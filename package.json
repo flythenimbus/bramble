@@ -1,0 +1,17 @@
+{
+  "name": "vault",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/core",
+    "packages/platform-extension"
+  ],
+  "scripts": {
+    "build": "bun run --filter '@vault/platform-extension' build",
+    "dev": "bun run --filter '@vault/platform-extension' dev",
+    "wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
+    "lint": "bun run --filter '*' lint",
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck"
+  }
+}

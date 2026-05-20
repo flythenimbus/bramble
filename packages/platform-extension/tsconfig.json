@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["../core/src/*"]
+    },
+    "types": ["chrome", "vite/client"]
+  },
+  "include": ["src/**/*", "../core/src/**/*"]
+}
