@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { copyFileSync, mkdirSync } from "node:fs";
 
@@ -11,6 +12,7 @@ export default defineConfig({
   publicDir: resolve(__dirname, "public"),
   plugins: [
     react(),
+    tailwindcss(),
     {
       name: "copy-manifest",
       writeBundle() {
