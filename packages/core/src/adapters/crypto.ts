@@ -5,6 +5,11 @@ export interface EncryptedPayload {
 	dekIv: string;
 }
 
+export interface MasterEncrypted {
+	iv: string;
+	ciphertext: string;
+}
+
 export interface CryptoAdapter {
 	unlock(password: string, saltB64: string): Promise<void>;
 	lock(): Promise<void>;
@@ -13,6 +18,8 @@ export interface CryptoAdapter {
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
 	generateSalt(): Promise<string>;
 	verifierFor(magicBytes: Uint8Array): Promise<Uint8Array>;
+	encryptWithMaster(plaintext: string): Promise<MasterEncrypted>;
+	decryptWithMaster(iv: string, ciphertext: string): Promise<string>;
 	changePassword(
 		newPassword: string,
 		newSaltB64: string,

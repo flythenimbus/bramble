@@ -11,6 +11,7 @@ import {
 	Upload,
 } from "lucide-react";
 import { useState } from "react";
+import { SelectField } from "../../components/ui/select-field";
 
 interface SettingsProps {
 	onBack: () => void;
@@ -57,17 +58,19 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 									</p>
 								</div>
 							</div>
-							<select
-								value={autoLockTimeout}
-								onChange={(e) => setAutoLockTimeout(e.target.value)}
-								className="px-3 py-1.5 text-sm rounded-lg border border-border/50 bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
-							>
-								<option value="5">5 minutes</option>
-								<option value="15">15 minutes</option>
-								<option value="30">30 minutes</option>
-								<option value="60">1 hour</option>
-								<option value="never">Never</option>
-							</select>
+							<div className="w-40">
+								<SelectField
+									label="Timeout"
+									value={autoLockTimeout}
+									onChange={(e) => setAutoLockTimeout(e.target.value)}
+								>
+									<option value="5">5 minutes</option>
+									<option value="15">15 minutes</option>
+									<option value="30">30 minutes</option>
+									<option value="60">1 hour</option>
+									<option value="never">Never</option>
+								</SelectField>
+							</div>
 						</div>
 
 						{/* Biometrics */}

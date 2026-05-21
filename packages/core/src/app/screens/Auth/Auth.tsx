@@ -1,17 +1,21 @@
-import { Eye, EyeOff, Lock, Shield } from "lucide-react";
+import { Eye, EyeOff, Shield } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { TextField } from "../../components/ui/text-field";
 
 interface AuthProps {
-	onAuthenticate: () => void;
+	hasVault: boolean;
+	onUnlock: (password: string) => Promise<void>;
+	onOpenSetup: () => Promise<void>;
 }
 
 interface FormValues {
 	masterPassword: string;
 }
 
-export function Auth({ onAuthenticate }: AuthProps) {
+export function Auth({ hasVault, onUnlock, onOpenSetup }: AuthProps) {
 	const [showPassword, setShowPassword] = useState(false);
+	const [busy, setBusy] = useState(false);
 	const {
 		register,
 		handleSubmit,
@@ -20,14 +24,27 @@ export function Auth({ onAuthenticate }: AuthProps) {
 		resetField,
 	} = useForm<FormValues>({ defaultValues: { masterPassword: "" } });
 
-	const onSubmit = ({ masterPassword }: FormValues) => {
-		// Mock authentication — real flow will call CryptoAdapter.unlock + verifier check.
-		if (masterPassword.length >= 8) {
-			onAuthenticate();
-			return;
+	const onSubmit = async ({ masterPassword }: FormValues) => {
+		setBusy(true);
+		try {
+			await onUnlock(masterPassword);
+		} catch (e) {
+			setError("masterPassword", { message: (e as Error).message });
+			resetField("masterPassword");
+		} finally {
+			setBusy(false);
 		}
-		setError("masterPassword", { message: "Invalid master password" });
-		resetField("masterPassword");
+	};
+
+	const handleOpenSetup = async () => {
+		setBusy(true);
+		try {
+			await onOpenSetup();
+		} catch (e) {
+			setError("masterPassword", { message: (e as Error).message });
+		} finally {
+			setBusy(false);
+		}
 	};
 
 	return (
@@ -47,43 +64,32 @@ export function Auth({ onAuthenticate }: AuthProps) {
 
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 					<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
-						<div>
-							<label htmlFor="master-password" className="block text-sm mb-2">
-								Master Password
-							</label>
-							<div className="relative">
-								<div className="absolute left-3 top-1/2 -translate-y-1/2">
-									<Lock className="w-4 h-4 text-muted-foreground/60" />
-								</div>
-								<input
-									id="master-password"
-									type={showPassword ? "text" : "password"}
-									placeholder="Enter your master password"
-									autoFocus
-									className="w-full pl-10 pr-12 py-3 text-sm rounded-lg border border-border/50 bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
-									{...register("masterPassword", {
-										required: "Please enter your master password",
-									})}
-								/>
+						<TextField
+							label="Master password"
+							type={showPassword ? "text" : "password"}
+							autoFocus
+							error={errors.masterPassword?.message}
+							endAdornment={
 								<button
 									type="button"
 									onClick={() => setShowPassword(!showPassword)}
-									className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+									className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
 									aria-label={showPassword ? "Hide password" : "Show password"}
 								>
 									{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
 								</button>
-							</div>
-							{errors.masterPassword && (
-								<p className="text-xs text-destructive mt-2">{errors.masterPassword.message}</p>
-							)}
-						</div>
+							}
+							{...register("masterPassword", {
+								required: "Please enter your master password",
+							})}
+						/>
 
 						<button
 							type="submit"
-							className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+							disabled={busy || !hasVault}
+							className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							Unlock Vault
+							{busy ? "Unlocking…" : hasVault ? "Unlock Vault" : "No vault — create one below"}
 						</button>
 					</form>
 				</div>
@@ -104,20 +110,13 @@ export function Auth({ onAuthenticate }: AuthProps) {
 
 					<button
 						type="button"
-						className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all"
+						onClick={handleOpenSetup}
+						disabled={busy}
+						className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all disabled:opacity-50"
 					>
 						Create new vault
 					</button>
 				</div>
-
-				{/* TODO: remove once unlock flow is wired to the real CryptoAdapter. */}
-				<button
-					type="button"
-					onClick={onAuthenticate}
-					className="mt-6 px-2 py-1 text-[10px] uppercase tracking-wider font-mono bg-yellow-300 text-black border border-yellow-600 hover:bg-yellow-400"
-				>
-					[dev] skip auth
-				</button>
 
 				<div className="mt-8 p-4 rounded-lg border border-border/30 bg-card/30 backdrop-blur-sm">
 					<div className="flex items-start gap-3">
@@ -125,10 +124,10 @@ export function Auth({ onAuthenticate }: AuthProps) {
 							<Shield className="w-4 h-4 text-primary" />
 						</div>
 						<div>
-							<h4 className="text-xs mb-1">Your data is encrypted</h4>
+							<h4 className="text-xs mb-1">Encrypted on your device</h4>
 							<p className="text-xs text-muted-foreground leading-relaxed">
-								We use end-to-end encryption. Only you can access your vault with your master
-								password.
+								Your vault stays on this device, encrypted with AES-256-GCM. Only your master
+								password can unlock it, so keep it somewhere safe.
 							</p>
 						</div>
 					</div>

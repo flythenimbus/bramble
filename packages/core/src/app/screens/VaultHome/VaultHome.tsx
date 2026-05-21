@@ -2,28 +2,25 @@ import { Filter, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { AddDropdown } from "../../components/AddDropdown";
 import { PasswordItem } from "../../components/PasswordItem";
+import { TextField } from "../../components/ui/text-field";
 
-const MOCK_PASSWORDS = [
-	{ id: 1, name: "Gmail", username: "john.doe@gmail.com", url: "mail.google.com" },
-	{ id: 2, name: "GitHub", username: "johndoe", url: "github.com" },
-	{ id: 3, name: "Netflix", username: "john.doe@gmail.com", url: "netflix.com" },
-	{ id: 4, name: "LinkedIn", username: "john-doe", url: "linkedin.com" },
-	{ id: 5, name: "Amazon", username: "john.doe@gmail.com", url: "amazon.com" },
-	{ id: 6, name: "Spotify", username: "johndoe", url: "spotify.com" },
-	{ id: 7, name: "Twitter", username: "@johndoe", url: "twitter.com" },
-	{ id: 8, name: "Dropbox", username: "john.doe@gmail.com", url: "dropbox.com" },
-	{ id: 9, name: "Slack", username: "johndoe", url: "slack.com" },
-	{ id: 10, name: "Notion", username: "john.doe@gmail.com", url: "notion.so" },
-];
+interface EntrySummary {
+	id: string;
+	name: string;
+	url: string;
+	username: string;
+	password: string;
+}
 
 interface VaultHomeProps {
+	entries: EntrySummary[];
 	onCreateNew: () => void;
 }
 
-export function VaultHome({ onCreateNew }: VaultHomeProps) {
+export function VaultHome({ entries, onCreateNew }: VaultHomeProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 
-	const filtered = MOCK_PASSWORDS.filter(
+	const filtered = entries.filter(
 		(p) =>
 			p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,20 +29,19 @@ export function VaultHome({ onCreateNew }: VaultHomeProps) {
 
 	return (
 		<main className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto px-4 py-5">
-			<div className="flex gap-2 mb-5">
-				<div className="relative flex-1">
-					<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
-					<input
+			<div className="flex gap-2 mb-5 items-start">
+				<div className="flex-1">
+					<TextField
+						label="Search passwords"
 						type="text"
-						placeholder="Search passwords..."
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
-						className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+						startAdornment={<Search className="w-4 h-4" />}
 					/>
 				</div>
 				<button
 					type="button"
-					className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-border bg-card/50 backdrop-blur-sm hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+					className="flex items-center gap-1.5 px-3 py-3 text-sm rounded-md border border-border/50 bg-background/50 hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 				>
 					<Filter className="w-4 h-4" />
 					Filter
@@ -58,7 +54,7 @@ export function VaultHome({ onCreateNew }: VaultHomeProps) {
 					<div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<p className="text-xs text-muted-foreground mb-0.5">Total Items</p>
-						<p className="text-2xl">{MOCK_PASSWORDS.length}</p>
+						<p className="text-2xl">{entries.length}</p>
 					</div>
 				</div>
 				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-gradient-to-br from-card/80 to-card/50 backdrop-blur-sm">
@@ -96,7 +92,13 @@ export function VaultHome({ onCreateNew }: VaultHomeProps) {
 				<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
 					{filtered.length > 0 ? (
 						filtered.map((pwd) => (
-							<PasswordItem key={pwd.id} name={pwd.name} username={pwd.username} url={pwd.url} />
+							<PasswordItem
+								key={pwd.id}
+								name={pwd.name}
+								username={pwd.username}
+								password={pwd.password}
+								url={pwd.url}
+							/>
 						))
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
