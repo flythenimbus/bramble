@@ -13,24 +13,24 @@ export const LEN_VERIFIER = 32;
 export const LEN_IV = 12;
 
 export interface EncryptedEntry {
-  id: string;
-  wrappedDek: string;
-  dekIv: string;
-  ciphertext: string;
-  iv: string;
+	id: string;
+	wrappedDek: string;
+	dekIv: string;
+	ciphertext: string;
+	iv: string;
 }
 
 export interface VaultBlob {
-  salt: Uint8Array;
-  verifier: Uint8Array;
-  entriesIv: Uint8Array;
-  entriesCiphertext: Uint8Array;
+	salt: Uint8Array;
+	verifier: Uint8Array;
+	entriesIv: Uint8Array;
+	entriesCiphertext: Uint8Array;
 }
 
 export function encodeVaultBlob(_blob: VaultBlob): Uint8Array {
-  throw new Error("TODO");
+	throw new Error("TODO");
 }
 
 export function decodeVaultBlob(_bytes: Uint8Array): VaultBlob {
-  throw new Error("TODO");
+	throw new Error("TODO");
 }
