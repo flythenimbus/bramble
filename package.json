@@ -1,17 +1,25 @@
 {
-  "name": "vault",
-  "version": "0.0.0",
-  "private": true,
-  "workspaces": [
-    "packages/core",
-    "packages/platform-extension"
-  ],
-  "scripts": {
-    "build": "bun run --filter '@vault/platform-extension' build",
-    "dev": "bun run --filter '@vault/platform-extension' dev",
-    "wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
-    "lint": "bun run --filter '*' lint",
-    "test": "bun run --filter '*' test",
-    "typecheck": "bun run --filter '*' typecheck"
-  }
+	"name": "vault",
+	"version": "0.0.0",
+	"private": true,
+	"workspaces": [
+		"packages/core",
+		"packages/platform-extension"
+	],
+	"scripts": {
+		"build": "bun run --filter '@vault/platform-extension' build",
+		"dev": "bun run --filter '@vault/platform-extension' dev",
+		"wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
+		"wasm:verify": "bun run packages/crypto-wasm/verify.ts",
+		"lint": "biome lint .",
+		"format": "biome format --write .",
+		"check": "biome check --write  --unsafe .",
+		"ci:check": "biome ci .",
+		"test": "bun run --filter '*' test",
+		"typecheck": "bun run --filter '*' typecheck"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.15",
+		"@types/node": "^22.10.0"
+	}
 }
