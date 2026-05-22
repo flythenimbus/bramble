@@ -1,6 +1,8 @@
 /// <reference types="chrome" />
 import { loadWasm, type VaultCrypto } from "./wasm-loader";
 
+// idle-kill timer. All session state — autofill index, cached master key,
+
 let wasm: VaultCrypto | null = null;
 
 async function getWasm(): Promise<VaultCrypto> {
@@ -14,11 +16,16 @@ interface OffscreenMessage {
 	payload?: any;
 }
 
-function dispatch(crypto: VaultCrypto, type: string, payload: any): unknown {
+function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknown {
 	switch (type) {
 		case "CRYPTO_UNLOCK":
 			crypto.unlock(payload.password, payload.saltB64);
 			return null;
+		case "CRYPTO_UNLOCK_WITH_KEY":
+			crypto.unlock_with_key(payload.keyB64);
+			return null;
+		case "CRYPTO_EXPORT_KEY":
+			return crypto.export_key();
 		case "CRYPTO_LOCK":
 			crypto.lock();
 			return null;
@@ -53,8 +60,12 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 
 	void (async () => {
 		try {
+			const msgType = message.type ?? "";
+			if (!msgType.startsWith("CRYPTO_")) {
+				throw new Error(`unknown message type: ${msgType}`);
+			}
 			const crypto = await getWasm();
-			const data = dispatch(crypto, message.type ?? "", message.payload);
+			const data = dispatchCrypto(crypto, msgType, message.payload);
 			sendResponse({ ok: true, data });
 		} catch (err) {
 			sendResponse({ ok: false, error: String(err) });

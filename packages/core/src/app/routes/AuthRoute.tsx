@@ -18,10 +18,7 @@ export function AuthRoute() {
 	return (
 		<Auth
 			hasVault={hasVault}
-			onUnlock={async (password) => {
-				await unlock(password);
-				navigate({ to: "/vault" });
-			}}
+			onUnlock={unlock}
 			onOpenSetup={() => shell.openSetup()}
 		/>
 	);

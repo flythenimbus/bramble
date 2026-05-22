@@ -74,8 +74,17 @@ function base64ToBytes(b64: string): Uint8Array {
 	return out;
 }
 
+function extractHostname(url: string): string {
+	try {
+		return new URL(url).hostname;
+	} catch {
+		// If the URL is malformed, treat the whole string as the hostname.
+		return url;
+	}
+}
+
 export function VaultProvider({ children }: { children: ReactNode }) {
-	const { storage, crypto } = usePlatform();
+	const { storage, crypto, autofill } = usePlatform();
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
 	const [entries, setEntries] = useState<Entry[]>([]);
@@ -86,6 +95,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		const blob = decodeVaultBlob(blobBytes);
 		if (blob.entriesCiphertext.length === 0) {
 			setEntries([]);
+			await autofill.setIndex([]);
 			return;
 		}
 		const outerJson = await crypto.decryptWithMaster(
@@ -106,20 +116,41 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			}),
 		);
 		setEntries(decrypted);
-	}, [storage, crypto]);
+		// works even when the popup is closed.
+		await autofill.setIndex(
+			decrypted.map((entry) => ({
+				id: entry.id,
+				hostname: extractHostname(entry.url),
+				name: entry.name,
+				username: entry.username,
+				password: entry.password,
+			})),
+		);
+	}, [storage, crypto, autofill]);
 
 	useEffect(() => {
+		let cancelled = false;
 		void (async () => {
 			try {
 				const has = await storage.hasVaultHandle();
+				if (cancelled) return;
 				setHasVault(has);
+				if (!has) return;
+
 				const locked = await crypto.isLocked();
+				if (cancelled) return;
 				setIsLocked(locked);
-				if (has && !locked) await loadEntries();
+				if (locked) return;
+
+				// Vault is unlocked — load entries from blob.
+				await loadEntries();
 			} catch (e) {
-				setError(String(e));
+				if (!cancelled) setError(String(e));
 			}
 		})();
+		return () => {
+			cancelled = true;
+		};
 	}, [storage, crypto, loadEntries]);
 
 	const unlock = useCallback(
@@ -141,9 +172,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	const lock = useCallback(async () => {
 		await crypto.lock();
+		await autofill.clearIndex();
 		setEntries([]);
 		setIsLocked(true);
-	}, [crypto]);
+	}, [crypto, autofill]);
 
 	const pickVaultFile = useCallback(
 		async (mode: "create" | "open") => {
@@ -209,8 +241,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				entriesCiphertext: base64ToBytes(ciphertext),
 			});
 			await storage.writeVaultBlob(newBlob);
+
+			// Keep the offscreen autofill index in sync.
+			await autofill.setIndex(
+				nextEntries.map((entry) => ({
+					id: entry.id,
+					hostname: extractHostname(entry.url),
+					name: entry.name,
+					username: entry.username,
+					password: entry.password,
+				})),
+			);
 		},
-		[crypto, storage],
+		[crypto, storage, autofill],
 	);
 
 	const addEntry = useCallback(

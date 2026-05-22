@@ -2,6 +2,8 @@
 
 export interface VaultCrypto {
 	unlock(password: string, saltB64: string): void;
+	unlock_with_key(keyB64: string): void;
+	export_key(): string;
 	lock(): void;
 	is_locked(): boolean;
 	encrypt_entry(plaintextJson: string): {
