@@ -157,6 +157,37 @@ pub fn generate_salt() -> Result<String, JsError> {
     Ok(B64.encode(salt))
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MasterEncrypted {
+    iv: String,
+    ciphertext: String,
+}
+
+#[wasm_bindgen]
+pub fn encrypt_with_master(plaintext: String) -> Result<JsValue, JsError> {
+    let payload = with_key(|master| {
+        let mut iv = [0u8; IV_LEN];
+        random_bytes(&mut iv)?;
+        let ct = aes_encrypt(master, &iv, plaintext.as_bytes())?;
+        Ok(MasterEncrypted {
+            iv: B64.encode(iv),
+            ciphertext: B64.encode(&ct),
+        })
+    })?;
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+}
+
+#[wasm_bindgen]
+pub fn decrypt_with_master(iv_b64: String, ciphertext_b64: String) -> Result<String, JsError> {
+    with_key(|master| {
+        let iv = iv_from(b64_decode(&iv_b64)?)?;
+        let ct = b64_decode(&ciphertext_b64)?;
+        let plaintext = aes_decrypt(master, &iv, &ct)?;
+        String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
+    })
+}
+
 #[wasm_bindgen]
 pub fn verifier_for(magic: &[u8]) -> Result<Vec<u8>, JsError> {
     with_key(|master| {
