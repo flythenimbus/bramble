@@ -252,11 +252,11 @@ function dropdownStyles(): string {
 				color: #fff;
 				max-height: 320px;
 				overflow-y: auto;
-				padding: 6px;
+				padding: 4px;
 				box-sizing: border-box;
 			}
 			#${DROPDOWN_ID} .tp-item {
-				padding: 8px 10px;
+				padding: 6px 8px;
 				cursor: pointer;
 				display: flex;
 				align-items: center;
