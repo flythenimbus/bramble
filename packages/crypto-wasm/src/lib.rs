@@ -95,6 +95,30 @@ pub fn unlock(password: String, salt_b64: String) -> Result<(), JsError> {
     Ok(())
 }
 
+// Direct-key unlock for session resume: the offscreen document caches the
+// derived master key in chrome.storage.session and re-injects it when the
+// page restarts, so the user doesn't have to retype their password.
+#[wasm_bindgen]
+pub fn unlock_with_key(key_b64: String) -> Result<(), JsError> {
+    let bytes = b64_decode(&key_b64)?;
+    if bytes.len() != KEY_LEN {
+        return Err(err(format!("key must be {} bytes", KEY_LEN)));
+    }
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    key.copy_from_slice(&bytes);
+    *master_slot().lock().unwrap() = Some(key);
+    Ok(())
+}
+
+// Counterpart to `unlock_with_key`: pull the in-memory master key out so the
+// offscreen document can persist it for the duration of the session.
+#[wasm_bindgen]
+pub fn export_key() -> Result<String, JsError> {
+    let guard = master_slot().lock().unwrap();
+    let key = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
+    Ok(B64.encode(key.as_slice()))
+}
+
 #[wasm_bindgen]
 pub fn lock() {
     *master_slot().lock().unwrap() = None;
