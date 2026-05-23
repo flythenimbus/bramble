@@ -1,22 +1,26 @@
 import { readFileSync } from "node:fs";
 import init, {
-	change_password,
 	decrypt_entry,
+	decrypt_with_vek,
 	encrypt_entry,
+	encrypt_with_vek,
+	export_vek,
 	generate_salt,
+	generate_slot_id,
+	generate_vek,
 	is_locked,
 	lock,
-	unlock,
-	verifier_for,
+	rotate_vek,
+	unlock_with_vek,
+	unwrap_vek_password,
+	verify_password_slot,
+	wrap_vek_password,
 } from "../platform-extension/public/wasm/vault_crypto.js";
 
 const wasmBytes = readFileSync(
 	new URL("../platform-extension/public/wasm/vault_crypto_bg.wasm", import.meta.url),
 );
 await init({ module_or_path: wasmBytes });
-
-const toHex = (bytes: Uint8Array) =>
-	Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 const assertEq = (label: string, a: unknown, b: unknown) => {
 	if (a !== b) throw new Error(`${label}: expected ${b}, got ${a}`);
@@ -32,79 +36,151 @@ const expectThrow = (label: string, fn: () => unknown) => {
 	}
 };
 
+const MAGIC_VERSION = new Uint8Array([0x56, 0x4c, 0x54, 0x31, 0x02]);
+
 console.log("locks: starts locked");
 assertEq("is_locked()", is_locked(), true);
 
-console.log("unlock + lock cycle");
+console.log("generate_vek loads VEK into memory");
+const vek = generate_vek();
+assertEq("is_locked() after generate_vek", is_locked(), false);
+assertEq("export_vek roundtrips", export_vek(), vek);
+
+console.log("wrap_vek_password produces a sealable slot");
 const salt = generate_salt();
-unlock("hunter2", salt);
-assertEq("is_locked() after unlock", is_locked(), false);
-lock();
-assertEq("is_locked() after lock", is_locked(), true);
+const slotId = generate_slot_id();
+const slot = wrap_vek_password("hunter2", salt, slotId, MAGIC_VERSION) as {
+	verifier: string;
+	wrapIv: string;
+	wrappedVek: string;
+};
 
-console.log("encrypt while locked must fail");
-expectThrow("encrypt_entry locked", () => encrypt_entry("{}"));
-
-console.log("encrypt → decrypt roundtrip");
-unlock("hunter2", salt);
-const plain = JSON.stringify({
-	site: "github.com",
-	username: "me",
-	password: "s3cr3t!",
-	totp: "JBSWY3DPEHPK3PXP",
-});
+console.log("encrypt while unlocked works");
+const plain = JSON.stringify({ site: "github.com", username: "me", password: "s3cr3t!" });
 const enc = encrypt_entry(plain) as {
 	ciphertext: string;
 	iv: string;
 	wrappedDek: string;
 	dekIv: string;
 };
+
+console.log("lock + encrypt must fail");
+lock();
+assertEq("is_locked() after lock", is_locked(), true);
+expectThrow("encrypt_entry locked", () => encrypt_entry("{}"));
+
+console.log("unwrap_vek_password with wrong password returns false, leaves locked");
+assertEq(
+	"unwrap wrong pw",
+	unwrap_vek_password(
+		"wrong",
+		salt,
+		slotId,
+		slot.verifier,
+		slot.wrapIv,
+		slot.wrappedVek,
+		MAGIC_VERSION,
+	),
+	false,
+);
+assertEq("still locked", is_locked(), true);
+
+console.log("unwrap_vek_password with right password unlocks");
+assertEq(
+	"unwrap right pw",
+	unwrap_vek_password(
+		"hunter2",
+		salt,
+		slotId,
+		slot.verifier,
+		slot.wrapIv,
+		slot.wrappedVek,
+		MAGIC_VERSION,
+	),
+	true,
+);
+assertEq("is_locked() after unwrap", is_locked(), false);
+assertEq("VEK restored", export_vek(), vek);
+
+console.log("decrypt roundtrip after unwrap");
 const dec = decrypt_entry(enc.ciphertext, enc.iv, enc.wrappedDek, enc.dekIv);
-assertEq("roundtrip plaintext", dec, plain);
+assertEq("decrypted plaintext", dec, plain);
 
-console.log("verifier is deterministic for same key + magic");
-const magic = new TextEncoder().encode("VLT1\x01");
-const v1 = verifier_for(magic);
-const v2 = verifier_for(magic);
-assertEq("verifier length", v1.length, 32);
-assertEq("verifier deterministic", toHex(v1), toHex(v2));
+console.log("encrypt_with_vek / decrypt_with_vek roundtrip");
+const outer = encrypt_with_vek("[]") as { iv: string; ciphertext: string };
+assertEq("outer decrypts back", decrypt_with_vek(outer.iv, outer.ciphertext), "[]");
 
-console.log("wrong password → different verifier");
-const wrongVerifier = (() => {
-	lock();
-	unlock("wrong-password", salt);
-	const v = verifier_for(magic);
-	lock();
-	unlock("hunter2", salt);
-	return v;
-})();
-if (toHex(v1) === toHex(wrongVerifier)) {
-	throw new Error("wrong password produced same verifier");
-}
-console.log("  ok  wrong password → different verifier");
+console.log("verify_password_slot — constant-time check while unlocked");
+assertEq(
+	"right pw ok",
+	verify_password_slot("hunter2", salt, slotId, slot.verifier, MAGIC_VERSION),
+	true,
+);
+assertEq(
+	"wrong pw rejected",
+	verify_password_slot("wrong", salt, slotId, slot.verifier, MAGIC_VERSION),
+	false,
+);
 
-console.log("change_password re-wraps DEKs, ciphertext unchanged");
+console.log("wrap_vek_password under fresh credentials: same VEK, new slot");
 const newSalt = generate_salt();
-const rewrapped = change_password("new-hunter3", newSalt, [enc]) as Array<{
+const newSlot = wrap_vek_password("new-hunter3", newSalt, slotId, MAGIC_VERSION) as {
+	verifier: string;
+	wrapIv: string;
+	wrappedVek: string;
+};
+lock();
+assertEq(
+	"unwrap with new pw",
+	unwrap_vek_password(
+		"new-hunter3",
+		newSalt,
+		slotId,
+		newSlot.verifier,
+		newSlot.wrapIv,
+		newSlot.wrappedVek,
+		MAGIC_VERSION,
+	),
+	true,
+);
+assertEq("VEK unchanged after rotation", export_vek(), vek);
+const dec2 = decrypt_entry(enc.ciphertext, enc.iv, enc.wrappedDek, enc.dekIv);
+assertEq("entry still decrypts after rotation", dec2, plain);
+
+console.log("session-resume: unlock_with_vek restores VEK");
+lock();
+unlock_with_vek(vek);
+assertEq("is_locked() after unlock_with_vek", is_locked(), false);
+assertEq("VEK matches", export_vek(), vek);
+
+console.log("rotate_vek: produces a new VEK, old entries no longer decrypt");
+const oldEntry = encrypt_entry(plain) as {
 	ciphertext: string;
 	iv: string;
 	wrappedDek: string;
 	dekIv: string;
-}>;
-assertEq("entries count", rewrapped.length, 1);
-assertEq("ciphertext unchanged", rewrapped[0]!.ciphertext, enc.ciphertext);
-assertEq("iv unchanged", rewrapped[0]!.iv, enc.iv);
-if (rewrapped[0]!.wrappedDek === enc.wrappedDek) {
-	throw new Error("wrappedDek did not change after password change");
-}
-console.log("  ok  wrappedDek changed");
-
-const dec2 = decrypt_entry(
-	rewrapped[0]!.ciphertext,
-	rewrapped[0]!.iv,
-	rewrapped[0]!.wrappedDek,
-	rewrapped[0]!.dekIv,
+};
+const preRotateVek = export_vek();
+const rotatedVek = rotate_vek();
+if (rotatedVek === preRotateVek) throw new Error("rotate_vek returned the same VEK");
+assertEq("export_vek matches rotated", export_vek(), rotatedVek);
+expectThrow("old entry fails to decrypt under new VEK", () =>
+	decrypt_entry(oldEntry.ciphertext, oldEntry.iv, oldEntry.wrappedDek, oldEntry.dekIv),
 );
-assertEq("decrypt after password change", dec2, plain);
+const newEntry = encrypt_entry(plain) as {
+	ciphertext: string;
+	iv: string;
+	wrappedDek: string;
+	dekIv: string;
+};
+assertEq(
+	"new entry decrypts under new VEK",
+	decrypt_entry(newEntry.ciphertext, newEntry.iv, newEntry.wrappedDek, newEntry.dekIv),
+	plain,
+);
+
+console.log("rotate_vek refuses to run on a locked vault");
+lock();
+expectThrow("rotate_vek locked", () => rotate_vek());
 
 console.log("\nALL CHECKS PASSED");

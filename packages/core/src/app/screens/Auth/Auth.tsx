@@ -22,7 +22,6 @@ export function Auth({ hasVault, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
 		handleSubmit,
 		formState: { errors },
 		setError,
-		resetField,
 	} = useForm<FormValues>({ defaultValues: { masterPassword: "" } });
 
 	const onSubmit = async ({ masterPassword }: FormValues) => {
@@ -30,8 +29,7 @@ export function Auth({ hasVault, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
 		try {
 			await onUnlock(masterPassword);
 		} catch (e) {
-			setError("masterPassword", { message: (e as Error).message });
-			resetField("masterPassword");
+			setError("masterPassword", { message: (e as Error).message }, { shouldFocus: true });
 		} finally {
 			setBusy(false);
 		}

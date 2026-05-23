@@ -6,11 +6,12 @@ use aes_gcm::{
 };
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
+
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -21,8 +22,9 @@ const KEY_LEN: usize = 32;
 const DEK_LEN: usize = 32;
 const IV_LEN: usize = 12;
 const SALT_LEN: usize = 16;
+const SLOT_ID_LEN: usize = 16;
 
-fn master_slot() -> &'static Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> {
+fn vek_slot() -> &'static Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> {
     static SLOT: OnceLock<Mutex<Option<Zeroizing<[u8; KEY_LEN]>>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
@@ -43,7 +45,7 @@ fn iv_from(bytes: Vec<u8>) -> Result<[u8; IV_LEN], JsError> {
     bytes.try_into().map_err(|_| err("iv must be 12 bytes"))
 }
 
-fn derive_key(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsError> {
+fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsError> {
     let params = Params::new(ARGON2_MEM_KIB, ARGON2_TIME, ARGON2_PARALLELISM, Some(KEY_LEN))
         .map_err(|e| err(format!("argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -69,13 +71,41 @@ fn aes_decrypt(key: &[u8], iv: &[u8; IV_LEN], ct: &[u8]) -> Result<Zeroizing<Vec
         .map_err(|e| err(format!("aes decrypt: {e}")))
 }
 
-fn with_key<F, R>(f: F) -> Result<R, JsError>
+fn with_vek<F, R>(f: F) -> Result<R, JsError>
 where
     F: FnOnce(&[u8]) -> Result<R, JsError>,
 {
-    let guard = master_slot().lock().unwrap();
+    let guard = vek_slot().lock().unwrap();
     let key = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
     f(key.as_slice())
+}
+
+fn load_vek(bytes: &[u8]) -> Result<(), JsError> {
+    if bytes.len() != KEY_LEN {
+        return Err(err(format!("VEK must be {} bytes", KEY_LEN)));
+    }
+    let mut z = Zeroizing::new([0u8; KEY_LEN]);
+    z.copy_from_slice(bytes);
+    *vek_slot().lock().unwrap() = Some(z);
+    Ok(())
+}
+
+fn compute_verifier(kek: &[u8], magic_version: &[u8], slot_id: &[u8]) -> Vec<u8> {
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(kek).expect("hmac accepts any key length");
+    mac.update(magic_version);
+    mac.update(slot_id);
+    mac.finalize().into_bytes().to_vec()
+}
+
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,72 +117,155 @@ struct EncryptedPayload {
     dek_iv: String,
 }
 
-#[wasm_bindgen]
-pub fn unlock(password: String, salt_b64: String) -> Result<(), JsError> {
-    let salt = b64_decode(&salt_b64)?;
-    let key = derive_key(&password, &salt)?;
-    *master_slot().lock().unwrap() = Some(key);
-    Ok(())
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MasterEncrypted {
+    iv: String,
+    ciphertext: String,
 }
 
-// Direct-key unlock for session resume: the offscreen document caches the
-// derived master key in chrome.storage.session and re-injects it when the
-// page restarts, so the user doesn't have to retype their password.
-#[wasm_bindgen]
-pub fn unlock_with_key(key_b64: String) -> Result<(), JsError> {
-    let bytes = b64_decode(&key_b64)?;
-    if bytes.len() != KEY_LEN {
-        return Err(err(format!("key must be {} bytes", KEY_LEN)));
-    }
-    let mut key = Zeroizing::new([0u8; KEY_LEN]);
-    key.copy_from_slice(&bytes);
-    *master_slot().lock().unwrap() = Some(key);
-    Ok(())
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PasswordSlotBlob {
+    verifier: String,
+    wrap_iv: String,
+    wrapped_vek: String,
 }
 
-// Counterpart to `unlock_with_key`: pull the in-memory master key out so the
-// offscreen document can persist it for the duration of the session.
+
 #[wasm_bindgen]
-pub fn export_key() -> Result<String, JsError> {
-    let guard = master_slot().lock().unwrap();
+pub fn is_locked() -> bool {
+    vek_slot().lock().unwrap().is_none()
+}
+
+#[wasm_bindgen]
+pub fn lock() {
+    *vek_slot().lock().unwrap() = None;
+}
+
+#[wasm_bindgen]
+pub fn generate_vek() -> Result<String, JsError> {
+    let mut vek = [0u8; KEY_LEN];
+    random_bytes(&mut vek)?;
+    let encoded = B64.encode(vek);
+    load_vek(&vek)?;
+    Ok(encoded)
+}
+
+#[wasm_bindgen]
+pub fn unlock_with_vek(vek_b64: String) -> Result<(), JsError> {
+    let bytes = b64_decode(&vek_b64)?;
+    load_vek(&bytes)
+}
+
+#[wasm_bindgen]
+pub fn export_vek() -> Result<String, JsError> {
+    let guard = vek_slot().lock().unwrap();
     let key = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
     Ok(B64.encode(key.as_slice()))
 }
 
 #[wasm_bindgen]
-pub fn lock() {
-    *master_slot().lock().unwrap() = None;
+pub fn rotate_vek() -> Result<String, JsError> {
+    if vek_slot().lock().unwrap().is_none() {
+        return Err(err("vault is locked"));
+    }
+    let mut new_vek = [0u8; KEY_LEN];
+    random_bytes(&mut new_vek)?;
+    let encoded = B64.encode(new_vek);
+    load_vek(&new_vek)?;
+    Ok(encoded)
 }
 
-// Constant-time check: does `password + salt` derive to the currently-loaded
-// master key? Used as a confirmation step before allowing a change-master-
-// password flow on an already-unlocked vault.
 #[wasm_bindgen]
-pub fn verify_password(password: String, salt_b64: String) -> Result<bool, JsError> {
+pub fn generate_salt() -> Result<String, JsError> {
+    let mut salt = [0u8; SALT_LEN];
+    random_bytes(&mut salt)?;
+    Ok(B64.encode(salt))
+}
+
+#[wasm_bindgen]
+pub fn generate_slot_id() -> Result<String, JsError> {
+    let mut id = [0u8; SLOT_ID_LEN];
+    random_bytes(&mut id)?;
+    Ok(B64.encode(id))
+}
+
+
+#[wasm_bindgen]
+pub fn wrap_vek_password(
+    password: String,
+    salt_b64: String,
+    slot_id_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<JsValue, JsError> {
     let salt = b64_decode(&salt_b64)?;
-    let candidate = derive_key(&password, &salt)?;
-    let guard = master_slot().lock().unwrap();
-    let current = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
-    let a = candidate.as_slice();
-    let b = current.as_slice();
-    if a.len() != b.len() {
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let kek = derive_kek(&password, &salt)?;
+
+    let payload = with_vek(|vek| {
+        let mut wrap_iv = [0u8; IV_LEN];
+        random_bytes(&mut wrap_iv)?;
+        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
+        let verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+        Ok(PasswordSlotBlob {
+            verifier: B64.encode(&verifier),
+            wrap_iv: B64.encode(wrap_iv),
+            wrapped_vek: B64.encode(&wrapped),
+        })
+    })?;
+
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+}
+
+// VEK.
+#[wasm_bindgen]
+pub fn verify_password_slot(
+    password: String,
+    salt_b64: String,
+    slot_id_b64: String,
+    verifier_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<bool, JsError> {
+    let salt = b64_decode(&salt_b64)?;
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let verifier = b64_decode(&verifier_b64)?;
+    let kek = derive_kek(&password, &salt)?;
+    let computed = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+    Ok(ct_eq(&computed, &verifier))
+}
+
+#[wasm_bindgen]
+pub fn unwrap_vek_password(
+    password: String,
+    salt_b64: String,
+    slot_id_b64: String,
+    verifier_b64: String,
+    wrap_iv_b64: String,
+    wrapped_vek_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<bool, JsError> {
+    let salt = b64_decode(&salt_b64)?;
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let verifier = b64_decode(&verifier_b64)?;
+    let kek = derive_kek(&password, &salt)?;
+
+    let computed = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+    if !ct_eq(&computed, &verifier) {
         return Ok(false);
     }
-    let mut diff = 0u8;
-    for i in 0..a.len() {
-        diff |= a[i] ^ b[i];
-    }
-    Ok(diff == 0)
+
+    let wrap_iv = iv_from(b64_decode(&wrap_iv_b64)?)?;
+    let wrapped = b64_decode(&wrapped_vek_b64)?;
+    let vek = aes_decrypt(kek.as_slice(), &wrap_iv, &wrapped)?;
+    load_vek(vek.as_slice())?;
+    Ok(true)
 }
 
-#[wasm_bindgen]
-pub fn is_locked() -> bool {
-    master_slot().lock().unwrap().is_none()
-}
 
 #[wasm_bindgen]
 pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, JsError> {
-    let payload = with_key(|master| {
+    let payload = with_vek(|vek| {
         let mut dek = Zeroizing::new([0u8; DEK_LEN]);
         random_bytes(dek.as_mut_slice())?;
 
@@ -163,7 +276,7 @@ pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, JsError> {
         random_bytes(&mut dek_iv)?;
 
         let ciphertext = aes_encrypt(dek.as_slice(), &iv, plaintext_json.as_bytes())?;
-        let wrapped_dek = aes_encrypt(master, &dek_iv, dek.as_slice())?;
+        let wrapped_dek = aes_encrypt(vek, &dek_iv, dek.as_slice())?;
 
         Ok(EncryptedPayload {
             ciphertext: B64.encode(&ciphertext),
@@ -183,38 +296,24 @@ pub fn decrypt_entry(
     wrapped_dek: String,
     dek_iv: String,
 ) -> Result<String, JsError> {
-    with_key(|master| {
+    with_vek(|vek| {
         let ct = b64_decode(&ciphertext)?;
         let iv = iv_from(b64_decode(&iv)?)?;
         let wrapped = b64_decode(&wrapped_dek)?;
         let dek_iv = iv_from(b64_decode(&dek_iv)?)?;
 
-        let dek = aes_decrypt(master, &dek_iv, &wrapped)?;
+        let dek = aes_decrypt(vek, &dek_iv, &wrapped)?;
         let plaintext = aes_decrypt(dek.as_slice(), &iv, &ct)?;
         String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
     })
 }
 
 #[wasm_bindgen]
-pub fn generate_salt() -> Result<String, JsError> {
-    let mut salt = [0u8; SALT_LEN];
-    random_bytes(&mut salt)?;
-    Ok(B64.encode(salt))
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct MasterEncrypted {
-    iv: String,
-    ciphertext: String,
-}
-
-#[wasm_bindgen]
-pub fn encrypt_with_master(plaintext: String) -> Result<JsValue, JsError> {
-    let payload = with_key(|master| {
+pub fn encrypt_with_vek(plaintext: String) -> Result<JsValue, JsError> {
+    let payload = with_vek(|vek| {
         let mut iv = [0u8; IV_LEN];
         random_bytes(&mut iv)?;
-        let ct = aes_encrypt(master, &iv, plaintext.as_bytes())?;
+        let ct = aes_encrypt(vek, &iv, plaintext.as_bytes())?;
         Ok(MasterEncrypted {
             iv: B64.encode(iv),
             ciphertext: B64.encode(&ct),
@@ -224,59 +323,11 @@ pub fn encrypt_with_master(plaintext: String) -> Result<JsValue, JsError> {
 }
 
 #[wasm_bindgen]
-pub fn decrypt_with_master(iv_b64: String, ciphertext_b64: String) -> Result<String, JsError> {
-    with_key(|master| {
+pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String, JsError> {
+    with_vek(|vek| {
         let iv = iv_from(b64_decode(&iv_b64)?)?;
         let ct = b64_decode(&ciphertext_b64)?;
-        let plaintext = aes_decrypt(master, &iv, &ct)?;
+        let plaintext = aes_decrypt(vek, &iv, &ct)?;
         String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
     })
-}
-
-#[wasm_bindgen]
-pub fn verifier_for(magic: &[u8]) -> Result<Vec<u8>, JsError> {
-    with_key(|master| {
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(master)
-            .expect("hmac accepts any key length");
-        mac.update(magic);
-        Ok(mac.finalize().into_bytes().to_vec())
-    })
-}
-
-#[wasm_bindgen]
-pub fn change_password(
-    new_password: String,
-    new_salt_b64: String,
-    entries: JsValue,
-) -> Result<JsValue, JsError> {
-    let entries: Vec<EncryptedPayload> = serde_wasm_bindgen::from_value(entries)
-        .map_err(|e| err(format!("entries deserialize: {e}")))?;
-
-    let new_salt = b64_decode(&new_salt_b64)?;
-    let new_key = derive_key(&new_password, &new_salt)?;
-
-    let new_entries = with_key(|old_master| {
-        let mut result = Vec::with_capacity(entries.len());
-        for entry in entries {
-            let wrapped = b64_decode(&entry.wrapped_dek)?;
-            let dek_iv = iv_from(b64_decode(&entry.dek_iv)?)?;
-            let dek = aes_decrypt(old_master, &dek_iv, &wrapped)?;
-
-            let mut new_dek_iv = [0u8; IV_LEN];
-            random_bytes(&mut new_dek_iv)?;
-            let new_wrapped = aes_encrypt(new_key.as_slice(), &new_dek_iv, dek.as_slice())?;
-
-            result.push(EncryptedPayload {
-                ciphertext: entry.ciphertext,
-                iv: entry.iv,
-                wrapped_dek: B64.encode(&new_wrapped),
-                dek_iv: B64.encode(new_dek_iv),
-            });
-        }
-        Ok(result)
-    })?;
-
-    *master_slot().lock().unwrap() = Some(new_key);
-
-    serde_wasm_bindgen::to_value(&new_entries).map_err(|e| err(format!("serialize: {e}")))
 }

@@ -12,9 +12,16 @@ import {
 	Timer,
 	Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { SelectField } from "../../components/ui/select-field";
 import { TextField } from "../../components/ui/text-field";
+
+interface PasswordFormValues {
+	currentPassword: string;
+	newPassword: string;
+	confirmPassword: string;
+}
 
 interface SettingsProps {
 	onBack: () => void;
@@ -28,7 +35,11 @@ interface SettingsProps {
 	onChangeClipboardSeconds: (seconds: number) => void;
 	onToggleBreachCheck: (enabled: boolean) => void;
 	onLockNow: () => Promise<void>;
-	onChangeMasterPassword: (currentPassword: string, newPassword: string) => Promise<void>;
+	// Two-step contract so the UI can distinguish a wrong current password
+	// (field-level error, recoverable) from a rotation failure (form-level
+	// error, the user may need to retry or relock).
+	onVerifyCurrentPassword: (currentPassword: string) => Promise<boolean>;
+	onChangeMasterPassword: (newPassword: string) => Promise<void>;
 }
 
 export function Settings({
@@ -43,43 +54,64 @@ export function Settings({
 	onChangeClipboardSeconds,
 	onToggleBreachCheck,
 	onLockNow,
+	onVerifyCurrentPassword,
 	onChangeMasterPassword,
 }: SettingsProps) {
 	const [changingPassword, setChangingPassword] = useState(false);
-	const [currentPassword, setCurrentPassword] = useState("");
-	const [newPassword, setNewPassword] = useState("");
-	const [confirmPassword, setConfirmPassword] = useState("");
-	const [pwError, setPwError] = useState<string | null>(null);
-	const [pwBusy, setPwBusy] = useState(false);
 	const [pwSuccess, setPwSuccess] = useState(false);
+	// Form-level error (rotation crash, disk write failure, etc.) lives
+	// outside react-hook-form because it isn't tied to any single field.
+	const [formError, setFormError] = useState<string | null>(null);
+	const formErrorRef = useRef<HTMLDivElement>(null);
 
-	const submitPasswordChange = async () => {
-		setPwError(null);
+	const {
+		register,
+		handleSubmit,
+		reset,
+		setError,
+		watch,
+		formState: { errors, isSubmitting },
+	} = useForm<PasswordFormValues>({
+		defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+	});
+
+	// `watch` is used by the confirm-password validator below.
+	const newPasswordValue = watch("newPassword");
+
+	// In a popup window the user is often scrolled down to the submit
+	// button when they press Enter; the error banner appearing above the
+	// form would be off-screen without this nudge.
+	useEffect(() => {
+		if (formError) {
+			formErrorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+		}
+	}, [formError]);
+
+	const closePasswordForm = () => {
+		setChangingPassword(false);
+		setFormError(null);
+		reset();
+	};
+
+	const onSubmitPasswordChange = async ({ currentPassword, newPassword }: PasswordFormValues) => {
+		setFormError(null);
 		setPwSuccess(false);
-		if (!currentPassword) {
-			setPwError("Enter your current password.");
-			return;
-		}
-		if (!newPassword || newPassword.length < 8) {
-			setPwError("New password must be at least 8 characters.");
-			return;
-		}
-		if (newPassword !== confirmPassword) {
-			setPwError("New password and confirmation don't match.");
-			return;
-		}
-		setPwBusy(true);
 		try {
-			await onChangeMasterPassword(currentPassword, newPassword);
-			setCurrentPassword("");
-			setNewPassword("");
-			setConfirmPassword("");
+			const ok = await onVerifyCurrentPassword(currentPassword);
+			if (!ok) {
+				setError(
+					"currentPassword",
+					{ message: "Current password is incorrect" },
+					{ shouldFocus: true },
+				);
+				return;
+			}
+			await onChangeMasterPassword(newPassword);
+			reset();
 			setPwSuccess(true);
 			setChangingPassword(false);
 		} catch (e) {
-			setPwError((e as Error).message);
-		} finally {
-			setPwBusy(false);
+			setFormError((e as Error).message);
 		}
 	};
 
@@ -177,15 +209,16 @@ export function Settings({
 						<Row
 							icon={<Key className="w-4 h-4 text-primary" />}
 							title="Change master password"
-							subtitle="Re-derive the key that wraps every entry"
+							subtitle="Rotates the vault key and re-encrypts every entry"
 						>
 							{!changingPassword ? (
 								<button
 									type="button"
 									onClick={() => {
-										setChangingPassword(true);
-										setPwError(null);
+										reset();
+										setFormError(null);
 										setPwSuccess(false);
+										setChangingPassword(true);
 									}}
 									className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 								>
@@ -199,59 +232,82 @@ export function Settings({
 						)}
 
 						{changingPassword && (
-							<div className="ml-12 space-y-3 pt-1">
+							<form
+								className="ml-12 space-y-3 pt-1"
+								onSubmit={handleSubmit(onSubmitPasswordChange)}
+								noValidate
+							>
+								{formError && (
+									<div
+										ref={formErrorRef}
+										role="alert"
+										aria-live="assertive"
+										className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/15 px-3 py-2.5 text-sm text-destructive"
+									>
+										<AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+										<span className="font-medium">{formError}</span>
+									</div>
+								)}
+								<div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground/90">
+									<Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+									<span>
+										Rotates the vault encryption key and re-encrypts{" "}
+										{totalEntries === 1 ? "your entry" : `all ${totalEntries} entries`} under fresh
+										keys. Old keys and ciphertext are discarded — anyone who held the previous key
+										can no longer decrypt this vault.
+									</span>
+								</div>
 								<TextField
 									label="Current password"
 									type="password"
 									autoComplete="current-password"
-									value={currentPassword}
-									onChange={(e) => setCurrentPassword(e.target.value)}
+									autoFocus
+									error={errors.currentPassword?.message}
+									{...register("currentPassword", {
+										required: "Enter your current password",
+									})}
 								/>
 								<TextField
 									label="New password"
 									type="password"
 									autoComplete="new-password"
-									value={newPassword}
-									onChange={(e) => setNewPassword(e.target.value)}
+									error={errors.newPassword?.message}
+									{...register("newPassword", {
+										required: "Enter a new password",
+										minLength: {
+											value: 8,
+											message: "Must be at least 8 characters",
+										},
+									})}
 								/>
 								<TextField
 									label="Confirm new password"
 									type="password"
 									autoComplete="new-password"
-									value={confirmPassword}
-									onChange={(e) => setConfirmPassword(e.target.value)}
+									error={errors.confirmPassword?.message}
+									{...register("confirmPassword", {
+										required: "Confirm your new password",
+										validate: (value) => value === newPasswordValue || "Passwords don't match",
+									})}
 								/>
-								{pwError && (
-									<div className="flex items-start gap-2 text-xs text-destructive">
-										<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-										<span>{pwError}</span>
-									</div>
-								)}
 								<div className="flex items-center justify-end gap-2">
 									<button
 										type="button"
-										onClick={() => {
-											setChangingPassword(false);
-											setCurrentPassword("");
-											setNewPassword("");
-											setConfirmPassword("");
-											setPwError(null);
-										}}
-										disabled={pwBusy}
+										onClick={closePasswordForm}
+										disabled={isSubmitting}
 										className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 									>
 										Cancel
 									</button>
 									<button
-										type="button"
-										onClick={() => void submitPasswordChange()}
-										disabled={pwBusy}
+										type="submit"
+										disabled={isSubmitting}
 										className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 									>
-										{pwBusy ? "Updating…" : "Update password"}
+										{isSubmitting ? "Updating…" : "Update password"}
 									</button>
 								</div>
-							</div>
+							</form>
 						)}
 					</div>
 				</div>

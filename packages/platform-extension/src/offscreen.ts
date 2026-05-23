@@ -1,7 +1,6 @@
 /// <reference types="chrome" />
 import { loadWasm, type VaultCrypto } from "./wasm-loader";
 
-// idle-kill timer. All session state — autofill index, cached master key,
 
 let wasm: VaultCrypto | null = null;
 
@@ -18,21 +17,53 @@ interface OffscreenMessage {
 
 function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknown {
 	switch (type) {
-		case "CRYPTO_UNLOCK":
-			crypto.unlock(payload.password, payload.saltB64);
-			return null;
-		case "CRYPTO_UNLOCK_WITH_KEY":
-			crypto.unlock_with_key(payload.keyB64);
-			return null;
-		case "CRYPTO_EXPORT_KEY":
-			return crypto.export_key();
 		case "CRYPTO_LOCK":
 			crypto.lock();
 			return null;
 		case "CRYPTO_IS_LOCKED":
 			return crypto.is_locked();
-		case "CRYPTO_GEN_SALT":
+
+		case "CRYPTO_GENERATE_VEK":
+			return crypto.generate_vek();
+		case "CRYPTO_UNLOCK_WITH_VEK":
+			crypto.unlock_with_vek(payload.vekB64);
+			return null;
+		case "CRYPTO_EXPORT_VEK":
+			return crypto.export_vek();
+		case "CRYPTO_ROTATE_VEK":
+			return crypto.rotate_vek();
+
+		case "CRYPTO_GENERATE_SALT":
 			return crypto.generate_salt();
+		case "CRYPTO_GENERATE_SLOT_ID":
+			return crypto.generate_slot_id();
+
+		case "CRYPTO_WRAP_PASSWORD_SLOT":
+			return crypto.wrap_vek_password(
+				payload.password,
+				payload.saltB64,
+				payload.slotIdB64,
+				new Uint8Array(payload.magicVersion),
+			);
+		case "CRYPTO_UNWRAP_PASSWORD_SLOT":
+			return crypto.unwrap_vek_password(
+				payload.password,
+				payload.saltB64,
+				payload.slotIdB64,
+				payload.verifierB64,
+				payload.wrapIvB64,
+				payload.wrappedVekB64,
+				new Uint8Array(payload.magicVersion),
+			);
+		case "CRYPTO_VERIFY_PASSWORD_SLOT":
+			return crypto.verify_password_slot(
+				payload.password,
+				payload.saltB64,
+				payload.slotIdB64,
+				payload.verifierB64,
+				new Uint8Array(payload.magicVersion),
+			);
+
 		case "CRYPTO_ENCRYPT":
 			return crypto.encrypt_entry(payload.plaintextJson);
 		case "CRYPTO_DECRYPT":
@@ -42,16 +73,11 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 				payload.wrappedDek,
 				payload.dekIv,
 			);
-		case "CRYPTO_VERIFIER":
-			return Array.from(crypto.verifier_for(new Uint8Array(payload.magic)));
-		case "CRYPTO_VERIFY_PASSWORD":
-			return crypto.verify_password(payload.password, payload.saltB64);
 		case "CRYPTO_ENCRYPT_OUTER":
-			return crypto.encrypt_with_master(payload.plaintext);
+			return crypto.encrypt_with_vek(payload.plaintext);
 		case "CRYPTO_DECRYPT_OUTER":
-			return crypto.decrypt_with_master(payload.iv, payload.ciphertext);
-		case "CRYPTO_CHANGE_PW":
-			return crypto.change_password(payload.newPassword, payload.newSaltB64, payload.entries);
+			return crypto.decrypt_with_vek(payload.iv, payload.ciphertext);
+
 		default:
 			throw new Error(`unknown crypto message: ${type}`);
 	}

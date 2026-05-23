@@ -17,11 +17,13 @@ Drive folder for transparent cloud sync.
   disk is the magic bytes, version, salt, verifier, and IVs in the vault
   header. The hostname registry (used for the "locked" autofill hint) is the
   one exception — see "Session lifecycle" below.
-- The **master key is derived inside Rust WASM.** A copy of the derived key
+- **All key derivation happens inside Rust WASM.** The password-derived KEK
+  (Argon2id) unwraps a random **Vault Encryption Key (VEK)** generated once
+  at vault creation. The VEK is the in-memory secret; a copy of its 32 raw
   bytes is held in `chrome.storage.session` (in-memory, per-extension, wiped
   on browser restart) so the WASM module can be re-hydrated after Chrome
   terminates the offscreen document. JS heap holds only ciphertexts,
-  operation results, and the b64 key cache.
+  operation results, and the b64 VEK cache — never a password or KEK.
 - Prefer **explicit over clever**. This is security software.
 - Every interface in `core/adapters/` must be implementable by a future
   platform (web app, Tauri desktop) without touching `core/` itself.
@@ -38,15 +40,15 @@ Drive folder for transparent cloud sync.
 | Cipher | **AES-256-GCM** with per-entry DEKs (envelope encryption). |
 | Memory zeroing | `zeroize` crate, `Drop`-based. |
 | WASM host context | **Offscreen document.** Pure WASM container — no state. |
-| Session state owner | **Background service worker.** Holds autofill index, cached master key, alarms. |
-| Session persistence | `chrome.storage.session` (master key + autofill index), `chrome.storage.local` (hostname registry). |
+| Session state owner | **Background service worker.** Holds autofill index, cached VEK, alarms. |
+| Session persistence | `chrome.storage.session` (VEK + autofill index), `chrome.storage.local` (hostname registry). |
 | Auto-lock | `chrome.alarms`, default 15 min, sliding (resets on autofill activity). |
 | Extension targets | **Chromium MV3 only for v1.** Firefox is v2. |
 | Vault encryption scope | **All entry fields encrypted.** No plaintext meta in the vault file. |
 | Vault file location | **File System Access API** — user picks file via OS picker. Falls back to `chrome.storage.local` when FSA isn't available. |
 | Handle persistence | `FileSystemFileHandle` in **IndexedDB**. |
-| Verifier block | **HMAC(master_key, magic ++ version)** — no fixed plaintext. |
-| Vault format versioning | 1-byte version field at offset 4 after `VLT1` magic. Multi-key (LUKS-style) slots planned before ship — see "Planned vault format" below. |
+| Per-slot verifier | **HMAC(KEK, magic ++ version ++ slotId)** — constant-time reject of wrong credentials without an AEAD unwrap attempt. |
+| Vault format versioning | 1-byte version field at offset 4 after `VLT1` magic. Current version `0x02` — LUKS-style multi-key slots (see "Multi-Key Slots" below). |
 | Hostname matching | `tldts` eTLD+1 collapsing — `www.ikea.com` and `ca.accounts.ikea.com` both match an entry stored as `ikea.com`. |
 | Password recovery | **None.** Loud onboarding warning. |
 | Atomic writes | FSA `createWritable()` close-commit semantics. |
@@ -148,13 +150,13 @@ packages/
 │  ──────────────────────────────────────────                    │
 │  Owns:                                                         │
 │   - autofillIndex (in-memory + chrome.storage.session)         │
-│   - cachedMasterKey b64 (in-memory + chrome.storage.session)   │
+│   - cachedVek b64 (in-memory + chrome.storage.session)         │
 │   - knownHostnames (in-memory + chrome.storage.local)          │
 │   - vault:autolock alarm (sliding 15-min timeout)              │
 │                                                                │
 │  Handles AUTOFILL_* directly (no offscreen round-trip).        │
-│  Forwards CRYPTO_* to offscreen, re-injecting cachedMasterKey  │
-│  via CRYPTO_UNLOCK_WITH_KEY whenever offscreen is fresh.       │
+│  Forwards CRYPTO_* to offscreen, re-injecting cachedVek via    │
+│  CRYPTO_UNLOCK_WITH_VEK whenever offscreen is fresh.           │
 └────────────────────┬───────────────────────────────────────────┘
                      │  chrome.runtime.sendMessage (target=offscreen)
                      ▼
@@ -181,10 +183,11 @@ idle-kill cycle.
 The unlocked-vault session is engineered to survive every restart Chrome
 throws at us except for explicit lock / timeout / browser-close.
 
-1. **Unlock** (`CRYPTO_UNLOCK`):
-   - Background forwards to offscreen → WASM derives master key with Argon2id.
-   - Background calls `CRYPTO_EXPORT_KEY` → caches the 32-byte master key as
-     b64 in `chrome.storage.session`.
+1. **Unlock** (`CRYPTO_UNWRAP_PASSWORD_SLOT`):
+   - Background forwards to offscreen → WASM derives the KEK with Argon2id,
+     verifies the slot in constant time, and unwraps the VEK into memory.
+   - On success, background calls `CRYPTO_EXPORT_VEK` → caches the 32-byte
+     VEK as b64 in `chrome.storage.session`.
    - Background schedules the `vault:autolock` alarm (15 min from now).
 2. **Populate autofill** (`AUTOFILL_SET_INDEX`):
    - Popup pushes the decrypted entries.
@@ -196,10 +199,10 @@ throws at us except for explicit lock / timeout / browser-close.
 4. **Offscreen killed by Chrome**:
    - Next `CRYPTO_*` recreates the offscreen.
    - Background detects WASM is fresh (`offscreenHasKey === false`), sends
-     `CRYPTO_UNLOCK_WITH_KEY` with the cached b64 key before forwarding the
+     `CRYPTO_UNLOCK_WITH_VEK` with the cached b64 VEK before forwarding the
      real message. No re-prompt.
 5. **SW killed by Chrome**:
-   - On wake, hydrates `autofillIndex`, `cachedMasterKey`, and `knownHostnames`
+   - On wake, hydrates `autofillIndex`, `cachedVek`, and `knownHostnames`
      from `chrome.storage.session` / `local`.
 6. **Alarm fires** (15 min idle):
    - Background wipes in-memory state, removes the session-storage keys,
@@ -224,20 +227,29 @@ interface StorageAdapter {
   setMeta<T>(key: string, value: T): Promise<void>;
 }
 
-// crypto.ts
+// crypto.ts — slot-aware. All entry / outer crypto is keyed by the in-memory
+// VEK; password slots wrap a copy of the VEK (LUKS-style multi-key layout).
 interface CryptoAdapter {
-  unlock(password: string, saltB64: string): Promise<void>;
+  // VEK lifecycle.
+  generateVek(): Promise<string>;                  // creates VEK + loads it
+  unlockWithVek(vekB64: string): Promise<void>;    // session resume / rollback
+  exportVek(): Promise<string>;                    // session resume
+  rotateVek(): Promise<string>;                    // full rotation
   lock(): Promise<void>;
   isLocked(): Promise<boolean>;
+
+  // Slot operations.
+  generateSalt(): Promise<string>;
+  generateSlotId(): Promise<string>;
+  wrapVekPassword(in: WrapPasswordSlotInput): Promise<PasswordSlotBlob>;
+  unwrapVekPassword(in: UnwrapPasswordSlotInput): Promise<boolean>;
+  verifyPasswordSlot(in: VerifyPasswordSlotInput): Promise<boolean>;
+
+  // Entry / outer crypto, keyed by the loaded VEK.
   encryptEntry(plaintextJson: string): Promise<EncryptedPayload>;
   decryptEntry(payload: EncryptedPayload): Promise<string>;
-  generateSalt(): Promise<string>;
-  verifierFor(magicBytes: Uint8Array): Promise<Uint8Array>;
-  verifyPassword(password: string, saltB64: string): Promise<boolean>;
-  encryptWithMaster(plaintext: string): Promise<MasterEncrypted>;
-  decryptWithMaster(iv: string, ciphertext: string): Promise<string>;
-  changePassword(newPassword: string, newSaltB64: string,
-                 entries: EncryptedPayload[]): Promise<EncryptedPayload[]>;
+  encryptWithVek(plaintext: string): Promise<VekEncrypted>;
+  decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 }
 
 // autofill.ts
@@ -281,19 +293,33 @@ interface NativeMessagingAdapter { ... }
 ## WASM Crypto API (`packages/crypto-wasm/src/lib.rs`)
 
 ```rust
-unlock(password: String, salt_b64: String) -> Result<(), JsError>
-unlock_with_key(key_b64: String) -> Result<(), JsError>  // session resume
-export_key() -> Result<String, JsError>                  // session resume
+// VEK lifecycle (the in-memory key slot now holds the Vault Encryption Key).
+generate_vek() -> Result<String, JsError>                // vault create
+unlock_with_vek(vek_b64: String) -> Result<(), JsError>  // session resume / rotation rollback
+export_vek() -> Result<String, JsError>                  // session resume
+rotate_vek() -> Result<String, JsError>                  // full rotation on password change
 lock()
 is_locked() -> bool
+
+// Salts / slot IDs.
 generate_salt() -> Result<String, JsError>
-encrypt_entry(plaintext_json: String) -> Result<JsValue, JsError>
+generate_slot_id() -> Result<String, JsError>
+
+// Password slot — wraps a copy of the VEK under a KEK = Argon2id(password, salt).
+// `magic_version` binds the verifier to the format version (magic ++ version).
+wrap_vek_password(password, salt_b64, slot_id_b64, magic_version)
+    -> Result<JsValue, JsError>          // { verifier, wrapIv, wrappedVek }
+unwrap_vek_password(password, salt_b64, slot_id_b64,
+                    verifier_b64, wrap_iv_b64, wrapped_vek_b64, magic_version)
+    -> Result<bool, JsError>             // true → VEK loaded; false → wrong pw
+verify_password_slot(password, salt_b64, slot_id_b64, verifier_b64, magic_version)
+    -> Result<bool, JsError>             // constant-time, no VEK unwrap
+
+// Entry / outer crypto — all keyed by the VEK.
+encrypt_entry(plaintext_json) -> Result<JsValue, JsError>
 decrypt_entry(ct, iv, wrapped_dek, dek_iv) -> Result<String, JsError>
-encrypt_with_master(plaintext: String) -> Result<JsValue, JsError>
-decrypt_with_master(iv_b64, ciphertext_b64) -> Result<String, JsError>
-verifier_for(magic: &[u8]) -> Result<Vec<u8>, JsError>
-verify_password(password: String, salt_b64: String) -> Result<bool, JsError>
-change_password(new_password, new_salt_b64, entries) -> Result<JsValue, JsError>
+encrypt_with_vek(plaintext) -> Result<JsValue, JsError>
+decrypt_with_vek(iv_b64, ciphertext_b64) -> Result<String, JsError>
 ```
 
 Built via `bun run wasm:build` → `wasm-pack build --target web --out-dir
@@ -308,17 +334,33 @@ through `wasm-loader.ts`.
 ```
 Offset   Length   Field
 0        4        Magic: 0x56 0x4C 0x54 0x31  ("VLT1")
-4        1        Version: 0x01
-5        16       Argon2id salt
-21       32       Verifier: HMAC-SHA256(master_key, magic ++ version)
-53       12       Entries IV
-65       N        Entries ciphertext (AES-256-GCM of JSON EncryptedEntry[])
+4        1        Version: 0x02
+5        1        slotCount (uint8, max 16)
+6        …        slots[] — each slot is TLV:
+                    1 byte  kind  (0x01 password | 0x02 webauthn | 0x03 recovery)
+                    2 bytes len   (big-endian)
+                    N bytes payload (see per-kind layout below)
+…       12        Entries IV
+…        N        Entries ciphertext (AES-256-GCM of JSON EncryptedEntry[] under VEK)
 ```
+
+Password slot payload (kind = 0x01, len = 124):
+```
+ 0   16   slotId
+16   16   Argon2id salt
+48   32   verifier = HMAC-SHA256(KEK, magic ++ version ++ slotId)
+80   12   wrapIv
+92   48   wrappedVEK (32-byte VEK + 16-byte GCM tag)
+```
+
+Today the on-disk encoder only emits password slots. Unknown slot kinds
+(future webauthn / recovery) are preserved verbatim across a decode → encode
+round-trip so older builds don't drop slot data added by newer builds.
 
 ```ts
 interface EncryptedEntry {
   id: string;          // uuid
-  wrappedDek: string;  // base64 — DEK wrapped by master key
+  wrappedDek: string;  // base64 — DEK wrapped by VEK
   dekIv: string;       // base64
   ciphertext: string;  // base64 — JSON of { name, url, username, password, totp?, notes? }
   iv: string;          // base64
@@ -331,21 +373,24 @@ queries while the popup is closed.
 
 ---
 
-## Planned Vault Format — Multi-Key Slots
+## Multi-Key Slots
 
-The current in-repo format hard-codes one master password per vault, but
-nothing has shipped yet so we'll go straight to a LUKS-style **multi-key
-slot** layout before first release. Same vault, unlockable by any of: a
-master password, a printable recovery code, a hardware security key (FIDO2
+LUKS-style multi-key slot layout. Same vault, unlockable by any of: a master
+password, a printable recovery code, a hardware security key (FIDO2
 `hmac-secret`), or future authenticator types — without re-encrypting the
 entries each time a key is added or revoked.
 
+Status: **password slot is shipped** (format v0x02). WebAuthn and recovery
+slot kinds are reserved in the format; the encoder/decoder preserves their
+payloads verbatim across a round-trip, but no UI yet exists to add or
+remove them.
+
 ### Concept
 
-Introduce a random **Vault Encryption Key (VEK)** at vault creation. Each
-entry's DEK is wrapped by the VEK (today it's wrapped by the master key).
-Each "slot" wraps a copy of the VEK with a Key Encryption Key (KEK) derived
-from one specific authenticator:
+A random **Vault Encryption Key (VEK)** is generated at vault creation. Each
+entry's DEK is wrapped by the VEK; the outer entries blob is encrypted under
+the VEK. Each "slot" wraps a copy of the VEK with a Key Encryption Key (KEK)
+derived from one specific authenticator:
 
 ```
 authenticator → KEK = kdf(authenticator-secret, slot-salt)
@@ -354,33 +399,25 @@ authenticator → KEK = kdf(authenticator-secret, slot-salt)
 ```
 
 Add a slot → derive a new KEK, wrap the existing VEK with it, append.
-Revoke a slot → drop it from the array. The VEK and all entry DEKs are
-untouched. Entries never need re-encryption.
+Revoke a slot → drop it from the array. These keep the VEK and all entry
+DEKs untouched, so entries don't need re-encryption.
 
-### Header layout (sketch)
+**Rotating a password is different**: we deliberately rotate the VEK,
+re-encrypt every entry under fresh DEKs + IVs, re-encrypt the outer entries
+blob, and rewrap the new VEK under the new password slot. The slow path is
+the point — a leaked old VEK or old DEK must not survive a rotation. When
+recovery / WebAuthn slots exist, rotation will require re-presenting each
+authenticator so the new VEK can be wrapped under every existing slot's KEK
+in one atomic operation.
+
+### Header layout
+
+See "Vault Blob Format" above for the live layout. The encoder enforces a
+non-empty slot list and a hard cap of 16 slots.
+
+### Reserved slot payloads (not yet wired)
 
 ```
-0        4        Magic: "VLT1"
-4        1        Version: 0x01
-5        1        slotCount (uint8, max 16)
-6        ...      slots[] — each slot is length-prefixed TLV:
-                    1 byte  kind  (0x01 password | 0x02 webauthn | 0x03 recovery)
-                    2 bytes len   (big-endian)
-                    N bytes payload (see per-kind layout below)
-?        12       Entries IV
-?        N        Entries ciphertext (AES-256-GCM under VEK)
-```
-
-Per-kind slot payload:
-
-```
-password slot (kind=0x01):
-  16 bytes  slotId (uuid)
-  16 bytes  Argon2id salt
-  32 bytes  verifier = HMAC-SHA256(KEK, magic ++ version ++ slotId)
-  12 bytes  wrapIv
-  48 bytes  wrappedVEK (32 byte VEK + 16 byte GCM tag)
-
 webauthn slot (kind=0x02):
   16 bytes  slotId
    2 bytes  credentialIdLen
@@ -412,7 +449,7 @@ recovery slot (kind=0x03):
 The verifier-per-slot lets us reject wrong passwords / wrong security keys
 without attempting expensive VEK unwrap.
 
-### WebAuthn `hmac-secret`
+### WebAuthn `hmac-secret` (planned)
 
 The `hmac-secret` extension lets us request a stable HMAC output from a
 FIDO2 authenticator (YubiKey 5, Solo, Passkey-capable platform
@@ -425,9 +462,9 @@ authenticators implement `hmac-secret` (YubiKey 5+ and most Solo keys do).
 
 ### Session-resume implications
 
-`chrome.storage.session` currently caches the b64 master key for offscreen
-restart. With key slots it caches the **VEK** instead — same shape, same
-lifecycle, but now agnostic to which authenticator the user originally used.
+`chrome.storage.session` caches the b64 VEK so offscreen / SW restarts can
+re-inject it without prompting the user. Agnostic to which authenticator
+the user originally unlocked with.
 
 ---
 
@@ -520,8 +557,8 @@ button calls `shell.popOut()`, which uses `chrome.windows.create` to open
 `popup.html?detached=1` as a standalone type=`popup` window — 500×600,
 anchored to the top-right of the currently-focused browser window with an
 80px y-offset to clear the title + tab bars. State is preserved because
-the background SW owns the master-key cache and autofill index, so the
-new window picks up the unlocked session without re-prompting.
+the background SW owns the VEK cache and autofill index, so the new
+window picks up the unlocked session without re-prompting.
 
 `shell.isDetached()` reads the `?detached=1` URL flag and is used to hide
 the pop-out button when already running detached. `popup.tsx` also
@@ -546,11 +583,26 @@ leaving dead space.
   background SW, not the popup.
 - File System Access storage with `chrome.storage.local` fallback.
 - WASM crypto with Argon2id + AES-256-GCM + envelope encryption.
-- Verifier-block password check.
+- **Multi-key vault slot format** (VLT1 v0x02) — random VEK at vault
+  creation, password slot wraps the VEK with `KEK = Argon2id(password, salt)`,
+  per-slot verifier = `HMAC-SHA256(KEK, magic ++ version ++ slotId)` for
+  constant-time wrong-password rejection. Encoder/decoder reserve and
+  round-trip kinds 0x02 (webauthn) / 0x03 (recovery) verbatim, so future
+  builds can add them without a format bump.
+- **Full-rotation password change** — changing the master password
+  generates a brand-new VEK (`crypto.rotateVek`), re-encrypts every entry
+  under a fresh DEK + content IV + dek-wrap IV, re-encrypts the outer
+  entries blob, and rewraps the new VEK under the new password slot. Any
+  leaked old VEK, old DEK, or old ciphertext is cryptographically useless
+  against the rotated vault. The flow snapshots the old VEK in JS memory
+  and rolls back via `unlockWithVek` if any step before the disk write
+  fails. When recovery / WebAuthn slots ship, rotation will refuse vaults
+  with more than one authenticator until the multi-slot re-enroll UI lands
+  rather than silently dropping authenticators.
 - Background-owned session state with sliding auto-lock alarm
   (user-configurable, 15 min default).
-- Master-key cache (`chrome.storage.session`) for seamless resume across
-  offscreen / SW restarts.
+- VEK cache (`chrome.storage.session`) for seamless resume across offscreen /
+  SW restarts.
 - Autofill on top-frame login pages: username-only, password-only, and
   combined forms. eTLD+1 subdomain matching via `tldts` (overridable
   per entry to `exact` / `subdomain` strict modes).
@@ -570,9 +622,9 @@ leaving dead space.
   change-master-password flow (current → new → confirm). Prefs persisted
   via `storage.setMeta` in `chrome.storage.local`; background reads them
   on demand and reschedules the auto-lock alarm when the timeout changes.
-  Change-master-password rotates salt + verifier, re-wraps every entry's
-  DEK via `crypto.changePassword`, re-encrypts the outer blob under the
-  new key, and refreshes the cached master key in background.
+  Change-master-password triggers a full rotation (new VEK, fresh DEK +
+  IVs per entry, new outer blob, new password slot) — see "Full-rotation
+  password change" above.
 - **HIBP breach check** — `checkPasswordBreach` (in `util/pwned.ts`)
   wraps the k-anonymity range query and returns `undefined` on any
   network failure (fail-open). Stored encrypted inside the entry JSON
@@ -597,20 +649,22 @@ leaving dead space.
 
 ### TODO (next phases)
 
-1. **Multi-key vault slots** (see "Planned Vault Format" above). Land this
-   *before* first release so we never have to migrate. Unblocks recovery
-   codes, hardware security keys via WebAuthn `hmac-secret`, and shared-vault
-   scenarios. WASM gets `unwrap_vek_*` / `wrap_vek_*` primitives, and the
-   existing `unlock` / `unlock_with_key` become "unlock the VEK via slot X".
-2. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
+1. **Recovery-code slot (kind 0x03)** — wire add / revoke UI to the existing
+   slot-aware format. Same Argon2id-derived KEK as password slots, just
+   with a printable code instead of a memorised password.
+2. **WebAuthn `hmac-secret` slot (kind 0x02)** — register / unlock with a
+   FIDO2 authenticator (YubiKey 5+, platform passkeys). Requires
+   `navigator.credentials.create/get` from popup/options context and
+   testing across authenticator vendors.
+3. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
    `chrome.idle.onStateChanged` + popup `visibilitychange`.
-3. **TOTP code generation** in `EntryDetail` (`otpauth` dep already
+4. **TOTP code generation** in `EntryDetail` (`otpauth` dep already
    installed, encrypted `totp` field already in the entry schema).
-4. **Password strength indicator** in `CreatePassword` — `check-password-strength`
+5. **Password strength indicator** in `CreatePassword` — `check-password-strength`
    dep is installed and used by `pwned.ts`, but not surfaced in the form.
-5. **E2E tests** — Playwright + extension support.
-6. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-7. **Chrome Web Store submission**.
+6. **E2E tests** — Playwright + extension support.
+7. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+8. **Chrome Web Store submission**.
 
 ---
 

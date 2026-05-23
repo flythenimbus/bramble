@@ -3,15 +3,13 @@
 import type { Credentials, FindResult, IndexEntry, MatchSummary } from "@core/adapters/autofill";
 import { getDomain } from "tldts";
 
-// state: decrypted autofill index, cached master key, hostname registry,
-// next CRYPTO_* forward), we silently re-inject the master key into it.
 //
-//   chrome.storage.session — master key + decrypted index. In-memory, wiped
+//   chrome.storage.session — VEK + decrypted index. In-memory, wiped
 //     on browser restart. Survives SW restart and offscreen restart.
 
 const OFFSCREEN_URL = "offscreen.html";
 
-const MASTER_KEY_KEY = "vault.masterKey";
+const VEK_KEY = "vault.vek";
 const AUTOFILL_INDEX_KEY = "autofill.index";
 const HOSTNAMES_KEY = "autofill.knownHostnames";
 const CLIPBOARD_EXPECTED_KEY = "clipboard.expectedHash";
@@ -28,18 +26,17 @@ const DEFAULT_CLIPBOARD_SECONDS = 30;
 
 let autofillIndex: Map<string, IndexEntry> | null = null;
 const knownHostnames = new Set<string>();
-let cachedMasterKey: string | null = null;
-// Tracks whether we've already re-injected the cached key into this offscreen
+let cachedVek: string | null = null;
 let offscreenHasKey = false;
 
 const hydrationPromise = (async () => {
 	try {
 		const [sessionResult, localResult] = await Promise.all([
-			chrome.storage.session.get([MASTER_KEY_KEY, AUTOFILL_INDEX_KEY]),
+			chrome.storage.session.get([VEK_KEY, AUTOFILL_INDEX_KEY]),
 			chrome.storage.local.get([HOSTNAMES_KEY]),
 		]);
-		const cachedKey = sessionResult[MASTER_KEY_KEY];
-		if (typeof cachedKey === "string") cachedMasterKey = cachedKey;
+		const cached = sessionResult[VEK_KEY];
+		if (typeof cached === "string") cachedVek = cached;
 		const cachedIndex = sessionResult[AUTOFILL_INDEX_KEY];
 		if (Array.isArray(cachedIndex)) {
 			autofillIndex = new Map();
@@ -90,21 +87,19 @@ async function sendToOffscreen(
 	message: Record<string, unknown>,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
 	await ensureOffscreen();
-	// If we have a cached key and the offscreen doesn't, push it in first so
-	// downstream operations see an unlocked WASM. Skip for the unlock messages
-	// themselves to avoid an infinite loop.
 	const type = message.type as string | undefined;
 	const skipKeyInjection =
-		type === "CRYPTO_UNLOCK" ||
-		type === "CRYPTO_UNLOCK_WITH_KEY" ||
+		type === "CRYPTO_UNWRAP_PASSWORD_SLOT" ||
+		type === "CRYPTO_UNLOCK_WITH_VEK" ||
+		type === "CRYPTO_GENERATE_VEK" ||
 		type === "CLIPBOARD_CLEAR";
-	if (cachedMasterKey && !offscreenHasKey && !skipKeyInjection) {
+	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {
 		offscreenHasKey = true;
 		await chrome.runtime
 			.sendMessage({
 				target: "offscreen",
-				type: "CRYPTO_UNLOCK_WITH_KEY",
-				payload: { keyB64: cachedMasterKey },
+				type: "CRYPTO_UNLOCK_WITH_VEK",
+				payload: { vekB64: cachedVek },
 			})
 			.catch(() => {
 				offscreenHasKey = false;
@@ -136,12 +131,12 @@ async function getClipboardSeconds(): Promise<number> {
 }
 
 
-async function persistMasterKey(): Promise<void> {
-	if (cachedMasterKey === null) return;
+async function persistVek(): Promise<void> {
+	if (cachedVek === null) return;
 	try {
-		await chrome.storage.session.set({ [MASTER_KEY_KEY]: cachedMasterKey });
+		await chrome.storage.session.set({ [VEK_KEY]: cachedVek });
 	} catch (e) {
-		console.warn("[titanpass:bg] persistMasterKey failed", e);
+		console.warn("[titanpass:bg] persistVek failed", e);
 	}
 }
 
@@ -160,11 +155,11 @@ async function persistAutofillIndex(): Promise<void> {
 }
 
 async function clearSession(): Promise<void> {
-	cachedMasterKey = null;
+	cachedVek = null;
 	autofillIndex = null;
 	offscreenHasKey = false;
 	try {
-		await chrome.storage.session.remove([MASTER_KEY_KEY, AUTOFILL_INDEX_KEY]);
+		await chrome.storage.session.remove([VEK_KEY, AUTOFILL_INDEX_KEY]);
 	} catch {}
 	void chrome.alarms.clear(AUTOLOCK_ALARM);
 }
@@ -178,16 +173,16 @@ async function scheduleAutoLock(): Promise<void> {
 	void chrome.alarms.create(AUTOLOCK_ALARM, { delayInMinutes: minutes });
 }
 
-async function exportAndCacheMasterKey(): Promise<void> {
+async function exportAndCacheVek(): Promise<void> {
 	try {
-		const exported = await sendToOffscreen({ type: "CRYPTO_EXPORT_KEY" });
+		const exported = await sendToOffscreen({ type: "CRYPTO_EXPORT_VEK" });
 		if (exported.ok && typeof exported.data === "string") {
-			cachedMasterKey = exported.data;
+			cachedVek = exported.data;
 			offscreenHasKey = true;
-			await persistMasterKey();
+			await persistVek();
 		}
 	} catch (e) {
-		console.warn("[titanpass:bg] export master key failed", e);
+		console.warn("[titanpass:bg] export VEK failed", e);
 	}
 }
 
@@ -218,7 +213,7 @@ async function runClipboardClear(): Promise<void> {
 
 
 function findResult(hostname: string): FindResult {
-	if (!autofillIndex || cachedMasterKey === null) {
+	if (!autofillIndex || cachedVek === null) {
 		const pageDomain = registrableDomain(hostname);
 		let hasPotentialMatch = false;
 		for (const h of knownHostnames) {
@@ -274,18 +269,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			try {
 				const response = await sendToOffscreen(message);
 				if (response.ok) {
-					// Post-success bookkeeping for the unlock / lock / change-pw
-					// messages.
-					if (type === "CRYPTO_UNLOCK") {
-						offscreenHasKey = true;
+					if (type === "CRYPTO_GENERATE_VEK") {
+						if (typeof response.data === "string") {
+							cachedVek = response.data;
+							offscreenHasKey = true;
+							await persistVek();
+						}
 						await scheduleAutoLock();
-						await exportAndCacheMasterKey();
-					} else if (type === "CRYPTO_CHANGE_PW") {
-						// change_password swaps the WASM master_slot to the new
-						// key — refresh the cached b64 so subsequent offscreen
-						// restarts re-inject the correct key.
-						offscreenHasKey = true;
-						await exportAndCacheMasterKey();
+					} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT") {
+						if (response.data === true) {
+							offscreenHasKey = true;
+							await scheduleAutoLock();
+							await exportAndCacheVek();
+						}
+					} else if (type === "CRYPTO_ROTATE_VEK") {
+						if (typeof response.data === "string") {
+							cachedVek = response.data;
+							offscreenHasKey = true;
+							await persistVek();
+						}
+					} else if (type === "CRYPTO_UNLOCK_WITH_VEK") {
+						const payload = (message.payload ?? {}) as { vekB64?: string };
+						if (typeof payload.vekB64 === "string") {
+							cachedVek = payload.vekB64;
+							offscreenHasKey = true;
+							await persistVek();
+						}
 					} else if (type === "CRYPTO_LOCK") {
 						await clearSession();
 					}
@@ -466,7 +475,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
-	if (changes[PREF_AUTOLOCK_MINUTES] && cachedMasterKey !== null) {
+	if (changes[PREF_AUTOLOCK_MINUTES] && cachedVek !== null) {
 		void scheduleAutoLock();
 	}
 });
