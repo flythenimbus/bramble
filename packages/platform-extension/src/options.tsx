@@ -2,6 +2,7 @@ import { OptionsApp, type Platform, PlatformProvider } from "@core/index";
 import { createRoot } from "react-dom/client";
 import "@core/styles/index.css";
 import { extensionAutofill } from "./autofill";
+import { extensionClipboard } from "./clipboard";
 import { extensionCrypto } from "./crypto";
 import { extensionShell } from "./shell";
 import { extensionStorage } from "./storage";
@@ -11,6 +12,7 @@ const platform: Platform = {
 	crypto: extensionCrypto,
 	autofill: extensionAutofill,
 	shell: extensionShell,
+	clipboard: extensionClipboard,
 };
 
 const root = document.getElementById("root");

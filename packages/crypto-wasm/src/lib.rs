@@ -124,6 +124,27 @@ pub fn lock() {
     *master_slot().lock().unwrap() = None;
 }
 
+// Constant-time check: does `password + salt` derive to the currently-loaded
+// master key? Used as a confirmation step before allowing a change-master-
+// password flow on an already-unlocked vault.
+#[wasm_bindgen]
+pub fn verify_password(password: String, salt_b64: String) -> Result<bool, JsError> {
+    let salt = b64_decode(&salt_b64)?;
+    let candidate = derive_key(&password, &salt)?;
+    let guard = master_slot().lock().unwrap();
+    let current = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
+    let a = candidate.as_slice();
+    let b = current.as_slice();
+    if a.len() != b.len() {
+        return Ok(false);
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    Ok(diff == 0)
+}
+
 #[wasm_bindgen]
 pub fn is_locked() -> bool {
     master_slot().lock().unwrap().is_none()

@@ -18,6 +18,7 @@ export interface CryptoAdapter {
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
 	generateSalt(): Promise<string>;
 	verifierFor(magicBytes: Uint8Array): Promise<Uint8Array>;
+	verifyPassword(password: string, saltB64: string): Promise<boolean>;
 	encryptWithMaster(plaintext: string): Promise<MasterEncrypted>;
 	decryptWithMaster(iv: string, ciphertext: string): Promise<string>;
 	changePassword(

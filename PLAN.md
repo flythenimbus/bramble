@@ -68,13 +68,15 @@ packages/
 │       ├── adapters/
 │       │   ├── storage.ts             # StorageAdapter interface
 │       │   ├── crypto.ts              # CryptoAdapter interface
-│       │   ├── autofill.ts            # AutofillAdapter interface
+│       │   ├── autofill.ts            # AutofillAdapter interface (+ per-entry overrides)
+│       │   ├── clipboard.ts           # ClipboardAdapter — copy + auto-clear
 │       │   ├── shell.ts               # ShellAdapter (open options page, FSA capability, current tab origin)
 │       │   └── messaging.ts           # NativeMessagingAdapter (reserved)
 │       ├── context/
 │       │   └── PlatformContext.tsx    # Provider + usePlatform() hook
 │       ├── hooks/
-│       │   └── useVault.tsx           # Orchestrates storage + crypto + autofill
+│       │   ├── useVault.tsx           # Orchestrates storage + crypto + autofill
+│       │   └── usePrefs.tsx           # User prefs (auto-lock, clipboard TTL, breach check)
 │       ├── vault-format.ts            # encode/decode binary blob
 │       ├── vault-format.test.ts
 │       ├── util/
@@ -106,17 +108,18 @@ packages/
 │   ├── public/                        # Static assets (wasm output lives here)
 │   │   └── wasm/                      # wasm-pack output — vault_crypto.js + .wasm
 │   └── src/
-│       ├── background.ts              # SW — session state, autofill index, alarms
+│       ├── background.ts              # SW — session state, autofill index, alarms, clipboard-clear, prefs
 │       ├── offscreen.html
-│       ├── offscreen.ts               # Pure WASM container; ~3 kB minified
+│       ├── offscreen.ts               # WASM container + clipboard-clear (CLIPBOARD reason)
 │       ├── popup.html
 │       ├── popup.tsx                  # Wires adapters, renders <App />
 │       ├── options.html
 │       ├── options.tsx                # Renders <OptionsApp />
-│       ├── content-script.ts          # Field detection + dropdown UI + autofill
+│       ├── content-script.ts          # Field detection + dropdown + autofill + auto-submit
 │       ├── storage.ts                 # StorageAdapter — FSA + IndexedDB
 │       ├── crypto.ts                  # CryptoAdapter — messages background → offscreen
 │       ├── autofill.ts                # AutofillAdapter — messages background
+│       ├── clipboard.ts               # ClipboardAdapter — popup-side write, background-scheduled clear
 │       ├── shell.ts                   # ShellAdapter — chrome.tabs / chrome.runtime
 │       └── wasm-loader.ts             # Boots wasm-bindgen runtime in offscreen
 │
@@ -230,6 +233,7 @@ interface CryptoAdapter {
   decryptEntry(payload: EncryptedPayload): Promise<string>;
   generateSalt(): Promise<string>;
   verifierFor(magicBytes: Uint8Array): Promise<Uint8Array>;
+  verifyPassword(password: string, saltB64: string): Promise<boolean>;
   encryptWithMaster(plaintext: string): Promise<MasterEncrypted>;
   decryptWithMaster(iv: string, ciphertext: string): Promise<string>;
   changePassword(newPassword: string, newSaltB64: string,
@@ -243,9 +247,21 @@ interface AutofillAdapter {
   findMatchingEntries(hostname: string): Promise<FindResult>;
   fetchCredentials(entryId: string): Promise<Credentials>;
 }
-// FindResult = { matches, locked, hasPotentialMatch }
-// IndexEntry  = { id, hostname, name, username, password } (decrypted)
-// Credentials = { username, password }
+// FindResult  = { matches, locked, hasPotentialMatch }
+// MatchSummary = { id, name, username, autofillEnabled?, autoSubmit? }
+// IndexEntry  = { id, hostname, name, username, password,
+//                 autofillEnabled?, autoSubmit?, subdomainMatch? }
+// Credentials = { username, password, autoSubmit? }
+// SubdomainMatchMode = "etld1" | "exact" | "subdomain"
+
+// clipboard.ts
+interface ClipboardAdapter {
+  // Writes the value to the OS clipboard (from a context with permission,
+  // i.e. the popup) and schedules a background-driven auto-clear. The clear
+  // wipes only if the clipboard still contains the original value at the
+  // time the alarm fires.
+  copy(text: string): Promise<void>;
+}
 
 // shell.ts
 interface ShellAdapter {
@@ -276,6 +292,7 @@ decrypt_entry(ct, iv, wrapped_dek, dek_iv) -> Result<String, JsError>
 encrypt_with_master(plaintext: String) -> Result<JsValue, JsError>
 decrypt_with_master(iv_b64, ciphertext_b64) -> Result<String, JsError>
 verifier_for(magic: &[u8]) -> Result<Vec<u8>, JsError>
+verify_password(password: String, salt_b64: String) -> Result<bool, JsError>
 change_password(new_password, new_salt_b64, entries) -> Result<JsValue, JsError>
 ```
 
@@ -530,62 +547,70 @@ leaving dead space.
 - File System Access storage with `chrome.storage.local` fallback.
 - WASM crypto with Argon2id + AES-256-GCM + envelope encryption.
 - Verifier-block password check.
-- Background-owned session state with 15-min sliding auto-lock alarm.
+- Background-owned session state with sliding auto-lock alarm
+  (user-configurable, 15 min default).
 - Master-key cache (`chrome.storage.session`) for seamless resume across
   offscreen / SW restarts.
 - Autofill on top-frame login pages: username-only, password-only, and
-  combined forms. eTLD+1 subdomain matching via `tldts`.
+  combined forms. eTLD+1 subdomain matching via `tldts` (overridable
+  per entry to `exact` / `subdomain` strict modes).
 - "Vault locked" hint dropdown when the vault is locked.
 - Theme toggle, popup → home redirect on unlock, content script teardown on
   extension reload.
+- **Clipboard auto-clear** — `ClipboardAdapter.copy()` writes the value
+  from the popup (sole context with clipboard write permission) and sends
+  a SHA-256 fingerprint of it to the background SW. Background schedules
+  the `vault:clipboard-clear` alarm with the user's configured TTL (30 s
+  default). On fire, the offscreen document (created with `CLIPBOARD` +
+  `WORKERS` reasons) reads the clipboard, re-hashes, and only writes
+  empty if the value still matches — so we never trash unrelated data
+  the user copied in the meantime.
+- **Settings screen** — auto-lock timeout (5 / 15 / 30 / 60 min / never),
+  clipboard-clear TTL, breach-check toggle, **Lock now**, and an inline
+  change-master-password flow (current → new → confirm). Prefs persisted
+  via `storage.setMeta` in `chrome.storage.local`; background reads them
+  on demand and reschedules the auto-lock alarm when the timeout changes.
+  Change-master-password rotates salt + verifier, re-wraps every entry's
+  DEK via `crypto.changePassword`, re-encrypts the outer blob under the
+  new key, and refreshes the cached master key in background.
+- **HIBP breach check** — `checkPasswordBreach` (in `util/pwned.ts`)
+  wraps the k-anonymity range query and returns `undefined` on any
+  network failure (fail-open). Stored encrypted inside the entry JSON
+  as `breach: { leaked, checkedAt }`; never written to `chrome.storage`.
+  Fires from the popup on entry create / edit (only when the password
+  actually changed), and lazily on `EntryDetail` open if the cached
+  result is older than 7 days. Red "Breached" badge on row + banner on
+  detail. VaultHome's "At Risk" / "Strong" counters now reflect real
+  breach state. Disabled by a single Settings toggle for users who
+  don't want any outbound traffic.
+- **Per-entry overrides** — new optional fields on `EntryData`:
+  `autofillEnabled` (default true), `autoSubmit` (default false), and
+  `subdomainMatch: "etld1" | "exact" | "subdomain"` (default `etld1`).
+  Surfaced in a collapsible "Advanced" section on `CreatePassword`.
+  Background's `hostnameMatches` honours `subdomainMatch`. Content
+  script honours `autofillEnabled === false` (still shows in dropdown
+  for manual pick, no silent fill) and `autoSubmit === true` (calls
+  `form.requestSubmit()` 50 ms after fill, with a synth-Enter fallback
+  for forms without a submit button). All overrides ride inside the
+  encrypted entry JSON and the in-memory autofill index, so old vaults
+  without these fields keep working unchanged.
 
 ### TODO (next phases)
 
-1. **Clipboard auto-clear** — wire the existing `vault:clipboard-clear` alarm
-   stub in `background.ts` (default 30 s).
-2. **Settings screen** — auto-lock timeout picker (5 / 15 / 60 min / never),
-   change-master-password flow, "Lock now" button. The route exists, the body
-   is empty.
-3. **HIBP password breach check** — `packages/core/src/util/pwned.ts` already
-   implements the k-anonymity range query against `api.pwnedpasswords.com`.
-   Decisions needed:
-   - **When to call**: on entry create + edit (one-shot), AND lazily on
-     `EntryDetail` open if the cached result is stale (> 7 days).
-   - **Where to cache**: store `{ leaked: boolean, checkedAt: number }` as an
-     extra field inside the encrypted entry JSON, so the result is encrypted
-     at rest and travels with the password. Never persist breach status to
-     `chrome.storage` (leaks which entries are compromised).
-   - **Network policy**: only fire from the popup (never the content script),
-     so the user can see and disable network calls in one place. Skip when
-     offline (fail-open: treat as "unknown", not "safe"). Surface a setting
-     to disable entirely for paranoid users.
-   - **UX**: red badge on the entry row + a banner in `EntryDetail` reading
-     "This password was found in N data breaches. Change it."
-4. **Per-entry overrides in a collapsible "Advanced" section** on
-   `CreatePassword` / `EntryDetail`:
-   - `autoSubmit`: after autofill, dispatch Enter / submit the form.
-   - `autofill`: opt this entry out of auto-fill entirely (still shows in the
-     dropdown for manual select).
-   - `subdomainMatch`: `eTLD+1` (default) / `exact` / `subdomain`.
-
-   All of these live inside the encrypted entry JSON. Content script reads
-   them via the `IndexEntry` payload (extend the type), so background can
-   honor per-entry policy when serving `findMatchingEntries` / single-match
-   auto-fill.
-5. **Multi-key vault slots** (see "Planned Vault Format" above). Land this
+1. **Multi-key vault slots** (see "Planned Vault Format" above). Land this
    *before* first release so we never have to migrate. Unblocks recovery
    codes, hardware security keys via WebAuthn `hmac-secret`, and shared-vault
    scenarios. WASM gets `unwrap_vek_*` / `wrap_vek_*` primitives, and the
    existing `unlock` / `unlock_with_key` become "unlock the VEK via slot X".
-6. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
+2. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
    `chrome.idle.onStateChanged` + popup `visibilitychange`.
-7. **TOTP code generation** in `EntryDetail` (add `otpauth` dep, encrypted
-   `totp` field already in entry schema).
-8. **Password strength indicator** in `CreatePassword` — `check-password-strength`
-   dep is installed but not wired.
-9. **E2E tests** — Playwright + extension support.
-10. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-11. **Chrome Web Store submission**.
+3. **TOTP code generation** in `EntryDetail` (`otpauth` dep already
+   installed, encrypted `totp` field already in the entry schema).
+4. **Password strength indicator** in `CreatePassword` — `check-password-strength`
+   dep is installed and used by `pwned.ts`, but not surfaced in the form.
+5. **E2E tests** — Playwright + extension support.
+6. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+7. **Chrome Web Store submission**.
 
 ---
 

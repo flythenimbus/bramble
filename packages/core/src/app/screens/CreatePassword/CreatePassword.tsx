@@ -1,6 +1,19 @@
-import { ArrowLeft, Eye, EyeOff, Globe, Plus, RefreshCw, Sparkles, X } from "lucide-react";
+import {
+	ArrowLeft,
+	ChevronDown,
+	ChevronRight,
+	Eye,
+	EyeOff,
+	Globe,
+	Plus,
+	RefreshCw,
+	Sparkles,
+	X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
+import type { SubdomainMatchMode } from "../../../adapters/autofill";
+import type { BreachStatus } from "../../../hooks/useVault";
 import { SelectField } from "../../components/ui/select-field";
 import { TextArea } from "../../components/ui/text-area";
 import { TextField } from "../../components/ui/text-field";
@@ -11,11 +24,19 @@ export interface EntryDraft {
 	username: string;
 	password: string;
 	notes?: string;
+	// Per-entry autofill behavior. Omitted = use defaults.
+	autofillEnabled?: boolean;
+	autoSubmit?: boolean;
+	subdomainMatch?: SubdomainMatchMode;
 }
 
 interface CreatePasswordProps {
 	defaultUrl?: string;
 	initialValues?: EntryDraft;
+	// Breach status cached for `initialValues.password`. While the field
+	// hasn't been edited we trust this value so we can flag a known-breached
+	// password without re-querying HIBP on every render.
+	initialBreach?: BreachStatus;
 	submitLabel?: string;
 	onBack: () => void;
 	onSave: (data: EntryDraft) => Promise<void>;
@@ -34,6 +55,9 @@ interface FormValues {
 	password: string;
 	notes: string;
 	customFields: CustomFieldValue[];
+	autofillEnabled: boolean;
+	autoSubmit: boolean;
+	subdomainMatch: SubdomainMatchMode;
 }
 
 function computeStrength(value: string): number {
@@ -57,6 +81,7 @@ function randomPassword(): string {
 export function CreatePassword({
 	defaultUrl = "",
 	initialValues,
+	initialBreach,
 	submitLabel = "Save password",
 	onBack,
 	onSave,
@@ -67,6 +92,7 @@ export function CreatePassword({
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const startUrl = initialValues?.url ?? defaultUrl;
 	const [hasWebsite, setHasWebsite] = useState(startUrl !== "");
+	const [advancedOpen, setAdvancedOpen] = useState(false);
 
 	const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
 		defaultValues: {
@@ -76,6 +102,9 @@ export function CreatePassword({
 			password: initialValues?.password ?? "",
 			notes: initialValues?.notes ?? "",
 			customFields: [],
+			autofillEnabled: initialValues?.autofillEnabled !== false,
+			autoSubmit: initialValues?.autoSubmit === true,
+			subdomainMatch: initialValues?.subdomainMatch ?? "etld1",
 		},
 	});
 
@@ -83,6 +112,9 @@ export function CreatePassword({
 
 	const passwordValue = watch("password");
 	const passwordStrength = useMemo(() => computeStrength(passwordValue), [passwordValue]);
+	// Only trust the cached breach result while the user hasn't edited the
+	// password — once it changes, the cached flag refers to a different string.
+	const isBreached = initialBreach?.leaked === true && passwordValue === initialValues?.password;
 
 	const generatePassword = () => {
 		setValue("password", randomPassword(), { shouldDirty: true, shouldValidate: true });
@@ -99,6 +131,11 @@ export function CreatePassword({
 				username: data.username,
 				password: data.password,
 				notes: data.notes || undefined,
+				// Only persist overrides when they differ from defaults, so old
+				// entries stay byte-clean and the encrypted payload is minimal.
+				autofillEnabled: data.autofillEnabled ? undefined : false,
+				autoSubmit: data.autoSubmit ? true : undefined,
+				subdomainMatch: data.subdomainMatch === "etld1" ? undefined : data.subdomainMatch,
 			});
 			onBack();
 		} catch (e) {
@@ -109,6 +146,7 @@ export function CreatePassword({
 	};
 
 	const getStrengthColor = () => {
+		if (isBreached) return "bg-destructive";
 		if (passwordStrength === 0) return "bg-muted";
 		if (passwordStrength <= 2) return "bg-destructive";
 		if (passwordStrength === 3) return "bg-yellow-500";
@@ -116,6 +154,7 @@ export function CreatePassword({
 	};
 
 	const getStrengthText = () => {
+		if (isBreached) return "Breached";
 		if (passwordStrength === 0) return "No password";
 		if (passwordStrength <= 2) return "Weak";
 		if (passwordStrength === 3) return "Good";
@@ -209,11 +248,13 @@ export function CreatePassword({
 										<span className="text-xs text-muted-foreground">Password strength</span>
 										<span
 											className={`text-xs ${
-												passwordStrength >= 3
-													? "text-primary"
-													: passwordStrength === 0
-														? "text-muted-foreground"
-														: "text-destructive"
+												isBreached
+													? "text-destructive"
+													: passwordStrength >= 3
+														? "text-primary"
+														: passwordStrength === 0
+															? "text-muted-foreground"
+															: "text-destructive"
 											}`}
 										>
 											{getStrengthText()}
@@ -222,7 +263,9 @@ export function CreatePassword({
 									<div className="h-1.5 bg-muted rounded-full overflow-hidden">
 										<div
 											className={`h-full transition-all duration-300 ${getStrengthColor()}`}
-											style={{ width: `${(passwordStrength / 4) * 100}%` }}
+											style={{
+												width: isBreached ? "5%" : `${(passwordStrength / 4) * 100}%`,
+											}}
 										/>
 									</div>
 								</div>
@@ -317,6 +360,52 @@ export function CreatePassword({
 								</p>
 							)}
 						</div>
+
+						<div>
+							<button
+								type="button"
+								onClick={() => setAdvancedOpen((o) => !o)}
+								className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
+								aria-expanded={advancedOpen}
+							>
+								{advancedOpen ? (
+									<ChevronDown className="w-3.5 h-3.5" />
+								) : (
+									<ChevronRight className="w-3.5 h-3.5" />
+								)}
+								Advanced
+							</button>
+							{advancedOpen && (
+								<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
+									<ToggleRow
+										title="Enable autofill"
+										subtitle="Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault."
+										checked={watch("autofillEnabled")}
+										onChange={(v) =>
+											setValue("autofillEnabled", v, {
+												shouldDirty: true,
+											})
+										}
+									/>
+									<ToggleRow
+										title="Auto-submit after fill"
+										subtitle="Press Enter / submit the form right after the credentials are filled in."
+										checked={watch("autoSubmit")}
+										onChange={(v) => setValue("autoSubmit", v, { shouldDirty: true })}
+									/>
+									<div>
+										<SelectField label="Subdomain match" {...register("subdomainMatch")}>
+											<option value="etld1">eTLD+1 (default — matches all subdomains)</option>
+											<option value="exact">Exact hostname only</option>
+											<option value="subdomain">This domain and its subdomains</option>
+										</SelectField>
+										<p className="text-xs text-muted-foreground mt-1.5">
+											Controls which URLs this entry will offer credentials for.
+										</p>
+									</div>
+								</div>
+							)}
+						</div>
 					</div>
 
 					<div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
@@ -344,5 +433,37 @@ export function CreatePassword({
 				</div>
 			</form>
 		</main>
+	);
+}
+
+interface ToggleRowProps {
+	title: string;
+	subtitle: string;
+	checked: boolean;
+	onChange: (next: boolean) => void;
+}
+
+function ToggleRow({ title, subtitle, checked, onChange }: ToggleRowProps) {
+	return (
+		<div className="flex items-start justify-between gap-3">
+			<div className="min-w-0">
+				<p className="text-sm">{title}</p>
+				<p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+			</div>
+			<button
+				type="button"
+				onClick={() => onChange(!checked)}
+				aria-pressed={checked}
+				className={`relative shrink-0 w-11 h-6 rounded-full border transition-all ${
+					checked ? "bg-primary border-primary/20" : "bg-muted border-border"
+				}`}
+			>
+				<span
+					className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
+						checked ? "left-5" : "left-0.5"
+					}`}
+				/>
+			</button>
+		</div>
 	);
 }

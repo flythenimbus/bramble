@@ -1,7 +1,15 @@
+export type SubdomainMatchMode = "etld1" | "exact" | "subdomain";
+
 export interface MatchSummary {
 	id: string;
 	name: string;
 	username: string;
+	// Per-entry autofill opt-out: when false, the content script must not
+	// silently single-match auto-fill this entry; the user has to pick it
+	// from the dropdown explicitly.
+	autofillEnabled?: boolean;
+	// When true, the content script submits the form after filling.
+	autoSubmit?: boolean;
 }
 
 export interface IndexEntry {
@@ -10,11 +18,17 @@ export interface IndexEntry {
 	name: string;
 	username: string;
 	password: string;
+	// Per-entry overrides (see EntryData in useVault). Optional so older
+	// vaults without these fields keep working.
+	autofillEnabled?: boolean;
+	autoSubmit?: boolean;
+	subdomainMatch?: SubdomainMatchMode;
 }
 
 export interface Credentials {
 	username: string;
 	password: string;
+	autoSubmit?: boolean;
 }
 
 // Returned by `findMatchingEntries`. When the vault is locked, `matches` is

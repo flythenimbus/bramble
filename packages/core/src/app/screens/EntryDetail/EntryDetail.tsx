@@ -1,5 +1,16 @@
-import { ArrowLeft, Check, Copy, Eye, EyeOff, Globe, Pencil, Trash2 } from "lucide-react";
+import {
+	AlertTriangle,
+	ArrowLeft,
+	Check,
+	Copy,
+	Eye,
+	EyeOff,
+	Globe,
+	Pencil,
+	Trash2,
+} from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
 
 interface EntryDetailProps {
@@ -10,6 +21,7 @@ interface EntryDetailProps {
 }
 
 export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProps) {
+	const { clipboard } = usePlatform();
 	const [showPassword, setShowPassword] = useState(false);
 	const [copied, setCopied] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
@@ -23,7 +35,7 @@ export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProp
 
 	const copy = async (label: string, value: string) => {
 		try {
-			await navigator.clipboard.writeText(value);
+			await clipboard.copy(value);
 			setCopied(label);
 		} catch {
 			// Clipboard write can fail when the document isn't focused. Best-effort.
@@ -39,6 +51,8 @@ export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProp
 		}
 	};
 
+	const leaked = entry.breach?.leaked === true;
+
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
 			<button
@@ -49,6 +63,21 @@ export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProp
 				<ArrowLeft className="w-4 h-4" />
 				Back to passwords
 			</button>
+
+			{leaked && (
+				<div
+					className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive"
+					role="alert"
+				>
+					<AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+					<div className="text-sm">
+						<p className="font-medium">This password appeared in a known data breach.</p>
+						<p className="text-xs mt-0.5 opacity-90">
+							Change it on the site to keep your account safe.
+						</p>
+					</div>
+				</div>
+			)}
 
 			<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 				<div className="p-6 space-y-5">

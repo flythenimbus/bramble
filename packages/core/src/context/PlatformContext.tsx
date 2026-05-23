@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from "react";
 import type { AutofillAdapter } from "../adapters/autofill";
+import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
@@ -9,6 +10,7 @@ export interface Platform {
 	crypto: CryptoAdapter;
 	autofill: AutofillAdapter;
 	shell: ShellAdapter;
+	clipboard: ClipboardAdapter;
 }
 
 const PlatformContext = createContext<Platform | null>(null);

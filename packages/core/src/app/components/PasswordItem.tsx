@@ -1,5 +1,6 @@
-import { Check, Copy, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { usePlatform } from "../../context/PlatformContext";
 
 interface CustomField {
 	key: string;
@@ -12,6 +13,7 @@ interface PasswordItemProps {
 	password: string;
 	url?: string;
 	customFields?: CustomField[];
+	leaked?: boolean;
 	onSelect: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
@@ -23,10 +25,12 @@ export function PasswordItem({
 	password,
 	url,
 	customFields = [],
+	leaked,
 	onSelect,
 	onEdit,
 	onDelete,
 }: PasswordItemProps) {
+	const { clipboard } = usePlatform();
 	const [copyOpen, setCopyOpen] = useState(false);
 	const [moreOpen, setMoreOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -59,7 +63,7 @@ export function PasswordItem({
 
 	const copyToClipboard = async (label: string, value: string) => {
 		try {
-			await navigator.clipboard.writeText(value);
+			await clipboard.copy(value);
 			setCopied(label);
 			setCopyOpen(false);
 		} catch {
@@ -105,104 +109,118 @@ export function PasswordItem({
 				</div>
 			</button>
 
-			<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-				<div className="relative" ref={copyRef}>
-					<button
-						type="button"
-						onClick={() => setCopyOpen((o) => !o)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={copied ? `Copied ${copied}` : "Copy"}
-						title={copied ? `Copied ${copied}` : "Copy"}
+			{/* Right slot: at rest shows the "Breached" badge (if any), swapped
+				for the action controls on hover/focus. Both share one grid cell
+				so the row's right edge never shifts. */}
+			<div className="relative shrink-0 grid">
+				{leaked && (
+					<span
+						className="row-start-1 col-start-1 justify-self-end self-center inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 opacity-100 group-hover:opacity-0 focus-within:opacity-0 transition-opacity pointer-events-none"
+						title="Password found in a known data breach"
 					>
-						{copied ? (
-							<Check className="w-3.5 h-3.5 text-primary" />
-						) : (
-							<Copy className="w-3.5 h-3.5" />
-						)}
-					</button>
-					{copyOpen && (
-						<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
-							<MenuItem
-								icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-								onClick={() => copyToClipboard("username", username)}
-							>
-								Copy username
-							</MenuItem>
-							<MenuItem
-								icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-								onClick={() => copyToClipboard("password", password)}
-							>
-								Copy password
-							</MenuItem>
-							{customFields.map((field) => (
-								<MenuItem
-									key={field.key}
-									icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-									onClick={() => copyToClipboard(field.key, field.value)}
-								>
-									Copy {field.key}
-								</MenuItem>
-							))}
-						</div>
-					)}
-				</div>
-
-				<div className="relative" ref={moreRef}>
-					<button
-						type="button"
-						onClick={() => {
-							setMoreOpen((o) => !o);
-							setConfirmingDelete(false);
-						}}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label="More options"
-						aria-expanded={moreOpen}
-					>
-						<MoreVertical className="w-3.5 h-3.5" />
-					</button>
-					{moreOpen && (
-						<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
-							{confirmingDelete ? (
-								<div className="p-3 space-y-2">
-									<p className="text-xs text-foreground">Delete this entry?</p>
-									<div className="flex items-center gap-2">
-										<button
-											type="button"
-											onClick={() => setConfirmingDelete(false)}
-											disabled={deleting}
-											className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
-										>
-											Cancel
-										</button>
-										<button
-											type="button"
-											onClick={handleDelete}
-											disabled={deleting}
-											className="flex-1 px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
-										>
-											{deleting ? "Deleting…" : "Delete"}
-										</button>
-									</div>
-								</div>
+						<AlertTriangle className="w-3 h-3" />
+						Breached
+					</span>
+				)}
+				<div className="row-start-1 col-start-1 justify-self-end self-center flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+					<div className="relative" ref={copyRef}>
+						<button
+							type="button"
+							onClick={() => setCopyOpen((o) => !o)}
+							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							aria-label={copied ? `Copied ${copied}` : "Copy"}
+							title={copied ? `Copied ${copied}` : "Copy"}
+						>
+							{copied ? (
+								<Check className="w-3.5 h-3.5 text-primary" />
 							) : (
-								<>
-									<MenuItem
-										icon={<Pencil className="w-3 h-3 text-muted-foreground" />}
-										onClick={handleEdit}
-									>
-										Edit
-									</MenuItem>
-									<MenuItem
-										icon={<Trash2 className="w-3 h-3 text-destructive" />}
-										destructive
-										onClick={() => setConfirmingDelete(true)}
-									>
-										Delete
-									</MenuItem>
-								</>
+								<Copy className="w-3.5 h-3.5" />
 							)}
-						</div>
-					)}
+						</button>
+						{copyOpen && (
+							<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
+								<MenuItem
+									icon={<Copy className="w-3 h-3 text-muted-foreground" />}
+									onClick={() => copyToClipboard("username", username)}
+								>
+									Copy username
+								</MenuItem>
+								<MenuItem
+									icon={<Copy className="w-3 h-3 text-muted-foreground" />}
+									onClick={() => copyToClipboard("password", password)}
+								>
+									Copy password
+								</MenuItem>
+								{customFields.map((field) => (
+									<MenuItem
+										key={field.key}
+										icon={<Copy className="w-3 h-3 text-muted-foreground" />}
+										onClick={() => copyToClipboard(field.key, field.value)}
+									>
+										Copy {field.key}
+									</MenuItem>
+								))}
+							</div>
+						)}
+					</div>
+
+					<div className="relative" ref={moreRef}>
+						<button
+							type="button"
+							onClick={() => {
+								setMoreOpen((o) => !o);
+								setConfirmingDelete(false);
+							}}
+							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							aria-label="More options"
+							aria-expanded={moreOpen}
+						>
+							<MoreVertical className="w-3.5 h-3.5" />
+						</button>
+						{moreOpen && (
+							<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
+								{confirmingDelete ? (
+									<div className="p-3 space-y-2">
+										<p className="text-xs text-foreground">Delete this entry?</p>
+										<div className="flex items-center gap-2">
+											<button
+												type="button"
+												onClick={() => setConfirmingDelete(false)}
+												disabled={deleting}
+												className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+											>
+												Cancel
+											</button>
+											<button
+												type="button"
+												onClick={handleDelete}
+												disabled={deleting}
+												className="flex-1 px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
+											>
+												{deleting ? "Deleting…" : "Delete"}
+											</button>
+										</div>
+									</div>
+								) : (
+									<>
+										<MenuItem
+											icon={<Pencil className="w-3 h-3 text-muted-foreground" />}
+											onClick={handleEdit}
+										>
+											Edit
+										</MenuItem>
+										<MenuItem
+											icon={<Trash2 className="w-3 h-3 text-destructive" />}
+											destructive
+											onClick={() => setConfirmingDelete(true)}
+										>
+											Delete
+										</MenuItem>
+									</>
+								)}
+							</div>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>

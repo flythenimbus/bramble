@@ -18,6 +18,8 @@ export const extensionCrypto: CryptoAdapter = {
 		const bytes = await send<number[]>("CRYPTO_VERIFIER", { magic: Array.from(magic) });
 		return new Uint8Array(bytes);
 	},
+	verifyPassword: (password, saltB64) =>
+		send<boolean>("CRYPTO_VERIFY_PASSWORD", { password, saltB64 }),
 	encryptWithMaster: (plaintext) => send<MasterEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext }),
 	decryptWithMaster: (iv, ciphertext) => send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext }),
 	changePassword: (newPassword, newSaltB64, entries) =>

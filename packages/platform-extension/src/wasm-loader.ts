@@ -15,6 +15,7 @@ export interface VaultCrypto {
 	decrypt_entry(ciphertext: string, iv: string, wrappedDek: string, dekIv: string): string;
 	generate_salt(): string;
 	verifier_for(magic: Uint8Array): Uint8Array;
+	verify_password(password: string, saltB64: string): boolean;
 	encrypt_with_master(plaintext: string): { iv: string; ciphertext: string };
 	decrypt_with_master(iv: string, ciphertext: string): string;
 	change_password(newPassword: string, newSaltB64: string, entries: unknown): unknown;
