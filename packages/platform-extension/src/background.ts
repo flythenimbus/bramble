@@ -1,11 +1,6 @@
 /// <reference types="chrome" />
 import { getDomain } from "tldts";
-import type {
-	Credentials,
-	FindResult,
-	IndexEntry,
-	MatchSummary,
-} from "@core/adapters/autofill";
+import type { Credentials, FindResult, IndexEntry, MatchSummary } from "@core/adapters/autofill";
 
 // state: decrypted autofill index, cached master key, hostname registry,
 // next CRYPTO_* forward), we silently re-inject the master key into it.
@@ -290,13 +285,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			try {
-				const { entryId } = message.payload as { entryId: string };
+				const { entryId, isAuto } = message.payload as {
+					entryId: string;
+					isAuto?: boolean;
+				};
 				const credentials = fetchCredentials(entryId);
 				scheduleAutoLock();
 				if (_sender.tab?.id) {
+					// overwrite unconditionally (explicit user pick).
 					await chrome.tabs.sendMessage(_sender.tab.id, {
 						type: "AUTOFILL_FILL",
-						payload: credentials,
+						payload: { ...credentials, isAuto: !!isAuto },
 					});
 				}
 				sendResponse({ ok: true });

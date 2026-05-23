@@ -20,6 +20,7 @@ export function AuthRoute() {
 			hasVault={hasVault}
 			onUnlock={unlock}
 			onOpenSetup={() => shell.openSetup()}
+			onPopOut={shell.isDetached() ? undefined : () => void shell.popOut()}
 		/>
 	);
 }

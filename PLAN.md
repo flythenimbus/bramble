@@ -252,6 +252,8 @@ interface ShellAdapter {
   openSetup(): Promise<void>;
   hasFilePicker(): boolean;
   getCurrentTabOrigin(): Promise<string | null>;
+  popOut(): Promise<void>;       // open current UI in a detached window
+  isDetached(): boolean;         // true when running in the popped-out window
 }
 
 // messaging.ts (reserved)
@@ -469,12 +471,19 @@ invalidated" error storm.
 trees:
 
 ```
-/                  → AuthRoute     (unlock form)
+/                            → AuthRoute     (unlock form)
 _app (layout)
-  /vault           → VaultHomeRoute
-  /vault/new       → CreatePasswordRoute
-  /settings        → SettingsRoute
+  /vault                     → VaultHomeRoute
+  /vault/new                 → CreatePasswordRoute
+  /vault/$entryId            → EntryDetailRoute
+  /vault/$entryId/edit       → EntryEditRoute
+  /settings                  → SettingsRoute
 ```
+
+`EntryEditRoute` reuses `CreatePassword` by passing `initialValues` and a
+custom `submitLabel` — one form serves both create and edit. `PasswordItem`
+rows are clickable (navigate to detail) and carry a three-dots menu with
+inline Edit / Delete (delete swaps to a confirm step before destroying).
 
 `AuthRoute` watches `isLocked` and navigates to `/vault` via a `useEffect`
 when it flips to `false`. Navigation is **not** explicit in the unlock
@@ -486,14 +495,38 @@ back to `/`.
 renders the `VaultSetup` flow directly without the router because file
 pickers misbehave inside the popup.
 
+### Detached window (pop-out)
+
+The popup auto-dismisses on focus loss, which is hostile to multi-step
+flows (filling a long form, copying values into another tab). A header
+button calls `shell.popOut()`, which uses `chrome.windows.create` to open
+`popup.html?detached=1` as a standalone type=`popup` window — 500×600,
+anchored to the top-right of the currently-focused browser window with an
+80px y-offset to clear the title + tab bars. State is preserved because
+the background SW owns the master-key cache and autofill index, so the
+new window picks up the unlocked session without re-prompting.
+
+`shell.isDetached()` reads the `?detached=1` URL flag and is used to hide
+the pop-out button when already running detached. `popup.tsx` also
+switches the html/body from the fixed 500×400 popup dimensions to `100%`
+when detached, so the React app fills the chrome window instead of
+leaving dead space.
+
 ---
 
 ## Status
 
 ### Working
 
-- Vault create + unlock + entry list (`VaultSetup`, `Auth`, `VaultHome`,
-  `CreatePassword`).
+- Full CRUD loop: vault create + unlock, entry list (`VaultHome`), entry
+  create (`CreatePassword`), entry detail with copy-to-clipboard
+  (`EntryDetail`), edit (reuses `CreatePassword` with `initialValues`), and
+  delete with confirm step. Row-level edit / delete via the three-dots
+  menu on every `PasswordItem`.
+- Pop-out to detached window via `shell.popOut()` — button in both
+  `AppLayout` header (unlocked) and `Auth` screen (locked). Detached
+  window persists the unlocked session because session state lives in the
+  background SW, not the popup.
 - File System Access storage with `chrome.storage.local` fallback.
 - WASM crypto with Argon2id + AES-256-GCM + envelope encryption.
 - Verifier-block password check.
@@ -508,14 +541,12 @@ pickers misbehave inside the popup.
 
 ### TODO (next phases)
 
-1. **Finish CRUD loop** — verify `CreatePassword` persists; add `EntryDetail`
-   view with copy-to-clipboard buttons; edit / delete from the entry list.
-2. **Clipboard auto-clear** — wire the existing `vault:clipboard-clear` alarm
+1. **Clipboard auto-clear** — wire the existing `vault:clipboard-clear` alarm
    stub in `background.ts` (default 30 s).
-3. **Settings screen** — auto-lock timeout picker (5 / 15 / 60 min / never),
+2. **Settings screen** — auto-lock timeout picker (5 / 15 / 60 min / never),
    change-master-password flow, "Lock now" button. The route exists, the body
    is empty.
-4. **HIBP password breach check** — `packages/core/src/util/pwned.ts` already
+3. **HIBP password breach check** — `packages/core/src/util/pwned.ts` already
    implements the k-anonymity range query against `api.pwnedpasswords.com`.
    Decisions needed:
    - **When to call**: on entry create + edit (one-shot), AND lazily on
@@ -530,7 +561,7 @@ pickers misbehave inside the popup.
      to disable entirely for paranoid users.
    - **UX**: red badge on the entry row + a banner in `EntryDetail` reading
      "This password was found in N data breaches. Change it."
-5. **Per-entry overrides in a collapsible "Advanced" section** on
+4. **Per-entry overrides in a collapsible "Advanced" section** on
    `CreatePassword` / `EntryDetail`:
    - `autoSubmit`: after autofill, dispatch Enter / submit the form.
    - `autofill`: opt this entry out of auto-fill entirely (still shows in the
@@ -541,20 +572,20 @@ pickers misbehave inside the popup.
    them via the `IndexEntry` payload (extend the type), so background can
    honor per-entry policy when serving `findMatchingEntries` / single-match
    auto-fill.
-6. **Multi-key vault slots** (see "Planned Vault Format" above). Land this
+5. **Multi-key vault slots** (see "Planned Vault Format" above). Land this
    *before* first release so we never have to migrate. Unblocks recovery
    codes, hardware security keys via WebAuthn `hmac-secret`, and shared-vault
    scenarios. WASM gets `unwrap_vek_*` / `wrap_vek_*` primitives, and the
    existing `unlock` / `unlock_with_key` become "unlock the VEK via slot X".
-7. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
+6. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
    `chrome.idle.onStateChanged` + popup `visibilitychange`.
-8. **TOTP code generation** in `EntryDetail` (add `otpauth` dep, encrypted
+7. **TOTP code generation** in `EntryDetail` (add `otpauth` dep, encrypted
    `totp` field already in entry schema).
-9. **Password strength indicator** in `CreatePassword` — `check-password-strength`
+8. **Password strength indicator** in `CreatePassword` — `check-password-strength`
    dep is installed but not wired.
-10. **E2E tests** — Playwright + extension support.
-11. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-12. **Chrome Web Store submission**.
+9. **E2E tests** — Playwright + extension support.
+10. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+11. **Chrome Web Store submission**.
 
 ---
 

@@ -8,6 +8,8 @@ import {
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
 import { CreatePasswordRoute } from "./routes/CreatePasswordRoute";
+import { EntryDetailRoute } from "./routes/EntryDetailRoute";
+import { EntryEditRoute } from "./routes/EntryEditRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 
@@ -39,6 +41,18 @@ const createPasswordRoute = createRoute({
 	component: CreatePasswordRoute,
 });
 
+const entryDetailRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/vault/$entryId",
+	component: EntryDetailRoute,
+});
+
+const entryEditRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/vault/$entryId/edit",
+	component: EntryEditRoute,
+});
+
 const settingsRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/settings",
@@ -47,7 +61,13 @@ const settingsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
 	authRoute,
-	appLayoutRoute.addChildren([vaultHomeRoute, createPasswordRoute, settingsRoute]),
+	appLayoutRoute.addChildren([
+		vaultHomeRoute,
+		createPasswordRoute,
+		entryDetailRoute,
+		entryEditRoute,
+		settingsRoute,
+	]),
 ]);
 
 export const router = createRouter({
