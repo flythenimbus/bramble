@@ -15,9 +15,18 @@ interface EntrySummary {
 interface VaultHomeProps {
 	entries: EntrySummary[];
 	onCreateNew: () => void;
+	onSelectEntry: (id: string) => void;
+	onEditEntry: (id: string) => void;
+	onDeleteEntry: (id: string) => Promise<void>;
 }
 
-export function VaultHome({ entries, onCreateNew }: VaultHomeProps) {
+export function VaultHome({
+	entries,
+	onCreateNew,
+	onSelectEntry,
+	onEditEntry,
+	onDeleteEntry,
+}: VaultHomeProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 
 	const filtered = entries.filter(
@@ -98,6 +107,9 @@ export function VaultHome({ entries, onCreateNew }: VaultHomeProps) {
 								username={pwd.username}
 								password={pwd.password}
 								url={pwd.url}
+								onSelect={() => onSelectEntry(pwd.id)}
+								onEdit={() => onEditEntry(pwd.id)}
+								onDelete={() => onDeleteEntry(pwd.id)}
 							/>
 						))
 					) : (

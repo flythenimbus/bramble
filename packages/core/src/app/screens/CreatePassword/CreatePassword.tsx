@@ -15,6 +15,8 @@ export interface EntryDraft {
 
 interface CreatePasswordProps {
 	defaultUrl?: string;
+	initialValues?: EntryDraft;
+	submitLabel?: string;
 	onBack: () => void;
 	onSave: (data: EntryDraft) => Promise<void>;
 }
@@ -52,20 +54,27 @@ function randomPassword(): string {
 	return Array.from(bytes, (b) => charset.charAt(b % charset.length)).join("");
 }
 
-export function CreatePassword({ defaultUrl = "", onBack, onSave }: CreatePasswordProps) {
+export function CreatePassword({
+	defaultUrl = "",
+	initialValues,
+	submitLabel = "Save password",
+	onBack,
+	onSave,
+}: CreatePasswordProps) {
 	const [showPassword, setShowPassword] = useState(false);
 	const [shownCustomFields, setShownCustomFields] = useState<Record<string, boolean>>({});
 	const [busy, setBusy] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const [hasWebsite, setHasWebsite] = useState(defaultUrl !== "");
+	const startUrl = initialValues?.url ?? defaultUrl;
+	const [hasWebsite, setHasWebsite] = useState(startUrl !== "");
 
 	const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
 		defaultValues: {
-			name: "",
-			url: defaultUrl,
-			username: "",
-			password: "",
-			notes: "",
+			name: initialValues?.name ?? "",
+			url: startUrl,
+			username: initialValues?.username ?? "",
+			password: initialValues?.password ?? "",
+			notes: initialValues?.notes ?? "",
 			customFields: [],
 		},
 	});
@@ -329,7 +338,7 @@ export function CreatePassword({ defaultUrl = "", onBack, onSave }: CreatePasswo
 							disabled={busy}
 							className="px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							{busy ? "Saving…" : "Save password"}
+							{busy ? "Saving…" : submitLabel}
 						</button>
 					</div>
 				</div>

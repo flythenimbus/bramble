@@ -1,10 +1,5 @@
 /// <reference types="chrome" />
-import type {
-	AutofillAdapter,
-	Credentials,
-	FindResult,
-	IndexEntry,
-} from "@core/adapters/autofill";
+import type { AutofillAdapter, Credentials, FindResult, IndexEntry } from "@core/adapters/autofill";
 
 async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 	const res = await chrome.runtime.sendMessage({ type, payload });

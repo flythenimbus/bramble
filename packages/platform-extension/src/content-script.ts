@@ -46,14 +46,16 @@ interface FindResult {
 interface FillPayload {
 	username: string;
 	password: string;
+	// Echoed back from AUTOFILL_SELECT so the content script knows whether
+	// the fill it's about to perform was user-initiated or automatic without
+	// relying on a racy module-level flag.
+	isAuto?: boolean;
 }
 
 interface LoginFields {
 	username: HTMLInputElement | null;
 	password: HTMLInputElement | null;
 }
-
-const EMPTY_RESULT: FindResult = { matches: [], locked: true, hasPotentialMatch: false };
 
 
 const USERNAME_HINT_RE = /email|e-mail|user|login|account|signin|sign-in/i;
@@ -170,8 +172,30 @@ function fillForm(username: string, password: string, isAuto: boolean): boolean 
 const DROPDOWN_ID = "titanpass-autofill-dropdown";
 
 let dropdownEl: HTMLElement | null = null;
-let cachedResult: FindResult = EMPTY_RESULT;
+let cachedResult: FindResult | null = null;
 let anchorField: HTMLInputElement | null = null;
+let openMatchesKey = "";
+let openDropdownKind: "matches" | "locked" | null = null;
+let silenceAutoOpen = false;
+
+function matchesKey(matches: MatchSummary[]): string {
+	let out = "";
+	for (const m of matches) out += `${m.id}\0`;
+	return out;
+}
+
+function clickIsOnAnchor(target: Node): boolean {
+	if (!anchorField) return false;
+	if (target === anchorField || anchorField.contains(target)) return true;
+	if (target instanceof Element) {
+		const label = target.closest("label");
+		if (label) {
+			if (anchorField.id && label.htmlFor === anchorField.id) return true;
+			if (label.contains(anchorField)) return true;
+		}
+	}
+	return false;
+}
 
 function escapeHtml(value: unknown): string {
 	return String(value ?? "")
@@ -198,6 +222,8 @@ function removeDropdown(): void {
 		dropdownEl = null;
 	}
 	anchorField = null;
+	openMatchesKey = "";
+	openDropdownKind = null;
 }
 
 function positionDropdown(field: HTMLInputElement): void {
@@ -336,6 +362,17 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
 function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
 	if (matches.length === 0) return;
 
+	const key = matchesKey(matches);
+	if (
+		dropdownEl &&
+		anchorField === field &&
+		openDropdownKind === "matches" &&
+		openMatchesKey === key
+	) {
+		positionDropdown(field);
+		return;
+	}
+
 	const body = html`
 		${matches.map(
 			(m) => html`
@@ -352,6 +389,8 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
 		)}
 	`;
 	const root = mountDropdown(field, body);
+	openMatchesKey = key;
+	openDropdownKind = "matches";
 
 	root.addEventListener("mousedown", (e) => {
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-entry-id]");
@@ -363,6 +402,10 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
 }
 
 function buildLockedDropdown(field: HTMLInputElement): void {
+	if (dropdownEl && anchorField === field && openDropdownKind === "locked") {
+		positionDropdown(field);
+		return;
+	}
 	const body = html`
 		<div class="tp-item tp-locked">
 			<div class="tp-avatar tp-avatar-locked">🔒</div>
@@ -373,19 +416,15 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 		</div>
 	`;
 	mountDropdown(field, body);
+	openDropdownKind = "locked";
 }
 
-// The AUTOFILL_FILL response from the background can't distinguish auto vs.
-// manual selection, so we stash the intent here and read it when the fill
-// message comes back.
-let pendingFillIsAuto = false;
-
 function selectMatch(entryId: string, isAuto: boolean): void {
-	pendingFillIsAuto = isAuto;
+	if (!isAuto) silenceAutoOpen = true;
 	removeDropdown();
 	safeSendMessage({
 		type: "AUTOFILL_SELECT",
-		payload: { entryId, hostname: location.hostname },
+		payload: { entryId, hostname: location.hostname, isAuto },
 	});
 }
 
@@ -410,14 +449,10 @@ function isFindResult(v: unknown): v is FindResult {
 // or page state changes from springing the dropdown back open after the user
 // clicks away.
 function handleResult(result: FindResult | undefined): void {
-	// Background may forward `undefined` when offscreen erred (e.g. it was
-	// killed and the new instance's listener wasn't ready). Fall back to a
-	// locked state instead of letting `cachedResult` become undefined.
-	if (!isFindResult(result)) {
-		cachedResult = EMPTY_RESULT;
-		return;
-	}
+	if (!isFindResult(result)) return;
 	cachedResult = result;
+
+	if (silenceAutoOpen) return;
 
 	if (result.locked) {
 		const f = focusedCandidate();
@@ -463,11 +498,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	}
 
 	if (message?.type === "AUTOFILL_FILL") {
-		const { username, password } = message.payload as FillPayload;
-		const isAuto = pendingFillIsAuto;
-		pendingFillIsAuto = false;
+		const { username, password, isAuto } = message.payload as FillPayload;
 		removeDropdown();
-		const ok = fillForm(username, password, isAuto);
+		const ok = fillForm(username, password, !!isAuto);
 		sendResponse({ ok });
 		return false;
 	}
@@ -484,6 +517,11 @@ function onDomChange(): void {
 }
 
 function showFor(field: HTMLInputElement): void {
+	if (silenceAutoOpen) return;
+	if (!cachedResult) {
+		queryAutofill();
+		return;
+	}
 	if (cachedResult.locked) {
 		// Always offer the unlock hint when the user touches a login field —
 		buildLockedDropdown(field);
@@ -508,6 +546,7 @@ function bootstrap(): void {
 		"focusin",
 		(e) => {
 			if (!isAutofillCandidate(e.target)) return;
+			silenceAutoOpen = false;
 			showFor(e.target);
 		},
 		true,
@@ -516,7 +555,13 @@ function bootstrap(): void {
 	document.addEventListener(
 		"input",
 		(e) => {
+			if (!e.isTrusted) return;
 			if (!isAutofillCandidate(e.target)) return;
+			silenceAutoOpen = false;
+			if (!cachedResult) {
+				queryAutofill();
+				return;
+			}
 			if (e.target.value && cachedResult.matches.length <= 1 && !cachedResult.locked) {
 				// User is typing their own value — get out of the way unless
 				// they have multiple matches to disambiguate.
@@ -529,15 +574,23 @@ function bootstrap(): void {
 	);
 
 	document.addEventListener(
-		"click",
+		"mousedown",
 		(e) => {
-			if (!dropdownEl) return;
-			const target = e.target as Node;
-			if (dropdownEl.contains(target)) return;
-			// Clicking the field that owns the dropdown is what just opened
-			// it — closing here would make it flash open and shut.
-			if (anchorField && anchorField.contains(target)) return;
-			removeDropdown();
+			if (dropdownEl) {
+				const target = e.target;
+				if (target instanceof Node) {
+					if (dropdownEl.contains(target)) return;
+					if (clickIsOnAnchor(target)) return;
+				}
+				silenceAutoOpen = true;
+				removeDropdown();
+				return;
+			}
+			const target = e.target;
+			if (isAutofillCandidate(target)) {
+				silenceAutoOpen = false;
+				if (document.activeElement === target) showFor(target);
+			}
 		},
 		true,
 	);
