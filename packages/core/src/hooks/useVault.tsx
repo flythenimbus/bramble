@@ -7,6 +7,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import type { SubdomainMatchMode } from "../adapters/autofill";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	decodeVaultBlob,
@@ -16,6 +17,11 @@ import {
 	VERSION,
 } from "../vault-format";
 
+export interface BreachStatus {
+	leaked: boolean;
+	checkedAt: number;
+}
+
 export interface EntryData {
 	name: string;
 	url: string;
@@ -23,6 +29,10 @@ export interface EntryData {
 	password: string;
 	totp?: string;
 	notes?: string;
+	breach?: BreachStatus;
+	autofillEnabled?: boolean;
+	autoSubmit?: boolean;
+	subdomainMatch?: SubdomainMatchMode;
 }
 
 export interface Entry extends EntryData {
@@ -41,6 +51,8 @@ export interface UseVault {
 	addEntry(data: EntryData): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
+	verifyMasterPassword(password: string): Promise<boolean>;
+	changeMasterPassword(newPassword: string): Promise<void>;
 }
 
 const VaultContext = createContext<UseVault | null>(null);
@@ -83,6 +95,19 @@ function extractHostname(url: string): string {
 	}
 }
 
+function indexEntryFor(entry: Entry) {
+	return {
+		id: entry.id,
+		hostname: extractHostname(entry.url),
+		name: entry.name,
+		username: entry.username,
+		password: entry.password,
+		autofillEnabled: entry.autofillEnabled,
+		autoSubmit: entry.autoSubmit,
+		subdomainMatch: entry.subdomainMatch,
+	};
+}
+
 export function VaultProvider({ children }: { children: ReactNode }) {
 	const { storage, crypto, autofill } = usePlatform();
 	const [hasVault, setHasVault] = useState(false);
@@ -117,15 +142,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		);
 		setEntries(decrypted);
 		// works even when the popup is closed.
-		await autofill.setIndex(
-			decrypted.map((entry) => ({
-				id: entry.id,
-				hostname: extractHostname(entry.url),
-				name: entry.name,
-				username: entry.username,
-				password: entry.password,
-			})),
-		);
+		await autofill.setIndex(decrypted.map(indexEntryFor));
 	}, [storage, crypto, autofill]);
 
 	useEffect(() => {
@@ -243,15 +260,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await storage.writeVaultBlob(newBlob);
 
 			// Keep the offscreen autofill index in sync.
-			await autofill.setIndex(
-				nextEntries.map((entry) => ({
-					id: entry.id,
-					hostname: extractHostname(entry.url),
-					name: entry.name,
-					username: entry.username,
-					password: entry.password,
-				})),
-			);
+			await autofill.setIndex(nextEntries.map(indexEntryFor));
 		},
 		[crypto, storage, autofill],
 	);
@@ -284,6 +293,79 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	const verifyMasterPassword = useCallback(
+		async (password: string) => {
+			const blobBytes = await storage.readVaultBlob();
+			const blob = decodeVaultBlob(blobBytes);
+			return crypto.verifyPassword(password, bytesToBase64(blob.salt));
+		},
+		[crypto, storage],
+	);
+
+	// Rotate the master password. Vault must be unlocked. Re-wraps every
+	// entry DEK under a freshly-derived key, re-encrypts the outer entries
+	// blob, and rewrites the header (new salt + new verifier). Per-entry
+	// ciphertext is reused — only DEKs are re-wrapped.
+	const changeMasterPassword = useCallback(
+		async (newPassword: string) => {
+			setError(null);
+
+			const blobBytes = await storage.readVaultBlob();
+			const blob = decodeVaultBlob(blobBytes);
+			const encryptedEntries: EncryptedEntry[] =
+				blob.entriesCiphertext.length === 0
+					? []
+					: JSON.parse(
+							await crypto.decryptWithMaster(
+								bytesToBase64(blob.entriesIv),
+								bytesToBase64(blob.entriesCiphertext),
+							),
+						);
+
+			const newSaltB64 = await crypto.generateSalt();
+			// changePassword does two things atomically inside the WASM:
+			//   1. re-wraps each entry's DEK using a key derived from the new
+			//      password + new salt
+			//   2. swaps master_slot to the new key
+			// After it returns, the WASM holds the new master key and the
+			// returned `rewrapped` carries new wrappedDek / dekIv per entry.
+			const rewrapped = await crypto.changePassword(
+				newPassword,
+				newSaltB64,
+				encryptedEntries.map((e) => ({
+					ciphertext: e.ciphertext,
+					iv: e.iv,
+					wrappedDek: e.wrappedDek,
+					dekIv: e.dekIv,
+				})),
+			);
+			const nextEncryptedEntries: EncryptedEntry[] = rewrapped.map((r, i) => ({
+				id: encryptedEntries[i]!.id,
+				ciphertext: r.ciphertext,
+				iv: r.iv,
+				wrappedDek: r.wrappedDek,
+				dekIv: r.dekIv,
+			}));
+
+			// Re-encrypt the outer entries blob under the new master, and
+			// recompute the verifier.
+			const outerJson = JSON.stringify(nextEncryptedEntries);
+			const { iv: outerIv, ciphertext: outerCt } =
+				nextEncryptedEntries.length === 0
+					? await crypto.encryptWithMaster("[]")
+					: await crypto.encryptWithMaster(outerJson);
+			const newVerifier = await crypto.verifierFor(verifierInput());
+			const newBlob = encodeVaultBlob({
+				salt: base64ToBytes(newSaltB64),
+				verifier: newVerifier,
+				entriesIv: base64ToBytes(outerIv),
+				entriesCiphertext: base64ToBytes(outerCt),
+			});
+			await storage.writeVaultBlob(newBlob);
+		},
+		[crypto, storage],
+	);
+
 	const value = useMemo<UseVault>(
 		() => ({
 			hasVault,
@@ -297,6 +379,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			addEntry,
 			updateEntry,
 			deleteEntry,
+			verifyMasterPassword,
+			changeMasterPassword,
 		}),
 		[
 			hasVault,
@@ -310,6 +394,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			addEntry,
 			updateEntry,
 			deleteEntry,
+			verifyMasterPassword,
+			changeMasterPassword,
 		],
 	);
 

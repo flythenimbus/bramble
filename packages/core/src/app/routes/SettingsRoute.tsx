@@ -1,16 +1,39 @@
 import { useNavigate } from "@tanstack/react-router";
+import { usePrefs } from "../../hooks/usePrefs";
+import { useVault } from "../../hooks/useVault";
 import { useTheme } from "../hooks/useTheme";
 import { Settings } from "../screens/Settings/Settings";
 
 export function SettingsRoute() {
 	const navigate = useNavigate();
 	const { darkMode, toggleTheme } = useTheme();
+	const { prefs, loaded, update } = usePrefs();
+	const { entries, lock, verifyMasterPassword, changeMasterPassword } = useVault();
+
+	if (!loaded) return null;
+
 	return (
 		<div className="flex-1 overflow-y-auto">
 			<Settings
 				onBack={() => navigate({ to: "/vault" })}
 				darkMode={darkMode}
 				onToggleTheme={toggleTheme}
+				autoLockMinutes={prefs.autoLockMinutes}
+				clipboardClearSeconds={prefs.clipboardClearSeconds}
+				breachCheckEnabled={prefs.breachCheckEnabled}
+				totalEntries={entries.length}
+				onChangeAutoLock={(minutes) => void update("autoLockMinutes", minutes)}
+				onChangeClipboardSeconds={(seconds) => void update("clipboardClearSeconds", seconds)}
+				onToggleBreachCheck={(enabled) => void update("breachCheckEnabled", enabled)}
+				onLockNow={async () => {
+					await lock();
+					navigate({ to: "/" });
+				}}
+				onChangeMasterPassword={async (currentPassword, newPassword) => {
+					const ok = await verifyMasterPassword(currentPassword);
+					if (!ok) throw new Error("Current password is incorrect");
+					await changeMasterPassword(newPassword);
+				}}
 			/>
 		</div>
 	);

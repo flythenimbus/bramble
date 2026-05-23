@@ -44,6 +44,8 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 			);
 		case "CRYPTO_VERIFIER":
 			return Array.from(crypto.verifier_for(new Uint8Array(payload.magic)));
+		case "CRYPTO_VERIFY_PASSWORD":
+			return crypto.verify_password(payload.password, payload.saltB64);
 		case "CRYPTO_ENCRYPT_OUTER":
 			return crypto.encrypt_with_master(payload.plaintext);
 		case "CRYPTO_DECRYPT_OUTER":
@@ -55,17 +57,50 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 	}
 }
 
+async function sha256Hex(text: string): Promise<string> {
+	const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+	const bytes = new Uint8Array(buf);
+	let out = "";
+	for (let i = 0; i < bytes.length; i++) out += bytes[i]!.toString(16).padStart(2, "0");
+	return out;
+}
+
+async function clearClipboardIfMatches(expectedHash: string): Promise<boolean> {
+	let current = "";
+	try {
+		current = await navigator.clipboard.readText();
+	} catch {
+		return false;
+	}
+	if (!current) return false;
+	const hash = await sha256Hex(current);
+	if (hash !== expectedHash) return false;
+	try {
+		await navigator.clipboard.writeText("");
+	} catch {
+		return false;
+	}
+	return true;
+}
+
 chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
 	if (message?.target !== "offscreen") return false;
 
 	void (async () => {
 		try {
 			const msgType = message.type ?? "";
+			if (msgType === "CLIPBOARD_CLEAR") {
+				const expectedHash = (message.payload as { expectedHash?: string } | undefined)
+					?.expectedHash;
+				const cleared = expectedHash ? await clearClipboardIfMatches(expectedHash) : false;
+				sendResponse({ ok: true, data: cleared });
+				return;
+			}
 			if (!msgType.startsWith("CRYPTO_")) {
 				throw new Error(`unknown message type: ${msgType}`);
 			}
-			const crypto = await getWasm();
-			const data = dispatchCrypto(crypto, msgType, message.payload);
+			const wasmCrypto = await getWasm();
+			const data = dispatchCrypto(wasmCrypto, msgType, message.payload);
 			sendResponse({ ok: true, data });
 		} catch (err) {
 			sendResponse({ ok: false, error: String(err) });

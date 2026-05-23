@@ -35,6 +35,8 @@ interface MatchSummary {
 	id: string;
 	name: string;
 	username: string;
+	autofillEnabled?: boolean;
+	autoSubmit?: boolean;
 }
 
 interface FindResult {
@@ -50,6 +52,8 @@ interface FillPayload {
 	// the fill it's about to perform was user-initiated or automatic without
 	// relying on a racy module-level flag.
 	isAuto?: boolean;
+	// Per-entry override: submit the form after filling.
+	autoSubmit?: boolean;
 }
 
 interface LoginFields {
@@ -152,7 +156,14 @@ function fillField(el: HTMLInputElement, value: string): void {
 
 const autoFilledFields = new WeakSet<HTMLInputElement>();
 
-function fillForm(username: string, password: string, isAuto: boolean): boolean {
+function fillForm(
+	username: string,
+	password: string,
+	isAuto: boolean,
+): {
+	filled: boolean;
+	passwordField: HTMLInputElement | null;
+} {
 	const { username: userField, password: pwField } = detectLoginFields();
 	let filled = false;
 	if (userField && !(isAuto && autoFilledFields.has(userField))) {
@@ -165,7 +176,29 @@ function fillForm(username: string, password: string, isAuto: boolean): boolean 
 		autoFilledFields.add(pwField);
 		filled = true;
 	}
-	return filled;
+	return { filled, passwordField: pwField };
+}
+
+function submitFromField(field: HTMLInputElement | null): void {
+	if (!field) return;
+	const form = field.closest("form");
+	if (form && typeof form.requestSubmit === "function") {
+		try {
+			form.requestSubmit();
+			return;
+		} catch {
+			// requestSubmit can throw if there's no submit button; fall through.
+		}
+	}
+	const enter = new KeyboardEvent("keydown", {
+		key: "Enter",
+		code: "Enter",
+		keyCode: 13,
+		which: 13,
+		bubbles: true,
+		cancelable: true,
+	});
+	field.dispatchEvent(enter);
 }
 
 
@@ -283,7 +316,7 @@ function dropdownStyles(): string {
 			}
 			#${DROPDOWN_ID} .tp-item {
 				padding: 6px 8px;
-				cursor: pointer;
+				cursor: pointer !important;
 				display: flex;
 				align-items: center;
 				gap: 12px;
@@ -407,16 +440,24 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 		return;
 	}
 	const body = html`
-		<div class="tp-item tp-locked">
+		<div class="tp-item tp-locked" data-tp-popout="1">
 			<div class="tp-avatar tp-avatar-locked">🔒</div>
 			<div class="tp-text">
 				<span class="tp-name">Vault locked</span>
-				<span class="tp-user">Click the icon to unlock</span>
+				<span class="tp-user">Click to unlock in a window</span>
 			</div>
 		</div>
 	`;
-	mountDropdown(field, body);
+	const root = mountDropdown(field, body);
 	openDropdownKind = "locked";
+
+	root.addEventListener("mousedown", (e) => {
+		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-tp-popout]");
+		if (!item) return;
+		e.preventDefault();
+		removeDropdown();
+		safeSendMessage({ type: "POPOUT_OPEN" });
+	});
 }
 
 function selectMatch(entryId: string, isAuto: boolean): void {
@@ -463,6 +504,14 @@ function handleResult(result: FindResult | undefined): void {
 	if (result.matches.length === 0) return;
 
 	if (result.matches.length === 1) {
+		const only = result.matches[0]!;
+		// Per-entry autofill opt-out: still surface the dropdown for manual
+		// pick, but don't silently fill.
+		if (only.autofillEnabled === false) {
+			const f = focusedCandidate();
+			if (f) buildDropdown(result.matches, f);
+			return;
+		}
 		// Re-queries from the MutationObserver shouldn't keep re-firing the
 		// auto-fill. If every detectable field is already in `autoFilledFields`
 		// the fill is a no-op anyway — but `selectMatch` would still remove
@@ -471,7 +520,7 @@ function handleResult(result: FindResult | undefined): void {
 		const userDone = !fields.username || autoFilledFields.has(fields.username);
 		const passDone = !fields.password || autoFilledFields.has(fields.password);
 		if (userDone && passDone) return;
-		selectMatch(result.matches[0]!.id, true);
+		selectMatch(only.id, true);
 		return;
 	}
 
@@ -498,10 +547,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	}
 
 	if (message?.type === "AUTOFILL_FILL") {
-		const { username, password, isAuto } = message.payload as FillPayload;
+		const { username, password, isAuto, autoSubmit } = message.payload as FillPayload;
 		removeDropdown();
-		const ok = fillForm(username, password, !!isAuto);
-		sendResponse({ ok });
+		const { filled, passwordField } = fillForm(username, password, !!isAuto);
+		if (filled && autoSubmit) {
+			// the field values.
+			setTimeout(() => submitFromField(passwordField), 50);
+		}
+		sendResponse({ ok: filled });
 		return false;
 	}
 

@@ -1,27 +1,87 @@
 import {
+	AlertTriangle,
 	ArrowLeft,
 	Clock,
 	Download,
-	Fingerprint,
 	Info,
 	Key,
 	Lock,
 	Palette,
 	Shield,
+	ShieldCheck,
+	Timer,
 	Upload,
 } from "lucide-react";
 import { useState } from "react";
 import { SelectField } from "../../components/ui/select-field";
+import { TextField } from "../../components/ui/text-field";
 
 interface SettingsProps {
 	onBack: () => void;
 	darkMode: boolean;
 	onToggleTheme: () => void;
+	autoLockMinutes: number;
+	clipboardClearSeconds: number;
+	breachCheckEnabled: boolean;
+	totalEntries: number;
+	onChangeAutoLock: (minutes: number) => void;
+	onChangeClipboardSeconds: (seconds: number) => void;
+	onToggleBreachCheck: (enabled: boolean) => void;
+	onLockNow: () => Promise<void>;
+	onChangeMasterPassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
-export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
-	const [autoLockTimeout, setAutoLockTimeout] = useState("15");
-	const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+export function Settings({
+	onBack,
+	darkMode,
+	onToggleTheme,
+	autoLockMinutes,
+	clipboardClearSeconds,
+	breachCheckEnabled,
+	totalEntries,
+	onChangeAutoLock,
+	onChangeClipboardSeconds,
+	onToggleBreachCheck,
+	onLockNow,
+	onChangeMasterPassword,
+}: SettingsProps) {
+	const [changingPassword, setChangingPassword] = useState(false);
+	const [currentPassword, setCurrentPassword] = useState("");
+	const [newPassword, setNewPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
+	const [pwError, setPwError] = useState<string | null>(null);
+	const [pwBusy, setPwBusy] = useState(false);
+	const [pwSuccess, setPwSuccess] = useState(false);
+
+	const submitPasswordChange = async () => {
+		setPwError(null);
+		setPwSuccess(false);
+		if (!currentPassword) {
+			setPwError("Enter your current password.");
+			return;
+		}
+		if (!newPassword || newPassword.length < 8) {
+			setPwError("New password must be at least 8 characters.");
+			return;
+		}
+		if (newPassword !== confirmPassword) {
+			setPwError("New password and confirmation don't match.");
+			return;
+		}
+		setPwBusy(true);
+		try {
+			await onChangeMasterPassword(currentPassword, newPassword);
+			setCurrentPassword("");
+			setNewPassword("");
+			setConfirmPassword("");
+			setPwSuccess(true);
+			setChangingPassword(false);
+		} catch (e) {
+			setPwError((e as Error).message);
+		} finally {
+			setPwBusy(false);
+		}
+	};
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
@@ -34,7 +94,6 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 				Back to vault
 			</button>
 
-			{/* Settings */}
 			<div className="space-y-4">
 				{/* Security Settings */}
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
@@ -46,75 +105,154 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 					</div>
 					<div className="p-4 space-y-4">
 						{/* Auto-lock timeout */}
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Clock className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Auto-lock timeout</p>
-									<p className="text-xs text-muted-foreground mt-0.5">
-										Lock vault after inactivity
-									</p>
-								</div>
-							</div>
-							<div className="w-40">
+						<Row
+							icon={<Clock className="w-4 h-4 text-primary" />}
+							title="Auto-lock timeout"
+							subtitle="Lock vault after inactivity"
+						>
+							<div className="w-44">
 								<SelectField
 									label="Timeout"
-									value={autoLockTimeout}
-									onChange={(e) => setAutoLockTimeout(e.target.value)}
+									value={String(autoLockMinutes)}
+									onChange={(e) => onChangeAutoLock(Number(e.target.value))}
 								>
 									<option value="5">5 minutes</option>
 									<option value="15">15 minutes</option>
 									<option value="30">30 minutes</option>
 									<option value="60">1 hour</option>
-									<option value="never">Never</option>
+									<option value="0">Never</option>
 								</SelectField>
 							</div>
-						</div>
+						</Row>
 
-						{/* Biometrics */}
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Fingerprint className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Biometric unlock</p>
-									<p className="text-xs text-muted-foreground mt-0.5">Use fingerprint or face ID</p>
-								</div>
+						{/* Clipboard auto-clear */}
+						<Row
+							icon={<Timer className="w-4 h-4 text-primary" />}
+							title="Clipboard auto-clear"
+							subtitle="Wipe copied passwords after"
+						>
+							<div className="w-44">
+								<SelectField
+									label="Clear after"
+									value={String(clipboardClearSeconds)}
+									onChange={(e) => onChangeClipboardSeconds(Number(e.target.value))}
+								>
+									<option value="15">15 seconds</option>
+									<option value="30">30 seconds</option>
+									<option value="60">1 minute</option>
+									<option value="120">2 minutes</option>
+								</SelectField>
 							</div>
+						</Row>
+
+						{/* Breach check */}
+						<Row
+							icon={<ShieldCheck className="w-4 h-4 text-primary" />}
+							title="Check passwords for breaches"
+							subtitle="Use HIBP (k-anonymity, your password is never sent)"
+						>
+							<Toggle
+								checked={breachCheckEnabled}
+								onChange={onToggleBreachCheck}
+								label="Toggle breach checks"
+							/>
+						</Row>
+
+						{/* Lock now */}
+						<Row
+							icon={<Lock className="w-4 h-4 text-primary" />}
+							title="Lock vault"
+							subtitle="Immediately lock and require master password to re-open"
+						>
 							<button
-								onClick={() => setBiometricsEnabled(!biometricsEnabled)}
-								className={`relative w-11 h-6 rounded-full border transition-all ${
-									biometricsEnabled ? "bg-primary border-primary/20" : "bg-muted border-border"
-								}`}
+								type="button"
+								onClick={() => void onLockNow()}
+								className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 							>
-								<div
-									className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
-										biometricsEnabled ? "left-5" : "left-0.5"
-									}`}
-								/>
+								Lock now
 							</button>
-						</div>
+						</Row>
 
 						{/* Change Master Password */}
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Key className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Change master password</p>
-									<p className="text-xs text-muted-foreground mt-0.5">
-										Update your master password
-									</p>
+						<Row
+							icon={<Key className="w-4 h-4 text-primary" />}
+							title="Change master password"
+							subtitle="Re-derive the key that wraps every entry"
+						>
+							{!changingPassword ? (
+								<button
+									type="button"
+									onClick={() => {
+										setChangingPassword(true);
+										setPwError(null);
+										setPwSuccess(false);
+									}}
+									className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+								>
+									Change
+								</button>
+							) : null}
+						</Row>
+
+						{pwSuccess && !changingPassword && (
+							<p className="text-xs text-primary pl-12">Master password updated.</p>
+						)}
+
+						{changingPassword && (
+							<div className="ml-12 space-y-3 pt-1">
+								<TextField
+									label="Current password"
+									type="password"
+									autoComplete="current-password"
+									value={currentPassword}
+									onChange={(e) => setCurrentPassword(e.target.value)}
+								/>
+								<TextField
+									label="New password"
+									type="password"
+									autoComplete="new-password"
+									value={newPassword}
+									onChange={(e) => setNewPassword(e.target.value)}
+								/>
+								<TextField
+									label="Confirm new password"
+									type="password"
+									autoComplete="new-password"
+									value={confirmPassword}
+									onChange={(e) => setConfirmPassword(e.target.value)}
+								/>
+								{pwError && (
+									<div className="flex items-start gap-2 text-xs text-destructive">
+										<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+										<span>{pwError}</span>
+									</div>
+								)}
+								<div className="flex items-center justify-end gap-2">
+									<button
+										type="button"
+										onClick={() => {
+											setChangingPassword(false);
+											setCurrentPassword("");
+											setNewPassword("");
+											setConfirmPassword("");
+											setPwError(null);
+										}}
+										disabled={pwBusy}
+										className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onClick={() => void submitPasswordChange()}
+										disabled={pwBusy}
+										className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
+									>
+										{pwBusy ? "Updating…" : "Update password"}
+									</button>
 								</div>
 							</div>
-							<button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all">
-								Change
-							</button>
-						</div>
+						)}
 					</div>
 				</div>
 
@@ -127,16 +265,11 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 						</h3>
 					</div>
 					<div className="p-4">
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Palette className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Theme</p>
-									<p className="text-xs text-muted-foreground mt-0.5">Choose light or dark mode</p>
-								</div>
-							</div>
+						<Row
+							icon={<Palette className="w-4 h-4 text-primary" />}
+							title="Theme"
+							subtitle="Choose light or dark mode"
+						>
 							<div className="flex items-center gap-2">
 								<button
 									onClick={onToggleTheme}
@@ -159,7 +292,7 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 									Dark
 								</button>
 							</div>
-						</div>
+						</Row>
 					</div>
 				</div>
 
@@ -172,41 +305,30 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 						</h3>
 					</div>
 					<div className="p-4 space-y-4">
-						{/* Export */}
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Download className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Export vault</p>
-									<p className="text-xs text-muted-foreground mt-0.5">
-										Download your passwords as JSON or CSV
-									</p>
-								</div>
-							</div>
-							<button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all">
+						<Row
+							icon={<Download className="w-4 h-4 text-primary" />}
+							title="Export vault"
+							subtitle="Download your passwords as JSON or CSV"
+						>
+							<button
+								disabled
+								className="px-3 py-1.5 text-xs rounded-lg border border-border opacity-50 cursor-not-allowed"
+							>
 								Export
 							</button>
-						</div>
-
-						{/* Import */}
-						<div className="flex items-center justify-between">
-							<div className="flex items-start gap-3">
-								<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
-									<Upload className="w-4 h-4 text-primary" />
-								</div>
-								<div>
-									<p className="text-sm">Import passwords</p>
-									<p className="text-xs text-muted-foreground mt-0.5">
-										Import from other password managers
-									</p>
-								</div>
-							</div>
-							<button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all">
+						</Row>
+						<Row
+							icon={<Upload className="w-4 h-4 text-primary" />}
+							title="Import passwords"
+							subtitle="Import from other password managers"
+						>
+							<button
+								disabled
+								className="px-3 py-1.5 text-xs rounded-lg border border-border opacity-50 cursor-not-allowed"
+							>
 								Import
 							</button>
-						</div>
+						</Row>
 					</div>
 				</div>
 
@@ -221,20 +343,16 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 					<div className="p-4 space-y-3">
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-muted-foreground">Version</span>
-							<span>1.0.0</span>
+							<span>0.0.1</span>
 						</div>
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-muted-foreground">Total passwords</span>
-							<span>10</span>
-						</div>
-						<div className="flex items-center justify-between text-sm">
-							<span className="text-muted-foreground">Vault created</span>
-							<span>Jan 15, 2026</span>
+							<span>{totalEntries}</span>
 						</div>
 					</div>
 				</div>
 
-				{/* Danger Zone */}
+				{/* Danger Zone (placeholder — destructive vault delete is out of scope for now) */}
 				<div className="rounded-lg border border-destructive/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 					<div className="px-4 py-3 border-b border-destructive/50">
 						<h3 className="text-sm flex items-center gap-2 text-destructive">
@@ -247,10 +365,13 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 							<div>
 								<p className="text-sm">Delete vault</p>
 								<p className="text-xs text-muted-foreground mt-0.5">
-									Permanently delete all your data
+									Permanently delete all your data (not implemented)
 								</p>
 							</div>
-							<button className="px-3 py-1.5 text-xs rounded-lg border border-destructive/50 text-destructive hover:bg-destructive/10 active:scale-[0.98] transition-all">
+							<button
+								disabled
+								className="px-3 py-1.5 text-xs rounded-lg border border-destructive/50 text-destructive opacity-50 cursor-not-allowed"
+							>
 								Delete
 							</button>
 						</div>
@@ -258,5 +379,55 @@ export function Settings({ onBack, darkMode, onToggleTheme }: SettingsProps) {
 				</div>
 			</div>
 		</main>
+	);
+}
+
+interface RowProps {
+	icon: React.ReactNode;
+	title: string;
+	subtitle: string;
+	children: React.ReactNode;
+}
+
+function Row({ icon, title, subtitle, children }: RowProps) {
+	return (
+		<div className="flex items-center justify-between gap-3">
+			<div className="flex items-start gap-3 min-w-0">
+				<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 flex-shrink-0">
+					{icon}
+				</div>
+				<div className="min-w-0">
+					<p className="text-sm">{title}</p>
+					<p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+				</div>
+			</div>
+			<div className="shrink-0">{children}</div>
+		</div>
+	);
+}
+
+interface ToggleProps {
+	checked: boolean;
+	onChange: (next: boolean) => void;
+	label: string;
+}
+
+function Toggle({ checked, onChange, label }: ToggleProps) {
+	return (
+		<button
+			type="button"
+			onClick={() => onChange(!checked)}
+			aria-label={label}
+			aria-pressed={checked}
+			className={`relative w-11 h-6 rounded-full border transition-all ${
+				checked ? "bg-primary border-primary/20" : "bg-muted border-border"
+			}`}
+		>
+			<span
+				className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
+					checked ? "left-5" : "left-0.5"
+				}`}
+			/>
+		</button>
 	);
 }

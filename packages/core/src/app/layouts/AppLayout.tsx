@@ -1,12 +1,5 @@
 import { Outlet, useNavigate } from "@tanstack/react-router";
-import {
-	ExternalLink,
-	Lock,
-	Moon,
-	Settings as SettingsIcon,
-	Shield,
-	Sun,
-} from "lucide-react";
+import { ExternalLink, Lock, Moon, Settings as SettingsIcon, Shield, Sun } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { useTheme } from "../hooks/useTheme";

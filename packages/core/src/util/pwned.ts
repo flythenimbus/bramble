@@ -21,10 +21,26 @@ export async function isPasswordLeaked(password: string) {
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
 	const firstFive = hashedPasswordString.substring(0, 5).toUpperCase();
-	const response = await fetch(`https://api.pwnedpasswords.com/range/${firstFive}`);
+	const response = await fetch(`https://api.pwnedpasswords.com/range/${firstFive}`, {
+		// Tells HIBP to pad the response set so an on-path observer can't
+		// infer which range was actually queried. No-op on the result.
+		headers: { "Add-Padding": "true" },
+	});
 	const data = await response.text();
 
 	return data.includes(hashedPasswordString.substring(5).toUpperCase());
+}
+
+export async function checkPasswordBreach(
+	password: string,
+): Promise<{ leaked: boolean; checkedAt: number } | undefined> {
+	if (!password) return undefined;
+	try {
+		const leaked = await isPasswordLeaked(password);
+		return { leaked, checkedAt: Date.now() };
+	} catch {
+		return undefined;
+	}
 }
 
 export function isPasswordLeakedSync(
