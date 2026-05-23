@@ -13,8 +13,11 @@ import {
 	decodeVaultBlob,
 	type EncryptedEntry,
 	encodeVaultBlob,
-	MAGIC,
-	VERSION,
+	findPasswordSlot,
+	type PasswordSlot,
+	SLOT_KIND_PASSWORD,
+	type VaultBlob,
+	verifierPrefix,
 } from "../vault-format";
 
 export interface BreachStatus {
@@ -57,22 +60,6 @@ export interface UseVault {
 
 const VaultContext = createContext<UseVault | null>(null);
 
-// Verifier input: magic bytes followed by the version byte. The Rust HMAC
-// over this is what gets stored in the vault header and compared on unlock.
-function verifierInput(): Uint8Array {
-	const out = new Uint8Array(MAGIC.length + 1);
-	out.set(MAGIC, 0);
-	out[MAGIC.length] = VERSION;
-	return out;
-}
-
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-	if (a.length !== b.length) return false;
-	let diff = 0;
-	for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
-	return diff === 0;
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
 	let s = "";
 	for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ?? 0);
@@ -90,7 +77,6 @@ function extractHostname(url: string): string {
 	try {
 		return new URL(url).hostname;
 	} catch {
-		// If the URL is malformed, treat the whole string as the hostname.
 		return url;
 	}
 }
@@ -123,7 +109,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await autofill.setIndex([]);
 			return;
 		}
-		const outerJson = await crypto.decryptWithMaster(
+		const outerJson = await crypto.decryptWithVek(
 			bytesToBase64(blob.entriesIv),
 			bytesToBase64(blob.entriesCiphertext),
 		);
@@ -159,7 +145,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				setIsLocked(locked);
 				if (locked) return;
 
-				// Vault is unlocked — load entries from blob.
 				await loadEntries();
 			} catch (e) {
 				if (!cancelled) setError(String(e));
@@ -173,14 +158,26 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const unlock = useCallback(
 		async (password: string) => {
 			setError(null);
-			const blobBytes = await storage.readVaultBlob();
-			const blob = decodeVaultBlob(blobBytes);
-			await crypto.unlock(password, bytesToBase64(blob.salt));
-			const computedVerifier = await crypto.verifierFor(verifierInput());
-			if (!bytesEqual(computedVerifier, blob.verifier)) {
-				await crypto.lock();
-				throw new Error("incorrect master password");
+			let slot: PasswordSlot | null;
+			try {
+				const blobBytes = await storage.readVaultBlob();
+				const blob = decodeVaultBlob(blobBytes);
+				slot = findPasswordSlot(blob);
+			} catch (e) {
+				console.error("[vault] failed to read vault blob:", e);
+				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
 			}
+			if (!slot) throw new Error("This vault has no password set.");
+			const ok = await crypto.unwrapVekPassword({
+				password,
+				saltB64: bytesToBase64(slot.salt),
+				slotIdB64: bytesToBase64(slot.slotId),
+				verifierB64: bytesToBase64(slot.verifier),
+				wrapIvB64: bytesToBase64(slot.wrapIv),
+				wrappedVekB64: bytesToBase64(slot.wrappedVek),
+				magicVersion: verifierPrefix(),
+			});
+			if (!ok) throw new Error("Incorrect master password");
 			await loadEntries();
 			setIsLocked(false);
 		},
@@ -206,20 +203,33 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const createVault = useCallback(
 		async (password: string) => {
 			setError(null);
-			// File selection is the caller's responsibility (use pickVaultFile
-			// first if you want FSA-backed storage). If no handle is picked, the
-			// storage adapter falls back to chrome.storage.local.
+			await crypto.generateVek();
+			// 2. Wrap the VEK under the password — produces the initial
+			//    password slot. Salt and slotId are fresh per slot.
 			const saltB64 = await crypto.generateSalt();
-			await crypto.unlock(password, saltB64);
-			const verifier = await crypto.verifierFor(verifierInput());
-			const { iv, ciphertext } = await crypto.encryptWithMaster("[]");
-			const blob = encodeVaultBlob({
+			const slotIdB64 = await crypto.generateSlotId();
+			const wrapped = await crypto.wrapVekPassword({
+				password,
+				saltB64,
+				slotIdB64,
+				magicVersion: verifierPrefix(),
+			});
+			const { iv, ciphertext } = await crypto.encryptWithVek("[]");
+
+			const slot: PasswordSlot = {
+				kind: SLOT_KIND_PASSWORD,
+				slotId: base64ToBytes(slotIdB64),
 				salt: base64ToBytes(saltB64),
-				verifier,
+				verifier: base64ToBytes(wrapped.verifier),
+				wrapIv: base64ToBytes(wrapped.wrapIv),
+				wrappedVek: base64ToBytes(wrapped.wrappedVek),
+			};
+			const blob: VaultBlob = {
+				slots: [slot],
 				entriesIv: base64ToBytes(iv),
 				entriesCiphertext: base64ToBytes(ciphertext),
-			});
-			await storage.writeVaultBlob(blob);
+			};
+			await storage.writeVaultBlob(encodeVaultBlob(blob));
 			setHasVault(true);
 			setEntries([]);
 			setIsLocked(false);
@@ -227,10 +237,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[storage, crypto],
 	);
 
-	// Re-encrypt all entries and write a new vault blob. The salt + verifier
-	// stay the same (those are set at vault creation); only the entries IV +
-	// outer ciphertext change. Every save re-randomises every DEK / IV — fine
-	// for our scale (sub-millisecond per entry).
 	const persistEntries = useCallback(
 		async (nextEntries: Entry[]) => {
 			const encryptedEntries: EncryptedEntry[] = await Promise.all(
@@ -247,19 +253,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				}),
 			);
 			const outerJson = JSON.stringify(encryptedEntries);
-			const { iv, ciphertext } = await crypto.encryptWithMaster(outerJson);
+			const { iv, ciphertext } = await crypto.encryptWithVek(outerJson);
 
 			const currentBytes = await storage.readVaultBlob();
 			const current = decodeVaultBlob(currentBytes);
-			const newBlob = encodeVaultBlob({
-				salt: current.salt,
-				verifier: current.verifier,
+			const newBlob: VaultBlob = {
+				slots: current.slots,
 				entriesIv: base64ToBytes(iv),
 				entriesCiphertext: base64ToBytes(ciphertext),
-			});
-			await storage.writeVaultBlob(newBlob);
+			};
+			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 
-			// Keep the offscreen autofill index in sync.
 			await autofill.setIndex(nextEntries.map(indexEntryFor));
 		},
 		[crypto, storage, autofill],
@@ -297,73 +301,110 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (password: string) => {
 			const blobBytes = await storage.readVaultBlob();
 			const blob = decodeVaultBlob(blobBytes);
-			return crypto.verifyPassword(password, bytesToBase64(blob.salt));
+			const slot = findPasswordSlot(blob);
+			if (!slot) return false;
+			return crypto.verifyPasswordSlot({
+				password,
+				saltB64: bytesToBase64(slot.salt),
+				slotIdB64: bytesToBase64(slot.slotId),
+				verifierB64: bytesToBase64(slot.verifier),
+				magicVersion: verifierPrefix(),
+			});
 		},
 		[crypto, storage],
 	);
 
-	// Rotate the master password. Vault must be unlocked. Re-wraps every
-	// entry DEK under a freshly-derived key, re-encrypts the outer entries
-	// blob, and rewrites the header (new salt + new verifier). Per-entry
-	// ciphertext is reused — only DEKs are re-wrapped.
+	// Full rotation on password change. The VEK itself is rotated, every
+	// entry is re-encrypted under a fresh DEK + IV (so any leaked old VEK or
+	// old DEK cannot decrypt new ciphertext), the outer entries blob is
+	// re-encrypted, and the password slot is re-wrapped under the new VEK.
+	//
+	// Today's vaults only have a single password slot. When we add WebAuthn /
+	// recovery slots, each existing authenticator will need to be presented
+	// during rotation so we can re-wrap the new VEK under its KEK — until
+	// that UI exists we refuse to rotate vaults with extra slots rather than
+	// silently dropping them.
+	//
+	// Caller (Settings) is responsible for verifying the current password
+	// before calling this. We hold the old VEK in JS memory and roll back if
+	// any step before the disk write fails, so a partial-rotation can't
+	// strand the user.
 	const changeMasterPassword = useCallback(
 		async (newPassword: string) => {
 			setError(null);
 
 			const blobBytes = await storage.readVaultBlob();
 			const blob = decodeVaultBlob(blobBytes);
-			const encryptedEntries: EncryptedEntry[] =
-				blob.entriesCiphertext.length === 0
-					? []
-					: JSON.parse(
-							await crypto.decryptWithMaster(
-								bytesToBase64(blob.entriesIv),
-								bytesToBase64(blob.entriesCiphertext),
-							),
-						);
+			const existing = findPasswordSlot(blob);
+			if (!existing) throw new Error("vault has no password slot to rotate");
+			if (blob.slots.length !== 1) {
+				throw new Error(
+					"vault has additional authenticators; multi-slot rotation is not yet supported",
+				);
+			}
 
-			const newSaltB64 = await crypto.generateSalt();
-			// changePassword does two things atomically inside the WASM:
-			//   1. re-wraps each entry's DEK using a key derived from the new
-			//      password + new salt
-			//   2. swaps master_slot to the new key
-			// After it returns, the WASM holds the new master key and the
-			// returned `rewrapped` carries new wrappedDek / dekIv per entry.
-			const rewrapped = await crypto.changePassword(
-				newPassword,
-				newSaltB64,
-				encryptedEntries.map((e) => ({
-					ciphertext: e.ciphertext,
-					iv: e.iv,
-					wrappedDek: e.wrappedDek,
-					dekIv: e.dekIv,
-				})),
-			);
-			const nextEncryptedEntries: EncryptedEntry[] = rewrapped.map((r, i) => ({
-				id: encryptedEntries[i]!.id,
-				ciphertext: r.ciphertext,
-				iv: r.iv,
-				wrappedDek: r.wrappedDek,
-				dekIv: r.dekIv,
-			}));
+			const oldVekB64 = await crypto.exportVek();
+			try {
+				// 1. Rotate the VEK. From here on every encrypt uses the new key;
+				//    every decrypt against old ciphertext will fail.
+				await crypto.rotateVek();
 
-			// Re-encrypt the outer entries blob under the new master, and
-			// recompute the verifier.
-			const outerJson = JSON.stringify(nextEncryptedEntries);
-			const { iv: outerIv, ciphertext: outerCt } =
-				nextEncryptedEntries.length === 0
-					? await crypto.encryptWithMaster("[]")
-					: await crypto.encryptWithMaster(outerJson);
-			const newVerifier = await crypto.verifierFor(verifierInput());
-			const newBlob = encodeVaultBlob({
-				salt: base64ToBytes(newSaltB64),
-				verifier: newVerifier,
-				entriesIv: base64ToBytes(outerIv),
-				entriesCiphertext: base64ToBytes(outerCt),
-			});
-			await storage.writeVaultBlob(newBlob);
+				// 2. Re-encrypt every entry under the new VEK. encryptEntry
+				//    generates a fresh DEK + content IV + dek-wrap IV per call,
+				//    so no piece of cryptographic material survives the rotation.
+				const encryptedEntries: EncryptedEntry[] = await Promise.all(
+					entries.map(async (entry) => {
+						const { id, ...data } = entry;
+						const enc = await crypto.encryptEntry(JSON.stringify(data));
+						return {
+							id,
+							wrappedDek: enc.wrappedDek,
+							dekIv: enc.dekIv,
+							ciphertext: enc.ciphertext,
+							iv: enc.iv,
+						};
+					}),
+				);
+				const outerJson = encryptedEntries.length === 0 ? "[]" : JSON.stringify(encryptedEntries);
+				const { iv: outerIv, ciphertext: outerCt } = await crypto.encryptWithVek(outerJson);
+
+				// 3. Wrap the new VEK under the new password's KEK (new salt,
+				//    same slotId so the slot's identity is stable).
+				const newSaltB64 = await crypto.generateSalt();
+				const wrapped = await crypto.wrapVekPassword({
+					password: newPassword,
+					saltB64: newSaltB64,
+					slotIdB64: bytesToBase64(existing.slotId),
+					magicVersion: verifierPrefix(),
+				});
+
+				const newSlot: PasswordSlot = {
+					kind: SLOT_KIND_PASSWORD,
+					slotId: existing.slotId,
+					salt: base64ToBytes(newSaltB64),
+					verifier: base64ToBytes(wrapped.verifier),
+					wrapIv: base64ToBytes(wrapped.wrapIv),
+					wrappedVek: base64ToBytes(wrapped.wrappedVek),
+				};
+				const newBlob: VaultBlob = {
+					slots: [newSlot],
+					entriesIv: base64ToBytes(outerIv),
+					entriesCiphertext: base64ToBytes(outerCt),
+				};
+				await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+
+				// 4. Refresh the in-memory autofill index so the background SW
+				//    keeps serving credentials without a relock.
+				await autofill.setIndex(entries.map(indexEntryFor));
+			} catch (e) {
+				// Restore the previous VEK so the still-on-disk vault is
+				// readable again. Without this the user would have to relock
+				// and re-enter their current password to recover.
+				await crypto.unlockWithVek(oldVekB64);
+				throw e;
+			}
 		},
-		[crypto, storage],
+		[crypto, storage, autofill, entries],
 	);
 
 	const value = useMemo<UseVault>(

@@ -1,11 +1,48 @@
 /// <reference types="chrome" />
 
+export interface PasswordSlotBlob {
+	verifier: string;
+	wrapIv: string;
+	wrappedVek: string;
+}
+
 export interface VaultCrypto {
-	unlock(password: string, saltB64: string): void;
-	unlock_with_key(keyB64: string): void;
-	export_key(): string;
-	lock(): void;
 	is_locked(): boolean;
+	lock(): void;
+
+	generate_vek(): string;
+	unlock_with_vek(vekB64: string): void;
+	export_vek(): string;
+	rotate_vek(): string;
+
+	generate_salt(): string;
+	generate_slot_id(): string;
+
+	wrap_vek_password(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		magicVersion: Uint8Array,
+	): PasswordSlotBlob;
+
+	unwrap_vek_password(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		wrapIvB64: string,
+		wrappedVekB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+
+	verify_password_slot(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+
 	encrypt_entry(plaintextJson: string): {
 		ciphertext: string;
 		iv: string;
@@ -13,12 +50,8 @@ export interface VaultCrypto {
 		dekIv: string;
 	};
 	decrypt_entry(ciphertext: string, iv: string, wrappedDek: string, dekIv: string): string;
-	generate_salt(): string;
-	verifier_for(magic: Uint8Array): Uint8Array;
-	verify_password(password: string, saltB64: string): boolean;
-	encrypt_with_master(plaintext: string): { iv: string; ciphertext: string };
-	decrypt_with_master(iv: string, ciphertext: string): string;
-	change_password(newPassword: string, newSaltB64: string, entries: unknown): unknown;
+	encrypt_with_vek(plaintext: string): { iv: string; ciphertext: string };
+	decrypt_with_vek(iv: string, ciphertext: string): string;
 }
 
 let cached: Promise<VaultCrypto> | null = null;
@@ -26,8 +59,6 @@ let cached: Promise<VaultCrypto> | null = null;
 export function loadWasm(): Promise<VaultCrypto> {
 	if (cached) return cached;
 	cached = (async () => {
-		// wasm-pack output goes to public/wasm/. Adjust import path to match
-		// the generated package name (e.g. vault_crypto.js).
 		const wasmModule = await import(
 			/* @vite-ignore */ chrome.runtime.getURL("wasm/vault_crypto.js")
 		);

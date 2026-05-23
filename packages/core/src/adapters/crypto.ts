@@ -5,25 +5,51 @@ export interface EncryptedPayload {
 	dekIv: string;
 }
 
-export interface MasterEncrypted {
+export interface VekEncrypted {
 	iv: string;
 	ciphertext: string;
 }
 
+export interface PasswordSlotBlob {
+	verifier: string;
+	wrapIv: string;
+	wrappedVek: string;
+}
+
+export interface WrapPasswordSlotInput {
+	password: string;
+	saltB64: string;
+	slotIdB64: string;
+	magicVersion: Uint8Array;
+}
+
+export interface UnwrapPasswordSlotInput extends WrapPasswordSlotInput {
+	verifierB64: string;
+	wrapIvB64: string;
+	wrappedVekB64: string;
+}
+
+export interface VerifyPasswordSlotInput extends WrapPasswordSlotInput {
+	verifierB64: string;
+}
+
 export interface CryptoAdapter {
-	unlock(password: string, saltB64: string): Promise<void>;
+	generateVek(): Promise<string>; // creates VEK + loads it; returns b64 for caching
+	unlockWithVek(vekB64: string): Promise<void>; // session resume (offscreen restart)
+	exportVek(): Promise<string>; // session resume (background cache)
+	rotateVek(): Promise<string>;
 	lock(): Promise<void>;
 	isLocked(): Promise<boolean>;
+
+	generateSalt(): Promise<string>;
+	generateSlotId(): Promise<string>;
+
+	wrapVekPassword(input: WrapPasswordSlotInput): Promise<PasswordSlotBlob>;
+	unwrapVekPassword(input: UnwrapPasswordSlotInput): Promise<boolean>;
+	verifyPasswordSlot(input: VerifyPasswordSlotInput): Promise<boolean>;
+
 	encryptEntry(plaintextJson: string): Promise<EncryptedPayload>;
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
-	generateSalt(): Promise<string>;
-	verifierFor(magicBytes: Uint8Array): Promise<Uint8Array>;
-	verifyPassword(password: string, saltB64: string): Promise<boolean>;
-	encryptWithMaster(plaintext: string): Promise<MasterEncrypted>;
-	decryptWithMaster(iv: string, ciphertext: string): Promise<string>;
-	changePassword(
-		newPassword: string,
-		newSaltB64: string,
-		entries: EncryptedPayload[],
-	): Promise<EncryptedPayload[]>;
+	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
+	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 }

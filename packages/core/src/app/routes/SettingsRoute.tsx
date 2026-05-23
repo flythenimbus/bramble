@@ -29,11 +29,8 @@ export function SettingsRoute() {
 					await lock();
 					navigate({ to: "/" });
 				}}
-				onChangeMasterPassword={async (currentPassword, newPassword) => {
-					const ok = await verifyMasterPassword(currentPassword);
-					if (!ok) throw new Error("Current password is incorrect");
-					await changeMasterPassword(newPassword);
-				}}
+				onVerifyCurrentPassword={verifyMasterPassword}
+				onChangeMasterPassword={changeMasterPassword}
 			/>
 		</div>
 	);
