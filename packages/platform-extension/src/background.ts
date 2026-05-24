@@ -13,6 +13,7 @@ const VEK_KEY = "vault.vek";
 const AUTOFILL_INDEX_KEY = "autofill.index";
 const HOSTNAMES_KEY = "autofill.knownHostnames";
 const CLIPBOARD_EXPECTED_KEY = "clipboard.expectedHash";
+const POPOUT_HANDOFF_KEY = "popout.handoff";
 
 const AUTOLOCK_ALARM = "vault:autolock";
 const CLIPBOARD_ALARM = "vault:clipboard-clear";
@@ -159,7 +160,7 @@ async function clearSession(): Promise<void> {
 	autofillIndex = null;
 	offscreenHasKey = false;
 	try {
-		await chrome.storage.session.remove([VEK_KEY, AUTOFILL_INDEX_KEY]);
+		await chrome.storage.session.remove([VEK_KEY, AUTOFILL_INDEX_KEY, POPOUT_HANDOFF_KEY]);
 	} catch {}
 	void chrome.alarms.clear(AUTOLOCK_ALARM);
 }
@@ -407,6 +408,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "POPOUT_OPEN") {
 		void (async () => {
 			try {
+				const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
+				if (handoff) {
+					await chrome.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
+				} else {
+					await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
+				}
 				const WIDTH = 500;
 				const HEIGHT = 600;
 				const CHROME_INSET = 80;
@@ -441,6 +448,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			} catch (err) {
 				sendResponse({ ok: false, error: String(err) });
 			}
+		})();
+		return true;
+	}
+
+	if (type === "POPOUT_CONSUME_HANDOFF") {
+		void (async () => {
+			let handoff: unknown = null;
+			try {
+				const r = await chrome.storage.session.get(POPOUT_HANDOFF_KEY);
+				handoff = r[POPOUT_HANDOFF_KEY] ?? null;
+				await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
+			} catch {}
+			sendResponse({ ok: true, data: handoff });
 		})();
 		return true;
 	}

@@ -15,23 +15,38 @@ const platform: Platform = {
 	clipboard: extensionClipboard,
 };
 
-// In the popped-out window the popup.html's fixed 400px height would leave
-// dead space. Let html/body track the window so h-screen fills the chrome
-// window.
-if (extensionShell.isDetached()) {
-	document.documentElement.style.height = "100%";
-	document.documentElement.style.width = "100%";
-	document.documentElement.style.overflow = "auto";
-	document.body.style.height = "100%";
-	document.body.style.width = "100%";
-	document.body.style.overflow = "auto";
+async function boot() {
+	const root = document.getElementById("root");
+	if (!root) throw new Error("missing #root");
+
+	let initialPath: string | undefined;
+	let initialDraft: unknown;
+
+	if (extensionShell.isDetached()) {
+		// In the popped-out window the popup.html's fixed 400px height would
+		// leave dead space. Let html/body track the window so h-screen fills
+		// the chrome window.
+		document.documentElement.style.height = "100%";
+		document.documentElement.style.width = "100%";
+		document.documentElement.style.overflow = "auto";
+		document.body.style.height = "100%";
+		document.body.style.width = "100%";
+		document.body.style.overflow = "auto";
+
+		// Resume on the route the originating popup was showing, with any
+		// half-filled form restored. consumeHandoff is a one-shot read.
+		const handoff = await extensionShell.consumeHandoff();
+		if (handoff) {
+			initialPath = handoff.path;
+			initialDraft = handoff.draft;
+		}
+	}
+
+	createRoot(root).render(
+		<PlatformProvider platform={platform}>
+			<App initialPath={initialPath} initialDraft={initialDraft} />
+		</PlatformProvider>,
+	);
 }
 
-const root = document.getElementById("root");
-if (!root) throw new Error("missing #root");
-
-createRoot(root).render(
-	<PlatformProvider platform={platform}>
-		<App />
-	</PlatformProvider>,
-);
+void boot();

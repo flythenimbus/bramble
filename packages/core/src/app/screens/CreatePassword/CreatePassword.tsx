@@ -1,5 +1,4 @@
 import {
-	ArrowLeft,
 	ChevronDown,
 	ChevronRight,
 	Eye,
@@ -10,7 +9,7 @@ import {
 	Sparkles,
 	X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../../adapters/autofill";
 import type { BreachStatus } from "../../../hooks/useVault";
@@ -37,6 +36,13 @@ interface CreatePasswordProps {
 	// hasn't been edited we trust this value so we can flag a known-breached
 	// password without re-querying HIBP on every render.
 	initialBreach?: BreachStatus;
+	// A full form snapshot restored from a pop-out handoff. When present it
+	// seeds the form verbatim (including custom fields), overriding the values
+	// derived from `initialValues` / `defaultUrl`.
+	draftValues?: CreatePasswordDraft;
+	// Registers a getter the pop-out flow can call to snapshot the live form
+	// values before opening a detached window. Cleared (null) on unmount.
+	registerDraft?: (getter: (() => CreatePasswordDraft) | null) => void;
 	submitLabel?: string;
 	onBack: () => void;
 	onSave: (data: EntryDraft) => Promise<void>;
@@ -60,6 +66,10 @@ interface FormValues {
 	subdomainMatch: SubdomainMatchMode;
 }
 
+// The complete, serializable form state. Exported so a pop-out can carry a
+// half-filled form into the detached window and seed it back verbatim.
+export type CreatePasswordDraft = FormValues;
+
 function computeStrength(value: string): number {
 	let s = 0;
 	if (value.length >= 8) s++;
@@ -82,6 +92,8 @@ export function CreatePassword({
 	defaultUrl = "",
 	initialValues,
 	initialBreach,
+	draftValues,
+	registerDraft,
 	submitLabel = "Save password",
 	onBack,
 	onSave,
@@ -90,12 +102,14 @@ export function CreatePassword({
 	const [shownCustomFields, setShownCustomFields] = useState<Record<string, boolean>>({});
 	const [busy, setBusy] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const startUrl = initialValues?.url ?? defaultUrl;
+	// A restored draft wins over initialValues/defaultUrl; "" is a meaningful
+	// url (the user cleared the website field), so only null/undefined fall back.
+	const startUrl = draftValues?.url ?? initialValues?.url ?? defaultUrl;
 	const [hasWebsite, setHasWebsite] = useState(startUrl !== "");
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 
-	const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
-		defaultValues: {
+	const { register, handleSubmit, control, watch, setValue, getValues } = useForm<FormValues>({
+		defaultValues: draftValues ?? {
 			name: initialValues?.name ?? "",
 			url: startUrl,
 			username: initialValues?.username ?? "",
@@ -107,6 +121,14 @@ export function CreatePassword({
 			subdomainMatch: initialValues?.subdomainMatch ?? "etld1",
 		},
 	});
+
+	// Expose a live snapshot getter to the pop-out flow while this form is
+	// mounted, so opening a detached window carries the in-flight values over.
+	useEffect(() => {
+		if (!registerDraft) return;
+		registerDraft(() => getValues());
+		return () => registerDraft(null);
+	}, [registerDraft, getValues]);
 
 	const { fields, append, remove } = useFieldArray({ control, name: "customFields" });
 
@@ -163,15 +185,6 @@ export function CreatePassword({
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
-			<button
-				onClick={onBack}
-				type="button"
-				className="flex items-center gap-2 mb-4 text-sm text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
-			>
-				<ArrowLeft className="w-4 h-4" />
-				Back to passwords
-			</button>
-
 			<form onSubmit={handleSubmit(onSubmit)}>
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 					<div className="p-6 space-y-5">
@@ -459,8 +472,8 @@ function ToggleRow({ title, subtitle, checked, onChange }: ToggleRowProps) {
 				}`}
 			>
 				<span
-					className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
-						checked ? "left-5" : "left-0.5"
+					className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow-sm transition-all ${
+						checked ? "left-5 dark:bg-primary-foreground" : "left-0.5 dark:bg-card-foreground"
 					}`}
 				/>
 			</button>

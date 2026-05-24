@@ -1,5 +1,5 @@
 /// <reference types="chrome" />
-import type { ShellAdapter } from "@core/adapters/shell";
+import type { PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
 
 const DETACHED_FLAG = "detached";
 
@@ -25,11 +25,15 @@ export const extensionShell: ShellAdapter = {
 			return null;
 		}
 	},
-	async popOut() {
-		// "vault locked" hint can request the same flow. Wait for the new
-		// window to be created before closing the popup.
-		await chrome.runtime.sendMessage({ type: "POPOUT_OPEN" });
+	async popOut(handoff?: PopOutHandoff) {
+		await chrome.runtime.sendMessage({ type: "POPOUT_OPEN", payload: { handoff } });
 		window.close();
+	},
+	async consumeHandoff() {
+		const res = (await chrome.runtime.sendMessage({ type: "POPOUT_CONSUME_HANDOFF" })) as
+			| { ok: boolean; data?: PopOutHandoff | null }
+			| undefined;
+		return res?.data ?? null;
 	},
 	isDetached() {
 		if (typeof window === "undefined") return false;

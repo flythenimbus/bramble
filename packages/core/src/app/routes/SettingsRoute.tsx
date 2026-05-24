@@ -1,11 +1,9 @@
-import { useNavigate } from "@tanstack/react-router";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { useTheme } from "../hooks/useTheme";
 import { Settings } from "../screens/Settings/Settings";
 
 export function SettingsRoute() {
-	const navigate = useNavigate();
 	const { darkMode, toggleTheme } = useTheme();
 	const { prefs, loaded, update } = usePrefs();
 	const { entries, lock, verifyMasterPassword, changeMasterPassword } = useVault();
@@ -15,7 +13,6 @@ export function SettingsRoute() {
 	return (
 		<div className="flex-1 overflow-y-auto">
 			<Settings
-				onBack={() => navigate({ to: "/vault" })}
 				darkMode={darkMode}
 				onToggleTheme={toggleTheme}
 				autoLockMinutes={prefs.autoLockMinutes}
@@ -25,10 +22,7 @@ export function SettingsRoute() {
 				onChangeAutoLock={(minutes) => void update("autoLockMinutes", minutes)}
 				onChangeClipboardSeconds={(seconds) => void update("clipboardClearSeconds", seconds)}
 				onToggleBreachCheck={(enabled) => void update("breachCheckEnabled", enabled)}
-				onLockNow={async () => {
-					await lock();
-					navigate({ to: "/" });
-				}}
+				onLockNow={lock}
 				onVerifyCurrentPassword={verifyMasterPassword}
 				onChangeMasterPassword={changeMasterPassword}
 			/>
