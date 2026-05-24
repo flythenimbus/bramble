@@ -1,11 +1,13 @@
-import { ChevronDown, CreditCard, FileText, Folder, Key, Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { EntryType } from "../../hooks/useVault";
+import { modeList } from "../entry-modes";
 
 interface AddDropdownProps {
-	onCreatePassword: () => void;
+	onCreate: (type: EntryType) => void;
 }
 
-export function AddDropdown({ onCreatePassword }: AddDropdownProps) {
+export function AddDropdown({ onCreate }: AddDropdownProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -20,19 +22,10 @@ export function AddDropdown({ onCreatePassword }: AddDropdownProps) {
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
-	const handleItemClick = (type: string) => {
+	const handleItemClick = (type: EntryType) => {
 		setIsOpen(false);
-		if (type === "password") {
-			onCreatePassword();
-		}
+		onCreate(type);
 	};
-
-	const items = [
-		{ type: "password", icon: Key, label: "Password", description: "Add a new password" },
-		{ type: "card", icon: CreditCard, label: "Payment Card", description: "Credit or debit card" },
-		{ type: "note", icon: FileText, label: "Secure Note", description: "Store sensitive text" },
-		{ type: "folder", icon: Folder, label: "Folder", description: "Organize your items" },
-	];
 
 	return (
 		<div className="relative" ref={dropdownRef}>
@@ -48,22 +41,25 @@ export function AddDropdown({ onCreatePassword }: AddDropdownProps) {
 
 			{isOpen && (
 				<div className="absolute right-0 mt-2 w-64 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
-					{items.map((item) => (
-						<button
-							type="button"
-							key={item.type}
-							onClick={() => handleItemClick(item.type)}
-							className="w-full flex items-start gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left border-b border-border/30 last:border-b-0"
-						>
-							<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 mt-0.5">
-								<item.icon className="w-4 h-4 text-primary" />
-							</div>
-							<div className="flex-1 min-w-0">
-								<p className="text-sm">{item.label}</p>
-								<p className="text-xs text-muted-foreground">{item.description}</p>
-							</div>
-						</button>
-					))}
+					{modeList.map((mode) => {
+						const Icon = mode.icon;
+						return (
+							<button
+								type="button"
+								key={mode.type}
+								onClick={() => handleItemClick(mode.type)}
+								className="w-full flex items-start gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left border-b border-border/30 last:border-b-0"
+							>
+								<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 mt-0.5">
+									<Icon className="w-4 h-4 text-primary" />
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-sm">{mode.label}</p>
+									<p className="text-xs text-muted-foreground">{mode.description}</p>
+								</div>
+							</button>
+						);
+					})}
 				</div>
 			)}
 		</div>

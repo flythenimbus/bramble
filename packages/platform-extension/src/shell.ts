@@ -39,4 +39,10 @@ export const extensionShell: ShellAdapter = {
 		if (typeof window === "undefined") return false;
 		return new URLSearchParams(window.location.search).has(DETACHED_FLAG);
 	},
+	async scanQrFromActiveTab() {
+		const res = (await chrome.runtime.sendMessage({ type: "CAPTURE_QR_SCAN" })) as
+			| { ok: boolean; data?: string | null }
+			| undefined;
+		return res?.ok ? (res.data ?? null) : null;
+	},
 };

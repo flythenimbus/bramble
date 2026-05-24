@@ -1,6 +1,14 @@
 /// <reference types="chrome" />
 
-import type { Credentials, FindResult, IndexEntry, MatchSummary } from "@core/adapters/autofill";
+import type {
+	FillPayload,
+	IndexEntry,
+	LoginIndexEntry,
+	MatchSummary,
+	QueryResult,
+} from "@core/adapters/autofill";
+import { parseTotp, totpAt } from "@core/util/totp";
+import jsQR from "jsqr";
 import { getDomain } from "tldts";
 
 //
@@ -59,7 +67,7 @@ function registrableDomain(hostname: string): string {
 // eTLD+1 collapse. We evaluate the policy when serving findResult to the
 // content script.
 
-function hostnameMatches(entry: IndexEntry, pageHostname: string): boolean {
+function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): boolean {
 	const entryHost = entry.hostname.toLowerCase();
 	const pageHost = pageHostname.toLowerCase();
 	switch (entry.subdomainMatch ?? "etld1") {
@@ -213,7 +221,18 @@ async function runClipboardClear(): Promise<void> {
 }
 
 
-function findResult(hostname: string): FindResult {
+function cardSecondary(entry: Extract<IndexEntry, { type: "card" }>): string {
+	const last4 = entry.number.replace(/\D/g, "").slice(-4);
+	const tail = last4 ? `•••• ${last4}` : "";
+	return [entry.brand, tail].filter(Boolean).join(" ");
+}
+
+function queryResult(
+	hostname: string,
+	hasLogin: boolean,
+	hasCard: boolean,
+	hasOtp: boolean,
+): QueryResult {
 	if (!autofillIndex || cachedVek === null) {
 		const pageDomain = registrableDomain(hostname);
 		let hasPotentialMatch = false;
@@ -223,30 +242,64 @@ function findResult(hostname: string): FindResult {
 				break;
 			}
 		}
-		return { matches: [], locked: true, hasPotentialMatch };
+		return { logins: [], cards: [], otps: [], locked: true, hasPotentialMatch };
 	}
-	const matches: MatchSummary[] = [];
+	const logins: MatchSummary[] = [];
+	const cards: MatchSummary[] = [];
+	const otps: MatchSummary[] = [];
 	for (const entry of autofillIndex.values()) {
-		if (hostnameMatches(entry, hostname)) {
-			matches.push({
-				id: entry.id,
-				name: entry.name,
-				username: entry.username,
-				autofillEnabled: entry.autofillEnabled,
-				autoSubmit: entry.autoSubmit,
-			});
+		if (entry.type === "login") {
+			if (!hostnameMatches(entry, hostname)) continue;
+			if (hasLogin) {
+				logins.push({
+					id: entry.id,
+					name: entry.name,
+					secondary: entry.username,
+					autofillEnabled: entry.autofillEnabled,
+					autoSubmit: entry.autoSubmit,
+				});
+			}
+			if (hasOtp && entry.totp) {
+				otps.push({
+					id: entry.id,
+					name: entry.name,
+					secondary: entry.username,
+					autofillEnabled: entry.autofillEnabled,
+				});
+			}
+		} else if (hasCard) {
+			cards.push({ id: entry.id, name: entry.name, secondary: cardSecondary(entry) });
 		}
 	}
-	return { matches, locked: false, hasPotentialMatch: matches.length > 0 };
+	return { logins, cards, otps, locked: false, hasPotentialMatch: logins.length > 0 };
 }
 
-function fetchCredentials(entryId: string): Credentials {
+function fetchFill(entryId: string): FillPayload {
 	const entry = autofillIndex?.get(entryId);
 	if (!entry) throw new Error(`entry not found: ${entryId}`);
+	if (entry.type === "login") {
+		let totp: string | undefined;
+		if (entry.totp) {
+			const parsed = parseTotp(entry.totp);
+			if (parsed) totp = totpAt(parsed.totp).code;
+		}
+		return {
+			kind: "login",
+			username: entry.username,
+			password: entry.password,
+			totp,
+			autoSubmit: entry.autoSubmit,
+			customFields: entry.customFields,
+		};
+	}
 	return {
-		username: entry.username,
-		password: entry.password,
-		autoSubmit: entry.autoSubmit,
+		kind: "card",
+		cardholderName: entry.cardholderName,
+		number: entry.number,
+		expMonth: entry.expMonth,
+		expYear: entry.expYear,
+		cvv: entry.cvv,
+		customFields: entry.customFields,
 	};
 }
 
@@ -258,6 +311,18 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
 	void ensureOffscreen();
 });
+
+async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
+	const blob = await (await fetch(dataUrl)).blob();
+	const bitmap = await createImageBitmap(blob);
+	const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return null;
+	ctx.drawImage(bitmap, 0, 0);
+	bitmap.close();
+	const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	return jsQR(data, width, height)?.data ?? null;
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.target === "offscreen") return false;
@@ -316,7 +381,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			knownHostnames.clear();
 			for (const entry of entries) {
 				autofillIndex.set(entry.id, entry);
-				knownHostnames.add(entry.hostname);
+				// Only logins carry a hostname for the locked-state hint registry.
+				if (entry.type === "login") knownHostnames.add(entry.hostname);
 			}
 			await persistAutofillIndex();
 			await scheduleAutoLock();
@@ -340,8 +406,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FIND") {
 		void (async () => {
 			await hydrationPromise;
-			const { hostname } = message.payload as { hostname: string };
-			sendResponse({ ok: true, data: findResult(hostname) });
+			const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
+				hostname: string;
+				hasLogin?: boolean;
+				hasCard?: boolean;
+				hasOtp?: boolean;
+			};
+			sendResponse({
+				ok: true,
+				data: queryResult(hostname, hasLogin !== false, hasCard === true, hasOtp === true),
+			});
 		})();
 		return true;
 	}
@@ -351,7 +425,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			await hydrationPromise;
 			try {
 				const { entryId } = message.payload as { entryId: string };
-				const data = fetchCredentials(entryId);
+				const data = fetchFill(entryId);
 				await scheduleAutoLock();
 				sendResponse({ ok: true, data });
 			} catch (err) {
@@ -361,13 +435,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		return true;
 	}
 
-	// everything we need in background.
 	if (type === "AUTOFILL_QUERY") {
 		void (async () => {
 			await hydrationPromise;
 			const tabId = _sender.tab?.id;
 			const hostname = message.hostname as string;
-			const result = findResult(hostname);
+			const hasLogin = message.hasLogin !== false;
+			const hasCard = message.hasCard === true;
+			const hasOtp = message.hasOtp === true;
+			const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
 			// Sliding session: any autofill activity extends the timer.
 			if (!result.locked) await scheduleAutoLock();
 			if (tabId !== undefined) {
@@ -384,17 +460,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			try {
-				const { entryId, isAuto } = message.payload as {
+				const { entryId, isAuto, otpOnly } = message.payload as {
 					entryId: string;
 					isAuto?: boolean;
+					otpOnly?: boolean;
 				};
-				const credentials = fetchCredentials(entryId);
+				const fill = fetchFill(entryId);
 				await scheduleAutoLock();
 				if (_sender.tab?.id) {
-					// overwrite unconditionally (explicit user pick).
 					await chrome.tabs.sendMessage(_sender.tab.id, {
 						type: "AUTOFILL_FILL",
-						payload: { ...credentials, isAuto: !!isAuto },
+						payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
 					});
 				}
 				sendResponse({ ok: true });
@@ -461,6 +537,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
 			} catch {}
 			sendResponse({ ok: true, data: handoff });
+		})();
+		return true;
+	}
+
+	if (type === "CAPTURE_QR_SCAN") {
+		void (async () => {
+			try {
+				const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+				if (win?.id === undefined) {
+					sendResponse({ ok: false, error: "No browser window to capture" });
+					return;
+				}
+				const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
+				const decoded = await decodeQrDataUrl(dataUrl);
+				sendResponse({ ok: true, data: decoded });
+			} catch (err) {
+				sendResponse({ ok: false, error: String(err) });
+			}
 		})();
 		return true;
 	}

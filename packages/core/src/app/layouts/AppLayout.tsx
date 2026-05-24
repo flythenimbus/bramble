@@ -36,15 +36,15 @@ export function AppLayout() {
 	let back: { label: string; onClick: () => void } | null = null;
 	if (pathname === "/settings") {
 		back = { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
-	} else if (pathname === "/vault/new") {
-		back = { label: "Back to passwords", onClick: () => navigate({ to: "/vault" }) };
+	} else if (pathname.startsWith("/vault/new")) {
+		back = { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
 	} else if (entryId) {
 		back = pathname.endsWith("/edit")
 			? {
 					label: "Back to details",
 					onClick: () => navigate({ to: "/vault/$entryId", params: { entryId } }),
 				}
-			: { label: "Back to passwords", onClick: () => navigate({ to: "/vault" }) };
+			: { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
 	}
 
 	return (

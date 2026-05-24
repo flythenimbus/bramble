@@ -1,58 +1,60 @@
-import { Search, TrendingDown, TrendingUp } from "lucide-react";
+import { type LucideIcon, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
+import type { EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
-import { PasswordItem } from "../../components/PasswordItem";
+import { EntryRow } from "../../components/EntryRow";
 import { TextField } from "../../components/ui/text-field";
 
-interface EntrySummary {
+export interface VaultListItem {
 	id: string;
+	type: EntryType;
 	name: string;
-	url: string;
-	username: string;
-	password: string;
+	icon: LucideIcon;
+	initials?: string;
+	secondary: string;
 	leaked?: boolean;
+	copyItems: { label: string; value: string }[];
+	// Lowercased text the search box matches against.
+	searchText: string;
 }
 
 interface VaultHomeProps {
-	entries: EntrySummary[];
-	onCreateNew: () => void;
+	items: VaultListItem[];
+	onCreate: (type: EntryType) => void;
 	onSelectEntry: (id: string) => void;
 	onEditEntry: (id: string) => void;
 	onDeleteEntry: (id: string) => Promise<void>;
 }
 
 export function VaultHome({
-	entries,
-	onCreateNew,
+	items,
+	onCreate,
 	onSelectEntry,
 	onEditEntry,
 	onDeleteEntry,
 }: VaultHomeProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 
-	const filtered = entries.filter(
-		(p) =>
-			p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			p.url.toLowerCase().includes(searchQuery.toLowerCase()),
-	);
+	const query = searchQuery.toLowerCase();
+	const filtered = items.filter((item) => item.searchText.includes(query));
 
-	const atRisk = entries.filter((p) => p.leaked).length;
-	const strong = entries.length - atRisk;
+	// "At Risk" / "Strong" are password-health stats, so they count logins only.
+	const atRisk = items.filter((item) => item.leaked).length;
+	const strong = items.filter((item) => item.type === "login" && !item.leaked).length;
 
 	return (
 		<main className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto px-4 py-5">
 			<div className="flex gap-2 mb-5 items-stretch">
 				<div className="flex-1">
 					<TextField
-						label="Search passwords"
+						label="Search vault"
 						type="text"
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
 						startAdornment={<Search className="w-4 h-4" />}
 					/>
 				</div>
-				<AddDropdown onCreatePassword={onCreateNew} />
+				<AddDropdown onCreate={onCreate} />
 			</div>
 
 			<div className="grid grid-cols-3 gap-3 mb-5">
@@ -60,7 +62,7 @@ export function VaultHome({
 					<div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<p className="text-xs text-muted-foreground mb-0.5">Total Items</p>
-						<p className="text-2xl">{entries.length}</p>
+						<p className="text-2xl">{items.length}</p>
 					</div>
 				</div>
 				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-gradient-to-br from-card to-background backdrop-blur-sm">
@@ -87,7 +89,7 @@ export function VaultHome({
 
 			<div className="flex-1 min-h-0 flex flex-col rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 				<div className="shrink-0 px-4 py-3 border-b border-border/50 flex items-center justify-between">
-					<h3 className="text-sm">Passwords ({filtered.length})</h3>
+					<h3 className="text-sm">Items ({filtered.length})</h3>
 					<button
 						type="button"
 						className="text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
@@ -97,22 +99,23 @@ export function VaultHome({
 				</div>
 				<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
 					{filtered.length > 0 ? (
-						filtered.map((pwd) => (
-							<PasswordItem
-								key={pwd.id}
-								name={pwd.name}
-								username={pwd.username}
-								password={pwd.password}
-								url={pwd.url}
-								leaked={pwd.leaked}
-								onSelect={() => onSelectEntry(pwd.id)}
-								onEdit={() => onEditEntry(pwd.id)}
-								onDelete={() => onDeleteEntry(pwd.id)}
+						filtered.map((item) => (
+							<EntryRow
+								key={item.id}
+								name={item.name}
+								secondary={item.secondary}
+								icon={item.icon}
+								initials={item.initials}
+								leaked={item.leaked}
+								copyItems={item.copyItems}
+								onSelect={() => onSelectEntry(item.id)}
+								onEdit={() => onEditEntry(item.id)}
+								onDelete={() => onDeleteEntry(item.id)}
 							/>
 						))
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
-							No passwords found matching your search.
+							No items found matching your search.
 						</div>
 					)}
 				</div>

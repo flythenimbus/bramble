@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
-import { CreatePasswordRoute } from "./routes/CreatePasswordRoute";
+import { CreateEntryRoute } from "./routes/CreateEntryRoute";
 import { EntryDetailRoute } from "./routes/EntryDetailRoute";
 import { EntryEditRoute } from "./routes/EntryEditRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
@@ -35,10 +35,10 @@ const vaultHomeRoute = createRoute({
 	component: VaultHomeRoute,
 });
 
-const createPasswordRoute = createRoute({
+const createEntryRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
-	path: "/vault/new",
-	component: CreatePasswordRoute,
+	path: "/vault/new/$type",
+	component: CreateEntryRoute,
 });
 
 const entryDetailRoute = createRoute({
@@ -63,7 +63,7 @@ const routeTree = rootRoute.addChildren([
 	authRoute,
 	appLayoutRoute.addChildren([
 		vaultHomeRoute,
-		createPasswordRoute,
+		createEntryRoute,
 		entryDetailRoute,
 		entryEditRoute,
 		settingsRoute,

@@ -1,7 +1,9 @@
-import { AlertTriangle, Check, Copy, Eye, EyeOff, Globe, Pencil, Trash2 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
+import { getEntryMode } from "../../entry-modes";
+import { CustomFieldsDetail } from "../../entry-modes/custom-fields";
 
 interface EntryDetailProps {
 	entry: Entry;
@@ -11,10 +13,15 @@ interface EntryDetailProps {
 
 export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
-	const [showPassword, setShowPassword] = useState(false);
 	const [copied, setCopied] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+
+	const mode = getEntryMode(entry.type);
+	const { icon: Icon, initials } = mode.row(entry);
+	const subtitle = mode.detailSubtitle?.(entry);
+	const alert = mode.detailAlert?.(entry) ?? null;
+	const Detail = mode.Detail;
 
 	useEffect(() => {
 		if (!copied) return;
@@ -40,91 +47,45 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 		}
 	};
 
-	const leaked = entry.breach?.leaked === true;
-
 	return (
-		<main className="max-w-5xl mx-auto px-4 py-5">
-			{leaked && (
+		<main className="max-w-5xl mx-auto px-4 py-3">
+			{alert && (
 				<div
-					className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive"
+					className="mb-3 flex items-start gap-2.5 px-4 py-2.5 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive"
 					role="alert"
 				>
 					<AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
 					<div className="text-sm">
-						<p className="font-medium">This password appeared in a known data breach.</p>
-						<p className="text-xs mt-0.5 opacity-90">
-							Change it on the site to keep your account safe.
-						</p>
+						<p className="font-medium">{alert.title}</p>
+						<p className="text-xs mt-0.5 opacity-90">{alert.body}</p>
 					</div>
 				</div>
 			)}
 
 			<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-				<div className="p-6 space-y-5">
+				<div className="px-5 py-4 space-y-3">
 					<div className="flex items-center gap-3">
-						<div className="flex items-center justify-center w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm">
-							<span className="text-sm text-primary">
-								{entry.name.substring(0, 2).toUpperCase()}
-							</span>
+						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
+							{initials ? (
+								<span className="text-sm text-primary">{initials}</span>
+							) : (
+								<Icon className="w-4 h-4 text-primary" />
+							)}
 						</div>
 						<div className="min-w-0">
-							<h2 className="text-lg truncate">{entry.name}</h2>
-							{entry.url && <p className="text-xs text-muted-foreground truncate">{entry.url}</p>}
+							<h2 className="text-base truncate">{entry.name}</h2>
+							{subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
 						</div>
 					</div>
 
-					{entry.url && (
-						<Field label="Website" copyKey={copied} onCopy={() => copy("website", entry.url)}>
-							<div className="flex items-center gap-2 text-sm">
-								<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-								<span className="truncate">{entry.url}</span>
-							</div>
-						</Field>
-					)}
+					<Detail entry={entry} copied={copied} copy={copy} />
 
-					<Field
-						label="Username"
-						copyKey={copied}
-						copyName="username"
-						onCopy={() => copy("username", entry.username)}
-					>
-						<span className="text-sm truncate">{entry.username || "—"}</span>
-					</Field>
-
-					<Field
-						label="Password"
-						copyKey={copied}
-						copyName="password"
-						onCopy={() => copy("password", entry.password)}
-						extraAction={
-							<button
-								type="button"
-								onClick={() => setShowPassword((v) => !v)}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label={showPassword ? "Hide password" : "Show password"}
-							>
-								{showPassword ? (
-									<EyeOff className="w-3.5 h-3.5" />
-								) : (
-									<Eye className="w-3.5 h-3.5" />
-								)}
-							</button>
-						}
-					>
-						<span className="text-sm font-mono truncate">
-							{showPassword ? entry.password : "•".repeat(Math.min(entry.password.length, 16))}
-						</span>
-					</Field>
-
-					{entry.notes && (
-						<div className="space-y-1.5">
-							<p className="text-xs text-muted-foreground">Notes</p>
-							<p className="text-sm whitespace-pre-wrap">{entry.notes}</p>
-						</div>
+					{entry.customFields && entry.customFields.length > 0 && (
+						<CustomFieldsDetail fields={entry.customFields} copied={copied} copy={copy} />
 					)}
 				</div>
 
-				<div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
+				<div className="px-5 py-3 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
 					{confirmDelete ? (
 						<>
 							<p className="flex-1 text-xs text-destructive">Delete this entry permanently?</p>
@@ -169,39 +130,5 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 				</div>
 			</div>
 		</main>
-	);
-}
-
-interface FieldProps {
-	label: string;
-	children: ReactNode;
-	copyKey: string | null;
-	copyName?: string;
-	onCopy: () => void;
-	extraAction?: ReactNode;
-}
-
-function Field({ label, children, copyKey, copyName, onCopy, extraAction }: FieldProps) {
-	const matched = copyName ? copyKey === copyName : false;
-	return (
-		<div className="space-y-1.5">
-			<p className="text-xs text-muted-foreground">{label}</p>
-			<div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/50">
-				<div className="flex-1 min-w-0">{children}</div>
-				{extraAction}
-				<button
-					type="button"
-					onClick={onCopy}
-					className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-					aria-label={`Copy ${label.toLowerCase()}`}
-				>
-					{matched ? (
-						<Check className="w-3.5 h-3.5 text-primary" />
-					) : (
-						<Copy className="w-3.5 h-3.5" />
-					)}
-				</button>
-			</div>
-		</div>
 	);
 }

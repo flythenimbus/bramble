@@ -1,35 +1,38 @@
-import { AlertTriangle, Check, Copy, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import {
+	AlertTriangle,
+	Check,
+	Copy,
+	type LucideIcon,
+	MoreVertical,
+	Pencil,
+	Trash2,
+} from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 
-interface CustomField {
-	key: string;
-	value: string;
-}
-
-interface PasswordItemProps {
+interface EntryRowProps {
 	name: string;
-	username: string;
-	password: string;
-	url?: string;
-	customFields?: CustomField[];
+	secondary: string;
+	icon: LucideIcon;
+	initials?: string;
 	leaked?: boolean;
+	copyItems: { label: string; value: string }[];
 	onSelect: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
 }
 
-export function PasswordItem({
+export function EntryRow({
 	name,
-	username,
-	password,
-	url,
-	customFields = [],
+	secondary,
+	icon: Icon,
+	initials,
 	leaked,
+	copyItems,
 	onSelect,
 	onEdit,
 	onDelete,
-}: PasswordItemProps) {
+}: EntryRowProps) {
 	const { clipboard } = usePlatform();
 	const [copyOpen, setCopyOpen] = useState(false);
 	const [moreOpen, setMoreOpen] = useState(false);
@@ -86,8 +89,6 @@ export function PasswordItem({
 		}
 	};
 
-	const getInitials = (text: string) => text.substring(0, 2).toUpperCase();
-
 	return (
 		<div className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/30">
 			<button
@@ -97,15 +98,18 @@ export function PasswordItem({
 				aria-label={`Open ${name}`}
 			>
 				<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
-					<span className="text-xs text-primary">{getInitials(name)}</span>
+					{initials ? (
+						<span className="text-xs text-primary">{initials}</span>
+					) : (
+						<Icon className="w-4 h-4 text-primary" />
+					)}
 				</div>
 
 				<div className="flex-1 min-w-0">
 					<div className="flex items-baseline gap-2">
 						<h4 className="text-sm truncate">{name}</h4>
-						{url && <span className="text-xs text-muted-foreground/60 truncate">{url}</span>}
 					</div>
-					<p className="text-xs text-muted-foreground truncate mt-0.5">{username}</p>
+					<p className="text-xs text-muted-foreground truncate mt-0.5">{secondary}</p>
 				</div>
 			</button>
 
@@ -123,46 +127,36 @@ export function PasswordItem({
 					</span>
 				)}
 				<div className="row-start-1 col-start-1 justify-self-end self-center flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-					<div className="relative" ref={copyRef}>
-						<button
-							type="button"
-							onClick={() => setCopyOpen((o) => !o)}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label={copied ? `Copied ${copied}` : "Copy"}
-							title={copied ? `Copied ${copied}` : "Copy"}
-						>
-							{copied ? (
-								<Check className="w-3.5 h-3.5 text-primary" />
-							) : (
-								<Copy className="w-3.5 h-3.5" />
+					{copyItems.length > 0 && (
+						<div className="relative" ref={copyRef}>
+							<button
+								type="button"
+								onClick={() => setCopyOpen((o) => !o)}
+								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								aria-label={copied ? `Copied ${copied}` : "Copy"}
+								title={copied ? `Copied ${copied}` : "Copy"}
+							>
+								{copied ? (
+									<Check className="w-3.5 h-3.5 text-primary" />
+								) : (
+									<Copy className="w-3.5 h-3.5" />
+								)}
+							</button>
+							{copyOpen && (
+								<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
+									{copyItems.map((item) => (
+										<MenuItem
+											key={item.label}
+											icon={<Copy className="w-3 h-3 text-muted-foreground" />}
+											onClick={() => copyToClipboard(item.label, item.value)}
+										>
+											Copy {item.label}
+										</MenuItem>
+									))}
+								</div>
 							)}
-						</button>
-						{copyOpen && (
-							<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
-								<MenuItem
-									icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-									onClick={() => copyToClipboard("username", username)}
-								>
-									Copy username
-								</MenuItem>
-								<MenuItem
-									icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-									onClick={() => copyToClipboard("password", password)}
-								>
-									Copy password
-								</MenuItem>
-								{customFields.map((field) => (
-									<MenuItem
-										key={field.key}
-										icon={<Copy className="w-3 h-3 text-muted-foreground" />}
-										onClick={() => copyToClipboard(field.key, field.value)}
-									>
-										Copy {field.key}
-									</MenuItem>
-								))}
-							</div>
-						)}
-					</div>
+						</div>
+					)}
 
 					<div className="relative" ref={moreRef}>
 						<button
