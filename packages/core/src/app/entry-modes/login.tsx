@@ -63,6 +63,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const [hasWebsite, setHasWebsite] = useState(getValues("url") !== "");
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [totpScan, setTotpScan] = useState<"idle" | "scanning" | "error">("idle");
+	const [showTotp, setShowTotp] = useState(false);
 	const [initialPassword] = useState(() => getValues("password"));
 
 	const passwordValue = watch("password");
@@ -215,22 +216,32 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 			<div>
 				<TextField
 					label="Authenticator key (TOTP)"
-					type="text"
+					type={showTotp ? "text" : "password"}
 					endAdornment={
-						<button
-							type="button"
-							onClick={scanTotp}
-							disabled={totpScan === "scanning"}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all disabled:opacity-50"
-							aria-label="Scan QR code from current webpage"
-							title="Scan authenticator QR code from current webpage"
-						>
-							{totpScan === "scanning" ? (
-								<Loader2 className="w-3.5 h-3.5 animate-spin" />
-							) : (
-								<Camera className="w-3.5 h-3.5" />
-							)}
-						</button>
+						<>
+							<button
+								type="button"
+								onClick={scanTotp}
+								disabled={totpScan === "scanning"}
+								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all disabled:opacity-50"
+								aria-label="Scan QR code from current webpage"
+								title="Scan authenticator QR code from current webpage"
+							>
+								{totpScan === "scanning" ? (
+									<Loader2 className="w-3.5 h-3.5 animate-spin" />
+								) : (
+									<Camera className="w-3.5 h-3.5" />
+								)}
+							</button>
+							<button
+								type="button"
+								onClick={() => setShowTotp((v) => !v)}
+								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								aria-label={showTotp ? "Hide authenticator key" : "Show authenticator key"}
+							>
+								{showTotp ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+							</button>
+						</>
 					}
 					{...register("totp")}
 				/>
