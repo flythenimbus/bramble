@@ -412,6 +412,35 @@ function submitFromField(field: HTMLInputElement | null): void {
 	field.dispatchEvent(enter);
 }
 
+const CAPTCHA_SELECTORS = [
+	".g-recaptcha:not([data-size='invisible'])",
+	".h-captcha",
+	".cf-turnstile",
+	'iframe[src*="recaptcha/api2/anchor"]',
+	'iframe[src*="recaptcha/api2/bframe"]',
+	'iframe[src*="hcaptcha.com"]',
+	'iframe[src*="challenges.cloudflare.com"]',
+	'iframe[src*="arkoselabs.com"]',
+	'iframe[src*="funcaptcha.com"]',
+	'iframe[title*="captcha" i]',
+];
+
+function isRendered(el: Element): boolean {
+	const rect = el.getBoundingClientRect();
+	if (rect.width < 10 || rect.height < 10) return false;
+	const style = getComputedStyle(el);
+	return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+}
+
+function hasInteractiveCaptcha(): boolean {
+	for (const sel of CAPTCHA_SELECTORS) {
+		for (const el of document.querySelectorAll(sel)) {
+			if (isRendered(el)) return true;
+		}
+	}
+	return false;
+}
+
 
 interface FieldMatcher {
 	canonical: string;
@@ -865,25 +894,24 @@ function handleResult(result: QueryResult | undefined): void {
 		return;
 	}
 
-	// A focused one-time-code field offers the matching logins' codes; a single
-	// match auto-fills like a login (respecting the per-entry opt-out), and
-	// skips if the field is already filled to avoid a re-fill loop.
-	if (focused && candidateKind(focused) === "otp") {
-		const otps = result.otps ?? [];
-		if (otps.length === 0) return;
-		if (otps.length === 1) {
-			const only = otps[0]!;
-			if (only.autofillEnabled === false) {
-				buildDropdown(otps, focused, { otpOnly: true });
-				return;
+	// One-time-code fill. A single match auto-fills like a login — **no focus
+	// required** — so the code lands as soon as the 2FA field is on the page;
+	// `autoFilledFields` stops the re-query loop. Multiple matches or a per-entry
+	// opt-out fall back to a picker, shown only when the field is focused. No
+	// early return on the auto-fill path: a combined page still runs the
+	// credential fill below.
+	const otps = result.otps ?? [];
+	const otpEls = otpInputs();
+	if (otps.length > 0 && otpEls.length > 0) {
+		const onlyOtp = otps.length === 1 ? otps[0]! : null;
+		if (onlyOtp && onlyOtp.autofillEnabled !== false) {
+			if (!otpEls.every((f) => autoFilledFields.has(f))) {
+				selectMatch(onlyOtp.id, true, true);
 			}
-			const fields = otpInputs();
-			if (fields.length > 0 && fields.every((f) => autoFilledFields.has(f))) return;
-			selectMatch(only.id, true, true);
+		} else if (focused && candidateKind(focused) === "otp") {
+			buildDropdown(otps, focused, { otpOnly: true });
 			return;
 		}
-		buildDropdown(otps, focused, { otpOnly: true });
-		return;
 	}
 
 	const logins = result.logins;
@@ -962,9 +990,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			!!payload.isAuto,
 		);
 		fillCustomFields(payload.customFields);
+		fillOtp(payload.totp);
 		if (filled && payload.autoSubmit) {
-			// the field values.
-			setTimeout(() => submitFromField(passwordField), 50);
+			setTimeout(() => {
+				if (hasInteractiveCaptcha()) return;
+				submitFromField(passwordField);
+			}, 50);
 		}
 		sendResponse({ ok: filled });
 		return false;
@@ -998,8 +1029,11 @@ function showFor(field: HTMLInputElement): void {
 	}
 	if (candidateKind(field) === "otp") {
 		const otps = cachedResult.otps ?? [];
-		if (otps.length > 0) buildDropdown(otps, field, { otpOnly: true });
-		else queryAutofill();
+		if (otps.length === 0) {
+			queryAutofill();
+		} else if (otps.length > 1 || !field.value) {
+			buildDropdown(otps, field, { otpOnly: true });
+		}
 		return;
 	}
 	if (cachedResult.logins.length === 0) {
