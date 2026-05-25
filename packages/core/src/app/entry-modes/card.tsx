@@ -2,6 +2,7 @@ import { CreditCard, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CardEntryData } from "../../hooks/useVault";
+import { cardBrand } from "../../util/card";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
@@ -15,17 +16,6 @@ export interface CardFormValues {
 	expYear: string;
 	cvv: string;
 	notes: string;
-}
-
-// Best-effort issuer detection from the leading digits, for the icon subtitle
-// and search. Not validation — an unknown prefix just yields no brand.
-function cardBrand(number: string): string | undefined {
-	const n = number.replace(/\D/g, "");
-	if (/^4/.test(n)) return "Visa";
-	if (/^(5[1-5]|2[2-7])/.test(n)) return "Mastercard";
-	if (/^3[47]/.test(n)) return "Amex";
-	if (/^6(?:011|5)/.test(n)) return "Discover";
-	return undefined;
 }
 
 function lastFour(number: string): string {
