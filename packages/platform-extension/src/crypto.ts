@@ -15,6 +15,8 @@ async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 	return res.data as T;
 }
 
+const VEK_SESSION_KEY = "vault.vek";
+
 function slotPayload(input: WrapPasswordSlotInput) {
 	return {
 		password: input.password,
@@ -27,6 +29,17 @@ function slotPayload(input: WrapPasswordSlotInput) {
 export const extensionCrypto: CryptoAdapter = {
 	lock: () => send("CRYPTO_LOCK"),
 	isLocked: () => send<boolean>("CRYPTO_IS_LOCKED"),
+
+	onExternalLock(callback: () => void) {
+		const handler = (changes: Record<string, chrome.storage.StorageChange>) => {
+			const change = changes[VEK_SESSION_KEY];
+			if (change && change.oldValue !== undefined && change.newValue === undefined) {
+				callback();
+			}
+		};
+		chrome.storage.session.onChanged.addListener(handler);
+		return () => chrome.storage.session.onChanged.removeListener(handler);
+	},
 
 	generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
 	unlockWithVek: (vekB64) => send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 }),

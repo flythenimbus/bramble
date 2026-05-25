@@ -2,11 +2,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
+import { usePopOut } from "../hooks/usePopOut";
 import { Auth } from "../screens/Auth/Auth";
 
 export function AuthRoute() {
 	const navigate = useNavigate();
 	const { shell } = usePlatform();
+	const { popOut, canPopOut } = usePopOut();
 	const { hasVault, isLocked, unlock } = useVault();
 
 	// If we land on auth but the vault is already unlocked (e.g. popup reopen
@@ -20,7 +22,7 @@ export function AuthRoute() {
 			hasVault={hasVault}
 			onUnlock={unlock}
 			onOpenSetup={() => shell.openSetup()}
-			onPopOut={shell.isDetached() ? undefined : () => void shell.popOut()}
+			onPopOut={canPopOut ? popOut : undefined}
 		/>
 	);
 }

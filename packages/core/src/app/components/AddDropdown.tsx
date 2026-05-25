@@ -39,7 +39,7 @@ export function AddDropdown({ onCreatePassword }: AddDropdownProps) {
 			<button
 				type="button"
 				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+				className="flex items-center gap-2 px-4 py-2 h-full rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
 			>
 				<Plus className="w-4 h-4" />
 				<span className="text-sm">Add New</span>

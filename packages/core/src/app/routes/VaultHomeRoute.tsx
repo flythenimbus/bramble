@@ -1,16 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useVault } from "../../hooks/useVault";
 import { VaultHome } from "../screens/VaultHome/VaultHome";
 
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
-	const { isLocked, entries, deleteEntry } = useVault();
-
-	// Kick back to auth if we ended up here while locked.
-	useEffect(() => {
-		if (isLocked) navigate({ to: "/" });
-	}, [isLocked, navigate]);
+	const { entries, deleteEntry } = useVault();
+	// The locked-state redirect to /auth lives in AppLayout, which covers every
+	// authed route — no per-route guard needed here.
 
 	const summaries = useMemo(
 		() =>

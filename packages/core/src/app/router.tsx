@@ -70,13 +70,17 @@ const routeTree = rootRoute.addChildren([
 	]),
 ]);
 
-export const router = createRouter({
-	routeTree,
-	history: createMemoryHistory({ initialEntries: ["/"] }),
-});
+export function createAppRouter(initialPath = "/") {
+	return createRouter({
+		routeTree,
+		history: createMemoryHistory({ initialEntries: [initialPath] }),
+	});
+}
+
+export type AppRouter = ReturnType<typeof createAppRouter>;
 
 declare module "@tanstack/react-router" {
 	interface Register {
-		router: typeof router;
+		router: AppRouter;
 	}
 }

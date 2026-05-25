@@ -45,6 +45,7 @@ export interface Entry extends EntryData {
 export interface UseVault {
 	hasVault: boolean;
 	isLocked: boolean;
+	ready: boolean;
 	entries: Entry[];
 	error: string | null;
 	unlock(password: string): Promise<void>;
@@ -98,6 +99,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const { storage, crypto, autofill } = usePlatform();
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
+	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
 
@@ -148,12 +150,21 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				await loadEntries();
 			} catch (e) {
 				if (!cancelled) setError(String(e));
+			} finally {
+				if (!cancelled) setReady(true);
 			}
 		})();
 		return () => {
 			cancelled = true;
 		};
 	}, [storage, crypto, loadEntries]);
+
+	useEffect(() => {
+		return crypto.onExternalLock(() => {
+			setEntries([]);
+			setIsLocked(true);
+		});
+	}, [crypto]);
 
 	const unlock = useCallback(
 		async (password: string) => {
@@ -411,6 +422,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		() => ({
 			hasVault,
 			isLocked,
+			ready,
 			entries,
 			error,
 			unlock,
@@ -426,6 +438,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[
 			hasVault,
 			isLocked,
+			ready,
 			entries,
 			error,
 			unlock,

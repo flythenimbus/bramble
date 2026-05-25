@@ -1,17 +1,4 @@
-import {
-	AlertTriangle,
-	ArrowLeft,
-	Clock,
-	Download,
-	Info,
-	Key,
-	Lock,
-	Palette,
-	Shield,
-	ShieldCheck,
-	Timer,
-	Upload,
-} from "lucide-react";
+import { AlertTriangle, Clock, Info, Key, Lock, Palette, ShieldCheck, Timer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { SelectField } from "../../components/ui/select-field";
@@ -24,7 +11,6 @@ interface PasswordFormValues {
 }
 
 interface SettingsProps {
-	onBack: () => void;
 	darkMode: boolean;
 	onToggleTheme: () => void;
 	autoLockMinutes: number;
@@ -43,7 +29,6 @@ interface SettingsProps {
 }
 
 export function Settings({
-	onBack,
 	darkMode,
 	onToggleTheme,
 	autoLockMinutes,
@@ -117,15 +102,6 @@ export function Settings({
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
-			{/* Back button */}
-			<button
-				onClick={onBack}
-				className="flex items-center gap-2 mb-4 text-sm text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
-			>
-				<ArrowLeft className="w-4 h-4" />
-				Back to vault
-			</button>
-
 			<div className="space-y-4">
 				{/* Security Settings */}
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
@@ -169,10 +145,10 @@ export function Settings({
 									value={String(clipboardClearSeconds)}
 									onChange={(e) => onChangeClipboardSeconds(Number(e.target.value))}
 								>
-									<option value="15">15 seconds</option>
 									<option value="30">30 seconds</option>
 									<option value="60">1 minute</option>
 									<option value="120">2 minutes</option>
+									<option value="300">5 minutes</option>
 								</SelectField>
 							</div>
 						</Row>
@@ -352,42 +328,6 @@ export function Settings({
 					</div>
 				</div>
 
-				{/* Data Management */}
-				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-					<div className="px-4 py-3 border-b border-border/50">
-						<h3 className="text-sm flex items-center gap-2">
-							<Download className="w-4 h-4 text-primary" />
-							Data Management
-						</h3>
-					</div>
-					<div className="p-4 space-y-4">
-						<Row
-							icon={<Download className="w-4 h-4 text-primary" />}
-							title="Export vault"
-							subtitle="Download your passwords as JSON or CSV"
-						>
-							<button
-								disabled
-								className="px-3 py-1.5 text-xs rounded-lg border border-border opacity-50 cursor-not-allowed"
-							>
-								Export
-							</button>
-						</Row>
-						<Row
-							icon={<Upload className="w-4 h-4 text-primary" />}
-							title="Import passwords"
-							subtitle="Import from other password managers"
-						>
-							<button
-								disabled
-								className="px-3 py-1.5 text-xs rounded-lg border border-border opacity-50 cursor-not-allowed"
-							>
-								Import
-							</button>
-						</Row>
-					</div>
-				</div>
-
 				{/* About */}
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 					<div className="px-4 py-3 border-b border-border/50">
@@ -404,32 +344,6 @@ export function Settings({
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-muted-foreground">Total passwords</span>
 							<span>{totalEntries}</span>
-						</div>
-					</div>
-				</div>
-
-				{/* Danger Zone (placeholder — destructive vault delete is out of scope for now) */}
-				<div className="rounded-lg border border-destructive/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-					<div className="px-4 py-3 border-b border-destructive/50">
-						<h3 className="text-sm flex items-center gap-2 text-destructive">
-							<Shield className="w-4 h-4" />
-							Danger Zone
-						</h3>
-					</div>
-					<div className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm">Delete vault</p>
-								<p className="text-xs text-muted-foreground mt-0.5">
-									Permanently delete all your data (not implemented)
-								</p>
-							</div>
-							<button
-								disabled
-								className="px-3 py-1.5 text-xs rounded-lg border border-destructive/50 text-destructive opacity-50 cursor-not-allowed"
-							>
-								Delete
-							</button>
 						</div>
 					</div>
 				</div>
@@ -480,8 +394,8 @@ function Toggle({ checked, onChange, label }: ToggleProps) {
 			}`}
 		>
 			<span
-				className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${
-					checked ? "left-5" : "left-0.5"
+				className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow-sm transition-all ${
+					checked ? "left-5 dark:bg-primary-foreground" : "left-0.5 dark:bg-card-foreground"
 				}`}
 			/>
 		</button>

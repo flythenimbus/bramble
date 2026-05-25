@@ -1,26 +1,15 @@
-import {
-	AlertTriangle,
-	ArrowLeft,
-	Check,
-	Copy,
-	Eye,
-	EyeOff,
-	Globe,
-	Pencil,
-	Trash2,
-} from "lucide-react";
+import { AlertTriangle, Check, Copy, Eye, EyeOff, Globe, Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
 
 interface EntryDetailProps {
 	entry: Entry;
-	onBack: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
 }
 
-export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProps) {
+export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
 	const [showPassword, setShowPassword] = useState(false);
 	const [copied, setCopied] = useState<string | null>(null);
@@ -55,15 +44,6 @@ export function EntryDetail({ entry, onBack, onEdit, onDelete }: EntryDetailProp
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
-			<button
-				onClick={onBack}
-				type="button"
-				className="flex items-center gap-2 mb-4 text-sm text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
-			>
-				<ArrowLeft className="w-4 h-4" />
-				Back to passwords
-			</button>
-
 			{leaked && (
 				<div
 					className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive"

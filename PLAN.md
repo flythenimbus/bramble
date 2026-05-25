@@ -54,7 +54,7 @@ Drive folder for transparent cloud sync.
 | Atomic writes | FSA `createWritable()` close-commit semantics. |
 | Iframes / shadow DOM | Top frame, light DOM only in v1. |
 | First-time setup | Full-tab options page (avoids popup focus-loss dismissal). |
-| UI router | **TanStack Router** with memory history (popup re-mounts at `/` every open). |
+| UI router | **TanStack Router** with memory history (popup re-mounts at `/` every open; a pop-out seeds the initial entry from the handoff). |
 | Build tool | **Vite** + Bun workspaces. |
 | Repo layout | `packages/*/src/` convention. `@core` → `packages/core/src`. |
 | Lint / format | **Biome**. |
@@ -207,7 +207,14 @@ throws at us except for explicit lock / timeout / browser-close.
 6. **Alarm fires** (15 min idle):
    - Background wipes in-memory state, removes the session-storage keys,
      forwards `CRYPTO_LOCK` to offscreen.
-7. **Explicit lock** (popup): same as alarm.
+   - Any open UI reacts: `crypto.onExternalLock` (extension impl listens on
+     `chrome.storage.session.onChanged` for the VEK key's removal) flips
+     `useVault.isLocked`, and AppLayout's guard redirects to the unlock
+     screen. So an open popup/detached window doesn't sit on stale unlocked
+     content after a background lock.
+7. **Explicit lock** (popup): same as alarm (also removes the VEK key, so the
+   `onExternalLock` path fires too — harmlessly, since the popup already set
+   `isLocked` itself).
 8. **Browser restart**: `chrome.storage.session` is wiped by Chrome. The
    hostname registry survives in `local` (low sensitivity — just "which sites
    have entries").
@@ -237,6 +244,7 @@ interface CryptoAdapter {
   rotateVek(): Promise<string>;                    // full rotation
   lock(): Promise<void>;
   isLocked(): Promise<boolean>;
+  onExternalLock(cb: () => void): () => void;       // background auto-lock → UI
 
   // Slot operations.
   generateSalt(): Promise<string>;
@@ -280,9 +288,12 @@ interface ShellAdapter {
   openSetup(): Promise<void>;
   hasFilePicker(): boolean;
   getCurrentTabOrigin(): Promise<string | null>;
-  popOut(): Promise<void>;       // open current UI in a detached window
+  popOut(handoff?: PopOutHandoff): Promise<void>;  // detach, carrying route + draft
+  consumeHandoff(): Promise<PopOutHandoff | null>; // one-shot read on detached boot
   isDetached(): boolean;         // true when running in the popped-out window
 }
+
+interface PopOutHandoff { path: string; draft?: unknown }
 
 // messaging.ts (reserved)
 interface NativeMessagingAdapter { ... }
@@ -545,6 +556,14 @@ callback — that caused a render-order race where `VaultHomeRoute` would mount
 before React applied the state update, see stale `isLocked: true`, and bounce
 back to `/`.
 
+The mirror case — `isLocked` flipping to `true` while inside the app (header
+"Lock" button, Settings' "Lock now") — is handled once in `AppLayout` (the
+`_app` layout), which redirects to `/` for every authed route. It is gated on
+`useVault().ready` so a popped-out window restoring a deep route isn't
+redirected during the pre-hydration window where `isLocked` still holds its
+default `true`. Individual routes therefore carry no locked-state guard of
+their own.
+
 `OptionsApp.tsx` is a separate React tree mounted by the options page; it
 renders the `VaultSetup` flow directly without the router because file
 pickers misbehave inside the popup.
@@ -553,12 +572,38 @@ pickers misbehave inside the popup.
 
 The popup auto-dismisses on focus loss, which is hostile to multi-step
 flows (filling a long form, copying values into another tab). A header
-button calls `shell.popOut()`, which uses `chrome.windows.create` to open
-`popup.html?detached=1` as a standalone type=`popup` window — 500×600,
+button calls `shell.popOut(handoff)`, which uses `chrome.windows.create` to
+open `popup.html?detached=1` as a standalone type=`popup` window — 500×600,
 anchored to the top-right of the currently-focused browser window with an
-80px y-offset to clear the title + tab bars. State is preserved because
-the background SW owns the VEK cache and autofill index, so the new
-window picks up the unlocked session without re-prompting.
+80px y-offset to clear the title + tab bars. The unlocked session is
+preserved because the background SW owns the VEK cache and autofill index,
+so the new window picks up the session without re-prompting.
+
+**Route + draft handoff.** Because the router uses *memory* history, the new
+window would otherwise restart at `/`. To resume where the user left off,
+the originating popup hands over `{ path, draft }`:
+
+- `popOut()` snapshots the current router href and (if a form route is
+  mounted) its live `react-hook-form` values via a getter the route
+  registered through `PopOutProvider`. The handoff rides in the
+  `POPOUT_OPEN` message; the background stashes it in
+  `chrome.storage.session` (in-memory — a draft can hold a plaintext
+  password, so it must never touch the URL or `chrome.storage.local`)
+  *before* creating the window, then the originating popup closes.
+- The detached `popup.tsx` boot is async: it calls `consumeHandoff()`
+  (a read-and-delete one-shot, so a window reload starts clean) and passes
+  `initialPath` / `initialDraft` into `<App>`. `App` builds the router once
+  via `createAppRouter(initialPath)`, and the matching form route — which
+  mounts first because the history is seeded with that path — claims the
+  draft once via `takeInitialDraft()` and seeds the form with it.
+- `useVault.ready` flips true only after mount-time hydration finishes.
+  Routes that redirect on a missing entry (`EntryDetail`, `EntryEdit`) gate
+  on it so a detached window booting straight onto `/vault/$id[/edit]`
+  doesn't bounce to `/vault` before `entries` has loaded. The handoff is
+  also dropped on lock, alongside the VEK.
+
+The content script's "vault locked" hint pops out with no handoff, so it
+lands on `/` (the unlock screen), unchanged.
 
 `shell.isDetached()` reads the `?detached=1` URL flag and is used to hide
 the pop-out button when already running detached. `popup.tsx` also
@@ -577,10 +622,12 @@ leaving dead space.
   (`EntryDetail`), edit (reuses `CreatePassword` with `initialValues`), and
   delete with confirm step. Row-level edit / delete via the three-dots
   menu on every `PasswordItem`.
-- Pop-out to detached window via `shell.popOut()` — button in both
+- Pop-out to detached window via `shell.popOut(handoff)` — button in both
   `AppLayout` header (unlocked) and `Auth` screen (locked). Detached
   window persists the unlocked session because session state lives in the
-  background SW, not the popup.
+  background SW, not the popup, **and resumes on the same route with any
+  half-filled form intact** by handing `{ path, draft }` over through
+  `chrome.storage.session` (see "Detached window" above).
 - File System Access storage with `chrome.storage.local` fallback.
 - WASM crypto with Argon2id + AES-256-GCM + envelope encryption.
 - **Multi-key vault slot format** (VLT1 v0x02) — random VEK at vault
@@ -600,7 +647,10 @@ leaving dead space.
   with more than one authenticator until the multi-slot re-enroll UI lands
   rather than silently dropping authenticators.
 - Background-owned session state with sliding auto-lock alarm
-  (user-configurable, 15 min default).
+  (user-configurable, 15 min default). An open popup / detached window
+  reflects a background lock in real time via `crypto.onExternalLock`
+  (a `chrome.storage.session` VEK-removal listener), so it never lingers on
+  stale unlocked content.
 - VEK cache (`chrome.storage.session`) for seamless resume across offscreen /
   SW restarts.
 - Autofill on top-frame login pages: username-only, password-only, and
