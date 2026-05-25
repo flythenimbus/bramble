@@ -342,7 +342,7 @@ export function Settings({
 							<span>0.0.1</span>
 						</div>
 						<div className="flex items-center justify-between text-sm">
-							<span className="text-muted-foreground">Total passwords</span>
+							<span className="text-muted-foreground">Total entries</span>
 							<span>{totalEntries}</span>
 						</div>
 					</div>

@@ -10,17 +10,11 @@ const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export function EntryDetailRoute() {
 	const navigate = useNavigate();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId" });
-	const { entries, updateEntry, deleteEntry, ready } = useVault();
+	const { entries, updateEntry, deleteEntry } = useVault();
 	const { prefs, loaded: prefsLoaded } = usePrefs();
 	const entry = entries.find((e) => e.id === entryId);
 	const refreshAttemptedRef = useRef<string | null>(null);
 
-	// If the entry vanished (deleted in another tab, or stale id), kick back —
-	// but only once hydration is done, so a detached window that booted onto
-	// this route doesn't bounce before `entries` has loaded.
-	useEffect(() => {
-		if (ready && !entry) navigate({ to: "/vault" });
-	}, [ready, entry, navigate]);
 
 	useEffect(() => {
 		if (!entry || entry.type !== "login" || !prefsLoaded) return;

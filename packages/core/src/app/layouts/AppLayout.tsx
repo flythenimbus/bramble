@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
+import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import {
 	ArrowLeft,
 	ExternalLink,
@@ -8,44 +8,32 @@ import {
 	Shield,
 	Sun,
 } from "lucide-react";
-import { useEffect } from "react";
 import { useVault } from "../../hooks/useVault";
 import { usePopOut } from "../hooks/usePopOut";
 import { useTheme } from "../hooks/useTheme";
 
 export function AppLayout() {
+	const router = useRouter();
 	const navigate = useNavigate();
 	const { darkMode, toggleTheme } = useTheme();
-	const { lock, isLocked, ready } = useVault();
+	const { lock } = useVault();
 	const { popOut, canPopOut } = usePopOut();
 
-	// Locking from anywhere inside the app (this header's button, Settings'
-	// "Lock now", a future auto-lock) only flips isLocked — bounce back to the
-	// unlock screen when it does, for every authed route. Gated on `ready` so a
-	// popped-out window restoring a deep route isn't redirected during the brief
-	// pre-hydration window where isLocked still holds its default `true`.
-	useEffect(() => {
-		if (ready && isLocked) navigate({ to: "/" });
-	}, [ready, isLocked, navigate]);
-
-	// The per-screen "Back to …" link now lives in the header (left of the
-	// logo). Derive its target + accessible label from the current route so
-	// each screen doesn't have to render its own. Vault home has no back.
-	const pathname = useRouterState({ select: (s) => s.location.pathname });
-	const { entryId } = useParams({ strict: false }) as { entryId?: string };
-	let back: { label: string; onClick: () => void } | null = null;
-	if (pathname === "/settings") {
-		back = { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
-	} else if (pathname.startsWith("/vault/new")) {
-		back = { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
-	} else if (entryId) {
-		back = pathname.endsWith("/edit")
-			? {
-					label: "Back to details",
-					onClick: () => navigate({ to: "/vault/$entryId", params: { entryId } }),
+	const matches = useMatches();
+	const params = useParams({ strict: false }) as Record<string, string>;
+	const backData = matches.at(-1)?.staticData.back;
+	const onBack = backData
+		? () => {
+				if (router.history.canGoBack()) {
+					router.history.back();
+					return;
 				}
-			: { label: "Back to vault", onClick: () => navigate({ to: "/vault" }) };
-	}
+				navigate({
+					to: backData.to,
+					params: Object.fromEntries((backData.paramKeys ?? []).map((k) => [k, params[k]])),
+				});
+			}
+		: null;
 
 	return (
 		<div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
@@ -53,13 +41,13 @@ export function AppLayout() {
 				<div className="max-w-5xl mx-auto px-4 py-3">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3">
-							{back && (
+							{onBack && (
 								<button
 									type="button"
-									onClick={back.onClick}
+									onClick={onBack}
 									className="flex items-center justify-center w-9 h-9 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.95] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									aria-label={back.label}
-									title={back.label}
+									aria-label="Go back"
+									title="Go back"
 								>
 									<ArrowLeft className="w-4 h-4" />
 								</button>

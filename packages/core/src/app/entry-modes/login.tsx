@@ -1,3 +1,4 @@
+import { passwordStrength } from "check-password-strength";
 import {
 	Camera,
 	Check,
@@ -36,16 +37,6 @@ export interface LoginFormValues {
 	subdomainMatch: SubdomainMatchMode;
 }
 
-function computeStrength(value: string): number {
-	let s = 0;
-	if (value.length >= 8) s++;
-	if (value.length >= 12) s++;
-	if (/[a-z]/.test(value) && /[A-Z]/.test(value)) s++;
-	if (/\d/.test(value)) s++;
-	if (/[^a-zA-Z0-9]/.test(value)) s++;
-	return Math.min(s, 4);
-}
-
 function randomPassword(): string {
 	const charset =
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
@@ -67,7 +58,10 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const [initialPassword] = useState(() => getValues("password"));
 
 	const passwordValue = watch("password");
-	const passwordStrength = useMemo(() => computeStrength(passwordValue), [passwordValue]);
+	const strength = useMemo(
+		() => (passwordValue ? passwordStrength(passwordValue) : null),
+		[passwordValue],
+	);
 	const isBreached = initialBreach?.leaked === true && passwordValue === initialPassword;
 
 	const generatePassword = () => {
@@ -89,21 +83,10 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		}
 	};
 
-	const getStrengthColor = () => {
-		if (isBreached) return "bg-destructive";
-		if (passwordStrength === 0) return "bg-muted";
-		if (passwordStrength <= 2) return "bg-destructive";
-		if (passwordStrength === 3) return "bg-yellow-500";
-		return "bg-primary";
-	};
-
-	const getStrengthText = () => {
-		if (isBreached) return "Breached";
-		if (passwordStrength === 0) return "No password";
-		if (passwordStrength <= 2) return "Weak";
-		if (passwordStrength === 3) return "Good";
-		return "Strong";
-	};
+	const strengthBar = (id: number) =>
+		id >= 3 ? "bg-primary" : id === 2 ? "bg-yellow-500" : "bg-destructive";
+	const strengthTextColor = (id: number) =>
+		id >= 3 ? "text-primary" : id === 2 ? "text-yellow-500" : "text-destructive";
 
 	return (
 		<>
@@ -174,29 +157,25 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					{...register("password")}
 				/>
 
-				{passwordValue && (
+				{strength && (
 					<div className="mt-2.5">
 						<div className="flex items-center justify-between mb-1.5">
 							<span className="text-xs text-muted-foreground">Password strength</span>
 							<span
 								className={`text-xs ${
-									isBreached
-										? "text-destructive"
-										: passwordStrength >= 3
-											? "text-primary"
-											: passwordStrength === 0
-												? "text-muted-foreground"
-												: "text-destructive"
+									isBreached ? "text-destructive" : strengthTextColor(strength.id)
 								}`}
 							>
-								{getStrengthText()}
+								{isBreached ? "Breached" : strength.value}
 							</span>
 						</div>
 						<div className="h-1.5 bg-muted rounded-full overflow-hidden">
 							<div
-								className={`h-full transition-all duration-300 ${getStrengthColor()}`}
+								className={`h-full transition-all duration-300 ${
+									isBreached ? "bg-destructive" : strengthBar(strength.id)
+								}`}
 								style={{
-									width: isBreached ? "5%" : `${(passwordStrength / 4) * 100}%`,
+									width: isBreached ? "5%" : `${((strength.id + 1) / 4) * 100}%`,
 								}}
 							/>
 						</div>
@@ -488,8 +467,8 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 export const loginMode: EntryMode = {
 	type: "login",
-	label: "Password",
-	description: "Add a new password",
+	label: "Login",
+	description: "Add a new login",
 	icon: Globe,
 
 	emptyForm: ({ defaultUrl }) => ({

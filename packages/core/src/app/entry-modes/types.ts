@@ -24,7 +24,6 @@ export interface EntryRowView {
 
 export interface EntryMode {
 	type: EntryType;
-	// Human label, e.g. "Password". Used in the add-menu and form/detail headers.
 	label: string;
 	// Add-menu subtitle, e.g. "Credit or debit card".
 	description: string;

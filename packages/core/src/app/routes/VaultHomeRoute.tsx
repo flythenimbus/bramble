@@ -8,8 +8,6 @@ import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
 	const { entries, deleteEntry } = useVault();
-	// The locked-state redirect to /auth lives in AppLayout, which covers every
-	// authed route — no per-route guard needed here.
 
 	const items = useMemo<VaultListItem[]>(
 		() =>
