@@ -34,31 +34,66 @@ function safeSendMessage(message: unknown): void {
 interface MatchSummary {
 	id: string;
 	name: string;
-	username: string;
+	// Username for a login, masked "•••• 1234" for a card.
+	secondary: string;
 	autofillEnabled?: boolean;
 	autoSubmit?: boolean;
 }
 
-interface FindResult {
-	matches: MatchSummary[];
+interface CustomFieldData {
+	key: string;
+	value: string;
+}
+
+interface QueryResult {
+	// Logins matching this page's hostname.
+	logins: MatchSummary[];
+	// Every stored card (offered on any payment form).
+	cards: MatchSummary[];
+	// Hostname-matched logins with a TOTP key (offered on a one-time-code field).
+	otps: MatchSummary[];
 	locked: boolean;
 	hasPotentialMatch: boolean;
 }
 
-interface FillPayload {
-	username: string;
-	password: string;
-	// Echoed back from AUTOFILL_SELECT so the content script knows whether
-	// the fill it's about to perform was user-initiated or automatic without
-	// relying on a racy module-level flag.
-	isAuto?: boolean;
-	// Per-entry override: submit the form after filling.
-	autoSubmit?: boolean;
-}
+type FillPayload =
+	| {
+			kind: "login";
+			username: string;
+			password: string;
+			// Live one-time code, present when the login has a TOTP key.
+			totp?: string;
+			customFields?: CustomFieldData[];
+			autoSubmit?: boolean;
+			isAuto?: boolean;
+			// Fill only the page's one-time-code field (the 2FA step), not the
+			// username/password.
+			otpOnly?: boolean;
+	  }
+	| {
+			kind: "card";
+			cardholderName: string;
+			number: string;
+			expMonth: string;
+			expYear: string;
+			cvv: string;
+			customFields?: CustomFieldData[];
+			isAuto?: boolean;
+	  };
 
 interface LoginFields {
 	username: HTMLInputElement | null;
 	password: HTMLInputElement | null;
+}
+
+interface CardFields {
+	number: HTMLInputElement | null;
+	name: HTMLInputElement | null;
+	// A single MM/YY field, used only when no split month/year pair is present.
+	expCombined: HTMLInputElement | null;
+	expMonth: HTMLInputElement | null;
+	expYear: HTMLInputElement | null;
+	cvv: HTMLInputElement | null;
 }
 
 
@@ -76,6 +111,34 @@ function findPasswordField(): HTMLInputElement | null {
 
 function attrHint(el: HTMLInputElement): string {
 	return `${el.name} ${el.id} ${el.placeholder} ${el.autocomplete} ${el.getAttribute("aria-label") ?? ""}`;
+}
+
+// `<label for=id>`, a wrapping <label>, or `aria-labelledby` targets. Used only
+// as a low-priority fallback when a field's own attributes are uninformative —
+// many forms carry the only human-readable hint in the label, with opaque
+// name/id.
+function labelText(el: HTMLInputElement): string {
+	const parts: string[] = [];
+	if (el.id) {
+		const sel = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(el.id) : el.id;
+		try {
+			for (const lbl of document.querySelectorAll<HTMLLabelElement>(`label[for="${sel}"]`)) {
+				parts.push(lbl.textContent ?? "");
+			}
+		} catch {
+		}
+	}
+	const wrapping = el.closest("label");
+	if (wrapping) parts.push(wrapping.textContent ?? "");
+	const labelledby = el.getAttribute("aria-labelledby");
+	if (labelledby) {
+		for (const id of labelledby.split(/\s+/)) {
+			if (!id) continue;
+			const ref = document.getElementById(id);
+			if (ref) parts.push(ref.textContent ?? "");
+		}
+	}
+	return parts.join(" ");
 }
 
 function looksLikeUsername(el: HTMLInputElement): boolean {
@@ -131,15 +194,163 @@ function detectLoginFields(): LoginFields {
 		if (looksLikeUsername(c)) return { username: c, password };
 	}
 
+	// 5. Last resort: the field's associated <label> text — some forms put the
+	//    only human-readable hint there and leave name/id opaque.
+	for (const c of candidates) {
+		const lbl = labelText(c);
+		if (!lbl || NEGATIVE_HINT_RE.test(lbl)) continue;
+		if (USERNAME_HINT_RE.test(lbl)) return { username: c, password };
+	}
+
 	return { username: null, password };
 }
 
+// ── Payment-field detection ───────────────────────────────────────────────────
+
+const CC_NUMBER_RE = /card.?number|cardnum|ccnum|cc.?number/i;
+const CC_NAME_RE = /cardholder|name.?on.?card|cc.?name/i;
+const CC_EXP_RE = /expir(y|ation)/i;
+const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
+const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
+const CC_CSC_RE =
+	/\bcvv\b|\bcvc\b|\bcsc\b|security.?code|card.?code|verification.?(no|number|code)/i;
+
+function ccByToken(token: string): HTMLInputElement | null {
+	return document.querySelector<HTMLInputElement>(
+		`input[autocomplete~="${token}"]:not([readonly]):not([disabled])`,
+	);
+}
+
+// First visible input whose attribute hint matches `re`. Password-typed inputs
+// are skipped unless `allowPassword` (a CVV is sometimes type=password).
+function findByHint(re: RegExp, exclude?: RegExp, allowPassword = false): HTMLInputElement | null {
+	const inputs: HTMLInputElement[] = [];
+	for (const el of document.querySelectorAll<HTMLInputElement>(
+		"input:not([readonly]):not([disabled])",
+	)) {
+		if (el.type === "hidden" || el.type === "checkbox" || el.type === "radio") continue;
+		if (el.type === "password" && !allowPassword) continue;
+		inputs.push(el);
+	}
+	for (const el of inputs) {
+		const hint = attrHint(el);
+		if (exclude?.test(hint)) continue;
+		if (re.test(hint)) return el;
+	}
+	for (const el of inputs) {
+		const lbl = labelText(el);
+		if (!lbl || exclude?.test(lbl)) continue;
+		if (re.test(lbl)) return el;
+	}
+	return null;
+}
+
+function detectCardFields(): CardFields {
+	const number = ccByToken("cc-number") ?? findByHint(CC_NUMBER_RE);
+	const name = ccByToken("cc-name") ?? findByHint(CC_NAME_RE);
+	const expMonth = ccByToken("cc-exp-month") ?? findByHint(CC_EXP_MONTH_RE);
+	const expYear = ccByToken("cc-exp-year") ?? findByHint(CC_EXP_YEAR_RE);
+	const expCombined =
+		!expMonth && !expYear ? (ccByToken("cc-exp") ?? findByHint(CC_EXP_RE, /month|year/i)) : null;
+	const cvv = ccByToken("cc-csc") ?? findByHint(CC_CSC_RE, undefined, true);
+	return { number, name, expCombined, expMonth, expYear, cvv };
+}
+
+// A bare cardholder-name field is too weak a signal on its own; require a real
+// card field before offering the card picker.
+function cardFieldsPresent(c: CardFields): boolean {
+	return !!(c.number || c.cvv || c.expCombined || c.expMonth || c.expYear);
+}
+
+function isCardField(c: CardFields, el: HTMLInputElement): boolean {
+	return (
+		el === c.number ||
+		el === c.name ||
+		el === c.expCombined ||
+		el === c.expMonth ||
+		el === c.expYear ||
+		el === c.cvv
+	);
+}
+
+// ── One-time-code (TOTP) field detection ─────────────────────────────────────
+
+const OTP_HINT_RE =
+	/one.?time|\botp\b|2fa|mfa|two.?factor|authenticator|auth.?code|login.?code|verif(y|ication).?code|confirmation.?code|passcode|\btotp\b|6.?digit/i;
+// Keep card / address / coupon fields out of OTP detection. A CVV is also a card
+// field (excluded via isCardField below); these guard the standalone case.
+const OTP_NEGATIVE_RE = /card|coupon|promo|postal|\bzip\b|country|address|phone/i;
+
+// The contiguous run of single-character, text-like inputs that `seed` belongs
+// to, in DOM order — the shape of a segmented OTP widget (N one-char boxes).
+function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
+	const parent = seed.parentElement;
+	if (!parent) return [seed];
+	const siblings = Array.from(parent.querySelectorAll<HTMLInputElement>("input")).filter(
+		(el) =>
+			!el.readOnly &&
+			!el.disabled &&
+			el.maxLength === 1 &&
+			(el.type === "text" || el.type === "tel" || el.type === "number" || el.type === ""),
+	);
+	return siblings.length >= 2 ? siblings : [seed];
+}
+
+// single field; some sites split it into N single-character boxes (segmented).
+function otpInputs(): HTMLInputElement[] {
+	const tokened = Array.from(
+		document.querySelectorAll<HTMLInputElement>(
+			'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
+		),
+	);
+	if (tokened.length >= 1) return tokened;
+
+	const card = detectCardFields();
+	let hinted: HTMLInputElement | null = null;
+	for (const el of document.querySelectorAll<HTMLInputElement>(
+		"input:not([readonly]):not([disabled])",
+	)) {
+		if (el.type === "password" || el.type === "hidden" || el.type === "checkbox") continue;
+		if (el.type === "radio" || el.type === "submit" || el.type === "button") continue;
+		if (isCardField(card, el)) continue;
+		const hint = attrHint(el);
+		if (OTP_NEGATIVE_RE.test(hint)) continue;
+		if (OTP_HINT_RE.test(hint)) {
+			hinted = el;
+			break;
+		}
+		const lbl = labelText(el);
+		if (lbl && !OTP_NEGATIVE_RE.test(lbl) && OTP_HINT_RE.test(lbl)) {
+			hinted = el;
+			break;
+		}
+	}
+	if (!hinted) return [];
+	// A single-character field is one box of a segmented widget — gather the run.
+	if (hinted.maxLength === 1) {
+		const group = segmentedSiblings(hinted);
+		if (group.length >= 2) return group;
+	}
+	return [hinted];
+}
+
+// Which autofill dropdown (if any) a field should drive. Card detection runs
+// first so a password-typed CVV is classified as a card field, not a login;
+// OTP runs last so it only claims fields nothing else owns.
+function candidateKind(el: EventTarget | null): "login" | "card" | "otp" | null {
+	if (!(el instanceof HTMLInputElement)) return null;
+	if (el.readOnly || el.disabled) return null;
+	const card = detectCardFields();
+	if (cardFieldsPresent(card) && isCardField(card, el)) return "card";
+	if (el.type === "password") return "login";
+	const login = detectLoginFields();
+	if (el === login.username) return "login";
+	if (otpInputs().includes(el)) return "otp";
+	return null;
+}
+
 function isAutofillCandidate(el: EventTarget | null): el is HTMLInputElement {
-	if (!(el instanceof HTMLInputElement)) return false;
-	if (el.readOnly || el.disabled) return false;
-	if (el.type === "password") return true;
-	const fields = detectLoginFields();
-	return el === fields.username;
+	return candidateKind(el) !== null;
 }
 
 
@@ -202,10 +413,151 @@ function submitFromField(field: HTMLInputElement | null): void {
 }
 
 
+interface FieldMatcher {
+	canonical: string;
+	hyphen: string;
+}
+
+function deriveMatcher(key: string): FieldMatcher | null {
+	const words = key.toLowerCase().match(/[a-z0-9]+/g);
+	if (!words || words.length === 0) return null;
+	return { canonical: words.join(""), hyphen: words.join("-") };
+}
+
+// Inputs a custom field may fill: text-like only. Password/email are excluded so
+// a stray match can't dump a custom value into a credential or email field.
+const CUSTOM_FILLABLE_TYPES = new Set(["text", "tel", "number", "search", "url", ""]);
+
+function getFillableInputs(): HTMLInputElement[] {
+	const out: HTMLInputElement[] = [];
+	for (const el of document.querySelectorAll<HTMLInputElement>("input")) {
+		if (el.readOnly || el.disabled) continue;
+		if (!CUSTOM_FILLABLE_TYPES.has(el.type)) continue;
+		out.push(el);
+	}
+	return out;
+}
+
+function matchesField(el: HTMLInputElement, m: FieldMatcher): boolean {
+	const ac = el.autocomplete?.toLowerCase().trim();
+	if (ac) {
+		for (const token of ac.split(/\s+/)) {
+			if (token === m.hyphen) return true;
+			if (token.replace(/[^a-z0-9]/g, "") === m.canonical) return true;
+		}
+	}
+	for (const raw of [
+		el.name,
+		el.id,
+		el.getAttribute("aria-label") ?? "",
+		el.placeholder,
+		labelText(el),
+	]) {
+		const a = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+		if (!a) continue;
+		// Exact normalized match at any length; substring only for longer keys, so
+		// short names like "name" / "city" can't match "username" / "velocity".
+		if (a === m.canonical) return true;
+		if (m.canonical.length >= 5 && a.includes(m.canonical)) return true;
+	}
+	return false;
+}
+
+function reservedInputs(): Set<HTMLInputElement> {
+	const reserved = new Set<HTMLInputElement>();
+	const login = detectLoginFields();
+	if (login.username) reserved.add(login.username);
+	if (login.password) reserved.add(login.password);
+	const card = detectCardFields();
+	for (const el of [
+		card.number,
+		card.name,
+		card.expCombined,
+		card.expMonth,
+		card.expYear,
+		card.cvv,
+	]) {
+		if (el) reserved.add(el);
+	}
+	for (const el of otpInputs()) reserved.add(el);
+	return reserved;
+}
+
+function fillCustomFields(fields: CustomFieldData[] | undefined): void {
+	if (!fields || fields.length === 0) return;
+	const reserved = reservedInputs();
+	const inputs = getFillableInputs().filter((el) => !reserved.has(el));
+	for (const field of fields) {
+		if (!field.value) continue;
+		const matcher = deriveMatcher(field.key);
+		if (!matcher) continue;
+		for (const el of inputs) {
+			if (el.value || autoFilledFields.has(el)) continue;
+			if (matchesField(el, matcher)) {
+				fillField(el, field.value);
+				autoFilledFields.add(el);
+				break;
+			}
+		}
+	}
+}
+
+
+function digits(value: string): string {
+	return value.replace(/\D/g, "");
+}
+
+function expYearFor(field: HTMLInputElement, year: string): string {
+	const two = year.slice(-2);
+	if (field.maxLength > 0 && field.maxLength <= 2) return two;
+	return year.length <= 2 ? `20${two}` : year;
+}
+
+function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean {
+	const c = detectCardFields();
+	let filled = false;
+	const put = (el: HTMLInputElement | null, value: string) => {
+		if (!el || !value || autoFilledFields.has(el)) return;
+		fillField(el, value);
+		autoFilledFields.add(el);
+		filled = true;
+	};
+	const mm = card.expMonth.padStart(2, "0");
+	put(c.number, digits(card.number));
+	put(c.name, card.cardholderName);
+	if (c.expCombined) put(c.expCombined, `${mm}/${card.expYear.slice(-2)}`);
+	put(c.expMonth, mm);
+	if (c.expYear) put(c.expYear, expYearFor(c.expYear, card.expYear));
+	put(c.cvv, card.cvv);
+	return filled;
+}
+
+
+function fillOtp(code: string | undefined): boolean {
+	if (!code) return false;
+	const fields = otpInputs();
+	if (fields.length === 0) return false;
+	if (fields.length === 1) {
+		const el = fields[0]!;
+		fillField(el, code);
+		autoFilledFields.add(el);
+		return true;
+	}
+	let filled = false;
+	fields.forEach((el, i) => {
+		const ch = code[i] ?? "";
+		fillField(el, ch);
+		autoFilledFields.add(el);
+		if (ch) filled = true;
+	});
+	return filled;
+}
+
+
 const DROPDOWN_ID = "titanpass-autofill-dropdown";
 
 let dropdownEl: HTMLElement | null = null;
-let cachedResult: FindResult | null = null;
+let cachedResult: QueryResult | null = null;
 let anchorField: HTMLInputElement | null = null;
 let openMatchesKey = "";
 let openDropdownKind: "matches" | "locked" | null = null;
@@ -392,7 +744,11 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
 	return root;
 }
 
-function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
+function buildDropdown(
+	matches: MatchSummary[],
+	field: HTMLInputElement,
+	opts?: { otpOnly?: boolean },
+): void {
 	if (matches.length === 0) return;
 
 	const key = matchesKey(matches);
@@ -415,7 +771,7 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
 					</div>
 					<div class="tp-text">
 						<span class="tp-name">${m.name}</span>
-						<span class="tp-user">${m.username}</span>
+						<span class="tp-user">${m.secondary}</span>
 					</div>
 				</div>
 			`,
@@ -430,7 +786,7 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement): void {
 		if (!item) return;
 		e.preventDefault();
 		const id = item.dataset.entryId;
-		if (id) selectMatch(id, false);
+		if (id) selectMatch(id, false, opts?.otpOnly === true);
 	});
 }
 
@@ -460,12 +816,12 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 	});
 }
 
-function selectMatch(entryId: string, isAuto: boolean): void {
+function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 	if (!isAuto) silenceAutoOpen = true;
 	removeDropdown();
 	safeSendMessage({
 		type: "AUTOFILL_SELECT",
-		payload: { entryId, hostname: location.hostname, isAuto },
+		payload: { entryId, hostname: location.hostname, isAuto, otpOnly },
 	});
 }
 
@@ -475,41 +831,76 @@ function focusedCandidate(): HTMLInputElement | null {
 	return focused instanceof HTMLInputElement && isAutofillCandidate(focused) ? focused : null;
 }
 
-function isFindResult(v: unknown): v is FindResult {
+function isQueryResult(v: unknown): v is QueryResult {
 	return (
 		typeof v === "object" &&
 		v !== null &&
-		Array.isArray((v as FindResult).matches) &&
-		typeof (v as FindResult).locked === "boolean"
+		Array.isArray((v as QueryResult).logins) &&
+		Array.isArray((v as QueryResult).cards) &&
+		typeof (v as QueryResult).locked === "boolean"
 	);
 }
 
-// Cache the query result. The only proactive UI action is single-match
-// auto-fill — anything that needs the dropdown waits for the user to focus
-// the field (handled in `showFor`). This stops re-queries from MutationObserver
-// or page state changes from springing the dropdown back open after the user
-// clicks away.
-function handleResult(result: FindResult | undefined): void {
-	if (!isFindResult(result)) return;
+// Cache the query result. The only proactive UI action is single-match login
+// auto-fill — cards always wait for an explicit pick, and anything else that
+// needs the dropdown waits for the user to focus the field (handled in
+// `showFor`). This stops re-queries from MutationObserver or page state changes
+// from springing the dropdown back open after the user clicks away.
+function handleResult(result: QueryResult | undefined): void {
+	if (!isQueryResult(result)) return;
 	cachedResult = result;
 
 	if (silenceAutoOpen) return;
 
+	const focused = focusedCandidate();
+
 	if (result.locked) {
-		const f = focusedCandidate();
-		if (f) buildLockedDropdown(f);
+		if (focused) buildLockedDropdown(focused);
 		return;
 	}
 
-	if (result.matches.length === 0) return;
+	// A focused payment field shows the card picker; cards never auto-fill.
+	if (focused && candidateKind(focused) === "card") {
+		if (result.cards.length > 0) buildDropdown(result.cards, focused);
+		return;
+	}
 
-	if (result.matches.length === 1) {
-		const only = result.matches[0]!;
+	// A focused one-time-code field offers the matching logins' codes; a single
+	// match auto-fills like a login (respecting the per-entry opt-out), and
+	// skips if the field is already filled to avoid a re-fill loop.
+	if (focused && candidateKind(focused) === "otp") {
+		const otps = result.otps ?? [];
+		if (otps.length === 0) return;
+		if (otps.length === 1) {
+			const only = otps[0]!;
+			if (only.autofillEnabled === false) {
+				buildDropdown(otps, focused, { otpOnly: true });
+				return;
+			}
+			const fields = otpInputs();
+			if (fields.length > 0 && fields.every((f) => autoFilledFields.has(f))) return;
+			selectMatch(only.id, true, true);
+			return;
+		}
+		buildDropdown(otps, focused, { otpOnly: true });
+		return;
+	}
+
+	const logins = result.logins;
+	if (logins.length === 0) {
+		// Nothing to auto-fill; offer the card picker if that's what's focused.
+		if (focused && candidateKind(focused) === "card" && result.cards.length > 0) {
+			buildDropdown(result.cards, focused);
+		}
+		return;
+	}
+
+	if (logins.length === 1) {
+		const only = logins[0]!;
 		// Per-entry autofill opt-out: still surface the dropdown for manual
 		// pick, but don't silently fill.
 		if (only.autofillEnabled === false) {
-			const f = focusedCandidate();
-			if (f) buildDropdown(result.matches, f);
+			if (focused) buildDropdown(logins, focused);
 			return;
 		}
 		// Re-queries from the MutationObserver shouldn't keep re-firing the
@@ -524,33 +915,54 @@ function handleResult(result: FindResult | undefined): void {
 		return;
 	}
 
-	const f = focusedCandidate();
-	if (f) buildDropdown(result.matches, f);
+	if (focused) buildDropdown(logins, focused);
 }
 
 
 function queryAutofill(): void {
-	const { username, password } = detectLoginFields();
-	if (!username && !password) return;
+	const login = detectLoginFields();
+	const hasLogin = !!(login.username || login.password);
+	const hasCard = cardFieldsPresent(detectCardFields());
+	const hasOtp = otpInputs().length > 0;
+	if (!hasLogin && !hasCard && !hasOtp) return;
 
 	safeSendMessage({
 		type: "AUTOFILL_QUERY",
 		hostname: location.hostname,
+		hasLogin,
+		hasCard,
+		hasOtp,
 	});
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.type === "AUTOFILL_MATCHES") {
-		handleResult(message.payload as FindResult | undefined);
+		handleResult(message.payload as QueryResult | undefined);
 		sendResponse({ ok: true });
 		return false;
 	}
 
 	if (message?.type === "AUTOFILL_FILL") {
-		const { username, password, isAuto, autoSubmit } = message.payload as FillPayload;
+		const payload = message.payload as FillPayload;
 		removeDropdown();
-		const { filled, passwordField } = fillForm(username, password, !!isAuto);
-		if (filled && autoSubmit) {
+		if (payload.kind === "card") {
+			const filled = fillCard(payload);
+			fillCustomFields(payload.customFields);
+			sendResponse({ ok: filled });
+			return false;
+		}
+		// 2FA step: fill only the one-time-code field, nothing else.
+		if (payload.otpOnly) {
+			sendResponse({ ok: fillOtp(payload.totp) });
+			return false;
+		}
+		const { filled, passwordField } = fillForm(
+			payload.username,
+			payload.password,
+			!!payload.isAuto,
+		);
+		fillCustomFields(payload.customFields);
+		if (filled && payload.autoSubmit) {
 			// the field values.
 			setTimeout(() => submitFromField(passwordField), 50);
 		}
@@ -576,16 +988,26 @@ function showFor(field: HTMLInputElement): void {
 		return;
 	}
 	if (cachedResult.locked) {
-		// Always offer the unlock hint when the user touches a login field —
 		buildLockedDropdown(field);
 		return;
 	}
-	if (cachedResult.matches.length === 0) {
+	if (candidateKind(field) === "card") {
+		if (cachedResult.cards.length > 0) buildDropdown(cachedResult.cards, field);
+		else queryAutofill();
+		return;
+	}
+	if (candidateKind(field) === "otp") {
+		const otps = cachedResult.otps ?? [];
+		if (otps.length > 0) buildDropdown(otps, field, { otpOnly: true });
+		else queryAutofill();
+		return;
+	}
+	if (cachedResult.logins.length === 0) {
 		queryAutofill();
 		return;
 	}
-	if (cachedResult.matches.length > 1 || !field.value) {
-		buildDropdown(cachedResult.matches, field);
+	if (cachedResult.logins.length > 1 || !field.value) {
+		buildDropdown(cachedResult.logins, field);
 	}
 }
 
@@ -615,11 +1037,18 @@ function bootstrap(): void {
 				queryAutofill();
 				return;
 			}
-			if (e.target.value && cachedResult.matches.length <= 1 && !cachedResult.locked) {
-				// User is typing their own value — get out of the way unless
-				// they have multiple matches to disambiguate.
-				removeDropdown();
-				return;
+			if (e.target.value && !cachedResult.locked) {
+				const kind = candidateKind(e.target);
+				const count =
+					kind === "card"
+						? cachedResult.cards.length
+						: kind === "otp"
+							? (cachedResult.otps ?? []).length
+							: cachedResult.logins.length;
+				if (count <= 1) {
+					removeDropdown();
+					return;
+				}
 			}
 			showFor(e.target);
 		},

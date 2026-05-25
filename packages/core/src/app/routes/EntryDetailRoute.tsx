@@ -23,7 +23,7 @@ export function EntryDetailRoute() {
 	}, [ready, entry, navigate]);
 
 	useEffect(() => {
-		if (!entry || !prefsLoaded) return;
+		if (!entry || entry.type !== "login" || !prefsLoaded) return;
 		if (!prefs.breachCheckEnabled) return;
 		if (refreshAttemptedRef.current === entry.id) return;
 		const stale = !entry.breach || Date.now() - entry.breach.checkedAt > BREACH_STALE_MS;

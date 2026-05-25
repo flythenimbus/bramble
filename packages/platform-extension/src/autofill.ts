@@ -1,5 +1,10 @@
 /// <reference types="chrome" />
-import type { AutofillAdapter, Credentials, FindResult, IndexEntry } from "@core/adapters/autofill";
+import type {
+	AutofillAdapter,
+	FillPayload,
+	IndexEntry,
+	QueryResult,
+} from "@core/adapters/autofill";
 
 async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 	const res = await chrome.runtime.sendMessage({ type, payload });
@@ -12,7 +17,7 @@ export const extensionAutofill: AutofillAdapter = {
 
 	clearIndex: () => send("AUTOFILL_CLEAR_INDEX"),
 
-	findMatchingEntries: (hostname) => send<FindResult>("AUTOFILL_FIND", { hostname }),
+	query: (hostname, opts) => send<QueryResult>("AUTOFILL_FIND", { hostname, ...opts }),
 
-	fetchCredentials: (entryId) => send<Credentials>("AUTOFILL_FETCH", { entryId }),
+	fetchFill: (entryId) => send<FillPayload>("AUTOFILL_FETCH", { entryId }),
 };

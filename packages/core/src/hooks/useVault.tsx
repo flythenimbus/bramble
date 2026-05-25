@@ -7,7 +7,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import type { SubdomainMatchMode } from "../adapters/autofill";
+import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	decodeVaultBlob,
@@ -25,21 +25,68 @@ export interface BreachStatus {
 	checkedAt: number;
 }
 
-export interface EntryData {
+export type EntryType = "login" | "card" | "note" | "ssh-key";
+
+export interface CustomField {
+	key: string;
+	value: string;
+	hidden?: boolean;
+}
+
+interface BaseEntryData {
 	name: string;
+	notes?: string;
+	customFields?: CustomField[];
+}
+
+export interface LoginEntryData extends BaseEntryData {
+	type: "login";
 	url: string;
 	username: string;
 	password: string;
 	totp?: string;
-	notes?: string;
 	breach?: BreachStatus;
 	autofillEnabled?: boolean;
 	autoSubmit?: boolean;
 	subdomainMatch?: SubdomainMatchMode;
 }
 
-export interface Entry extends EntryData {
-	id: string;
+export interface CardEntryData extends BaseEntryData {
+	type: "card";
+	cardholderName: string;
+	number: string;
+	brand?: string;
+	expMonth: string;
+	expYear: string;
+	cvv: string;
+}
+
+export interface NoteEntryData extends BaseEntryData {
+	type: "note";
+}
+
+export interface SshKeyEntryData extends BaseEntryData {
+	type: "ssh-key";
+	publicKey: string;
+	privateKey: string;
+	passphrase?: string;
+	keyType?: string;
+}
+
+export type EntryData = LoginEntryData | CardEntryData | NoteEntryData | SshKeyEntryData;
+
+export type Entry = EntryData & { id: string };
+export type LoginEntry = LoginEntryData & { id: string };
+export type CardEntry = CardEntryData & { id: string };
+export type SshKeyEntry = SshKeyEntryData & { id: string };
+
+export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, LoginEntryData> {
+	return entry.type === "login";
+}
+
+// them as logins so old vaults decrypt unchanged.
+function normalizeEntryData(raw: Record<string, unknown>): EntryData {
+	return (raw.type ? raw : { type: "login", ...raw }) as unknown as EntryData;
 }
 
 export interface UseVault {
@@ -82,17 +129,50 @@ function extractHostname(url: string): string {
 	}
 }
 
-function indexEntryFor(entry: Entry) {
+function autofillCustomFields(fields: CustomField[] | undefined) {
+	if (!fields) return undefined;
+	const out = fields.filter((f) => f.value).map((f) => ({ key: f.key, value: f.value }));
+	return out.length > 0 ? out : undefined;
+}
+
+function loginIndexEntry(entry: LoginEntry): IndexEntry {
 	return {
+		type: "login",
 		id: entry.id,
 		hostname: extractHostname(entry.url),
 		name: entry.name,
 		username: entry.username,
 		password: entry.password,
+		totp: entry.totp,
+		customFields: autofillCustomFields(entry.customFields),
 		autofillEnabled: entry.autofillEnabled,
 		autoSubmit: entry.autoSubmit,
 		subdomainMatch: entry.subdomainMatch,
 	};
+}
+
+function cardIndexEntry(entry: CardEntry): IndexEntry {
+	return {
+		type: "card",
+		id: entry.id,
+		name: entry.name,
+		brand: entry.brand,
+		cardholderName: entry.cardholderName,
+		number: entry.number,
+		expMonth: entry.expMonth,
+		expYear: entry.expYear,
+		cvv: entry.cvv,
+		customFields: autofillCustomFields(entry.customFields),
+	};
+}
+
+function toAutofillIndex(entries: Entry[]): IndexEntry[] {
+	const out: IndexEntry[] = [];
+	for (const entry of entries) {
+		if (entry.type === "login") out.push(loginIndexEntry(entry));
+		else if (entry.type === "card") out.push(cardIndexEntry(entry));
+	}
+	return out;
 }
 
 export function VaultProvider({ children }: { children: ReactNode }) {
@@ -124,13 +204,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					wrappedDek: enc.wrappedDek,
 					dekIv: enc.dekIv,
 				});
-				const data: EntryData = JSON.parse(plaintext);
+				const data = normalizeEntryData(JSON.parse(plaintext));
 				return { id: enc.id, ...data };
 			}),
 		);
 		setEntries(decrypted);
-		// works even when the popup is closed.
-		await autofill.setIndex(decrypted.map(indexEntryFor));
+		await autofill.setIndex(toAutofillIndex(decrypted));
 	}, [storage, crypto, autofill]);
 
 	useEffect(() => {
@@ -275,7 +354,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			};
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 
-			await autofill.setIndex(nextEntries.map(indexEntryFor));
+			await autofill.setIndex(toAutofillIndex(nextEntries));
 		},
 		[crypto, storage, autofill],
 	);
@@ -406,7 +485,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 				// 4. Refresh the in-memory autofill index so the background SW
 				//    keeps serving credentials without a relock.
-				await autofill.setIndex(entries.map(indexEntryFor));
+				await autofill.setIndex(toAutofillIndex(entries));
 			} catch (e) {
 				// Restore the previous VEK so the still-on-disk vault is
 				// readable again. Without this the user would have to relock

@@ -1,4 +1,3 @@
-// intact. `path` is a router href (e.g. "/vault/new"); `draft` is the active
 export interface PopOutHandoff {
 	path: string;
 	draft?: unknown;
@@ -13,4 +12,5 @@ export interface ShellAdapter {
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	consumeHandoff(): Promise<PopOutHandoff | null>;
 	isDetached(): boolean;
+	scanQrFromActiveTab(): Promise<string | null>;
 }

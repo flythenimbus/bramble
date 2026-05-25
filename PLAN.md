@@ -90,19 +90,31 @@ packages/
 │           ├── router.tsx             # TanStack routes
 │           ├── hooks/useTheme.tsx
 │           ├── layouts/AppLayout.tsx
+│           ├── entry-modes/           # Entry-type registry — the mode extension point
+│           │   ├── types.ts           # EntryMode descriptor interface
+│           │   ├── index.ts           # entryModes registry + modeList + getEntryMode
+│           │   ├── login.tsx          # login mode: fields, detail, row, mappings
+│           │   ├── card.tsx           # payment-card mode
+│           │   ├── note.tsx           # secure-note mode
+│           │   ├── ssh-key.tsx        # SSH-key mode (store/copy only)
+│           │   ├── custom-fields.tsx  # shared custom-field editor/detail/helpers
+│           │   └── DetailField.tsx    # shared copyable detail row
 │           ├── routes/
 │           │   ├── AuthRoute.tsx      # Auto-redirects to /vault when unlocked
 │           │   ├── VaultHomeRoute.tsx
-│           │   ├── CreatePasswordRoute.tsx
+│           │   ├── CreateEntryRoute.tsx   # /vault/new/$type
+│           │   ├── EntryDetailRoute.tsx
+│           │   ├── EntryEditRoute.tsx
 │           │   └── SettingsRoute.tsx
 │           ├── screens/
 │           │   ├── Auth/
 │           │   ├── VaultHome/
-│           │   ├── CreatePassword/
+│           │   ├── CreateEntry/       # EntryForm — generic create/edit host
+│           │   ├── EntryDetail/       # generic detail host
 │           │   ├── Settings/
 │           │   └── VaultSetup/        # Used by options page
 │           └── components/
-│               ├── PasswordItem.tsx
+│               ├── EntryRow.tsx       # type-agnostic vault-list row
 │               ├── AddDropdown.tsx
 │               └── ui/                # Shadcn-style primitives
 │
@@ -260,18 +272,24 @@ interface CryptoAdapter {
   decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 }
 
-// autofill.ts
+// autofill.ts — logins (hostname-matched) + cards (offered on any payment form)
 interface AutofillAdapter {
   setIndex(entries: IndexEntry[]): Promise<void>;
   clearIndex(): Promise<void>;
-  findMatchingEntries(hostname: string): Promise<FindResult>;
-  fetchCredentials(entryId: string): Promise<Credentials>;
+  query(hostname: string, opts: { hasLogin: boolean; hasCard: boolean }): Promise<QueryResult>;
+  fetchFill(entryId: string): Promise<FillPayload>;
 }
-// FindResult  = { matches, locked, hasPotentialMatch }
-// MatchSummary = { id, name, username, autofillEnabled?, autoSubmit? }
-// IndexEntry  = { id, hostname, name, username, password,
-//                 autofillEnabled?, autoSubmit?, subdomainMatch? }
-// Credentials = { username, password, autoSubmit? }
+// IndexEntry   = LoginIndexEntry | CardIndexEntry  (discriminated on `type`)
+//   LoginIndexEntry = { type:"login", id, hostname, name, username, password,
+//                       customFields?, autofillEnabled?, autoSubmit?, subdomainMatch? }
+//   CardIndexEntry  = { type:"card", id, name, brand?, cardholderName,
+//                       number, expMonth, expYear, cvv, customFields? }
+// CustomFieldData = { key, value }   // key drives derived page-field matching
+// MatchSummary = { id, name, secondary, autofillEnabled?, autoSubmit? }
+// QueryResult  = { logins: MatchSummary[], cards: MatchSummary[],
+//                  locked, hasPotentialMatch }
+// FillPayload  = { kind:"login", username, password, customFields?, autoSubmit? }
+//              | { kind:"card", cardholderName, number, expMonth, expYear, cvv, customFields? }
 // SubdomainMatchMode = "etld1" | "exact" | "subdomain"
 
 // clipboard.ts
@@ -291,6 +309,7 @@ interface ShellAdapter {
   popOut(handoff?: PopOutHandoff): Promise<void>;  // detach, carrying route + draft
   consumeHandoff(): Promise<PopOutHandoff | null>; // one-shot read on detached boot
   isDetached(): boolean;         // true when running in the popped-out window
+  scanQrFromActiveTab(): Promise<string | null>;   // capture active tab, decode a QR
 }
 
 interface PopOutHandoff { path: string; draft?: unknown }
@@ -373,10 +392,15 @@ interface EncryptedEntry {
   id: string;          // uuid
   wrappedDek: string;  // base64 — DEK wrapped by VEK
   dekIv: string;       // base64
-  ciphertext: string;  // base64 — JSON of { name, url, username, password, totp?, notes? }
+  ciphertext: string;  // base64 — JSON of a typed EntryData (see "Entry Types" below)
   iv: string;          // base64
 }
 ```
+
+Each entry's plaintext is a typed `EntryData` discriminated on `type`
+(`login` | `card` | `note`). Entries persisted before the typed schema have no
+`type` field and are normalised to `login` on decrypt, so old vaults read back
+unchanged. Only `login` entries feed the autofill index and breach checks.
 
 `useVault.loadEntries` decrypts the outer block, then each entry, and pushes
 the decrypted index to the autofill adapter so the background SW can serve
@@ -471,6 +495,9 @@ store `credentialId` + a 32-byte random `salt`; on unlock we call
 to produce the KEK. Browser support: Chrome / Edge on desktop today; not all
 authenticators implement `hmac-secret` (YubiKey 5+ and most Solo keys do).
 
+This is about *unlocking the vault* with a hardware key — distinct from the
+vault *storing and serving* passkeys for websites (see the "Passkeys" section).
+
 ### Session-resume implications
 
 `chrome.storage.session` caches the b64 VEK so offscreen / SW restarts can
@@ -492,9 +519,56 @@ Multi-strategy `detectLoginFields()`:
 4. Otherwise: heuristic on `name|id|placeholder|autocomplete|aria-label`
    matching `/email|user|login|account|signin/` minus negative hints
    `/search|captcha|coupon|otp|code/`.
+5. Last resort: the same heuristic against the field's associated `<label>`
+   text (`<label for=id>`, a wrapping `<label>`, or `aria-labelledby`) — for
+   forms whose only human-readable hint lives in the label.
 
 This makes the email-only step of two-step logins (e.g. ikea.com) work — the
 script doesn't require a password field to be present.
+
+### Cards & custom fields
+
+The content script also detects **payment fields** (`cc-number`, `cc-name`,
+`cc-exp` / `cc-exp-month` + `cc-exp-year`, `cc-csc`) via their HTML
+`autocomplete` tokens, then attribute-hint, then associated-`<label>`-text
+fallbacks (the same ladder used everywhere — attributes first, label text last).
+Cards aren't hostname-
+scoped, so focusing a payment field opens a picker of *all* cards (they never
+auto-fill — always an explicit pick); selecting one fills the card fields
+(expiry formatted to the target field's width; CVV handled even when
+`type=password`).
+
+**Custom-field autofill** works for both logins and cards. Each custom field's
+name is turned into matcher variants (`"Postal code"` → `postal-code` /
+`postalcode`); the script fills the first *empty* page input whose `autocomplete`
+token or normalized `name`/`id`/`aria-label`/`placeholder` — then, as a last
+rung, associated `<label>` text — matches. Matching is
+deliberately conservative: exact normalized match at any length, substring match
+only for keys ≥ 5 chars, text-like inputs only (never password/email), and never
+overwriting a non-empty or already-filled field. The query tells the background
+which field kinds the page has (`hasLogin` / `hasCard`) so only relevant matches
+come back.
+
+Custom fields are **strictly lowest priority**: `fillCustomFields` excludes the
+inputs the built-in login/card detectors own (the detected username/password and
+all card fields), so a custom field named "username" / "email" / "cvv" / "card
+number" can't hijack a primary slot — even when that primary value is empty.
+Built-ins also fill first, then custom fields take whatever's left.
+
+### One-time codes (TOTP)
+
+`otpInputs()` finds the page's one-time-code entry: an `autocomplete~="one-time-code"`
+input first (multiple such inputs are treated as a segmented widget), else an
+OTP-hinted input (`one-time` / `otp` / `2fa` / `authenticator` / `verification
+code` …, minus card/address/coupon negatives), with a single-character match
+expanded into its run of sibling one-char boxes. `candidateKind` evaluates OTP
+**last** (after card and login) so it only claims fields nothing else owns, and
+CVV stays a card field. The query carries `hasOtp`; the background returns
+`otps` (hostname-matched logins that have a key). A focused OTP field auto-fills
+on a single match (or shows a picker), and the selection rides an `otpOnly` flag
+so the fill — `fillOtp`, single field or char-per-box — touches only the code
+field. The background computes the live code in `fetchFill`; the seed never
+reaches the page.
 
 ### Dropdown UI
 
@@ -530,6 +604,74 @@ invalidated" error storm.
 
 ---
 
+## Corner Prompt (capture, save & use)
+
+One in-page corner card is the surface for every "want to save this?" *and* "want
+to use this?" moment — new login, changed password, passkey registration, and
+passkey sign-in — so the experience is identical across them. It's pinned to the
+**top-right of the viewport** (top frame only), sharing the autofill dropdown's
+visual language (dark blurred popover, an injected `#titanpass-prompt` root with
+inline styles) but **corner-anchored rather than field-anchored**, and it
+dismisses on an explicit close or a timeout.
+
+### Variants
+
+One component, a `kind`-discriminated payload:
+
+- **`save-login`** — a username+password was submitted that we don't have for
+  this hostname. Editable username + masked password, primary **Save**,
+  secondary **Not now**, overflow **Never for this site**.
+- **`update-login`** — the submitted password differs from the stored entry's.
+  Names the account whose password changed; primary **Update**, secondary
+  **Not now**. When several entries match the hostname, the user picks which.
+- **`save-passkey`** — the site is registering a passkey. If a login for this
+  rpId exists, the default is **Add to ‹username›** with an alternative **Save as
+  a new login**; if none exists, just **Save as a new login** with an editable
+  username (prefilled from the WebAuthn `user.name` / `user.displayName`).
+  Primary **Create**, secondary **Cancel**.
+- **`use-passkey`** — the site asked to authenticate (`get()`) and we hold a
+  matching passkey. Names the account (or lists them if several), primary **Use
+  passkey**, secondary **Cancel**. Mechanics — conditional vs. modal triggers,
+  matching, consent, signing — live in "Passkeys → Use".
+
+### Capture & lifecycle
+
+- **Logins** are captured by the content script: password fields are snapshotted
+  on input; on form `submit` (and the Enter / synthetic-submit paths the
+  autofiller already recognises) the candidate `{ username, password }` goes to
+  the background. Submit usually navigates and destroys the page, so the
+  background **stashes the pending capture** (in-memory / `chrome.storage.session`
+  — never `local`, it holds a plaintext password) keyed by eTLD+1, and the
+  content script shows the prompt on the next load for that site (or immediately
+  for SPA logins with no navigation).
+- **Passkeys** are captured at registration: the proxy's `onCreateRequest` (see
+  "Passkeys") parks the request, the background tells the active tab's content
+  script to show the `save-passkey` prompt, and the user's attach-vs-new choice
+  flows back *before* we mint the credential and `completeCreateRequest`. The
+  request waits on the user; `onRequestCanceled` tears the prompt down.
+
+### Who writes the vault
+
+The prompt only collects intent; the commit runs background → offscreen (crypto)
+→ storage, reusing the same encrypt-and-write path as popup CRUD so there's a
+single source of truth (and the in-memory autofill index is refreshed after).
+**Open constraint:** the File System Access backend may refuse a gesture-less
+write from a non-popup context. Assumed fallback — `chrome.storage.local` vaults
+write straight from the background; FSA vaults queue the change and flush it from
+an extension-context write (the offscreen document holding the handle, or the
+next popup/options open). This is the main thing to prove out.
+
+### De-dupe & anti-nag (assumptions)
+
+- Never prompt when the exact credential is already stored (no diff).
+- A per-site **"Never for this site"** suppression list in `chrome.storage.local`.
+- One prompt per captured credential per session; gated on a global Settings
+  toggle **"Offer to save logins & passkeys"** (default on).
+- A locked vault still captures and prompts, but the primary action first walks
+  the user through unlock before committing.
+
+---
+
 ## UI Routing
 
 `app/router.tsx` defines a TanStack memory-history router with two top-level
@@ -539,16 +681,54 @@ trees:
 /                            → AuthRoute     (unlock form)
 _app (layout)
   /vault                     → VaultHomeRoute
-  /vault/new                 → CreatePasswordRoute
+  /vault/new/$type           → CreateEntryRoute  ($type ∈ login|card|note)
   /vault/$entryId            → EntryDetailRoute
   /vault/$entryId/edit       → EntryEditRoute
   /settings                  → SettingsRoute
 ```
 
-`EntryEditRoute` reuses `CreatePassword` by passing `initialValues` and a
-custom `submitLabel` — one form serves both create and edit. `PasswordItem`
-rows are clickable (navigate to detail) and carry a three-dots menu with
-inline Edit / Delete (delete swaps to a confirm step before destroying).
+Both `CreateEntryRoute` and `EntryEditRoute` render the generic `EntryForm`
+host (create reads `$type` from the path; edit takes it from the entry). One
+form serves both create and edit for every mode. `EntryRow` rows are clickable
+(navigate to detail) and carry a three-dots menu with inline Edit / Delete
+(delete swaps to a confirm step before destroying), plus a copy menu whose
+actions are mode-specific.
+
+### Entry types (modes)
+
+Entries are typed (`login` | `card` | `note` | `ssh-key`), and each type is
+described by a self-contained **mode descriptor** in `app/entry-modes/`. A
+descriptor bundles
+everything type-specific: add-menu metadata (label / description / icon), the
+form-body component, the detail-body component, the form↔entry mappings
+(`emptyForm` / `toForm` / `toEntry`), the vault-list row projection (`row`),
+search text, and optional detail subtitle / warning banner. The registry
+(`entryModes` / `modeList` / `getEntryMode`) is the single place every generic
+consumer reads from — `EntryForm`, `EntryDetail`, `VaultHome`/`EntryRow`,
+`AddDropdown`, and routing are all type-agnostic.
+
+`EntryForm` owns the cross-cutting form concerns once (react-hook-form context
+via `FormProvider`, card chrome, submit/footer, pop-out draft registration);
+the descriptor's `Fields` component supplies only the inputs. `EntryDetail`
+likewise owns the chrome (banner, header, delete/edit footer, clipboard) and
+delegates the field rows to the descriptor's `Detail`.
+
+**Custom fields** are shared by every type, not owned by any one mode. They live
+in `BaseEntryData.customFields` (`{ key, value, hidden? }`) and are managed
+entirely by the host: `EntryForm` injects the editor + persists them,
+`EntryDetail` renders them after the mode body, and the vault list folds them
+into copy actions + search text (`entry-modes/custom-fields.tsx`). A new mode
+gets custom fields for free.
+
+**Adding a mode** is three steps: extend the `EntryType` union
+(`hooks/useVault`), write a descriptor file like `login`/`card`/`note`, and add
+it to the registry. No host, route, list, or plumbing changes are needed.
+Only `login` carries autofill overrides, the password generator/strength meter,
+and breach checks; cards autofill on payment forms; notes and SSH keys never
+reach the autofill index. SSH keys (`ssh-key.tsx`) are store/copy only — a
+browser extension can't act as an ssh-agent — and use a masked multi-line
+`SecretArea` primitive for the private key; key type is derived from the public
+key on save.
 
 `AuthRoute` watches `isLocked` and navigates to `/vault` via a `useEffect`
 when it flips to `false`. Navigation is **not** explicit in the unlock
@@ -613,15 +793,178 @@ leaving dead space.
 
 ---
 
+## Passkeys (Vault as a WebAuthn credential provider) — planned
+
+Goal: let the vault create, store, and use **passkeys** (WebAuthn discoverable
+credentials) on the user's behalf, synced through the same encrypted vault blob
+as every other entry. This is the inverse of the hmac-secret unlock plan above:
+there a hardware key unlocks the vault; here the vault *is* the authenticator a
+website talks to. (Don't conflate the two — see "WebAuthn `hmac-secret`".)
+
+### Mechanism — `chrome.webAuthenticationProxy`
+
+Chrome's `webAuthenticationProxy` API (permission `webAuthenticationProxy`) is
+the only way an MV3 extension can answer `navigator.credentials.create()` /
+`.get()`. After `attach()`, the background SW receives:
+
+- `onCreateRequest` — registration. Carries a JSON-serialized
+  `PublicKeyCredentialCreationOptions` (all ArrayBuffers base64url). We mint a
+  credential and reply via `completeCreateRequest({ requestId, responseJson })`.
+- `onGetRequest` — authentication. We find a matching stored credential, sign,
+  and reply via `completeGetRequest(...)`.
+- `onRequestCanceled` — tear down any in-flight unlock prompt.
+- `onIsUvpaaRequest` — "is a user-verifying platform authenticator available":
+  yes whenever passkey support is enabled.
+
+**Interception is all-or-nothing.** While attached, the extension handles
+*every* WebAuthn call in the browser — including ones meant for the user's
+platform authenticator or security key. So the policy is:
+
+- Attach only when the user has opted in **and** the vault is unlocked; detach
+  on lock and on opt-out, so native authenticators work normally otherwise.
+- For an RP / credential we don't manage, complete with a `NotAllowedError` so
+  the site falls back cleanly (and investigate forwarding to the native stack
+  where the API allows it).
+
+### What we store — passkeys live on the login entry (no new mode, no blob bump)
+
+**Final assumption: a passkey is not a standalone entry — it's attached to a
+login.** This mirrors how the user thinks about it ("attach to my GitHub
+account") and how every other manager models it, and it makes the capture UX
+(below) a simple attach-or-create choice. So `LoginEntryData` gains an optional
+`passkeys` array, exactly alongside `totp` / `customFields`:
+
+```
+interface PasskeyCredential {
+  rpId: string;            // "github.com" — the relying party
+  rpName?: string;
+  userHandle: string;      // base64url user.id from the RP
+  userName: string;        // account label shown in the chooser
+  userDisplayName?: string;
+  credentialId: string;    // base64url; random 16–32 bytes we generate
+  alg: -7 | -8 | -257;     // COSE alg: ES256 (default) / EdDSA / RS256
+  publicKeyCose: string;   // base64url COSE_Key (reference / debug)
+  privateKey: string;      // the SECRET — PKCS8 / JWK
+  createdAt: number;
+  // signCount stays 0 for synced credentials (no clone-detection false alarms).
+}
+
+interface LoginEntryData extends BaseEntryData {
+  // …url, username, password, totp, overrides…
+  passkeys?: PasskeyCredential[];
+}
+```
+
+A login can therefore be **passkey-only** (no password — the "create new" path
+makes a fresh login shell holding just the passkey). The whole login entry is
+already encrypted under its per-entry DEK-under-VEK envelope, so the private key
+inherits that protection; nothing else changes. **No vault-format version bump,
+no new entry mode** — passkeys render inside the login form/detail like `totp`,
+and the vault list shows a passkey badge on logins that have one. `onGetRequest`
+lookups scan every login's `passkeys` by `rpId` (+ `credentialId` when the RP
+sends `allowCredentials`).
+
+### Crypto flow
+
+- **Key generation**: WebCrypto `crypto.subtle.generateKey` (ECDSA P-256 for
+  ES256 by default). Export the private key, encrypt through the vault's AES-GCM
+  envelope, store. Public key encoded as a COSE_Key.
+- **Registration (create)**: `authenticatorData` = `SHA-256(rpId)` ++ flags
+  (`UP|UV|AT|BE|BS` — BE/BS set because the credential is backed up in the synced
+  vault) ++ `signCount=0` ++ attestedCredentialData (`AAGUID` ++ credId ++ COSE
+  pubkey). Wrap as an `attestationObject` with **`fmt:"none"`** (no attestation
+  key material to manage). Build `clientDataJSON` (`{type:"webauthn.create",
+  challenge, origin, crossOrigin:false}`) and return the serialized
+  `PublicKeyCredential`.
+- **Authentication (get)**: select by `rpId` + `allowCredentials` (or
+  discoverable when empty). `authenticatorData` = `SHA-256(rpId)` ++ flags ++
+  `signCount=0`; `signature = sign(privKey, authenticatorData ++
+  SHA-256(clientDataJSON))`. Return `{clientDataJSON, authenticatorData,
+  signature, userHandle}`.
+- **User verification**: an unlocked vault *is* UV. A request demanding UV while
+  locked triggers an unlock prompt before we complete it.
+- CBOR (attestationObject + COSE key) is small enough to encode in TS; ECDSA
+  signing uses WebCrypto. Signing only moves into WASM if profiling demands it.
+
+### Use — the sign-in prompt
+
+Passkey use is **RP-initiated**: the site must call `navigator.credentials.get()`
+(we can't authenticate unilaterally — the assertion needs the RP's challenge). So
+"you land on foo.com and we offer your passkey" really means *the foo.com login
+page fired a `get()` and we hold a match*. The proxy's `onGetRequest` is the only
+trigger; we surface the **same top-right corner card** as the save prompt — the
+`use-passkey` variant (see "Corner Prompt").
+
+- **The card is always a response to the site asking — never a navigation
+  nudge.** It appears when `onGetRequest` fires, in two cases:
+  - *Modal* (the canonical case) — the user clicks the site's "Sign in with a
+    passkey" button, the site calls `get()`, and our card comes out ("Sign in to
+    foo.com as ‹username›?").
+  - *Conditional* (`mediation:"conditional"`) — the site arms passkey autofill on
+    load; with a match we surface the same card. Still the site asking (it made
+    the `get()` call), just on page load rather than on a button click.
+- **Matching** (background): scan every login's `passkeys[]` for `rpId`, filtered
+  by `allowCredentials` when the RP sends one (else discoverable = every passkey
+  for that rpId). 0 matches → complete with `NotAllowedError` so the site falls
+  back; 1 → the card names that account; >1 → the card lists them and the user
+  picks.
+- **Consent = the card tap; unlocked vault = UV.** Tapping **Use passkey** is the
+  user-presence/consent gesture; if the vault is locked the card unlocks first.
+  We then decrypt the private key, sign per "Crypto flow", and
+  `completeGetRequest`. `onRequestCanceled` (navigation, or the site abandoning a
+  conditional request) tears the card down.
+- **Anti-nag:** a conditional prompt respects a per-site dismiss + the global
+  passkey toggle, so it doesn't reappear on every load once waved off; a modal get
+  always shows (the user explicitly asked to sign in).
+- The password autofill dropdown (field-anchored) and this passkey card
+  (corner-anchored) coexist on the same login page without fighting.
+
+### UX
+
+- Settings toggle **"Use Vault for passkeys"** → `attach()` / `detach()`.
+- **Registration is the capture prompt.** When a site calls
+  `navigator.credentials.create()`, the proxy parks the request and we surface
+  the top-right **`save-passkey`** prompt (see "Corner Prompt") offering *attach to the matching login* or *save as a new login*.
+  Only after the user chooses do we mint the credential and complete the request.
+- **Use is the sign-in prompt** (see "Use" above) — a `use-passkey` corner card
+  driven by `onGetRequest`, proactively on a conditional get and on demand for a
+  modal one.
+- Passkeys are viewed/managed **inside their login entry** (a passkeys section in
+  the detail, a badge in the list); deleting one edits the login. They are
+  **not** content-script-autofilled — the browser drives use through the proxy.
+
+### Open questions / risks
+
+- Coexistence with native authenticators given all-or-nothing interception
+  (mitigated by attach-only-while-unlocked, but needs real-world testing).
+- Whether conditional-mediation requests actually arrive via the proxy on the
+  target Chrome version.
+- Chrome Web Store review of the `webAuthenticationProxy` permission — powerful,
+  expect scrutiny and a justification.
+- Attestation: shipping `none` sidesteps key management, but some enterprise RPs
+  demand real attestation — out of scope for the first cut.
+
+---
+
 ## Status
 
 ### Working
 
 - Full CRUD loop: vault create + unlock, entry list (`VaultHome`), entry
-  create (`CreatePassword`), entry detail with copy-to-clipboard
-  (`EntryDetail`), edit (reuses `CreatePassword` with `initialValues`), and
-  delete with confirm step. Row-level edit / delete via the three-dots
-  menu on every `PasswordItem`.
+  create (`EntryForm` via `/vault/new/$type`), entry detail with
+  copy-to-clipboard (`EntryDetail`), edit (reuses `EntryForm` with the stored
+  entry), and delete with confirm step. Row-level edit / delete + copy menu
+  via the three-dots menu on every `EntryRow`.
+- **Typed entries (modes)** — logins, payment cards, secure notes, and SSH keys,
+  each a self-contained descriptor in `app/entry-modes/` consumed by a generic
+  form host, detail host, list, and add-menu. Adding a new kind is one descriptor
+  file + one registry line; see "Entry types (modes)" above. The data model
+  is a discriminated union on `type`; pre-typed vaults normalise to `login`.
+  SSH keys are store/copy only (no ssh-agent in an extension) and use a masked
+  multi-line `SecretArea` for the private key.
+  Every type also supports shared, persisted **custom fields** (visible or
+  hidden), surfaced in the form, detail view, copy menu, search, and autofill
+  (matched to page fields by name-derived tokens — see the autofill section).
 - Pop-out to detached window via `shell.popOut(handoff)` — button in both
   `AppLayout` header (unlocked) and `Auth` screen (locked). Detached
   window persists the unlocked session because session state lives in the
@@ -656,6 +999,16 @@ leaving dead space.
 - Autofill on top-frame login pages: username-only, password-only, and
   combined forms. eTLD+1 subdomain matching via `tldts` (overridable
   per entry to `exact` / `subdomain` strict modes).
+- **Card autofill** — payment fields (`cc-number` / `cc-name` / `cc-exp[-month
+  /-year]` / `cc-csc`) are detected by autocomplete token + attribute hints;
+  focusing one opens a picker of all cards (explicit pick only, never
+  auto-filled). The card index ships in the same session-stored autofill index
+  as logins.
+- **Custom-field autofill** — a custom field's name is expanded into matcher
+  variants (`postal-code` / `postalcode`) and filled into the first empty page
+  input whose autocomplete token or attribute hint matches. Works after both
+  login and card fills. Conservative matching (exact, or substring for keys ≥ 5
+  chars; text-like empty inputs only) keeps it from clobbering unrelated fields.
 - "Vault locked" hint dropdown when the vault is locked.
 - Theme toggle, popup → home redirect on unlock, content script teardown on
   extension reload.
@@ -688,7 +1041,7 @@ leaving dead space.
 - **Per-entry overrides** — new optional fields on `EntryData`:
   `autofillEnabled` (default true), `autoSubmit` (default false), and
   `subdomainMatch: "etld1" | "exact" | "subdomain"` (default `etld1`).
-  Surfaced in a collapsible "Advanced" section on `CreatePassword`.
+  Surfaced in a collapsible "Advanced" section on the login form.
   Background's `hostnameMatches` honours `subdomainMatch`. Content
   script honours `autofillEnabled === false` (still shows in dropdown
   for manual pick, no silent fill) and `autoSubmit === true` (calls
@@ -696,6 +1049,29 @@ leaving dead space.
   for forms without a submit button). All overrides ride inside the
   encrypted entry JSON and the in-memory autofill index, so old vaults
   without these fields keep working unchanged.
+- **TOTP (two-factor) codes** — logins carry an encrypted `totp` authenticator
+  key (an `otpauth://` URI or a bare base32 setup key). The login detail shows a
+  live 6-digit code with a draining countdown ring, regenerated every second and
+  copyable through the same clipboard auto-clear path as any other secret. Code
+  generation + parsing live in `util/totp.ts` (`parseTotp` / `totpAt`, verified
+  against the RFC 6238 vectors) and tolerate both URI and spaced/dashed-secret
+  inputs; HOTP and Google's `otpauth-migration://` export blob are rejected.
+  **Set-up by QR scan from the current page** — the "Authenticator key" field's
+  camera button calls `shell.scanQrFromActiveTab()`, which has the background SW
+  `captureVisibleTab` (PNG) the user's real browsing window and decode a QR via
+  `jsQR` over an `OffscreenCanvas` (no DOM, runs in the worker). Only the decoded
+  string crosses back to the popup — the screenshot never leaves the background —
+  and it's accepted only if it parses as a usable TOTP. Needs no new permission
+  (`<all_urls>` already covers capture). The setup key can also be pasted by hand.
+  **TOTP autofill** — the content script detects a one-time-code field
+  (`autocomplete="one-time-code"`, else an OTP-hinted input, with single-char
+  boxes gathered into a segmented group) and, on the 2FA step, offers the
+  hostname-matched logins that have a key; picking one (or a single auto-fill)
+  drops in the live code. The code is computed in the background at fill time via
+  `fetchFill` and only the digits cross to the page — the seed never leaves the
+  background. The fill is threaded through with an `otpOnly` flag so it touches
+  only the OTP field, never username/password. The key rides the session autofill
+  index as `LoginIndexEntry.totp`; `QueryResult.otps` carries the matches.
 
 ### TODO (next phases)
 
@@ -706,15 +1082,30 @@ leaving dead space.
    FIDO2 authenticator (YubiKey 5+, platform passkeys). Requires
    `navigator.credentials.create/get` from popup/options context and
    testing across authenticator vendors.
-3. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
+3. **Corner prompt (capture, save & use)** — the top-right in-page card for
+   `save-login` / `update-login` / `save-passkey` / `use-passkey`, the background
+   pending-capture stash that survives navigation, and the write-from-background
+   path (with the FSA gesture-less-write constraint to resolve). Foundational:
+   login auto-save doesn't exist yet, and both passkey registration and sign-in
+   ride this surface. See "Corner Prompt".
+4. **Passkey storage — Vault as a WebAuthn credential provider** — create / store
+   / use synced passkeys via `chrome.webAuthenticationProxy`, stored **as a
+   `passkeys` field on the login entry** (attach-or-create via the capture
+   prompt). Full design in the "Passkeys" section; key pieces are the proxy
+   attach/detach lifecycle (attach only while unlocked), the `none`-attestation
+   create/get crypto, and Web Store review of the powerful permission.
+5. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
    `chrome.idle.onStateChanged` + popup `visibilitychange`.
-4. **TOTP code generation** in `EntryDetail` (`otpauth` dep already
-   installed, encrypted `totp` field already in the entry schema).
-5. **Password strength indicator** in `CreatePassword` — `check-password-strength`
-   dep is installed and used by `pwned.ts`, but not surfaced in the form.
-6. **E2E tests** — Playwright + extension support.
-7. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-8. **Chrome Web Store submission**.
+6. **SSH key enhancements** — derive the SHA256 fingerprint from the public key
+   (WebCrypto over the decoded key blob) and a "generate key pair" action.
+   ssh-agent use stays out of scope — unreachable from an MV3 extension.
+7. **Autofill heuristics hardening** — real-world tuning of the card /
+   custom-field / one-time-code matchers across checkout, login & 2FA forms (the
+   matching is conservative but unvalidated against many live sites; segmented
+   OTP widgets in particular vary widely).
+8. **E2E tests** — Playwright + extension support.
+9. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+10. **Chrome Web Store submission**.
 
 ---
 
