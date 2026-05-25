@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { ThemeProvider } from "./hooks/useTheme";
+import { ImportShell } from "./screens/Import/ImportShell";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
 function SetupShell() {
@@ -55,11 +56,10 @@ function SetupShell() {
 }
 
 export default function OptionsApp() {
+	const screen = new URLSearchParams(window.location.search).get("screen");
 	return (
 		<ThemeProvider>
-			<VaultProvider>
-				<SetupShell />
-			</VaultProvider>
+			<VaultProvider>{screen === "import" ? <ImportShell /> : <SetupShell />}</VaultProvider>
 		</ThemeProvider>
 	);
 }

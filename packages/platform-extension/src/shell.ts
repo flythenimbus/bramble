@@ -1,10 +1,14 @@
 /// <reference types="chrome" />
-import type { PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
+import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
 
 const DETACHED_FLAG = "detached";
 
 export const extensionShell: ShellAdapter = {
-	async openSetup() {
+	async openSetup(screen?: OptionsScreen) {
+		if (screen) {
+			await chrome.tabs.create({ url: chrome.runtime.getURL(`options.html?screen=${screen}`) });
+			return;
+		}
 		await chrome.runtime.openOptionsPage();
 	},
 	hasFilePicker() {

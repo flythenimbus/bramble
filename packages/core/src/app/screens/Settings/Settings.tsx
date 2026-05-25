@@ -1,4 +1,14 @@
-import { AlertTriangle, Clock, Info, Key, Lock, Palette, ShieldCheck, Timer } from "lucide-react";
+import {
+	AlertTriangle,
+	Clock,
+	Download,
+	Info,
+	Key,
+	Lock,
+	Palette,
+	ShieldCheck,
+	Timer,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { SelectField } from "../../components/ui/select-field";
@@ -26,6 +36,8 @@ interface SettingsProps {
 	// error, the user may need to retry or relock).
 	onVerifyCurrentPassword: (currentPassword: string) => Promise<boolean>;
 	onChangeMasterPassword: (newPassword: string) => Promise<void>;
+	// Open the full-tab import flow (the file picker would dismiss the popup).
+	onImport: () => void;
 }
 
 export function Settings({
@@ -41,6 +53,7 @@ export function Settings({
 	onLockNow,
 	onVerifyCurrentPassword,
 	onChangeMasterPassword,
+	onImport,
 }: SettingsProps) {
 	const [changingPassword, setChangingPassword] = useState(false);
 	const [pwSuccess, setPwSuccess] = useState(false);
@@ -324,6 +337,31 @@ export function Settings({
 									Dark
 								</button>
 							</div>
+						</Row>
+					</div>
+				</div>
+
+				{/* Data */}
+				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+					<div className="px-4 py-3 border-b border-border/50">
+						<h3 className="text-sm flex items-center gap-2">
+							<Download className="w-4 h-4 text-primary" />
+							Data
+						</h3>
+					</div>
+					<div className="p-4">
+						<Row
+							icon={<Download className="w-4 h-4 text-primary" />}
+							title="Import from another manager"
+							subtitle="Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
+						>
+							<button
+								type="button"
+								onClick={onImport}
+								className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+							>
+								Import
+							</button>
 						</Row>
 					</div>
 				</div>

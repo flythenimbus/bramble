@@ -7,6 +7,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { z } from "zod";
 import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import { usePlatform } from "../context/PlatformContext";
 import {
@@ -84,9 +85,64 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 	return entry.type === "login";
 }
 
+// Runtime mirror of EntryData, kept beside the type so drift is obvious: the
+// `z.ZodType<EntryData>` annotation makes the compiler fail here if the schema
+// and the hand-written union diverge. Used to validate entries decrypted from
+// disk (below) and every entry the importer produces (see import/), so nothing
+// malformed reaches the rest of the app.
+const customFieldSchema = z.object({
+	key: z.string(),
+	value: z.string(),
+	hidden: z.boolean().optional(),
+});
+
+const baseEntryFields = {
+	name: z.string(),
+	notes: z.string().optional(),
+	customFields: z.array(customFieldSchema).optional(),
+};
+
+export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type", [
+	z.object({
+		...baseEntryFields,
+		type: z.literal("login"),
+		url: z.string(),
+		username: z.string(),
+		password: z.string(),
+		totp: z.string().optional(),
+		breach: z.object({ leaked: z.boolean(), checkedAt: z.number() }).optional(),
+		autofillEnabled: z.boolean().optional(),
+		autoSubmit: z.boolean().optional(),
+		subdomainMatch: z.enum(["etld1", "exact", "subdomain"]).optional(),
+	}),
+	z.object({
+		...baseEntryFields,
+		type: z.literal("card"),
+		cardholderName: z.string(),
+		number: z.string(),
+		brand: z.string().optional(),
+		expMonth: z.string(),
+		expYear: z.string(),
+		cvv: z.string(),
+	}),
+	z.object({ ...baseEntryFields, type: z.literal("note") }),
+	z.object({
+		...baseEntryFields,
+		type: z.literal("ssh-key"),
+		publicKey: z.string(),
+		privateKey: z.string(),
+		passphrase: z.string().optional(),
+		keyType: z.string().optional(),
+	}),
+]);
+
 // them as logins so old vaults decrypt unchanged.
 function normalizeEntryData(raw: Record<string, unknown>): EntryData {
-	return (raw.type ? raw : { type: "login", ...raw }) as unknown as EntryData;
+	const candidate = raw.type ? raw : { type: "login", ...raw };
+	if (!entryDataSchema.safeParse(candidate).success) {
+		console.error("[vault] decrypted entry has an unexpected shape:", candidate);
+	}
+	return candidate as unknown as EntryData;
 }
 
 export interface UseVault {
@@ -100,6 +156,7 @@ export interface UseVault {
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
 	createVault(password: string): Promise<void>;
 	addEntry(data: EntryData): Promise<void>;
+	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
@@ -369,6 +426,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	const importEntries = useCallback(
+		async (items: EntryData[]) => {
+			const withIds: Entry[] = items.map((data) => ({
+				id: globalThis.crypto.randomUUID(),
+				...data,
+			}));
+			const next = [...entries, ...withIds];
+			await persistEntries(next);
+			setEntries(next);
+		},
+		[entries, persistEntries],
+	);
+
 	const updateEntry = useCallback(
 		async (id: string, data: EntryData) => {
 			const next = entries.map((e) => (e.id === id ? { id, ...data } : e));
@@ -509,6 +579,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			pickVaultFile,
 			createVault,
 			addEntry,
+			importEntries,
 			updateEntry,
 			deleteEntry,
 			verifyMasterPassword,
@@ -525,6 +596,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			pickVaultFile,
 			createVault,
 			addEntry,
+			importEntries,
 			updateEntry,
 			deleteEntry,
 			verifyMasterPassword,

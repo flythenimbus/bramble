@@ -1,3 +1,4 @@
+import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { useTheme } from "../hooks/useTheme";
@@ -7,6 +8,7 @@ export function SettingsRoute() {
 	const { darkMode, toggleTheme } = useTheme();
 	const { prefs, loaded, update } = usePrefs();
 	const { entries, lock, verifyMasterPassword, changeMasterPassword } = useVault();
+	const { shell } = usePlatform();
 
 	if (!loaded) return null;
 
@@ -25,6 +27,7 @@ export function SettingsRoute() {
 				onLockNow={lock}
 				onVerifyCurrentPassword={verifyMasterPassword}
 				onChangeMasterPassword={changeMasterPassword}
+				onImport={() => void shell.openSetup("import")}
 			/>
 		</div>
 	);
