@@ -1093,6 +1093,15 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   background. The fill is threaded through with an `otpOnly` flag so it touches
   only the OTP field, never username/password. The key rides the session autofill
   index as `LoginIndexEntry.totp`; `QueryResult.otps` carries the matches.
+- **Import from other managers** — Bitwarden (`.json`), 1Password (`.1pux`),
+  Proton Pass (`.zip`), and KeePass (2.x XML export). Pure, unit-tested parsers
+  in `core/import/` (`fflate` unzip, `fast-xml-parser`) map each provider onto our
+  typed `EntryData`; unmappable kinds fold into a secure note, passkeys are dropped
+  with a warning. The flow lives on the options page (`options.html?screen=import`,
+  opened from Settings → Data → Import via `shell.openSetup("import")`) because a
+  file dialog dismisses the popup; it parses entirely on-device and bulk-writes via
+  `useVault.importEntries` in a single encrypted `persistEntries` pass. KeePass
+  `.kdbx`, dedup, folders, and attachments are deliberately out of v1 (see below).
 
 ### TODO (next phases)
 
@@ -1137,6 +1146,5 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
 - Iframe and Shadow DOM autofill
 - Vault sync conflict resolution (rely on cloud provider's versioning)
 - Native messaging host
-- Password import from other managers
 - Biometric unlock
 - Browser bookmark / history integration
