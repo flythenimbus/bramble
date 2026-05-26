@@ -168,11 +168,12 @@ export function Settings({
 							</div>
 						</Row>
 
-						{/* Breach check */}
+						{/* Breach check — opt-in (default off). The only network egress
+						    in the app, so the subtitle is explicit about what's sent. */}
 						<Row
 							icon={<ShieldCheck className="w-4 h-4 text-primary" />}
 							title="Check passwords for breaches"
-							subtitle="Use HIBP (k-anonymity, your password is never sent)"
+							subtitle="Sends a 5-char SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity — the password itself never leaves the device). The only off-device traffic in the app."
 						>
 							<Toggle
 								checked={breachCheckEnabled}
