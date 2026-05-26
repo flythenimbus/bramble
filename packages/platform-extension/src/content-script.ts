@@ -870,11 +870,6 @@ function isQueryResult(v: unknown): v is QueryResult {
 	);
 }
 
-// Cache the query result. The only proactive UI action is single-match login
-// auto-fill — cards always wait for an explicit pick, and anything else that
-// needs the dropdown waits for the user to focus the field (handled in
-// `showFor`). This stops re-queries from MutationObserver or page state changes
-// from springing the dropdown back open after the user clicks away.
 function handleResult(result: QueryResult | undefined): void {
 	if (!isQueryResult(result)) return;
 	cachedResult = result;
@@ -882,68 +877,25 @@ function handleResult(result: QueryResult | undefined): void {
 	if (silenceAutoOpen) return;
 
 	const focused = focusedCandidate();
+	if (!focused) return;
 
 	if (result.locked) {
-		if (focused) buildLockedDropdown(focused);
+		buildLockedDropdown(focused);
 		return;
 	}
 
-	// A focused payment field shows the card picker; cards never auto-fill.
-	if (focused && candidateKind(focused) === "card") {
+	const kind = candidateKind(focused);
+	if (kind === "card") {
 		if (result.cards.length > 0) buildDropdown(result.cards, focused);
 		return;
 	}
-
-	// One-time-code fill. A single match auto-fills like a login — **no focus
-	// required** — so the code lands as soon as the 2FA field is on the page;
-	// `autoFilledFields` stops the re-query loop. Multiple matches or a per-entry
-	// opt-out fall back to a picker, shown only when the field is focused. No
-	// early return on the auto-fill path: a combined page still runs the
-	// credential fill below.
-	const otps = result.otps ?? [];
-	const otpEls = otpInputs();
-	if (otps.length > 0 && otpEls.length > 0) {
-		const onlyOtp = otps.length === 1 ? otps[0]! : null;
-		if (onlyOtp && onlyOtp.autofillEnabled !== false) {
-			if (!otpEls.every((f) => autoFilledFields.has(f))) {
-				selectMatch(onlyOtp.id, true, true);
-			}
-		} else if (focused && candidateKind(focused) === "otp") {
-			buildDropdown(otps, focused, { otpOnly: true });
-			return;
-		}
-	}
-
-	const logins = result.logins;
-	if (logins.length === 0) {
-		// Nothing to auto-fill; offer the card picker if that's what's focused.
-		if (focused && candidateKind(focused) === "card" && result.cards.length > 0) {
-			buildDropdown(result.cards, focused);
-		}
+	if (kind === "otp") {
+		const otps = result.otps ?? [];
+		if (otps.length > 0) buildDropdown(otps, focused, { otpOnly: true });
 		return;
 	}
-
-	if (logins.length === 1) {
-		const only = logins[0]!;
-		// Per-entry autofill opt-out: still surface the dropdown for manual
-		// pick, but don't silently fill.
-		if (only.autofillEnabled === false) {
-			if (focused) buildDropdown(logins, focused);
-			return;
-		}
-		// Re-queries from the MutationObserver shouldn't keep re-firing the
-		// auto-fill. If every detectable field is already in `autoFilledFields`
-		// the fill is a no-op anyway — but `selectMatch` would still remove
-		// any visible dropdown as a side effect, causing the flicker. Skip.
-		const fields = detectLoginFields();
-		const userDone = !fields.username || autoFilledFields.has(fields.username);
-		const passDone = !fields.password || autoFilledFields.has(fields.password);
-		if (userDone && passDone) return;
-		selectMatch(only.id, true);
-		return;
-	}
-
-	if (focused) buildDropdown(logins, focused);
+	// login
+	if (result.logins.length > 0) buildDropdown(result.logins, focused);
 }
 
 
