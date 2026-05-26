@@ -96,6 +96,7 @@ export function CustomFieldsEditor() {
 								<TextField
 									label="Value"
 									type={type === "password" && !isShown ? "password" : "text"}
+									autoComplete="off"
 									endAdornment={
 										type === "password" ? (
 											<button

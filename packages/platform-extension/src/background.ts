@@ -439,7 +439,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			const tabId = _sender.tab?.id;
-			const hostname = message.hostname as string;
+			let hostname = "";
+			try {
+				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
+				if (src) hostname = new URL(src).hostname;
+			} catch {}
+			if (!hostname) {
+				sendResponse({ ok: false, error: "no verifiable origin on sender" });
+				return;
+			}
 			const hasLogin = message.hasLogin !== false;
 			const hasCard = message.hasCard === true;
 			const hasOtp = message.hasOtp === true;

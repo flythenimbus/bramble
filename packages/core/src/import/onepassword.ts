@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { CardEntryData, EntryData, LoginEntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
-import { asBytes, type RawField, summarize, toCustomFields } from "./shared";
+import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
 const valueSchema = z.object({
@@ -214,6 +214,7 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 	} catch {
 		throw new Error("Couldn't read this .1pux file — it may be corrupt.");
 	}
+	assertUnzipUnderCap(files);
 	const dataFile =
 		files["export.data"] ?? Object.entries(files).find(([p]) => p.endsWith("export.data"))?.[1];
 	if (!dataFile) throw new Error(FORMAT_ERROR);

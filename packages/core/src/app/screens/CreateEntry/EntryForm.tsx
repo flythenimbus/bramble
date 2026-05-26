@@ -76,7 +76,11 @@ export function EntryForm({
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-3">
 			<FormProvider {...methods}>
-				<form onSubmit={handleSubmit(onSubmit)}>
+				    peer password managers) that this is an entry editor, not a real
+				    login form, so they don't try to save / autofill the values the
+				    user is *storing*. Chrome ignores autoComplete="off" on bare login
+				    forms, hence the form-type hint. */}
+				<form onSubmit={handleSubmit(onSubmit)} autoComplete="off" data-form-type="other">
 					<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 						<div className="px-5 py-2.5 border-b border-border/50">
 							<h2 className="text-xs text-muted-foreground">{heading}</h2>

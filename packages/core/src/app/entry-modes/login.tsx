@@ -40,9 +40,18 @@ export interface LoginFormValues {
 function randomPassword(): string {
 	const charset =
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
-	const bytes = new Uint8Array(16);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => charset.charAt(b % charset.length)).join("");
+	const n = charset.length;
+	const limit = Math.floor(256 / n) * n;
+	const out: string[] = [];
+	const buf = new Uint8Array(16);
+	while (out.length < 16) {
+		crypto.getRandomValues(buf);
+		for (let i = 0; i < buf.length && out.length < 16; i++) {
+			const b = buf[i]!;
+			if (b < limit) out.push(charset.charAt(b % n));
+		}
+	}
+	return out.join("");
 }
 
 function LoginFields({ initialBreach }: EntryFieldsProps) {
@@ -124,12 +133,18 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				</button>
 			)}
 
-			<TextField label="Username or email" type="text" {...register("username")} />
+			<TextField
+				label="Username or email"
+				type="text"
+				autoComplete="off"
+				{...register("username")}
+			/>
 
 			<div>
 				<TextField
 					label="Password"
 					type={showPassword ? "text" : "password"}
+					autoComplete="off"
 					endAdornment={
 						<>
 							<button
@@ -196,6 +211,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				<TextField
 					label="Authenticator key (TOTP)"
 					type={showTotp ? "text" : "password"}
+					autoComplete="off"
 					endAdornment={
 						<>
 							<button

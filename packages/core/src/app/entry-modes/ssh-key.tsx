@@ -25,10 +25,11 @@ function SshKeyFields() {
 		<>
 			<TextField label="Name" type="text" {...register("name")} />
 			<TextArea label="Public key" rows={2} className="font-mono" {...register("publicKey")} />
-			<SecretArea label="Private key" rows={6} {...register("privateKey")} />
+			<SecretArea label="Private key" rows={6} autoComplete="off" {...register("privateKey")} />
 			<TextField
 				label="Passphrase (optional)"
 				type={showPassphrase ? "text" : "password"}
+				autoComplete="off"
 				endAdornment={
 					<button
 						type="button"

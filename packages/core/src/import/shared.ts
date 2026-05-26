@@ -47,3 +47,18 @@ export function asBytes(raw: string | Uint8Array): Uint8Array {
 	if (typeof raw === "string") throw new Error("expected file bytes, received text");
 	return raw;
 }
+
+const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
+
+export function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {
+	let total = 0;
+	for (const k in files) {
+		const f = files[k];
+		if (f) total += f.byteLength;
+		if (total > MAX_DECOMPRESSED_BYTES) {
+			throw new Error(
+				`This archive decompresses to more than ${MAX_DECOMPRESSED_BYTES / 1024 / 1024} MB and looks unsafe to process.`,
+			);
+		}
+	}
+}
