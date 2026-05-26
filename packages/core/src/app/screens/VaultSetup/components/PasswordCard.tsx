@@ -1,5 +1,7 @@
 import { Shield } from "lucide-react";
 import type { UseFormReturn } from "react-hook-form";
+import { masterPasswordRejectionMessage } from "../../../../util/master-password-strength";
+import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { TextField } from "../../../components/ui/text-field";
 import type { VaultSetupFormValues, VaultSetupMode } from "../types";
 
@@ -39,16 +41,21 @@ export function PasswordCard({
 					</h3>
 				</div>
 				<div className="p-5 space-y-4">
-					<TextField
-						label="Master password"
-						type="password"
-						autoComplete={isCreate ? "new-password" : "current-password"}
-						error={errors.masterPassword?.message}
-						{...register("masterPassword", {
-							required: isCreate ? "Choose a master password" : "Enter your master password",
-							minLength: isCreate ? { value: 8, message: "At least 8 characters" } : undefined,
-						})}
-					/>
+					<div>
+						<TextField
+							label="Master password"
+							type="password"
+							autoComplete={isCreate ? "new-password" : "current-password"}
+							error={errors.masterPassword?.message}
+							{...register("masterPassword", {
+								required: isCreate ? "Choose a master password" : "Enter your master password",
+								// Strength gate runs only on vault creation. Unlock skips it because
+								// existing vaults may have been created under a weaker policy.
+								validate: isCreate ? masterPasswordRejectionMessage : undefined,
+							})}
+						/>
+						{isCreate && <MasterPasswordMeter value={pw ?? ""} />}
+					</div>
 					{isCreate && (
 						<TextField
 							label="Confirm master password"

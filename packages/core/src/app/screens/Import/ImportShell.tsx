@@ -10,6 +10,9 @@ import {
 import { TextField } from "../../components/ui/text-field";
 import { getEntryMode } from "../../entry-modes";
 
+const MAX_IMPORT_FILE_MB = 50;
+const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
+
 // Page chrome shared by every state.
 function Shell({ children }: { children: React.ReactNode }) {
 	return (
@@ -148,6 +151,12 @@ export function ImportShell() {
 		setError(null);
 		setBusy(true);
 		try {
+			if (file.size > MAX_IMPORT_FILE_BYTES) {
+				setError(
+					`This file is too large to import (${(file.size / 1024 / 1024).toFixed(1)} MB; max ${MAX_IMPORT_FILE_MB} MB).`,
+				);
+				return;
+			}
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());
 			const res = parseImport(p.id, raw);
 			if (res.imported.length === 0) {

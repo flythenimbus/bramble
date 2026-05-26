@@ -140,7 +140,11 @@ export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type"
 function normalizeEntryData(raw: Record<string, unknown>): EntryData {
 	const candidate = raw.type ? raw : { type: "login", ...raw };
 	if (!entryDataSchema.safeParse(candidate).success) {
-		console.error("[vault] decrypted entry has an unexpected shape:", candidate);
+		const type = typeof candidate?.type === "string" ? candidate.type : "<missing>";
+		const keys = Object.keys(candidate ?? {})
+			.sort()
+			.join(",");
+		console.error(`[vault] decrypted entry has an unexpected shape (type=${type}, keys=${keys})`);
 	}
 	return candidate as unknown as EntryData;
 }

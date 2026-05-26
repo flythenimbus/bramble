@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
-import { asBytes, type RawField, summarize, toCustomFields } from "./shared";
+import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
 const extraFieldSchema = z.object({
@@ -73,6 +73,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 	} catch {
 		throw new Error("Couldn't read this Proton Pass file — it may be corrupt.");
 	}
+	assertUnzipUnderCap(files);
 	const dataFile = Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1];
 	if (!dataFile) throw new Error(FORMAT_ERROR);
 

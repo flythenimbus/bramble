@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { masterPasswordRejectionMessage } from "../../../util/master-password-strength";
+import { MasterPasswordMeter } from "../../components/ui/master-password-meter";
 import { SelectField } from "../../components/ui/select-field";
 import { TextField } from "../../components/ui/text-field";
 
@@ -256,19 +258,21 @@ export function Settings({
 										required: "Enter your current password",
 									})}
 								/>
-								<TextField
-									label="New password"
-									type="password"
-									autoComplete="new-password"
-									error={errors.newPassword?.message}
-									{...register("newPassword", {
-										required: "Enter a new password",
-										minLength: {
-											value: 8,
-											message: "Must be at least 8 characters",
-										},
-									})}
-								/>
+								<div>
+									<TextField
+										label="New password"
+										type="password"
+										autoComplete="new-password"
+										error={errors.newPassword?.message}
+										{...register("newPassword", {
+											required: "Enter a new password",
+											// Same strength floor as vault setup (master-password-strength)
+											// so rotating to a weaker password isn't possible.
+											validate: masterPasswordRejectionMessage,
+										})}
+									/>
+									<MasterPasswordMeter value={newPasswordValue ?? ""} />
+								</div>
 								<TextField
 									label="Confirm new password"
 									type="password"

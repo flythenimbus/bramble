@@ -106,6 +106,7 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 			ignoreAttributes: false,
 			attributeNamePrefix: "@_",
 			parseTagValue: false,
+			processEntities: false,
 		}).parse(text);
 	} catch {
 		throw new Error(FORMAT_ERROR);

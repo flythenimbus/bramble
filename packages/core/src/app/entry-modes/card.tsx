@@ -36,12 +36,18 @@ function CardFields() {
 
 	return (
 		<>
-			<TextField label="Name" type="text" {...register("name")} />
-			<TextField label="Cardholder name" type="text" {...register("cardholderName")} />
+			<TextField label="Name" type="text" autoComplete="off" {...register("name")} />
+			<TextField
+				label="Cardholder name"
+				type="text"
+				autoComplete="off"
+				{...register("cardholderName")}
+			/>
 			<TextField
 				label="Card number"
 				type={showNumber ? "text" : "password"}
 				inputMode="numeric"
+				autoComplete="off"
 				className="font-mono"
 				endAdornment={
 					<button
@@ -61,6 +67,7 @@ function CardFields() {
 					label="Month (MM)"
 					type="text"
 					inputMode="numeric"
+					autoComplete="off"
 					maxLength={2}
 					{...register("expMonth")}
 				/>
@@ -68,6 +75,7 @@ function CardFields() {
 					label="Year (YY)"
 					type="text"
 					inputMode="numeric"
+					autoComplete="off"
 					maxLength={4}
 					{...register("expYear")}
 				/>
@@ -75,6 +83,7 @@ function CardFields() {
 					label="CVV"
 					type={showCvv ? "text" : "password"}
 					inputMode="numeric"
+					autoComplete="off"
 					maxLength={4}
 					endAdornment={
 						<button
