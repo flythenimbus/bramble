@@ -1,10 +1,13 @@
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { ThemeProvider } from "./hooks/useTheme";
-import { ImportShell } from "./screens/Import/ImportShell";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
+
+const ImportShell = lazy(() =>
+	import("./screens/Import/ImportShell").then((m) => ({ default: m.ImportShell })),
+);
 
 function SetupShell() {
 	const { shell } = usePlatform();
@@ -59,7 +62,15 @@ export default function OptionsApp() {
 	const screen = new URLSearchParams(window.location.search).get("screen");
 	return (
 		<ThemeProvider>
-			<VaultProvider>{screen === "import" ? <ImportShell /> : <SetupShell />}</VaultProvider>
+			<VaultProvider>
+				{screen === "import" ? (
+					<Suspense fallback={null}>
+						<ImportShell />
+					</Suspense>
+				) : (
+					<SetupShell />
+				)}
+			</VaultProvider>
 		</ThemeProvider>
 	);
 }
