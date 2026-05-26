@@ -21,6 +21,7 @@ export function SettingsRoute() {
 				clipboardClearSeconds={prefs.clipboardClearSeconds}
 				breachCheckEnabled={prefs.breachCheckEnabled}
 				totalEntries={entries.length}
+				version={shell.version}
 				onChangeAutoLock={(minutes) => void update("autoLockMinutes", minutes)}
 				onChangeClipboardSeconds={(seconds) => void update("clipboardClearSeconds", seconds)}
 				onToggleBreachCheck={(enabled) => void update("breachCheckEnabled", enabled)}
