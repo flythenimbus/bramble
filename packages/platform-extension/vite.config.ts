@@ -32,6 +32,7 @@ export default defineConfig({
 	build: {
 		outDir,
 		emptyOutDir: true,
+		chunkSizeWarningLimit: 600,
 		rollupOptions: {
 			input: {
 				popup: resolve(root, "popup.html"),
