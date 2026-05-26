@@ -244,9 +244,23 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
 
+	const readDecodedBlob = useCallback(async () => {
+		const tryDecode = async () => {
+			const bytes = await storage.readVaultBlob();
+			return { bytes, blob: decodeVaultBlob(bytes) };
+		};
+		try {
+			return await tryDecode();
+		} catch (firstError) {
+			const restored = await storage.restoreVaultFromBackup().catch(() => false);
+			if (!restored) throw firstError;
+			console.warn("[vault] live vault file failed to decode; restored from backup snapshot");
+			return tryDecode();
+		}
+	}, [storage]);
+
 	const loadEntries = useCallback(async () => {
-		const blobBytes = await storage.readVaultBlob();
-		const blob = decodeVaultBlob(blobBytes);
+		const { blob } = await readDecodedBlob();
 		if (blob.entriesCiphertext.length === 0) {
 			setEntries([]);
 			await autofill.setIndex([]);
@@ -271,7 +285,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		);
 		setEntries(decrypted);
 		await autofill.setIndex(toAutofillIndex(decrypted));
-	}, [storage, crypto, autofill]);
+	}, [readDecodedBlob, crypto, autofill]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -311,8 +325,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setError(null);
 			let slot: PasswordSlot | null;
 			try {
-				const blobBytes = await storage.readVaultBlob();
-				const blob = decodeVaultBlob(blobBytes);
+				const { blob } = await readDecodedBlob();
 				slot = findPasswordSlot(blob);
 			} catch (e) {
 				console.error("[vault] failed to read vault blob:", e);
@@ -332,7 +345,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await loadEntries();
 			setIsLocked(false);
 		},
-		[storage, crypto, loadEntries],
+		[readDecodedBlob, crypto, loadEntries],
 	);
 
 	const lock = useCallback(async () => {
@@ -406,8 +419,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const outerJson = JSON.stringify(encryptedEntries);
 			const { iv, ciphertext } = await crypto.encryptWithVek(outerJson);
 
-			const currentBytes = await storage.readVaultBlob();
-			const current = decodeVaultBlob(currentBytes);
+			const { blob: current } = await readDecodedBlob();
 			const newBlob: VaultBlob = {
 				slots: current.slots,
 				entriesIv: base64ToBytes(iv),
@@ -417,7 +429,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 			await autofill.setIndex(toAutofillIndex(nextEntries));
 		},
-		[crypto, storage, autofill],
+		[crypto, storage, autofill, readDecodedBlob],
 	);
 
 	const addEntry = useCallback(
@@ -463,8 +475,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	const verifyMasterPassword = useCallback(
 		async (password: string) => {
-			const blobBytes = await storage.readVaultBlob();
-			const blob = decodeVaultBlob(blobBytes);
+			const { blob } = await readDecodedBlob();
 			const slot = findPasswordSlot(blob);
 			if (!slot) return false;
 			return crypto.verifyPasswordSlot({
@@ -475,7 +486,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				magicVersion: verifierPrefix(),
 			});
 		},
-		[crypto, storage],
+		[crypto, readDecodedBlob],
 	);
 
 	// Full rotation on password change. The VEK itself is rotated, every
@@ -490,15 +501,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// silently dropping them.
 	//
 	// Caller (Settings) is responsible for verifying the current password
-	// before calling this. We hold the old VEK in JS memory and roll back if
-	// any step before the disk write fails, so a partial-rotation can't
-	// strand the user.
+	// before calling this. Atomicity from the user's perspective is enforced
+	// by reading the written blob back, decoding it, and *decrypting it under
+	// the new VEK* before reporting success. If any of those fail we restore
+	// the on-disk backup snapshot taken by `writeVaultBlob` and revert the
+	// in-memory VEK so the still-on-disk vault is openable under the OLD
+	// password — i.e. the rotation never half-applied.
 	const changeMasterPassword = useCallback(
 		async (newPassword: string) => {
 			setError(null);
 
-			const blobBytes = await storage.readVaultBlob();
-			const blob = decodeVaultBlob(blobBytes);
+			const { blob } = await readDecodedBlob();
 			const existing = findPasswordSlot(blob);
 			if (!existing) throw new Error("vault has no password slot to rotate");
 			if (blob.slots.length !== 1) {
@@ -508,6 +521,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			}
 
 			const oldVekB64 = await crypto.exportVek();
+			let didWrite = false;
 			try {
 				// 1. Rotate the VEK. From here on every encrypt uses the new key;
 				//    every decrypt against old ciphertext will fail.
@@ -555,20 +569,56 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					entriesIv: base64ToBytes(outerIv),
 					entriesCiphertext: base64ToBytes(outerCt),
 				};
+				// 4. Persist. `writeVaultBlob` snapshots the previous bytes to
+				//    a backup key first, so steps 5/6 can roll back to the old
+				//    vault if anything is wrong with what we just wrote.
 				await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+				didWrite = true;
 
-				// 4. Refresh the in-memory autofill index so the background SW
+				// 5. Verify the persisted bytes decode cleanly.
+				const writtenBytes = await storage.readVaultBlob();
+				const writtenBlob = decodeVaultBlob(writtenBytes);
+
+				// 6. Verify the persisted bytes decrypt under the newly-loaded
+				//    VEK. A non-empty entries blob is the strongest signal;
+				//    for an empty vault, attempt to unwrap the new slot under
+				//    the new password as the equivalent end-to-end check.
+				if (writtenBlob.entriesCiphertext.length > 0) {
+					await crypto.decryptWithVek(
+						bytesToBase64(writtenBlob.entriesIv),
+						bytesToBase64(writtenBlob.entriesCiphertext),
+					);
+				} else {
+					const writtenSlot = findPasswordSlot(writtenBlob);
+					if (!writtenSlot) throw new Error("rotated blob has no password slot");
+					const ok = await crypto.verifyPasswordSlot({
+						password: newPassword,
+						saltB64: bytesToBase64(writtenSlot.salt),
+						slotIdB64: bytesToBase64(writtenSlot.slotId),
+						verifierB64: bytesToBase64(writtenSlot.verifier),
+						magicVersion: verifierPrefix(),
+					});
+					if (!ok) throw new Error("rotated blob slot fails new-password verify");
+				}
+
+				// 7. Refresh the in-memory autofill index so the background SW
 				//    keeps serving credentials without a relock.
 				await autofill.setIndex(toAutofillIndex(entries));
 			} catch (e) {
-				// Restore the previous VEK so the still-on-disk vault is
-				// readable again. Without this the user would have to relock
-				// and re-enter their current password to recover.
+				// If the write completed but verification failed, the on-disk
+				// blob is the new-but-broken one. Roll the file back to the
+				// backup snapshot taken inside writeVaultBlob, then restore
+				// the previous VEK so the recovered file is openable under
+				// the OLD password. The user sees "rotation failed; try
+				// again" — never an unreadable vault.
+				if (didWrite) {
+					await storage.restoreVaultFromBackup().catch(() => false);
+				}
 				await crypto.unlockWithVek(oldVekB64);
 				throw e;
 			}
 		},
-		[crypto, storage, autofill, entries],
+		[crypto, storage, autofill, entries, readDecodedBlob],
 	);
 
 	const value = useMemo<UseVault>(

@@ -2,6 +2,7 @@
 import type { StorageAdapter } from "@core/adapters/storage";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
+const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
 const IDB_NAME = "vault-storage";
 const IDB_STORE = "handles";
 const HANDLE_KEY = "vault-file";
@@ -72,6 +73,36 @@ async function hasLocalVault(): Promise<boolean> {
 	return typeof result[VAULT_BLOB_KEY] === "string";
 }
 
+async function readExistingBlobBytes(
+	handle: FileSystemFileHandle | null,
+): Promise<Uint8Array | null> {
+	try {
+		if (handle) {
+			const file = await handle.getFile();
+			if (file.size === 0) return null;
+			return new Uint8Array(await file.arrayBuffer());
+		}
+		const r = await chrome.storage.local.get(VAULT_BLOB_KEY);
+		const b64 = r[VAULT_BLOB_KEY];
+		if (typeof b64 !== "string" || b64.length === 0) return null;
+		return base64ToBytes(b64);
+	} catch {
+		return null;
+	}
+}
+
+async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise<void> {
+	const existing = await readExistingBlobBytes(handle);
+	try {
+		if (existing === null) {
+			await chrome.storage.local.remove(VAULT_BLOB_BACKUP_KEY);
+			return;
+		}
+		await chrome.storage.local.set({ [VAULT_BLOB_BACKUP_KEY]: bytesToBase64(existing) });
+	} catch {
+	}
+}
+
 const VAULT_FILE_TYPES = [
 	{ description: "PassGuard vault", accept: { "application/octet-stream": [".db"] } },
 ];
@@ -115,6 +146,7 @@ export const extensionStorage: StorageAdapter = {
 
 	async writeVaultBlob(blob) {
 		const handle = await getHandle();
+		await snapshotCurrentBlob(handle);
 		if (handle) {
 			await ensurePermission(handle);
 			const writable = await handle.createWritable();
@@ -123,6 +155,23 @@ export const extensionStorage: StorageAdapter = {
 			return;
 		}
 		await chrome.storage.local.set({ [VAULT_BLOB_KEY]: bytesToBase64(blob) });
+	},
+
+	async restoreVaultFromBackup() {
+		const r = await chrome.storage.local.get(VAULT_BLOB_BACKUP_KEY);
+		const b64 = r[VAULT_BLOB_BACKUP_KEY];
+		if (typeof b64 !== "string" || b64.length === 0) return false;
+		const bytes = base64ToBytes(b64);
+		const handle = await getHandle();
+		if (handle) {
+			await ensurePermission(handle);
+			const writable = await handle.createWritable();
+			await writable.write(bytes as BufferSource);
+			await writable.close();
+		} else {
+			await chrome.storage.local.set({ [VAULT_BLOB_KEY]: b64 });
+		}
+		return true;
 	},
 
 	async getMeta(key) {
