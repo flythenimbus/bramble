@@ -2,6 +2,7 @@ import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { SshKeyEntry, SshKeyEntryData } from "../../hooks/useVault";
+import { deriveKeyType } from "../../util/ssh";
 import { SecretArea } from "../components/ui/secret-area";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -14,21 +15,6 @@ export interface SshKeyFormValues {
 	privateKey: string;
 	passphrase: string;
 	notes: string;
-}
-
-// Best-effort key algorithm from the public key's type token, falling back to
-// the private key's PEM header. Display-only — never used for crypto.
-function deriveKeyType(publicKey: string, privateKey: string): string | undefined {
-	const token = publicKey.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-	if (token.includes("ed25519")) return "ed25519";
-	if (token === "ssh-rsa") return "rsa";
-	if (token.startsWith("ecdsa-sha2") || token.startsWith("sk-ecdsa")) return "ecdsa";
-	if (token === "ssh-dss") return "dsa";
-	if (/BEGIN OPENSSH PRIVATE KEY/.test(privateKey)) return "openssh";
-	if (/BEGIN RSA PRIVATE KEY/.test(privateKey)) return "rsa";
-	if (/BEGIN EC PRIVATE KEY/.test(privateKey)) return "ecdsa";
-	if (/BEGIN DSA PRIVATE KEY/.test(privateKey)) return "dsa";
-	return undefined;
 }
 
 function SshKeyFields() {
