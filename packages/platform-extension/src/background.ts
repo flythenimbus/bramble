@@ -12,13 +12,11 @@ import jsQR from "jsqr";
 import { getDomain } from "tldts";
 
 //
-//   chrome.storage.session — VEK + decrypted index. In-memory, wiped
-//     on browser restart. Survives SW restart and offscreen restart.
 
 const OFFSCREEN_URL = "offscreen.html";
 
 const VEK_KEY = "vault.vek";
-const AUTOFILL_INDEX_KEY = "autofill.index";
+const LEGACY_AUTOFILL_INDEX_KEY = "autofill.index";
 const HOSTNAMES_KEY = "autofill.knownHostnames";
 const CLIPBOARD_EXPECTED_KEY = "clipboard.expectedHash";
 const POPOUT_HANDOFF_KEY = "popout.handoff";
@@ -41,18 +39,14 @@ let offscreenHasKey = false;
 const hydrationPromise = (async () => {
 	try {
 		const [sessionResult, localResult] = await Promise.all([
-			chrome.storage.session.get([VEK_KEY, AUTOFILL_INDEX_KEY]),
+			chrome.storage.session.get([VEK_KEY]),
 			chrome.storage.local.get([HOSTNAMES_KEY]),
 		]);
 		const cached = sessionResult[VEK_KEY];
 		if (typeof cached === "string") cachedVek = cached;
-		const cachedIndex = sessionResult[AUTOFILL_INDEX_KEY];
-		if (Array.isArray(cachedIndex)) {
-			autofillIndex = new Map();
-			for (const entry of cachedIndex) autofillIndex.set(entry.id, entry);
-		}
 		const hostnames = localResult[HOSTNAMES_KEY];
 		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
+		await chrome.storage.session.remove([LEGACY_AUTOFILL_INDEX_KEY]).catch(() => {});
 	} catch (e) {
 		console.warn("[titanpass:bg] hydration failed", e);
 	}
@@ -149,17 +143,11 @@ async function persistVek(): Promise<void> {
 	}
 }
 
-async function persistAutofillIndex(): Promise<void> {
-	if (!autofillIndex) return;
+async function persistKnownHostnames(): Promise<void> {
 	try {
-		await Promise.all([
-			chrome.storage.session.set({
-				[AUTOFILL_INDEX_KEY]: Array.from(autofillIndex.values()),
-			}),
-			chrome.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) }),
-		]);
+		await chrome.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) });
 	} catch (e) {
-		console.warn("[titanpass:bg] persistAutofillIndex failed", e);
+		console.warn("[titanpass:bg] persistKnownHostnames failed", e);
 	}
 }
 
@@ -168,7 +156,7 @@ async function clearSession(): Promise<void> {
 	autofillIndex = null;
 	offscreenHasKey = false;
 	try {
-		await chrome.storage.session.remove([VEK_KEY, AUTOFILL_INDEX_KEY, POPOUT_HANDOFF_KEY]);
+		await chrome.storage.session.remove([VEK_KEY, POPOUT_HANDOFF_KEY]);
 	} catch {}
 	void chrome.alarms.clear(AUTOLOCK_ALARM);
 }
@@ -384,7 +372,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				// Only logins carry a hostname for the locked-state hint registry.
 				if (entry.type === "login") knownHostnames.add(entry.hostname);
 			}
-			await persistAutofillIndex();
+			await persistKnownHostnames();
 			await scheduleAutoLock();
 			sendResponse({ ok: true, data: null });
 		})();
@@ -395,9 +383,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			autofillIndex = null;
-			try {
-				await chrome.storage.session.remove([AUTOFILL_INDEX_KEY]);
-			} catch {}
 			sendResponse({ ok: true, data: null });
 		})();
 		return true;
