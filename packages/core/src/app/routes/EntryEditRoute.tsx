@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePrefs } from "../../hooks/usePrefs";
 import { type EntryData, useVault } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
@@ -10,18 +10,12 @@ import { EntryForm, type EntryFormDraft } from "../screens/CreateEntry/EntryForm
 export function EntryEditRoute() {
 	const navigate = useNavigate();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId/edit" });
-	const { entries, updateEntry, ready } = useVault();
+	const { entries, updateEntry } = useVault();
 	const { prefs } = usePrefs();
 	const { registerDraftGetter, takeInitialDraft } = usePopOut();
 	const [draft] = useState(() => takeInitialDraft() as EntryFormDraft | undefined);
 	const entry = entries.find((e) => e.id === entryId);
 
-	// Only bail once the vault has finished hydrating — a detached window can
-	// boot straight onto this route before `entries` has loaded, and we don't
-	// want to bounce off the restored route in that window.
-	useEffect(() => {
-		if (ready && !entry) navigate({ to: "/vault" });
-	}, [ready, entry, navigate]);
 
 	if (!entry) return null;
 

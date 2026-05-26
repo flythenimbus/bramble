@@ -63,7 +63,7 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 			)}
 
 			<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-				<div className="px-5 py-4 space-y-3">
+				<div className="p-4 space-y-3">
 					<div className="flex items-center gap-3">
 						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
 							{initials ? (
@@ -85,7 +85,7 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 					)}
 				</div>
 
-				<div className="px-5 py-3 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
+				<div className="p-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
 					{confirmDelete ? (
 						<>
 							<p className="flex-1 text-xs text-destructive">Delete this entry permanently?</p>

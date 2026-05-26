@@ -1,21 +1,16 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { usePopOut } from "../hooks/usePopOut";
 import { Auth } from "../screens/Auth/Auth";
 
 export function AuthRoute() {
-	const navigate = useNavigate();
 	const { shell } = usePlatform();
 	const { popOut, canPopOut } = usePopOut();
-	const { hasVault, isLocked, unlock } = useVault();
+	const { hasVault, unlock } = useVault();
 
-	// If we land on auth but the vault is already unlocked (e.g. popup reopen
-	// while offscreen still holds the master key), skip straight to /vault.
-	useEffect(() => {
-		if (!isLocked) navigate({ to: "/vault" });
-	}, [isLocked, navigate]);
+	// The "already unlocked → skip to /vault" redirect lives in this route's
+	// beforeLoad (app/router.tsx); the router redirects before this component
+	// renders, so there's no eager-navigate render race to work around here.
 
 	return (
 		<Auth

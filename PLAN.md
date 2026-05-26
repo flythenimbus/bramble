@@ -730,19 +730,39 @@ browser extension can't act as an ssh-agent — and use a masked multi-line
 `SecretArea` primitive for the private key; key type is derived from the public
 key on save.
 
-`AuthRoute` watches `isLocked` and navigates to `/vault` via a `useEffect`
-when it flips to `false`. Navigation is **not** explicit in the unlock
-callback — that caused a render-order race where `VaultHomeRoute` would mount
-before React applied the state update, see stale `isLocked: true`, and bounce
-back to `/`.
+**Route guards run in the router, not in component bodies.** The root is a
+`createRootRouteWithContext<{ vault }>()` whose `vault` slice (`isLocked`,
+`ready`, `entries`) is injected from React via `<RouterProvider context>` in
+`App.tsx` (`InnerApp`, inside `VaultProvider`). Because changing that prop only
+affects *future* navigations, `InnerApp` also calls `router.invalidate()`
+whenever the slice changes, which re-runs the active routes' `beforeLoad` guards
+against the new state. Each guard `throw redirect(...)`:
 
-The mirror case — `isLocked` flipping to `true` while inside the app (header
-"Lock" button, Settings' "Lock now") — is handled once in `AppLayout` (the
-`_app` layout), which redirects to `/` for every authed route. It is gated on
-`useVault().ready` so a popped-out window restoring a deep route isn't
-redirected during the pre-hydration window where `isLocked` still holds its
-default `true`. Individual routes therefore carry no locked-state guard of
-their own.
+- `authRoute` (`/`): unlocked → `/vault`. This runs inside the navigation
+  pipeline, so it cleanly replaces the old unlock-callback `useEffect` whose
+  eager navigate raced `VaultHomeRoute` mounting on stale `isLocked: true`.
+- `_app` layout: `ready && isLocked` → `/`. Covers every authed route at once —
+  a lock from anywhere (header button, Settings, background auto-lock) flips
+  `isLocked`, the invalidate re-runs this, and we bounce to the unlock screen.
+- `entryDetail` / `entryEdit`: `ready && !entries.find(id)` → `/vault` (stale or
+  deleted id).
+
+The `ready` gate on `_app`/entry guards keeps a popped-out window restoring a
+deep route from bouncing during pre-hydration (where `isLocked` still holds its
+default `true`). `authRoute` is **deliberately not** `ready`-gated: it keys off
+`!isLocked` while `_app` keys off `ready && isLocked`, and that asymmetry stops
+the two guards from looping in the brief `(isLocked=false, ready=false)` window
+where hydration flips `isLocked` before `ready`. Parent-before-child guard
+ordering means an auto-lock that also empties `entries` lands on `/` (the `_app`
+guard) rather than `/vault` (an entry guard). Guards are covered headlessly in
+`app/router.guards.test.ts`. The header's "Back" button is contextual: it calls
+`router.history.back()` to return wherever the user actually came from (so
+opening Edit from the vault list goes back to the list, not the detail view).
+Routes still declare `staticData.back` (`{ to, paramKeys? }`), but it's only the
+*fallback* target used when `router.history.canGoBack()` is false — a popped-out
+window that booted straight onto a deep route has a single memory-history entry.
+The button shows only on routes that declare a back target (the vault home has
+none).
 
 `OptionsApp.tsx` is a separate React tree mounted by the options page; it
 renders the `VaultSetup` flow directly without the router because file
@@ -777,10 +797,11 @@ the originating popup hands over `{ path, draft }`:
   mounts first because the history is seeded with that path — claims the
   draft once via `takeInitialDraft()` and seeds the form with it.
 - `useVault.ready` flips true only after mount-time hydration finishes.
-  Routes that redirect on a missing entry (`EntryDetail`, `EntryEdit`) gate
-  on it so a detached window booting straight onto `/vault/$id[/edit]`
-  doesn't bounce to `/vault` before `entries` has loaded. The handoff is
-  also dropped on lock, alongside the VEK.
+  The `beforeLoad` guards that redirect on a missing entry (`entryDetail`,
+  `entryEdit`) gate on it so a detached window booting straight onto
+  `/vault/$id[/edit]` doesn't bounce to `/vault` before `entries` has loaded
+  (and so the popped-out form's restored draft isn't discarded by an early
+  redirect). The handoff is also dropped on lock, alongside the VEK.
 
 The content script's "vault locked" hint pops out with no handoff, so it
 lands on `/` (the unlock screen), unchanged.
