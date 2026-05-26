@@ -6,7 +6,7 @@ export const PREF_BREACH_CHECK = "pref.breachCheckEnabled";
 export const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
-export const DEFAULT_BREACH_CHECK = true;
+export const DEFAULT_BREACH_CHECK = false;
 export const DEFAULT_CLIPBOARD_SECONDS = 30;
 
 export interface Prefs {
