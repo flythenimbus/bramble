@@ -580,6 +580,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 	}
 });
 
+chrome.commands?.onCommand.addListener((command) => {
+	if (command !== "lock-vault") return;
+	void (async () => {
+		await clearSession();
+		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
+	})();
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
 	if (changes[PREF_AUTOLOCK_MINUTES] && cachedVek !== null) {
