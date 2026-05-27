@@ -16,11 +16,20 @@ jobs:
         with:
           bun-version: latest
 
+      # Reads rust-toolchain.toml automatically — single source of truth for
+      # the pinned toolchain version, components (rustfmt, clippy), and the
+      # wasm32-unknown-unknown target. Replaces `dtolnay/rust-toolchain@stable`,
+      # which silently installed whatever the latest stable was instead of
+      # honouring the toolchain file → broke CI reproducibility on any local
+      # change that depended on a 1.95-specific behaviour.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      # TODO: pin to a specific wasm-pack version (e.g. via
+      # jetli/wasm-pack-action with `version:`) once we settle on one. Cargo's
+      # default install still picks the latest semver-compatible release each
+      # run; not a behavioural risk today (wasm:verify catches contract drift)
+      # but worth tightening if we ever want byte-for-byte reproducibility.
       - name: Install wasm-pack
         run: cargo install wasm-pack
 
@@ -29,6 +38,14 @@ jobs:
 
       - name: Build WASM
         run: bun run wasm:build
+
+      # Behavioural reproducibility gate: exercises the full WASM crypto
+      # surface (slot wrap/unwrap, encrypt/decrypt roundtrip, lock/unlock,
+      # VEK rotation) against the freshly-built bytes. A toolchain or code
+      # change that silently broke a contract fails the build here, before
+      # the rest of the suite ever runs.
+      - name: Verify WASM
+        run: bun run wasm:verify
 
       - name: Typecheck
         run: bun run typecheck
