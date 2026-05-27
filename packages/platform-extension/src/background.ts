@@ -588,6 +588,15 @@ chrome.commands?.onCommand.addListener((command) => {
 	})();
 });
 
+chrome.idle?.onStateChanged.addListener((state) => {
+	if (state !== "locked") return;
+	if (cachedVek === null) return;
+	void (async () => {
+		await clearSession();
+		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
+	})();
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
 	if (changes[PREF_AUTOLOCK_MINUTES] && cachedVek !== null) {
