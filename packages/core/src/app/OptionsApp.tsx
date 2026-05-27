@@ -26,7 +26,7 @@ function SetupShell() {
 					</div>
 					<h1 className="text-2xl mb-2">{done === "created" ? "Vault ready" : "Vault unlocked"}</h1>
 					<p className="text-sm text-muted-foreground">
-						You can close this tab and use the PassGuard popup.
+						You can close this tab and use the {shell.appName} popup.
 					</p>
 				</div>
 			</div>

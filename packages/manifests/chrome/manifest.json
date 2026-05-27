@@ -1,12 +1,12 @@
 {
 	"manifest_version": 3,
-	"name": "Vault",
+	"name": "Titanpass",
 	"version": "0.0.1",
 	"description": "Local-first, encrypted password manager. No server, no sync service.",
 	"minimum_chrome_version": "116",
 	"action": {
 		"default_popup": "popup.html",
-		"default_title": "Vault"
+		"default_title": "Titanpass"
 	},
 	"options_page": "options.html",
 	"background": {

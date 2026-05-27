@@ -5,6 +5,10 @@ import { TextField } from "../../components/ui/text-field";
 
 interface AuthProps {
 	hasVault: boolean;
+	// Brand to show in the "New to ___?" onboarding divider. Sourced from
+	// the host extension's manifest via `shell.appName` so a rebrand only
+	// touches `manifest.json`.
+	appName: string;
 	onUnlock: (password: string) => Promise<void>;
 	onOpenSetup: () => Promise<void>;
 	onPopOut?: () => void;
@@ -14,7 +18,7 @@ interface FormValues {
 	masterPassword: string;
 }
 
-export function Auth({ hasVault, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
+export function Auth({ hasVault, appName, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
 	const [showPassword, setShowPassword] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const {
@@ -107,7 +111,7 @@ export function Auth({ hasVault, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
 					<div className="mt-6 text-center space-y-3">
 						<div className="flex items-center gap-4 text-xs text-muted-foreground">
 							<div className="flex-1 h-px bg-border/50"></div>
-							<span>New to PassGuard?</span>
+							<span>New to {appName}?</span>
 							<div className="flex-1 h-px bg-border/50"></div>
 						</div>
 

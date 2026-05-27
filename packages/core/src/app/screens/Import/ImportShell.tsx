@@ -1,5 +1,6 @@
 import { ArrowLeft, Check, Database, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useState } from "react";
+import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import {
 	IMPORT_PROVIDERS,
@@ -91,6 +92,7 @@ function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<void> }) {
 
 export function ImportShell() {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
+	const { shell } = usePlatform();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
 	const [result, setResult] = useState<ImportResult | null>(null);
 	const [imported, setImported] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export function ImportShell() {
 				<Header subtitle="You need a vault before you can import into it" />
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 text-center space-y-4">
 					<p className="text-sm text-muted-foreground">
-						Set up your PassGuard vault first, then come back to import.
+						Set up your {shell.appName} vault first, then come back to import.
 					</p>
 					<button
 						type="button"

@@ -15,6 +15,7 @@ export function AuthRoute() {
 	return (
 		<Auth
 			hasVault={hasVault}
+			appName={shell.appName}
 			onUnlock={unlock}
 			onOpenSetup={() => shell.openSetup()}
 			onPopOut={canPopOut ? popOut : undefined}
