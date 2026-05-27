@@ -17,6 +17,7 @@
 		"storage",
 		"unlimitedStorage",
 		"alarms",
+		"idle",
 		"offscreen",
 		"clipboardWrite",
 		"activeTab"
