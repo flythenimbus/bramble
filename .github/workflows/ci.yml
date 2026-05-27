@@ -25,13 +25,26 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      # TODO: pin to a specific wasm-pack version (e.g. via
-      # jetli/wasm-pack-action with `version:`) once we settle on one. Cargo's
-      # default install still picks the latest semver-compatible release each
-      # run; not a behavioural risk today (wasm:verify catches contract drift)
-      # but worth tightening if we ever want byte-for-byte reproducibility.
+      # Caches ~/.cargo/registry, ~/.cargo/git, and the named workspaces'
+      # target/ directories keyed off Cargo.lock + rustc version. Cold cache
+      # cost is one extra step; warm cache shaves several minutes off the
+      # WASM build by avoiding recompilation of unchanged deps. The cache key
+      # automatically busts when Cargo.lock or the toolchain version changes,
+      # so it can't serve a stale build that masks a real regression.
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/crypto-wasm
+
+      # Downloads a precompiled wasm-pack binary instead of `cargo install`-
+      # ing it from source (the latter recompiled wasm-pack + every transitive
+      # crate each run, ~2 minutes wasted). Version pin is what makes the
+      # WASM toolchain fully reproducible alongside the Rust pin above —
+      # bump deliberately, never accidentally. Latest stable as of writing.
       - name: Install wasm-pack
-        run: cargo install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'v0.13.1'
 
       - name: Install JS deps
         run: bun install
