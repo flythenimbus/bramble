@@ -8,6 +8,7 @@ import {
 	Shield,
 	Sun,
 } from "lucide-react";
+import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { usePopOut } from "../hooks/usePopOut";
 import { useTheme } from "../hooks/useTheme";
@@ -18,6 +19,7 @@ export function AppLayout() {
 	const { darkMode, toggleTheme } = useTheme();
 	const { lock } = useVault();
 	const { popOut, canPopOut } = usePopOut();
+	const { shell } = usePlatform();
 
 	const matches = useMatches();
 	const params = useParams({ strict: false }) as Record<string, string>;
@@ -62,7 +64,7 @@ export function AppLayout() {
 									<Shield className="w-4.5 h-4.5 text-primary-foreground" />
 								</div>
 								<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-									PassGuard
+									{shell.appName}
 								</h1>
 							</button>
 						</div>

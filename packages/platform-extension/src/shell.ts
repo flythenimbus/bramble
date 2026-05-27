@@ -3,11 +3,11 @@ import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/
 
 const DETACHED_FLAG = "detached";
 
+const manifest = chrome.runtime.getManifest();
+
 export const extensionShell: ShellAdapter = {
-	// chrome.runtime.getManifest is synchronous and available in every
-	// extension context (popup, options, offscreen), so we resolve once at
-	// module load.
-	version: chrome.runtime.getManifest().version,
+	appName: manifest.name,
+	version: manifest.version,
 	async openSetup(screen?: OptionsScreen) {
 		if (screen) {
 			await chrome.tabs.create({ url: chrome.runtime.getURL(`options.html?screen=${screen}`) });

@@ -6,6 +6,7 @@ export interface PopOutHandoff {
 export type OptionsScreen = "import";
 
 export interface ShellAdapter {
+	appName: string;
 	version: string;
 	openSetup(screen?: OptionsScreen): Promise<void>;
 	hasFilePicker(): boolean;

@@ -104,7 +104,10 @@ async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise
 }
 
 const VAULT_FILE_TYPES = [
-	{ description: "PassGuard vault", accept: { "application/octet-stream": [".db"] } },
+	{
+		description: `${chrome.runtime.getManifest().name} vault`,
+		accept: { "application/octet-stream": [".db"] },
+	},
 ];
 
 export const extensionStorage: StorageAdapter = {
