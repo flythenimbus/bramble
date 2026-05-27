@@ -90,7 +90,7 @@ function mapEntry(entry: XmlEntry): EntryData {
 		type: "login",
 		name,
 		notes: notes || undefined,
-		url,
+		urls: url ? [url] : [],
 		username,
 		password,
 		totp: totp || undefined,

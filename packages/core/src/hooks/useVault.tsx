@@ -40,9 +40,10 @@ interface BaseEntryData {
 	customFields?: CustomField[];
 }
 
+//
 export interface LoginEntryData extends BaseEntryData {
 	type: "login";
-	url: string;
+	urls: string[];
 	username: string;
 	password: string;
 	totp?: string;
@@ -106,7 +107,7 @@ export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type"
 	z.object({
 		...baseEntryFields,
 		type: z.literal("login"),
-		url: z.string(),
+		urls: z.array(z.string()),
 		username: z.string(),
 		password: z.string(),
 		totp: z.string().optional(),
@@ -136,9 +137,13 @@ export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type"
 	}),
 ]);
 
-// them as logins so old vaults decrypt unchanged.
 function normalizeEntryData(raw: Record<string, unknown>): EntryData {
-	const candidate = raw.type ? raw : { type: "login", ...raw };
+	const candidate: Record<string, unknown> = raw.type ? { ...raw } : { type: "login", ...raw };
+	if (candidate.type === "login" && !Array.isArray(candidate.urls)) {
+		const legacy = typeof candidate.url === "string" ? candidate.url : "";
+		candidate.urls = legacy ? [legacy] : [];
+		delete candidate.url;
+	}
 	if (!entryDataSchema.safeParse(candidate).success) {
 		const type = typeof candidate?.type === "string" ? candidate.type : "<missing>";
 		const keys = Object.keys(candidate ?? {})
@@ -197,10 +202,11 @@ function autofillCustomFields(fields: CustomField[] | undefined) {
 }
 
 function loginIndexEntry(entry: LoginEntry): IndexEntry {
+	const hostnames = entry.urls.map(extractHostname).filter((h): h is string => h.length > 0);
 	return {
 		type: "login",
 		id: entry.id,
-		hostname: extractHostname(entry.url),
+		hostnames,
 		name: entry.name,
 		username: entry.username,
 		password: entry.password,

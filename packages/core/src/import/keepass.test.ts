@@ -34,7 +34,7 @@ describe("parseKeePass", () => {
 			name: "GitHub",
 			username: "octo",
 			password: "pw",
-			url: "https://github.com",
+			urls: ["https://github.com"],
 			notes: "note",
 			totp: "otpauth://t",
 		});

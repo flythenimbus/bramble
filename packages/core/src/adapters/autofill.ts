@@ -13,10 +13,11 @@ export interface MatchSummary {
 	autoSubmit?: boolean;
 }
 
+//
 export interface LoginIndexEntry {
 	type: "login";
 	id: string;
-	hostname: string;
+	hostnames: string[];
 	name: string;
 	username: string;
 	password: string;

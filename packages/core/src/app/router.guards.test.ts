@@ -9,7 +9,7 @@ const login = (id: string): Entry => ({
 	id,
 	type: "login",
 	name: id,
-	url: "",
+	urls: [],
 	username: "",
 	password: "",
 });

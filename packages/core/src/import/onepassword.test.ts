@@ -62,7 +62,7 @@ describe("parseOnePassword", () => {
 
 		expect(res.imported[0]).toMatchObject({
 			type: "login",
-			url: "https://github.com",
+			urls: ["https://github.com"],
 			username: "octo",
 			password: "pw",
 			totp: "otpauth://t",

@@ -9,12 +9,13 @@ import {
 	EyeOff,
 	Globe,
 	Loader2,
+	Plus,
 	RefreshCw,
 	Sparkles,
 	X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useFormContext } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
 import { usePlatform } from "../../context/PlatformContext";
 import type { LoginEntry, LoginEntryData } from "../../hooks/useVault";
@@ -25,9 +26,10 @@ import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryFieldsProps, EntryMode } from "./types";
 
+//
 export interface LoginFormValues {
 	name: string;
-	url: string;
+	urls: { value: string }[];
 	username: string;
 	password: string;
 	totp: string;
@@ -55,12 +57,14 @@ function randomPassword(): string {
 }
 
 function LoginFields({ initialBreach }: EntryFieldsProps) {
-	const { register, watch, setValue, getValues } = useFormContext<LoginFormValues>();
+	const { register, control, watch, setValue, getValues } = useFormContext<LoginFormValues>();
 	const { shell } = usePlatform();
 	const [showPassword, setShowPassword] = useState(false);
-	// "" is a meaningful url (the user cleared the field), so seed visibility
-	// from the actual default rather than truthiness alone.
-	const [hasWebsite, setHasWebsite] = useState(getValues("url") !== "");
+	const {
+		fields: urlFields,
+		append: appendUrl,
+		remove: removeUrl,
+	} = useFieldArray({ control, name: "urls" });
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [totpScan, setTotpScan] = useState<"idle" | "scanning" | "error">("idle");
 	const [showTotp, setShowTotp] = useState(false);
@@ -101,37 +105,48 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		<>
 			<TextField label="Name" type="text" {...register("name")} />
 
-			{hasWebsite ? (
-				<div className="space-y-1">
-					<TextField
-						label="Website URL"
-						type="url"
-						endAdornment={
-							<button
-								type="button"
-								onClick={() => {
-									setHasWebsite(false);
-									setValue("url", "");
-								}}
-								className="p-1.5 rounded-md border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all"
-								aria-label="Remove website URL"
-							>
-								<X className="w-3.5 h-3.5" />
-							</button>
-						}
-						{...register("url")}
-					/>
+			<div>
+				<div className="flex items-center justify-between mb-2">
+					<span className="block text-sm">Websites</span>
+					<button
+						type="button"
+						onClick={() => appendUrl({ value: "" })}
+						className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+					>
+						<Plus className="w-3 h-3" />
+						Add URL
+					</button>
 				</div>
-			) : (
-				<button
-					type="button"
-					onClick={() => setHasWebsite(true)}
-					className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-border/50 text-muted-foreground hover:bg-primary/5 hover:border-primary/50 hover:text-foreground active:scale-[0.98] transition-all"
-				>
-					<Globe className="w-3.5 h-3.5" />
-					Add website URL
-				</button>
-			)}
+
+				{urlFields.length > 0 ? (
+					<div className="space-y-2">
+						{urlFields.map((field, index) => (
+							<div key={field.id} className="flex gap-2 items-start">
+								<div className="flex-1">
+									<TextField
+										label="Website URL"
+										type="url"
+										autoComplete="off"
+										{...register(`urls.${index}.value`)}
+									/>
+								</div>
+								<button
+									type="button"
+									onClick={() => removeUrl(index)}
+									className="mt-2 p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
+									aria-label="Remove URL"
+								>
+									<X className="w-4 h-4" />
+								</button>
+							</div>
+						))}
+					</div>
+				) : (
+					<p className="text-xs text-muted-foreground">
+						Add the websites this login covers. Leave empty for a credential not tied to a site.
+					</p>
+				)}
+			</div>
 
 			<TextField
 				label="Username or email"
@@ -430,14 +445,24 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 	return (
 		<>
-			{login.url && (
-				<DetailField label="Website" copied={copied} onCopy={() => copy("website", login.url)}>
-					<div className="flex items-center gap-2 text-sm">
-						<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-						<span className="truncate">{login.url}</span>
-					</div>
-				</DetailField>
-			)}
+			{login.urls.map((url, i) => {
+				const copyName = login.urls.length === 1 ? "website" : `website-${i}`;
+				return (
+					<DetailField
+						// biome-ignore lint/suspicious/noArrayIndexKey: index needed to disambiguate accidentally-duplicate URLs
+						key={`${url}-${i}`}
+						label="Website"
+						copied={copied}
+						copyName={copyName}
+						onCopy={() => copy(copyName, url)}
+					>
+						<div className="flex items-center gap-2 text-sm">
+							<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+							<span className="truncate">{url}</span>
+						</div>
+					</DetailField>
+				);
+			})}
 
 			<DetailField
 				label="Username"
@@ -489,7 +514,7 @@ export const loginMode: EntryMode = {
 
 	emptyForm: ({ defaultUrl }) => ({
 		name: "",
-		url: defaultUrl ?? "",
+		urls: defaultUrl ? [{ value: defaultUrl }] : [],
 		username: "",
 		password: "",
 		totp: "",
@@ -504,7 +529,7 @@ export const loginMode: EntryMode = {
 		const login = entry as LoginEntryData;
 		return {
 			name: login.name,
-			url: login.url,
+			urls: login.urls.map((value) => ({ value })),
 			username: login.username,
 			password: login.password,
 			totp: login.totp ?? "",
@@ -517,10 +542,11 @@ export const loginMode: EntryMode = {
 
 	toEntry: (values) => {
 		const v = values as LoginFormValues;
+		const urls = v.urls.map((u) => u.value.trim()).filter((u) => u.length > 0);
 		return {
 			type: "login",
 			name: v.name,
-			url: v.url,
+			urls,
 			username: v.username,
 			password: v.password,
 			totp: v.totp.trim() || undefined,
@@ -534,7 +560,7 @@ export const loginMode: EntryMode = {
 	Fields: LoginFields,
 	Detail: LoginDetail,
 
-	detailSubtitle: (entry) => (entry as LoginEntry).url || undefined,
+	detailSubtitle: (entry) => (entry as LoginEntry).urls[0] || undefined,
 
 	detailAlert: (entry) =>
 		(entry as LoginEntry).breach?.leaked === true
@@ -560,6 +586,6 @@ export const loginMode: EntryMode = {
 
 	searchText: (entry) => {
 		const login = entry as LoginEntry;
-		return `${login.name} ${login.username} ${login.url}`.toLowerCase();
+		return `${login.name} ${login.username} ${login.urls.join(" ")}`.toLowerCase();
 	},
 };
