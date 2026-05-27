@@ -29,6 +29,10 @@ interface SettingsProps {
 	clipboardClearSeconds: number;
 	breachCheckEnabled: boolean;
 	totalEntries: number;
+	// Installed extension version, shown on the About row. Injected by the
+	// route rather than pulled from the manifest here so the screen stays
+	// platform-agnostic.
+	version: string;
 	onChangeAutoLock: (minutes: number) => void;
 	onChangeClipboardSeconds: (seconds: number) => void;
 	onToggleBreachCheck: (enabled: boolean) => void;
@@ -49,6 +53,7 @@ export function Settings({
 	clipboardClearSeconds,
 	breachCheckEnabled,
 	totalEntries,
+	version,
 	onChangeAutoLock,
 	onChangeClipboardSeconds,
 	onToggleBreachCheck,
@@ -382,7 +387,7 @@ export function Settings({
 					<div className="p-4 space-y-3">
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-muted-foreground">Version</span>
-							<span>0.0.1</span>
+							<span>{version}</span>
 						</div>
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-muted-foreground">Total entries</span>

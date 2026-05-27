@@ -6,6 +6,7 @@ export interface PopOutHandoff {
 export type OptionsScreen = "import";
 
 export interface ShellAdapter {
+	version: string;
 	openSetup(screen?: OptionsScreen): Promise<void>;
 	hasFilePicker(): boolean;
 	getCurrentTabOrigin(): Promise<string | null>;
