@@ -1,13 +1,29 @@
 import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { SshKeyEntry, SshKeyEntryData } from "../../hooks/useVault";
-import { deriveKeyType } from "../../util/ssh";
+import { deriveKeyType, sshFingerprint } from "../../util/ssh";
 import { SecretArea } from "../components/ui/secret-area";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
+
+function useSshFingerprint(publicKey: string): string | undefined {
+	const [fingerprint, setFingerprint] = useState<string | undefined>(undefined);
+	useEffect(() => {
+		let cancelled = false;
+		setFingerprint(undefined);
+		if (!publicKey) return;
+		void sshFingerprint(publicKey).then((fp) => {
+			if (!cancelled) setFingerprint(fp);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [publicKey]);
+	return fingerprint;
+}
 
 export interface SshKeyFormValues {
 	name: string;
@@ -98,8 +114,20 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const key = entry as SshKeyEntry;
 	const [showPassphrase, setShowPassphrase] = useState(false);
+	const fingerprint = useSshFingerprint(key.publicKey);
 	return (
 		<>
+			{fingerprint && (
+				<DetailField
+					label="Fingerprint"
+					copied={copied}
+					copyName="fingerprint"
+					onCopy={() => copy("fingerprint", fingerprint)}
+				>
+					<span className="text-sm font-mono truncate">{fingerprint}</span>
+				</DetailField>
+			)}
+
 			{key.publicKey && (
 				<KeyBlock
 					label="Public key"
