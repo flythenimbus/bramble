@@ -28,6 +28,11 @@ interface SettingsProps {
 	autoLockMinutes: number;
 	clipboardClearSeconds: number;
 	breachCheckEnabled: boolean;
+	offerToSave: boolean;
+	// eTLD+1 hostnames the user has muted via the corner card's
+	// "Never for this site" overflow action. Surfaced here so they can be
+	// un-muted; the array drives a chip list with per-row removal.
+	neverSaveSites: string[];
 	totalEntries: number;
 	// Installed extension version, shown on the About row. Injected by the
 	// route rather than pulled from the manifest here so the screen stays
@@ -36,6 +41,8 @@ interface SettingsProps {
 	onChangeAutoLock: (minutes: number) => void;
 	onChangeClipboardSeconds: (seconds: number) => void;
 	onToggleBreachCheck: (enabled: boolean) => void;
+	onToggleOfferToSave: (enabled: boolean) => void;
+	onRemoveNeverSaveSite: (host: string) => void;
 	onLockNow: () => Promise<void>;
 	// Two-step contract so the UI can distinguish a wrong current password
 	// (field-level error, recoverable) from a rotation failure (form-level
@@ -52,11 +59,15 @@ export function Settings({
 	autoLockMinutes,
 	clipboardClearSeconds,
 	breachCheckEnabled,
+	offerToSave,
+	neverSaveSites,
 	totalEntries,
 	version,
 	onChangeAutoLock,
 	onChangeClipboardSeconds,
 	onToggleBreachCheck,
+	onToggleOfferToSave,
+	onRemoveNeverSaveSite,
 	onLockNow,
 	onVerifyCurrentPassword,
 	onChangeMasterPassword,
@@ -186,6 +197,42 @@ export function Settings({
 								label="Toggle breach checks"
 							/>
 						</Row>
+
+						{/* Offer to save logins — drives the corner-prompt card. */}
+						<Row
+							icon={<ShieldCheck className="w-4 h-4 text-primary" />}
+							title="Offer to save logins"
+							subtitle="Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+						>
+							<Toggle
+								checked={offerToSave}
+								onChange={onToggleOfferToSave}
+								label="Toggle offer to save logins"
+							/>
+						</Row>
+
+						{neverSaveSites.length > 0 && (
+							<Row
+								icon={<ShieldCheck className="w-4 h-4 text-primary" />}
+								title="Sites you've muted"
+								subtitle={`No save card on these ${neverSaveSites.length === 1 ? "site" : "sites"}. Remove to start prompting again.`}
+							>
+								<div className="flex flex-wrap gap-1.5 justify-end max-w-[12rem]">
+									{neverSaveSites.map((host) => (
+										<button
+											key={host}
+											type="button"
+											onClick={() => onRemoveNeverSaveSite(host)}
+											className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+											title={`Remove ${host} from never-save list`}
+										>
+											{host}
+											<span aria-hidden>×</span>
+										</button>
+									))}
+								</div>
+							</Row>
+						)}
 
 						{/* Lock now */}
 						<Row

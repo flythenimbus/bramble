@@ -15,4 +15,5 @@ export interface ShellAdapter {
 	consumeHandoff(): Promise<PopOutHandoff | null>;
 	isDetached(): boolean;
 	scanQrFromActiveTab(): Promise<string | null>;
+	flushPendingCornerCapture(): Promise<boolean>;
 }

@@ -6,4 +6,9 @@ export interface StorageAdapter {
 	restoreVaultFromBackup(): Promise<boolean>;
 	getMeta<T>(key: string): Promise<T | undefined>;
 	setMeta<T>(key: string, value: T): Promise<void>;
+
+
+	canWriteFromBackground(): Promise<boolean>;
+	flushPendingVaultBlob(): Promise<boolean>;
+	getPendingFlushCount(): Promise<number>;
 }

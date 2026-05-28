@@ -41,6 +41,7 @@ export interface CryptoAdapter {
 	lock(): Promise<void>;
 	isLocked(): Promise<boolean>;
 	onExternalLock(callback: () => void): () => void;
+	onExternalChange(callback: () => void): () => void;
 
 	generateSalt(): Promise<string>;
 	generateSlotId(): Promise<string>;

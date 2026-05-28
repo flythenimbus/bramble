@@ -70,6 +70,45 @@ export type FillPayload =
 			customFields?: CustomFieldData[];
 	  };
 
+//
+//
+
+export type CornerPromptKind = "save-login" | "update-login";
+
+interface CornerPromptCommon {
+	promptId: string;
+	hostname: string;
+	locked: boolean;
+}
+
+export interface SaveLoginPrompt extends CornerPromptCommon {
+	kind: "save-login";
+	username: string;
+	password: string;
+}
+
+export interface UpdateLoginPrompt extends CornerPromptCommon {
+	kind: "update-login";
+	candidates: { id: string; name: string; username: string }[];
+	newPassword: string;
+}
+
+export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt;
+
+export type CornerPromptResponseAction =
+	| "save"
+	| "update"
+	| "dismiss"
+	| "never"
+	| "save-unlock-first";
+
+export interface CornerPromptResponse {
+	promptId: string;
+	action: CornerPromptResponseAction;
+	chosenEntryId?: string;
+	editedUsername?: string;
+}
+
 export interface AutofillAdapter {
 	setIndex(entries: IndexEntry[]): Promise<void>;
 	clearIndex(): Promise<void>;

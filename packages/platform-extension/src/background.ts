@@ -1,15 +1,32 @@
 /// <reference types="chrome" />
 
 import type {
+	CornerPromptPayload,
+	CornerPromptResponse,
 	FillPayload,
 	IndexEntry,
 	LoginIndexEntry,
 	MatchSummary,
 	QueryResult,
+	SaveLoginPrompt,
+	UpdateLoginPrompt,
 } from "@core/adapters/autofill";
 import { parseTotp, totpAt } from "@core/util/totp";
+import { normalizeEntryData } from "@core/vault/entry-normalize";
+import {
+	decodeVaultBlob,
+	type EncryptedEntry,
+	encodeVaultBlob,
+	type VaultBlob,
+} from "@core/vault-format";
 import jsQR from "jsqr";
-import { getDomain } from "tldts";
+import {
+	type DedupeOutcome,
+	dedupeCapture as dedupeCaptureFn,
+	hostnameMatches,
+	registrableDomain,
+} from "./dedupe";
+import { extensionStorage, PENDING_BLOB_KEY } from "./storage";
 
 //
 
@@ -26,9 +43,30 @@ const CLIPBOARD_ALARM = "vault:clipboard-clear";
 
 const PREF_AUTOLOCK_MINUTES = "pref.autoLockMinutes";
 const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
+const PREF_OFFER_TO_SAVE = "pref.offerToSave";
+const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 
 const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_CLIPBOARD_SECONDS = 30;
+const DEFAULT_OFFER_TO_SAVE = true;
+
+const CAPTURE_KEY_PREFIX = "capture.pending.";
+const CORNER_HANDOFF_KEY = "cornerPrompt.handoff";
+
+interface PendingCapture {
+	promptId: string;
+	etld1: string;
+	hostname: string;
+	username: string;
+	password: string;
+	capturedAt: number;
+}
+
+interface CornerHandoff {
+	intent: "save" | "update";
+	capture: PendingCapture;
+	chosenEntryId?: string;
+}
 
 
 let autofillIndex: Map<string, IndexEntry> | null = null;
@@ -52,36 +90,10 @@ const hydrationPromise = (async () => {
 	}
 })();
 
-function registrableDomain(hostname: string): string {
-	return getDomain(hostname) ?? hostname;
-}
-
-// ── Per-entry hostname matching ─────────────────────────────────────────────
-// Each entry can opt into a stricter or looser policy than the default
-// eTLD+1 collapse. We evaluate the policy when serving findResult to the
-// content script.
-
-function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): boolean {
-	const pageHost = pageHostname.toLowerCase();
-	const policy = entry.subdomainMatch ?? "etld1";
-	// A login can be registered against many sites — match if the page's
-	// hostname satisfies the policy against *any* of them. The policy is
-	// applied per-hostname; we don't split it per-URL (yet).
-	for (const raw of entry.hostnames) {
-		const entryHost = raw.toLowerCase();
-		switch (policy) {
-			case "exact":
-				if (entryHost === pageHost) return true;
-				break;
-			case "subdomain":
-				if (pageHost === entryHost || pageHost.endsWith(`.${entryHost}`)) return true;
-				break;
-			default:
-				if (registrableDomain(entryHost) === registrableDomain(pageHost)) return true;
-		}
-	}
-	return false;
-}
+// `registrableDomain`, `hostnameMatches`, and `dedupeCapture` live in
+// `./dedupe` so they can be unit-tested without the SW globals (autofill
+// index, cached VEK). See dedupe.test.ts for the matrix of dedupe outcomes
+// and hostname-policy edges.
 
 
 async function ensureOffscreen(): Promise<void> {
@@ -165,7 +177,12 @@ async function clearSession(): Promise<void> {
 	autofillIndex = null;
 	offscreenHasKey = false;
 	try {
-		await chrome.storage.session.remove([VEK_KEY, POPOUT_HANDOFF_KEY]);
+		const all = await chrome.storage.session.get(null);
+		const toRemove: string[] = [VEK_KEY, POPOUT_HANDOFF_KEY, CORNER_HANDOFF_KEY];
+		for (const key of Object.keys(all)) {
+			if (key.startsWith(CAPTURE_KEY_PREFIX)) toRemove.push(key);
+		}
+		await chrome.storage.session.remove(toRemove);
 	} catch {}
 	void chrome.alarms.clear(AUTOLOCK_ALARM);
 }
@@ -300,6 +317,458 @@ function fetchFill(entryId: string): FillPayload {
 	};
 }
 
+//
+// Capture-and-save flow for the in-page top-right card. The card itself lives
+// in the content script (see content-script.ts); the background owns:
+//   • the dedupe decision (save / update / skip) against the autofill index,
+//   • the plaintext capture stash in chrome.storage.session,
+//   • the encrypt-and-commit path through the offscreen doc,
+//   • the queue-and-flush split between the chrome.storage.local backend
+//     (write directly) and the FSA backend (stash the new blob, popup flushes).
+//
+// `cornerPrompt.handoff` and `capture.pending.*` are wiped on lock alongside
+// `VEK_KEY` (see clearSession); `vault.pendingFlush` is ciphertext and survives.
+
+async function getOfferToSavePref(): Promise<boolean> {
+	try {
+		const r = await chrome.storage.local.get(PREF_OFFER_TO_SAVE);
+		const v = r[PREF_OFFER_TO_SAVE];
+		if (typeof v === "boolean") return v;
+	} catch {}
+	return DEFAULT_OFFER_TO_SAVE;
+}
+
+async function getNeverSaveSites(): Promise<Set<string>> {
+	try {
+		const r = await chrome.storage.local.get(PREF_NEVER_SAVE_SITES);
+		const v = r[PREF_NEVER_SAVE_SITES];
+		if (Array.isArray(v)) return new Set(v.filter((s): s is string => typeof s === "string"));
+	} catch {}
+	return new Set();
+}
+
+async function appendNeverSaveSite(etld1: string): Promise<void> {
+	const current = await getNeverSaveSites();
+	if (current.has(etld1)) return;
+	current.add(etld1);
+	await chrome.storage.local.set({ [PREF_NEVER_SAVE_SITES]: Array.from(current) });
+}
+
+function captureStashKey(etld1: string): string {
+	return CAPTURE_KEY_PREFIX + etld1;
+}
+
+async function readPendingCapture(etld1: string): Promise<PendingCapture | null> {
+	try {
+		const key = captureStashKey(etld1);
+		const r = await chrome.storage.session.get(key);
+		const v = r[key] as PendingCapture | undefined;
+		return v ?? null;
+	} catch {
+		return null;
+	}
+}
+
+async function writePendingCapture(capture: PendingCapture): Promise<void> {
+	await chrome.storage.session.set({ [captureStashKey(capture.etld1)]: capture });
+}
+
+async function clearPendingCapture(etld1: string): Promise<void> {
+	await chrome.storage.session.remove(captureStashKey(etld1));
+}
+
+// Curry the pure dedupe function with the SW's in-memory index so the rest
+// of background.ts can call `dedupeCapture(host, user, pw)` without passing
+// the index every time.
+function dedupeCapture(hostname: string, username: string, password: string): DedupeOutcome {
+	return dedupeCaptureFn(autofillIndex, hostname, username, password);
+}
+
+function buildCornerPayload(
+	capture: PendingCapture,
+	outcome: DedupeOutcome,
+	locked: boolean,
+): CornerPromptPayload | null {
+	if (outcome.kind === "exact") return null;
+	if (outcome.kind === "save") {
+		const payload: SaveLoginPrompt = {
+			kind: "save-login",
+			promptId: capture.promptId,
+			hostname: capture.hostname,
+			locked,
+			username: capture.username,
+			password: capture.password,
+		};
+		return payload;
+	}
+	const payload: UpdateLoginPrompt = {
+		kind: "update-login",
+		promptId: capture.promptId,
+		hostname: capture.hostname,
+		locked,
+		candidates: outcome.candidates.map((c) => ({
+			id: c.id,
+			name: c.name,
+			username: c.username,
+		})),
+		newPassword: capture.password,
+	};
+	return payload;
+}
+
+// True when the vault is operationally locked — `cachedVek === null` is the
+// authoritative signal (no key → can't decrypt or encrypt). `autofillIndex`
+// being null is a separate state (session-resumed across SW idle-kill, no
+// popup open since): the vault is unlocked but the searchable index hasn't
+// been rebuilt. Don't conflate the two.
+function vaultLocked(): boolean {
+	return cachedVek === null;
+}
+
+// Rebuild `autofillIndex` from the on-disk vault when the SW has been idle-
+// killed and the popup hasn't repopulated it. Idempotent: returns early if
+// the index is already loaded or if there's no VEK to decrypt with. Used by
+// the corner-prompt paths so dedupe works even when the popup is closed.
+async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
+	if (autofillIndex !== null) return true;
+	if (cachedVek === null) return false;
+	try {
+		const blob = await readAndDecodeVault();
+		if (blob.entriesCiphertext.length === 0) {
+			autofillIndex = new Map();
+			return true;
+		}
+		const outerResp = await sendToOffscreen({
+			type: "CRYPTO_DECRYPT_OUTER",
+			payload: {
+				iv: bytesToBase64(blob.entriesIv),
+				ciphertext: bytesToBase64(blob.entriesCiphertext),
+			},
+		});
+		if (!outerResp.ok || typeof outerResp.data !== "string") return false;
+		const encryptedEntries = JSON.parse(outerResp.data) as EncryptedEntry[];
+		const newIndex = new Map<string, IndexEntry>();
+		for (const enc of encryptedEntries) {
+			const dec = await sendToOffscreen({
+				type: "CRYPTO_DECRYPT",
+				payload: {
+					ciphertext: enc.ciphertext,
+					iv: enc.iv,
+					wrappedDek: enc.wrappedDek,
+					dekIv: enc.dekIv,
+				},
+			});
+			if (!dec.ok || typeof dec.data !== "string") continue;
+			// Single source of truth: run the same normalizer + Zod schema the
+			// popup uses, so the legacy `url → urls` migration and any future
+			// migration logic stay in one place and the SW can't drift away
+			// from the popup's understanding of an entry's shape.
+			const data = normalizeEntryData(JSON.parse(dec.data));
+			// Project custom fields to the autofill shape (value-having only),
+			// matching `autofillCustomFields` in useVault.
+			const customFields =
+				data.customFields?.filter((f) => f.value).map((f) => ({ key: f.key, value: f.value })) ??
+				undefined;
+			const projectedCustomFields =
+				customFields && customFields.length > 0 ? customFields : undefined;
+			if (data.type === "login") {
+				const hostnames: string[] = [];
+				for (const u of data.urls) {
+					if (!u) continue;
+					try {
+						hostnames.push(new URL(u).hostname);
+					} catch {
+						hostnames.push(u);
+					}
+				}
+				newIndex.set(enc.id, {
+					type: "login",
+					id: enc.id,
+					hostnames,
+					name: data.name,
+					username: data.username,
+					password: data.password,
+					totp: data.totp,
+					customFields: projectedCustomFields,
+					autofillEnabled: data.autofillEnabled,
+					autoSubmit: data.autoSubmit,
+					subdomainMatch: data.subdomainMatch,
+				});
+				for (const h of hostnames) knownHostnames.add(h);
+			} else if (data.type === "card") {
+				// Cards aren't hostname-scoped — offered on any detected
+				// payment form. Mirror `cardIndexEntry` in useVault.
+				newIndex.set(enc.id, {
+					type: "card",
+					id: enc.id,
+					name: data.name,
+					brand: data.brand,
+					cardholderName: data.cardholderName,
+					number: data.number,
+					expMonth: data.expMonth,
+					expYear: data.expYear,
+					cvv: data.cvv,
+					customFields: projectedCustomFields,
+				});
+			}
+			// Notes and SSH keys aren't autofillable — skip them entirely.
+		}
+		autofillIndex = newIndex;
+		await persistKnownHostnames();
+		return true;
+	} catch (e) {
+		console.warn("[titanpass:bg] hydrateAutofillIndexFromDisk failed", e);
+		return false;
+	}
+}
+
+// Broadcast to every open extension surface (popup, options, detached
+// window) that the on-disk vault has changed under their feet. Each
+// listener responds by re-running `loadEntries`. Cheap re-decrypt; the
+// alternative (silently stale UI showing pre-save entries) is worse.
+async function broadcastVaultChanged(): Promise<void> {
+	try {
+		await chrome.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" });
+	} catch {
+		// No listeners = no popup open = nothing to refresh.
+	}
+}
+
+// Decrypt the current outer entries blob, run the splice/replace, and
+// re-encrypt — all via the offscreen doc so plaintext entry JSON never
+// crosses out of the WASM/offscreen boundary except to be encrypted again.
+async function reencryptOuterWithEntryChange(
+	currentBlob: VaultBlob,
+	mutate: (entries: EncryptedEntry[]) => Promise<EncryptedEntry[]>,
+): Promise<{ entriesIv: Uint8Array; entriesCiphertext: Uint8Array; entryCount: number }> {
+	let entries: EncryptedEntry[];
+	if (currentBlob.entriesCiphertext.length === 0) {
+		entries = [];
+	} else {
+		const decrypted = await sendToOffscreen({
+			type: "CRYPTO_DECRYPT_OUTER",
+			payload: {
+				iv: bytesToBase64(currentBlob.entriesIv),
+				ciphertext: bytesToBase64(currentBlob.entriesCiphertext),
+			},
+		});
+		if (!decrypted.ok || typeof decrypted.data !== "string") {
+			throw new Error(`outer decrypt failed: ${decrypted.error ?? "no data"}`);
+		}
+		entries = JSON.parse(decrypted.data) as EncryptedEntry[];
+	}
+	const mutated = await mutate(entries);
+	const json = JSON.stringify(mutated);
+	const encrypted = await sendToOffscreen({
+		type: "CRYPTO_ENCRYPT_OUTER",
+		payload: { plaintext: json },
+	});
+	if (!encrypted.ok || !encrypted.data || typeof encrypted.data !== "object") {
+		throw new Error(`outer encrypt failed: ${encrypted.error ?? "no data"}`);
+	}
+	const { iv, ciphertext } = encrypted.data as { iv: string; ciphertext: string };
+	return {
+		entriesIv: base64ToBytes(iv),
+		entriesCiphertext: base64ToBytes(ciphertext),
+		entryCount: mutated.length,
+	};
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+	let s = "";
+	for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ?? 0);
+	return btoa(s);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+	const s = atob(b64);
+	const out = new Uint8Array(s.length);
+	for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+	return out;
+}
+
+// Write the new full vault bytes to disk if we can (chrome.storage.local
+// backend), otherwise stash them as a pending blob for the next popup/options
+// open to flush. Returns whether a direct write happened — the caller uses
+// this to decide whether to broadcast `VAULT_CHANGED_EXTERNAL` immediately
+// (direct write) or wait for the popup flush.
+async function writeOrQueueVault(blob: Uint8Array, entryCount: number): Promise<void> {
+	const canWrite = await extensionStorage.canWriteFromBackground();
+	if (canWrite) {
+		await extensionStorage.writeVaultBlob(blob);
+		return;
+	}
+	await chrome.storage.session.set({
+		[PENDING_BLOB_KEY]: {
+			blobB64: bytesToBase64(blob),
+			entryCount,
+			queuedAt: Date.now(),
+		},
+	});
+}
+
+// Build the LoginEntryData JSON the offscreen doc encrypts. Kept narrow —
+// only the fields the corner prompt collects. The popup's normalizer fills
+// in the rest on next load (e.g. breach status is lazy-checked).
+function newLoginPlaintext(capture: PendingCapture, editedUsername?: string): string {
+	const username = editedUsername ?? capture.username;
+	return JSON.stringify({
+		type: "login",
+		name: capture.hostname,
+		urls: [`https://${capture.hostname}`],
+		username,
+		password: capture.password,
+	});
+}
+
+async function commitCornerSave(
+	capture: PendingCapture,
+	editedUsername: string | undefined,
+): Promise<void> {
+	const blob = await readAndDecodeVault();
+	const plaintext = newLoginPlaintext(capture, editedUsername);
+	const encryptedEntryResp = await sendToOffscreen({
+		type: "CRYPTO_ENCRYPT",
+		payload: { plaintextJson: plaintext },
+	});
+	if (!encryptedEntryResp.ok || !encryptedEntryResp.data) {
+		throw new Error(`encrypt new entry failed: ${encryptedEntryResp.error ?? "no data"}`);
+	}
+	const encEntry = encryptedEntryResp.data as Omit<EncryptedEntry, "id">;
+	const id = globalThis.crypto.randomUUID();
+	const newEnc: EncryptedEntry = { id, ...encEntry };
+	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => [...entries, newEnc]);
+	const newBlob: VaultBlob = {
+		slots: blob.slots,
+		entriesIv: outer.entriesIv,
+		entriesCiphertext: outer.entriesCiphertext,
+	};
+	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
+
+	// In-memory autofill index: register the new login immediately so the
+	// next autofill query on this site finds it without waiting for the
+	// popup's `AUTOFILL_SET_INDEX` to refresh.
+	if (autofillIndex) {
+		const username = editedUsername ?? capture.username;
+		const newIndexEntry: LoginIndexEntry = {
+			type: "login",
+			id,
+			hostnames: [capture.hostname],
+			name: capture.hostname,
+			username,
+			password: capture.password,
+		};
+		autofillIndex.set(id, newIndexEntry);
+		knownHostnames.add(capture.hostname);
+		await persistKnownHostnames();
+	}
+	await broadcastVaultChanged();
+}
+
+async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string): Promise<void> {
+	const indexEntry = autofillIndex?.get(chosenEntryId);
+	if (!indexEntry || indexEntry.type !== "login") {
+		throw new Error(`update target not in index: ${chosenEntryId}`);
+	}
+	const blob = await readAndDecodeVault();
+	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => {
+		const next: EncryptedEntry[] = [];
+		for (const enc of entries) {
+			if (enc.id !== chosenEntryId) {
+				next.push(enc);
+				continue;
+			}
+			// Decrypt the existing entry, replace both username + password
+			// with the captured pair, re-encrypt with fresh DEK + IVs
+			// (matches `persistEntries` in useVault). Updating both fields
+			// covers email/username rotations as well as password rotations —
+			// the user picked this entry as the one being updated, not "save
+			// a separate new one."
+			const dec = await sendToOffscreen({
+				type: "CRYPTO_DECRYPT",
+				payload: {
+					ciphertext: enc.ciphertext,
+					iv: enc.iv,
+					wrappedDek: enc.wrappedDek,
+					dekIv: enc.dekIv,
+				},
+			});
+			if (!dec.ok || typeof dec.data !== "string") {
+				throw new Error(`decrypt entry failed: ${dec.error ?? "no data"}`);
+			}
+			const parsed = JSON.parse(dec.data);
+			parsed.username = capture.username;
+			parsed.password = capture.password;
+			const reenc = await sendToOffscreen({
+				type: "CRYPTO_ENCRYPT",
+				payload: { plaintextJson: JSON.stringify(parsed) },
+			});
+			if (!reenc.ok || !reenc.data) {
+				throw new Error(`reencrypt entry failed: ${reenc.error ?? "no data"}`);
+			}
+			const fresh = reenc.data as Omit<EncryptedEntry, "id">;
+			next.push({ id: enc.id, ...fresh });
+		}
+		return next;
+	});
+	const newBlob: VaultBlob = {
+		slots: blob.slots,
+		entriesIv: outer.entriesIv,
+		entriesCiphertext: outer.entriesCiphertext,
+	};
+	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
+	// Mirror username + password change in the in-memory index so subsequent
+	// autofills find the updated credential without waiting for the popup
+	// to re-push the full index.
+	autofillIndex?.set(chosenEntryId, {
+		...indexEntry,
+		username: capture.username,
+		password: capture.password,
+	});
+	await broadcastVaultChanged();
+}
+
+async function readAndDecodeVault(): Promise<VaultBlob> {
+	const bytes = await extensionStorage.readVaultBlob();
+	return decodeVaultBlob(bytes);
+}
+
+// Orchestrate dedupe + stash + dispatch. Called from CORNER_PROMPT_CAPTURE
+// and from the locked-vault unlock flow (where the same capture has to be
+// re-evaluated against the just-decrypted index).
+async function dispatchCornerPromptForCapture(
+	capture: PendingCapture,
+	tabId: number | undefined,
+): Promise<CornerPromptPayload | null> {
+	const offerToSave = await getOfferToSavePref();
+	if (!offerToSave) return null;
+	const muted = await getNeverSaveSites();
+	if (muted.has(capture.etld1)) return null;
+
+	// Rebuild the index if SW idle-killed it; only blocks when the vault is
+	// truly locked (no VEK). Otherwise dedupe runs against stale (empty) data
+	// and the card always shows save-login with the wrong locked flag.
+	await hydrateAutofillIndexFromDisk();
+	const locked = vaultLocked();
+	const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+	const payload = buildCornerPayload(capture, outcome, locked);
+	if (!payload) {
+		// Exact duplicate — nothing to offer, drop the stash so we don't
+		// re-prompt on the next page load.
+		await clearPendingCapture(capture.etld1);
+		return null;
+	}
+	await writePendingCapture(capture);
+	if (tabId !== undefined) {
+		// SPA-friendly path: the page is still alive, the content script can
+		// mount the card immediately. If the page already navigated away,
+		// `sendMessage` rejects and the next CORNER_PROMPT_QUERY picks the
+		// stash up on the new page's content script bootstrap.
+		await chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
+	}
+	return payload;
+}
+
 
 chrome.runtime.onInstalled.addListener(() => {
 	void ensureOffscreen();
@@ -401,6 +870,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FIND") {
 		void (async () => {
 			await hydrationPromise;
+			// Rebuild the in-memory index from disk if the SW idle-killed it
+			// but the VEK is still cached. Without this, the dropdown reports
+			// the vault as locked even though we have everything we need to
+			// serve matches — same stale-locked-state bug the corner-prompt
+			// path used to have.
+			await hydrateAutofillIndexFromDisk();
 			const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
 				hostname: string;
 				hasLogin?: boolean;
@@ -418,6 +893,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FETCH") {
 		void (async () => {
 			await hydrationPromise;
+			await hydrateAutofillIndexFromDisk();
 			try {
 				const { entryId } = message.payload as { entryId: string };
 				const data = fetchFill(entryId);
@@ -443,6 +919,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				sendResponse({ ok: false, error: "no verifiable origin on sender" });
 				return;
 			}
+			// Rebuild the index from disk if the SW lost it but we still have
+			// the VEK (idle-kill case). Without this, the content script sees
+			// `locked: true` and shows the unlock hint even though we could
+			// actually serve matches — same root bug as the corner prompt's
+			// stale-locked state. See `hydrateAutofillIndexFromDisk`.
+			await hydrateAutofillIndexFromDisk();
 			const hasLogin = message.hasLogin !== false;
 			const hasCard = message.hasCard === true;
 			const hasOtp = message.hasOtp === true;
@@ -556,6 +1038,302 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				const decoded = await decodeQrDataUrl(dataUrl);
 				sendResponse({ ok: true, data: decoded });
 			} catch (err) {
+				sendResponse({ ok: false, error: String(err) });
+			}
+		})();
+		return true;
+	}
+
+	if (type === "CORNER_PROMPT_CAPTURE") {
+		void (async () => {
+			await hydrationPromise;
+			try {
+				let hostname = "";
+				try {
+					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
+					if (src) hostname = new URL(src).hostname;
+				} catch {}
+				if (!hostname) {
+					sendResponse({ ok: false, error: "no verifiable origin on sender" });
+					return;
+				}
+				const { username, password } = message.payload as {
+					username: string;
+					password: string;
+				};
+				if (!password) {
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				const etld1 = registrableDomain(hostname);
+				const capture: PendingCapture = {
+					promptId: globalThis.crypto.randomUUID(),
+					etld1,
+					hostname,
+					username,
+					password,
+					capturedAt: Date.now(),
+				};
+				const dispatched = await dispatchCornerPromptForCapture(capture, _sender.tab?.id);
+				sendResponse({ ok: true, data: dispatched });
+			} catch (err) {
+				sendResponse({ ok: false, error: String(err) });
+			}
+		})();
+		return true;
+	}
+
+	if (type === "CORNER_PROMPT_QUERY") {
+		void (async () => {
+			await hydrationPromise;
+			let hostname = "";
+			try {
+				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
+				if (src) hostname = new URL(src).hostname;
+			} catch {}
+			if (!hostname) {
+				sendResponse({ ok: true, data: null });
+				return;
+			}
+			const offerToSave = await getOfferToSavePref();
+			if (!offerToSave) {
+				sendResponse({ ok: true, data: null });
+				return;
+			}
+			const etld1 = registrableDomain(hostname);
+			const capture = await readPendingCapture(etld1);
+			if (!capture) {
+				sendResponse({ ok: true, data: null });
+				return;
+			}
+			await hydrateAutofillIndexFromDisk();
+			const locked = vaultLocked();
+			const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+			const payload = buildCornerPayload(capture, outcome, locked);
+			if (!payload) {
+				await clearPendingCapture(etld1);
+				sendResponse({ ok: true, data: null });
+				return;
+			}
+			sendResponse({ ok: true, data: payload });
+		})();
+		return true;
+	}
+
+	if (type === "CORNER_PROMPT_RESPONSE") {
+		void (async () => {
+			await hydrationPromise;
+			try {
+				const response = message.payload as CornerPromptResponse;
+				let hostname = "";
+				try {
+					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
+					if (src) hostname = new URL(src).hostname;
+				} catch {}
+				const etld1 = hostname ? registrableDomain(hostname) : "";
+				const capture = etld1 ? await readPendingCapture(etld1) : null;
+				if (!capture || capture.promptId !== response.promptId) {
+					if (response.action === "never" && etld1) await appendNeverSaveSite(etld1);
+					if (etld1) await clearPendingCapture(etld1);
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+
+				if (response.action === "dismiss") {
+					await clearPendingCapture(etld1);
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				if (response.action === "never") {
+					await appendNeverSaveSite(etld1);
+					await clearPendingCapture(etld1);
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				if (response.action === "save-unlock-first") {
+					// If the vault is actually unlocked (the card was stale —
+					// SW restarted between mount and click), don't make the
+					// user open the popup just to commit. Treat it as a normal
+					// save with dedupe and let the flow finish here.
+					if (!vaultLocked()) {
+						await hydrateAutofillIndexFromDisk();
+						const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+						try {
+							if (outcome.kind === "exact") {
+								// no-op
+							} else if (
+								outcome.kind === "update" &&
+								(response.chosenEntryId || outcome.candidates.length === 1)
+							) {
+								const targetId = response.chosenEntryId ?? outcome.candidates[0]!.id;
+								await commitCornerUpdate(capture, targetId);
+							} else {
+								await commitCornerSave(capture, undefined);
+							}
+						} finally {
+							await clearPendingCapture(etld1);
+						}
+						sendResponse({ ok: true, data: null });
+						return;
+					}
+					// Locked vault: stash the captured creds in a one-shot handoff
+					// and surface the action popup so the user can unlock. After a
+					// successful unlock the popup fires CORNER_FLUSH_HANDOFF and
+					// we run the commit there (the index is loaded by then, so
+					// dedupe finally has full info).
+					const handoff: CornerHandoff = {
+						intent: response.chosenEntryId ? "update" : "save",
+						capture,
+						chosenEntryId: response.chosenEntryId,
+					};
+					await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
+					try {
+						// chrome.action.openPopup is Chrome 127+. When unavailable
+						// (or when called outside a user-gesture window from the
+						// page's perspective), fall back to the detached-window
+						// flow so there's still a path to unlock.
+						const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
+							.openPopup;
+						if (typeof openPopupFn === "function") {
+							await openPopupFn.call(chrome.action);
+						} else {
+							throw new Error("openPopup unavailable");
+						}
+					} catch {
+						try {
+							await chrome.windows.create({
+								url: chrome.runtime.getURL("popup.html?detached=1"),
+								type: "popup",
+								focused: true,
+								width: 500,
+								height: 600,
+							});
+						} catch {
+							// Even the fallback failed — the handoff sits and waits;
+							// the next time the user opens the popup manually it'll
+							// be picked up by CORNER_FLUSH_HANDOFF.
+						}
+					}
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				if (response.action === "save") {
+					// Hydrate first — the card may have shown save-login against
+					// a stale (post-SW-restart) empty index even though the
+					// vault actually has an existing entry for this hostname.
+					// Re-running dedupe after hydration lets us upgrade the
+					// save into an update when the candidate is unambiguous.
+					await hydrateAutofillIndexFromDisk();
+					const editedCapture: PendingCapture = response.editedUsername
+						? { ...capture, username: response.editedUsername }
+						: capture;
+					const outcome = dedupeCapture(
+						editedCapture.hostname,
+						editedCapture.username,
+						editedCapture.password,
+					);
+					try {
+						if (outcome.kind === "exact") {
+							// Already stored — nothing to write.
+						} else if (outcome.kind === "update" && outcome.candidates.length === 1) {
+							// Unambiguous match → update silently rather than save a
+							// duplicate. If there are multiple candidates we honour
+							// the user's explicit "Save" by saving a separate entry.
+							await commitCornerUpdate(editedCapture, outcome.candidates[0]!.id);
+						} else {
+							await commitCornerSave(editedCapture, undefined);
+						}
+					} finally {
+						// Clear regardless: a lingering stash re-surfaces the
+						// card on every page-load until commit succeeds, which
+						// the user reads as "the app is broken."
+						await clearPendingCapture(etld1);
+					}
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				if (response.action === "update") {
+					if (!response.chosenEntryId) {
+						sendResponse({ ok: false, error: "update missing chosenEntryId" });
+						return;
+					}
+					await hydrateAutofillIndexFromDisk();
+					try {
+						await commitCornerUpdate(capture, response.chosenEntryId);
+					} finally {
+						await clearPendingCapture(etld1);
+					}
+					sendResponse({ ok: true, data: null });
+					return;
+				}
+				sendResponse({ ok: false, error: `unknown action: ${response.action}` });
+			} catch (err) {
+				console.error("[titanpass:bg] CORNER_PROMPT_RESPONSE failed", err);
+				sendResponse({ ok: false, error: String(err) });
+			}
+		})();
+		return true;
+	}
+
+	if (type === "CORNER_FLUSH_HANDOFF") {
+		// Fired by the popup after a successful unlock when a corner-prompt
+		// handoff is parked. We run the commit here (in the background) so
+		// the same encrypt-and-write path covers both the unlocked-card and
+		// unlock-first flows. The popup picks up the result via the existing
+		// VAULT_CHANGED_EXTERNAL broadcast that commit emits.
+		void (async () => {
+			await hydrationPromise;
+			try {
+				const r = await chrome.storage.session.get(CORNER_HANDOFF_KEY);
+				const handoff = r[CORNER_HANDOFF_KEY] as CornerHandoff | undefined;
+				if (!handoff) {
+					sendResponse({ ok: true, data: false });
+					return;
+				}
+				// One-shot: clear before committing so a duplicate
+				// CORNER_FLUSH_HANDOFF (e.g. two popup windows racing) can't
+				// double-write the same entry.
+				await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
+				// Make sure the index is loaded — the popup awaits loadEntries
+				// before firing the flush so it usually is, but the mount-time
+				// session-resume path may run hydrate-then-flush concurrently.
+				await hydrateAutofillIndexFromDisk();
+				if (vaultLocked()) {
+					// No VEK — can't encrypt. Leave the capture stash so the
+					// next page submit (after unlock) can retry, but drop the
+					// handoff (already consumed above) so we don't loop.
+					sendResponse({ ok: false, error: "vault still locked" });
+					return;
+				}
+				// Re-evaluate dedupe with the now-decrypted index — what was
+				// "save" against an empty index may actually be "update", and
+				// vice versa.
+				const outcome = dedupeCapture(
+					handoff.capture.hostname,
+					handoff.capture.username,
+					handoff.capture.password,
+				);
+				try {
+					if (outcome.kind === "exact") {
+						// Nothing to do — the user already has the same credential.
+					} else if (outcome.kind === "update") {
+						const targetId = handoff.chosenEntryId ?? outcome.candidates[0]?.id;
+						if (!targetId) throw new Error("no update target");
+						await commitCornerUpdate(handoff.capture, targetId);
+					} else {
+						await commitCornerSave(handoff.capture, undefined);
+					}
+				} finally {
+					// Clear the capture stash whether the commit succeeded or
+					// not — the handoff was already consumed, so leaving the
+					// stash would re-surface the card on the next page load
+					// (the user thinks they handled it). Commit failures are
+					// surfaced through sendResponse + console.error below.
+					await clearPendingCapture(handoff.capture.etld1);
+				}
+				sendResponse({ ok: true, data: true });
+			} catch (err) {
+				console.error("[titanpass:bg] CORNER_FLUSH_HANDOFF failed", err);
 				sendResponse({ ok: false, error: String(err) });
 			}
 		})();

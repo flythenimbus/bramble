@@ -3,6 +3,13 @@ import type { StorageAdapter } from "@core/adapters/storage";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
 const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
+export const PENDING_BLOB_KEY = "vault.pendingFlush";
+
+interface PendingBlobStash {
+	blobB64: string;
+	entryCount: number;
+	queuedAt: number;
+}
 const IDB_NAME = "vault-storage";
 const IDB_STORE = "handles";
 const HANDLE_KEY = "vault-file";
@@ -25,7 +32,6 @@ async function openIdb(): Promise<IDBDatabase> {
 }
 
 async function getHandle(): Promise<FileSystemFileHandle | null> {
-	if (!pickerSupported()) return null;
 	const db = await openIdb();
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(HANDLE_KEY);
@@ -184,5 +190,26 @@ export const extensionStorage: StorageAdapter = {
 
 	async setMeta(key, value) {
 		await chrome.storage.local.set({ [key]: value });
+	},
+
+	async canWriteFromBackground() {
+		return (await getHandle()) === null;
+	},
+
+	async flushPendingVaultBlob() {
+		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
+		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;
+		if (!stash || typeof stash.blobB64 !== "string") return false;
+		const bytes = base64ToBytes(stash.blobB64);
+		await extensionStorage.writeVaultBlob(bytes);
+		await chrome.storage.session.remove(PENDING_BLOB_KEY);
+		return true;
+	},
+
+	async getPendingFlushCount() {
+		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
+		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;
+		if (!stash) return 0;
+		return typeof stash.entryCount === "number" ? stash.entryCount : 0;
 	},
 };
