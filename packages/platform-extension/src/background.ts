@@ -90,11 +90,6 @@ const hydrationPromise = (async () => {
 	}
 })();
 
-// `registrableDomain`, `hostnameMatches`, and `dedupeCapture` live in
-// `./dedupe` so they can be unit-tested without the SW globals (autofill
-// index, cached VEK). See dedupe.test.ts for the matrix of dedupe outcomes
-// and hostname-policy edges.
-
 
 async function ensureOffscreen(): Promise<void> {
 	const existing = await chrome.offscreen.hasDocument?.();
@@ -317,17 +312,6 @@ function fetchFill(entryId: string): FillPayload {
 	};
 }
 
-//
-// Capture-and-save flow for the in-page top-right card. The card itself lives
-// in the content script (see content-script.ts); the background owns:
-//   • the dedupe decision (save / update / skip) against the autofill index,
-//   • the plaintext capture stash in chrome.storage.session,
-//   • the encrypt-and-commit path through the offscreen doc,
-//   • the queue-and-flush split between the chrome.storage.local backend
-//     (write directly) and the FSA backend (stash the new blob, popup flushes).
-//
-// `cornerPrompt.handoff` and `capture.pending.*` are wiped on lock alongside
-// `VEK_KEY` (see clearSession); `vault.pendingFlush` is ciphertext and survives.
 
 async function getOfferToSavePref(): Promise<boolean> {
 	try {
@@ -377,9 +361,6 @@ async function clearPendingCapture(etld1: string): Promise<void> {
 	await chrome.storage.session.remove(captureStashKey(etld1));
 }
 
-// Curry the pure dedupe function with the SW's in-memory index so the rest
-// of background.ts can call `dedupeCapture(host, user, pw)` without passing
-// the index every time.
 function dedupeCapture(hostname: string, username: string, password: string): DedupeOutcome {
 	return dedupeCaptureFn(autofillIndex, hostname, username, password);
 }
@@ -416,19 +397,10 @@ function buildCornerPayload(
 	return payload;
 }
 
-// True when the vault is operationally locked — `cachedVek === null` is the
-// authoritative signal (no key → can't decrypt or encrypt). `autofillIndex`
-// being null is a separate state (session-resumed across SW idle-kill, no
-// popup open since): the vault is unlocked but the searchable index hasn't
-// been rebuilt. Don't conflate the two.
 function vaultLocked(): boolean {
 	return cachedVek === null;
 }
 
-// Rebuild `autofillIndex` from the on-disk vault when the SW has been idle-
-// killed and the popup hasn't repopulated it. Idempotent: returns early if
-// the index is already loaded or if there's no VEK to decrypt with. Used by
-// the corner-prompt paths so dedupe works even when the popup is closed.
 async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 	if (autofillIndex !== null) return true;
 	if (cachedVek === null) return false;
@@ -459,13 +431,7 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 				},
 			});
 			if (!dec.ok || typeof dec.data !== "string") continue;
-			// Single source of truth: run the same normalizer + Zod schema the
-			// popup uses, so the legacy `url → urls` migration and any future
-			// migration logic stay in one place and the SW can't drift away
-			// from the popup's understanding of an entry's shape.
 			const data = normalizeEntryData(JSON.parse(dec.data));
-			// Project custom fields to the autofill shape (value-having only),
-			// matching `autofillCustomFields` in useVault.
 			const customFields =
 				data.customFields?.filter((f) => f.value).map((f) => ({ key: f.key, value: f.value })) ??
 				undefined;
@@ -496,8 +462,6 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 				});
 				for (const h of hostnames) knownHostnames.add(h);
 			} else if (data.type === "card") {
-				// Cards aren't hostname-scoped — offered on any detected
-				// payment form. Mirror `cardIndexEntry` in useVault.
 				newIndex.set(enc.id, {
 					type: "card",
 					id: enc.id,
@@ -511,7 +475,6 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 					customFields: projectedCustomFields,
 				});
 			}
-			// Notes and SSH keys aren't autofillable — skip them entirely.
 		}
 		autofillIndex = newIndex;
 		await persistKnownHostnames();
@@ -522,21 +485,12 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 	}
 }
 
-// Broadcast to every open extension surface (popup, options, detached
-// window) that the on-disk vault has changed under their feet. Each
-// listener responds by re-running `loadEntries`. Cheap re-decrypt; the
-// alternative (silently stale UI showing pre-save entries) is worse.
 async function broadcastVaultChanged(): Promise<void> {
 	try {
 		await chrome.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" });
-	} catch {
-		// No listeners = no popup open = nothing to refresh.
-	}
+	} catch {}
 }
 
-// Decrypt the current outer entries blob, run the splice/replace, and
-// re-encrypt — all via the offscreen doc so plaintext entry JSON never
-// crosses out of the WASM/offscreen boundary except to be encrypted again.
 async function reencryptOuterWithEntryChange(
 	currentBlob: VaultBlob,
 	mutate: (entries: EncryptedEntry[]) => Promise<EncryptedEntry[]>,
@@ -587,11 +541,6 @@ function base64ToBytes(b64: string): Uint8Array {
 	return out;
 }
 
-// Write the new full vault bytes to disk if we can (chrome.storage.local
-// backend), otherwise stash them as a pending blob for the next popup/options
-// open to flush. Returns whether a direct write happened — the caller uses
-// this to decide whether to broadcast `VAULT_CHANGED_EXTERNAL` immediately
-// (direct write) or wait for the popup flush.
 async function writeOrQueueVault(blob: Uint8Array, entryCount: number): Promise<void> {
 	const canWrite = await extensionStorage.canWriteFromBackground();
 	if (canWrite) {
@@ -607,9 +556,6 @@ async function writeOrQueueVault(blob: Uint8Array, entryCount: number): Promise<
 	});
 }
 
-// Build the LoginEntryData JSON the offscreen doc encrypts. Kept narrow —
-// only the fields the corner prompt collects. The popup's normalizer fills
-// in the rest on next load (e.g. breach status is lazy-checked).
 function newLoginPlaintext(capture: PendingCapture, editedUsername?: string): string {
 	const username = editedUsername ?? capture.username;
 	return JSON.stringify({
@@ -645,9 +591,6 @@ async function commitCornerSave(
 	};
 	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
 
-	// In-memory autofill index: register the new login immediately so the
-	// next autofill query on this site finds it without waiting for the
-	// popup's `AUTOFILL_SET_INDEX` to refresh.
 	if (autofillIndex) {
 		const username = editedUsername ?? capture.username;
 		const newIndexEntry: LoginIndexEntry = {
@@ -678,12 +621,6 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 				next.push(enc);
 				continue;
 			}
-			// Decrypt the existing entry, replace both username + password
-			// with the captured pair, re-encrypt with fresh DEK + IVs
-			// (matches `persistEntries` in useVault). Updating both fields
-			// covers email/username rotations as well as password rotations —
-			// the user picked this entry as the one being updated, not "save
-			// a separate new one."
 			const dec = await sendToOffscreen({
 				type: "CRYPTO_DECRYPT",
 				payload: {
@@ -717,9 +654,6 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 		entriesCiphertext: outer.entriesCiphertext,
 	};
 	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
-	// Mirror username + password change in the in-memory index so subsequent
-	// autofills find the updated credential without waiting for the popup
-	// to re-push the full index.
 	autofillIndex?.set(chosenEntryId, {
 		...indexEntry,
 		username: capture.username,
@@ -733,9 +667,6 @@ async function readAndDecodeVault(): Promise<VaultBlob> {
 	return decodeVaultBlob(bytes);
 }
 
-// Orchestrate dedupe + stash + dispatch. Called from CORNER_PROMPT_CAPTURE
-// and from the locked-vault unlock flow (where the same capture has to be
-// re-evaluated against the just-decrypted index).
 async function dispatchCornerPromptForCapture(
 	capture: PendingCapture,
 	tabId: number | undefined,
@@ -745,25 +676,16 @@ async function dispatchCornerPromptForCapture(
 	const muted = await getNeverSaveSites();
 	if (muted.has(capture.etld1)) return null;
 
-	// Rebuild the index if SW idle-killed it; only blocks when the vault is
-	// truly locked (no VEK). Otherwise dedupe runs against stale (empty) data
-	// and the card always shows save-login with the wrong locked flag.
 	await hydrateAutofillIndexFromDisk();
 	const locked = vaultLocked();
 	const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
 	const payload = buildCornerPayload(capture, outcome, locked);
 	if (!payload) {
-		// Exact duplicate — nothing to offer, drop the stash so we don't
-		// re-prompt on the next page load.
 		await clearPendingCapture(capture.etld1);
 		return null;
 	}
 	await writePendingCapture(capture);
 	if (tabId !== undefined) {
-		// SPA-friendly path: the page is still alive, the content script can
-		// mount the card immediately. If the page already navigated away,
-		// `sendMessage` rejects and the next CORNER_PROMPT_QUERY picks the
-		// stash up on the new page's content script bootstrap.
 		await chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
 	}
 	return payload;
@@ -870,11 +792,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FIND") {
 		void (async () => {
 			await hydrationPromise;
-			// Rebuild the in-memory index from disk if the SW idle-killed it
-			// but the VEK is still cached. Without this, the dropdown reports
-			// the vault as locked even though we have everything we need to
-			// serve matches — same stale-locked-state bug the corner-prompt
-			// path used to have.
 			await hydrateAutofillIndexFromDisk();
 			const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
 				hostname: string;
@@ -919,11 +836,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				sendResponse({ ok: false, error: "no verifiable origin on sender" });
 				return;
 			}
-			// Rebuild the index from disk if the SW lost it but we still have
-			// the VEK (idle-kill case). Without this, the content script sees
-			// `locked: true` and shows the unlock hint even though we could
-			// actually serve matches — same root bug as the corner prompt's
-			// stale-locked state. See `hydrateAutofillIndexFromDisk`.
 			await hydrateAutofillIndexFromDisk();
 			const hasLogin = message.hasLogin !== false;
 			const hasCard = message.hasCard === true;
@@ -1151,10 +1063,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					return;
 				}
 				if (response.action === "save-unlock-first") {
-					// If the vault is actually unlocked (the card was stale —
-					// SW restarted between mount and click), don't make the
-					// user open the popup just to commit. Treat it as a normal
-					// save with dedupe and let the flow finish here.
 					if (!vaultLocked()) {
 						await hydrateAutofillIndexFromDisk();
 						const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
@@ -1176,11 +1084,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 						sendResponse({ ok: true, data: null });
 						return;
 					}
-					// Locked vault: stash the captured creds in a one-shot handoff
-					// and surface the action popup so the user can unlock. After a
-					// successful unlock the popup fires CORNER_FLUSH_HANDOFF and
-					// we run the commit there (the index is loaded by then, so
-					// dedupe finally has full info).
 					const handoff: CornerHandoff = {
 						intent: response.chosenEntryId ? "update" : "save",
 						capture,
@@ -1188,10 +1091,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					};
 					await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
 					try {
-						// chrome.action.openPopup is Chrome 127+. When unavailable
-						// (or when called outside a user-gesture window from the
-						// page's perspective), fall back to the detached-window
-						// flow so there's still a path to unlock.
 						const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
 							.openPopup;
 						if (typeof openPopupFn === "function") {
@@ -1208,21 +1107,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 								width: 500,
 								height: 600,
 							});
-						} catch {
-							// Even the fallback failed — the handoff sits and waits;
-							// the next time the user opens the popup manually it'll
-							// be picked up by CORNER_FLUSH_HANDOFF.
-						}
+						} catch {}
 					}
 					sendResponse({ ok: true, data: null });
 					return;
 				}
 				if (response.action === "save") {
-					// Hydrate first — the card may have shown save-login against
-					// a stale (post-SW-restart) empty index even though the
-					// vault actually has an existing entry for this hostname.
-					// Re-running dedupe after hydration lets us upgrade the
-					// save into an update when the candidate is unambiguous.
 					await hydrateAutofillIndexFromDisk();
 					const editedCapture: PendingCapture = response.editedUsername
 						? { ...capture, username: response.editedUsername }
@@ -1234,19 +1124,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					);
 					try {
 						if (outcome.kind === "exact") {
-							// Already stored — nothing to write.
+							// no-op
 						} else if (outcome.kind === "update" && outcome.candidates.length === 1) {
-							// Unambiguous match → update silently rather than save a
-							// duplicate. If there are multiple candidates we honour
-							// the user's explicit "Save" by saving a separate entry.
 							await commitCornerUpdate(editedCapture, outcome.candidates[0]!.id);
 						} else {
 							await commitCornerSave(editedCapture, undefined);
 						}
 					} finally {
-						// Clear regardless: a lingering stash re-surfaces the
-						// card on every page-load until commit succeeds, which
-						// the user reads as "the app is broken."
 						await clearPendingCapture(etld1);
 					}
 					sendResponse({ ok: true, data: null });
@@ -1276,11 +1160,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	}
 
 	if (type === "CORNER_FLUSH_HANDOFF") {
-		// Fired by the popup after a successful unlock when a corner-prompt
-		// handoff is parked. We run the commit here (in the background) so
-		// the same encrypt-and-write path covers both the unlocked-card and
-		// unlock-first flows. The popup picks up the result via the existing
-		// VAULT_CHANGED_EXTERNAL broadcast that commit emits.
 		void (async () => {
 			await hydrationPromise;
 			try {
@@ -1290,24 +1169,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					sendResponse({ ok: true, data: false });
 					return;
 				}
-				// One-shot: clear before committing so a duplicate
-				// CORNER_FLUSH_HANDOFF (e.g. two popup windows racing) can't
-				// double-write the same entry.
 				await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
-				// Make sure the index is loaded — the popup awaits loadEntries
-				// before firing the flush so it usually is, but the mount-time
-				// session-resume path may run hydrate-then-flush concurrently.
 				await hydrateAutofillIndexFromDisk();
 				if (vaultLocked()) {
-					// No VEK — can't encrypt. Leave the capture stash so the
-					// next page submit (after unlock) can retry, but drop the
-					// handoff (already consumed above) so we don't loop.
 					sendResponse({ ok: false, error: "vault still locked" });
 					return;
 				}
-				// Re-evaluate dedupe with the now-decrypted index — what was
-				// "save" against an empty index may actually be "update", and
-				// vice versa.
 				const outcome = dedupeCapture(
 					handoff.capture.hostname,
 					handoff.capture.username,
@@ -1315,7 +1182,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				);
 				try {
 					if (outcome.kind === "exact") {
-						// Nothing to do — the user already has the same credential.
+						// no-op
 					} else if (outcome.kind === "update") {
 						const targetId = handoff.chosenEntryId ?? outcome.candidates[0]?.id;
 						if (!targetId) throw new Error("no update target");
@@ -1324,11 +1191,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 						await commitCornerSave(handoff.capture, undefined);
 					}
 				} finally {
-					// Clear the capture stash whether the commit succeeded or
-					// not — the handoff was already consumed, so leaving the
-					// stash would re-surface the card on the next page load
-					// (the user thinks they handled it). Commit failures are
-					// surfaced through sendResponse + console.error below.
 					await clearPendingCapture(handoff.capture.etld1);
 				}
 				sendResponse({ ok: true, data: true });
