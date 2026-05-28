@@ -49,7 +49,7 @@ Drive folder for transparent cloud sync.
 | Handle persistence | `FileSystemFileHandle` in **IndexedDB**. |
 | Per-slot verifier | **HMAC(KEK, magic ++ version ++ slotId)** — constant-time reject of wrong credentials without an AEAD unwrap attempt. |
 | Vault format versioning | 1-byte version field at offset 4 after `VLT1` magic. Current version `0x02` — LUKS-style multi-key slots (see "Multi-Key Slots" below). |
-| Hostname matching | `tldts` eTLD+1 collapsing — `www.ikea.com` and `ca.accounts.ikea.com` both match an entry stored as `ikea.com`. |
+| Hostname matching | `tldts` eTLD+1 collapsing — `www.ikea.com` and `ca.accounts.ikea.com` both match an entry stored as `ikea.com`. A login can carry multiple URLs (`urls: string[]`); a page matches if **any** of its hostnames satisfies the policy. |
 | Password recovery | **None.** Loud onboarding warning. |
 | Atomic writes | FSA `createWritable()` close-commit semantics. |
 | Iframes / shadow DOM | Top frame, light DOM only in v1. |
@@ -280,8 +280,13 @@ interface AutofillAdapter {
   fetchFill(entryId: string): Promise<FillPayload>;
 }
 // IndexEntry   = LoginIndexEntry | CardIndexEntry  (discriminated on `type`)
-//   LoginIndexEntry = { type:"login", id, hostname, name, username, password,
-//                       customFields?, autofillEnabled?, autoSubmit?, subdomainMatch? }
+//   LoginIndexEntry = { type:"login", id, hostnames: string[], name, username,
+//                       password, customFields?, autofillEnabled?, autoSubmit?,
+//                       subdomainMatch? }
+//                     // `hostnames` is derived from `LoginEntryData.urls` at
+//                     // index-build time; one login can cover many sites.
+//                     // hostnameMatches returns true on the first hit under
+//                     // the entry's `subdomainMatch` policy.
 //   CardIndexEntry  = { type:"card", id, name, brand?, cardholderName,
 //                       number, expMonth, expYear, cvv, customFields? }
 // CustomFieldData = { key, value }   // key drives derived page-field matching
@@ -724,7 +729,9 @@ gets custom fields for free.
 (`hooks/useVault`), write a descriptor file like `login`/`card`/`note`, and add
 it to the registry. No host, route, list, or plumbing changes are needed.
 Only `login` carries autofill overrides, the password generator/strength meter,
-and breach checks; cards autofill on payment forms; notes and SSH keys never
+and breach checks; the login form's URL field is an editable list (`urls:
+string[]`) so a single credential can be registered against many sites at
+once. Cards autofill on payment forms; notes and SSH keys never
 reach the autofill index. SSH keys (`ssh-key.tsx`) are store/copy only — a
 browser extension can't act as an ssh-agent — and use a masked multi-line
 `SecretArea` primitive for the private key; key type is derived from the public
@@ -871,7 +878,7 @@ interface PasskeyCredential {
 }
 
 interface LoginEntryData extends BaseEntryData {
-  // …url, username, password, totp, overrides…
+  // …urls, username, password, totp, overrides…
   passkeys?: PasskeyCredential[];
 }
 ```
@@ -1019,7 +1026,11 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   SW restarts.
 - Autofill on top-frame login pages: username-only, password-only, and
   combined forms. eTLD+1 subdomain matching via `tldts` (overridable
-  per entry to `exact` / `subdomain` strict modes).
+  per entry to `exact` / `subdomain` strict modes). **A login can be
+  registered against multiple sites** (`urls: string[]`); a page matches
+  if any of the entry's hostnames satisfies the policy. SSO accounts
+  reused across products, sibling brand domains, and http/https
+  variants all collapse onto one entry instead of duplicates.
 - **Card autofill** — payment fields (`cc-number` / `cc-name` / `cc-exp[-month
   /-year]` / `cc-csc`) are detected by autocomplete token + attribute hints;
   focusing one opens a picker of all cards (explicit pick only, never
@@ -1097,11 +1108,29 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   Proton Pass (`.zip`), and KeePass (2.x XML export). Pure, unit-tested parsers
   in `core/import/` (`fflate` unzip, `fast-xml-parser`) map each provider onto our
   typed `EntryData`; unmappable kinds fold into a secure note, passkeys are dropped
-  with a warning. The flow lives on the options page (`options.html?screen=import`,
-  opened from Settings → Data → Import via `shell.openSetup("import")`) because a
-  file dialog dismisses the popup; it parses entirely on-device and bulk-writes via
-  `useVault.importEntries` in a single encrypted `persistEntries` pass. KeePass
-  `.kdbx`, dedup, folders, and attachments are deliberately out of v1 (see below).
+  with a warning. Every URL the source format records is carried over (1Password
+  `overview.urls[]`, Bitwarden `login.uris[]`, Proton `content.urls[]`), so an
+  SSO account that already pointed at five sites comes across as one login with
+  five URLs, not five duplicates. The flow lives on the options page
+  (`options.html?screen=import`, opened from Settings → Data → Import via
+  `shell.openSetup("import")`) because a file dialog dismisses the popup; it
+  parses entirely on-device and bulk-writes via `useVault.importEntries` in a
+  single encrypted `persistEntries` pass. KeePass `.kdbx`, dedup, folders, and
+  attachments are deliberately out of v1 (see below).
+
+#### Schema migrations
+
+JSON-shape changes inside the encrypted entries blob don't bump the on-disk
+vault format — they ride a runtime normalizer in `useVault.normalizeEntryData`
+that runs against every decrypted entry before Zod validation. Currently:
+
+- **Untyped → typed entries.** Vaults created before the `type` discriminator
+  treat every entry as `login` (the original kind).
+- **Single URL → multi-URL.** Logins persisted with `url: string` are collapsed
+  into `urls: [url]` (or `urls: []` if blank). The legacy `url` field is
+  dropped on the next save. Migration is forward-only — old code reading a new
+  vault would see an unknown `urls` and a missing `url`, but the extension
+  auto-updates and there's no realistic downgrade path.
 
 ### TODO (next phases)
 
