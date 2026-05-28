@@ -110,11 +110,14 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 					const email = content.itemEmail;
 					const emailField: RawField[] =
 						email && email !== username ? [{ key: "email", value: email }] : [];
+					const urls = (content.urls ?? []).filter(
+						(u): u is string => typeof u === "string" && u.length > 0,
+					);
 					imported.push({
 						type: "login",
 						name,
 						notes,
-						url: content.urls?.find(Boolean) ?? "",
+						urls,
 						username,
 						password: content.password ?? "",
 						totp: content.totpUri || totpExtra || undefined,

@@ -74,11 +74,14 @@ export function parseBitwarden(raw: string | Uint8Array): ImportResult {
 			if (login.fido2Credentials?.length) {
 				warnings.push(`"${name}" has a passkey, which can't be imported yet.`);
 			}
+			const urls = (login.uris ?? [])
+				.map((u) => u.uri)
+				.filter((u): u is string => typeof u === "string" && u.length > 0);
 			imported.push({
 				type: "login",
 				name,
 				notes,
-				url: login.uris?.find((u) => u.uri)?.uri ?? "",
+				urls,
 				username: login.username ?? "",
 				password: login.password ?? "",
 				totp: login.totp || undefined,

@@ -99,8 +99,14 @@ function flattenFields(item: OpItem): FlatField[] {
 	return out;
 }
 
-function primaryUrl(item: OpItem): string {
-	return item.overview?.url || item.overview?.urls?.find((u) => u.url)?.url || "";
+function allUrls(item: OpItem): string[] {
+	const out: string[] = [];
+	const push = (u: string | null | undefined) => {
+		if (typeof u === "string" && u && !out.includes(u)) out.push(u);
+	};
+	push(item.overview?.url);
+	for (const entry of item.overview?.urls ?? []) push(entry.url);
+	return out;
 }
 
 function loginCredentials(item: OpItem): { username: string; password: string } {
@@ -122,7 +128,7 @@ function mapLogin(item: OpItem, name: string, notes: string | undefined): LoginE
 		type: "login",
 		name,
 		notes,
-		url: primaryUrl(item),
+		urls: allUrls(item),
 		username,
 		password,
 		totp: totp || undefined,

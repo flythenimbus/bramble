@@ -53,7 +53,7 @@ describe("parseBitwarden", () => {
 
 		expect(res.imported[0]).toMatchObject({
 			type: "login",
-			url: "https://github.com",
+			urls: ["https://github.com"],
 			username: "octo",
 			password: "pw",
 			totp: "otpauth://t",
@@ -85,7 +85,7 @@ describe("parseBitwarden", () => {
 				],
 			}),
 		);
-		expect(res.imported[0]).toMatchObject({ type: "login", url: "" });
+		expect(res.imported[0]).toMatchObject({ type: "login", urls: [] });
 		expect(res.warnings).toHaveLength(1);
 	});
 

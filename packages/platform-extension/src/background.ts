@@ -62,16 +62,25 @@ function registrableDomain(hostname: string): string {
 // content script.
 
 function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): boolean {
-	const entryHost = entry.hostname.toLowerCase();
 	const pageHost = pageHostname.toLowerCase();
-	switch (entry.subdomainMatch ?? "etld1") {
-		case "exact":
-			return entryHost === pageHost;
-		case "subdomain":
-			return pageHost === entryHost || pageHost.endsWith(`.${entryHost}`);
-		default:
-			return registrableDomain(entryHost) === registrableDomain(pageHost);
+	const policy = entry.subdomainMatch ?? "etld1";
+	// A login can be registered against many sites — match if the page's
+	// hostname satisfies the policy against *any* of them. The policy is
+	// applied per-hostname; we don't split it per-URL (yet).
+	for (const raw of entry.hostnames) {
+		const entryHost = raw.toLowerCase();
+		switch (policy) {
+			case "exact":
+				if (entryHost === pageHost) return true;
+				break;
+			case "subdomain":
+				if (pageHost === entryHost || pageHost.endsWith(`.${entryHost}`)) return true;
+				break;
+			default:
+				if (registrableDomain(entryHost) === registrableDomain(pageHost)) return true;
+		}
 	}
+	return false;
 }
 
 
@@ -369,8 +378,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			knownHostnames.clear();
 			for (const entry of entries) {
 				autofillIndex.set(entry.id, entry);
-				// Only logins carry a hostname for the locked-state hint registry.
-				if (entry.type === "login") knownHostnames.add(entry.hostname);
+				if (entry.type === "login") {
+					for (const h of entry.hostnames) knownHostnames.add(h);
+				}
 			}
 			await persistKnownHostnames();
 			await scheduleAutoLock();

@@ -58,7 +58,7 @@ describe("parseProtonPass", () => {
 			type: "login",
 			username: "octo",
 			password: "pw",
-			url: "https://github.com",
+			urls: ["https://github.com"],
 			totp: "otpauth://t",
 		});
 		// distinct email retained; hidden extra field preserved.
