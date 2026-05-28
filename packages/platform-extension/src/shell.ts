@@ -47,6 +47,12 @@ export const extensionShell: ShellAdapter = {
 		if (typeof window === "undefined") return false;
 		return new URLSearchParams(window.location.search).has(DETACHED_FLAG);
 	},
+	async flushPendingCornerCapture() {
+		const res = (await chrome.runtime.sendMessage({ type: "CORNER_FLUSH_HANDOFF" })) as
+			| { ok: boolean; data?: boolean }
+			| undefined;
+		return res?.ok === true && res.data === true;
+	},
 	async scanQrFromActiveTab() {
 		const res = (await chrome.runtime.sendMessage({ type: "CAPTURE_QR_SCAN" })) as
 			| { ok: boolean; data?: string | null }

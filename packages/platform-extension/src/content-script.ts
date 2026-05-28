@@ -18,6 +18,7 @@ function teardown(): void {
 	mutationObserver?.disconnect();
 	mutationObserver = null;
 	removeDropdown();
+	removeCornerPrompt();
 }
 
 function safeSendMessage(message: unknown): void {
@@ -79,6 +80,24 @@ type FillPayload =
 			cvv: string;
 			customFields?: CustomFieldData[];
 			isAuto?: boolean;
+	  };
+
+type CornerPromptPayload =
+	| {
+			kind: "save-login";
+			promptId: string;
+			hostname: string;
+			locked: boolean;
+			username: string;
+			password: string;
+	  }
+	| {
+			kind: "update-login";
+			promptId: string;
+			hostname: string;
+			locked: boolean;
+			candidates: { id: string; name: string; username: string }[];
+			newPassword: string;
 	  };
 
 interface LoginFields {
@@ -367,6 +386,8 @@ function fillField(el: HTMLInputElement, value: string): void {
 
 const autoFilledFields = new WeakSet<HTMLInputElement>();
 
+let lastFilledPassword: string | null = null;
+
 function fillForm(
 	username: string,
 	password: string,
@@ -385,6 +406,7 @@ function fillForm(
 	if (pwField && !(isAuto && autoFilledFields.has(pwField))) {
 		fillField(pwField, password);
 		autoFilledFields.add(pwField);
+		lastFilledPassword = password;
 		filled = true;
 	}
 	return { filled, passwordField: pwField };
@@ -915,9 +937,555 @@ function queryAutofill(): void {
 	});
 }
 
+
+let lastUserEditedPassword: string | null = null;
+let lastEditAt = 0;
+const SPA_SUBMIT_WINDOW_MS = 1500;
+
+// Detect a password-change form. Returns the user-edited "new password" field
+// when the page has multiple password fields AND we can confidently pick the
+// new-password one and confirm it against a matching second field. Returns
+// null when the form is ambiguous or mid-edit — better to skip the prompt
+// than to capture (and offer to save) an unconfirmed new password.
+function findNewPasswordOnChangeForm(): HTMLInputElement | null {
+	const fields = Array.from(
+		document.querySelectorAll<HTMLInputElement>(
+			'input[type="password"]:not([readonly]):not([disabled])',
+		),
+	);
+	if (fields.length < 2) return null;
+	const NEW_RE = /new|set/i;
+	const OLD_OR_CONFIRM_RE = /old|current|confirm|verify|repeat|re.?type|again/i;
+	let candidate: HTMLInputElement | null = null;
+	for (const el of fields) {
+		const hint = `${el.autocomplete ?? ""} ${attrHint(el)} ${labelText(el) ?? ""}`;
+		if (OLD_OR_CONFIRM_RE.test(hint)) continue;
+		if (el.autocomplete?.toLowerCase().includes("new-password") || NEW_RE.test(hint)) {
+			candidate = el;
+			break;
+		}
+	}
+	if (!candidate?.value) return null;
+	// Look for a matching confirmation field — same value. Without it the
+	// user is mid-typing and we shouldn't capture (would race the user's
+	// second-field edit).
+	for (const el of fields) {
+		if (el === candidate) continue;
+		if (el.value === candidate.value) return candidate;
+	}
+	return null;
+}
+
+// Build the capture payload — username + the user-edited password — from the
+// current page state. Returns null when any capture gate trips.
+function buildCapture(): { username: string; password: string } | null {
+	if (lastUserEditedPassword === null) return null;
+	if (hasInteractiveCaptcha()) return null;
+	const login = detectLoginFields();
+	if (otpInputs().length > 0 && !login.password) return null;
+
+	const pwFields = document.querySelectorAll(
+		'input[type="password"]:not([readonly]):not([disabled])',
+	);
+	let capturePassword = lastUserEditedPassword;
+	if (pwFields.length >= 2) {
+		const newField = findNewPasswordOnChangeForm();
+		if (!newField) return null;
+		capturePassword = newField.value;
+	}
+	if (capturePassword === lastFilledPassword) return null;
+
+	const username =
+		login.username?.value ??
+		document.querySelector<HTMLInputElement>('input[autocomplete~="username"]')?.value ??
+		"";
+	return { username, password: capturePassword };
+}
+
+function emitCapture(): void {
+	const captured = buildCapture();
+	if (!captured) return;
+	if (!captured.password) return;
+	safeSendMessage({
+		type: "CORNER_PROMPT_CAPTURE",
+		payload: { username: captured.username, password: captured.password },
+	});
+	lastUserEditedPassword = null;
+}
+
+document.addEventListener(
+	"input",
+	(e) => {
+		if (!e.isTrusted) return;
+		const target = e.target;
+		if (!(target instanceof HTMLInputElement)) return;
+		if (target.type !== "password") return;
+		lastUserEditedPassword = target.value;
+		lastEditAt = Date.now();
+	},
+	true,
+);
+
+document.addEventListener(
+	"submit",
+	() => {
+		emitCapture();
+	},
+	true,
+);
+
+document.addEventListener(
+	"keydown",
+	(e) => {
+		if (!e.isTrusted) return;
+		if (e.key !== "Enter") return;
+		const target = e.target;
+		if (!(target instanceof HTMLInputElement)) return;
+		if (target.type !== "password") return;
+		emitCapture();
+	},
+	true,
+);
+
+function queryCornerPrompt(): void {
+	if (!isExtensionAlive()) return;
+	try {
+		chrome.runtime
+			.sendMessage({ type: "CORNER_PROMPT_QUERY" })
+			.then((resp: { ok: boolean; data?: CornerPromptPayload | null } | undefined) => {
+				if (!resp?.ok || !resp.data) return;
+				handleCornerPromptShow(resp.data);
+			})
+			.catch(() => {});
+	} catch {
+		extensionAlive = false;
+		teardown();
+	}
+}
+
+
+const CORNER_ID = "titanpass-corner-prompt";
+
+let cornerPromptEl: HTMLElement | null = null;
+let currentPrompt: CornerPromptPayload | null = null;
+
+function removeCornerPrompt(): void {
+	if (cornerPromptEl) {
+		cornerPromptEl.remove();
+		cornerPromptEl = null;
+	}
+	currentPrompt = null;
+}
+
+function cornerStyles(): string {
+	return html`
+		<style>
+			#${CORNER_ID} {
+				background: rgba(28, 28, 30, 0.96);
+				-webkit-backdrop-filter: saturate(180%) blur(20px);
+				backdrop-filter: saturate(180%) blur(20px);
+				border: 1px solid rgba(255, 255, 255, 0.08);
+				border-radius: 14px;
+				box-shadow:
+					0 16px 48px rgba(0, 0, 0, 0.5),
+					0 0 0 1px rgba(0, 0, 0, 0.3);
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+				font-size: 13px;
+				color: #fff;
+				padding: 20px;
+				box-sizing: border-box;
+				width: 360px;
+			}
+			#${CORNER_ID} .tp-head {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 12px;
+				margin-bottom: 18px;
+			}
+			#${CORNER_ID} .tp-title {
+				font-weight: 600;
+				font-size: 16px;
+				line-height: 1.3;
+			}
+			#${CORNER_ID} .tp-host {
+				color: rgba(235, 235, 245, 0.55);
+				font-size: 12px;
+				margin-top: 4px;
+			}
+			#${CORNER_ID} .tp-close {
+				background: transparent;
+				border: 0;
+				color: rgba(235, 235, 245, 0.55);
+				cursor: pointer;
+				font-size: 18px;
+				line-height: 1;
+				padding: 2px 6px;
+				border-radius: 6px;
+			}
+			#${CORNER_ID} .tp-close:hover {
+				background: rgba(255, 255, 255, 0.06);
+				color: #fff;
+			}
+			#${CORNER_ID} .tp-row {
+				display: flex;
+				flex-direction: column;
+				gap: 7px;
+				margin-bottom: 14px;
+			}
+			#${CORNER_ID} .tp-label {
+				font-size: 11px;
+				color: rgba(235, 235, 245, 0.55);
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				font-weight: 500;
+			}
+			#${CORNER_ID} input.tp-input {
+				background: rgba(255, 255, 255, 0.06);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 8px;
+				color: #fff;
+				padding: 10px 12px;
+				font: inherit;
+				font-size: 13px;
+				outline: none;
+				width: 100%;
+				box-sizing: border-box;
+			}
+			#${CORNER_ID} input.tp-input:focus {
+				border-color: rgba(255, 255, 255, 0.4);
+			}
+			#${CORNER_ID} .tp-password-wrap {
+				position: relative;
+			}
+			#${CORNER_ID} .tp-password-toggle {
+				position: absolute;
+				right: 6px;
+				top: 50%;
+				transform: translateY(-50%);
+				background: transparent;
+				border: 0;
+				color: rgba(235, 235, 245, 0.55);
+				cursor: pointer;
+				font-size: 11px;
+				padding: 6px 8px;
+				border-radius: 6px;
+			}
+			#${CORNER_ID} .tp-password-toggle:hover {
+				background: rgba(255, 255, 255, 0.08);
+				color: #fff;
+			}
+			#${CORNER_ID} .tp-candidates {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				margin-bottom: 16px;
+			}
+			#${CORNER_ID} .tp-candidate {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				padding: 12px 14px;
+				background: rgba(255, 255, 255, 0.04);
+				border: 1px solid rgba(255, 255, 255, 0.08);
+				border-radius: 10px;
+				cursor: pointer;
+			}
+			#${CORNER_ID} .tp-candidate:hover {
+				background: rgba(255, 255, 255, 0.08);
+			}
+			#${CORNER_ID} .tp-candidate input[type="radio"] {
+				accent-color: #fff;
+			}
+			#${CORNER_ID} .tp-candidate .tp-cand-name {
+				font-weight: 600;
+				font-size: 13px;
+			}
+			#${CORNER_ID} .tp-candidate .tp-cand-user {
+				color: rgba(235, 235, 245, 0.55);
+				font-size: 12px;
+				margin-top: 2px;
+			}
+			#${CORNER_ID} .tp-actions {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				margin-top: 18px;
+				position: relative;
+			}
+			#${CORNER_ID} button.tp-btn {
+				background: transparent;
+				color: #fff;
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				border-radius: 8px;
+				padding: 10px 16px;
+				font: inherit;
+				font-size: 13px;
+				font-weight: 500;
+				cursor: pointer;
+				transition:
+					background 0.1s ease,
+					border-color 0.1s ease;
+			}
+			#${CORNER_ID} .tp-btn:hover {
+				background: rgba(255, 255, 255, 0.06);
+				border-color: rgba(255, 255, 255, 0.24);
+			}
+			#${CORNER_ID} button.tp-btn-primary {
+				background: #fafafa;
+				color: #18181b;
+				border: 1px solid rgba(255, 255, 255, 0.2);
+			}
+			#${CORNER_ID} button.tp-btn-primary:hover {
+				background: #e4e4e7;
+				border-color: rgba(255, 255, 255, 0.3);
+			}
+			#${CORNER_ID} .tp-overflow {
+				margin-left: auto;
+				background: transparent;
+				border: 1px solid transparent;
+				color: rgba(235, 235, 245, 0.55);
+				cursor: pointer;
+				font-size: 18px;
+				padding: 6px 10px;
+				border-radius: 8px;
+				line-height: 1;
+			}
+			#${CORNER_ID} .tp-overflow:hover {
+				background: rgba(255, 255, 255, 0.06);
+				border-color: rgba(255, 255, 255, 0.14);
+				color: #fff;
+			}
+			#${CORNER_ID} .tp-menu {
+				position: absolute;
+				right: 0;
+				bottom: 52px;
+				background: rgba(40, 40, 44, 0.98);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 10px;
+				padding: 6px;
+				box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+				z-index: 1;
+				min-width: 160px;
+			}
+			#${CORNER_ID} .tp-menu button {
+				background: transparent;
+				color: #fff;
+				border: 0;
+				padding: 9px 12px;
+				font: inherit;
+				font-size: 13px;
+				cursor: pointer;
+				border-radius: 6px;
+				width: 100%;
+				text-align: left;
+			}
+			#${CORNER_ID} .tp-menu button:hover {
+				background: rgba(255, 255, 255, 0.08);
+			}
+		</style>
+	`;
+}
+
+function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login" }>): string {
+	const primaryLabel = p.locked ? "Unlock & Save" : "Save";
+	const primaryAction = p.locked ? "save-unlock-first" : "save";
+	return html`
+		<div class="tp-head">
+			<div>
+				<div class="tp-title">Save New Login</div>
+				<div class="tp-host">${p.hostname}</div>
+			</div>
+			<button class="tp-close" data-tp-action="dismiss" aria-label="Dismiss">×</button>
+		</div>
+		<div class="tp-row">
+			<div class="tp-label">Username</div>
+			<input class="tp-input" id="tp-username" type="text" value="${p.username}" autocomplete="off" />
+		</div>
+		<div class="tp-row">
+			<div class="tp-label">Password</div>
+			<div class="tp-password-wrap">
+				<input class="tp-input" id="tp-password" type="password" value="${p.password}" autocomplete="off" readonly />
+				<button class="tp-password-toggle" data-tp-action="toggle-password">Show</button>
+			</div>
+		</div>
+		<div class="tp-actions">
+			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
+			<button class="tp-btn" data-tp-action="dismiss">Not now</button>
+			<button class="tp-overflow" data-tp-action="toggle-menu" aria-label="More">⋯</button>
+		</div>
+	`;
+}
+
+function buildUpdateLoginBody(p: Extract<CornerPromptPayload, { kind: "update-login" }>): string {
+	const primaryLabel = p.locked ? "Unlock & Update" : "Update";
+	const primaryAction = p.locked ? "save-unlock-first" : "update";
+	const title = p.candidates.length > 1 ? "Update an existing login?" : "Update saved login?";
+	const candidatesBody =
+		p.candidates.length > 1
+			? html`
+					<div class="tp-candidates">
+						${p.candidates.map(
+							(c, i) => html`
+								<label class="tp-candidate">
+									<input type="radio" name="tp-update-target" value="${c.id}" ${i === 0 ? "checked" : ""} />
+									<div>
+										<div class="tp-cand-name">${c.name}</div>
+										<div class="tp-cand-user">${c.username}</div>
+									</div>
+								</label>
+							`,
+						)}
+					</div>
+				`
+			: html`
+					<div class="tp-row">
+						<div class="tp-label">Account</div>
+						<div>${p.candidates[0]?.name ?? ""} <span style="color: rgba(235,235,245,0.55)">(${p.candidates[0]?.username ?? ""})</span></div>
+						<input type="hidden" name="tp-update-target" value="${p.candidates[0]?.id ?? ""}" />
+					</div>
+				`;
+	return html`
+		<div class="tp-head">
+			<div>
+				<div class="tp-title">${title}</div>
+				<div class="tp-host">${p.hostname}</div>
+			</div>
+			<button class="tp-close" data-tp-action="dismiss" aria-label="Dismiss">×</button>
+		</div>
+		${candidatesBody}
+		<div class="tp-actions">
+			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
+			<button class="tp-btn" data-tp-action="save-new" title="Save as a separate login instead of updating">Save as new</button>
+			<button class="tp-overflow" data-tp-action="toggle-menu" aria-label="More">⋯</button>
+		</div>
+	`;
+}
+
+function sendCornerResponse(action: string, extra?: Record<string, unknown>): void {
+	if (!currentPrompt) return;
+	safeSendMessage({
+		type: "CORNER_PROMPT_RESPONSE",
+		payload: { promptId: currentPrompt.promptId, action, ...extra },
+	});
+}
+
+function closeOverflowMenu(): void {
+	cornerPromptEl?.querySelector(".tp-menu")?.remove();
+}
+
+function handleCornerCardClick(e: Event): void {
+	const target = e.target;
+	if (!(target instanceof HTMLElement)) return;
+	const actionEl = target.closest<HTMLElement>("[data-tp-action]");
+	if (!actionEl || actionEl.dataset.tpAction !== "toggle-menu") {
+		if (!target.closest(".tp-menu")) closeOverflowMenu();
+	}
+	if (!actionEl || !cornerPromptEl?.contains(actionEl)) return;
+	const action = actionEl.dataset.tpAction;
+	if (!action || !currentPrompt) return;
+
+	if (action === "toggle-password") {
+		const pw = cornerPromptEl.querySelector<HTMLInputElement>("#tp-password");
+		if (!pw) return;
+		pw.type = pw.type === "password" ? "text" : "password";
+		actionEl.textContent = pw.type === "password" ? "Show" : "Hide";
+		return;
+	}
+	if (action === "toggle-menu") {
+		const existing = cornerPromptEl.querySelector(".tp-menu");
+		if (existing) {
+			existing.remove();
+			return;
+		}
+		const menu = document.createElement("div");
+		menu.className = "tp-menu";
+		menu.innerHTML = html`<button data-tp-action="never">Never for this site</button>`;
+		const actions = cornerPromptEl.querySelector(".tp-actions");
+		(actions ?? cornerPromptEl).appendChild(menu);
+		return;
+	}
+
+	if (action === "save") {
+		const usernameInput = cornerPromptEl.querySelector<HTMLInputElement>("#tp-username");
+		const edited = usernameInput?.value;
+		sendCornerResponse("save", { editedUsername: edited });
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "save-new") {
+		sendCornerResponse("save");
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "update") {
+		const radio =
+			cornerPromptEl.querySelector<HTMLInputElement>('input[name="tp-update-target"]:checked') ??
+			cornerPromptEl.querySelector<HTMLInputElement>('input[name="tp-update-target"]');
+		const chosenEntryId = radio?.value;
+		if (!chosenEntryId) return;
+		sendCornerResponse("update", { chosenEntryId });
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "save-unlock-first") {
+		const radio = cornerPromptEl.querySelector<HTMLInputElement>(
+			'input[name="tp-update-target"]:checked',
+		);
+		sendCornerResponse("save-unlock-first", radio ? { chosenEntryId: radio.value } : undefined);
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "dismiss") {
+		sendCornerResponse("dismiss");
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "never") {
+		sendCornerResponse("never");
+		removeCornerPrompt();
+		return;
+	}
+}
+
+document.addEventListener(
+	"mousedown",
+	(e) => {
+		if (!cornerPromptEl) return;
+		const target = e.target;
+		if (!(target instanceof Node)) return;
+		if (!cornerPromptEl.contains(target)) closeOverflowMenu();
+	},
+	true,
+);
+
+function handleCornerPromptShow(payload: CornerPromptPayload): void {
+	removeCornerPrompt();
+	currentPrompt = payload;
+
+	const root = document.createElement("div");
+	root.id = CORNER_ID;
+	// Inline so we don't depend on the inner stylesheet loading first.
+	root.style.cssText = "position: fixed; top: 16px; right: 16px; z-index: 2147483647;";
+	const body =
+		payload.kind === "save-login" ? buildSaveLoginBody(payload) : buildUpdateLoginBody(payload);
+	root.innerHTML = cornerStyles() + body;
+	root.addEventListener("click", handleCornerCardClick, true);
+
+	cornerPromptEl = root;
+	document.body.appendChild(root);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.type === "AUTOFILL_MATCHES") {
 		handleResult(message.payload as QueryResult | undefined);
+		sendResponse({ ok: true });
+		return false;
+	}
+
+	if (message?.type === "CORNER_PROMPT_SHOW") {
+		handleCornerPromptShow(message.payload as CornerPromptPayload);
 		sendResponse({ ok: true });
 		return false;
 	}
@@ -958,6 +1526,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 let lastCheck = 0;
 function onDomChange(): void {
+	if (
+		lastUserEditedPassword !== null &&
+		Date.now() - lastEditAt < SPA_SUBMIT_WINDOW_MS &&
+		!document.querySelector('input[type="password"]:not([readonly]):not([disabled])')
+	) {
+		emitCapture();
+	}
 	const now = Date.now();
 	if (now - lastCheck < 500) return;
 	lastCheck = now;
@@ -999,6 +1574,7 @@ function showFor(field: HTMLInputElement): void {
 
 function bootstrap(): void {
 	queryAutofill();
+	queryCornerPrompt();
 
 	mutationObserver = new MutationObserver(() => onDomChange());
 	mutationObserver.observe(document.body, { childList: true, subtree: true });

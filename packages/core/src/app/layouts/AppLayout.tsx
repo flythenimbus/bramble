@@ -17,7 +17,7 @@ export function AppLayout() {
 	const router = useRouter();
 	const navigate = useNavigate();
 	const { darkMode, toggleTheme } = useTheme();
-	const { lock } = useVault();
+	const { lock, pendingSyncCount } = useVault();
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
 
@@ -69,6 +69,14 @@ export function AppLayout() {
 							</button>
 						</div>
 						<div className="flex items-center gap-1.5">
+							{pendingSyncCount > 0 && (
+								<span
+									className="text-[11px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20"
+									title="Vault changes saved by autofill while the popup was closed are syncing to disk"
+								>
+									{pendingSyncCount} pending sync
+								</span>
+							)}
 							{canPopOut && (
 								<button
 									type="button"

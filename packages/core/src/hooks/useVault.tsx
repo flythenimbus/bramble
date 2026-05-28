@@ -7,7 +7,6 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { z } from "zod";
 import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import { usePlatform } from "../context/PlatformContext";
 import {
@@ -86,73 +85,9 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 	return entry.type === "login";
 }
 
-// Runtime mirror of EntryData, kept beside the type so drift is obvious: the
-// `z.ZodType<EntryData>` annotation makes the compiler fail here if the schema
-// and the hand-written union diverge. Used to validate entries decrypted from
-// disk (below) and every entry the importer produces (see import/), so nothing
-// malformed reaches the rest of the app.
-const customFieldSchema = z.object({
-	key: z.string(),
-	value: z.string(),
-	hidden: z.boolean().optional(),
-});
+import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
 
-const baseEntryFields = {
-	name: z.string(),
-	notes: z.string().optional(),
-	customFields: z.array(customFieldSchema).optional(),
-};
-
-export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type", [
-	z.object({
-		...baseEntryFields,
-		type: z.literal("login"),
-		urls: z.array(z.string()),
-		username: z.string(),
-		password: z.string(),
-		totp: z.string().optional(),
-		breach: z.object({ leaked: z.boolean(), checkedAt: z.number() }).optional(),
-		autofillEnabled: z.boolean().optional(),
-		autoSubmit: z.boolean().optional(),
-		subdomainMatch: z.enum(["etld1", "exact", "subdomain"]).optional(),
-	}),
-	z.object({
-		...baseEntryFields,
-		type: z.literal("card"),
-		cardholderName: z.string(),
-		number: z.string(),
-		brand: z.string().optional(),
-		expMonth: z.string(),
-		expYear: z.string(),
-		cvv: z.string(),
-	}),
-	z.object({ ...baseEntryFields, type: z.literal("note") }),
-	z.object({
-		...baseEntryFields,
-		type: z.literal("ssh-key"),
-		publicKey: z.string(),
-		privateKey: z.string(),
-		passphrase: z.string().optional(),
-		keyType: z.string().optional(),
-	}),
-]);
-
-function normalizeEntryData(raw: Record<string, unknown>): EntryData {
-	const candidate: Record<string, unknown> = raw.type ? { ...raw } : { type: "login", ...raw };
-	if (candidate.type === "login" && !Array.isArray(candidate.urls)) {
-		const legacy = typeof candidate.url === "string" ? candidate.url : "";
-		candidate.urls = legacy ? [legacy] : [];
-		delete candidate.url;
-	}
-	if (!entryDataSchema.safeParse(candidate).success) {
-		const type = typeof candidate?.type === "string" ? candidate.type : "<missing>";
-		const keys = Object.keys(candidate ?? {})
-			.sort()
-			.join(",");
-		console.error(`[vault] decrypted entry has an unexpected shape (type=${type}, keys=${keys})`);
-	}
-	return candidate as unknown as EntryData;
-}
+export { entryDataSchema };
 
 export interface UseVault {
 	hasVault: boolean;
@@ -160,6 +95,7 @@ export interface UseVault {
 	ready: boolean;
 	entries: Entry[];
 	error: string | null;
+	pendingSyncCount: number;
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
@@ -243,12 +179,21 @@ function toAutofillIndex(entries: Entry[]): IndexEntry[] {
 }
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-	const { storage, crypto, autofill } = usePlatform();
+	const { storage, crypto, autofill, shell } = usePlatform();
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
 	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+	const refreshPendingSyncCount = useCallback(async () => {
+		try {
+			setPendingSyncCount(await storage.getPendingFlushCount());
+		} catch {
+			setPendingSyncCount(0);
+		}
+	}, [storage]);
 
 	const readDecodedBlob = useCallback(async () => {
 		const tryDecode = async () => {
@@ -266,6 +211,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	}, [storage]);
 
 	const loadEntries = useCallback(async () => {
+		await storage.flushPendingVaultBlob().catch(() => {});
+		await refreshPendingSyncCount();
 		const { blob } = await readDecodedBlob();
 		if (blob.entriesCiphertext.length === 0) {
 			setEntries([]);
@@ -291,7 +238,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		);
 		setEntries(decrypted);
 		await autofill.setIndex(toAutofillIndex(decrypted));
-	}, [readDecodedBlob, crypto, autofill]);
+	}, [readDecodedBlob, crypto, autofill, storage, refreshPendingSyncCount]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -308,6 +255,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				if (locked) return;
 
 				await loadEntries();
+				void shell.flushPendingCornerCapture().catch(() => {});
 			} catch (e) {
 				if (!cancelled) setError(String(e));
 			} finally {
@@ -317,7 +265,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [storage, crypto, loadEntries]);
+	}, [storage, crypto, loadEntries, shell]);
 
 	useEffect(() => {
 		return crypto.onExternalLock(() => {
@@ -325,6 +273,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setIsLocked(true);
 		});
 	}, [crypto]);
+
+	useEffect(() => {
+		return crypto.onExternalChange(() => {
+			void loadEntries().catch(() => {});
+		});
+	}, [crypto, loadEntries]);
 
 	const unlock = useCallback(
 		async (password: string) => {
@@ -350,8 +304,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (!ok) throw new Error("Incorrect master password");
 			await loadEntries();
 			setIsLocked(false);
+			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries],
+		[readDecodedBlob, crypto, loadEntries, shell],
 	);
 
 	const lock = useCallback(async () => {
@@ -634,6 +589,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			entries,
 			error,
+			pendingSyncCount,
 			unlock,
 			lock,
 			pickVaultFile,
@@ -651,6 +607,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			entries,
 			error,
+			pendingSyncCount,
 			unlock,
 			lock,
 			pickVaultFile,

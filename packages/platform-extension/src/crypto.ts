@@ -41,6 +41,14 @@ export const extensionCrypto: CryptoAdapter = {
 		return () => chrome.storage.session.onChanged.removeListener(handler);
 	},
 
+	onExternalChange(callback: () => void) {
+		const handler = (message: { type?: string } | undefined) => {
+			if (message?.type === "VAULT_CHANGED_EXTERNAL") callback();
+		};
+		chrome.runtime.onMessage.addListener(handler);
+		return () => chrome.runtime.onMessage.removeListener(handler);
+	},
+
 	generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
 	unlockWithVek: (vekB64) => send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 }),
 	exportVek: () => send<string>("CRYPTO_EXPORT_VEK"),

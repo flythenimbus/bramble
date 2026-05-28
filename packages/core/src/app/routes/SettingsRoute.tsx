@@ -20,11 +20,20 @@ export function SettingsRoute() {
 				autoLockMinutes={prefs.autoLockMinutes}
 				clipboardClearSeconds={prefs.clipboardClearSeconds}
 				breachCheckEnabled={prefs.breachCheckEnabled}
+				offerToSave={prefs.offerToSave}
+				neverSaveSites={prefs.neverSaveSites}
 				totalEntries={entries.length}
 				version={shell.version}
 				onChangeAutoLock={(minutes) => void update("autoLockMinutes", minutes)}
 				onChangeClipboardSeconds={(seconds) => void update("clipboardClearSeconds", seconds)}
 				onToggleBreachCheck={(enabled) => void update("breachCheckEnabled", enabled)}
+				onToggleOfferToSave={(enabled) => void update("offerToSave", enabled)}
+				onRemoveNeverSaveSite={(host) =>
+					void update(
+						"neverSaveSites",
+						prefs.neverSaveSites.filter((h) => h !== host),
+					)
+				}
 				onLockNow={lock}
 				onVerifyCurrentPassword={verifyMasterPassword}
 				onChangeMasterPassword={changeMasterPassword}

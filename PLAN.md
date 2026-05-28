@@ -660,11 +660,21 @@ One component, a `kind`-discriminated payload:
 The prompt only collects intent; the commit runs background → offscreen (crypto)
 → storage, reusing the same encrypt-and-write path as popup CRUD so there's a
 single source of truth (and the in-memory autofill index is refreshed after).
-**Open constraint:** the File System Access backend may refuse a gesture-less
-write from a non-popup context. Assumed fallback — `chrome.storage.local` vaults
-write straight from the background; FSA vaults queue the change and flush it from
-an extension-context write (the offscreen document holding the handle, or the
-next popup/options open). This is the main thing to prove out.
+
+**Write path — queue and flush.** The File System Access backend refuses
+gesture-less writes from a non-popup context, so:
+
+- `chrome.storage.local` vaults — write straight through from the background;
+  the corner-prompt commit lands immediately.
+- FSA-backed vaults — encrypt in the offscreen doc and **stash the new
+  encrypted blob in `chrome.storage.session`** keyed against the vault. The
+  in-memory entries (and autofill index) update right away so the rest of the
+  unlocked session sees the new entry; the on-disk file flushes on the **next
+  popup or options open** (any extension-context surface with a fresh user
+  gesture, which can call the FSA write). A small "**1 change pending sync**"
+  indicator in the popup header surfaces the lag honestly. On lock or browser
+  close before flush the session-stashed blob persists in
+  `chrome.storage.session` and flushes on the next unlock-with-popup-open.
 
 ### De-dupe & anti-nag (assumptions)
 
@@ -989,7 +999,11 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   file + one registry line; see "Entry types (modes)" above. The data model
   is a discriminated union on `type`; pre-typed vaults normalise to `login`.
   SSH keys are store/copy only (no ssh-agent in an extension) and use a masked
-  multi-line `SecretArea` for the private key.
+  multi-line `SecretArea` for the private key. SSH-key entries also surface
+  the OpenSSH **SHA-256 fingerprint** (`SHA256:<base64-no-padding>`, matching
+  `ssh-keygen -lf`) derived from the stored public key via WebCrypto, so the
+  user can eyeball-match against the fingerprint a remote (GitHub, a server's
+  `authorized_keys` listing) displays.
   Every type also supports shared, persisted **custom fields** (visible or
   hidden), surfaced in the form, detail view, copy menu, search, and autofill
   (matched to page fields by name-derived tokens — see the autofill section).
@@ -1022,6 +1036,14 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   reflects a background lock in real time via `crypto.onExternalLock`
   (a `chrome.storage.session` VEK-removal listener), so it never lingers on
   stale unlocked content.
+- **OS-screen-lock auto-lock** — `chrome.idle.onStateChanged` routes the
+  `locked` state through the same `clearSession()` + offscreen `CRYPTO_LOCK`
+  path the alarm uses, closing the window where the user has walked away
+  but the vault is still autofillable. The `idle` state is deliberately
+  ignored (too aggressive for reading / calls / conferences — the sliding
+  alarm covers genuine afk), and popup `visibilitychange` is deliberately
+  not wired (the action popup auto-closes on blur, so it would fire on any
+  outside click).
 - VEK cache (`chrome.storage.session`) for seamless resume across offscreen /
   SW restarts.
 - Autofill on top-frame login pages: username-only, password-only, and
@@ -1153,18 +1175,17 @@ that runs against every decrypted entry before Zod validation. Currently:
    prompt). Full design in the "Passkeys" section; key pieces are the proxy
    attach/detach lifecycle (attach only while unlocked), the `none`-attestation
    create/get crypto, and Web Store review of the powerful permission.
-5. **Idle / visibility-based auto-lock triggers** — supplement the alarm with
-   `chrome.idle.onStateChanged` + popup `visibilitychange`.
-6. **SSH key enhancements** — derive the SHA256 fingerprint from the public key
-   (WebCrypto over the decoded key blob) and a "generate key pair" action.
-   ssh-agent use stays out of scope — unreachable from an MV3 extension.
-7. **Autofill heuristics hardening** — real-world tuning of the card /
+5. **SSH key-pair generation** — a "generate key pair" action on the SSH-key
+   form (WebCrypto Ed25519, emitted in OpenSSH-format private + public). The
+   read-side fingerprint already ships (see Working); ssh-agent use stays out
+   of scope — unreachable from an MV3 extension.
+6. **Autofill heuristics hardening** — real-world tuning of the card /
    custom-field / one-time-code matchers across checkout, login & 2FA forms (the
    matching is conservative but unvalidated against many live sites; segmented
    OTP widgets in particular vary widely).
-8. **E2E tests** — Playwright + extension support.
-9. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-10. **Chrome Web Store submission**.
+7. **E2E tests** — Playwright + extension support.
+8. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+9. **Chrome Web Store submission**.
 
 ---
 
