@@ -11,11 +11,12 @@
 		"dev": "bun run --filter '@vault/platform-extension' dev",
 		"wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
 		"wasm:verify": "bun run packages/crypto-wasm/verify.ts",
+		"wasm:test": "cd packages/crypto-wasm && cargo test",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"check": "biome check --write  --unsafe .",
 		"ci:check": "biome ci .",
-		"test": "bun run --filter '*' test",
+		"test": "bun run wasm:test && bun run --filter '*' test",
 		"typecheck": "bun run --filter '*' typecheck"
 	},
 	"devDependencies": {

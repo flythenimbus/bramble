@@ -14,6 +14,8 @@ export const LEN_SLOT_ID = 16;
 export const LEN_WRAP_IV = 12;
 // 32-byte VEK + 16-byte GCM tag.
 export const LEN_WRAPPED_VEK = 48;
+// WebAuthn `hmac-secret` requires a 32-byte salt (CTAP2 spec).
+export const LEN_HMAC_SECRET_SALT = 32;
 
 export const SLOT_KIND_PASSWORD = 0x01;
 export const SLOT_KIND_WEBAUTHN = 0x02;
@@ -31,14 +33,22 @@ export interface PasswordSlot {
 	wrappedVek: Uint8Array; // 48 bytes (32-byte VEK + GCM tag)
 }
 
-// other (future) clients have added webauthn / recovery slots to without
-// losing data. Today only PasswordSlot is operationally used.
+export interface WebauthnSlot {
+	kind: typeof SLOT_KIND_WEBAUTHN;
+	slotId: Uint8Array; // 16 bytes
+	credentialId: Uint8Array; // variable
+	salt: Uint8Array; // 32 bytes (hmac-secret salt)
+	verifier: Uint8Array; // 32 bytes
+	wrapIv: Uint8Array; // 12 bytes
+	wrappedVek: Uint8Array; // 48 bytes
+}
+
 export interface OpaqueSlot {
 	kind: number;
 	payload: Uint8Array;
 }
 
-export type Slot = PasswordSlot | OpaqueSlot;
+export type Slot = PasswordSlot | WebauthnSlot | OpaqueSlot;
 
 export interface EncryptedEntry {
 	id: string;
@@ -119,9 +129,92 @@ function decodePasswordPayload(payload: Uint8Array): PasswordSlot {
 	};
 }
 
+const WEBAUTHN_FIXED_LEN =
+	LEN_SLOT_ID + 2 + LEN_HMAC_SECRET_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK;
+
+function encodeWebauthnPayload(slot: WebauthnSlot): Uint8Array {
+	if (slot.slotId.length !== LEN_SLOT_ID) {
+		throw new Error(`slotId must be ${LEN_SLOT_ID} bytes, got ${slot.slotId.length}`);
+	}
+	if (slot.credentialId.length === 0 || slot.credentialId.length > 0xffff) {
+		throw new Error(
+			`credentialId length out of range: ${slot.credentialId.length} (need 1..65535)`,
+		);
+	}
+	if (slot.salt.length !== LEN_HMAC_SECRET_SALT) {
+		throw new Error(`salt must be ${LEN_HMAC_SECRET_SALT} bytes, got ${slot.salt.length}`);
+	}
+	if (slot.verifier.length !== LEN_VERIFIER) {
+		throw new Error(`verifier must be ${LEN_VERIFIER} bytes, got ${slot.verifier.length}`);
+	}
+	if (slot.wrapIv.length !== LEN_WRAP_IV) {
+		throw new Error(`wrapIv must be ${LEN_WRAP_IV} bytes, got ${slot.wrapIv.length}`);
+	}
+	if (slot.wrappedVek.length !== LEN_WRAPPED_VEK) {
+		throw new Error(`wrappedVek must be ${LEN_WRAPPED_VEK} bytes, got ${slot.wrappedVek.length}`);
+	}
+	const out = new Uint8Array(WEBAUTHN_FIXED_LEN + slot.credentialId.length);
+	let off = 0;
+	out.set(slot.slotId, off);
+	off += LEN_SLOT_ID;
+	out[off++] = (slot.credentialId.length >> 8) & 0xff;
+	out[off++] = slot.credentialId.length & 0xff;
+	out.set(slot.credentialId, off);
+	off += slot.credentialId.length;
+	out.set(slot.salt, off);
+	off += LEN_HMAC_SECRET_SALT;
+	out.set(slot.verifier, off);
+	off += LEN_VERIFIER;
+	out.set(slot.wrapIv, off);
+	off += LEN_WRAP_IV;
+	out.set(slot.wrappedVek, off);
+	return out;
+}
+
+function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
+	if (payload.length < WEBAUTHN_FIXED_LEN + 1) {
+		throw new Error(
+			`webauthn slot payload too short: ${payload.length} (need at least ${WEBAUTHN_FIXED_LEN + 1})`,
+		);
+	}
+	let off = 0;
+	const slotId = payload.slice(off, off + LEN_SLOT_ID);
+	off += LEN_SLOT_ID;
+	const credIdLen = ((payload[off]! << 8) | payload[off + 1]!) & 0xffff;
+	off += 2;
+	if (credIdLen === 0) throw new Error("webauthn credentialId length is zero");
+	if (
+		off + credIdLen + LEN_HMAC_SECRET_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK !==
+		payload.length
+	) {
+		throw new Error(`webauthn slot payload length mismatch (credIdLen=${credIdLen})`);
+	}
+	const credentialId = payload.slice(off, off + credIdLen);
+	off += credIdLen;
+	const salt = payload.slice(off, off + LEN_HMAC_SECRET_SALT);
+	off += LEN_HMAC_SECRET_SALT;
+	const verifier = payload.slice(off, off + LEN_VERIFIER);
+	off += LEN_VERIFIER;
+	const wrapIv = payload.slice(off, off + LEN_WRAP_IV);
+	off += LEN_WRAP_IV;
+	const wrappedVek = payload.slice(off, off + LEN_WRAPPED_VEK);
+	return {
+		kind: SLOT_KIND_WEBAUTHN,
+		slotId,
+		credentialId,
+		salt,
+		verifier,
+		wrapIv,
+		wrappedVek,
+	};
+}
+
 function encodeSlotPayload(slot: Slot): Uint8Array {
 	if (slot.kind === SLOT_KIND_PASSWORD) {
 		return encodePasswordPayload(slot as PasswordSlot);
+	}
+	if (slot.kind === SLOT_KIND_WEBAUTHN) {
+		return encodeWebauthnPayload(slot as WebauthnSlot);
 	}
 	return (slot as OpaqueSlot).payload;
 }
@@ -129,6 +222,9 @@ function encodeSlotPayload(slot: Slot): Uint8Array {
 function decodeSlotPayload(kind: number, payload: Uint8Array): Slot {
 	if (kind === SLOT_KIND_PASSWORD) {
 		return decodePasswordPayload(payload);
+	}
+	if (kind === SLOT_KIND_WEBAUTHN) {
+		return decodeWebauthnPayload(payload);
 	}
 	return { kind, payload };
 }
@@ -234,4 +330,12 @@ export function findPasswordSlot(blob: VaultBlob): PasswordSlot | null {
 		if (slot.kind === SLOT_KIND_PASSWORD) return slot as PasswordSlot;
 	}
 	return null;
+}
+
+export function findWebauthnSlots(blob: VaultBlob): WebauthnSlot[] {
+	const out: WebauthnSlot[] = [];
+	for (const slot of blob.slots) {
+		if (slot.kind === SLOT_KIND_WEBAUTHN) out.push(slot as WebauthnSlot);
+	}
+	return out;
 }

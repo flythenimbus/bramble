@@ -14,10 +14,15 @@ import {
 	type EncryptedEntry,
 	encodeVaultBlob,
 	findPasswordSlot,
+	findWebauthnSlots,
+	LEN_HMAC_SECRET_SALT,
+	LEN_SLOT_ID,
 	type PasswordSlot,
 	SLOT_KIND_PASSWORD,
+	SLOT_KIND_WEBAUTHN,
 	type VaultBlob,
 	verifierPrefix,
+	type WebauthnSlot,
 } from "../vault-format";
 
 export interface BreachStatus {
@@ -86,12 +91,28 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 }
 
 import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
+import {
+	addWebauthnSlot,
+	matchSlotByCredentialId,
+	needsSaltMismatchRetry,
+	removeWebauthnSlot,
+} from "../vault/security-key-slots";
 
 export { entryDataSchema };
+
+export interface SecurityKeyMeta {
+	slotIdB64: string;
+	label: string;
+	addedAt: number;
+}
+
+const SECURITY_KEY_LABELS_PREF = "pref.securityKeyLabels";
 
 export interface UseVault {
 	hasVault: boolean;
 	isLocked: boolean;
+	hasWebauthnSlot: boolean;
+	securityKeys: SecurityKeyMeta[];
 	ready: boolean;
 	entries: Entry[];
 	error: string | null;
@@ -106,6 +127,9 @@ export interface UseVault {
 	deleteEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
 	changeMasterPassword(newPassword: string): Promise<void>;
+	unlockWithSecurityKey(): Promise<void>;
+	registerSecurityKey(label: string): Promise<void>;
+	revokeSecurityKey(slotIdB64: string): Promise<void>;
 }
 
 const VaultContext = createContext<UseVault | null>(null);
@@ -186,6 +210,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [pendingSyncCount, setPendingSyncCount] = useState(0);
+	const [webauthnSlots, setWebauthnSlots] = useState<WebauthnSlot[]>([]);
+	const [securityKeyLabels, setSecurityKeyLabels] = useState<
+		Record<string, { label: string; addedAt: number }>
+	>({});
 
 	const refreshPendingSyncCount = useCallback(async () => {
 		try {
@@ -209,6 +237,22 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			return tryDecode();
 		}
 	}, [storage]);
+
+	const refreshSlotMetadata = useCallback(async () => {
+		try {
+			const [{ blob }, stored] = await Promise.all([
+				readDecodedBlob(),
+				storage.getMeta<Record<string, { label: string; addedAt: number }>>(
+					SECURITY_KEY_LABELS_PREF,
+				),
+			]);
+			setWebauthnSlots(findWebauthnSlots(blob));
+			setSecurityKeyLabels(stored ?? {});
+		} catch {
+			setWebauthnSlots([]);
+			setSecurityKeyLabels({});
+		}
+	}, [readDecodedBlob, storage]);
 
 	const loadEntries = useCallback(async () => {
 		await storage.flushPendingVaultBlob().catch(() => {});
@@ -249,6 +293,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				setHasVault(has);
 				if (!has) return;
 
+				await refreshSlotMetadata();
+
 				const locked = await crypto.isLocked();
 				if (cancelled) return;
 				setIsLocked(locked);
@@ -265,7 +311,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [storage, crypto, loadEntries, shell]);
+	}, [storage, crypto, loadEntries, shell, refreshSlotMetadata]);
 
 	useEffect(() => {
 		return crypto.onExternalLock(() => {
@@ -315,6 +361,198 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		setEntries([]);
 		setIsLocked(true);
 	}, [crypto, autofill]);
+
+
+	const callGetWithSalt = useCallback(
+		async (
+			allowCredentials: WebauthnSlot[],
+			salt: Uint8Array,
+		): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array }> => {
+			const challenge = new Uint8Array(32);
+			globalThis.crypto.getRandomValues(challenge);
+			// `hmacGetSecret` isn't in lib.dom.d.ts's `AuthenticationExtensionsClientInputs`;
+			// cast the options object so TS doesn't reject the field.
+			const publicKey = {
+				challenge: challenge as BufferSource,
+				allowCredentials: allowCredentials.map((s) => ({
+					type: "public-key",
+					id: s.credentialId as BufferSource,
+				})),
+				userVerification: "preferred",
+				extensions: { hmacGetSecret: { salt1: salt as BufferSource } },
+			} as unknown as PublicKeyCredentialRequestOptions;
+			const credential = (await navigator.credentials.get({
+				publicKey,
+			})) as PublicKeyCredential | null;
+			if (!credential) throw new Error("Authenticator returned no credential.");
+			const ext = credential.getClientExtensionResults() as {
+				hmacGetSecret?: { output1?: ArrayBuffer };
+			};
+			const out1 = ext.hmacGetSecret?.output1;
+			if (!out1) {
+				throw new Error(
+					"This authenticator didn't return an hmac-secret. Try a YubiKey 5+ or Windows Hello.",
+				);
+			}
+			return {
+				rawId: new Uint8Array(credential.rawId),
+				hmacSecret: new Uint8Array(out1),
+			};
+		},
+		[],
+	);
+
+	const unlockWithSecurityKey = useCallback(async () => {
+		setError(null);
+		let slots: WebauthnSlot[];
+		try {
+			const { blob } = await readDecodedBlob();
+			slots = findWebauthnSlots(blob);
+		} catch (e) {
+			console.error("[vault] failed to read vault blob:", e);
+			throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
+		}
+		if (slots.length === 0) {
+			throw new Error("No security key registered on this vault.");
+		}
+
+		const firstSalt = slots[0]!.salt;
+		const firstAttempt = await callGetWithSalt(slots, firstSalt);
+		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
+		if (!used) {
+			throw new Error("Authenticator returned an unknown credential.");
+		}
+		let hmacSecret = firstAttempt.hmacSecret;
+		if (needsSaltMismatchRetry(used, firstSalt)) {
+			const second = await callGetWithSalt([used], used.salt);
+			used = matchSlotByCredentialId([used], second.rawId);
+			if (!used) throw new Error("Authenticator returned an unknown credential.");
+			hmacSecret = second.hmacSecret;
+		}
+
+		const ok = await crypto.unwrapVekWebauthn({
+			hmacSecretB64: bytesToBase64(hmacSecret),
+			slotIdB64: bytesToBase64(used.slotId),
+			verifierB64: bytesToBase64(used.verifier),
+			wrapIvB64: bytesToBase64(used.wrapIv),
+			wrappedVekB64: bytesToBase64(used.wrappedVek),
+			magicVersion: verifierPrefix(),
+		});
+		if (!ok) {
+			throw new Error("Security-key unlock failed (verifier mismatch).");
+		}
+		await loadEntries();
+		setIsLocked(false);
+		void shell.flushPendingCornerCapture().catch(() => {});
+	}, [readDecodedBlob, callGetWithSalt, crypto, loadEntries, shell]);
+
+	const registerSecurityKey = useCallback(
+		async (label: string) => {
+			setError(null);
+			if (await crypto.isLocked()) {
+				throw new Error("Unlock the vault before adding a security key.");
+			}
+			const { blob } = await readDecodedBlob();
+
+			// Step 1: create() — register a credential with hmacCreateSecret.
+			const challenge = new Uint8Array(32);
+			globalThis.crypto.getRandomValues(challenge);
+			const userId = new Uint8Array(16);
+			globalThis.crypto.getRandomValues(userId);
+			const created = (await navigator.credentials.create({
+				publicKey: {
+					challenge: challenge as BufferSource,
+					rp: { name: "Vault" },
+					user: {
+						id: userId as BufferSource,
+						name: "vault@local",
+						displayName: label || "Vault",
+					},
+					pubKeyCredParams: [
+						{ type: "public-key", alg: -7 }, // ES256
+						{ type: "public-key", alg: -257 }, // RS256
+					],
+					authenticatorSelection: {
+						userVerification: "preferred",
+						residentKey: "discouraged",
+					},
+					attestation: "none",
+					extensions: { hmacCreateSecret: true },
+				},
+			})) as PublicKeyCredential | null;
+			if (!created) throw new Error("Authenticator returned no credential.");
+			const createdExt = created.getClientExtensionResults() as {
+				hmacCreateSecret?: boolean;
+			};
+			if (createdExt.hmacCreateSecret !== true) {
+				throw new Error(
+					"This authenticator doesn't support hmac-secret. Try a YubiKey 5+ or Windows Hello.",
+				);
+			}
+
+			// Step 2: generate a fresh 32-byte salt for this slot, then get()
+			// to retrieve the actual secret. (The create() response confirms
+			// support; only get() returns the secret.)
+			const credentialId = new Uint8Array(created.rawId);
+			const salt = new Uint8Array(LEN_HMAC_SECRET_SALT);
+			globalThis.crypto.getRandomValues(salt);
+			const { hmacSecret } = await callGetWithSalt(
+				[
+					{
+						kind: SLOT_KIND_WEBAUTHN,
+						slotId: new Uint8Array(LEN_SLOT_ID),
+						credentialId,
+						salt,
+						verifier: new Uint8Array(),
+						wrapIv: new Uint8Array(),
+						wrappedVek: new Uint8Array(),
+					},
+				],
+				salt,
+			);
+
+			// Step 3: wrap the VEK under a KEK derived from the secret.
+			const slotIdB64 = await crypto.generateSlotId();
+			const wrapped = await crypto.wrapVekWebauthn({
+				hmacSecretB64: bytesToBase64(hmacSecret),
+				slotIdB64,
+				magicVersion: verifierPrefix(),
+			});
+			const slot: WebauthnSlot = {
+				kind: SLOT_KIND_WEBAUTHN,
+				slotId: base64ToBytes(slotIdB64),
+				credentialId,
+				salt,
+				verifier: base64ToBytes(wrapped.verifier),
+				wrapIv: base64ToBytes(wrapped.wrapIv),
+				wrappedVek: base64ToBytes(wrapped.wrappedVek),
+			};
+
+			const newBlob = addWebauthnSlot(blob, slot);
+			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+
+			const labels = { ...securityKeyLabels };
+			labels[slotIdB64] = { label: label.trim() || "Security key", addedAt: Date.now() };
+			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
+
+			await refreshSlotMetadata();
+		},
+		[crypto, readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata, callGetWithSalt],
+	);
+
+	const revokeSecurityKey = useCallback(
+		async (slotIdB64: string) => {
+			setError(null);
+			const { blob } = await readDecodedBlob();
+			const newBlob = removeWebauthnSlot(blob, base64ToBytes(slotIdB64));
+			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+			const labels = { ...securityKeyLabels };
+			delete labels[slotIdB64];
+			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
+			await refreshSlotMetadata();
+		},
+		[readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata],
+	);
 
 	const pickVaultFile = useCallback(
 		async (mode: "create" | "open") => {
@@ -475,6 +713,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const { blob } = await readDecodedBlob();
 			const existing = findPasswordSlot(blob);
 			if (!existing) throw new Error("vault has no password slot to rotate");
+			// Rotation re-encrypts everything under a fresh VEK, which would
+			// invalidate every other slot's wrappedVek. For webauthn slots
+			// we'd have to re-prompt the user to tap each registered key,
+			// which is unacceptable UX; for now refuse and tell the user to
+			// remove security keys first.
+			if (findWebauthnSlots(blob).length > 0) {
+				throw new Error(
+					"Remove all security keys first — rotating the master password will invalidate them.",
+				);
+			}
 			if (blob.slots.length !== 1) {
 				throw new Error(
 					"vault has additional authenticators; multi-slot rotation is not yet supported",
@@ -582,6 +830,21 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, storage, autofill, entries, readDecodedBlob],
 	);
 
+	const hasWebauthnSlot = webauthnSlots.length > 0;
+	const securityKeys = useMemo<SecurityKeyMeta[]>(
+		() =>
+			webauthnSlots.map((slot) => {
+				const slotIdB64 = bytesToBase64(slot.slotId);
+				const meta = securityKeyLabels[slotIdB64];
+				return {
+					slotIdB64,
+					label: meta?.label ?? "Security key",
+					addedAt: meta?.addedAt ?? 0,
+				};
+			}),
+		[webauthnSlots, securityKeyLabels],
+	);
+
 	const value = useMemo<UseVault>(
 		() => ({
 			hasVault,
@@ -590,6 +853,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			entries,
 			error,
 			pendingSyncCount,
+			hasWebauthnSlot,
+			securityKeys,
 			unlock,
 			lock,
 			pickVaultFile,
@@ -600,6 +865,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteEntry,
 			verifyMasterPassword,
 			changeMasterPassword,
+			unlockWithSecurityKey,
+			registerSecurityKey,
+			revokeSecurityKey,
 		}),
 		[
 			hasVault,
@@ -608,6 +876,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			entries,
 			error,
 			pendingSyncCount,
+			hasWebauthnSlot,
+			securityKeys,
 			unlock,
 			lock,
 			pickVaultFile,
@@ -618,6 +888,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteEntry,
 			verifyMasterPassword,
 			changeMasterPassword,
+			unlockWithSecurityKey,
+			registerSecurityKey,
+			revokeSecurityKey,
 		],
 	);
 

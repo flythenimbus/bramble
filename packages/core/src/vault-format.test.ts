@@ -3,6 +3,8 @@ import {
 	decodeVaultBlob,
 	encodeVaultBlob,
 	findPasswordSlot,
+	findWebauthnSlots,
+	LEN_HMAC_SECRET_SALT,
 	LEN_IV,
 	LEN_SALT,
 	LEN_SLOT_ID,
@@ -19,6 +21,7 @@ import {
 	type VaultBlob,
 	VERSION,
 	verifierPrefix,
+	type WebauthnSlot,
 } from "./vault-format";
 
 function fillBytes(length: number, base = 0): Uint8Array {
@@ -101,14 +104,14 @@ describe("decodeVaultBlob", () => {
 	});
 
 	it("preserves unknown slot kinds verbatim across a round-trip", () => {
-		const opaque = { kind: SLOT_KIND_WEBAUTHN, payload: fillBytes(96, 0xa0) };
+		const future = { kind: 0xf1, payload: fillBytes(96, 0xa0) };
 		const recovery = { kind: SLOT_KIND_RECOVERY, payload: fillBytes(124, 0xb0) };
-		const blob = makeBlob(0, [makePasswordSlot(), opaque, recovery]);
+		const blob = makeBlob(0, [makePasswordSlot(), future, recovery]);
 		const decoded = decodeVaultBlob(encodeVaultBlob(blob));
 		expect(decoded.slots).toHaveLength(3);
 		expect(decoded.slots[0]!.kind).toBe(SLOT_KIND_PASSWORD);
-		expect(decoded.slots[1]!.kind).toBe(SLOT_KIND_WEBAUTHN);
-		expect((decoded.slots[1] as { payload: Uint8Array }).payload).toEqual(opaque.payload);
+		expect(decoded.slots[1]!.kind).toBe(0xf1);
+		expect((decoded.slots[1] as { payload: Uint8Array }).payload).toEqual(future.payload);
 		expect(decoded.slots[2]!.kind).toBe(SLOT_KIND_RECOVERY);
 		expect((decoded.slots[2] as { payload: Uint8Array }).payload).toEqual(recovery.payload);
 	});
@@ -155,8 +158,73 @@ describe("findPasswordSlot", () => {
 	});
 
 	it("returns null when no password slot is present", () => {
-		const blob = makeBlob(0, [{ kind: SLOT_KIND_WEBAUTHN, payload: fillBytes(96, 0xa0) }]);
+		const blob = makeBlob(0, [{ kind: 0xf1, payload: fillBytes(96, 0xa0) }]);
 		expect(findPasswordSlot(blob)).toBeNull();
+	});
+});
+
+function makeWebauthnSlot(base = 0, credentialIdLen = 64): WebauthnSlot {
+	return {
+		kind: SLOT_KIND_WEBAUTHN,
+		slotId: fillBytes(LEN_SLOT_ID, base + 0x10),
+		credentialId: fillBytes(credentialIdLen, base + 0x20),
+		salt: fillBytes(LEN_HMAC_SECRET_SALT, base + 0x30),
+		verifier: fillBytes(LEN_VERIFIER, base + 0x40),
+		wrapIv: fillBytes(LEN_WRAP_IV, base + 0x50),
+		wrappedVek: fillBytes(LEN_WRAPPED_VEK, base + 0x60),
+	};
+}
+
+describe("WebauthnSlot", () => {
+	it("round-trips a single webauthn slot verbatim", () => {
+		const wa = makeWebauthnSlot();
+		const blob = makeBlob(0, [makePasswordSlot(), wa]);
+		const decoded = decodeVaultBlob(encodeVaultBlob(blob));
+		const decodedWa = decoded.slots[1] as WebauthnSlot;
+		expect(decodedWa.kind).toBe(SLOT_KIND_WEBAUTHN);
+		expect(decodedWa.slotId).toEqual(wa.slotId);
+		expect(decodedWa.credentialId).toEqual(wa.credentialId);
+		expect(decodedWa.salt).toEqual(wa.salt);
+		expect(decodedWa.verifier).toEqual(wa.verifier);
+		expect(decodedWa.wrapIv).toEqual(wa.wrapIv);
+		expect(decodedWa.wrappedVek).toEqual(wa.wrappedVek);
+	});
+
+	it("handles variable-length credentialIds", () => {
+		// Different authenticators produce different credentialId lengths
+		// (YubiKey ~89 bytes, platform passkeys 16-32 bytes).
+		for (const credIdLen of [16, 32, 64, 128, 256]) {
+			const wa = makeWebauthnSlot(0, credIdLen);
+			const blob = makeBlob(0, [makePasswordSlot(), wa]);
+			const decoded = decodeVaultBlob(encodeVaultBlob(blob));
+			const decodedWa = decoded.slots[1] as WebauthnSlot;
+			expect(decodedWa.credentialId.length).toBe(credIdLen);
+			expect(decodedWa.credentialId).toEqual(wa.credentialId);
+		}
+	});
+
+	it("findWebauthnSlots returns every registered webauthn slot", () => {
+		const a = makeWebauthnSlot(0);
+		const b = makeWebauthnSlot(0x80, 32);
+		const blob = makeBlob(0, [makePasswordSlot(), a, b]);
+		const found = findWebauthnSlots(blob);
+		expect(found).toHaveLength(2);
+		expect(found[0]!.slotId).toEqual(a.slotId);
+		expect(found[1]!.slotId).toEqual(b.slotId);
+	});
+
+	it("findWebauthnSlots returns an empty array when none are registered", () => {
+		const blob = makeBlob(0, [makePasswordSlot()]);
+		expect(findWebauthnSlots(blob)).toEqual([]);
+	});
+
+	it("rejects a malformed payload length", () => {
+		const blob = makeBlob(0, [
+			makePasswordSlot(),
+			{ kind: SLOT_KIND_WEBAUTHN, payload: fillBytes(10, 0xa0) } as unknown as Slot,
+		]);
+		// The encoder will produce nonsense bytes, but decode should reject.
+		expect(() => decodeVaultBlob(encodeVaultBlob(blob))).toThrow();
 	});
 });
 

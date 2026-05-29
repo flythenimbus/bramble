@@ -33,6 +33,22 @@ export interface VerifyPasswordSlotInput extends WrapPasswordSlotInput {
 	verifierB64: string;
 }
 
+export interface WrapWebauthnSlotInput {
+	hmacSecretB64: string;
+	slotIdB64: string;
+	magicVersion: Uint8Array;
+}
+
+export interface UnwrapWebauthnSlotInput extends WrapWebauthnSlotInput {
+	verifierB64: string;
+	wrapIvB64: string;
+	wrappedVekB64: string;
+}
+
+export interface VerifyWebauthnSlotInput extends WrapWebauthnSlotInput {
+	verifierB64: string;
+}
+
 export interface CryptoAdapter {
 	generateVek(): Promise<string>; // creates VEK + loads it; returns b64 for caching
 	unlockWithVek(vekB64: string): Promise<void>; // session resume (offscreen restart)
@@ -49,6 +65,10 @@ export interface CryptoAdapter {
 	wrapVekPassword(input: WrapPasswordSlotInput): Promise<PasswordSlotBlob>;
 	unwrapVekPassword(input: UnwrapPasswordSlotInput): Promise<boolean>;
 	verifyPasswordSlot(input: VerifyPasswordSlotInput): Promise<boolean>;
+
+	wrapVekWebauthn(input: WrapWebauthnSlotInput): Promise<PasswordSlotBlob>;
+	unwrapVekWebauthn(input: UnwrapWebauthnSlotInput): Promise<boolean>;
+	verifyWebauthnSlot(input: VerifyWebauthnSlotInput): Promise<boolean>;
 
 	encryptEntry(plaintextJson: string): Promise<EncryptedPayload>;
 	decryptEntry(payload: EncryptedPayload): Promise<string>;

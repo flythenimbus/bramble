@@ -1,4 +1,4 @@
-import { ExternalLink, Eye, EyeOff, Shield } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { TextField } from "../../components/ui/text-field";
@@ -12,13 +12,25 @@ interface AuthProps {
 	onUnlock: (password: string) => Promise<void>;
 	onOpenSetup: () => Promise<void>;
 	onPopOut?: () => void;
+	// True when the vault carries a webauthn slot; shows the
+	// "Use security key" button alongside the password form.
+	hasWebauthnSlot?: boolean;
+	onUnlockWithSecurityKey?: () => Promise<void>;
 }
 
 interface FormValues {
 	masterPassword: string;
 }
 
-export function Auth({ hasVault, appName, onUnlock, onOpenSetup, onPopOut }: AuthProps) {
+export function Auth({
+	hasVault,
+	appName,
+	onUnlock,
+	onOpenSetup,
+	onPopOut,
+	hasWebauthnSlot,
+	onUnlockWithSecurityKey,
+}: AuthProps) {
 	const [showPassword, setShowPassword] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const {
@@ -43,6 +55,18 @@ export function Auth({ hasVault, appName, onUnlock, onOpenSetup, onPopOut }: Aut
 		setBusy(true);
 		try {
 			await onOpenSetup();
+		} catch (e) {
+			setError("masterPassword", { message: (e as Error).message });
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const handleSecurityKey = async () => {
+		if (!onUnlockWithSecurityKey) return;
+		setBusy(true);
+		try {
+			await onUnlockWithSecurityKey();
 		} catch (e) {
 			setError("masterPassword", { message: (e as Error).message });
 		} finally {
@@ -106,6 +130,18 @@ export function Auth({ hasVault, appName, onUnlock, onOpenSetup, onPopOut }: Aut
 								{busy ? "Unlocking…" : hasVault ? "Unlock Vault" : "No vault — create one below"}
 							</button>
 						</form>
+
+						{hasVault && hasWebauthnSlot && onUnlockWithSecurityKey && (
+							<button
+								type="button"
+								onClick={handleSecurityKey}
+								disabled={busy}
+								className="mt-3 w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+							>
+								<KeyRound className="w-4 h-4" />
+								{busy ? "Waiting for your key…" : "Use security key"}
+							</button>
+						)}
 					</div>
 
 					<div className="mt-6 text-center space-y-3">

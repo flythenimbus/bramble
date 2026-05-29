@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
+use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -53,6 +54,15 @@ fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, J
     argon2
         .hash_password_into(password.as_bytes(), salt, out.as_mut_slice())
         .map_err(|e| err(format!("argon2 hash: {e}")))?;
+    Ok(out)
+}
+
+const WEBAUTHN_KDF_INFO: &[u8] = b"titanpass/webauthn/v1";
+fn derive_kek_hkdf(hmac_secret: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsError> {
+    let hkdf = Hkdf::<Sha256>::new(None, hmac_secret);
+    let mut out = Zeroizing::new([0u8; KEY_LEN]);
+    hkdf.expand(WEBAUTHN_KDF_INFO, out.as_mut_slice())
+        .map_err(|e| err(format!("hkdf expand: {e}")))?;
     Ok(out)
 }
 
@@ -262,6 +272,74 @@ pub fn unwrap_vek_password(
     Ok(true)
 }
 
+//
+
+#[wasm_bindgen]
+pub fn wrap_vek_webauthn(
+    hmac_secret_b64: String,
+    slot_id_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<JsValue, JsError> {
+    let hmac_secret = b64_decode(&hmac_secret_b64)?;
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let kek = derive_kek_hkdf(&hmac_secret)?;
+
+    let payload = with_vek(|vek| {
+        let mut wrap_iv = [0u8; IV_LEN];
+        random_bytes(&mut wrap_iv)?;
+        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
+        let verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+        Ok(PasswordSlotBlob {
+            verifier: B64.encode(&verifier),
+            wrap_iv: B64.encode(wrap_iv),
+            wrapped_vek: B64.encode(&wrapped),
+        })
+    })?;
+
+    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+}
+
+#[wasm_bindgen]
+pub fn verify_webauthn_slot(
+    hmac_secret_b64: String,
+    slot_id_b64: String,
+    verifier_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<bool, JsError> {
+    let hmac_secret = b64_decode(&hmac_secret_b64)?;
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let verifier = b64_decode(&verifier_b64)?;
+    let kek = derive_kek_hkdf(&hmac_secret)?;
+    let computed = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+    Ok(ct_eq(&computed, &verifier))
+}
+
+#[wasm_bindgen]
+pub fn unwrap_vek_webauthn(
+    hmac_secret_b64: String,
+    slot_id_b64: String,
+    verifier_b64: String,
+    wrap_iv_b64: String,
+    wrapped_vek_b64: String,
+    magic_version: Vec<u8>,
+) -> Result<bool, JsError> {
+    let hmac_secret = b64_decode(&hmac_secret_b64)?;
+    let slot_id = b64_decode(&slot_id_b64)?;
+    let verifier = b64_decode(&verifier_b64)?;
+    let kek = derive_kek_hkdf(&hmac_secret)?;
+
+    let computed = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+    if !ct_eq(&computed, &verifier) {
+        return Ok(false);
+    }
+
+    let wrap_iv = iv_from(b64_decode(&wrap_iv_b64)?)?;
+    let wrapped = b64_decode(&wrapped_vek_b64)?;
+    let vek = aes_decrypt(kek.as_slice(), &wrap_iv, &wrapped)?;
+    load_vek(vek.as_slice())?;
+    Ok(true)
+}
+
 
 #[wasm_bindgen]
 pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, JsError> {
@@ -330,4 +408,97 @@ pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String
         let plaintext = aes_decrypt(vek, &iv, &ct)?;
         String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
     })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn derive_kek_hkdf_is_deterministic_and_32_bytes() {
+        let secret = [0xa5u8; 32];
+        let a = derive_kek_hkdf(&secret).unwrap();
+        let b = derive_kek_hkdf(&secret).unwrap();
+        assert_eq!(a.as_slice().len(), KEY_LEN);
+        assert_eq!(a.as_slice(), b.as_slice());
+    }
+
+    #[test]
+    fn derive_kek_hkdf_different_secrets_give_different_keks() {
+        let kek_a = derive_kek_hkdf(&[0x01u8; 32]).unwrap();
+        let kek_b = derive_kek_hkdf(&[0x02u8; 32]).unwrap();
+        assert_ne!(kek_a.as_slice(), kek_b.as_slice());
+    }
+
+    #[test]
+    fn webauthn_wrap_unwrap_round_trip() {
+        let vek: [u8; KEY_LEN] = [0x42; KEY_LEN];
+        let hmac_secret: [u8; 32] = [0xc3; 32];
+        let slot_id: [u8; SLOT_ID_LEN] = [0x10; SLOT_ID_LEN];
+        let magic_version: [u8; 5] = [b'V', b'L', b'T', b'1', 0x02];
+        let wrap_iv: [u8; IV_LEN] = [0x77; IV_LEN];
+
+        // wrap
+        let kek = derive_kek_hkdf(&hmac_secret).unwrap();
+        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, &vek).unwrap();
+        let verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+        assert_eq!(verifier.len(), 32, "verifier must be HMAC-SHA256 sized");
+
+        // unwrap
+        let kek2 = derive_kek_hkdf(&hmac_secret).unwrap();
+        let computed = compute_verifier(kek2.as_slice(), &magic_version, &slot_id);
+        assert!(ct_eq(&computed, &verifier), "verifier round-trip mismatch");
+        let recovered = aes_decrypt(kek2.as_slice(), &wrap_iv, &wrapped).unwrap();
+        assert_eq!(recovered.as_slice(), vek);
+    }
+
+    #[test]
+    fn webauthn_unwrap_rejects_wrong_hmac_secret() {
+        let slot_id: [u8; SLOT_ID_LEN] = [0x10; SLOT_ID_LEN];
+        let magic_version: [u8; 5] = [b'V', b'L', b'T', b'1', 0x02];
+
+        let kek_real = derive_kek_hkdf(&[0xaa; 32]).unwrap();
+        let kek_attacker = derive_kek_hkdf(&[0xab; 32]).unwrap();
+        let verifier_real = compute_verifier(kek_real.as_slice(), &magic_version, &slot_id);
+        let verifier_attacker =
+            compute_verifier(kek_attacker.as_slice(), &magic_version, &slot_id);
+        assert!(!ct_eq(&verifier_real, &verifier_attacker));
+    }
+
+    #[test]
+    fn webauthn_unwrap_rejects_tampered_verifier() {
+        let hmac_secret: [u8; 32] = [0xc3; 32];
+        let slot_id: [u8; SLOT_ID_LEN] = [0x10; SLOT_ID_LEN];
+        let magic_version: [u8; 5] = [b'V', b'L', b'T', b'1', 0x02];
+
+        let kek = derive_kek_hkdf(&hmac_secret).unwrap();
+        let mut verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+        verifier[0] ^= 0x01;
+        let recomputed = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
+        assert!(!ct_eq(&recomputed, &verifier));
+    }
+
+    #[test]
+    fn webauthn_unwrap_rejects_tampered_ciphertext() {
+        use aes_gcm::aead::Aead;
+        let vek: [u8; KEY_LEN] = [0x42; KEY_LEN];
+        let hmac_secret: [u8; 32] = [0xc3; 32];
+        let wrap_iv: [u8; IV_LEN] = [0x77; IV_LEN];
+
+        let kek = derive_kek_hkdf(&hmac_secret).unwrap();
+        let mut wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, &vek).unwrap();
+        wrapped[0] ^= 0x01;
+        let cipher = Aes256Gcm::new_from_slice(kek.as_slice()).unwrap();
+        let result = cipher.decrypt(Nonce::from_slice(&wrap_iv), wrapped.as_slice());
+        assert!(result.is_err(), "AES-GCM should reject a flipped ciphertext bit");
+    }
+
+    #[test]
+    fn webauthn_kek_differs_from_password_kek_on_same_bytes() {
+        let bytes = [0x33u8; 32];
+        let webauthn_kek = derive_kek_hkdf(&bytes).unwrap();
+        let password_kek = derive_kek("\u{0033}".repeat(32).as_str(), &bytes[..16]).unwrap();
+        assert_ne!(webauthn_kek.as_slice(), password_kek.as_slice());
+    }
 }
