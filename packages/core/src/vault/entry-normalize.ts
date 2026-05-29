@@ -1,9 +1,6 @@
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 
-// Lives in its own non-React module so both the popup (useVault) and the
-// background SW (background.ts hydrate path) can run the same validation
-// without pulling React into the SW bundle.
 
 const customFieldSchema = z.object({
 	key: z.string(),

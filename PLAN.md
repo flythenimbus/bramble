@@ -1139,12 +1139,67 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   parses entirely on-device and bulk-writes via `useVault.importEntries` in a
   single encrypted `persistEntries` pass. KeePass `.kdbx`, dedup, folders, and
   attachments are deliberately out of v1 (see below).
+- **Corner prompt — save & update logins.** Top-right in-page card the content
+  script renders after the user submits a form with credentials we don't have
+  (or that differ from what we have). Capture is gated on a real user-edit of
+  the password field (autofilled values that the user didn't touch are
+  skipped) and suppresses on captchas, OTP-only steps, and ambiguous
+  password-change forms; a MutationObserver fallback catches SPA submits that
+  fire no native `submit` event. Background owns the dedupe decision against
+  the autofill index (exact / save / update with same-username candidates
+  floated to the top), the plaintext capture stash in `chrome.storage.session`
+  (wiped on lock), and the encrypt-and-commit path through the offscreen doc.
+  Writes branch on backend kind: chrome.storage.local vaults commit
+  immediately from the background; FSA-backed vaults stash the new outer
+  blob in `chrome.storage.session` and the next popup/options open flushes it
+  through `storage.flushPendingVaultBlob` — surfaced as a "1 pending sync"
+  chip in the AppLayout header so the lag is honest. Locked-vault "Unlock &
+  save" stashes a one-shot handoff and opens the action popup
+  (`chrome.action.openPopup`, detached-window fallback for older Chrome); the
+  popup commits the parked capture immediately after a successful unlock via
+  `shell.flushPendingCornerCapture` → `CORNER_FLUSH_HANDOFF`. Per-site mute
+  via the card's overflow → "Never for this site" (managed back in Settings),
+  and a global Settings toggle (default on). Passkey variants
+  (`save-passkey` / `use-passkey`) are deferred to the passkey work that
+  rides this surface.
+- **Lazy in-memory autofill index** — the background's decrypted index is
+  in-memory only (never persisted, to keep plaintext out of
+  `chrome.storage.session` under memory pressure). Previously it was null
+  until the popup repopulated it after every SW idle-kill, which made the
+  dropdown and the corner card both falsely report "locked" while the vault
+  was actually unlocked (cached VEK still in session). `hydrateAutofillIndexFromDisk`
+  now rebuilds the index by re-decrypting on demand the next time any path
+  needs it (`AUTOFILL_QUERY`, `AUTOFILL_FIND`, `AUTOFILL_FETCH`, and every
+  corner-prompt path). The autoritative "is the vault locked" signal is now
+  `cachedVek === null`; an empty index is just "not hydrated yet."
+- **Detection helpers extracted + tested under happy-dom.** The pure DOM
+  detectors (`detectLoginFields`, `detectCardFields`, `otpInputs`,
+  `findNewPasswordOnChangeForm`, `hasInteractiveCaptcha`, `candidateKind`,
+  etc.) live in `platform-extension/src/detection.ts` — testable in
+  isolation without the content-script's bootstrap side effects. Coverage
+  is two-tier: ~60 synthetic snippet tests in `detection.dom.test.ts`
+  exercising every code path, plus ~60 fixture tests in
+  `fixtures/sites.dom.test.ts` against scrubbed HTML snapshots of 10 real
+  sites (github, bmo, discord, twitch, amazon-add-payment, microsoft x2,
+  github-2fa, biteasy, github-password-change). The fixtures surfaced one
+  production-grade bug — BMO's login uses your debit card number as your
+  user ID, so the field's label/aria-label read "Card number or Login ID"
+  and `CC_NUMBER_RE` claimed it as card.number. `candidateKind` now
+  prefers login when a field satisfies both detectors (the CVV-as-password
+  exception is preserved). The corpus also documented two intended
+  shallow weaknesses: `\bcvv\b` doesn't match underscore-fused names like
+  `cvv_field` (no word boundary at `_`), and a standalone
+  `verification-code` field is classified as card-CVV (via
+  `card.?code`) — both locked in with explicit tests so a future regex
+  tweak knows the tradeoff.
 
 #### Schema migrations
 
 JSON-shape changes inside the encrypted entries blob don't bump the on-disk
-vault format — they ride a runtime normalizer in `useVault.normalizeEntryData`
-that runs against every decrypted entry before Zod validation. Currently:
+vault format — they ride a runtime normalizer
+(`@core/vault/entry-normalize.normalizeEntryData`, shared by the popup's
+`useVault` and the background's lazy-rehydration path) that runs against every
+decrypted entry before Zod validation. Currently:
 
 - **Untyped → typed entries.** Vaults created before the `type` discriminator
   treat every entry as `login` (the original kind).
@@ -1163,29 +1218,31 @@ that runs against every decrypted entry before Zod validation. Currently:
    FIDO2 authenticator (YubiKey 5+, platform passkeys). Requires
    `navigator.credentials.create/get` from popup/options context and
    testing across authenticator vendors.
-3. **Corner prompt (capture, save & use)** — the top-right in-page card for
-   `save-login` / `update-login` / `save-passkey` / `use-passkey`, the background
-   pending-capture stash that survives navigation, and the write-from-background
-   path (with the FSA gesture-less-write constraint to resolve). Foundational:
-   login auto-save doesn't exist yet, and both passkey registration and sign-in
-   ride this surface. See "Corner Prompt".
-4. **Passkey storage — Vault as a WebAuthn credential provider** — create / store
+3. **Passkey storage — Vault as a WebAuthn credential provider** — create / store
    / use synced passkeys via `chrome.webAuthenticationProxy`, stored **as a
-   `passkeys` field on the login entry** (attach-or-create via the capture
-   prompt). Full design in the "Passkeys" section; key pieces are the proxy
+   `passkeys` field on the login entry** (attach-or-create via the corner
+   prompt — the `save-login` / `update-login` infrastructure already ships, so
+   the new variants are `save-passkey` / `use-passkey` on the same card).
+   Full design in the "Passkeys" section; key pieces are the proxy
    attach/detach lifecycle (attach only while unlocked), the `none`-attestation
    create/get crypto, and Web Store review of the powerful permission.
-5. **SSH key-pair generation** — a "generate key pair" action on the SSH-key
-   form (WebCrypto Ed25519, emitted in OpenSSH-format private + public). The
-   read-side fingerprint already ships (see Working); ssh-agent use stays out
-   of scope — unreachable from an MV3 extension.
-6. **Autofill heuristics hardening** — real-world tuning of the card /
-   custom-field / one-time-code matchers across checkout, login & 2FA forms (the
-   matching is conservative but unvalidated against many live sites; segmented
-   OTP widgets in particular vary widely).
-7. **E2E tests** — Playwright + extension support.
-8. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
-9. **Chrome Web Store submission**.
+4. **Autofill heuristics — ongoing tuning.** The first pass landed (detection
+   helpers extracted, ~120 detection tests across synthetic snippets + 10
+   real-site fixtures, BMO bug fixed — see Working). Remaining work is
+   incremental: add fixtures as users report site-specific misses, and grow
+   coverage in known-thin areas — a visible captcha fixture (current
+   coverage is invisible Turnstile only), more SPA / shadow-DOM patterns,
+   and more bank / payment-processor checkout markup. No discrete blocker;
+   this is now an open-ended quality-of-coverage axis rather than a release
+   gate.
+5. **E2E tests** — Playwright + extension support. Includes the corner-prompt
+   capture flow (real submit on a public site, queue-and-flush across an FSA
+   popup close/reopen, locked-vault unlock-and-save) which the unit tests in
+   `dedupe.test.ts` only cover at the pure-logic layer. (Detection itself is
+   covered by `*.dom.test.ts` under happy-dom — see Working — but those don't
+   exercise the full content-script ↔ background ↔ offscreen pipeline.)
+6. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
+7. **Chrome Web Store submission**.
 
 ---
 
@@ -1198,3 +1255,6 @@ that runs against every decrypted entry before Zod validation. Currently:
 - Native messaging host
 - Biometric unlock
 - Browser bookmark / history integration
+- SSH key-pair generation (a password manager stores secrets; key minting
+  belongs in `ssh-keygen` / a dedicated tool). The read-side fingerprint
+  display for stored keys ships — see Working.

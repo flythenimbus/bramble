@@ -1,0 +1,591 @@
+<form name="f1" id="i0281" novalidate="novalidate" spellcheck="false" method="post" target="_top" autocomplete="off" data-bind="visible: !isLoginPageHidden(), autoSubmit: forceSubmit, attr: { action: postUrl }, ariaHidden: !!activeDialog(), css: { 'provide-min-height': svr.fUseMinHeight }" action="https://login.microsoftonline.com/common/login" class="provide-min-height">
+    <!-- ko withProperties: { '$loginPage': $data } -->
+    <div class="login-paginated-page" data-bind="component: { name: 'master-page',
+        publicMethods: masterPageMethods,
+        params: {
+            serverData: svr,
+            showButtons: svr.fShowButtons,
+            showFooterLinks: true,
+            useWizardBehavior: svr.fUseWizardBehavior,
+            handleWizardButtons: false,
+            password: password,
+            hideFromAria: ariaHidden },
+        event: {
+            footerAgreementClick: footer_agreementClick } }"><!--  -->
+
+<!-- ko ifnot: useLayoutTemplates --><!-- /ko -->
+
+<!-- ko if: useLayoutTemplates -->
+    <!-- ko withProperties: { '$page': $parent } -->
+        <!-- ko if: isLightboxTemplate() -->
+        <div id="lightboxTemplateContainer" data-bind="component: { name: 'lightbox-template', params: { serverData: svr, showHeader: $page.showHeader(), headerLogo: $page.headerLogo() } }, css: { 'provide-min-height': svr.fUseMinHeight }" class="provide-min-height"><!--  -->
+
+<div id="lightboxBackgroundContainer" data-bind="css: { 'provide-min-height': svr.fUsePlaywrightMinHeight },
+    component: { name: 'background-image-control',
+        publicMethods: $page.backgroundControlMethods,
+        event: { load: $page.backgroundImageControl_onLoad } }"><div class="background-image-holder" role="presentation" data-bind="css: { app: isAppBranding }, style: { background: backgroundStyle }">
+    <!-- ko if: smallImageUrl --><!-- /ko -->
+
+    <!-- ko if: backgroundImageUrl -->
+    <div id="backgroundImage" role="img" data-bind="backgroundImage: backgroundImageUrl(), externalCss: { 'background-image': true }, ariaLabel: str['STR_Background_Image_AltText']" class="background-image ext-background-image" aria-label="Organization background image" style="background-image: url(&quot;https://aadcdn.msauth.net/shared/1.0/content/images/backgrounds/4_eae2dd7eb3a55636dc2d74f4fa4c386e.svg&quot;);"></div>
+        <!-- ko if: useImageMask --><!-- /ko -->
+    <!-- /ko -->
+</div></div>
+
+<!-- ko if: svr.iBannerEnvironment --><!-- /ko -->
+
+<!-- ko withProperties: { '$masterPageContext': $parentContext } -->
+<div class="outer" data-bind="css: { 'app': $page.backgroundLogoUrl }">
+    <!-- ko if: showHeader --><!-- /ko -->
+
+    <div class="template-section main-section">
+        <div data-bind="externalCss: { 'middle': true }" class="middle ext-middle">
+            <div class="full-height" data-bind="component: { name: 'content-control', params: { serverData: svr, isVerticalSplitTemplate: $page.isVerticalSplitTemplate(), hasHeader: showHeader } }"><!--  -->
+
+<!-- ko withProperties: { '$content': $data } -->
+<div class="flex-column">
+    <!-- ko if: $page.paginationControlHelper.showBackgroundLogoHolder --><!-- /ko -->
+
+    <!-- ko if: $page.paginationControlHelper.showPageLevelTitleControl --><!-- /ko -->
+
+    <div class="win-scroll">
+        <div id="lightbox" data-bind="
+            animationEnd: $page.paginationControlHelper.animationEnd,
+            externalCss: { 'sign-in-box': true },
+            css: {
+                'inner':  $content.isVerticalSplitTemplate,
+                'vertical-split-content': $content.isVerticalSplitTemplate,
+                'app': $page.backgroundLogoUrl,
+                'wide': $page.paginationControlHelper.useWiderWidth,
+                'fade-in-lightbox': $page.fadeInLightBox,
+                'has-popup': $page.showFedCredAndNewSession &amp;&amp; ($page.showFedCredButtons() || $page.newSession()),
+                'transparent-lightbox': $page.backgroundControlMethods() &amp;&amp; $page.backgroundControlMethods().useTransparentLightBox,
+                'lightbox-bottom-margin-debug': $page.showDebugDetails,
+                'has-header': $content.hasHeader }" class="sign-in-box ext-sign-in-box has-popup">
+
+            <!-- ko template: { nodes: $masterPageContext.$componentTemplateNodes, data: $page } -->
+
+        <!-- ko if: svr.fShowCookieBanner --><!-- /ko -->
+
+        <div class="lightbox-cover" data-bind="css: { 'disable-lightbox': svr.fAllowGrayOutLightBox &amp;&amp; showLightboxProgress() }"></div>
+
+        <!-- ko if: showLightboxProgress --><!-- /ko -->
+
+        <!-- ko if: loadBannerLogo -->
+        <div data-bind="component: { name: 'logo-control',
+            params: {
+                isChinaDc: svr.fIsChinaDc,
+                bannerLogoUrl: bannerLogoUrl() } }"><!--  -->
+
+<!-- ko if: bannerLogoUrl --><!-- /ko -->
+
+<!-- ko if: !bannerLogoUrl && !isChinaDc && !isCiamUserFlowUx -->
+    <!-- ko if: !svr.fEnableDelosBrandingForEntra && !svr.fEnableBleuBrandingForEntra -->
+        <!-- ko component: 'accessible-image-control' --><!-- ko if: (isHighContrastBlackTheme || hasDarkBackground || svr.fHasBackgroundColor) && !isHighContrastWhiteTheme --><!-- /ko -->
+<!-- ko if: (isHighContrastWhiteTheme || (!hasDarkBackground && !svr.fHasBackgroundColor)) && !isHighContrastBlackTheme -->
+<!-- ko template: { nodes: [darkImageNode], data: $parent } --><img class="logo" role="img" pngsrc="https://aadcdn.msauth.net/shared/1.0/content/images/microsoft_logo_ea19b2112f4dfd8e90b4505ef7dcb4f9.png" svgsrc="https://aadcdn.msauth.net/shared/1.0/content/images/microsoft_logo_564db913a7fa0ca42727161c6d031bef.svg" data-bind="imgSrc, attr: { alt: str['MOBILE_STR_Footer_Microsoft'] }" src="https://aadcdn.msauth.net/shared/1.0/content/images/microsoft_logo_564db913a7fa0ca42727161c6d031bef.svg" alt="Microsoft"><!-- /ko -->
+<!-- /ko --><!-- /ko -->
+    <!-- /ko -->
+    <!-- ko if: svr.fEnableDelosBrandingForEntra --><!-- /ko -->
+    <!-- ko if: svr.fEnableBleuBrandingForEntra --><!-- /ko -->
+<!-- /ko -->
+<!-- ko if: !bannerLogoUrl && isCiamUserFlowUx && bannerLogoText --><!-- /ko --></div>
+        <!-- /ko -->
+
+        <!-- ko if: svr.strLWADisclaimerMsg && paginationControlHelper.showLwaDisclaimer() --><!-- /ko -->
+
+        <!-- ko if: asyncInitReady -->
+        <div role="main" data-bind="component: { name: 'pagination-control',
+            publicMethods: paginationControlMethods,
+            params: {
+                enableCssAnimation: svr.fEnableCssAnimation,
+                disableAnimationIfAnimationEndUnsupported: svr.fDisableAnimationIfAnimationEndUnsupported,
+                initialViewId: initialViewId,
+                currentViewId: currentViewId,
+                initialSharedData: initialSharedData,
+                initialError: $loginPage.getServerError() },
+            event: {
+                cancel: paginationControl_onCancel,
+                load: paginationControlHelper.onLoad,
+                unload: paginationControlHelper.onUnload,
+                loadView: view_onLoadView,
+                showView: view_onShow,
+                setLightBoxFadeIn: view_onSetLightBoxFadeIn,
+                animationStateChange: paginationControl_onAnimationStateChange } }"><!--  -->
+
+<div data-bind="css: { 'zero-opacity': hidePaginatedView() }" class="">
+    <!-- ko if: showIdentityBanner() && (sharedData.displayName || svr.sPOST_Username) --><!-- /ko -->
+
+    <div class="pagination-view animate slide-in-next" data-bind="css: {
+        'has-identity-banner': showIdentityBanner() &amp;&amp; (sharedData.displayName || svr.sPOST_Username),
+        'zero-opacity': hidePaginatedView.hideSubView(),
+        'animate': animate(),
+        'slide-out-next': animate.isSlideOutNext(),
+        'slide-in-next': animate.isSlideInNext(),
+        'slide-out-back': animate.isSlideOutBack(),
+        'slide-in-back': animate.isSlideInBack() }">
+
+        <!-- ko foreach: views -->
+            <!-- ko if: $parent.currentViewIndex() === $index() -->
+                <!-- ko template: { nodes: [$data], data: $parent } --><div data-viewid="1" data-showfedcredbutton="true" data-bind="pageViewComponent: { name: 'login-paginated-username-view',
+                params: {
+                    serverData: svr,
+                    serverError: initialError,
+                    isInitialView: isInitialState,
+                    displayName: sharedData.displayName,
+                    otherIdpRedirectUrl: sharedData.otherIdpRedirectUrl,
+                    prefillNames: $loginPage.prefillNames,
+                    flowToken: sharedData.flowToken,
+                    availableSignupCreds: sharedData.availableSignupCreds,
+                    undirectedRecoveryContinuationToken: sharedData.undirectedRecoveryContinuationToken,
+                    undirectedRecoveryUrl: sharedData.undirectedRecoveryUrl,
+                    accountRecoveryUrlV2: sharedData.accountRecoveryUrlV2,
+                    accountRecoveryContinuationTokenV2: sharedData.accountRecoveryContinuationTokenV2,
+                    supportsAccountRecoveryV2: sharedData.supportsAccountRecoveryV2,
+                    customStrings: $loginPage.stringCustomizationObservables.customStrings(),
+                    isCustomizationFailure: $loginPage.stringCustomizationObservables.isCustomStringsLoadFailure(),
+                    userIdLabel: $loginPage.userIdLabel,
+                    cantAccessYourAccountText: $loginPage.cantAccessYourAccountText,
+                    hideAccountResetCredentials: $loginPage.hideAccountResetCredentials,
+                    accessRecoveryLink: $loginPage.accessRecoveryLink,
+                    boilerPlateText: $loginPage.boilerPlateText },
+                event: {
+                    restoreIsRecoveryAttemptPost: $loginPage.view_onRestoreIsRecoveryAttemptPost,
+                    redirect: $loginPage.view_onRedirect,
+                    updateDFPUrl: $loginPage.view_onUpdateDFPUrl,
+                    setPendingRequest: $loginPage.view_onSetPendingRequest,
+                    registerDialog: $loginPage.view_onRegisterDialog,
+                    unregisterDialog: $loginPage.view_onUnregisterDialog,
+                    showDialog: $loginPage.view_onShowDialog,
+                    updateAvailableCredsWithoutUsername: $loginPage.view_onUpdateAvailableCreds,
+                    agreementClick: $loginPage.footer_agreementClick } }"><!--  -->
+
+<div data-bind="component: { name: 'header-control',
+    params: {
+        serverData: svr,
+        title: customTitle() || str['WF_STR_HeaderDefault_Title'],
+        headerDescription: customDescription() } }"><div>
+    <div class="row title ext-title" id="loginHeader" data-bind="externalCss: { 'title': true }">
+        <div role="heading" aria-level="1" data-bind="text: title">Sign in</div>
+        <!-- ko if: isSubtitleVisible --><!-- /ko -->
+    </div>
+
+    <!-- ko if: headerDescription --><!-- /ko -->
+</div></div>
+
+<!-- ko if: pageDescription && !svr.fHideLoginDesc --><!-- /ko -->
+
+<div class="row">
+    <!-- ko if: svr.fEnableAriaLiveUpdates --><!-- /ko -->
+
+    <!-- ko ifnot: svr.fEnableAriaLiveUpdates -->
+    <div role="alert" aria-live="assertive">
+        <!-- ko if: usernameTextbox.error --><!-- /ko -->
+    </div>
+    <!-- /ko -->
+
+    <div class="form-group col-md-24">
+        <!-- ko if: prefillNames().length > 1 --><!-- /ko -->
+
+        <!-- ko ifnot: prefillNames().length > 1 -->
+        <div class="placeholderContainer" data-bind="component: { name: 'placeholder-textbox-field',
+            publicMethods: usernameTextbox.placeholderTextboxMethods,
+            params: {
+                serverData: svr,
+                hintText: svr.fEnableLivePreview ? userIdLabel : tenantBranding.unsafe_userIdLabel || str['STR_SSSU_Username_Hint'] || str['CT_PWD_STR_Email_Example'],
+                hintCss: 'placeholder' + (!svr.fAllowPhoneSignIn ? ' ltr_override' : '') },
+            event: {
+                updateFocus: usernameTextbox.textbox_onUpdateFocus } }"><!-- ko withProperties: { '$placeholderText': placeholderText } -->
+    <!-- ko template: { nodes: $componentTemplateNodes, data: $parent } -->
+
+            <input type="email" name="loginfmt" id="i0116" maxlength="113" class="form-control ltr_override input ext-input text-box ext-text-box" aria-required="true" data-report-event="Signin_Email_Phone_Skype" data-report-trigger="click" data-report-value="Email_Phone_Skype_Entry" data-bind="
+                    attr: { lang: svr.fApplyAsciiRegexOnInput ? null : 'en',
+                    autocomplete: svr.fEnablePasskeyAutofillUI ? 'username webauthn' : 'username' },
+                    externalCss: {
+                        'input': true,
+                        'text-box': true,
+                        'has-error': usernameTextbox.error },
+                    ariaLabel: tenantBranding.unsafe_userIdLabel || str['CT_PWD_STR_Username_AriaLabel'],
+                    ariaDescribedBy:
+                        'winBodyHeader winBodySubHeader loginHeader' + (pageDescription &amp;&amp; !svr.fHideLoginDesc ? ' loginDescription usernameError' : ' usernameError'),
+                    textInput: usernameTextbox.value,
+                    hasFocusEx: usernameTextbox.focused,
+                    placeholder: $placeholderText" autocomplete="username webauthn" aria-label="Enter your email, phone, or Skype." aria-describedby="winBodyHeader winBodySubHeader loginHeader usernameError" placeholder="Email, phone, or Skype" data-report-attached="1">
+
+            <input name="passwd" type="password" id="i0118" data-bind="moveOffScreen, textInput: passwordBrowserPrefill" class="moveOffScreen" tabindex="-1" aria-hidden="true">
+
+        <!-- /ko -->
+<!-- /ko -->
+<!-- ko ifnot: usePlaceholderAttribute --><!-- /ko --></div>
+        <!-- /ko -->
+    </div>
+</div>
+
+<div data-bind="css: { 'position-buttons': !tenantBranding.BoilerPlateText &amp;&amp; !boilerPlateText }, externalCss: { 'password-reset-links-container': true }" class="position-buttons password-reset-links-container ext-password-reset-links-container">
+    <div class="row">
+        <div class="col-md-24">
+            <div class="text-13">
+                <!-- ko if: svr.fCBShowSignUp && !svr.fDoIfExists && !svr.fCheckProofForAliases -->
+                <!-- ko if: svr.fIsSelfServiceSignupUxEnabled --><!-- /ko -->
+
+                <!-- ko ifnot: svr.fIsSelfServiceSignupUxEnabled -->
+                <div class="form-group" data-bind="
+                    htmlWithBindings: html['WF_STR_SignUpLink_Text'],
+                    childBindings: {
+                        'signup': {
+                            href: svr.urlSignUp || '#',
+                            ariaLabel: svr.urlSignUp ? str['WF_STR_SignupLink_AriaLabel_Text'] : str['WF_STR_SignupLink_AriaLabel_Generic_Text'],
+                            click: signup_onClick } }">No account? <a href="https://login.live.com/oauth20_authorize.srf?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&amp;scope=openid+profile+https%3a%2f%2fwww.office.com%2fv2%2fOfficeHome.All&amp;redirect_uri=https%3a%2f%2fwww.office.com%2flandingv2&amp;response_type=code+id_token&amp;state=Sf8yjk4ipZWqcS6dQOVLSLiz2_vtGB7BGmev1HN6it2rSW8IdkPq0zej6yzECL1Yk7hXIoqU-ThQ-_KZ1RTuombMp667YeL9goeNP4m2Q3o622owW3ba2G1mjEsOPMpMyjLAMA3kkWm1GV_RolpNUWSuaIwIY9Af7Ep8fS26hCyb0vr-AckPiaUwX9eMY6oPPolaLNu2zc2mt4n_9H1wQRjVf_pktRICpdqyU0OuSpun38XyGPq68mLIVHydwsvPSTzfAXleLLyKy4kOG8F7PZTBbo7jjLFlFdla-UzXb_8jlhQiB9IUvmB2yWiUaQY8ARfAAoHXnKOYTeC9XFsHZK378QK2vzKuhvYSYk1CAJTVs54cDu6eierjMt6PjsVKF8hIuZhcWetyhrtFse6RxRlWmLvMp27vdiFcrCbAFuQ&amp;response_mode=form_post&amp;nonce=639156160243713486.ZDVhMDgzNTAtMTk0OC00OTE0LWI5OGMtYzkwYmM3OWNkOGJiNzA3NjZiYjUtMWQ3OC00ZjBjLTg1ZGMtMTI5ODBhNTAwOGQ5&amp;x-client-SKU=ID_NET8_0&amp;x-client-Ver=8.14.0.0&amp;uaid=REDACTED&amp;msproxy=1&amp;issuer=mso&amp;tenant=common&amp;ui_locales=en-US&amp;signup=1&amp;lw=1&amp;fl=easi2&amp;epctrc=ngUxvv8GB42I6R2wIf2FLXGnzJfbKR65I32X5DDdCaY%3d0%3a1%3aCANARY%3aZqeS0Ppl%2fI7naOxdsoCui8xGHFC2kBOWeKoIH5AUcwg%3d&amp;epct=PAQABDgEAAAAdDD7nC9b5Q7JPd_okEQRFRXZvU3RzQXJ0aWZhY3RzCAAAAAAAlSofCxHeXnFtukyrwBNsUV0Uuf1hTeeIdX7WFLu2wftQnTPI0Ds76wFU1SHlLvPCHaD883wGEMw2TDrviC6mxMmYk2dm4QjQZ1QusEXWu8TjBLb6158ZStwegvYO4G7Kke-RFW2ZTjcWF1d2y6GGvvTizZbif0YateWHIz9gALvEgYzbG8KI_b6RUeYD6GDiGZiFNfkH25lQX1IHEiL7oiAA&amp;jshs=0" id="signup" aria-label="Create a Microsoft account">Create one!</a></div>
+                <!-- /ko -->
+                <!-- /ko -->
+
+                <!-- ko ifnot: hideCantAccessYourAccount -->
+                <div class="form-group">
+                    <a id="cantAccessAccount" name="cannotAccessAccount" data-bind="
+                        text: svr.fEnableLivePreview ? cantAccessYourAccountText : unsafe_cantAccessYourAccountText,
+                        click: accessRecoveryLink ? null : cantAccessAccount_onClick,
+                        attr: { target: accessRecoveryLink &amp;&amp; '_blank' },
+                        href: accessRecoveryLink || '#'" href="#">Can’t access your account?</a>
+                </div>
+                <!-- /ko -->
+
+                <!-- ko if: showFidoLinkInline && hasFido() && (availableCredsWithoutUsername().length >= 2 || svr.fShowForgotUsernameLink || isOfflineAccountVisible) --><!-- /ko -->
+
+                <!-- ko if: svr.fEnableShowPickerCredObservable -->
+                    <!-- ko if: showCredPicker() --><!-- /ko -->
+                <!-- /ko -->
+
+                <!-- ko ifnot: svr.fEnableShowPickerCredObservable --><!-- /ko -->
+
+                <!-- ko if: svr.urlSkipZtd --><!-- /ko -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ko if: svr.fShowLegalMessagingInline --><!-- /ko -->
+
+<div class="win-button-pin-bottom" data-bind="css : { 'boilerplate-button-bottom': tenantBranding.BoilerPlateText || boilerPlateText }">
+    <div class="row" data-bind="css: { 'move-buttons': tenantBranding.BoilerPlateText || boilerPlateText }">
+        <div data-bind="component: { name: 'footer-buttons-field',
+            params: {
+                serverData: svr,
+                isPrimaryButtonEnabled: !isRequestPending(),
+                isPrimaryButtonVisible: svr.fShowButtons,
+                isSecondaryButtonEnabled: true,
+                isSecondaryButtonVisible: svr.fShowButtons &amp;&amp; isSecondaryButtonVisible(),
+                secondaryButtonText: secondaryButtonText() },
+            event: {
+                primaryButtonClick: primaryButton_onClick,
+                secondaryButtonClick: secondaryButton_onClick } }"><div class="col-xs-24 no-padding-left-right button-container button-field-container ext-button-field-container" data-bind="
+    visible: isPrimaryButtonVisible() || isSecondaryButtonVisible(),
+    css: { 'no-margin-bottom': removeBottomMargin },
+    externalCss: { 'button-field-container': true }">
+
+    <!-- ko if: isSecondaryButtonVisible --><!-- /ko -->
+
+    <div data-bind="css: { 'inline-block': isPrimaryButtonVisible }, externalCss: { 'button-item': true }" class="inline-block button-item ext-button-item">
+        <!-- type="submit" is needed in-addition to 'type' in primaryButtonAttributes observable to support IE8 -->
+        <!-- ko ifnot: svr.fConsentButtonIdViaName -->
+        <input type="submit" id="idSIButton9" class="win-button button_primary high-contrast-overrides button ext-button primary ext-primary" data-report-event="Signin_Submit" data-report-trigger="click" data-report-value="Submit" data-bind="
+                attr: primaryButtonAttributes,
+                css: { 'high-contrast-overrides': true },
+                externalCss: {
+                    'button': true,
+                    'primary': true },
+                value: primaryButtonText() || str['CT_PWD_STR_SignIn_Button_Next'],
+                hasFocus: focusOnPrimaryButton,
+                click: svr.fEnableLivePreview ?  function() { } : primaryButton_onClick,
+                clickBubble: !svr.fEnableLivePreview,
+                enable: isPrimaryButtonEnabled,
+                visible: isPrimaryButtonVisible,
+                preventTabbing: primaryButtonPreventTabbing" value="Next" data-report-attached="1">
+        <!-- /ko -->
+        <!-- ko if: svr.fConsentButtonIdViaName --><!-- /ko -->
+    </div>
+</div></div>
+    </div>
+</div>
+
+<!-- ko if: tenantBranding.BoilerPlateText || boilerPlateText --><!-- /ko --></div><!-- /ko -->
+            <!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+
+            <!-- ko if: $parent.currentViewIndex() === $index() --><!-- /ko -->
+        <!-- /ko -->
+    </div>
+</div></div>
+        <!-- /ko -->
+
+        <input type="hidden" name="ps" data-bind="value: postedLoginStateViewId" value="">
+        <input type="hidden" name="psRNGCDefaultType" data-bind="value: postedLoginStateViewRNGCDefaultType" value="">
+        <input type="hidden" name="psRNGCEntropy" data-bind="value: postedLoginStateViewRNGCEntropy" value="">
+        <input type="hidden" name="psRNGCSLK" data-bind="value: postedLoginStateViewRNGCSLK" value="">
+        <!-- ko if: svr.sCanaryTokenName && !svr.fSkipRenderingNewCanaryToken -->
+        <input type="hidden" data-bind="attr: { name: svr.sCanaryTokenName }, value: svr.canary" name="canary" value="REDACTED">
+        <!-- /ko -->
+        <!-- ko if: !svr.sCanaryTokenName || svr.fSkipRenderingNewCanaryToken --><!-- /ko -->
+        <input type="hidden" name="ctx" data-bind="value: ctx" value="REDACTED">
+        <input type="hidden" name="hpgrequestid" data-bind="value: svr.sessionId" value="REDACTED">
+        <input type="hidden" id="i0327" data-bind="attr: { name: svr.sFTName }, value: flowToken" name="flowToken" value="REDACTED">
+        <input type="hidden" name="PPSX" data-bind="value: svr.sRandomBlob" value="">
+        <input type="hidden" name="NewUser" value="1">
+        <input type="hidden" name="FoundMSAs" data-bind="value: svr.sFoundMSAs" value="">
+        <input type="hidden" name="fspost" data-bind="value: svr.fPOST_ForceSignin ? 1 : 0" value="0">
+        <input type="hidden" name="i21" data-bind="value: wasLearnMoreShown() ? 1 : 0" value="0">
+        <input type="hidden" name="CookieDisclosure" data-bind="value: svr.fShowCookieBanner ? 1 : 0" value="0">
+        <input type="hidden" name="IsFidoSupported" data-bind="value: isFidoSupported() ? 1 : 0" value="1">
+        <input type="hidden" name="isSignupPost" data-bind="value: isSignupPost() ? 1 : 0" value="0">
+        <!-- ko ifnot: svr.fShouldSupportTargetCredentialForRecovery --><!-- /ko -->
+        <!-- ko if: svr.fEnableDFPIntegration -->
+        <input type="hidden" name="DfpArtifact" data-bind="value: dfpResult()" value="">
+        <!-- /ko -->
+        <!-- ko if: svr.fShouldSupportTargetCredentialForRecovery && targetCredentialForRecovery() --><!-- /ko -->
+        <div data-bind="component: { name: 'instrumentation-control',
+            publicMethods: instrumentationMethods,
+            params: { serverData: svr } }">
+<input type="hidden" name="i19" data-bind="value: timeOnPage" value=""></div>
+    <!-- /ko -->
+        </div>
+
+        <!-- ko if: $page.showFedCredAndNewSession -->
+        <!-- ko if: $page.showFedCredButtons -->
+        <div data-bind="component: { name: 'fed-cred-buttons-control',
+            params: {
+                serverData: svr,
+                fedCredOptions: $page.otherSigninOptions },
+            event: {
+                fedCredButtonClick: $page.otherSigninOptionsButton_onClick } }"><!--  -->
+
+<!-- ko withProperties: { '$fedCredButtonsControl': $data } -->
+<div data-bind="css: { 'app': $page.backgroundLogoUrl }">
+    <div class="promoted-fed-cred-content promoted-fed-cred-box ext-promoted-fed-cred-box" data-bind="css: {
+        'animate': $page.useCssAnimations &amp;&amp; $page.animate(),
+        'slide-out-next': $page.animate.isSlideOutNext,
+        'slide-in-next': $page.animate.isSlideInNext,
+        'slide-out-back': $page.animate.isSlideOutBack,
+        'slide-in-back': $page.animate.isSlideInBack,
+        'app': $page.backgroundLogoUrl }">
+
+        <!-- ko ifnot: svr.fIsQrCodePinSupported --><!-- /ko -->
+
+        <!-- ko if: svr.fEnableQrCodeA11YFixes -->
+        <!-- ko if: svr.fIsQrCodePinSupported -->
+        <!-- ko foreach: $fedCredButtonsControl.fedCredOptions -->
+        <div class="tile-container" data-bind="css: { 'binaryChoice list': svr.fSupportWindowsStyles }">
+            <div class="row tile">
+                <div class="table" role="button" tabindex="0" data-bind="
+                    css: { 'list-item': svr.fSupportWindowsStyles },
+                    pressEnter: $fedCredButtonsControl.fedCredButton_onClick,
+                    click: $fedCredButtonsControl.fedCredButton_onClick,
+                    ariaLabel: $data.helpText ? $data.text + ' ' + $data.helpText : $data.text" aria-label="Sign-in options">
+
+                    <div class="table-row">
+                        <div class="table-cell tile-img medium">
+                            <!-- ko component: 'accessible-image-control' --><!-- ko if: (isHighContrastBlackTheme || hasDarkBackground || svr.fHasBackgroundColor) && !isHighContrastWhiteTheme --><!-- /ko -->
+<!-- ko if: (isHighContrastWhiteTheme || (!hasDarkBackground && !svr.fHasBackgroundColor)) && !isHighContrastBlackTheme -->
+<!-- ko template: { nodes: [darkImageNode], data: $parent } --><img class="tile-img medium" role="presentation" data-bind="addEventHandlers, attr: { src: $data.darkIconUrl }" src="https://aadcdn.msauth.net/shared/1.0/content/images/signin-options_3e3f6b73c3f310c31d2c4d131a8ab8c6.svg"><!-- /ko -->
+<!-- /ko --><!-- /ko -->
+                        </div>
+                        <div class="table-cell text-left content" data-bind="css: { 'content': !svr.fSupportWindowsStyles }">
+                            <div data-bind="text: $data.text, attr: { 'data-test-id': $data.testId }" data-test-id="signinOptions">Sign-in options</div>
+                            <!-- ko if: $data.showHelpIcon --><!-- /ko -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ko if: $data.showHelpIcon --><!-- /ko -->
+        </div>
+        <!-- ko if: svr.fAllowExternalIdpSignInCommonEndpoint && $index() === 0 && $fedCredButtonsControl.fedCredOptions() && $fedCredButtonsControl.fedCredOptions().length > 1 --><!-- /ko -->
+        <!-- /ko -->
+        <!-- /ko -->
+        <!-- /ko -->
+
+        <!-- ko ifnot: svr.fEnableQrCodeA11YFixes --><!-- /ko -->
+
+    </div>
+</div>
+<!-- /ko -->
+</div>
+        <!-- /ko -->
+
+        <!-- ko if: $page.showSignupFedCredButtons --><!-- /ko -->
+
+        <!-- ko if: svr.fShowQrCodePinOption --><!-- /ko -->
+
+        <!-- ko if: $page.newSession --><!-- /ko -->
+        <!-- /ko -->
+
+        <!-- ko if: $page.showDebugDetails --><!-- /ko -->
+    </div>
+</div>
+<!-- /ko --></div>
+        </div>
+    </div>
+
+    <!-- ko if: $page.paginationControlHelper.showFooterControl -->
+    <div id="footer" role="contentinfo" data-bind="
+        externalCss: {
+            'footer': true,
+            'has-background': !$page.useDefaultBackground() &amp;&amp; $page.showFooter(),
+            'background-always-visible': $page.backgroundLogoUrl }" class="footer ext-footer">
+
+        <div data-bind="component: { name: 'footer-control',
+            publicMethods: $page.footerMethods,
+            params: {
+                serverData: svr,
+                useDefaultBackground: $page.useDefaultBackground(),
+                hasDarkBackground: $page.backgroundLogoUrl(),
+                showLinks: true,
+                showFooter: $page.showFooter(),
+                hideTOU: $page.hideTOU(),
+                termsText: $page.termsText(),
+                termsLink: $page.termsLink(),
+                hidePrivacy: $page.hidePrivacy(),
+                privacyText: $page.privacyText(),
+                privacyLink: $page.privacyLink() },
+            event: {
+                agreementClick: $page.footer_agreementClick,
+                showDebugDetails: $page.toggleDebugDetails_onClick } }"><!-- ko if: !hideFooter && (showLinks || impressumLink || showIcpLicense) -->
+<div id="footerLinks" class="footerNode text-secondary footer-links ext-footer-links" data-bind="externalCss: { 'footer-links': true }">
+
+    <!-- ko if: showFooter -->
+        <!-- ko if: !hideTOU -->
+        <a id="ftrTerms" data-bind="
+            text: termsText,
+            href: termsLink,
+            click: termsLink_onClick,
+            externalCss: {
+                'footer-content': true,
+                'footer-item': true,
+                'has-background': !useDefaultBackground,
+                'background-always-visible': hasDarkBackground }" href="https://www.microsoft.com/en-US/servicesagreement/" class="footer-content ext-footer-content footer-item ext-footer-item">Terms of use</a>
+        <!-- /ko -->
+
+        <!-- ko if: !hidePrivacy -->
+        <a id="ftrPrivacy" data-bind="
+            text: privacyText,
+            href: privacyLink,
+            click: privacyLink_onClick,
+            externalCss: {
+                'footer-content': true,
+                'footer-item': true,
+                'has-background': !useDefaultBackground,
+                'background-always-visible': hasDarkBackground }" href="https://privacy.microsoft.com/en-US/privacystatement" class="footer-content ext-footer-content footer-item ext-footer-item">Privacy &amp; cookies</a>
+        <!-- /ko -->
+
+        <!-- ko if: impressumLink --><!-- /ko -->
+
+        <!-- ko if: a11yConformeLink --><!-- /ko -->
+
+        <!-- ko if: showIcpLicense --><!-- /ko -->
+    <!-- /ko -->
+
+    <!-- Set attr binding before hasFocusEx to prevent Narrator from losing focus -->
+    <a id="moreOptions" href="#" role="button" data-bind="
+        click: moreInfo_onClick,
+        ariaLabel: str['CT_STR_More_Options_Ellipsis_AriaLabel'],
+        attr: { 'aria-expanded': showDebugDetails().toString() },
+        hasFocusEx: focusMoreInfo(),
+        externalCss: {
+            'footer-content': true,
+            'footer-item': true,
+            'debug-item': true,
+            'has-background': !useDefaultBackground,
+            'background-always-visible': hasDarkBackground }" aria-label="Click here for troubleshooting information" aria-expanded="false" class="footer-content ext-footer-content footer-item ext-footer-item debug-item ext-debug-item">...</a>
+</div>
+<!-- /ko -->
+
+<!-- ko if: svr.fShowLegalMessagingInline && showLinks --><!-- /ko --></div>
+    </div>
+    <!-- /ko -->
+</div>
+<!-- /ko --></div>
+        <!-- /ko -->
+
+        <!-- ko if: isVerticalSplitTemplate() && isTemplateLoaded() --><!-- /ko -->
+    <!-- /ko -->
+<!-- /ko --></div>
+    <!-- /ko -->
+</form>

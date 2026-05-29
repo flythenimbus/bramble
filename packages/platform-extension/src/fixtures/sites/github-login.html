@@ -1,0 +1,37 @@
+<form data-turbo="false" action="/session" accept-charset="UTF-8" method="post"><input type="hidden" data-csrf="true" name="authenticity_token" value="REDACTED">  <div>
+
+  <input type="hidden" name="add_account" id="add_account" autocomplete="off" class="form-control">
+
+    <label for="login_field">
+      Username or email address
+    </label>
+    <input type="text" name="login" id="login_field" autocapitalize="off" autocorrect="off" autocomplete="username" class="form-control  js-login-field" autofocus="autofocus" required="required">
+  </div>
+
+
+  <div class="position-relative">
+    <label for="password">
+      Password
+    </label>
+    <input type="password" name="password" id="password" class="form-control form-control js-password-field" autocomplete="current-password" required="required">
+    <a class="label-link position-absolute top-0 right-0" id="forgot-password" href="/password_reset">Forgot password?</a>
+
+<input type="hidden" name="webauthn-conditional" value="undefined">
+<input type="hidden" class="js-support" name="javascript-support" value="true">
+<input type="hidden" class="js-webauthn-support" name="webauthn-support" value="supported">
+<input type="hidden" class="js-webauthn-iuvpaa-support" name="webauthn-iuvpaa-support" value="supported">
+<input type="hidden" name="return_to" id="return_to" value="https://github.com/login" autocomplete="off" class="form-control">
+<input type="hidden" name="allow_signup" id="allow_signup" autocomplete="off" class="form-control">
+<input type="hidden" name="client_id" id="client_id" autocomplete="off" class="form-control">
+<input type="hidden" name="integration" id="integration" autocomplete="off" class="form-control">
+<input class="form-control" type="text" name="required_field_4f63" hidden="hidden">
+<input class="form-control" type="hidden" name="timestamp" value="0">
+<input class="form-control" type="hidden" name="timestamp_secret" value="REDACTED">
+
+
+  </div>
+
+  <div>
+    <input type="submit" name="commit" value="Sign in" class="btn btn-primary btn-block js-sign-in-button" data-disable-with="Signing in…" data-signin-label="Sign in" data-sso-label="Sign in with your identity provider" development="false" disable-emu-sso="false">
+  </div>
+</form>
