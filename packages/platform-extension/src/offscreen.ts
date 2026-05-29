@@ -64,6 +64,29 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 				new Uint8Array(payload.magicVersion),
 			);
 
+		case "CRYPTO_WRAP_WEBAUTHN_SLOT":
+			return crypto.wrap_vek_webauthn(
+				payload.hmacSecretB64,
+				payload.slotIdB64,
+				new Uint8Array(payload.magicVersion),
+			);
+		case "CRYPTO_UNWRAP_WEBAUTHN_SLOT":
+			return crypto.unwrap_vek_webauthn(
+				payload.hmacSecretB64,
+				payload.slotIdB64,
+				payload.verifierB64,
+				payload.wrapIvB64,
+				payload.wrappedVekB64,
+				new Uint8Array(payload.magicVersion),
+			);
+		case "CRYPTO_VERIFY_WEBAUTHN_SLOT":
+			return crypto.verify_webauthn_slot(
+				payload.hmacSecretB64,
+				payload.slotIdB64,
+				payload.verifierB64,
+				new Uint8Array(payload.magicVersion),
+			);
+
 		case "CRYPTO_ENCRYPT":
 			return crypto.encrypt_entry(payload.plaintextJson);
 		case "CRYPTO_DECRYPT":

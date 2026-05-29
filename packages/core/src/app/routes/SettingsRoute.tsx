@@ -7,7 +7,15 @@ import { Settings } from "../screens/Settings/Settings";
 export function SettingsRoute() {
 	const { darkMode, toggleTheme } = useTheme();
 	const { prefs, loaded, update } = usePrefs();
-	const { entries, lock, verifyMasterPassword, changeMasterPassword } = useVault();
+	const {
+		entries,
+		lock,
+		verifyMasterPassword,
+		changeMasterPassword,
+		securityKeys,
+		registerSecurityKey,
+		revokeSecurityKey,
+	} = useVault();
 	const { shell } = usePlatform();
 
 	if (!loaded) return null;
@@ -37,6 +45,9 @@ export function SettingsRoute() {
 				onLockNow={lock}
 				onVerifyCurrentPassword={verifyMasterPassword}
 				onChangeMasterPassword={changeMasterPassword}
+				securityKeys={securityKeys}
+				onRegisterSecurityKey={registerSecurityKey}
+				onRevokeSecurityKey={revokeSecurityKey}
 				onImport={() => void shell.openSetup("import")}
 			/>
 		</div>

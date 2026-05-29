@@ -4,6 +4,7 @@ import {
 	Download,
 	Info,
 	Key,
+	KeyRound,
 	Lock,
 	Palette,
 	ShieldCheck,
@@ -49,6 +50,12 @@ interface SettingsProps {
 	// error, the user may need to retry or relock).
 	onVerifyCurrentPassword: (currentPassword: string) => Promise<boolean>;
 	onChangeMasterPassword: (newPassword: string) => Promise<void>;
+	// FIDO2 / WebAuthn unlock — paired with the master password (or as a
+	// total replacement once at least one key is registered). List + add +
+	// revoke; each row gets a friendly label set at registration time.
+	securityKeys: { slotIdB64: string; label: string; addedAt: number }[];
+	onRegisterSecurityKey: (label: string) => Promise<void>;
+	onRevokeSecurityKey: (slotIdB64: string) => Promise<void>;
 	// Open the full-tab import flow (the file picker would dismiss the popup).
 	onImport: () => void;
 }
@@ -71,6 +78,9 @@ export function Settings({
 	onLockNow,
 	onVerifyCurrentPassword,
 	onChangeMasterPassword,
+	securityKeys,
+	onRegisterSecurityKey,
+	onRevokeSecurityKey,
 	onImport,
 }: SettingsProps) {
 	const [changingPassword, setChangingPassword] = useState(false);
@@ -355,6 +365,12 @@ export function Settings({
 								</div>
 							</form>
 						)}
+
+						<SecurityKeysSection
+							securityKeys={securityKeys}
+							onRegister={onRegisterSecurityKey}
+							onRevoke={onRevokeSecurityKey}
+						/>
 					</div>
 				</div>
 
@@ -494,5 +510,124 @@ function Toggle({ checked, onChange, label }: ToggleProps) {
 				}`}
 			/>
 		</button>
+	);
+}
+
+interface SecurityKeysSectionProps {
+	securityKeys: { slotIdB64: string; label: string; addedAt: number }[];
+	onRegister: (label: string) => Promise<void>;
+	onRevoke: (slotIdB64: string) => Promise<void>;
+}
+
+function SecurityKeysSection({ securityKeys, onRegister, onRevoke }: SecurityKeysSectionProps) {
+	const [adding, setAdding] = useState(false);
+	const [label, setLabel] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const handleAdd = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setError(null);
+		setBusy(true);
+		try {
+			await onRegister(label.trim() || "Security key");
+			setLabel("");
+			setAdding(false);
+		} catch (err) {
+			setError(String(err instanceof Error ? err.message : err));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const handleRevoke = async (slotIdB64: string) => {
+		setError(null);
+		try {
+			await onRevoke(slotIdB64);
+		} catch (err) {
+			setError(String(err instanceof Error ? err.message : err));
+		}
+	};
+
+	return (
+		<>
+			<Row
+				icon={<KeyRound className="w-4 h-4 text-primary" />}
+				title="Security keys"
+				subtitle="Tap a YubiKey or use Windows Hello to unlock instead of typing the master password."
+			>
+				{!adding ? (
+					<button
+						type="button"
+						onClick={() => {
+							setError(null);
+							setAdding(true);
+						}}
+						className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+					>
+						Add
+					</button>
+				) : null}
+			</Row>
+
+			{securityKeys.length > 0 && (
+				<ul className="ml-12 mt-2 space-y-1.5">
+					{securityKeys.map((k) => (
+						<li
+							key={k.slotIdB64}
+							className="flex items-center justify-between gap-3 text-xs rounded-md border border-border/40 px-3 py-1.5"
+						>
+							<span className="truncate">{k.label}</span>
+							<button
+								type="button"
+								onClick={() => void handleRevoke(k.slotIdB64)}
+								className="text-muted-foreground hover:text-destructive transition-colors"
+								aria-label={`Remove ${k.label}`}
+								title={`Remove ${k.label}`}
+							>
+								×
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+
+			{adding && (
+				<form className="ml-12 mt-3 space-y-2" onSubmit={handleAdd}>
+					<input
+						type="text"
+						autoFocus
+						value={label}
+						onChange={(e) => setLabel(e.target.value)}
+						placeholder="Name this key (e.g. YubiKey office)"
+						className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+						disabled={busy}
+					/>
+					<div className="flex gap-2">
+						<button
+							type="submit"
+							disabled={busy}
+							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
+						>
+							{busy ? "Tap your key…" : "Register"}
+						</button>
+						<button
+							type="button"
+							onClick={() => {
+								setAdding(false);
+								setLabel("");
+								setError(null);
+							}}
+							disabled={busy}
+							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
+						>
+							Cancel
+						</button>
+					</div>
+				</form>
+			)}
+
+			{error && <p className="ml-12 mt-2 text-xs text-destructive">{error}</p>}
+		</>
 	);
 }

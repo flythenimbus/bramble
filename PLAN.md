@@ -1214,10 +1214,20 @@ decrypted entry before Zod validation. Currently:
 1. **Recovery-code slot (kind 0x03)** — wire add / revoke UI to the existing
    slot-aware format. Same Argon2id-derived KEK as password slots, just
    with a printable code instead of a memorised password.
-2. **WebAuthn `hmac-secret` slot (kind 0x02)** — register / unlock with a
-   FIDO2 authenticator (YubiKey 5+, platform passkeys). Requires
-   `navigator.credentials.create/get` from popup/options context and
-   testing across authenticator vendors.
+2. **WebAuthn unlock (`hmac-secret` slot, kind 0x02)** — replace (or
+   supplement) the master password as the unlock mechanism. Tap a YubiKey,
+   touch Touch ID, or use Windows Hello to unlock instead of typing a
+   passphrase. The slot format and unlock-flow plumbing are already
+   reserved in the vault blob (see "Reserved slot payloads" + "Unlock
+   flow"); what remains is the popup/options UI for **register** (`create()`
+   + add a slot to the vault), **unlock** (`get()` + derive KEK via HKDF
+   over the returned hmac-secret), and **revoke** (drop the slot). Slots
+   coexist — a vault can have password + WebAuthn + recovery in any
+   combination — so this is additive, not a replacement of the password
+   slot. Cross-vendor testing required (YubiKey 5+ / Solo / platform
+   passkeys on Chrome+Edge; not all FIDO2 authenticators implement
+   `hmac-secret`). Distinct from TODO #3 (passkey *storage*), which is
+   about the vault impersonating an authenticator for websites.
 3. **Passkey storage — Vault as a WebAuthn credential provider** — create / store
    / use synced passkeys via `chrome.webAuthenticationProxy`, stored **as a
    `passkeys` field on the login entry** (attach-or-create via the corner

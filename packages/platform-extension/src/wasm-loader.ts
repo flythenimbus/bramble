@@ -43,6 +43,28 @@ export interface VaultCrypto {
 		magicVersion: Uint8Array,
 	): boolean;
 
+	wrap_vek_webauthn(
+		hmacSecretB64: string,
+		slotIdB64: string,
+		magicVersion: Uint8Array,
+	): PasswordSlotBlob;
+
+	unwrap_vek_webauthn(
+		hmacSecretB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		wrapIvB64: string,
+		wrappedVekB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+
+	verify_webauthn_slot(
+		hmacSecretB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+
 	encrypt_entry(plaintextJson: string): {
 		ciphertext: string;
 		iv: string;

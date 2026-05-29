@@ -5,7 +5,9 @@ edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+# `cdylib` for the WASM build, `rlib` so `cargo test` can build the library
+# as a regular Rust crate against the native target and run unit tests.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
@@ -13,6 +15,7 @@ js-sys = "0.3"
 argon2 = "0.5"
 aes-gcm = "0.10"
 hmac = "0.12"
+hkdf = "0.12"
 sha2 = "0.10"
 zeroize = { version = "1.8", features = ["derive"] }
 getrandom = { version = "0.2", features = ["js"] }
