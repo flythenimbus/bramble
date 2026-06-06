@@ -2,6 +2,8 @@
 import type {
 	CryptoAdapter,
 	EncryptedPayload,
+	KdbxRawEntry,
+	OpenKdbxInput,
 	PasswordSlotBlob,
 	UnwrapPasswordSlotInput,
 	UnwrapWebauthnSlotInput,
@@ -106,4 +108,6 @@ export const extensionCrypto: CryptoAdapter = {
 	decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload),
 	encryptWithVek: (plaintext) => send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext }),
 	decryptWithVek: (iv, ciphertext) => send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext }),
+
+	openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
 };

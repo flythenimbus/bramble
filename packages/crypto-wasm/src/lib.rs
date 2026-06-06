@@ -16,6 +16,8 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
+mod kdbx;
+
 const ARGON2_TIME: u32 = 3;
 const ARGON2_MEM_KIB: u32 = 64 * 1024;
 const ARGON2_PARALLELISM: u32 = 1;
