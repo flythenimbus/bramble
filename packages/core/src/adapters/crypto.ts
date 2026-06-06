@@ -49,6 +49,16 @@ export interface VerifyWebauthnSlotInput extends WrapWebauthnSlotInput {
 	verifierB64: string;
 }
 
+export interface KdbxRawEntry {
+	strings: { key: string; value: string; protected: boolean }[];
+}
+
+export interface OpenKdbxInput {
+	fileB64: string;
+	password: string;
+	keyfileB64?: string;
+}
+
 export interface CryptoAdapter {
 	generateVek(): Promise<string>; // creates VEK + loads it; returns b64 for caching
 	unlockWithVek(vekB64: string): Promise<void>; // session resume (offscreen restart)
@@ -74,4 +84,6 @@ export interface CryptoAdapter {
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
 	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
 	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
+
+	openKdbx(input: OpenKdbxInput): Promise<KdbxRawEntry[]>;
 }

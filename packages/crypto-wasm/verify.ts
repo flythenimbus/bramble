@@ -10,6 +10,7 @@ import init, {
 	generate_vek,
 	is_locked,
 	lock,
+	open_kdbx4,
 	rotate_vek,
 	unlock_with_vek,
 	unwrap_vek_password,
@@ -182,5 +183,46 @@ assertEq(
 console.log("rotate_vek refuses to run on a locked vault");
 lock();
 expectThrow("rotate_vek locked", () => rotate_vek());
+
+type KdbxEntry = { strings: { key: string; value: string; protected: boolean }[] };
+const kdbxField = (e: KdbxEntry | undefined, key: string) =>
+	e?.strings.find((s) => s.key === key)?.value;
+const kdbxByTitle = (es: KdbxEntry[], title: string) =>
+	es.find((e) => kdbxField(e, "Title") === title);
+const fixture = (name: string) =>
+	new Uint8Array(readFileSync(new URL(`./tests/fixtures/${name}`, import.meta.url)));
+
+console.log("open_kdbx4: opens a real KDBX4 file and decrypts protected values");
+const kdbxEntries = open_kdbx4(
+	fixture("sample.kdbx"),
+	"correct horse battery staple",
+) as KdbxEntry[];
+assertEq("kdbx entry count", kdbxEntries.length, 2);
+const gh = kdbxByTitle(kdbxEntries, "GitHub");
+assertEq("kdbx GitHub password (protected, decrypted)", kdbxField(gh, "Password"), "hunter2");
+assertEq(
+	"kdbx password marked protected",
+	gh?.strings.find((s) => s.key === "Password")?.protected,
+	true,
+);
+
+console.log("open_kdbx4: opens with a key file");
+const keyed = open_kdbx4(
+	fixture("sample-keyfile.kdbx"),
+	"filevault",
+	fixture("sample.keyx"),
+) as KdbxEntry[];
+assertEq("kdbx keyfile password", kdbxField(kdbxByTitle(keyed, "GitHub"), "Password"), "hunter2");
+
+console.log("open_kdbx4: wrong password throws KDBX_WRONG_CREDENTIAL");
+try {
+	open_kdbx4(fixture("sample.kdbx"), "definitely wrong");
+	throw new Error("expected open_kdbx4 to throw on wrong password");
+} catch (e) {
+	const msg = (e as Error).message;
+	if (!msg.includes("KDBX_WRONG_CREDENTIAL"))
+		throw new Error(`expected KDBX_WRONG_CREDENTIAL, got: ${msg}`);
+	console.log("  ok  wrong kdbx password (threw KDBX_WRONG_CREDENTIAL)");
+}
 
 console.log("\nALL CHECKS PASSED");

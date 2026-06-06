@@ -23,6 +23,13 @@ base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 
+# --- KDBX4 import spike (de-risking wasm compat) ---
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+chacha20 = "0.9"
+flate2 = "1"        # default backend is pure-Rust miniz_oxide -> wasm-clean
+quick-xml = "0.37"
+
 [profile.release]
 opt-level = "z"
 lto = true

@@ -74,6 +74,12 @@ export interface VaultCrypto {
 	decrypt_entry(ciphertext: string, iv: string, wrappedDek: string, dekIv: string): string;
 	encrypt_with_vek(plaintext: string): { iv: string; ciphertext: string };
 	decrypt_with_vek(iv: string, ciphertext: string): string;
+
+	open_kdbx4(
+		file: Uint8Array,
+		password: string,
+		keyfile?: Uint8Array,
+	): { strings: { key: string; value: string; protected: boolean }[] }[];
 }
 
 let cached: Promise<VaultCrypto> | null = null;

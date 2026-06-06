@@ -43,7 +43,7 @@ function collectEntries(group: XmlGroup): XmlEntry[] {
 	return [...here, ...nested];
 }
 
-function mapEntry(entry: XmlEntry): EntryData {
+export function mapKeepassFields(fields: RawField[]): EntryData {
 	let name = "";
 	let username = "";
 	let password = "";
@@ -52,37 +52,35 @@ function mapEntry(entry: XmlEntry): EntryData {
 	let totp: string | undefined;
 	const extras: RawField[] = [];
 
-	for (const s of toArray(entry.String)) {
-		const key = String(s.Key ?? "");
-		const { text, hidden } = readValue(s.Value);
+	for (const { key, value, hidden } of fields) {
 		switch (key) {
 			case "Title":
-				name = text;
+				name = value;
 				break;
 			case "UserName":
-				username = text;
+				username = value;
 				break;
 			case "Password":
-				password = text;
+				password = value;
 				break;
 			case "URL":
-				url = text;
+				url = value;
 				break;
 			case "Notes":
-				notes = text;
+				notes = value;
 				break;
 			case "otp":
 				// KeePassXC: a full otpauth:// URI.
-				totp = text || totp;
+				totp = value || totp;
 				break;
 			case "TOTP Seed":
 				// KeeOtp/KeeWeb plugins: a bare base32 secret.
-				if (!totp) totp = text;
+				if (!totp) totp = value;
 				break;
 			case "TOTP Settings":
 				break; // companion to TOTP Seed — period/digits, not needed
 			default:
-				if (!STANDARD_KEYS.has(key)) extras.push({ key, value: text, hidden });
+				if (!STANDARD_KEYS.has(key)) extras.push({ key, value, hidden });
 		}
 	}
 
@@ -96,6 +94,14 @@ function mapEntry(entry: XmlEntry): EntryData {
 		totp: totp || undefined,
 		customFields: toCustomFields(extras),
 	};
+}
+
+function mapEntry(entry: XmlEntry): EntryData {
+	const fields: RawField[] = toArray(entry.String).map((s) => {
+		const { text, hidden } = readValue(s.Value);
+		return { key: String(s.Key ?? ""), value: text, hidden };
+	});
+	return mapKeepassFields(fields);
 }
 
 export function parseKeePass(raw: string | Uint8Array): ImportResult {

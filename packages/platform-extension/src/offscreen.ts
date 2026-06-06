@@ -101,9 +101,23 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 		case "CRYPTO_DECRYPT_OUTER":
 			return crypto.decrypt_with_vek(payload.iv, payload.ciphertext);
 
+		case "CRYPTO_OPEN_KDBX": {
+			// key/value pairs come back. Unrelated to the vault VEK.
+			const file = b64ToBytes(payload.fileB64);
+			const keyfile = payload.keyfileB64 ? b64ToBytes(payload.keyfileB64) : undefined;
+			return crypto.open_kdbx4(file, payload.password, keyfile);
+		}
+
 		default:
 			throw new Error(`unknown crypto message: ${type}`);
 	}
+}
+
+function b64ToBytes(b64: string): Uint8Array {
+	const bin = atob(b64);
+	const out = new Uint8Array(bin.length);
+	for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+	return out;
 }
 
 async function sha256Hex(text: string): Promise<string> {
