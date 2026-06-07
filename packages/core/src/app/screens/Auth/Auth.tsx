@@ -1,8 +1,9 @@
-import { Asterisk, ExternalLink, Eye, EyeOff, KeyRound, Shield } from "lucide-react";
+import { Asterisk, ExternalLink, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
+import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { TextField } from "../../components/ui/text-field";
 import { usePopOut } from "../../hooks/usePopOut";
 
@@ -104,9 +105,7 @@ export function Auth() {
 				<div className="w-full max-w-md mx-auto">
 					<div className="mb-5">
 						<div className="flex justify-center mb-3">
-							<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-linear-to-br from-primary to-primary/80">
-								<Shield className="w-8 h-8 text-primary-foreground" />
-							</div>
+							<BrambleGlyph className="w-16 h-16 text-foreground" />
 						</div>
 						<h1 className="text-xl bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
 							{showPasswordForm
@@ -254,9 +253,7 @@ export function Auth() {
 
 					<div className="mt-6 p-4 rounded-lg border border-border/30 bg-card/30 backdrop-blur-sm">
 						<div className="flex items-start gap-3">
-							<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
-								<Shield className="w-4 h-4 text-primary" />
-							</div>
+							<BrambleGlyph className="w-6 h-6 text-primary shrink-0" />
 							<div>
 								<h4 className="text-xs mb-1">Encrypted on your device</h4>
 								<p className="text-xs text-muted-foreground leading-relaxed">

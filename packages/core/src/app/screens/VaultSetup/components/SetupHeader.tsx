@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import { BrambleGlyph } from "../../../components/BrambleGlyph";
 import type { VaultSetupMode } from "../types";
 
 interface SetupHeaderProps {
@@ -8,9 +8,7 @@ interface SetupHeaderProps {
 export function SetupHeader({ mode }: SetupHeaderProps) {
 	return (
 		<div className="text-center mb-8">
-			<div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-4">
-				<Shield className="w-9 h-9 text-primary-foreground" />
-			</div>
+			<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 			<h1 className="text-2xl mb-2 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
 				{mode === "create" ? "Set up your vault" : "Open your vault"}
 			</h1>

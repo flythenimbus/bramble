@@ -1,15 +1,8 @@
 import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import {
-	ArrowLeft,
-	ExternalLink,
-	Lock,
-	Moon,
-	Settings as SettingsIcon,
-	Shield,
-	Sun,
-} from "lucide-react";
+import { ArrowLeft, ExternalLink, Lock, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
+import { BrambleGlyph } from "../components/BrambleGlyph";
 import { usePopOut } from "../hooks/usePopOut";
 import { useTheme } from "../hooks/useTheme";
 
@@ -60,9 +53,7 @@ export function AppLayout() {
 								className="flex items-center gap-2.5 rounded-lg active:scale-[0.98] transition-all"
 								aria-label="Go to vault"
 							>
-								<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25">
-									<Shield className="w-4.5 h-4.5 text-primary-foreground" />
-								</div>
+								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
 								<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
 									{shell.appName}
 								</h1>
