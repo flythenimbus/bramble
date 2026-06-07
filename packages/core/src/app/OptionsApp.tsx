@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ThemeProvider } from "./hooks/useTheme";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
@@ -15,7 +16,24 @@ function SetupShell() {
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	const [hasFile, setHasFile] = useState(hasVault);
 	const [done, setDone] = useState<null | "created" | "opened">(null);
+	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
 	const hasPicker = shell.hasFilePicker();
+
+	if (recoveryCode) {
+		return (
+			<div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+				<div className="w-full max-w-xl rounded-xl border border-border bg-card/50 backdrop-blur-sm p-6">
+					<RecoveryCodeDisplay
+						code={recoveryCode}
+						onContinue={() => {
+							setRecoveryCode(null);
+							setDone("created");
+						}}
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	if (done) {
 		return (
@@ -47,8 +65,7 @@ function SetupShell() {
 				setHasFile(true);
 			}}
 			onCreate={async (password) => {
-				await createVault(password);
-				setDone("created");
+				setRecoveryCode(await createVault(password));
 			}}
 			onUnlock={async (password) => {
 				await unlock(password);

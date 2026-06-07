@@ -65,7 +65,7 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 			<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 				<div className="p-4 space-y-3">
 					<div className="flex items-center gap-3">
-						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
+						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
 							{initials ? (
 								<span className="text-sm text-primary">{initials}</span>
 							) : (

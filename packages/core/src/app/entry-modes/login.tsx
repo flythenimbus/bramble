@@ -261,7 +261,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					}`}
 				>
 					{totpScan === "error"
-						? "No authenticator QR code found on the page. Make sure it's visible, then retry — or paste the setup key."
+						? "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
 						: "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."}
 				</p>
 			</div>
@@ -298,7 +298,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 						/>
 						<div>
 							<SelectField label="Subdomain match" {...register("subdomainMatch")}>
-								<option value="etld1">eTLD+1 (default — matches all subdomains)</option>
+								<option value="etld1">eTLD+1 (default, matches all subdomains)</option>
 								<option value="exact">Exact hostname only</option>
 								<option value="subdomain">This domain and its subdomains</option>
 							</SelectField>
@@ -470,7 +470,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="username"
 				onCopy={() => copy("username", login.username)}
 			>
-				<span className="text-sm truncate">{login.username || "—"}</span>
+				<span className="text-sm truncate">{login.username || "-"}</span>
 			</DetailField>
 
 			<DetailField

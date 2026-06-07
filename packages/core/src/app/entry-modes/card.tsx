@@ -118,7 +118,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="cardholder name"
 				onCopy={() => copy("cardholder name", card.cardholderName)}
 			>
-				<span className="text-sm truncate">{card.cardholderName || "—"}</span>
+				<span className="text-sm truncate">{card.cardholderName || "-"}</span>
 			</DetailField>
 
 			<DetailField
@@ -149,7 +149,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					copyName="expiry"
 					onCopy={() => copy("expiry", expiry)}
 				>
-					<span className="text-sm font-mono truncate">{expiry || "—"}</span>
+					<span className="text-sm font-mono truncate">{expiry || "-"}</span>
 				</DetailField>
 
 				<DetailField

@@ -253,7 +253,7 @@ interface CryptoAdapter {
   generateVek(): Promise<string>;                  // creates VEK + loads it
   unlockWithVek(vekB64: string): Promise<void>;    // session resume / rollback
   exportVek(): Promise<string>;                    // session resume
-  rotateVek(): Promise<string>;                    // full rotation
+  rotateVek(): Promise<string>;                    // full VEK rotation (reserved for an explicit vault rekey)
   lock(): Promise<void>;
   isLocked(): Promise<boolean>;
   onExternalLock(cb: () => void): () => void;       // background auto-lock → UI
@@ -332,7 +332,7 @@ interface NativeMessagingAdapter { ... }
 generate_vek() -> Result<String, JsError>                // vault create
 unlock_with_vek(vek_b64: String) -> Result<(), JsError>  // session resume / rotation rollback
 export_vek() -> Result<String, JsError>                  // session resume
-rotate_vek() -> Result<String, JsError>                  // full rotation on password change
+rotate_vek() -> Result<String, JsError>                  // full VEK rotation (reserved for an explicit vault rekey)
 lock()
 is_locked() -> bool
 
@@ -388,8 +388,8 @@ Password slot payload (kind = 0x01, len = 124):
 92   48   wrappedVEK (32-byte VEK + 16-byte GCM tag)
 ```
 
-Today the on-disk encoder only emits password slots. Unknown slot kinds
-(future webauthn / recovery) are preserved verbatim across a decode → encode
+The encoder emits password, webauthn, and recovery slots. Unknown slot kinds
+(future authenticator types) are preserved verbatim across a decode → encode
 round-trip so older builds don't drop slot data added by newer builds.
 
 ```ts
@@ -416,15 +416,20 @@ queries while the popup is closed.
 ## Multi-Key Slots
 
 LUKS-style multi-key slot layout. Same vault, unlockable by any of: a master
-password, a printable recovery code, a hardware security key (FIDO2
-`hmac-secret`), or future authenticator types — without re-encrypting the
-entries each time a key is added or revoked.
+password, a hardware security key (FIDO2 `hmac-secret` via the WebAuthn PRF
+extension), a printable recovery code, or future authenticator types — without
+re-encrypting the entries each time a key is added or revoked.
 
-Status: **password and WebAuthn (`hmac-secret`) slots are shipped** (format
-v0x02) — register / unlock / revoke wired end to end through the offscreen
-crypto boundary and the Settings + Auth UI. The recovery slot kind is
-reserved in the format; the encoder/decoder preserves its payload verbatim
-across a round-trip, but no UI yet exists to add or remove it.
+Status: **password, WebAuthn, and recovery slots are all shipped** (format
+v0x02) — register / unlock / revoke / reset wired end to end through the
+offscreen crypto boundary and the Settings + Auth UI.
+
+**Invariant B:** a vault must always keep at least one *primary* unlock method,
+where primary = master password OR security key. A recovery code can unlock but
+is a backup only — it never satisfies the always-one-primary guard. This lets a
+user disable the master password entirely (security-key-only) or remove all
+keys (password-only), but never strands them with just a recovery code. Enforced
+in `core/vault/slot-policy.ts`.
 
 ### Concept
 
@@ -443,21 +448,23 @@ Add a slot → derive a new KEK, wrap the existing VEK with it, append.
 Revoke a slot → drop it from the array. These keep the VEK and all entry
 DEKs untouched, so entries don't need re-encryption.
 
-**Rotating a password is different**: we deliberately rotate the VEK,
-re-encrypt every entry under fresh DEKs + IVs, re-encrypt the outer entries
-blob, and rewrap the new VEK under the new password slot. The slow path is
-the point — a leaked old VEK or old DEK must not survive a rotation. With a
-WebAuthn slot present (and once recovery slots ship), rotation requires
-re-presenting each authenticator so the new VEK can be wrapped under every
-existing slot's KEK in one atomic operation; until that multi-slot re-enroll
-UI lands, rotation refuses vaults that carry more than one authenticator.
+**Changing a password is a re-wrap, not a VEK rotation**: we re-derive the KEK
+from the new password and rewrap the *same* VEK under the password slot, leaving
+every other slot (recovery, security keys) intact. The VEK is deliberately
+stable because it's shared across slots — rotating it would invalidate the
+recovery slot (the code is offline and can't be re-wrapped) and every WebAuthn
+slot (each would need a tap). The tradeoff is no VEK forward-secrecy on password
+change, but a leaked *password* is fully addressed: its KEK and verifier are
+replaced. (A true "rekey the vault" operation — new VEK, re-encrypt everything,
+reissue the recovery code, re-tap keys — could be added later as an explicit
+action; it is not the everyday password-change path.)
 
 ### Header layout
 
 See "Vault Blob Format" above for the live layout. The encoder enforces a
 non-empty slot list and a hard cap of 16 slots.
 
-### Slot payloads (webauthn shipped, recovery reserved)
+### Slot payloads (password, webauthn, recovery — all shipped)
 
 ```
 webauthn slot (kind=0x02):
@@ -491,17 +498,26 @@ recovery slot (kind=0x03):
 The verifier-per-slot lets us reject wrong passwords / wrong security keys
 without attempting expensive VEK unwrap.
 
-### WebAuthn `hmac-secret` (shipped)
+### WebAuthn PRF / `hmac-secret` (shipped)
 
-The `hmac-secret` extension lets us request a stable HMAC output from a
-FIDO2 authenticator (YubiKey 5, Solo, Passkey-capable platform
-authenticators) without ever extracting key material. On registration
-(`navigator.credentials.create` with `hmacCreateSecret`) we store
-`credentialId` + a 32-byte random `salt`; on unlock we call
-`navigator.credentials.get({ publicKey: { ..., extensions: { hmacGetSecret:
-{ salt1: ourSalt } } } })` and pass the returned 32-byte secret through HKDF
-to produce the KEK. Browser support: Chrome / Edge on desktop today; not all
-authenticators implement `hmac-secret` (YubiKey 5+ and most Solo keys do).
+The authenticator's `hmac-secret` gives a stable HMAC output from a FIDO2 key
+(YubiKey 5, Solo, passkey-capable platform authenticators) without ever
+extracting key material. We reach it through the **WebAuthn `prf` extension**,
+not the raw `hmacCreateSecret` / `hmacGetSecret` inputs: Chromium forwards
+`hmacCreateSecret` on `create()` but **silently drops `hmacGetSecret` on
+`get()`** (returns an empty extension result), so the raw path never yields
+unlock material. Both register and unlock therefore go through `prf`.
+
+On registration (`navigator.credentials.create` with `extensions: { prf: { eval:
+{ first: salt } } }`) we store `credentialId` + a 32-byte random `salt` and try
+to read a create-time PRF result; most security keys can't evaluate PRF at
+makeCredential (that needs CTAP 2.2 `hmac-secret-mc`), so registration falls
+back to a second `get()` — i.e. two taps to register, one to unlock. On unlock
+we call `get()` with `extensions: { prf: { eval: { first: ourSalt } } }` and
+pass the returned 32-byte secret through HKDF to produce the KEK
+(`derive_kek_hkdf` in WASM). Browser support: Chrome / Edge / Brave on desktop
+today; not all authenticators implement `hmac-secret` (YubiKey 5+ and most Solo
+keys do).
 
 This is about *unlocking the vault* with a hardware key — distinct from the
 vault *storing and serving* passkeys for websites (see the "Passkeys" section).
@@ -1021,31 +1037,40 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
 - **Multi-key vault slot format** (VLT1 v0x02) — random VEK at vault
   creation, password slot wraps the VEK with `KEK = Argon2id(password, salt)`,
   per-slot verifier = `HMAC-SHA256(KEK, magic ++ version ++ slotId)` for
-  constant-time wrong-password rejection. The webauthn slot (kind 0x02) is
-  wired (see below); the recovery slot (kind 0x03) is still reserved — the
-  encoder/decoder round-trips its payload verbatim so it can be added without
-  a format bump.
-- **Hardware-key unlock (WebAuthn `hmac-secret`, slot kind 0x02)** — register
-  a FIDO2 authenticator (YubiKey, Touch ID, Windows Hello) and unlock the
-  vault with it instead of (or alongside) the master password.
-  `registerSecurityKey` calls `navigator.credentials.create` with
-  `hmacCreateSecret`; `unlockWithSecurityKey` calls `navigator.credentials.get`
-  with `hmacGetSecret` and derives the KEK via HKDF over the returned 32-byte
-  secret (`derive_kek_hkdf` in WASM). Add / list / revoke in Settings, an
-  "unlock with security key" affordance on the Auth screen when the vault
-  carries a webauthn slot, and `wrap_vek_webauthn` / `unwrap_vek_webauthn` /
-  `verify_webauthn_slot` across the offscreen crypto boundary. Slots coexist,
-  so a vault can be opened by password or security key in any combination.
-- **Full-rotation password change** — changing the master password
-  generates a brand-new VEK (`crypto.rotateVek`), re-encrypts every entry
-  under a fresh DEK + content IV + dek-wrap IV, re-encrypts the outer
-  entries blob, and rewraps the new VEK under the new password slot. Any
-  leaked old VEK, old DEK, or old ciphertext is cryptographically useless
-  against the rotated vault. The flow snapshots the old VEK in JS memory
-  and rolls back via `unlockWithVek` if any step before the disk write
-  fails. When recovery / WebAuthn slots ship, rotation will refuse vaults
-  with more than one authenticator until the multi-slot re-enroll UI lands
-  rather than silently dropping authenticators.
+  constant-time wrong-password rejection. Password (0x01), webauthn (0x02), and
+  recovery (0x03) slots are all wired (see below). Slot-mutation policy
+  (`core/vault/slot-policy.ts`) enforces **invariant B** — a vault always keeps
+  ≥1 primary unlock (password or security key); a recovery code never counts
+  as primary.
+- **Hardware-key unlock (WebAuthn PRF, slot kind 0x02)** — register a FIDO2
+  authenticator (YubiKey, Touch ID, Windows Hello) and unlock the vault with it
+  instead of (or alongside) the master password. Both `registerSecurityKey` and
+  `unlockWithSecurityKey` use the `prf` extension (Chromium drops the raw
+  `hmacGetSecret` on `get()` — see "WebAuthn PRF" above). Registration evals the
+  PRF salt at `create()` and falls back to a second `get()` when the key can't
+  (most can't → two taps to register, one to unlock); the KEK is HKDF over the
+  returned 32-byte secret (`derive_kek_hkdf` in WASM). Add / list / revoke in
+  Settings, security-key + recovery-code affordances on the Auth screen, and
+  `wrap_vek_webauthn` / `unwrap_vek_webauthn` / `verify_webauthn_slot` across
+  the offscreen crypto boundary. Slots coexist, so a vault can be opened by
+  password or security key in any combination — including **password-less**
+  (master password disabled, security key only).
+- **Re-wrap password change + set / disable** — changing the master password
+  re-derives the KEK and rewraps the *same* VEK under the password slot
+  (`writeMasterPasswordSlot`), leaving recovery and webauthn slots intact; it
+  verifies the written slot and rolls the file back if that fails.
+  `setMasterPassword` re-enables a password on a key-only vault the same way;
+  `disableMasterPassword` drops the password slot (refused by invariant B
+  unless a security key remains). The VEK is intentionally stable rather than
+  rotated — see "Changing a password is a re-wrap" above for the tradeoff.
+- **Recovery codes (slot kind 0x03)** — every vault gets a 150-bit Crockford
+  base32 recovery code at creation (`createVault` returns it; shown once via
+  `RecoveryCodeDisplay`, never persisted in plaintext). It's a high-entropy
+  passphrase that reuses the password KDF (`wrap_vek_password` /
+  `unwrap_vek_password`) stored under the recovery kind — no Rust changes.
+  `generateRecoveryCode` resets it (gated behind a master-password confirm, or
+  a security-key tap on a password-less vault); `unlockWithRecoveryCode` opens
+  the vault from the Auth screen. One recovery slot per vault; reset replaces it.
 - Background-owned session state with sliding auto-lock alarm
   (user-configurable, 15 min default). An open popup / detached window
   reflects a background lock in real time via `crypto.onExternalLock`
@@ -1089,14 +1114,16 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
   `WORKERS` reasons) reads the clipboard, re-hashes, and only writes
   empty if the value still matches — so we never trash unrelated data
   the user copied in the meantime.
-- **Settings screen** — auto-lock timeout (5 / 15 / 30 / 60 min / never),
-  clipboard-clear TTL, breach-check toggle, **Lock now**, and an inline
-  change-master-password flow (current → new → confirm). Prefs persisted
-  via `storage.setMeta` in `chrome.storage.local`; background reads them
-  on demand and reschedules the auto-lock alarm when the timeout changes.
-  Change-master-password triggers a full rotation (new VEK, fresh DEK +
-  IVs per entry, new outer blob, new password slot) — see "Full-rotation
-  password change" above.
+- **Settings screen** — split into a **General** section (auto-lock timeout
+  5 / 15 / 30 / 60 min / never, clipboard-clear TTL, breach-check toggle,
+  offer-to-save toggle, muted-site list) and a **Security** section (master
+  password change / set, a require-master-password toggle that disables it
+  behind a confirm modal, security keys add / list / revoke, and recovery-code
+  reset behind an auth gate → modal showing the new code). The standalone
+  "Lock now" row was removed (lock still lives in the AppLayout header). Prefs
+  persisted via `storage.setMeta` in `chrome.storage.local`; background reads
+  them on demand and reschedules the auto-lock alarm when the timeout changes.
+  Master-password change is a re-wrap — see "Re-wrap password change" above.
 - **HIBP breach check** — `checkPasswordBreach` (in `util/pwned.ts`)
   wraps the k-anonymity range query and returns `undefined` on any
   network failure (fail-open). Stored encrypted inside the entry JSON
@@ -1234,19 +1261,19 @@ decrypted entry before Zod validation. Currently:
 
 ### TODO (next phases)
 
-1. **Recovery-code slot (kind 0x03)** — wire add / revoke UI to the existing
-   slot-aware format. Same Argon2id-derived KEK as password slots, just
-   with a printable code instead of a memorised password. The webauthn slot
-   (TODO #2 in earlier drafts) shipped — see "Hardware-key unlock" under
-   Working; recovery is the last reserved slot kind left to wire, and it can
-   coexist with the password and webauthn slots already supported.
-2. **Multi-slot re-enroll / rotation** — master-password rotation currently
-   refuses vaults carrying more than one authenticator (see "Rotating a
-   password" above). Build the re-enroll flow that re-presents each existing
-   authenticator so a rotated VEK can be rewrapped under every slot's KEK in
-   one atomic operation, lifting that restriction. Cross-vendor testing
-   required (YubiKey 5+ / Solo / platform passkeys on Chrome + Edge; not all
-   FIDO2 authenticators implement `hmac-secret`).
+1. **Optional full vault rekey** — the everyday password change is now a
+   re-wrap that keeps the VEK stable (see "Changing a password is a re-wrap").
+   A separate, explicit "rekey the vault" action could rotate the VEK,
+   re-encrypt every entry, reissue the recovery code, and re-present each
+   security key so the new VEK is rewrapped under every slot in one atomic
+   operation — useful after a suspected compromise. Cross-vendor testing
+   required (YubiKey 5+ / Solo / platform passkeys on Chrome / Edge / Brave;
+   not all FIDO2 authenticators implement `hmac-secret`). Not a release gate.
+2. **`useVault` integration tests** — the slot-policy, recovery-code, and
+   vault-format logic are unit-tested, but the hook flows (set / disable /
+   change password, generate / unlock recovery) have no harness (no
+   `renderHook` / adapter mocks in the repo). Build mockable crypto + storage
+   adapters and cover the new auth flows end to end.
 3. **Passkey storage — Vault as a WebAuthn credential provider** — create / store
    / use synced passkeys via `chrome.webAuthenticationProxy`, stored **as a
    `passkeys` field on the login entry** (attach-or-create via the corner

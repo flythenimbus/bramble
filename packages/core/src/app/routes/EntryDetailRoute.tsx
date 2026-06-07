@@ -33,10 +33,13 @@ export function EntryDetailRoute() {
 
 	if (!entry) return null;
 
+	const viewEntry =
+		prefs.breachCheckEnabled || entry.type !== "login" ? entry : { ...entry, breach: undefined };
+
 	return (
 		<div className="flex-1 overflow-y-auto">
 			<EntryDetail
-				entry={entry}
+				entry={viewEntry}
 				onEdit={() => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
 				onDelete={async () => {
 					await deleteEntry(entryId);

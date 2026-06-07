@@ -68,7 +68,7 @@ export function VaultSetup({
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			<div className="w-full max-w-xl">
 				<SetupHeader mode={mode} />
 				<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} />

@@ -8,7 +8,9 @@ import {
 	LEN_WRAPPED_VEK,
 	MAX_SLOTS,
 	type PasswordSlot,
+	type RecoverySlot,
 	SLOT_KIND_PASSWORD,
+	SLOT_KIND_RECOVERY,
 	SLOT_KIND_WEBAUTHN,
 	type Slot,
 	type VaultBlob,
@@ -18,8 +20,11 @@ import {
 	addWebauthnSlot,
 	matchSlotByCredentialId,
 	needsSaltMismatchRetry,
+	removePasswordSlot,
 	removeWebauthnSlot,
-} from "./security-key-slots";
+	upsertPasswordSlot,
+	upsertRecoverySlot,
+} from "./slot-policy";
 
 function fillBytes(length: number, base = 0): Uint8Array {
 	const arr = new Uint8Array(length);
@@ -39,14 +44,25 @@ function makeWebauthnSlot(idBase: number, credIdLen = 64, saltBase = 0x30): Weba
 	};
 }
 
-function makePasswordSlot(): PasswordSlot {
+function makePasswordSlot(idBase = 0x01): PasswordSlot {
 	return {
 		kind: SLOT_KIND_PASSWORD,
-		slotId: fillBytes(LEN_SLOT_ID, 0x01),
-		salt: fillBytes(16, 0x02),
-		verifier: fillBytes(LEN_VERIFIER, 0x03),
-		wrapIv: fillBytes(LEN_WRAP_IV, 0x04),
-		wrappedVek: fillBytes(LEN_WRAPPED_VEK, 0x05),
+		slotId: fillBytes(LEN_SLOT_ID, idBase),
+		salt: fillBytes(16, idBase + 0x01),
+		verifier: fillBytes(LEN_VERIFIER, idBase + 0x02),
+		wrapIv: fillBytes(LEN_WRAP_IV, idBase + 0x03),
+		wrappedVek: fillBytes(LEN_WRAPPED_VEK, idBase + 0x04),
+	};
+}
+
+function makeRecoverySlot(idBase = 0xc0): RecoverySlot {
+	return {
+		kind: SLOT_KIND_RECOVERY,
+		slotId: fillBytes(LEN_SLOT_ID, idBase),
+		salt: fillBytes(16, idBase + 0x01),
+		verifier: fillBytes(LEN_VERIFIER, idBase + 0x02),
+		wrapIv: fillBytes(LEN_WRAP_IV, idBase + 0x03),
+		wrappedVek: fillBytes(LEN_WRAPPED_VEK, idBase + 0x04),
 	};
 }
 
@@ -186,13 +202,12 @@ describe("removeWebauthnSlot", () => {
 		expect((next.slots[0] as WebauthnSlot).slotId).toEqual(b.slotId);
 	});
 
-	it("refuses when removing would leave only an opaque (unknown) slot", () => {
-		// Recovery slot (0x03) reserved but not yet implemented as
-		// `Unlockable` from this client. If we removed the only webauthn,
-		// the user couldn't unlock with just an opaque slot.
+	it("refuses when removing would leave only a recovery slot", () => {
+		// A recovery code is a backup, never a primary unlock (invariant B).
+		// Removing the only webauthn key would leave nothing to unlock with
+		// day-to-day, so it must be refused even though a recovery slot exists.
 		const only = makeWebauthnSlot(0x10);
-		const opaque = { kind: 0x03, payload: fillBytes(124, 0xb0) };
-		const blob = makeBlob([only, opaque]);
+		const blob = makeBlob([only, makeRecoverySlot()]);
 		expect(() => removeWebauthnSlot(blob, only.slotId)).toThrow(/last unlock/);
 	});
 
@@ -202,5 +217,102 @@ describe("removeWebauthnSlot", () => {
 		const next = removeWebauthnSlot(blob, a.slotId);
 		expect(next.entriesIv).toBe(blob.entriesIv);
 		expect(next.entriesCiphertext).toBe(blob.entriesCiphertext);
+	});
+});
+
+describe("upsertPasswordSlot", () => {
+	it("adds a password slot to a key-only vault (first-time enable)", () => {
+		const blob = makeBlob([makeWebauthnSlot(0x10)]);
+		const next = upsertPasswordSlot(blob, makePasswordSlot());
+		expect(next.slots).toHaveLength(2);
+		expect(next.slots.filter((s) => s.kind === SLOT_KIND_PASSWORD)).toHaveLength(1);
+	});
+
+	it("replaces the existing password slot (re-wrap on change), keeping count", () => {
+		const old = makePasswordSlot(0x01);
+		const blob = makeBlob([old, makeWebauthnSlot(0x10)]);
+		const replacement = makePasswordSlot(0x90);
+		const next = upsertPasswordSlot(blob, replacement);
+		const pw = next.slots.filter((s) => s.kind === SLOT_KIND_PASSWORD) as PasswordSlot[];
+		expect(pw).toHaveLength(1);
+		expect(pw[0]!.slotId).toEqual(replacement.slotId);
+	});
+
+	it("leaves recovery and webauthn slots untouched", () => {
+		const blob = makeBlob([makeWebauthnSlot(0x10), makeRecoverySlot()]);
+		const next = upsertPasswordSlot(blob, makePasswordSlot());
+		expect(next.slots.some((s) => s.kind === SLOT_KIND_WEBAUTHN)).toBe(true);
+		expect(next.slots.some((s) => s.kind === SLOT_KIND_RECOVERY)).toBe(true);
+	});
+
+	it("does not mutate the input blob", () => {
+		const blob = makeBlob([makeWebauthnSlot(0x10)]);
+		const before = blob.slots.length;
+		upsertPasswordSlot(blob, makePasswordSlot());
+		expect(blob.slots.length).toBe(before);
+	});
+
+	it("refuses when adding would exceed MAX_SLOTS", () => {
+		const slots: Slot[] = Array.from({ length: MAX_SLOTS }, (_, i) =>
+			makeWebauthnSlot(0x10 + i * 0x10),
+		);
+		const blob = makeBlob(slots);
+		expect(() => upsertPasswordSlot(blob, makePasswordSlot())).toThrow(/maximum/);
+	});
+});
+
+describe("removePasswordSlot", () => {
+	it("removes the password slot when a security key remains", () => {
+		const blob = makeBlob([makePasswordSlot(), makeWebauthnSlot(0x10)]);
+		const next = removePasswordSlot(blob);
+		expect(next.slots.some((s) => s.kind === SLOT_KIND_PASSWORD)).toBe(false);
+		expect(next.slots.some((s) => s.kind === SLOT_KIND_WEBAUTHN)).toBe(true);
+	});
+
+	it("throws when there is no password slot to disable", () => {
+		const blob = makeBlob([makeWebauthnSlot(0x10)]);
+		expect(() => removePasswordSlot(blob)).toThrow(/no master password/);
+	});
+
+	it("refuses to disable the password when it is the only primary unlock", () => {
+		const blob = makeBlob([makePasswordSlot()]);
+		expect(() => removePasswordSlot(blob)).toThrow(/register a security key/i);
+	});
+
+	it("refuses when only a recovery slot would remain (invariant B)", () => {
+		// would leave no day-to-day unlock method.
+		const blob = makeBlob([makePasswordSlot(), makeRecoverySlot()]);
+		expect(() => removePasswordSlot(blob)).toThrow(/register a security key/i);
+	});
+
+	it("does not mutate the input blob", () => {
+		const blob = makeBlob([makePasswordSlot(), makeWebauthnSlot(0x10)]);
+		const before = blob.slots.length;
+		removePasswordSlot(blob);
+		expect(blob.slots.length).toBe(before);
+	});
+});
+
+describe("upsertRecoverySlot", () => {
+	it("adds a recovery slot when none exists", () => {
+		const blob = makeBlob([makePasswordSlot()]);
+		const next = upsertRecoverySlot(blob, makeRecoverySlot());
+		expect(next.slots.filter((s) => s.kind === SLOT_KIND_RECOVERY)).toHaveLength(1);
+	});
+
+	it("replaces the existing recovery slot (reset), keeping a single one", () => {
+		const blob = makeBlob([makePasswordSlot(), makeRecoverySlot(0xc0)]);
+		const replacement = makeRecoverySlot(0xe0);
+		const next = upsertRecoverySlot(blob, replacement);
+		const rec = next.slots.filter((s) => s.kind === SLOT_KIND_RECOVERY) as RecoverySlot[];
+		expect(rec).toHaveLength(1);
+		expect(rec[0]!.slotId).toEqual(replacement.slotId);
+	});
+
+	it("does not mutate the input blob", () => {
+		const blob = makeBlob([makePasswordSlot()]);
+		const before = blob.slots.length;
+		upsertRecoverySlot(blob, makeRecoverySlot());
+		expect(blob.slots.length).toBe(before);
 	});
 });

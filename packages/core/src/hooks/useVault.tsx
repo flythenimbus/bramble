@@ -14,11 +14,14 @@ import {
 	type EncryptedEntry,
 	encodeVaultBlob,
 	findPasswordSlot,
+	findRecoverySlots,
 	findWebauthnSlots,
 	LEN_HMAC_SECRET_SALT,
 	LEN_SLOT_ID,
 	type PasswordSlot,
+	type RecoverySlot,
 	SLOT_KIND_PASSWORD,
+	SLOT_KIND_RECOVERY,
 	SLOT_KIND_WEBAUTHN,
 	type VaultBlob,
 	verifierPrefix,
@@ -92,11 +95,18 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 
 import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
 import {
+	generateRecoveryCode as makeRecoveryCode,
+	normalizeRecoveryCode,
+} from "../vault/recovery-code";
+import {
 	addWebauthnSlot,
 	matchSlotByCredentialId,
 	needsSaltMismatchRetry,
+	removePasswordSlot,
 	removeWebauthnSlot,
-} from "../vault/security-key-slots";
+	upsertPasswordSlot,
+	upsertRecoverySlot,
+} from "../vault/slot-policy";
 
 export { entryDataSchema };
 
@@ -112,6 +122,8 @@ export interface UseVault {
 	hasVault: boolean;
 	isLocked: boolean;
 	hasWebauthnSlot: boolean;
+	hasPasswordSlot: boolean;
+	hasRecoveryCode: boolean;
 	securityKeys: SecurityKeyMeta[];
 	ready: boolean;
 	entries: Entry[];
@@ -120,16 +132,21 @@ export interface UseVault {
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
-	createVault(password: string): Promise<void>;
+	createVault(password: string): Promise<string>;
 	addEntry(data: EntryData): Promise<void>;
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
+	verifyWithSecurityKey(): Promise<boolean>;
 	changeMasterPassword(newPassword: string): Promise<void>;
+	setMasterPassword(password: string): Promise<void>;
+	disableMasterPassword(): Promise<void>;
 	unlockWithSecurityKey(): Promise<void>;
 	registerSecurityKey(label: string): Promise<void>;
 	revokeSecurityKey(slotIdB64: string): Promise<void>;
+	generateRecoveryCode(): Promise<string>;
+	unlockWithRecoveryCode(code: string): Promise<void>;
 }
 
 const VaultContext = createContext<UseVault | null>(null);
@@ -211,6 +228,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [error, setError] = useState<string | null>(null);
 	const [pendingSyncCount, setPendingSyncCount] = useState(0);
 	const [webauthnSlots, setWebauthnSlots] = useState<WebauthnSlot[]>([]);
+	const [hasPasswordSlot, setHasPasswordSlot] = useState(false);
+	const [hasRecoveryCode, setHasRecoveryCode] = useState(false);
 	const [securityKeyLabels, setSecurityKeyLabels] = useState<
 		Record<string, { label: string; addedAt: number }>
 	>({});
@@ -247,9 +266,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				),
 			]);
 			setWebauthnSlots(findWebauthnSlots(blob));
+			setHasPasswordSlot(findPasswordSlot(blob) !== null);
+			setHasRecoveryCode(findRecoverySlots(blob).length > 0);
 			setSecurityKeyLabels(stored ?? {});
 		} catch {
 			setWebauthnSlots([]);
+			setHasPasswordSlot(false);
+			setHasRecoveryCode(false);
 			setSecurityKeyLabels({});
 		}
 	}, [readDecodedBlob, storage]);
@@ -370,8 +393,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array }> => {
 			const challenge = new Uint8Array(32);
 			globalThis.crypto.getRandomValues(challenge);
-			// `hmacGetSecret` isn't in lib.dom.d.ts's `AuthenticationExtensionsClientInputs`;
-			// cast the options object so TS doesn't reject the field.
 			const publicKey = {
 				challenge: challenge as BufferSource,
 				allowCredentials: allowCredentials.map((s) => ({
@@ -379,27 +400,72 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					id: s.credentialId as BufferSource,
 				})),
 				userVerification: "preferred",
-				extensions: { hmacGetSecret: { salt1: salt as BufferSource } },
+				extensions: { prf: { eval: { first: salt as BufferSource } } },
 			} as unknown as PublicKeyCredentialRequestOptions;
 			const credential = (await navigator.credentials.get({
 				publicKey,
 			})) as PublicKeyCredential | null;
 			if (!credential) throw new Error("Authenticator returned no credential.");
 			const ext = credential.getClientExtensionResults() as {
-				hmacGetSecret?: { output1?: ArrayBuffer };
+				prf?: { results?: { first?: ArrayBuffer } };
 			};
-			const out1 = ext.hmacGetSecret?.output1;
-			if (!out1) {
+			const first = ext.prf?.results?.first;
+			if (!first) {
 				throw new Error(
-					"This authenticator didn't return an hmac-secret. Try a YubiKey 5+ or Windows Hello.",
+					"This authenticator didn't return a PRF secret. Try a YubiKey 5+ or Windows Hello.",
 				);
 			}
 			return {
 				rawId: new Uint8Array(credential.rawId),
-				hmacSecret: new Uint8Array(out1),
+				hmacSecret: new Uint8Array(first),
 			};
 		},
 		[],
+	);
+
+
+	const wrapPasswordSlot = useCallback(
+		async (password: string): Promise<PasswordSlot> => {
+			const saltB64 = await crypto.generateSalt();
+			const slotIdB64 = await crypto.generateSlotId();
+			const wrapped = await crypto.wrapVekPassword({
+				password,
+				saltB64,
+				slotIdB64,
+				magicVersion: verifierPrefix(),
+			});
+			return {
+				kind: SLOT_KIND_PASSWORD,
+				slotId: base64ToBytes(slotIdB64),
+				salt: base64ToBytes(saltB64),
+				verifier: base64ToBytes(wrapped.verifier),
+				wrapIv: base64ToBytes(wrapped.wrapIv),
+				wrappedVek: base64ToBytes(wrapped.wrappedVek),
+			};
+		},
+		[crypto],
+	);
+
+	const wrapRecoverySlot = useCallback(
+		async (code: string): Promise<RecoverySlot> => {
+			const saltB64 = await crypto.generateSalt();
+			const slotIdB64 = await crypto.generateSlotId();
+			const wrapped = await crypto.wrapVekPassword({
+				password: normalizeRecoveryCode(code),
+				saltB64,
+				slotIdB64,
+				magicVersion: verifierPrefix(),
+			});
+			return {
+				kind: SLOT_KIND_RECOVERY,
+				slotId: base64ToBytes(slotIdB64),
+				salt: base64ToBytes(saltB64),
+				verifier: base64ToBytes(wrapped.verifier),
+				wrapIv: base64ToBytes(wrapped.wrapIv),
+				wrappedVek: base64ToBytes(wrapped.wrappedVek),
+			};
+		},
+		[crypto],
 	);
 
 	const unlockWithSecurityKey = useCallback(async () => {
@@ -446,6 +512,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		void shell.flushPendingCornerCapture().catch(() => {});
 	}, [readDecodedBlob, callGetWithSalt, crypto, loadEntries, shell]);
 
+	const verifyWithSecurityKey = useCallback(async (): Promise<boolean> => {
+		const { blob } = await readDecodedBlob();
+		const slots = findWebauthnSlots(blob);
+		if (slots.length === 0) return false;
+		try {
+			const attempt = await callGetWithSalt(slots, slots[0]!.salt);
+			return matchSlotByCredentialId(slots, attempt.rawId) !== null;
+		} catch {
+			return false;
+		}
+	}, [readDecodedBlob, callGetWithSalt]);
+
 	const registerSecurityKey = useCallback(
 		async (label: string) => {
 			setError(null);
@@ -454,51 +532,49 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			}
 			const { blob } = await readDecodedBlob();
 
-			// Step 1: create() — register a credential with hmacCreateSecret.
 			const challenge = new Uint8Array(32);
 			globalThis.crypto.getRandomValues(challenge);
 			const userId = new Uint8Array(16);
 			globalThis.crypto.getRandomValues(userId);
-			const created = (await navigator.credentials.create({
-				publicKey: {
-					challenge: challenge as BufferSource,
-					rp: { name: "Vault" },
-					user: {
-						id: userId as BufferSource,
-						name: "vault@local",
-						displayName: label || "Vault",
-					},
-					pubKeyCredParams: [
-						{ type: "public-key", alg: -7 }, // ES256
-						{ type: "public-key", alg: -257 }, // RS256
-					],
-					authenticatorSelection: {
-						userVerification: "preferred",
-						residentKey: "discouraged",
-					},
-					attestation: "none",
-					extensions: { hmacCreateSecret: true },
-				},
-			})) as PublicKeyCredential | null;
-			if (!created) throw new Error("Authenticator returned no credential.");
-			const createdExt = created.getClientExtensionResults() as {
-				hmacCreateSecret?: boolean;
-			};
-			if (createdExt.hmacCreateSecret !== true) {
-				throw new Error(
-					"This authenticator doesn't support hmac-secret. Try a YubiKey 5+ or Windows Hello.",
-				);
-			}
-
-			// Step 2: generate a fresh 32-byte salt for this slot, then get()
-			// to retrieve the actual secret. (The create() response confirms
-			// support; only get() returns the secret.)
-			const credentialId = new Uint8Array(created.rawId);
 			const salt = new Uint8Array(LEN_HMAC_SECRET_SALT);
 			globalThis.crypto.getRandomValues(salt);
-			const { hmacSecret } = await callGetWithSalt(
-				[
-					{
+			let credentialId: Uint8Array;
+			let hmacSecret: Uint8Array;
+			try {
+				const created = (await navigator.credentials.create({
+					publicKey: {
+						challenge: challenge as BufferSource,
+						rp: { name: "Vault" },
+						user: {
+							id: userId as BufferSource,
+							name: "vault@local",
+							displayName: label || "Vault",
+						},
+						pubKeyCredParams: [
+							{ type: "public-key", alg: -7 }, // ES256
+							{ type: "public-key", alg: -257 }, // RS256
+						],
+						authenticatorSelection: {
+							userVerification: "preferred",
+							residentKey: "discouraged",
+						},
+						attestation: "none",
+						extensions: {
+							prf: { eval: { first: salt as BufferSource } },
+						} as unknown as AuthenticationExtensionsClientInputs,
+					},
+				})) as PublicKeyCredential | null;
+				if (!created) throw new Error("Authenticator returned no credential.");
+				credentialId = new Uint8Array(created.rawId);
+
+				const createdExt = created.getClientExtensionResults() as {
+					prf?: { results?: { first?: ArrayBuffer } };
+				};
+				const evaluated = createdExt.prf?.results?.first;
+				if (evaluated) {
+					hmacSecret = new Uint8Array(evaluated);
+				} else {
+					const probe: WebauthnSlot = {
 						kind: SLOT_KIND_WEBAUTHN,
 						slotId: new Uint8Array(LEN_SLOT_ID),
 						credentialId,
@@ -506,12 +582,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 						verifier: new Uint8Array(),
 						wrapIv: new Uint8Array(),
 						wrappedVek: new Uint8Array(),
-					},
-				],
-				salt,
-			);
+					};
+					hmacSecret = (await callGetWithSalt([probe], salt)).hmacSecret;
+				}
+			} catch (e) {
+				if ((e as { name?: string })?.name === "NotAllowedError") {
+					throw new Error(
+						"Registration was cancelled or timed out. Adding a security key takes two taps: one to create the key, then a second to unlock its secret. Please try again and complete both prompts.",
+					);
+				}
+				throw e;
+			}
 
-			// Step 3: wrap the VEK under a KEK derived from the secret.
 			const slotIdB64 = await crypto.generateSlotId();
 			const wrapped = await crypto.wrapVekWebauthn({
 				hmacSecretB64: bytesToBase64(hmacSecret),
@@ -564,31 +646,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	const createVault = useCallback(
-		async (password: string) => {
+		async (password: string): Promise<string> => {
 			setError(null);
 			await crypto.generateVek();
-			// 2. Wrap the VEK under the password — produces the initial
-			//    password slot. Salt and slotId are fresh per slot.
-			const saltB64 = await crypto.generateSalt();
-			const slotIdB64 = await crypto.generateSlotId();
-			const wrapped = await crypto.wrapVekPassword({
-				password,
-				saltB64,
-				slotIdB64,
-				magicVersion: verifierPrefix(),
-			});
+			const passwordSlot = await wrapPasswordSlot(password);
+			const code = makeRecoveryCode();
+			const recoverySlot = await wrapRecoverySlot(code);
 			const { iv, ciphertext } = await crypto.encryptWithVek("[]");
 
-			const slot: PasswordSlot = {
-				kind: SLOT_KIND_PASSWORD,
-				slotId: base64ToBytes(slotIdB64),
-				salt: base64ToBytes(saltB64),
-				verifier: base64ToBytes(wrapped.verifier),
-				wrapIv: base64ToBytes(wrapped.wrapIv),
-				wrappedVek: base64ToBytes(wrapped.wrappedVek),
-			};
 			const blob: VaultBlob = {
-				slots: [slot],
+				slots: [passwordSlot, recoverySlot],
 				entriesIv: base64ToBytes(iv),
 				entriesCiphertext: base64ToBytes(ciphertext),
 			};
@@ -596,8 +663,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setHasVault(true);
 			setEntries([]);
 			setIsLocked(false);
+			await refreshSlotMetadata();
+			return code;
 		},
-		[storage, crypto],
+		[storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
 	);
 
 	const persistEntries = useCallback(
@@ -688,146 +757,122 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, readDecodedBlob],
 	);
 
-	// Full rotation on password change. The VEK itself is rotated, every
-	// entry is re-encrypted under a fresh DEK + IV (so any leaked old VEK or
-	// old DEK cannot decrypt new ciphertext), the outer entries blob is
-	// re-encrypted, and the password slot is re-wrapped under the new VEK.
 	//
-	// Today's vaults only have a single password slot. When we add WebAuthn /
-	// recovery slots, each existing authenticator will need to be presented
-	// during rotation so we can re-wrap the new VEK under its KEK — until
-	// that UI exists we refuse to rotate vaults with extra slots rather than
-	// silently dropping them.
-	//
-	// Caller (Settings) is responsible for verifying the current password
-	// before calling this. Atomicity from the user's perspective is enforced
-	// by reading the written blob back, decoding it, and *decrypting it under
-	// the new VEK* before reporting success. If any of those fail we restore
-	// the on-disk backup snapshot taken by `writeVaultBlob` and revert the
-	// in-memory VEK so the still-on-disk vault is openable under the OLD
-	// password — i.e. the rotation never half-applied.
-	const changeMasterPassword = useCallback(
-		async (newPassword: string) => {
-			setError(null);
-
+	const writeMasterPasswordSlot = useCallback(
+		async (password: string) => {
 			const { blob } = await readDecodedBlob();
-			const existing = findPasswordSlot(blob);
-			if (!existing) throw new Error("vault has no password slot to rotate");
-			// Rotation re-encrypts everything under a fresh VEK, which would
-			// invalidate every other slot's wrappedVek. For webauthn slots
-			// we'd have to re-prompt the user to tap each registered key,
-			// which is unacceptable UX; for now refuse and tell the user to
-			// remove security keys first.
-			if (findWebauthnSlots(blob).length > 0) {
-				throw new Error(
-					"Remove all security keys first — rotating the master password will invalidate them.",
-				);
-			}
-			if (blob.slots.length !== 1) {
-				throw new Error(
-					"vault has additional authenticators; multi-slot rotation is not yet supported",
-				);
-			}
-
-			const oldVekB64 = await crypto.exportVek();
-			let didWrite = false;
+			const slot = await wrapPasswordSlot(password);
+			const newBlob = upsertPasswordSlot(blob, slot);
+			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 			try {
-				// 1. Rotate the VEK. From here on every encrypt uses the new key;
-				//    every decrypt against old ciphertext will fail.
-				await crypto.rotateVek();
-
-				// 2. Re-encrypt every entry under the new VEK. encryptEntry
-				//    generates a fresh DEK + content IV + dek-wrap IV per call,
-				//    so no piece of cryptographic material survives the rotation.
-				const encryptedEntries: EncryptedEntry[] = await Promise.all(
-					entries.map(async (entry) => {
-						const { id, ...data } = entry;
-						const enc = await crypto.encryptEntry(JSON.stringify(data));
-						return {
-							id,
-							wrappedDek: enc.wrappedDek,
-							dekIv: enc.dekIv,
-							ciphertext: enc.ciphertext,
-							iv: enc.iv,
-						};
-					}),
-				);
-				const outerJson = encryptedEntries.length === 0 ? "[]" : JSON.stringify(encryptedEntries);
-				const { iv: outerIv, ciphertext: outerCt } = await crypto.encryptWithVek(outerJson);
-
-				// 3. Wrap the new VEK under the new password's KEK (new salt,
-				//    same slotId so the slot's identity is stable).
-				const newSaltB64 = await crypto.generateSalt();
-				const wrapped = await crypto.wrapVekPassword({
-					password: newPassword,
-					saltB64: newSaltB64,
-					slotIdB64: bytesToBase64(existing.slotId),
-					magicVersion: verifierPrefix(),
-				});
-
-				const newSlot: PasswordSlot = {
-					kind: SLOT_KIND_PASSWORD,
-					slotId: existing.slotId,
-					salt: base64ToBytes(newSaltB64),
-					verifier: base64ToBytes(wrapped.verifier),
-					wrapIv: base64ToBytes(wrapped.wrapIv),
-					wrappedVek: base64ToBytes(wrapped.wrappedVek),
-				};
-				const newBlob: VaultBlob = {
-					slots: [newSlot],
-					entriesIv: base64ToBytes(outerIv),
-					entriesCiphertext: base64ToBytes(outerCt),
-				};
-				// 4. Persist. `writeVaultBlob` snapshots the previous bytes to
-				//    a backup key first, so steps 5/6 can roll back to the old
-				//    vault if anything is wrong with what we just wrote.
-				await storage.writeVaultBlob(encodeVaultBlob(newBlob));
-				didWrite = true;
-
-				// 5. Verify the persisted bytes decode cleanly.
-				const writtenBytes = await storage.readVaultBlob();
-				const writtenBlob = decodeVaultBlob(writtenBytes);
-
-				// 6. Verify the persisted bytes decrypt under the newly-loaded
-				//    VEK. A non-empty entries blob is the strongest signal;
-				//    for an empty vault, attempt to unwrap the new slot under
-				//    the new password as the equivalent end-to-end check.
-				if (writtenBlob.entriesCiphertext.length > 0) {
-					await crypto.decryptWithVek(
-						bytesToBase64(writtenBlob.entriesIv),
-						bytesToBase64(writtenBlob.entriesCiphertext),
-					);
-				} else {
-					const writtenSlot = findPasswordSlot(writtenBlob);
-					if (!writtenSlot) throw new Error("rotated blob has no password slot");
-					const ok = await crypto.verifyPasswordSlot({
-						password: newPassword,
+				const { blob: written } = await readDecodedBlob();
+				const writtenSlot = findPasswordSlot(written);
+				const ok =
+					writtenSlot != null &&
+					(await crypto.verifyPasswordSlot({
+						password,
 						saltB64: bytesToBase64(writtenSlot.salt),
 						slotIdB64: bytesToBase64(writtenSlot.slotId),
 						verifierB64: bytesToBase64(writtenSlot.verifier),
 						magicVersion: verifierPrefix(),
-					});
-					if (!ok) throw new Error("rotated blob slot fails new-password verify");
-				}
-
-				// 7. Refresh the in-memory autofill index so the background SW
-				//    keeps serving credentials without a relock.
-				await autofill.setIndex(toAutofillIndex(entries));
-			} catch (e) {
-				// If the write completed but verification failed, the on-disk
-				// blob is the new-but-broken one. Roll the file back to the
-				// backup snapshot taken inside writeVaultBlob, then restore
-				// the previous VEK so the recovered file is openable under
-				// the OLD password. The user sees "rotation failed; try
-				// again" — never an unreadable vault.
-				if (didWrite) {
-					await storage.restoreVaultFromBackup().catch(() => false);
-				}
-				await crypto.unlockWithVek(oldVekB64);
-				throw e;
+					}));
+				if (!ok) throw new Error("password slot failed post-write verify");
+			} catch {
+				await storage.restoreVaultFromBackup().catch(() => false);
+				throw new Error("Couldn't save the master password. Please try again.");
 			}
+			await refreshSlotMetadata();
 		},
-		[crypto, storage, autofill, entries, readDecodedBlob],
+		[readDecodedBlob, wrapPasswordSlot, storage, crypto, refreshSlotMetadata],
+	);
+
+	const changeMasterPassword = useCallback(
+		async (newPassword: string) => {
+			setError(null);
+			if (await crypto.isLocked()) {
+				throw new Error("Unlock the vault before changing the master password.");
+			}
+			const { blob } = await readDecodedBlob();
+			if (!findPasswordSlot(blob)) {
+				throw new Error("This vault has no master password to change.");
+			}
+			await writeMasterPasswordSlot(newPassword);
+		},
+		[crypto, readDecodedBlob, writeMasterPasswordSlot],
+	);
+
+	const setMasterPassword = useCallback(
+		async (password: string) => {
+			setError(null);
+			if (await crypto.isLocked()) {
+				throw new Error("Unlock the vault before setting a master password.");
+			}
+			await writeMasterPasswordSlot(password);
+		},
+		[crypto, writeMasterPasswordSlot],
+	);
+
+	const disableMasterPassword = useCallback(async () => {
+		setError(null);
+		if (await crypto.isLocked()) {
+			throw new Error("Unlock the vault before disabling the master password.");
+		}
+		const { blob } = await readDecodedBlob();
+		// Throws (invariant B) if no security key remains to unlock with.
+		const newBlob = removePasswordSlot(blob);
+		await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+		await refreshSlotMetadata();
+	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata]);
+
+	const generateRecoveryCode = useCallback(async (): Promise<string> => {
+		setError(null);
+		if (await crypto.isLocked()) {
+			throw new Error("Unlock the vault before generating a recovery code.");
+		}
+		const { blob } = await readDecodedBlob();
+		const code = makeRecoveryCode();
+		const slot = await wrapRecoverySlot(code);
+		const newBlob = upsertRecoverySlot(blob, slot);
+		await storage.writeVaultBlob(encodeVaultBlob(newBlob));
+		await refreshSlotMetadata();
+		return code;
+	}, [crypto, readDecodedBlob, wrapRecoverySlot, storage, refreshSlotMetadata]);
+
+	const unlockWithRecoveryCode = useCallback(
+		async (code: string) => {
+			setError(null);
+			let slots: RecoverySlot[];
+			try {
+				const { blob } = await readDecodedBlob();
+				slots = findRecoverySlots(blob);
+			} catch (e) {
+				console.error("[vault] failed to read vault blob:", e);
+				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
+			}
+			if (slots.length === 0) throw new Error("This vault has no recovery code.");
+			const normalized = normalizeRecoveryCode(code);
+			let opened = false;
+			for (const slot of slots) {
+				const ok = await crypto.unwrapVekPassword({
+					password: normalized,
+					saltB64: bytesToBase64(slot.salt),
+					slotIdB64: bytesToBase64(slot.slotId),
+					verifierB64: bytesToBase64(slot.verifier),
+					wrapIvB64: bytesToBase64(slot.wrapIv),
+					wrappedVekB64: bytesToBase64(slot.wrappedVek),
+					magicVersion: verifierPrefix(),
+				});
+				if (ok) {
+					opened = true;
+					break;
+				}
+			}
+			if (!opened) throw new Error("Incorrect recovery code");
+			await loadEntries();
+			setIsLocked(false);
+			void shell.flushPendingCornerCapture().catch(() => {});
+		},
+		[readDecodedBlob, crypto, loadEntries, shell],
 	);
 
 	const hasWebauthnSlot = webauthnSlots.length > 0;
@@ -854,6 +899,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			error,
 			pendingSyncCount,
 			hasWebauthnSlot,
+			hasPasswordSlot,
+			hasRecoveryCode,
 			securityKeys,
 			unlock,
 			lock,
@@ -864,10 +911,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			updateEntry,
 			deleteEntry,
 			verifyMasterPassword,
+			verifyWithSecurityKey,
 			changeMasterPassword,
+			setMasterPassword,
+			disableMasterPassword,
 			unlockWithSecurityKey,
 			registerSecurityKey,
 			revokeSecurityKey,
+			generateRecoveryCode,
+			unlockWithRecoveryCode,
 		}),
 		[
 			hasVault,
@@ -877,6 +929,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			error,
 			pendingSyncCount,
 			hasWebauthnSlot,
+			hasPasswordSlot,
+			hasRecoveryCode,
 			securityKeys,
 			unlock,
 			lock,
@@ -887,10 +941,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			updateEntry,
 			deleteEntry,
 			verifyMasterPassword,
+			verifyWithSecurityKey,
 			changeMasterPassword,
+			setMasterPassword,
+			disableMasterPassword,
 			unlockWithSecurityKey,
 			registerSecurityKey,
 			revokeSecurityKey,
+			generateRecoveryCode,
+			unlockWithRecoveryCode,
 		],
 	);
 

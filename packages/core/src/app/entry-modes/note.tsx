@@ -30,7 +30,7 @@ function NoteDetail({ entry }: EntryDetailBodyProps) {
 	return (
 		<div className="space-y-1.5">
 			<p className="text-xs text-muted-foreground">Content</p>
-			<p className="text-sm whitespace-pre-wrap">{note.notes || "—"}</p>
+			<p className="text-sm whitespace-pre-wrap">{note.notes || "-"}</p>
 		</div>
 	);
 }

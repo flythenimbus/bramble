@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Database, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowLeft, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
@@ -10,196 +10,16 @@ import {
 	kdbxEntriesToResult,
 	parseImport,
 } from "../../../import";
-import { TextField } from "../../components/ui/text-field";
-import { getEntryMode } from "../../entry-modes";
-
-function bytesToB64(bytes: Uint8Array): string {
-	let bin = "";
-	const CHUNK = 0x8000;
-	for (let i = 0; i < bytes.length; i += CHUNK) {
-		bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-	}
-	return btoa(bin);
-}
-
-function kdbxErrorMessage(err: unknown): string {
-	const msg = err instanceof Error ? err.message : String(err);
-	if (msg.includes("KDBX_WRONG_CREDENTIAL")) return "Wrong master password or key file.";
-	if (msg.includes("KDBX_UNSUPPORTED_VERSION"))
-		return "Only KeePass KDBX4 databases are supported. Re-save it as KDBX4, or export to XML.";
-	if (msg.includes("KDBX_UNSUPPORTED_CIPHER"))
-		return "This database uses an unsupported cipher (only AES-256 and ChaCha20 are supported).";
-	if (msg.includes("KDBX_UNSUPPORTED_KDF"))
-		return "This database uses an unsupported key-derivation function. Re-save it with Argon2 in KeePass.";
-	if (msg.includes("KDBX_UNSUPPORTED_STREAM"))
-		return "This database uses an unsupported inner cipher.";
-	if (msg.includes("KDBX_NOT_KEEPASS")) return "This doesn't look like a KeePass .kdbx file.";
-	if (msg.includes("KDBX_CORRUPT")) return "This .kdbx file appears to be damaged.";
-	return "Couldn't open this database.";
-}
+import { Header } from "./components/Header";
+import { KdbxUnlock } from "./components/KdbxUnlock";
+import { Shell } from "./components/Shell";
+import { UnlockGate } from "./components/UnlockGate";
+import { bytesToB64 } from "./util/bytes-to-b64";
+import { countLine } from "./util/count-line";
+import { kdbxErrorMessage } from "./util/kdbx-error";
 
 const MAX_IMPORT_FILE_MB = 50;
 const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
-
-// Page chrome shared by every state.
-function Shell({ children }: { children: React.ReactNode }) {
-	return (
-		<div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
-			<div className="w-full max-w-xl">{children}</div>
-		</div>
-	);
-}
-
-function Header({ subtitle }: { subtitle: string }) {
-	return (
-		<div className="text-center mb-6">
-			<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-3">
-				<Database className="w-7 h-7 text-primary-foreground" />
-			</div>
-			<h1 className="text-2xl">Import data</h1>
-			<p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
-		</div>
-	);
-}
-
-// Pluralized "3 Logins" / "1 Payment card" line from the per-type counts.
-function countLine(result: ImportResult): string {
-	const parts = Object.entries(result.byType).map(([type, n]) => {
-		const label = getEntryMode(type).label;
-		return `${n} ${label}${n === 1 ? "" : "s"}`;
-	});
-	return parts.join(" · ");
-}
-
-function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<void> }) {
-	const [password, setPassword] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
-
-	const submit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setError(null);
-		setBusy(true);
-		try {
-			await onUnlock(password);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Couldn't unlock the vault.");
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	return (
-		<Shell>
-			<Header subtitle="Unlock your vault to import into it" />
-			<form
-				onSubmit={submit}
-				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
-			>
-				<TextField
-					label="Master password"
-					type="password"
-					autoComplete="current-password"
-					autoFocus
-					value={password}
-					onChange={(e) => setPassword(e.target.value)}
-					error={error ?? undefined}
-				/>
-				<button
-					type="submit"
-					disabled={busy || !password}
-					className="w-full px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
-				>
-					{busy ? "Unlocking…" : "Unlock"}
-				</button>
-			</form>
-		</Shell>
-	);
-}
-
-function KdbxUnlock({
-	providerLabel,
-	onOpen,
-	onBack,
-}: {
-	providerLabel: string;
-	onOpen: (password: string, keyfileB64?: string) => Promise<void>;
-	onBack: () => void;
-}) {
-	const [password, setPassword] = useState("");
-	const [keyfile, setKeyfile] = useState<File | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
-
-	const submit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setError(null);
-		setBusy(true);
-		try {
-			const keyfileB64 = keyfile
-				? bytesToB64(new Uint8Array(await keyfile.arrayBuffer()))
-				: undefined;
-			await onOpen(password, keyfileB64);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Couldn't open this database.");
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	return (
-		<Shell>
-			<Header subtitle={`Enter the password for your ${providerLabel} database`} />
-			<form
-				onSubmit={submit}
-				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
-			>
-				<TextField
-					label="KeePass master password"
-					type="password"
-					autoComplete="off"
-					autoFocus
-					value={password}
-					onChange={(e) => setPassword(e.target.value)}
-					error={error ?? undefined}
-				/>
-				<label className="block space-y-1.5">
-					<span className="text-sm">Key file (optional)</span>
-					<input
-						type="file"
-						onChange={(e) => setKeyfile(e.currentTarget.files?.[0] ?? null)}
-						className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background/50 file:px-3 file:py-1.5 file:text-sm hover:file:bg-background/80"
-					/>
-				</label>
-				<div className="flex items-center justify-between gap-3">
-					<button
-						type="button"
-						onClick={onBack}
-						disabled={busy}
-						className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
-					>
-						<ArrowLeft className="w-3.5 h-3.5" />
-						Back
-					</button>
-					<button
-						type="submit"
-						disabled={busy || (!password && !keyfile)}
-						className="flex items-center gap-2 px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
-					>
-						{busy ? (
-							<>
-								<Loader2 className="w-3.5 h-3.5 animate-spin" />
-								Opening…
-							</>
-						) : (
-							"Open database"
-						)}
-					</button>
-				</div>
-			</form>
-		</Shell>
-	);
-}
 
 export function ImportShell() {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
@@ -250,12 +70,12 @@ export function ImportShell() {
 		return (
 			<Shell>
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-8 text-center space-y-3">
-					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80">
+					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-linear-to-br from-primary to-primary/80">
 						<Check className="w-7 h-7 text-primary-foreground" />
 					</div>
 					<h1 className="text-2xl">Imported {imported} items</h1>
 					<p className="text-sm text-muted-foreground">
-						They're in your vault now. For your safety, delete the export file you just imported —
+						They're in your vault now. For your safety, delete the export file you just imported, as
 						it holds your passwords in plain text.
 					</p>
 				</div>
@@ -420,7 +240,7 @@ export function ImportShell() {
 								});
 							}}
 						/>
-						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shrink-0">
+						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
 							<span className="text-sm text-primary">{p.label.charAt(0)}</span>
 						</div>
 						<div className="min-w-0 flex-1">
@@ -439,7 +259,7 @@ export function ImportShell() {
 			)}
 			{error && <p className="text-sm text-destructive text-center mt-4">{error}</p>}
 			<p className="text-xs text-muted-foreground text-center mt-6">
-				Files are read on this device only — nothing is uploaded. Delete the export file once you're
+				Files are read on this device only. Nothing is uploaded. Delete the export file once you're
 				done.
 			</p>
 		</Shell>
