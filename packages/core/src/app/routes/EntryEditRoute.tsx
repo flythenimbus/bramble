@@ -40,7 +40,9 @@ export function EntryEditRoute() {
 				key={entry.type}
 				type={entry.type}
 				initialEntry={entry}
-				initialBreach={entry.type === "login" ? entry.breach : undefined}
+				initialBreach={
+					prefs.breachCheckEnabled && entry.type === "login" ? entry.breach : undefined
+				}
 				draftValues={draft}
 				registerDraft={registerDraftGetter}
 				submitLabel={`Update ${mode.label}`}

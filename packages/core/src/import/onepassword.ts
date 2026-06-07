@@ -218,7 +218,7 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 	try {
 		files = unzipSync(asBytes(raw));
 	} catch {
-		throw new Error("Couldn't read this .1pux file — it may be corrupt.");
+		throw new Error("Couldn't read this .1pux file. It may be corrupt.");
 	}
 	assertUnzipUnderCap(files);
 	const dataFile =

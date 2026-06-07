@@ -3,6 +3,7 @@ import {
 	decodeVaultBlob,
 	encodeVaultBlob,
 	findPasswordSlot,
+	findRecoverySlots,
 	findWebauthnSlots,
 	LEN_HMAC_SECRET_SALT,
 	LEN_IV,
@@ -14,6 +15,7 @@ import {
 	MAGIC,
 	MAX_SLOTS,
 	type PasswordSlot,
+	type RecoverySlot,
 	SLOT_KIND_PASSWORD,
 	SLOT_KIND_RECOVERY,
 	SLOT_KIND_WEBAUTHN,
@@ -105,15 +107,12 @@ describe("decodeVaultBlob", () => {
 
 	it("preserves unknown slot kinds verbatim across a round-trip", () => {
 		const future = { kind: 0xf1, payload: fillBytes(96, 0xa0) };
-		const recovery = { kind: SLOT_KIND_RECOVERY, payload: fillBytes(124, 0xb0) };
-		const blob = makeBlob(0, [makePasswordSlot(), future, recovery]);
+		const blob = makeBlob(0, [makePasswordSlot(), future]);
 		const decoded = decodeVaultBlob(encodeVaultBlob(blob));
-		expect(decoded.slots).toHaveLength(3);
+		expect(decoded.slots).toHaveLength(2);
 		expect(decoded.slots[0]!.kind).toBe(SLOT_KIND_PASSWORD);
 		expect(decoded.slots[1]!.kind).toBe(0xf1);
 		expect((decoded.slots[1] as { payload: Uint8Array }).payload).toEqual(future.payload);
-		expect(decoded.slots[2]!.kind).toBe(SLOT_KIND_RECOVERY);
-		expect((decoded.slots[2] as { payload: Uint8Array }).payload).toEqual(recovery.payload);
 	});
 
 	it("rejects too-short input", () => {
@@ -225,6 +224,45 @@ describe("WebauthnSlot", () => {
 		]);
 		// The encoder will produce nonsense bytes, but decode should reject.
 		expect(() => decodeVaultBlob(encodeVaultBlob(blob))).toThrow();
+	});
+});
+
+function makeRecoverySlot(base = 0): RecoverySlot {
+	return {
+		kind: SLOT_KIND_RECOVERY,
+		slotId: fillBytes(LEN_SLOT_ID, base + 0x10),
+		salt: fillBytes(LEN_SALT, base + 0x20),
+		verifier: fillBytes(LEN_VERIFIER, base + 0x30),
+		wrapIv: fillBytes(LEN_WRAP_IV, base + 0x40),
+		wrappedVek: fillBytes(LEN_WRAPPED_VEK, base + 0x50),
+	};
+}
+
+describe("RecoverySlot", () => {
+	it("round-trips a recovery slot verbatim", () => {
+		const rec = makeRecoverySlot(0xc0);
+		const blob = makeBlob(0, [makePasswordSlot(), rec]);
+		const decoded = decodeVaultBlob(encodeVaultBlob(blob));
+		const decodedRec = decoded.slots[1] as RecoverySlot;
+		expect(decodedRec.kind).toBe(SLOT_KIND_RECOVERY);
+		expect(decodedRec.slotId).toEqual(rec.slotId);
+		expect(decodedRec.salt).toEqual(rec.salt);
+		expect(decodedRec.verifier).toEqual(rec.verifier);
+		expect(decodedRec.wrapIv).toEqual(rec.wrapIv);
+		expect(decodedRec.wrappedVek).toEqual(rec.wrappedVek);
+	});
+
+	it("does not confuse a recovery slot with a password slot", () => {
+		const blob = makeBlob(0, [makePasswordSlot(), makeRecoverySlot(0xc0)]);
+		const decoded = decodeVaultBlob(encodeVaultBlob(blob));
+		// findPasswordSlot must not pick up the recovery slot.
+		expect(findPasswordSlot(decoded)!.kind).toBe(SLOT_KIND_PASSWORD);
+		expect(findRecoverySlots(decoded)).toHaveLength(1);
+	});
+
+	it("findRecoverySlots returns an empty array when none exist", () => {
+		const blob = makeBlob(0, [makePasswordSlot()]);
+		expect(findRecoverySlots(blob)).toEqual([]);
 	});
 });
 

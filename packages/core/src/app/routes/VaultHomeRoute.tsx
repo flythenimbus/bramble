@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { getEntryMode } from "../entry-modes";
 import { customFieldsCopyItems, customFieldsSearchText } from "../entry-modes/custom-fields";
@@ -8,6 +9,9 @@ import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
 	const { entries, deleteEntry } = useVault();
+	const { prefs } = usePrefs();
+
+	const showBreaches = prefs.breachCheckEnabled;
 
 	const items = useMemo<VaultListItem[]>(
 		() =>
@@ -24,13 +28,13 @@ export function VaultHomeRoute() {
 					icon: view.icon,
 					initials: view.initials,
 					secondary: view.secondary,
-					leaked: view.leaked,
+					leaked: showBreaches ? view.leaked : false,
 					copyItems: [...view.copyItems, ...customFieldsCopyItems(entry.customFields)],
 					searchText:
 						`${mode.searchText(entry)} ${customFieldsSearchText(entry.customFields)}`.toLowerCase(),
 				};
 			}),
-		[entries],
+		[entries, showBreaches],
 	);
 
 	return (

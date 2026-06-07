@@ -164,7 +164,7 @@ export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailP
 						}
 					>
 						<span className={`text-sm truncate ${field.hidden ? "font-mono" : ""}`}>
-							{masked ? "•".repeat(Math.min(field.value.length, 16)) : field.value || "—"}
+							{masked ? "•".repeat(Math.min(field.value.length, 16)) : field.value || "-"}
 						</span>
 					</DetailField>
 				);

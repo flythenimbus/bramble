@@ -43,12 +43,21 @@ export interface WebauthnSlot {
 	wrappedVek: Uint8Array; // 48 bytes
 }
 
+export interface RecoverySlot {
+	kind: typeof SLOT_KIND_RECOVERY;
+	slotId: Uint8Array; // 16 bytes
+	salt: Uint8Array; // 16 bytes (Argon2id salt)
+	verifier: Uint8Array; // 32 bytes
+	wrapIv: Uint8Array; // 12 bytes
+	wrappedVek: Uint8Array; // 48 bytes
+}
+
 export interface OpaqueSlot {
 	kind: number;
 	payload: Uint8Array;
 }
 
-export type Slot = PasswordSlot | WebauthnSlot | OpaqueSlot;
+export type Slot = PasswordSlot | WebauthnSlot | RecoverySlot | OpaqueSlot;
 
 export interface EncryptedEntry {
 	id: string;
@@ -209,12 +218,23 @@ function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
 	};
 }
 
+function encodeRecoveryPayload(slot: RecoverySlot): Uint8Array {
+	return encodePasswordPayload({ ...slot, kind: SLOT_KIND_PASSWORD });
+}
+
+function decodeRecoveryPayload(payload: Uint8Array): RecoverySlot {
+	return { ...decodePasswordPayload(payload), kind: SLOT_KIND_RECOVERY };
+}
+
 function encodeSlotPayload(slot: Slot): Uint8Array {
 	if (slot.kind === SLOT_KIND_PASSWORD) {
 		return encodePasswordPayload(slot as PasswordSlot);
 	}
 	if (slot.kind === SLOT_KIND_WEBAUTHN) {
 		return encodeWebauthnPayload(slot as WebauthnSlot);
+	}
+	if (slot.kind === SLOT_KIND_RECOVERY) {
+		return encodeRecoveryPayload(slot as RecoverySlot);
 	}
 	return (slot as OpaqueSlot).payload;
 }
@@ -225,6 +245,9 @@ function decodeSlotPayload(kind: number, payload: Uint8Array): Slot {
 	}
 	if (kind === SLOT_KIND_WEBAUTHN) {
 		return decodeWebauthnPayload(payload);
+	}
+	if (kind === SLOT_KIND_RECOVERY) {
+		return decodeRecoveryPayload(payload);
 	}
 	return { kind, payload };
 }
@@ -336,6 +359,14 @@ export function findWebauthnSlots(blob: VaultBlob): WebauthnSlot[] {
 	const out: WebauthnSlot[] = [];
 	for (const slot of blob.slots) {
 		if (slot.kind === SLOT_KIND_WEBAUTHN) out.push(slot as WebauthnSlot);
+	}
+	return out;
+}
+
+export function findRecoverySlots(blob: VaultBlob): RecoverySlot[] {
+	const out: RecoverySlot[] = [];
+	for (const slot of blob.slots) {
+		if (slot.kind === SLOT_KIND_RECOVERY) out.push(slot as RecoverySlot);
 	}
 	return out;
 }

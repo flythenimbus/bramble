@@ -58,15 +58,15 @@ export function VaultHome({
 			</div>
 
 			<div className="grid grid-cols-3 gap-3 mb-5">
-				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-gradient-to-br from-card to-background backdrop-blur-sm">
-					<div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50"></div>
+				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
+					<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<p className="text-xs text-muted-foreground mb-0.5">Total Items</p>
 						<p className="text-2xl">{items.length}</p>
 					</div>
 				</div>
-				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-gradient-to-br from-card to-background backdrop-blur-sm">
-					<div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-50"></div>
+				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
+					<div className="absolute inset-0 bg-linear-to-br from-destructive/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<div className="flex items-center gap-1.5 mb-0.5">
 							<p className="text-xs text-muted-foreground">At Risk</p>
@@ -75,8 +75,8 @@ export function VaultHome({
 						<p className="text-2xl text-destructive">{atRisk}</p>
 					</div>
 				</div>
-				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-gradient-to-br from-card to-background backdrop-blur-sm">
-					<div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50"></div>
+				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
+					<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<div className="flex items-center gap-1.5 mb-0.5">
 							<p className="text-xs text-muted-foreground">Strong</p>

@@ -105,7 +105,7 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 				</div>
 			</div>
 			<pre className="text-xs font-mono whitespace-pre-wrap break-all rounded-md border border-border/50 p-3 max-h-48 overflow-auto">
-				{masked ? "•".repeat(48) : value || "—"}
+				{masked ? "•".repeat(48) : value || "-"}
 			</pre>
 		</div>
 	);

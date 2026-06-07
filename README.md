@@ -20,12 +20,13 @@ Everything cryptographic happens inside a Rust module compiled to WebAssembly. Y
 - **Autofill that's smart about domains.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry can hold several URLs.
 - **More than just logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - **Built-in password generator.** Strong passwords on tap, right where you need them.
-- **Unlock with a hardware key.** Register a YubiKey, Touch ID, or Windows Hello and unlock the vault with a tap instead of typing your passphrase, using the WebAuthn `hmac-secret` extension. The key never hands over its secret, it just helps derive yours. Add it alongside your master password or lean on it as the main way in.
+- **Unlock with a hardware key.** Register a YubiKey, Touch ID, or Windows Hello and unlock the vault with a tap instead of typing your passphrase, using the WebAuthn PRF extension (built on the authenticator's `hmac-secret`). The key never hands over its secret, it just helps derive yours. Use it alongside your master password — or turn the master password off entirely and make the key your only way in.
+- **Recovery codes.** Every vault gets a high-entropy recovery code at setup — a printable backup that unlocks it independently of your master password. It's shown once, you store it offline, and it's never kept in plaintext. Reset it any time from Settings.
 - **TOTP / 2FA codes.** Store your authenticator secrets and Bramble generates the six-digit codes for you. Paste an `otpauth://` URI or a bare secret.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so your password (or even its full hash) never leaves your machine.
 - **Auto-lock.** Locks itself after 15 minutes of no activity by default (can be configured)
 - **Import from KeePass.** Bring your existing KDBX4 database over, key files included.
-- **Multi-key vaults.** LUKS-style key slots, so more than one credential can unlock the same vault.
+- **Multi-key vaults.** LUKS-style key slots, so any of your master password, a security key, or your recovery code can unlock the same vault.
 
 ## Why this beats the cloud password managers
 
@@ -38,7 +39,7 @@ Bramble flips that around:
 - **You own the file.** Back it up however you like, sync it however you like, or keep it on one machine and never let it touch the internet.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data." And guess what, the code's is all open source.
 
-The tradeoff is real and worth being honest about: there's no magic "I forgot my password" button. Lose the master password and the vault is gone. That's the price of nobody else holding a key. Back up your file (backup keys coming soon).
+The tradeoff is real and worth being honest about: there's no magic "I forgot my password" button on a server somewhere. But you're not without a safety net — every vault gets a recovery code at setup, and you can register a hardware security key as another way in. Save the recovery code somewhere safe and back up your vault file. Lose *all* of them — password, key, and recovery code — and the vault is gone, because nobody else holds a copy.
 
 ## How it stacks up against KeePass
 
@@ -63,7 +64,6 @@ The codebase is heavily tested, through automated and manual testing. Security s
 
 The local-first foundation is here today. A few things are on the way:
 
-- **Recovery codes.** Remember that honest "there's no forgot-password button" tradeoff up top? This is the answer. When you set up a vault you'll get a printable backup code that unlocks it independently of your master password. Keep it somewhere safe (a drawer, a safe, a piece of paper, not a sticky note on your monitor) and you've got a way back in if the password ever slips your mind.
 - **Passkey storage.** Bramble will be able to create, store, and serve passkeys for websites, acting as your own WebAuthn authenticator.
 - **Smarter autofill.** Ongoing tuning against real-world sites, more form-detection coverage, and fixes for the weird checkout and login pages that like to break things.
 

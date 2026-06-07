@@ -126,7 +126,7 @@ export const extensionStorage: StorageAdapter = {
 	async selectVaultFile(mode) {
 		if (!pickerSupported()) {
 			throw new Error(
-				"File picker not available in this browser context — vault will use browser storage instead.",
+				"File picker not available in this browser context. Vault will use browser storage instead.",
 			);
 		}
 		const handle =

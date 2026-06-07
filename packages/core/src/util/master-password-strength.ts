@@ -1,31 +1,29 @@
 import { passwordStrength } from "check-password-strength";
 
-// Minimum strength `id` we accept for a master password. `check-password-strength`
-// scores 0 ("Too weak") · 1 ("Weak") · 2 ("Medium") · 3 ("Strong"); 2 is the
-// usual industry floor for a passphrase that's plausibly safe against an
-// offline Argon2id attack once the vault file syncs to a cloud folder. There
-// is no recovery — a weak master password is a permanent loss waiting to
-// happen.
-const MIN_MASTER_PASSWORD_STRENGTH = 2;
+
+const MIN_MASTER_PASSWORD_LENGTH = 8;
+const MIN_RECOMMENDED_STRENGTH = 2;
 
 export interface MasterPasswordStrength {
 	id: number;
 	label: string;
-	// True when the score meets MIN_MASTER_PASSWORD_STRENGTH. Both setup and
-	// rotation use this as the validator gate.
-	acceptable: boolean;
 }
 
 export function masterPasswordStrength(password: string): MasterPasswordStrength {
 	const s = passwordStrength(password);
-	return { id: s.id, label: s.value, acceptable: s.id >= MIN_MASTER_PASSWORD_STRENGTH };
+	return { id: s.id, label: s.value };
 }
 
-// Form-validator message returned when a candidate master password is too
-// weak. Returns undefined for an acceptable password.
-export function masterPasswordRejectionMessage(password: string): string | undefined {
+export function masterPasswordHardError(password: string): string | undefined {
 	if (!password) return undefined;
-	const s = masterPasswordStrength(password);
-	if (s.acceptable) return undefined;
-	return `${s.label} — choose a longer or more varied passphrase`;
+	if (password.length < MIN_MASTER_PASSWORD_LENGTH) {
+		return `Use at least ${MIN_MASTER_PASSWORD_LENGTH} characters.`;
+	}
+	return undefined;
+}
+
+export function masterPasswordWarning(password: string): string | undefined {
+	if (!password || masterPasswordHardError(password)) return undefined;
+	if (masterPasswordStrength(password).id >= MIN_RECOMMENDED_STRENGTH) return undefined;
+	return "This password is weak. Anyone who gets your vault file could crack it offline.";
 }

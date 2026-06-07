@@ -71,7 +71,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 	try {
 		files = unzipSync(asBytes(raw));
 	} catch {
-		throw new Error("Couldn't read this Proton Pass file — it may be corrupt.");
+		throw new Error("Couldn't read this Proton Pass file. It may be corrupt.");
 	}
 	assertUnzipUnderCap(files);
 	const dataFile = Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1];

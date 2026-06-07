@@ -1,8 +1,13 @@
 import { Shield } from "lucide-react";
+import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { masterPasswordRejectionMessage } from "../../../../util/master-password-strength";
+import {
+	masterPasswordHardError,
+	masterPasswordWarning,
+} from "../../../../util/master-password-strength";
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { TextField } from "../../../components/ui/text-field";
+import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
 import type { VaultSetupFormValues, VaultSetupMode } from "../types";
 
 interface PasswordCardProps {
@@ -30,6 +35,11 @@ export function PasswordCard({
 	} = form;
 	const isCreate = mode === "create";
 	const pw = watch("masterPassword");
+	// Weak (but allowed) passwords warn + require an explicit opt-in, only on
+	// creation. Unlock never gates an existing password.
+	const weakWarning = isCreate ? masterPasswordWarning(pw ?? "") : undefined;
+	const [acceptedWeak, setAcceptedWeak] = useState(false);
+	const blockedByWeak = !!weakWarning && !acceptedWeak;
 
 	return (
 		<form onSubmit={handleSubmit(onSubmit)}>
@@ -49,9 +59,9 @@ export function PasswordCard({
 							error={errors.masterPassword?.message}
 							{...register("masterPassword", {
 								required: isCreate ? "Choose a master password" : "Enter your master password",
-								// Strength gate runs only on vault creation. Unlock skips it because
-								// existing vaults may have been created under a weaker policy.
-								validate: isCreate ? masterPasswordRejectionMessage : undefined,
+								// Only the hard floor (too short) blocks creation; weakness is a
+								// predate any policy.
+								validate: isCreate ? masterPasswordHardError : undefined,
 							})}
 						/>
 						{isCreate && <MasterPasswordMeter value={pw ?? ""} />}
@@ -68,6 +78,13 @@ export function PasswordCard({
 							})}
 						/>
 					)}
+					{weakWarning && (
+						<WeakPasswordNotice
+							message={weakWarning}
+							accepted={acceptedWeak}
+							onAccept={setAcceptedWeak}
+						/>
+					)}
 					{isCreate && <NoRecoveryWarning />}
 				</div>
 
@@ -79,7 +96,7 @@ export function PasswordCard({
 					)}
 					<button
 						type="submit"
-						disabled={busy || !canSubmit}
+						disabled={busy || !canSubmit || blockedByWeak}
 						className="px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						<SubmitLabel mode={mode} busy={busy} />
@@ -98,8 +115,9 @@ function SubmitLabel({ mode, busy }: { mode: VaultSetupMode; busy: boolean }) {
 function NoRecoveryWarning() {
 	return (
 		<div className="rounded-md p-3 bg-destructive/5 border border-destructive/30 text-xs text-muted-foreground">
-			<span className="text-destructive">⚠</span> There is no recovery. If you forget this password,
-			your vault is permanently unrecoverable.
+			<span className="text-destructive">⚠</span> There's no vendor reset. Memorize this password and
+			keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be
+			recovered.
 		</div>
 	);
 }
