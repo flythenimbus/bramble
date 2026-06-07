@@ -115,9 +115,9 @@ function SubmitLabel({ mode, busy }: { mode: VaultSetupMode; busy: boolean }) {
 function NoRecoveryWarning() {
 	return (
 		<div className="rounded-md p-3 bg-destructive/5 border border-destructive/30 text-xs text-muted-foreground">
-			<span className="text-destructive">⚠</span> There's no vendor reset. Memorize this password and
-			keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be
-			recovered.
+			<span className="text-destructive">⚠</span> There's no vendor reset. Memorize this password
+			and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't
+			be recovered.
 		</div>
 	);
 }
