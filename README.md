@@ -90,11 +90,12 @@ If you're just here to poke at the code, clone it, run the tests, and have a loo
 Bramble is free and open source. If it's useful to you, toss some Monero our way.
 
 <p align="center">
-  <img src="website/public/monero.png" alt="Monero donation QR code" width="200" />
+  <img src="monero.png" alt="Monero donation QR code" width="200" />
 </p>
 
 ```
 4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq
+```
 
 ## License
 
