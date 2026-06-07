@@ -73,7 +73,11 @@ export function MasterPasswordSection() {
 			if (formMode === "change") {
 				const ok = await verifyMasterPassword(currentPassword);
 				if (!ok) {
-					setError("currentPassword", { message: "Current password is incorrect" }, { shouldFocus: true });
+					setError(
+						"currentPassword",
+						{ message: "Current password is incorrect" },
+						{ shouldFocus: true },
+					);
 					return;
 				}
 				await changeMasterPassword(newPassword);
@@ -235,7 +239,11 @@ export function MasterPasswordSection() {
 							disabled={isSubmitting || blockedByWeak}
 							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
-							{isSubmitting ? "Saving…" : formMode === "change" ? "Update password" : "Set password"}
+							{isSubmitting
+								? "Saving…"
+								: formMode === "change"
+									? "Update password"
+									: "Set password"}
 						</button>
 					</div>
 				</form>
