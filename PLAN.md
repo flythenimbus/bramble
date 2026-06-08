@@ -1003,6 +1003,75 @@ trigger; we surface the **same top-right corner card** as the save prompt — th
 
 ---
 
+## HTTP Basic Auth autofill — planned (later)
+
+Goal: fill the browser's native **HTTP Basic / Digest auth dialog** (the
+`WWW-Authenticate` 401 popup) from a stored login. Lower priority than passkeys —
+basic auth is increasingly rare on the public web (mostly internal tools, NAS
+boxes, staging gates), so this is a down-the-road convenience, not a release item.
+
+### Why this is a separate path
+
+The 401 dialog is **native browser chrome, not DOM** — the content-script autofill
+pipeline (field detection, dropdown, corner prompt) can't see or touch it. The
+only hook is the network layer: `chrome.webRequest.onAuthRequired`. It is the one
+`webRequest` event that still supports *blocking* in MV3 (the rest gave way to
+`declarativeNetRequest`); `webRequestAuthProvider` is the permission that unlocks
+it. So this lives entirely in the **background SW**, alongside the
+`webAuthenticationProxy` handlers — a third browser-driven entry point next to
+content-script autofill and the passkey proxy.
+
+### Mechanism
+
+- Manifest gains `"webRequest"` + `"webRequestAuthProvider"` permissions.
+- Register `onAuthRequired` with `["asyncBlocking"]` (async, because we decrypt a
+  credential out of the vault before answering):
+
+  ```
+  chrome.webRequest.onAuthRequired.addListener(
+    (details, callback) => {
+      // details.challenger {host, port}, details.realm, details.scheme, details.isProxy
+      matchBasicAuth(details).then(cred =>
+        callback(cred ? { authCredentials: { username: cred.user, password: cred.pass } }
+                      : {}));   // {} → let the browser show its own dialog
+    },
+    { urls: ["<all_urls>"] },
+    ["asyncBlocking"]);
+  ```
+
+### Matching is coarser than form autofill
+
+`onAuthRequired` gives **host + port + realm + scheme + isProxy — no path**. So
+matching keys off origin (host[:port]) and optionally `realm`, not the
+URL-pattern matching the content script uses. A login matches if one of its `urls`
+shares the challenger host. `details.isProxy` lets the same handler answer proxy
+407s if we choose to.
+
+### Locked-vault + multi-match are the hard parts (not the API)
+
+The handler fires *before* any UI moment, with no user gesture:
+
+- **Vault locked** → we can't silently decrypt, and there's no natural prompt
+  surface here. First cut: bail with `callback({})` so the native dialog shows
+  (i.e. autofill is best-effort, unlocked-vault only). A later pass could park the
+  request and raise an unlock prompt, mirroring the passkey `onGetRequest` flow.
+- **>1 match for the host** → no good chooser at this layer; pick the single match
+  or fall through to native. (Reusing the corner card is possible but is the
+  expensive part — defer.)
+- **Bad-credential loop:** Chrome re-fires `onAuthRequired` for the *same request*
+  if the credentials we supplied were rejected. Track attempts per `requestId` and
+  fall back to `callback({})` after one try, or it spins.
+
+### Scope notes
+
+- **Capture** (offering to save basic-auth creds the user typed into the native
+  dialog) is *not* covered — the dialog is opaque to us; the save path stays
+  manual entry for now.
+- Firefox exposes the same `onAuthRequired`; Safari has no equivalent — consistent
+  with "Firefox/Safari out of scope for v1".
+
+---
+
 ## Status
 
 ### Working
@@ -1299,6 +1368,12 @@ decrypted entry before Zod validation. Currently:
    exercise the full content-script ↔ background ↔ offscreen pipeline.)
 6. **Reproducible WASM build in CI** — `rust-toolchain.toml` + Docker.
 7. **Chrome Web Store submission**.
+8. **HTTP Basic Auth autofill** (later) — fill the native 401 dialog via
+   `chrome.webRequest.onAuthRequired` (perms `webRequest` +
+   `webRequestAuthProvider`), background-SW only since the dialog is native chrome,
+   not DOM. Best-effort, unlocked-vault-only first cut; host/realm matching (no
+   path), guard the bad-credential re-fire loop. Full design in the "HTTP Basic
+   Auth autofill" section. Low priority — basic auth is rare on the public web.
 
 ---
 
