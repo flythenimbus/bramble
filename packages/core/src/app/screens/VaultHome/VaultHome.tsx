@@ -5,6 +5,7 @@ import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
 import { TextField } from "../../components/ui/text-field";
 
+/** List-ready projection of an entry: shared id/name plus mode-contributed display fields. */
 export interface VaultListItem {
 	id: string;
 	type: EntryType;
@@ -26,6 +27,7 @@ interface VaultHomeProps {
 	onDeleteEntry: (id: string) => Promise<void>;
 }
 
+/** Vault list screen with search, password-health stats, and the entry rows. */
 export function VaultHome({
 	items,
 	onCreate,

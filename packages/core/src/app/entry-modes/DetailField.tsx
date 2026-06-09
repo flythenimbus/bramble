@@ -13,6 +13,7 @@ interface DetailFieldProps {
 	extraAction?: ReactNode;
 }
 
+/** One labelled, copyable read-only field row shared by every mode's detail view. */
 export function DetailField({
 	label,
 	children,

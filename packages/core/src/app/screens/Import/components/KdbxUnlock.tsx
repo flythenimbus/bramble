@@ -5,6 +5,7 @@ import { bytesToB64 } from "../util/bytes-to-b64";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
+/** Credential step for an encrypted .kdbx: its own master password plus an optional key file. */
 export function KdbxUnlock({
 	providerLabel,
 	onOpen,

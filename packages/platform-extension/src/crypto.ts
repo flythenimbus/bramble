@@ -20,8 +20,10 @@ async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 	return res.data as T;
 }
 
+// Mirrors background.ts VEK_KEY. Its removal from session storage is our cross-context lock signal.
 const VEK_SESSION_KEY = "vault.vek";
 
+// sendMessage mangles Uint8Array into a plain object; send magicVersion as number[] instead.
 function slotPayload(input: WrapPasswordSlotInput) {
 	return {
 		password: input.password,
@@ -46,6 +48,7 @@ export const extensionCrypto: CryptoAdapter = {
 	onExternalLock(callback: () => void) {
 		const handler = (changes: Record<string, chrome.storage.StorageChange>) => {
 			const change = changes[VEK_SESSION_KEY];
+			// Removal (value gone) means locked; a set value (unlock/resume) is self-driven, ignore.
 			if (change && change.oldValue !== undefined && change.newValue === undefined) {
 				callback();
 			}

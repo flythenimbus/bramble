@@ -19,6 +19,7 @@ interface PasswordCardProps {
 	onSubmit: (values: VaultSetupFormValues) => Promise<void>;
 }
 
+/** Master-password form card for vault setup, gating weak passwords on create only. */
 export function PasswordCard({
 	mode,
 	form,
@@ -60,6 +61,7 @@ export function PasswordCard({
 							{...register("masterPassword", {
 								required: isCreate ? "Choose a master password" : "Enter your master password",
 								// Only the hard floor (too short) blocks creation; weakness is a
+								// warning below. Unlock skips it entirely: existing vaults may
 								// predate any policy.
 								validate: isCreate ? masterPasswordHardError : undefined,
 							})}

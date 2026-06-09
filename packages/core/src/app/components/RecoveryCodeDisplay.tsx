@@ -8,6 +8,11 @@ interface RecoveryCodeDisplayProps {
 	onContinue: () => void;
 }
 
+/**
+ * One-time recovery-code view (copy/download). Renders chrome-less so it drops
+ * into onboarding or a Modal. The plaintext is never persisted: this is the only
+ * chance to save it.
+ */
 export function RecoveryCodeDisplay({
 	code,
 	title = "Save your recovery code",

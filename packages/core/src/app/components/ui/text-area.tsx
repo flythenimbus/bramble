@@ -6,6 +6,7 @@ interface TextAreaProps extends Omit<ComponentProps<"textarea">, "id" | "placeho
 	error?: string;
 }
 
+/** Multi-line text field (same fieldset+legend pattern as TextField), with a top-pinned label. */
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
 	{ label, error, className, disabled, rows = 3, ...props },
 	ref,

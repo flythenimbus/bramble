@@ -4,6 +4,7 @@ interface MasterPasswordMeterProps {
 	value: string;
 }
 
+/** Master-password strength bar, hidden while the field is empty. */
 export function MasterPasswordMeter({ value }: MasterPasswordMeterProps) {
 	if (!value) return null;
 	const s = masterPasswordStrength(value);

@@ -6,6 +6,7 @@ import { BrambleGlyph } from "../components/BrambleGlyph";
 import { usePopOut } from "../hooks/usePopOut";
 import { useTheme } from "../hooks/useTheme";
 
+/** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
 export function AppLayout() {
 	const router = useRouter();
 	const navigate = useNavigate();
@@ -14,6 +15,10 @@ export function AppLayout() {
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
 
+	// Back prefers real history (so Edit-from-list returns to the list) and falls
+	// back to the route's staticData.back when there's none (a popped-out window
+	// booted straight onto a deep route). paramKeys resolves the fallback's path
+	// params from current params, since staticData can't hold runtime values.
 	const matches = useMatches();
 	const params = useParams({ strict: false }) as Record<string, string>;
 	const backData = matches.at(-1)?.staticData.back;
@@ -61,6 +66,9 @@ export function AppLayout() {
 						</div>
 						<div className="flex items-center gap-1.5">
 							{pendingSyncCount > 0 && (
+								// On-disk file is behind the in-memory view (FSA saves from the
+								// corner prompt). Should clear within a second of mount; if it
+								// lingers, the flush failed.
 								<span
 									className="text-[11px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20"
 									title="Vault changes saved by autofill while the popup was closed are syncing to disk"

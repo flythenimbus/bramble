@@ -18,9 +18,12 @@ import { bytesToB64 } from "./util/bytes-to-b64";
 import { countLine } from "./util/count-line";
 import { kdbxErrorMessage } from "./util/kdbx-error";
 
+// File-size ceiling for any import: above any realistic export, guards against
+// OOM from a hostile or corrupt file.
 const MAX_IMPORT_FILE_MB = 50;
 const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
 
+/** Import wizard: pick a provider, parse/decrypt the file, preview, then write into the vault. */
 export function ImportShell() {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
 	const { shell, crypto } = usePlatform();
@@ -29,11 +32,13 @@ export function ImportShell() {
 	const [imported, setImported] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	// Encrypted .kdbx picked, awaiting its master password.
 	const [kdbxPending, setKdbxPending] = useState<{
 		provider: ImportProviderInfo;
 		fileB64: string;
 	} | null>(null);
 
+	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
 		return (
 			<Shell>
@@ -94,6 +99,7 @@ export function ImportShell() {
 				);
 				return;
 			}
+			// Encrypted .kdbx: stash bytes, collect the password in the next step.
 			if (p.needsCredential) {
 				const bytes = new Uint8Array(await file.arrayBuffer());
 				setKdbxPending({ provider: p, fileB64: bytesToB64(bytes) });
@@ -102,6 +108,7 @@ export function ImportShell() {
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());
 			const res = parseImport(p.id as ImportProvider, raw);
 			if (res.imported.length === 0) {
+				// Distinguish an empty file from one where all items failed validation.
 				setError(
 					res.skipped > 0
 						? `This file held ${res.skipped} item${res.skipped === 1 ? "" : "s"}, but none matched a supported format.`
@@ -118,6 +125,8 @@ export function ImportShell() {
 		}
 	};
 
+	// Open the pending .kdbx in WASM, then preview. Throws a friendly message
+	// (caught by KdbxUnlock) so a wrong password keeps the user on this step.
 	const openKdbxAndPreview = async (password: string, keyfileB64?: string) => {
 		if (!kdbxPending) return;
 		let entries: Awaited<ReturnType<typeof crypto.openKdbx>>;
@@ -234,6 +243,7 @@ export function ImportShell() {
 							accept={p.accept}
 							className="hidden"
 							onChange={(e) => {
+								// Reset value after handling so re-picking the same file fires onChange again.
 								const input = e.currentTarget;
 								void onFile(p, input.files?.[0]).finally(() => {
 									input.value = "";

@@ -4,12 +4,14 @@ import { cn } from "./utils";
 interface ModalProps {
 	open: boolean;
 	onClose: () => void;
+	// When false, backdrop clicks and Esc don't dismiss, for must-acknowledge
 	// dialogs (e.g. a one-time recovery code the user has to save first).
 	dismissable?: boolean;
 	className?: string;
 	children: React.ReactNode;
 }
 
+/** Centered modal with a blurred backdrop. No focus-trap; Esc + backdrop dismiss when `dismissable`. */
 export function Modal({ open, onClose, dismissable = true, className, children }: ModalProps) {
 	useEffect(() => {
 		if (!open || !dismissable) return;
@@ -35,6 +37,7 @@ export function Modal({ open, onClose, dismissable = true, className, children }
 				aria-modal="true"
 				className={cn(
 					"relative w-full max-w-md rounded-xl border border-border bg-card shadow-xl",
+					// Never taller than the viewport (popup windows are short), scroll
 					// the body instead of clipping the title/actions off-screen.
 					"max-h-[calc(100vh-2rem)] overflow-y-auto",
 					className,

@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 import type { ClipboardAdapter } from "@core/adapters/clipboard";
 
+/** SHA-256 hex fingerprint; the background uses it to verify ours is still on the clipboard before clearing. */
 async function sha256Hex(text: string): Promise<string> {
 	const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
 	const bytes = new Uint8Array(buf);
@@ -12,6 +13,7 @@ async function sha256Hex(text: string): Promise<string> {
 export const extensionClipboard: ClipboardAdapter = {
 	async copy(text: string) {
 		await navigator.clipboard.writeText(text);
+		// Fire-and-forget: the background SW + offscreen pair runs the clear, surviving popup close.
 		try {
 			const expectedHash = await sha256Hex(text);
 			await chrome.runtime.sendMessage({

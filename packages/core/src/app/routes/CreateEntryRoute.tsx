@@ -8,6 +8,7 @@ import { getEntryMode } from "../entry-modes";
 import { usePopOut } from "../hooks/usePopOut";
 import { EntryForm, type EntryFormDraft } from "../screens/CreateEntry/EntryForm";
 
+/** Route for creating a new entry, seeding logins from the active tab origin or a pop-out draft. */
 export function CreateEntryRoute() {
 	const navigate = useNavigate();
 	const { type } = useParams({ from: "/_app/vault/new/$type" });

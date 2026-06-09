@@ -53,6 +53,8 @@ describe("github.com — sign in", () => {
 	});
 
 	it("doesn't pick the honeypot text input as username", () => {
+		// `required_field_4f63` is a type=text honeypot; detectors don't filter
+		// on `hidden`, so this locks in the DOM-order safety net.
 		loadFixture("github-login");
 		const { username } = detectLoginFields();
 		expect(username?.getAttribute("name")).not.toBe("required_field_4f63");
@@ -60,6 +62,8 @@ describe("github.com — sign in", () => {
 });
 
 describe("bmo.com — sign in (label says 'card number' but it's the login)", () => {
+	// BMO uses the debit card number as the login id, so the username field's
+	// label matches CC_NUMBER_RE; candidateKind prefers login over card.
 
 	it("detectLoginFields finds the username and password fields", () => {
 		loadFixture("bmo-login");
@@ -81,6 +85,8 @@ describe("bmo.com — sign in (label says 'card number' but it's the login)", ()
 	});
 
 	it("known shallow weakness: detectCardFields still claims the username as card.number", () => {
+		// Direct callers of detectCardFields see this false positive; all
+		// autofill paths go through candidateKind, which resolves it.
 		loadFixture("bmo-login");
 		expect(detectCardFields().number?.getAttribute("name")).toBe("username-input");
 	});
@@ -97,6 +103,8 @@ describe("bmo.com — sign in (label says 'card number' but it's the login)", ()
 });
 
 describe("github.com — change password (old / new / confirm)", () => {
+	// GitHub sets autocomplete="off" on the new-password field, so detection
+	// falls through to the name/id/label regex rung ("new" wins).
 
 	function loadAndSetValues(values: Record<string, string>): void {
 		loadFixture("github-password-change");
@@ -145,6 +153,8 @@ describe("github.com — change password (old / new / confirm)", () => {
 	});
 
 	it("detectLoginFields finds the first (old) password — no text username here", () => {
+		// With no username field, findPasswordField returns the first password;
+		// callers must branch on findNewPasswordOnChangeForm when >=2 are present.
 		loadFixture("github-password-change");
 		const { username, password } = detectLoginFields();
 		expect(username).toBeNull();
@@ -152,6 +162,8 @@ describe("github.com — change password (old / new / confirm)", () => {
 	});
 
 	it("doesn't pick the honeypot text input as a username candidate", () => {
+		// `required_field_e345` honeypot sits after all password fields; safe via
+		// DOM order and a name that doesn't match USERNAME_HINT_RE.
 		loadFixture("github-password-change");
 		expect(detectLoginFields().username).toBeNull();
 	});
@@ -173,6 +185,8 @@ describe("github.com — change password (old / new / confirm)", () => {
 });
 
 describe("discord.com — sign in", () => {
+	// Discord uses a multi-token `autocomplete="username webauthn"`; captcha is
+	// shown only on suspicious activity, so this snapshot has none.
 
 	it("detectLoginFields finds the email + password fields", () => {
 		loadFixture("discord-login");
@@ -182,6 +196,7 @@ describe("discord.com — sign in", () => {
 	});
 
 	it("handles the multi-token autocomplete='username webauthn'", () => {
+		// Asserts rung 2 uses `~=` (token match), not `=`.
 		loadFixture("discord-login");
 		const email = document.querySelector<HTMLInputElement>('input[name="email"]')!;
 		expect(email.autocomplete).toBe("username webauthn");
@@ -195,6 +210,7 @@ describe("discord.com — sign in", () => {
 	});
 
 	it("doesn't detect a captcha on the default form", () => {
+		// Discord injects captcha only after a server-side challenge.
 		loadFixture("discord-login");
 		expect(hasInteractiveCaptcha()).toBe(false);
 	});
@@ -206,6 +222,7 @@ describe("discord.com — sign in", () => {
 	});
 
 	it("the country-code button (BR +55) doesn't sneak in as an input", () => {
+		// The country-code selector is a `<div role="button">`, not an input.
 		loadFixture("discord-login");
 		const inputs = document.querySelectorAll("input");
 		expect(inputs.length).toBe(2);
@@ -213,6 +230,8 @@ describe("discord.com — sign in", () => {
 });
 
 describe("twitch.tv — sign in", () => {
+	// Twitch inputs have no `name`, only `id`; social-login buttons are
+	// `<button>`s, not inputs.
 
 	it("detectLoginFields finds the username + password by id", () => {
 		loadFixture("twitch-login");
@@ -243,6 +262,8 @@ describe("twitch.tv — sign in", () => {
 });
 
 describe("amazon.com — add a payment method", () => {
+	// No <form> wrapper, no CVV in the add-card flow, combined MM/YY expiry,
+	// all three inputs tagged with `autocomplete="cc-*"`.
 
 	it("detectCardFields finds number, name, and combined expiry", () => {
 		loadFixture("amazon-add-payment");
@@ -260,6 +281,7 @@ describe("amazon.com — add a payment method", () => {
 	});
 
 	it("CVV is null (Amazon collects it separately)", () => {
+		// "Name on card" / "Card number" must not match CC_CSC_RE's `card.?code`.
 		loadFixture("amazon-add-payment");
 		expect(detectCardFields().cvv).toBeNull();
 	});
@@ -285,12 +307,14 @@ describe("amazon.com — add a payment method", () => {
 	});
 
 	it("the cardholder-name field doesn't false-positive as username", () => {
+		// "Name on card" / cc-name must not match USERNAME_HINT_RE.
 		loadFixture("amazon-add-payment");
 		const name = document.querySelector<HTMLInputElement>('input[autocomplete="cc-name"]')!;
 		expect(candidateKind(name)).toBe("card"); // not "login"
 	});
 
 	it("works without a <form> wrapper", () => {
+		// Amazon's modal is all <div>s; detectors walk the document by default.
 		loadFixture("amazon-add-payment");
 		expect(document.querySelector("form")).toBeNull();
 		expect(cardFieldsPresent(detectCardFields())).toBe(true);
@@ -308,6 +332,7 @@ describe("amazon.com — add a payment method", () => {
 	});
 
 	it("handles untyped inputs (no `type` attribute on number / exp)", () => {
+		// Number/expiry omit `type`; browsers default to "text".
 		loadFixture("amazon-add-payment");
 		const number = document.querySelector<HTMLInputElement>('input[autocomplete="cc-number"]')!;
 		expect(number.hasAttribute("type")).toBe(false);
@@ -317,6 +342,9 @@ describe("amazon.com — add a payment method", () => {
 });
 
 describe("login.microsoftonline.com — email step (two-step SSO)", () => {
+	// Microsoft renders an off-screen `type="password"` on the email step;
+	// detectors don't filter on its hidden hints, so we treat it as the page
+	// password (matching browser pwd-manager behaviour).
 
 	it("detectLoginFields finds the email input as username", () => {
 		loadFixture("microsoft-login-email");
@@ -356,6 +384,8 @@ describe("login.microsoftonline.com — email step (two-step SSO)", () => {
 });
 
 describe("login.microsoftonline.com — password step (two-step SSO)", () => {
+	// Email carries through as a hidden `autocomplete="displayUsername"` input;
+	// the `~=` token match is whole-word so it doesn't false-positive on it.
 
 	it("detectLoginFields finds password but no username (email is on a prior page)", () => {
 		loadFixture("microsoft-login-password");
@@ -365,6 +395,7 @@ describe("login.microsoftonline.com — password step (two-step SSO)", () => {
 	});
 
 	it("hidden 'displayUsername' carry-through doesn't false-positive", () => {
+		// `~="username"` is whole-word; `displayUsername` is one token, not a match.
 		loadFixture("microsoft-login-password");
 		const carry = document.querySelector<HTMLInputElement>(
 			'input[autocomplete="displayUsername"]',
@@ -380,6 +411,7 @@ describe("login.microsoftonline.com — password step (two-step SSO)", () => {
 	});
 
 	it("form-level autocomplete='off' doesn't disable detection", () => {
+		// Detectors ignore a form's autocomplete="off"; we autofill regardless.
 		loadFixture("microsoft-login-password");
 		expect(document.querySelector("form")?.getAttribute("autocomplete")).toBe("off");
 		expect(detectLoginFields().password).not.toBeNull();
@@ -394,6 +426,8 @@ describe("login.microsoftonline.com — password step (two-step SSO)", () => {
 });
 
 describe("github.com — 2FA (TOTP)", () => {
+	// GitHub 2FA has no `one-time-code` token; it uses name="otp", caught by the
+	// hint rung via `\botp\b`.
 
 	it("otpInputs finds the 6-digit OTP field via hint-based detection", () => {
 		loadFixture("github-2fa");
@@ -403,6 +437,7 @@ describe("github.com — 2FA (TOTP)", () => {
 	});
 
 	it("the field has no `autocomplete='one-time-code'` token (fallback rung exercised)", () => {
+		// GitHub doesn't use the standard token; the hint rung must cover it.
 		loadFixture("github-2fa");
 		const otp = document.querySelector<HTMLInputElement>('input[name="otp"]')!;
 		expect(otp.autocomplete).toBe("off");
@@ -415,7 +450,6 @@ describe("github.com — 2FA (TOTP)", () => {
 	});
 
 	it("detectLoginFields returns null/null (no username or password here)", () => {
-		// pages.
 		loadFixture("github-2fa");
 		const { username, password } = detectLoginFields();
 		expect(username).toBeNull();
@@ -430,6 +464,8 @@ describe("github.com — 2FA (TOTP)", () => {
 });
 
 describe("biteasy.co — sign in with invisible/managed Cloudflare Turnstile", () => {
+	// Invisible Turnstile must not block autofill: token is in a hidden input,
+	// the container is 0x0, and `cf-turnstile` is an id (not the class we match).
 
 	it("detectLoginFields finds the email + password", () => {
 		loadFixture("biteasy-login");
@@ -447,6 +483,8 @@ describe("biteasy.co — sign in with invisible/managed Cloudflare Turnstile", (
 	});
 
 	it("invisible Turnstile is NOT detected as an interactive captcha", () => {
+		// Doesn't fire: `cf-turnstile` is an id (not the `.cf-turnstile` class),
+		// and the 0x0 container fails isRendered anyway.
 		loadFixture("biteasy-login");
 		expect(hasInteractiveCaptcha()).toBe(false);
 		expect(document.getElementById("cf-turnstile")).not.toBeNull();
@@ -464,6 +502,8 @@ describe("biteasy.co — sign in with invisible/managed Cloudflare Turnstile", (
 	});
 
 	it("the Stripe metrics iframe doesn't trigger captcha detection", () => {
+		// Stripe's analytics iframe must not match any captcha selector (its src
+		// is scrubbed in the fixture, so it's identified by Stripe-specific name).
 		loadFixture("biteasy-login");
 		const stripeIframe = document.querySelector('iframe[name^="__privateStripe"]');
 		expect(stripeIframe).not.toBeNull();

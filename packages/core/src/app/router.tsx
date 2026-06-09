@@ -15,8 +15,12 @@ import { EntryEditRoute } from "./routes/EntryEditRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 
+// Slice of vault state route guards read; injected via RouterProvider context.
+// Stays `undefined` until React fills it, so guards treat missing vault as
+// "not ready, don't decide".
 type VaultGuard = Pick<UseVault, "isLocked" | "ready" | "entries">;
 
+/** Router context: vault guard slice, undefined until React injects it. */
 export interface RouterContext {
 	vault: VaultGuard | undefined;
 }
@@ -28,6 +32,8 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const authRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
+	// WARNING: intentionally NOT gated on `ready`. Adding a ready gate here
+	// "for symmetry" with _app reintroduces a redirect loop.
 	beforeLoad: ({ context }) => {
 		if (context.vault && !context.vault.isLocked) throw redirect({ to: "/vault" });
 	},
@@ -37,6 +43,8 @@ const authRoute = createRoute({
 const appLayoutRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	id: "_app",
+	// Guard for all authed routes: bounce to the unlock screen when locked.
+	// Gated on `ready` to avoid redirecting a popped-out window pre-hydration.
 	beforeLoad: ({ context }) => {
 		if (context.vault?.ready && context.vault.isLocked) throw redirect({ to: "/" });
 	},
@@ -60,6 +68,8 @@ const entryDetailRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/vault/$entryId",
 	staticData: { back: { to: "/vault" } },
+	// Bail to the vault list on a stale id. Gated on `ready` so a detached
+	// window doesn't bounce before `entries` has hydrated.
 	beforeLoad: ({ context, params }) => {
 		if (context.vault?.ready && !context.vault.entries.find((e) => e.id === params.entryId)) {
 			throw redirect({ to: "/vault" });
@@ -98,7 +108,10 @@ const routeTree = rootRoute.addChildren([
 	]),
 ]);
 
-//
+/**
+ * Build a fresh memory-history router. `initialPath` seeds the route so a
+ * popped-out window resumes where the user left (default "/").
+ */
 export function createAppRouter(initialPath = "/") {
 	return createRouter({
 		routeTree,
@@ -114,6 +127,9 @@ declare module "@tanstack/react-router" {
 		router: AppRouter;
 	}
 
+	// Fallback target for the header Back button when there's no history to pop
+	// (e.g. a popped-out window booted onto a deep route). `paramKeys` lists the
+	// path params `to` needs, resolved in AppLayout from the current params.
 	interface StaticDataRouteOption {
 		back?: { to: string; paramKeys?: readonly string[] };
 	}

@@ -35,6 +35,7 @@ export interface BreachStatus {
 
 export type EntryType = "login" | "card" | "note" | "ssh-key";
 
+/** A user-defined extra field, available on every entry type. */
 export interface CustomField {
 	key: string;
 	value: string;
@@ -47,7 +48,11 @@ interface BaseEntryData {
 	customFields?: CustomField[];
 }
 
-//
+/**
+ * A website credential: the only entry kind that feeds the autofill index and
+ * breach checks. `urls` covers every site the same credentials work on (legacy
+ * single-`url` vaults are migrated by `normalizeEntryData` on first read).
+ */
 export interface LoginEntryData extends BaseEntryData {
 	type: "login";
 	urls: string[];
@@ -74,6 +79,7 @@ export interface NoteEntryData extends BaseEntryData {
 	type: "note";
 }
 
+/** An SSH key pair. Stored and copied only, never autofilled. */
 export interface SshKeyEntryData extends BaseEntryData {
 	type: "ssh-key";
 	publicKey: string;
@@ -89,6 +95,7 @@ export type LoginEntry = LoginEntryData & { id: string };
 export type CardEntry = CardEntryData & { id: string };
 export type SshKeyEntry = SshKeyEntryData & { id: string };
 
+/** Narrows `EntryData`/`Entry` to logins (autofill, breach are login-only). */
 export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, LoginEntryData> {
 	return entry.type === "login";
 }
@@ -121,30 +128,41 @@ const SECURITY_KEY_LABELS_PREF = "pref.securityKeyLabels";
 export interface UseVault {
 	hasVault: boolean;
 	isLocked: boolean;
+	/** Vault has at least one webauthn slot (gates the "Use security key" button). */
 	hasWebauthnSlot: boolean;
+	/** Vault has a master-password slot. False for a security-key-only vault. */
 	hasPasswordSlot: boolean;
+	/** Vault has a recovery code on file. False for pre-recovery-code vaults. */
 	hasRecoveryCode: boolean;
+	/** Webauthn slots joined with their stored labels, for Settings. */
 	securityKeys: SecurityKeyMeta[];
+	/** False until mount-time hydration resolves; route guards gate on this. */
 	ready: boolean;
 	entries: Entry[];
 	error: string | null;
+	/** Vault changes queued to disk but not yet flushed. 0 for the chrome.storage backend. */
 	pendingSyncCount: number;
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
+	/** Creates the vault and returns its initial plaintext recovery code (shown once). */
 	createVault(password: string): Promise<string>;
 	addEntry(data: EntryData): Promise<void>;
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
+	/** Prove possession of a registered key (a tap) without changing lock state. */
 	verifyWithSecurityKey(): Promise<boolean>;
 	changeMasterPassword(newPassword: string): Promise<void>;
+	/** Set (or re-enable) the master password by re-wrapping the in-memory VEK. */
 	setMasterPassword(password: string): Promise<void>;
+	/** Remove the master-password slot. Requires a security key (invariant B). */
 	disableMasterPassword(): Promise<void>;
 	unlockWithSecurityKey(): Promise<void>;
 	registerSecurityKey(label: string): Promise<void>;
 	revokeSecurityKey(slotIdB64: string): Promise<void>;
+	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
 	unlockWithRecoveryCode(code: string): Promise<void>;
 }
@@ -210,6 +228,7 @@ function cardIndexEntry(entry: CardEntry): IndexEntry {
 	};
 }
 
+/** Project logins and cards into the autofill index (notes/ssh keys excluded). */
 function toAutofillIndex(entries: Entry[]): IndexEntry[] {
 	const out: IndexEntry[] = [];
 	for (const entry of entries) {
@@ -242,6 +261,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 	}, [storage]);
 
+	/** Read+decode the vault, falling back to the backup snapshot on decode failure. */
 	const readDecodedBlob = useCallback(async () => {
 		const tryDecode = async () => {
 			const bytes = await storage.readVaultBlob();
@@ -277,7 +297,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 	}, [readDecodedBlob, storage]);
 
+	/** Decrypt all entries and push the autofill index. */
 	const loadEntries = useCallback(async () => {
+		// Flush before the read so the decoded blob reflects any background-queued
+		// corner-prompt write (FSA backend only).
 		await storage.flushPendingVaultBlob().catch(() => {});
 		await refreshPendingSyncCount();
 		const { blob } = await readDecodedBlob();
@@ -307,6 +330,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await autofill.setIndex(toAutofillIndex(decrypted));
 	}, [readDecodedBlob, crypto, autofill, storage, refreshPendingSyncCount]);
 
+	// On mount: detect an existing vault handle and whether crypto is already
+	// unlocked (popup reopened mid-session).
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
@@ -324,6 +349,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				if (locked) return;
 
 				await loadEntries();
+				// Session-resume: unlock() won't fire, so commit any parked handoff here.
 				void shell.flushPendingCornerCapture().catch(() => {});
 			} catch (e) {
 				if (!cancelled) setError(String(e));
@@ -336,6 +362,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		};
 	}, [storage, crypto, loadEntries, shell, refreshSlotMetadata]);
 
+	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
+	// so the guard redirects to the unlock screen.
 	useEffect(() => {
 		return crypto.onExternalLock(() => {
 			setEntries([]);
@@ -343,15 +371,20 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		});
 	}, [crypto]);
 
+	// Re-decrypt when the background commits a vault write (corner-prompt path)
+	// outside this context, keeping in-memory entries in sync with disk.
 	useEffect(() => {
 		return crypto.onExternalChange(() => {
 			void loadEntries().catch(() => {});
 		});
 	}, [crypto, loadEntries]);
 
+	/** Unlock with the master password, decrypt entries, and clear lock state. */
 	const unlock = useCallback(
 		async (password: string) => {
 			setError(null);
+			// Read failures collapse to one generic message; raw decoder errors leak
+			// format internals and aren't actionable for end users.
 			let slot: PasswordSlot | null;
 			try {
 				const { blob } = await readDecodedBlob();
@@ -373,11 +406,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (!ok) throw new Error("Incorrect master password");
 			await loadEntries();
 			setIsLocked(false);
+			// Commit any corner-prompt capture parked while locked, now that the VEK is live.
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
 		[readDecodedBlob, crypto, loadEntries, shell],
 	);
 
+	/** Lock the vault: clear the VEK, autofill index, and decrypted state. */
 	const lock = useCallback(async () => {
 		await crypto.lock();
 		await autofill.clearIndex();
@@ -385,7 +420,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		setIsLocked(true);
 	}, [crypto, autofill]);
 
-
+	/** Run a get() assertion over the given slots, returning the PRF secret. */
 	const callGetWithSalt = useCallback(
 		async (
 			allowCredentials: WebauthnSlot[],
@@ -393,6 +428,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array }> => {
 			const challenge = new Uint8Array(32);
 			globalThis.crypto.getRandomValues(challenge);
+			// Chromium drops raw hmacGetSecret on get() and only honors prf, which
+			// isn't in lib.dom.d.ts, so the options object is cast.
 			const publicKey = {
 				challenge: challenge as BufferSource,
 				allowCredentials: allowCredentials.map((s) => ({
@@ -423,7 +460,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[],
 	);
 
-
+	/** Wrap the in-memory VEK under a freshly-salted password KEK. */
 	const wrapPasswordSlot = useCallback(
 		async (password: string): Promise<PasswordSlot> => {
 			const saltB64 = await crypto.generateSalt();
@@ -446,6 +483,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto],
 	);
 
+	/** Wrap the in-memory VEK under a recovery code (reuses the password KDF). */
 	const wrapRecoverySlot = useCallback(
 		async (code: string): Promise<RecoverySlot> => {
 			const saltB64 = await crypto.generateSalt();
@@ -468,6 +506,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto],
 	);
 
+	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
 	const unlockWithSecurityKey = useCallback(async () => {
 		setError(null);
 		let slots: WebauthnSlot[];
@@ -482,6 +521,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			throw new Error("No security key registered on this vault.");
 		}
 
+		// First tap uses slot[0]'s salt; if a different credential with a
+		// different salt is tapped, re-ask narrowed to it with its own salt.
 		const firstSalt = slots[0]!.salt;
 		const firstAttempt = await callGetWithSalt(slots, firstSalt);
 		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
@@ -512,6 +553,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		void shell.flushPendingCornerCapture().catch(() => {});
 	}, [readDecodedBlob, callGetWithSalt, crypto, loadEntries, shell]);
 
+	/**
+	 * Prove possession of a registered key (a tap) without touching lock state.
+	 * Authorizes sensitive actions on a password-less vault.
+	 */
 	const verifyWithSecurityKey = useCallback(async (): Promise<boolean> => {
 		const { blob } = await readDecodedBlob();
 		const slots = findWebauthnSlots(blob);
@@ -524,6 +569,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 	}, [readDecodedBlob, callGetWithSalt]);
 
+	/**
+	 * Register a new security key against the unlocked vault. Requires the vault
+	 * to be unlocked (wraps the in-memory VEK). Usually two taps: create() then a
+	 * get() to read the PRF secret, unless the key supports one-tap hmac-secret-mc.
+	 */
 	const registerSecurityKey = useCallback(
 		async (label: string) => {
 			setError(null);
@@ -532,6 +582,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			}
 			const { blob } = await readDecodedBlob();
 
+			// Pick the PRF salt up front so the authenticator can evaluate it during
+			// create(); capable keys then return the secret there (no second tap).
 			const challenge = new Uint8Array(32);
 			globalThis.crypto.getRandomValues(challenge);
 			const userId = new Uint8Array(16);
@@ -556,9 +608,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 						],
 						authenticatorSelection: {
 							userVerification: "preferred",
+							// Non-discoverable: the unlock handle lives in our vault file.
 							residentKey: "discouraged",
 						},
 						attestation: "none",
+						// prf is the web channel for hmac-secret (Chromium ignores raw
+						// hmacCreateSecret/hmacGetSecret). Eval now for a possible one-tap register.
 						extensions: {
 							prf: { eval: { first: salt as BufferSource } },
 						} as unknown as AuthenticationExtensionsClientInputs,
@@ -567,6 +622,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				if (!created) throw new Error("Authenticator returned no credential.");
 				credentialId = new Uint8Array(created.rawId);
 
+				// Prefer the secret from create(); else get() with the same salt. PRF
+				// is deterministic, so the value matches and the persisted slot unlocks.
 				const createdExt = created.getClientExtensionResults() as {
 					prf?: { results?: { first?: ArrayBuffer } };
 				};
@@ -622,6 +679,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata, callGetWithSalt],
 	);
 
+	/** Remove a security-key slot and its stored label. */
 	const revokeSecurityKey = useCallback(
 		async (slotIdB64: string) => {
 			setError(null);
@@ -636,6 +694,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata],
 	);
 
+	/** Prompt the user to pick a vault file to create or open. */
 	const pickVaultFile = useCallback(
 		async (mode: "create" | "open") => {
 			setError(null);
@@ -645,6 +704,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[storage],
 	);
 
+	/** Create a new vault with a password slot and an initial recovery slot. */
 	const createVault = useCallback(
 		async (password: string): Promise<string> => {
 			setError(null);
@@ -669,6 +729,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
 	);
 
+	/** Re-encrypt all entries and write a new blob; the slot list is unchanged. */
 	const persistEntries = useCallback(
 		async (nextEntries: Entry[]) => {
 			const encryptedEntries: EncryptedEntry[] = await Promise.all(
@@ -700,6 +761,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, storage, autofill, readDecodedBlob],
 	);
 
+	/** Add one entry and persist. */
 	const addEntry = useCallback(
 		async (data: EntryData) => {
 			const newEntry: Entry = { id: globalThis.crypto.randomUUID(), ...data };
@@ -710,6 +772,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	/** Bulk-add imported entries in a single encrypt-and-write (one disk write, not N). */
 	const importEntries = useCallback(
 		async (items: EntryData[]) => {
 			const withIds: Entry[] = items.map((data) => ({
@@ -723,6 +786,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	/** Replace one entry by id and persist. */
 	const updateEntry = useCallback(
 		async (id: string, data: EntryData) => {
 			const next = entries.map((e) => (e.id === id ? { id, ...data } : e));
@@ -732,6 +796,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	/** Delete one entry by id and persist. */
 	const deleteEntry = useCallback(
 		async (id: string) => {
 			const next = entries.filter((e) => e.id !== id);
@@ -741,6 +806,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[entries, persistEntries],
 	);
 
+	/** Check a password against the slot verifier without unlocking. */
 	const verifyMasterPassword = useCallback(
 		async (password: string) => {
 			const { blob } = await readDecodedBlob();
@@ -757,7 +823,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, readDecodedBlob],
 	);
 
-	//
+	/**
+	 * Re-wrap the in-memory VEK under `password` as the vault's single password
+	 * slot. Shared core of set, re-enable, and change. Does NOT rotate the VEK
+	 * (other slots depend on it), only the password KEK + verifier. The written
+	 * slot is verified post-write and the file rolled back on failure.
+	 */
 	const writeMasterPasswordSlot = useCallback(
 		async (password: string) => {
 			const { blob } = await readDecodedBlob();
@@ -786,6 +857,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[readDecodedBlob, wrapPasswordSlot, storage, crypto, refreshSlotMetadata],
 	);
 
+	/** Change the master password. Requires the vault unlocked; does not rotate the VEK. */
 	const changeMasterPassword = useCallback(
 		async (newPassword: string) => {
 			setError(null);
@@ -801,6 +873,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, readDecodedBlob, writeMasterPasswordSlot],
 	);
 
+	/** Set (or re-enable) the master password. Requires the vault unlocked. */
 	const setMasterPassword = useCallback(
 		async (password: string) => {
 			setError(null);
@@ -812,6 +885,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, writeMasterPasswordSlot],
 	);
 
+	/** Remove the master-password slot. Requires the vault unlocked and a security key (invariant B). */
 	const disableMasterPassword = useCallback(async () => {
 		setError(null);
 		if (await crypto.isLocked()) {
@@ -824,6 +898,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await refreshSlotMetadata();
 	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata]);
 
+	/** Generate (or reset) the recovery code. Requires the vault unlocked; returns the plaintext once. */
 	const generateRecoveryCode = useCallback(async (): Promise<string> => {
 		setError(null);
 		if (await crypto.isLocked()) {
@@ -838,6 +913,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return code;
 	}, [crypto, readDecodedBlob, wrapRecoverySlot, storage, refreshSlotMetadata]);
 
+	/** Unlock by trying the code against every recovery slot. */
 	const unlockWithRecoveryCode = useCallback(
 		async (code: string) => {
 			setError(null);
@@ -956,6 +1032,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
 }
 
+/** Access the vault API. Must be called inside a VaultProvider. */
 export function useVault(): UseVault {
 	const ctx = useContext(VaultContext);
 	if (!ctx) throw new Error("useVault called outside VaultProvider");

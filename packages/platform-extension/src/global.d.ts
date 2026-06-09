@@ -1,3 +1,4 @@
+// File System Access API picker types, not yet in lib.dom defaults.
 interface SaveFilePickerOptions {
 	suggestedName?: string;
 	types?: { description?: string; accept: Record<string, string[]> }[];

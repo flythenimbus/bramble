@@ -6,14 +6,17 @@ import { SelectField } from "../components/ui/select-field";
 import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 
+/** Form-side shape of a custom field: the persisted `hidden` boolean becomes a "text"/"password" type. */
 export interface CustomFieldFormValue {
 	key: string;
 	value: string;
 	type: "text" | "password";
 }
 
+/** Top-level form-values key for custom fields, shared by the editor and every mode host. */
 export const CUSTOM_FIELDS_NAME = "customFields";
 
+/** Map persisted custom fields to their form-side shape. */
 export function customFieldsToForm(fields: CustomField[] | undefined): CustomFieldFormValue[] {
 	return (fields ?? []).map((f) => ({
 		key: f.key,
@@ -22,6 +25,7 @@ export function customFieldsToForm(fields: CustomField[] | undefined): CustomFie
 	}));
 }
 
+/** Collapse form values to persisted custom fields, dropping unnamed rows. Returns undefined when empty. */
 export function formToCustomFields(
 	values: CustomFieldFormValue[] | undefined,
 ): CustomField[] | undefined {
@@ -34,16 +38,19 @@ export function formToCustomFields(
 	return out.length > 0 ? out : undefined;
 }
 
+/** Quick-copy actions for a vault-list row (fields with a value only). */
 export function customFieldsCopyItems(
 	fields: CustomField[] | undefined,
 ): { label: string; value: string }[] {
 	return (fields ?? []).filter((f) => f.value).map((f) => ({ label: f.key, value: f.value }));
 }
 
+/** Searchable text contributed by custom fields (keys + values). */
 export function customFieldsSearchText(fields: CustomField[] | undefined): string {
 	return (fields ?? []).map((f) => `${f.key} ${f.value}`).join(" ");
 }
 
+/** Custom-fields editor, shared by every mode's form. Must render inside the host's <FormProvider>. */
 export function CustomFieldsEditor() {
 	const { register, control, watch } = useFormContext();
 	const [shown, setShown] = useState<Record<string, boolean>>({});
@@ -135,6 +142,7 @@ interface CustomFieldsDetailProps {
 	copy: (label: string, value: string) => void;
 }
 
+/** Read-only render of an entry's custom fields in its detail view. */
 export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailProps) {
 	const [shown, setShown] = useState<Record<number, boolean>>({});
 	return (

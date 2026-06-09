@@ -28,14 +28,13 @@ import {
 } from "./dedupe";
 import { extensionStorage, PENDING_BLOB_KEY } from "./storage";
 
-//
-
 const OFFSCREEN_URL = "offscreen.html";
 
 const VEK_KEY = "vault.vek";
 const LEGACY_AUTOFILL_INDEX_KEY = "autofill.index";
 const HOSTNAMES_KEY = "autofill.knownHostnames";
 const CLIPBOARD_EXPECTED_KEY = "clipboard.expectedHash";
+// In-memory only: a draft can hold a plaintext password, never persist to local.
 const POPOUT_HANDOFF_KEY = "popout.handoff";
 
 const AUTOLOCK_ALARM = "vault:autolock";
@@ -50,7 +49,9 @@ const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_CLIPBOARD_SECONDS = 30;
 const DEFAULT_OFFER_TO_SAVE = true;
 
+// Session stash for an in-flight capture, keyed one per eTLD+1.
 const CAPTURE_KEY_PREFIX = "capture.pending.";
+// Plaintext captured credentials: wiped on lock alongside the capture stash.
 const CORNER_HANDOFF_KEY = "cornerPrompt.handoff";
 
 interface PendingCapture {
@@ -68,7 +69,9 @@ interface CornerHandoff {
 	chosenEntryId?: string;
 }
 
-
+// In-memory caches, hydrated lazily from chrome.storage. The decrypted
+// autofill index is never persisted (plaintext secrets); it stays null after
+// a SW restart until the popup re-pushes it via AUTOFILL_SET_INDEX.
 let autofillIndex: Map<string, IndexEntry> | null = null;
 const knownHostnames = new Set<string>();
 let cachedVek: string | null = null;
@@ -84,13 +87,14 @@ const hydrationPromise = (async () => {
 		if (typeof cached === "string") cachedVek = cached;
 		const hostnames = localResult[HOSTNAMES_KEY];
 		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
+		// Drop any decrypted index left in session storage by a previous build.
 		await chrome.storage.session.remove([LEGACY_AUTOFILL_INDEX_KEY]).catch(() => {});
 	} catch (e) {
 		console.warn("[titanpass:bg] hydration failed", e);
 	}
 })();
 
-
+/** Create the offscreen crypto document if absent; a fresh one starts locked. */
 async function ensureOffscreen(): Promise<void> {
 	const existing = await chrome.offscreen.hasDocument?.();
 	if (existing) return;
@@ -102,6 +106,11 @@ async function ensureOffscreen(): Promise<void> {
 	offscreenHasKey = false;
 }
 
+/**
+ * Forward a message to the offscreen crypto document, re-injecting the cached
+ * VEK first if the offscreen was killed and recreated. Skips injection for the
+ * unlock/VEK messages themselves (would infinite-loop) and clipboard ops.
+ */
 async function sendToOffscreen(
 	message: Record<string, unknown>,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
@@ -130,7 +139,6 @@ async function sendToOffscreen(
 	return response ?? { ok: false, error: "no response from offscreen" };
 }
 
-
 async function getAutoLockMinutes(): Promise<number> {
 	try {
 		const r = await chrome.storage.local.get(PREF_AUTOLOCK_MINUTES);
@@ -149,7 +157,6 @@ async function getClipboardSeconds(): Promise<number> {
 	return DEFAULT_CLIPBOARD_SECONDS;
 }
 
-
 async function persistVek(): Promise<void> {
 	if (cachedVek === null) return;
 	try {
@@ -159,6 +166,7 @@ async function persistVek(): Promise<void> {
 	}
 }
 
+/** Persist the hostname registry so the locked-state hint survives SW restarts. */
 async function persistKnownHostnames(): Promise<void> {
 	try {
 		await chrome.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) });
@@ -167,6 +175,7 @@ async function persistKnownHostnames(): Promise<void> {
 	}
 }
 
+/** Lock: clear the VEK, in-memory index, and every session item holding plaintext. */
 async function clearSession(): Promise<void> {
 	cachedVek = null;
 	autofillIndex = null;
@@ -177,6 +186,7 @@ async function clearSession(): Promise<void> {
 		for (const key of Object.keys(all)) {
 			if (key.startsWith(CAPTURE_KEY_PREFIX)) toRemove.push(key);
 		}
+		// PENDING_BLOB_KEY is ciphertext, so it is intentionally not wiped here.
 		await chrome.storage.session.remove(toRemove);
 	} catch {}
 	void chrome.alarms.clear(AUTOLOCK_ALARM);
@@ -184,6 +194,7 @@ async function clearSession(): Promise<void> {
 
 async function scheduleAutoLock(): Promise<void> {
 	const minutes = await getAutoLockMinutes();
+	// 0 or absent means never auto-lock.
 	if (minutes <= 0) {
 		void chrome.alarms.clear(AUTOLOCK_ALARM);
 		return;
@@ -203,7 +214,6 @@ async function exportAndCacheVek(): Promise<void> {
 		console.warn("[titanpass:bg] export VEK failed", e);
 	}
 }
-
 
 async function scheduleClipboardClear(expectedHash: string): Promise<void> {
 	const seconds = await getClipboardSeconds();
@@ -229,13 +239,14 @@ async function runClipboardClear(): Promise<void> {
 	}).catch(() => {});
 }
 
-
+/** Masked card label for the dropdown, e.g. "Visa •••• 1234". */
 function cardSecondary(entry: Extract<IndexEntry, { type: "card" }>): string {
 	const last4 = entry.number.replace(/\D/g, "").slice(-4);
 	const tail = last4 ? `•••• ${last4}` : "";
 	return [entry.brand, tail].filter(Boolean).join(" ");
 }
 
+/** Build the autofill match list for a hostname, or a locked result if no VEK. */
 function queryResult(
 	hostname: string,
 	hasLogin: boolean,
@@ -277,12 +288,14 @@ function queryResult(
 				});
 			}
 		} else if (hasCard) {
+			// Cards are not hostname-scoped: every card is offered on a payment form.
 			cards.push({ id: entry.id, name: entry.name, secondary: cardSecondary(entry) });
 		}
 	}
 	return { logins, cards, otps, locked: false, hasPotentialMatch: logins.length > 0 };
 }
 
+/** Resolve an entry to its fill payload. TOTP is computed live; the seed never ships. */
 function fetchFill(entryId: string): FillPayload {
 	const entry = autofillIndex?.get(entryId);
 	if (!entry) throw new Error(`entry not found: ${entryId}`);
@@ -311,7 +324,6 @@ function fetchFill(entryId: string): FillPayload {
 		customFields: entry.customFields,
 	};
 }
-
 
 async function getOfferToSavePref(): Promise<boolean> {
 	try {
@@ -397,10 +409,12 @@ function buildCornerPayload(
 	return payload;
 }
 
+/** Authoritative lock signal: a missing index only means "not hydrated yet". */
 function vaultLocked(): boolean {
 	return cachedVek === null;
 }
 
+/** Rebuild autofillIndex from disk when the SW idle-killed it but the VEK is cached. Idempotent. */
 async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 	if (autofillIndex !== null) return true;
 	if (cachedVek === null) return false;
@@ -475,6 +489,7 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 					customFields: projectedCustomFields,
 				});
 			}
+			// Notes / ssh-keys are not autofillable.
 		}
 		autofillIndex = newIndex;
 		await persistKnownHostnames();
@@ -485,12 +500,14 @@ async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 	}
 }
 
+/** Notify any open popup that the vault changed so it can re-decrypt. */
 async function broadcastVaultChanged(): Promise<void> {
 	try {
 		await chrome.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" });
 	} catch {}
 }
 
+/** Decrypt, mutate, re-encrypt the outer entry list via offscreen so plaintext never leaves it. */
 async function reencryptOuterWithEntryChange(
 	currentBlob: VaultBlob,
 	mutate: (entries: EncryptedEntry[]) => Promise<EncryptedEntry[]>,
@@ -541,6 +558,7 @@ function base64ToBytes(b64: string): Uint8Array {
 	return out;
 }
 
+/** chrome.storage.local writes directly; FSA queues the blob for the next popup to flush. */
 async function writeOrQueueVault(blob: Uint8Array, entryCount: number): Promise<void> {
 	const canWrite = await extensionStorage.canWriteFromBackground();
 	if (canWrite) {
@@ -567,6 +585,7 @@ function newLoginPlaintext(capture: PendingCapture, editedUsername?: string): st
 	});
 }
 
+/** Encrypt and append a new login from a corner-prompt capture, updating index and disk. */
 async function commitCornerSave(
 	capture: PendingCapture,
 	editedUsername: string | undefined,
@@ -608,6 +627,7 @@ async function commitCornerSave(
 	await broadcastVaultChanged();
 }
 
+/** Overwrite an existing login's username and password with a captured credential. */
 async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string): Promise<void> {
 	const indexEntry = autofillIndex?.get(chosenEntryId);
 	if (!indexEntry || indexEntry.type !== "login") {
@@ -667,6 +687,7 @@ async function readAndDecodeVault(): Promise<VaultBlob> {
 	return decodeVaultBlob(bytes);
 }
 
+/** Dedupe a capture and, if it warrants a prompt, stash it and show the corner card. */
 async function dispatchCornerPromptForCapture(
 	capture: PendingCapture,
 	tabId: number | undefined,
@@ -686,11 +707,11 @@ async function dispatchCornerPromptForCapture(
 	}
 	await writePendingCapture(capture);
 	if (tabId !== undefined) {
+		// SPA path: if the page navigated away, the next load's CORNER_PROMPT_QUERY picks up the stash.
 		await chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
 	}
 	return payload;
 }
-
 
 chrome.runtime.onInstalled.addListener(() => {
 	void ensureOffscreen();
@@ -700,6 +721,7 @@ chrome.runtime.onStartup.addListener(() => {
 	void ensureOffscreen();
 });
 
+/** Decode a single QR code from a PNG data URL via OffscreenCanvas (no DOM); null if none found. */
 async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
 	const blob = await (await fetch(dataUrl)).blob();
 	const bitmap = await createImageBitmap(blob);
@@ -723,6 +745,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			try {
 				const response = await sendToOffscreen(message);
 				if (response.ok) {
+					// Keep the session VEK cache in sync on creation, unlock, and rotation.
 					if (type === "CRYPTO_GENERATE_VEK") {
 						if (typeof response.data === "string") {
 							cachedVek = response.data;
@@ -731,6 +754,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 						}
 						await scheduleAutoLock();
 					} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT") {
+						// Only count as an unlock if the verifier matched.
 						if (response.data === true) {
 							offscreenHasKey = true;
 							await scheduleAutoLock();
@@ -743,6 +767,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 							await persistVek();
 						}
 					} else if (type === "CRYPTO_UNLOCK_WITH_VEK") {
+						// Used by the popup for rotation rollback; keep the cache in sync.
 						const payload = (message.payload ?? {}) as { vekB64?: string };
 						if (typeof payload.vekB64 === "string") {
 							cachedVek = payload.vekB64;
@@ -769,6 +794,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			knownHostnames.clear();
 			for (const entry of entries) {
 				autofillIndex.set(entry.id, entry);
+				// Register every hostname a login covers so the locked-state hint lights up on all of them.
 				if (entry.type === "login") {
 					for (const h of entry.hostnames) knownHostnames.add(h);
 				}
@@ -827,6 +853,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			const tabId = _sender.tab?.id;
+			// Hostname is derived from the verified sender, never the message body.
 			let hostname = "";
 			try {
 				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
@@ -865,6 +892,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				const fill = fetchFill(entryId);
 				await scheduleAutoLock();
 				if (_sender.tab?.id) {
+					// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
 					await chrome.tabs.sendMessage(_sender.tab.id, {
 						type: "AUTOFILL_FILL",
 						payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
@@ -881,6 +909,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "POPOUT_OPEN") {
 		void (async () => {
 			try {
+				// Stash the handoff before creating the window so the new window's boot read sees it.
 				const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
 				if (handoff) {
 					await chrome.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
@@ -890,6 +919,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				const WIDTH = 500;
 				const HEIGHT = 600;
 				const CHROME_INSET = 80;
+				// Prefer the sender's window so the pop-out lands next to the active tab.
 				let anchor: chrome.windows.Window | undefined;
 				if (_sender.tab?.windowId !== undefined) {
 					anchor = await chrome.windows.get(_sender.tab.windowId).catch(() => undefined);
@@ -927,6 +957,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 	if (type === "POPOUT_CONSUME_HANDOFF") {
 		void (async () => {
+			// Read-and-delete one-shot: reloading the window must not re-seed a stale draft.
 			let handoff: unknown = null;
 			try {
 				const r = await chrome.storage.session.get(POPOUT_HANDOFF_KEY);
@@ -941,11 +972,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "CAPTURE_QR_SCAN") {
 		void (async () => {
 			try {
+				// Filter to normal windows so a detached pop-out resolves the real browsing tab.
 				const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
 				if (win?.id === undefined) {
 					sendResponse({ ok: false, error: "No browser window to capture" });
 					return;
 				}
+				// PNG, not JPEG: lossless pixels decode QR far more reliably.
 				const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
 				const decoded = await decodeQrDataUrl(dataUrl);
 				sendResponse({ ok: true, data: decoded });
@@ -960,6 +993,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		void (async () => {
 			await hydrationPromise;
 			try {
+				// Hostname is derived from the verified sender, never the message body.
 				let hostname = "";
 				try {
 					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
@@ -998,6 +1032,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "CORNER_PROMPT_QUERY") {
 		void (async () => {
 			await hydrationPromise;
+			// Page-load poll: surface a capture stashed by a previous page that navigated away.
 			let hostname = "";
 			try {
 				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
@@ -1018,6 +1053,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				sendResponse({ ok: true, data: null });
 				return;
 			}
+			// Re-run dedupe against the current index (hydrate first, else every
+			// recurring entry would mis-label as a fresh save).
 			await hydrateAutofillIndexFromDisk();
 			const locked = vaultLocked();
 			const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
@@ -1037,6 +1074,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			await hydrationPromise;
 			try {
 				const response = message.payload as CornerPromptResponse;
+				// Hostname (and stash key) from the verified sender; promptId guards
+				// against a stale prompt committing across an unlock cycle.
 				let hostname = "";
 				try {
 					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
@@ -1045,6 +1084,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				const etld1 = hostname ? registrableDomain(hostname) : "";
 				const capture = etld1 ? await readPendingCapture(etld1) : null;
 				if (!capture || capture.promptId !== response.promptId) {
+					// Stale or missing prompt: honor dismiss/never but commit nothing.
 					if (response.action === "never" && etld1) await appendNeverSaveSite(etld1);
 					if (etld1) await clearPendingCapture(etld1);
 					sendResponse({ ok: true, data: null });
@@ -1063,6 +1103,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					return;
 				}
 				if (response.action === "save-unlock-first") {
+					// Fast path: if already unlocked, commit directly instead of routing through the popup.
 					if (!vaultLocked()) {
 						await hydrateAutofillIndexFromDisk();
 						const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
@@ -1091,6 +1132,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					};
 					await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
 					try {
+						// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
 						const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
 							.openPopup;
 						if (typeof openPopupFn === "function") {
@@ -1126,11 +1168,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 						if (outcome.kind === "exact") {
 							// no-op
 						} else if (outcome.kind === "update" && outcome.candidates.length === 1) {
+							// Unambiguous match upgrades to update; multiple candidates means user chose Save.
 							await commitCornerUpdate(editedCapture, outcome.candidates[0]!.id);
 						} else {
 							await commitCornerSave(editedCapture, undefined);
 						}
 					} finally {
+						// Always clear, else a lingering stash re-surfaces the card on every reload.
 						await clearPendingCapture(etld1);
 					}
 					sendResponse({ ok: true, data: null });
@@ -1160,6 +1204,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	}
 
 	if (type === "CORNER_FLUSH_HANDOFF") {
+		// Popup signals a post-unlock flush of a parked corner-prompt handoff;
+		// commit here so unlocked and unlock-first flows share one encrypt path.
 		void (async () => {
 			await hydrationPromise;
 			try {
@@ -1169,6 +1215,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					sendResponse({ ok: true, data: false });
 					return;
 				}
+				// Clear first so a racing duplicate flush cannot double-write.
 				await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
 				await hydrateAutofillIndexFromDisk();
 				if (vaultLocked()) {
@@ -1230,6 +1277,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 	}
 });
 
+// Manual lock via the user-bound `lock-vault` shortcut (declared without a default chord).
 chrome.commands?.onCommand.addListener((command) => {
 	if (command !== "lock-vault") return;
 	void (async () => {
@@ -1238,8 +1286,11 @@ chrome.commands?.onCommand.addListener((command) => {
 	})();
 });
 
+// Lock immediately on OS screen-lock. Only `locked` is acted on; `idle` would
+// also fire on long reads/videos and is left to the sliding alarm.
 chrome.idle?.onStateChanged.addListener((state) => {
 	if (state !== "locked") return;
+	// Already torn down: avoid needlessly spinning up the offscreen document.
 	if (cachedVek === null) return;
 	void (async () => {
 		await clearSession();
@@ -1247,6 +1298,7 @@ chrome.idle?.onStateChanged.addListener((state) => {
 	})();
 });
 
+// Reschedule the auto-lock alarm live when the timeout pref changes (if unlocked).
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
 	if (changes[PREF_AUTOLOCK_MINUTES] && cachedVek !== null) {

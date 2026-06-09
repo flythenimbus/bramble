@@ -6,6 +6,9 @@ import { deriveKeyType } from "../util/ssh";
 import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
+// 1Password .1pux = a zip whose export.data is JSON (accounts > vaults > items).
+// Schema is lenient except the top-level accounts array, which identifies the format.
+// https://support.1password.com/1pux-format/
 const valueSchema = z.object({
 	string: z.string().nullish(),
 	concealed: z.string().nullish(),
@@ -60,6 +63,7 @@ const CAT_PASSWORD = "005";
 const CAT_SSH_KEY = "114";
 // Secure note (003) and every other category fall through to the note mapping.
 
+// Collapse a section field's polymorphic value into text + masking + optional TOTP.
 function readValue(v: OpValue | null | undefined): {
 	text: string;
 	hidden: boolean;
@@ -99,6 +103,8 @@ function flattenFields(item: OpItem): FlatField[] {
 	return out;
 }
 
+// Merge the legacy overview.url slot with the modern overview.urls[] list,
+// de-duped and blank-stripped.
 function allUrls(item: OpItem): string[] {
 	const out: string[] = [];
 	const push = (u: string | null | undefined) => {
@@ -183,6 +189,8 @@ function mapCard(item: OpItem, name: string, notes: string | undefined): CardEnt
 	};
 }
 
+// 1Password's SSH-key shape varies; detect keys heuristically from field text,
+// fold the rest into custom fields.
 function mapSshKey(item: OpItem, name: string, notes: string | undefined): EntryData {
 	const flat = flattenFields(item);
 	const privateKey = flat.find((f) => /PRIVATE KEY/.test(f.text))?.text ?? "";
@@ -213,6 +221,7 @@ function mapNote(item: OpItem, name: string, notes: string | undefined): EntryDa
 	return { type: "note", name, notes, customFields: toCustomFields(extras) };
 }
 
+/** Parse a 1Password .1pux export (zip) into importable entries. */
 export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 	let files: Record<string, Uint8Array>;
 	try {

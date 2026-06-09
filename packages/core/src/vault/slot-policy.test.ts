@@ -94,6 +94,7 @@ describe("matchSlotByCredentialId", () => {
 
 	it("returns the first match if credentialIds collide (defensive)", () => {
 		// Two slots can't legitimately share a credentialId, but if they do
+		// (e.g. data corruption) we shouldn't crash, return the first.
 		const a = makeWebauthnSlot(0x10);
 		const b = makeWebauthnSlot(0x80);
 		b.credentialId = a.credentialId;
@@ -179,6 +180,7 @@ describe("removeWebauthnSlot", () => {
 	});
 
 	it("refuses to remove the last unlock method (single webauthn slot)", () => {
+		// A vault with ONLY one webauthn slot: if we remove it, the user
 		// can never unlock the vault again. Must refuse.
 		const only = makeWebauthnSlot(0x10);
 		const blob = makeBlob([only]);
@@ -280,6 +282,7 @@ describe("removePasswordSlot", () => {
 	});
 
 	it("refuses when only a recovery slot would remain (invariant B)", () => {
+		// Recovery is a backup, not a primary; disabling the password here
 		// would leave no day-to-day unlock method.
 		const blob = makeBlob([makePasswordSlot(), makeRecoverySlot()]);
 		expect(() => removePasswordSlot(blob)).toThrow(/register a security key/i);

@@ -12,6 +12,7 @@ async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 	return res.data as T;
 }
 
+/** AutofillAdapter backed by chrome.runtime messaging to the background worker. */
 export const extensionAutofill: AutofillAdapter = {
 	setIndex: (entries: IndexEntry[]) => send("AUTOFILL_SET_INDEX", entries),
 

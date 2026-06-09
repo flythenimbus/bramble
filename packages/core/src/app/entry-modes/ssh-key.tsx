@@ -9,6 +9,7 @@ import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
+/** OpenSSH SHA-256 fingerprint of `publicKey`. undefined until derived (async) and on parse failure. */
 function useSshFingerprint(publicKey: string): string | undefined {
 	const [fingerprint, setFingerprint] = useState<string | undefined>(undefined);
 	useEffect(() => {
@@ -69,9 +70,11 @@ interface KeyBlockProps {
 	copyName: string;
 	copied: string | null;
 	onCopy: () => void;
+	/** Secret blocks start masked with a reveal toggle; public ones are shown. */
 	secret?: boolean;
 }
 
+/** Multi-line key display with copy and (for secrets) reveal controls. */
 function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockProps) {
 	const [revealed, setRevealed] = useState(false);
 	const masked = secret && !revealed;

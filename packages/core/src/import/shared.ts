@@ -7,12 +7,14 @@ import {
 } from "../hooks/useVault";
 import type { ImportResult } from "./types";
 
+/** Raw key/value pairs collected by a parser before they become CustomFields. */
 export interface RawField {
 	key: string;
 	value: string;
 	hidden?: boolean;
 }
 
+/** Build CustomField[] from raw pairs, dropping blank keys/values. Returns undefined when empty. */
 export function toCustomFields(pairs: RawField[]): CustomField[] | undefined {
 	const out: CustomField[] = [];
 	for (const { key, value, hidden } of pairs) {
@@ -22,6 +24,7 @@ export function toCustomFields(pairs: RawField[]): CustomField[] | undefined {
 	return out.length ? out : undefined;
 }
 
+/** Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest, tally by type. */
 export function summarize(
 	candidates: EntryData[],
 	skipped: number,
@@ -39,17 +42,22 @@ export function summarize(
 	return { imported, byType, skipped: skipped + dropped, warnings };
 }
 
+/** Normalize a string-or-bytes input to text. */
 export function asText(raw: string | Uint8Array): string {
 	return typeof raw === "string" ? raw : strFromU8(raw);
 }
 
+/** Normalize a string-or-bytes input to bytes; throws if handed text. */
 export function asBytes(raw: string | Uint8Array): Uint8Array {
 	if (typeof raw === "string") throw new Error("expected file bytes, received text");
 	return raw;
 }
 
+// Decompressed-size ceiling for zip importers: the 50 MB input cap doesn't stop
+// a high-ratio zip bomb, so bound the decompressed total too.
 const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
 
+/** Throw if an unzip result's total decompressed size exceeds the cap. Run before any further parsing. */
 export function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {
 	let total = 0;
 	for (const k in files) {

@@ -8,7 +8,10 @@ interface SelectFieldProps extends Omit<ComponentProps<"select">, "id"> {
 	children: ReactNode;
 }
 
-// open.
+/**
+ * Outlined fieldset/legend field (like TextField) for native <select>. The label
+ * always floats since a select always has a value, so the legend notch stays open.
+ */
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
 	{ label, error, className, disabled, children, ...props },
 	ref,

@@ -5,6 +5,7 @@ import { RecoveryCodeDisplay } from "../../../components/RecoveryCodeDisplay";
 import { Modal } from "../../../components/ui/modal";
 import { Row } from "./primitives";
 
+/** Settings row to generate or reset the vault's one-time recovery code. */
 export function RecoveryCodeSection() {
 	const {
 		hasPasswordSlot,
@@ -19,6 +20,7 @@ export function RecoveryCodeSection() {
 	const [error, setError] = useState<string | null>(null);
 	const [freshCode, setFreshCode] = useState<string | null>(null);
 
+	// Requires authorization: a master-password confirm if one is set, else a security-key tap.
 	const begin = async () => {
 		setError(null);
 		if (hasPasswordSlot) {

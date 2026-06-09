@@ -26,12 +26,14 @@ import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryFieldsProps, EntryMode } from "./types";
 
-//
+/** The login form's value shape. (Custom fields are host-owned and shared across modes, so not listed here.) */
 export interface LoginFormValues {
 	name: string;
+	/** Wrapped as `{ value }[]` so useFieldArray has stable per-row identity; `toEntry` collapses back to `string[]`. */
 	urls: { value: string }[];
 	username: string;
 	password: string;
+	/** Authenticator key: an `otpauth://` URI or bare base32 setup key, stored verbatim. Empty string means no 2FA. */
 	totp: string;
 	notes: string;
 	autofillEnabled: boolean;
@@ -39,10 +41,12 @@ export interface LoginFormValues {
 	subdomainMatch: SubdomainMatchMode;
 }
 
+/** Generate a 16-char password by unbiased rejection sampling over the charset. */
 function randomPassword(): string {
 	const charset =
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
 	const n = charset.length;
+	// 88 doesn't divide 256, so byte % n would bias; only accept bytes < floor(256/n)*n.
 	const limit = Math.floor(256 / n) * n;
 	const out: string[] = [];
 	const buf = new Uint8Array(16);
@@ -68,6 +72,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [totpScan, setTotpScan] = useState<"idle" | "scanning" | "error">("idle");
 	const [showTotp, setShowTotp] = useState(false);
+	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
 	const [initialPassword] = useState(() => getValues("password"));
 
 	const passwordValue = watch("password");
@@ -81,6 +86,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		setValue("password", randomPassword(), { shouldDirty: true, shouldValidate: true });
 	};
 
+	// Accept a scanned QR only if it parses as a usable TOTP, so a stray QR can't land a junk key.
 	const scanTotp = async () => {
 		setTotpScan("scanning");
 		try {
@@ -345,6 +351,7 @@ function ToggleRow({ title, subtitle, checked, onChange }: ToggleRowProps) {
 	);
 }
 
+/** Live two-factor code for an entry's authenticator key, recomputed every second with a countdown ring. */
 function TotpField({
 	value,
 	copied,
@@ -406,6 +413,7 @@ function TotpField({
 	);
 }
 
+/** Ring + number that drains as the current code ages out, turning red in the final few seconds. */
 function CountdownRing({ remaining, period }: { remaining: number; period: number }) {
 	const radius = 11;
 	const circumference = 2 * Math.PI * radius;
@@ -446,6 +454,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	return (
 		<>
 			{login.urls.map((url, i) => {
+				// Key combines URL with position so intentional duplicates (e.g. http vs https) don't collide.
 				const copyName = login.urls.length === 1 ? "website" : `website-${i}`;
 				return (
 					<DetailField
@@ -514,6 +523,7 @@ export const loginMode: EntryMode = {
 
 	emptyForm: ({ defaultUrl }) => ({
 		name: "",
+		// Seed with the active tab's URL when launched from a page, else start empty.
 		urls: defaultUrl ? [{ value: defaultUrl }] : [],
 		username: "",
 		password: "",
@@ -542,6 +552,7 @@ export const loginMode: EntryMode = {
 
 	toEntry: (values) => {
 		const v = values as LoginFormValues;
+		// Drop blank rows so an empty input doesn't pollute the persisted list or knownHostnames.
 		const urls = v.urls.map((u) => u.value.trim()).filter((u) => u.length > 0);
 		return {
 			type: "login",
@@ -551,6 +562,7 @@ export const loginMode: EntryMode = {
 			password: v.password,
 			totp: v.totp.trim() || undefined,
 			notes: v.notes || undefined,
+			// Persist only overrides that differ from defaults, keeping the encrypted payload minimal.
 			autofillEnabled: v.autofillEnabled ? undefined : false,
 			autoSubmit: v.autoSubmit ? true : undefined,
 			subdomainMatch: v.subdomainMatch === "etld1" ? undefined : v.subdomainMatch,
@@ -586,6 +598,7 @@ export const loginMode: EntryMode = {
 
 	searchText: (entry) => {
 		const login = entry as LoginEntry;
+		// Include every URL so search hits on any covered site, not just the first.
 		return `${login.name} ${login.username} ${login.urls.join(" ")}`.toLowerCase();
 	},
 };

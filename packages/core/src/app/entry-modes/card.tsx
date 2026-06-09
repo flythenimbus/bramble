@@ -22,6 +22,7 @@ function lastFour(number: string): string {
 	return number.replace(/\D/g, "").slice(-4);
 }
 
+/** "Visa •••• 1234", or just the last four when the brand is unknown. */
 function cardSubtitle(card: CardEntryData): string {
 	const last4 = lastFour(card.number);
 	const brand = card.brand ?? cardBrand(card.number);
@@ -184,6 +185,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	);
 }
 
+/** EntryMode for payment cards. */
 export const cardMode: EntryMode = {
 	type: "card",
 	label: "Payment card",

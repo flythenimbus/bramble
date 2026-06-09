@@ -1,7 +1,4 @@
-//
-//
-//
-//
+// VLT1 v2 multi-key vault blob format.
 
 export const MAGIC = new Uint8Array([0x56, 0x4c, 0x54, 0x31]);
 export const VERSION = 0x02;
@@ -24,6 +21,7 @@ export const SLOT_KIND_RECOVERY = 0x03;
 const HEADER_FIXED_LEN = MAGIC.length + 1 + 1; // magic + version + slotCount
 const TLV_PREFIX_LEN = 1 + 2; // kind + len
 
+/** Master-password slot: KEK is an Argon2id derivation of the password. */
 export interface PasswordSlot {
 	kind: typeof SLOT_KIND_PASSWORD;
 	slotId: Uint8Array; // 16 bytes
@@ -33,16 +31,18 @@ export interface PasswordSlot {
 	wrappedVek: Uint8Array; // 48 bytes (32-byte VEK + GCM tag)
 }
 
+/** FIDO2 slot: KEK is HKDF over the authenticator's `hmac-secret`. */
 export interface WebauthnSlot {
 	kind: typeof SLOT_KIND_WEBAUTHN;
 	slotId: Uint8Array; // 16 bytes
-	credentialId: Uint8Array; // variable
+	credentialId: Uint8Array; // variable; drives allowCredentials, not secret
 	salt: Uint8Array; // 32 bytes (hmac-secret salt)
 	verifier: Uint8Array; // 32 bytes
 	wrapIv: Uint8Array; // 12 bytes
 	wrappedVek: Uint8Array; // 48 bytes
 }
 
+/** Offline recovery code. Byte-identical to PasswordSlot; only the kind differs. */
 export interface RecoverySlot {
 	kind: typeof SLOT_KIND_RECOVERY;
 	slotId: Uint8Array; // 16 bytes
@@ -52,6 +52,7 @@ export interface RecoverySlot {
 	wrappedVek: Uint8Array; // 48 bytes
 }
 
+/** Unknown slot kind, preserved verbatim for round-trip. */
 export interface OpaqueSlot {
 	kind: number;
 	payload: Uint8Array;
@@ -59,6 +60,7 @@ export interface OpaqueSlot {
 
 export type Slot = PasswordSlot | WebauthnSlot | RecoverySlot | OpaqueSlot;
 
+/** One entry's ciphertext plus its wrapped per-entry DEK. */
 export interface EncryptedEntry {
 	id: string;
 	wrappedDek: string;
@@ -67,12 +69,14 @@ export interface EncryptedEntry {
 	iv: string;
 }
 
+/** Decoded vault: unlock slots plus the encrypted entries blob. */
 export interface VaultBlob {
 	slots: Slot[];
 	entriesIv: Uint8Array;
 	entriesCiphertext: Uint8Array;
 }
 
+/** Magic+version bytes that bind a verifier to this format version. */
 export function verifierPrefix(): Uint8Array {
 	const out = new Uint8Array(MAGIC.length + 1);
 	out.set(MAGIC, 0);
@@ -249,9 +253,11 @@ function decodeSlotPayload(kind: number, payload: Uint8Array): Slot {
 	if (kind === SLOT_KIND_RECOVERY) {
 		return decodeRecoveryPayload(payload);
 	}
+	// preserve unknown slot kinds verbatim for round-trip
 	return { kind, payload };
 }
 
+/** Serialize a vault to the VLT1 v2 byte layout. */
 export function encodeVaultBlob(blob: VaultBlob): Uint8Array {
 	if (blob.slots.length === 0) {
 		throw new Error("vault must have at least one slot");
@@ -295,6 +301,7 @@ export function encodeVaultBlob(blob: VaultBlob): Uint8Array {
 	return out;
 }
 
+/** Parse a VLT1 v2 blob, preserving unknown slot kinds. */
 export function decodeVaultBlob(bytes: Uint8Array): VaultBlob {
 	if (bytes.length < HEADER_FIXED_LEN) {
 		throw new Error(
@@ -348,6 +355,7 @@ export function decodeVaultBlob(bytes: Uint8Array): VaultBlob {
 	return { slots, entriesIv, entriesCiphertext };
 }
 
+/** The vault's password slot, or null if none. */
 export function findPasswordSlot(blob: VaultBlob): PasswordSlot | null {
 	for (const slot of blob.slots) {
 		if (slot.kind === SLOT_KIND_PASSWORD) return slot as PasswordSlot;
@@ -355,6 +363,7 @@ export function findPasswordSlot(blob: VaultBlob): PasswordSlot | null {
 	return null;
 }
 
+/** All security-key slots on the vault. */
 export function findWebauthnSlots(blob: VaultBlob): WebauthnSlot[] {
 	const out: WebauthnSlot[] = [];
 	for (const slot of blob.slots) {
@@ -363,6 +372,7 @@ export function findWebauthnSlots(blob: VaultBlob): WebauthnSlot[] {
 	return out;
 }
 
+/** All recovery slots (backups, not primary unlock methods). At most one today. */
 export function findRecoverySlots(blob: VaultBlob): RecoverySlot[] {
 	const out: RecoverySlot[] = [];
 	for (const slot of blob.slots) {

@@ -15,14 +15,17 @@ const PARSERS: Record<ImportProvider, ImportParser> = {
 	keepass: parseKeePass,
 };
 
+/** Provider id, including `keepass-kdbx` which has no synchronous parser (opened in WASM). */
 export type ImportProviderId = ImportProvider | "keepass-kdbx";
 
+/** UI-facing description of a supported import provider. Icons live in the UI layer. */
 export interface ImportProviderInfo {
 	id: ImportProviderId;
 	label: string;
 	blurb: string;
 	accept: string;
 	reads: "text" | "bytes";
+	/** kdbx: prompt for credentials and open via CryptoAdapter.openKdbx, not parseImport. */
 	needsCredential?: boolean;
 }
 
@@ -65,6 +68,7 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 	},
 ];
 
+/** Parse a provider export into normalized entries. Read the file as the provider's `reads` kind. */
 export function parseImport(provider: ImportProvider, raw: string | Uint8Array): ImportResult {
 	return PARSERS[provider](raw);
 }

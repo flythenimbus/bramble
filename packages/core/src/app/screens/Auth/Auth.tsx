@@ -11,6 +11,7 @@ interface FormValues {
 	masterPassword: string;
 }
 
+/** Vault unlock screen: master password, security key, and recovery-code paths. */
 export function Auth() {
 	const {
 		hasVault,
@@ -43,6 +44,8 @@ export function Auth() {
 		try {
 			await unlock(masterPassword);
 		} catch (e) {
+			// Keep the typed value; the inline field error is the failure signal.
+			// Do not resetField here: in RHF v7 it clears the error and makes failures silent.
 			setError("masterPassword", { message: (e as Error).message }, { shouldFocus: true });
 		} finally {
 			setBusy(false);
@@ -65,6 +68,7 @@ export function Auth() {
 		try {
 			await unlockWithSecurityKey();
 		} catch (e) {
+			// Surface in the same field-error region as a wrong master password.
 			setError("masterPassword", { message: (e as Error).message });
 		} finally {
 			setBusy(false);

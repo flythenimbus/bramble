@@ -4,6 +4,7 @@ const fixtures = import.meta.glob<string>("./sites/*.html", {
 	import: "default",
 });
 
+/** Load a fixture HTML file from sites/ into document.body. */
 export function loadFixture(name: string): void {
 	const key = `./sites/${name}.html`;
 	const html = fixtures[key];

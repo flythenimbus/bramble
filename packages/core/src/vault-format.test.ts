@@ -106,6 +106,7 @@ describe("decodeVaultBlob", () => {
 	});
 
 	it("preserves unknown slot kinds verbatim across a round-trip", () => {
+		// 0xF1 isn't a known kind today; exercises the OpaqueSlot fall-through.
 		const future = { kind: 0xf1, payload: fillBytes(96, 0xa0) };
 		const blob = makeBlob(0, [makePasswordSlot(), future]);
 		const decoded = decodeVaultBlob(encodeVaultBlob(blob));

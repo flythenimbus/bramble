@@ -1,6 +1,9 @@
 /// <reference types="chrome" />
 import { loadWasm, type VaultCrypto } from "./wasm-loader";
 
+// Offscreen document: holds the WASM crypto module in a context that survives
+// popup close and the service worker's idle-kill. Session state lives in the
+// background SW; this page just does WASM.
 
 let wasm: VaultCrypto | null = null;
 
@@ -102,6 +105,7 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 			return crypto.decrypt_with_vek(payload.iv, payload.ciphertext);
 
 		case "CRYPTO_OPEN_KDBX": {
+			// Foreign KeePass database decrypted entirely in WASM; only mapped
 			// key/value pairs come back. Unrelated to the vault VEK.
 			const file = b64ToBytes(payload.fileB64);
 			const keyfile = payload.keyfileB64 ? b64ToBytes(payload.keyfileB64) : undefined;
@@ -113,6 +117,8 @@ function dispatchCrypto(crypto: VaultCrypto, type: string, payload: any): unknow
 	}
 }
 
+// chrome.runtime messages can't carry a Uint8Array losslessly, so bytes arrive
+// as base64 and are rebuilt here at the WASM boundary.
 function b64ToBytes(b64: string): Uint8Array {
 	const bin = atob(b64);
 	const out = new Uint8Array(bin.length);
@@ -128,11 +134,14 @@ async function sha256Hex(text: string): Promise<string> {
 	return out;
 }
 
+// Clear the clipboard only if it still holds the value we wrote (hash match),
+// so we never wipe something the user copied since.
 async function clearClipboardIfMatches(expectedHash: string): Promise<boolean> {
 	let current = "";
 	try {
 		current = await navigator.clipboard.readText();
 	} catch {
+		// On read failure, skip the clear rather than risk wiping unrelated data.
 		return false;
 	}
 	if (!current) return false;

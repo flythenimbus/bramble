@@ -2,17 +2,24 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef
 import { usePlatform } from "../../context/PlatformContext";
 import type { AppRouter } from "../router";
 
+/** Getter the active form route registers so pop-out can snapshot its in-flight draft. */
 type DraftGetter = () => unknown;
 
+/** Pop-out detaches the current route + form draft into a standalone window. */
 interface PopOutContextValue {
+	/** False when already detached (hides the affordance). */
 	canPopOut: boolean;
+	/** Snapshot the current route + draft and open a detached window. */
 	popOut: () => void;
+	/** Active form route registers its draft getter on mount, null on unmount. */
 	registerDraftGetter: (getter: DraftGetter | null) => void;
+	/** Returns the draft this window opened with, exactly once (undefined after). */
 	takeInitialDraft: () => unknown;
 }
 
 const PopOutContext = createContext<PopOutContextValue | null>(null);
 
+/** Provides pop-out context; seeded with the handed-over draft when this is a detached window. */
 export function PopOutProvider({
 	router,
 	initialDraft,
@@ -50,6 +57,7 @@ export function PopOutProvider({
 	return <PopOutContext.Provider value={value}>{children}</PopOutContext.Provider>;
 }
 
+/** Access pop-out controls. Throws outside PopOutProvider. */
 export function usePopOut(): PopOutContextValue {
 	const ctx = useContext(PopOutContext);
 	if (!ctx) throw new Error("usePopOut called outside PopOutProvider");
