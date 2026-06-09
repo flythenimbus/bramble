@@ -1,9 +1,9 @@
 /// <reference types="chrome" />
 
-
 let extensionAlive = true;
 let mutationObserver: MutationObserver | null = null;
 
+/** False once the extension context is invalidated (orphaned content script); tears us down on first detection. */
 function isExtensionAlive(): boolean {
 	if (!extensionAlive) return false;
 	if (!chrome.runtime?.id) {
@@ -21,6 +21,7 @@ function teardown(): void {
 	removeCornerPrompt();
 }
 
+/** Sends a runtime message, swallowing the throw if the extension context is gone. */
 function safeSendMessage(message: unknown): void {
 	if (!isExtensionAlive()) return;
 	try {
@@ -30,7 +31,6 @@ function safeSendMessage(message: unknown): void {
 		teardown();
 	}
 }
-
 
 interface MatchSummary {
 	id: string;
@@ -57,6 +57,7 @@ interface QueryResult {
 	hasPotentialMatch: boolean;
 }
 
+/** Fill instruction from the background, discriminated by `kind`. `isAuto` echoes whether the fill was user-initiated. */
 type FillPayload =
 	| {
 			kind: "login";
@@ -82,6 +83,8 @@ type FillPayload =
 			isAuto?: boolean;
 	  };
 
+// Mirror of `CornerPromptPayload` in `@core/adapters/autofill`; duplicated to
+// keep the content script a flat bundle with no cross-package runtime imports.
 type CornerPromptPayload =
 	| {
 			kind: "save-login";
@@ -100,7 +103,6 @@ type CornerPromptPayload =
 			newPassword: string;
 	  };
 
-
 import {
 	candidateKind,
 	cardFieldsPresent,
@@ -115,7 +117,7 @@ import {
 	otpInputs,
 } from "./detection";
 
-
+/** Sets an input's value via the native setter so frameworks (React) observe the change. */
 function setNativeValue(el: HTMLInputElement, value: string): void {
 	const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
 	desc?.set?.call(el, value);
@@ -127,10 +129,15 @@ function fillField(el: HTMLInputElement, value: string): void {
 	el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+// Auto-fill skips these so clearing a field isn't re-clobbered by the next
+// query. Explicit dropdown selection ignores this set and always fills.
 const autoFilledFields = new WeakSet<HTMLInputElement>();
 
+// Last password we autofilled; capture compares against it to suppress "save"
+// prompts for unchanged autofilled credentials.
 let lastFilledPassword: string | null = null;
 
+/** Fills the page's login fields. When `isAuto`, skips fields already auto-filled this session. */
 function fillForm(
 	username: string,
 	password: string,
@@ -155,6 +162,10 @@ function fillForm(
 	return { filled, passwordField: pwField };
 }
 
+/**
+ * Submits the form after autofill: prefers requestSubmit() on the enclosing
+ * <form>, falling back to a synthesised Enter keypress for key-handler forms.
+ */
 function submitFromField(field: HTMLInputElement | null): void {
 	if (!field) return;
 	const form = field.closest("form");
@@ -177,7 +188,7 @@ function submitFromField(field: HTMLInputElement | null): void {
 	field.dispatchEvent(enter);
 }
 
-
+/** Inputs owned by built-in login/card autofill; custom fields never fill these, so they can't hijack a primary slot. */
 function reservedInputs(): Set<HTMLInputElement> {
 	const reserved = new Set<HTMLInputElement>();
 	const login = detectLoginFields();
@@ -198,6 +209,7 @@ function reservedInputs(): Set<HTMLInputElement> {
 	return reserved;
 }
 
+/** Fills each custom field into the first empty page input whose hint matches its derived name. */
 function fillCustomFields(fields: CustomFieldData[] | undefined): void {
 	if (!fields || fields.length === 0) return;
 	const reserved = reservedInputs();
@@ -217,11 +229,11 @@ function fillCustomFields(fields: CustomFieldData[] | undefined): void {
 	}
 }
 
-
 function digits(value: string): string {
 	return value.replace(/\D/g, "");
 }
 
+/** Renders the stored expiry year to suit the target field's width (2- vs 4-digit). */
 function expYearFor(field: HTMLInputElement, year: string): string {
 	const two = year.slice(-2);
 	if (field.maxLength > 0 && field.maxLength <= 2) return two;
@@ -247,7 +259,7 @@ function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean {
 	return filled;
 }
 
-
+/** Fills the page's OTP field(s): whole code into a single field, one char per box for a segmented widget. */
 function fillOtp(code: string | undefined): boolean {
 	if (!code) return false;
 	const fields = otpInputs();
@@ -268,14 +280,19 @@ function fillOtp(code: string | undefined): boolean {
 	return filled;
 }
 
-
 const DROPDOWN_ID = "titanpass-autofill-dropdown";
 
 let dropdownEl: HTMLElement | null = null;
+// `null` until the first query response: distinguishes "unknown" from "queried,
+// came back empty" (a locked default would flash "Vault locked" on every load).
 let cachedResult: QueryResult | null = null;
 let anchorField: HTMLInputElement | null = null;
+// Joined ids of the rendered matches; lets re-queries with the same set skip
+// the remove-and-re-add cycle that caused flicker on dynamic pages.
 let openMatchesKey = "";
 let openDropdownKind: "matches" | "locked" | null = null;
+// Set when the user explicitly closes the popover; suppresses redisplay from
+// re-queries until they re-engage (focus, type, or mousedown on a field).
 let silenceAutoOpen = false;
 
 function matchesKey(matches: MatchSummary[]): string {
@@ -284,6 +301,7 @@ function matchesKey(matches: MatchSummary[]): string {
 	return out;
 }
 
+/** True when a click landed on the anchor field or a `<label>` that routes to it. */
 function clickIsOnAnchor(target: Node): boolean {
 	if (!anchorField) return false;
 	if (target === anchorField || anchorField.contains(target)) return true;
@@ -306,6 +324,7 @@ function escapeHtml(value: unknown): string {
 		.replace(/'/g, "&#39;");
 }
 
+/** Tagged template that html-escapes scalar interpolations; arrays join verbatim so nested `html` results don't double-escape. */
 function html(strings: TemplateStringsArray, ...values: unknown[]): string {
 	let out = strings[0] ?? "";
 	for (let i = 0; i < values.length; i++) {
@@ -331,10 +350,12 @@ function positionDropdown(field: HTMLInputElement): void {
 	const rect = field.getBoundingClientRect();
 	dropdownEl.style.top = `${rect.bottom + window.scrollY + 2}px`;
 	dropdownEl.style.left = `${rect.left + window.scrollX}px`;
+	// One third of the field, floored at 240px for readability on narrow fields.
 	const width = Math.max(rect.width / 3, 240);
 	dropdownEl.style.width = `${width}px`;
 }
 
+/** Uppercase avatar initials: first letter of the first two words, else first two letters. */
 function initials(name: string): string {
 	const trimmed = name.trim();
 	if (!trimmed) return "??";
@@ -345,6 +366,7 @@ function initials(name: string): string {
 	return trimmed.slice(0, 2).toUpperCase();
 }
 
+// Stable colour per entry: same name always lands on the same swatch.
 const AVATAR_COLORS = [
 	"#7C3AED",
 	"#2563EB",
@@ -450,6 +472,7 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
 
 	const root = document.createElement("div");
 	root.id = DROPDOWN_ID;
+	// Inline so positioning doesn't depend on the inner stylesheet parsing first.
 	root.style.cssText = "position: absolute; z-index: 2147483647;";
 	root.innerHTML = dropdownStyles() + bodyHtml;
 
@@ -459,6 +482,7 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
 	return root;
 }
 
+/** Renders the match picker anchored to `field`; no-op when matches are unchanged to avoid flicker. */
 function buildDropdown(
 	matches: MatchSummary[],
 	field: HTMLInputElement,
@@ -467,6 +491,8 @@ function buildDropdown(
 	if (matches.length === 0) return;
 
 	const key = matchesKey(matches);
+	// Same matches/field already showing: keep the existing dropdown to avoid
+	// flicker from re-queries on every DOM mutation.
 	if (
 		dropdownEl &&
 		anchorField === field &&
@@ -496,6 +522,8 @@ function buildDropdown(
 	openMatchesKey = key;
 	openDropdownKind = "matches";
 
+	// mousedown (not click) beats the field's blur; otherwise focus leaves first
+	// and the click never reaches us.
 	root.addEventListener("mousedown", (e) => {
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-entry-id]");
 		if (!item) return;
@@ -522,6 +550,7 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 	const root = mountDropdown(field, body);
 	openDropdownKind = "locked";
 
+	// mousedown beats the field's blur; otherwise the row never gets the click.
 	root.addEventListener("mousedown", (e) => {
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-tp-popout]");
 		if (!item) return;
@@ -531,7 +560,10 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 	});
 }
 
+/** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
 function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
+	// Manual selection counts as an explicit dismissal; silence auto-redisplay
+	// (e.g. a re-query landing mid-fill) until the user re-engages a field.
 	if (!isAuto) silenceAutoOpen = true;
 	removeDropdown();
 	safeSendMessage({
@@ -539,7 +571,6 @@ function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 		payload: { entryId, hostname: location.hostname, isAuto, otpOnly },
 	});
 }
-
 
 function focusedCandidate(): HTMLInputElement | null {
 	const focused = document.activeElement;
@@ -556,10 +587,19 @@ function isQueryResult(v: unknown): v is QueryResult {
 	);
 }
 
+/**
+ * Caches the query result and surfaces the picker if a candidate field is focused.
+ * SECURITY: never fills without an explicit user gesture; secrets are fetched only
+ * on AUTOFILL_SELECT, so a password is never injected into the DOM on load.
+ */
 function handleResult(result: QueryResult | undefined): void {
+	// Background forwards `undefined` when offscreen erred; keep the last good
+	// cached result rather than clobbering it.
 	if (!isQueryResult(result)) return;
 	cachedResult = result;
 
+	// User dismissed/selected: don't resurrect the dropdown from a re-query until
+	// they re-engage. cachedResult is still updated so the next focus sees fresh data.
 	if (silenceAutoOpen) return;
 
 	const focused = focusedCandidate();
@@ -584,7 +624,7 @@ function handleResult(result: QueryResult | undefined): void {
 	if (result.logins.length > 0) buildDropdown(result.logins, focused);
 }
 
-
+/** Asks the background what's available for this page, but only if a fillable field exists. */
 function queryAutofill(): void {
 	const login = detectLoginFields();
 	const hasLogin = !!(login.username || login.password);
@@ -601,14 +641,20 @@ function queryAutofill(): void {
 	});
 }
 
-
+// Most recent user-typed password across all fields. Values we wrote via
+// `fillForm` are not edits: gated on `e.isTrusted` below. Cleared on submit.
 let lastUserEditedPassword: string | null = null;
 let lastEditAt = 0;
+// SPA submit fallback window: a password field vanishing within this many ms of
+// the last edit is treated as a submit (React-removes-form, no native event).
 const SPA_SUBMIT_WINDOW_MS = 1500;
 
+/** Builds the capture payload from the current form state; returns null when any capture gate trips. */
 function buildCapture(): { username: string; password: string } | null {
 	if (lastUserEditedPassword === null) return null;
+	// Don't fire a save prompt mid-CAPTCHA-challenge.
 	if (hasInteractiveCaptcha()) return null;
+	// OTP field present with no edited password: this submit is the 2FA confirm step.
 	const login = detectLoginFields();
 	if (otpInputs().length > 0 && !login.password) return null;
 
@@ -617,10 +663,13 @@ function buildCapture(): { username: string; password: string } | null {
 	);
 	let capturePassword = lastUserEditedPassword;
 	if (pwFields.length >= 2) {
+		// Change form (old/new/confirm): only capture when the new-password field
+		// is confidently identified and its confirm matches.
 		const newField = findNewPasswordOnChangeForm();
 		if (!newField) return null;
 		capturePassword = newField.value;
 	}
+	// Suppress unchanged autofilled credentials: nothing to save.
 	if (capturePassword === lastFilledPassword) return null;
 
 	const username =
@@ -630,6 +679,7 @@ function buildCapture(): { username: string; password: string } | null {
 	return { username, password: capturePassword };
 }
 
+/** Emits a capture event to the background and clears state so re-submits don't duplicate it. */
 function emitCapture(): void {
 	const captured = buildCapture();
 	if (!captured) return;
@@ -641,6 +691,8 @@ function emitCapture(): void {
 	lastUserEditedPassword = null;
 }
 
+// Track user-typed password edits. Only `e.isTrusted` events (real keystrokes,
+// not our own `fillField` dispatches) count.
 document.addEventListener(
 	"input",
 	(e) => {
@@ -654,6 +706,8 @@ document.addEventListener(
 	true,
 );
 
+// Capture phase so we see the event before any handler that preventDefaults and
+// rebuilds the DOM.
 document.addEventListener(
 	"submit",
 	() => {
@@ -662,6 +716,8 @@ document.addEventListener(
 	true,
 );
 
+// Enter inside a password field that drives no real `<form>` submit (lone
+// inputs, ARIA pseudo-forms) is an effective submit; capture on it too.
 document.addEventListener(
 	"keydown",
 	(e) => {
@@ -670,11 +726,13 @@ document.addEventListener(
 		const target = e.target;
 		if (!(target instanceof HTMLInputElement)) return;
 		if (target.type !== "password") return;
+		// A real submit event may also fire; the duplicate emitCapture is harmless.
 		emitCapture();
 	},
 	true,
 );
 
+/** Picks up a save/update prompt stashed by a prior page's submit (post-navigation capture). */
 function queryCornerPrompt(): void {
 	if (!isExtensionAlive()) return;
 	try {
@@ -690,7 +748,6 @@ function queryCornerPrompt(): void {
 		teardown();
 	}
 }
-
 
 const CORNER_ID = "titanpass-corner-prompt";
 
@@ -916,6 +973,7 @@ function cornerStyles(): string {
 	`;
 }
 
+/** Renders the "Save New Login" card body. */
 function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login" }>): string {
 	const primaryLabel = p.locked ? "Unlock & Save" : "Save";
 	const primaryAction = p.locked ? "save-unlock-first" : "save";
@@ -946,9 +1004,11 @@ function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login"
 	`;
 }
 
+/** Renders the "Update login" card body; "Save as new" keeps existing entries instead of rotating. */
 function buildUpdateLoginBody(p: Extract<CornerPromptPayload, { kind: "update-login" }>): string {
 	const primaryLabel = p.locked ? "Unlock & Update" : "Update";
 	const primaryAction = p.locked ? "save-unlock-first" : "update";
+	// >1 candidate: ask which entry to update; exactly 1: confirm the rotation.
 	const title = p.candidates.length > 1 ? "Update an existing login?" : "Update saved login?";
 	const candidatesBody =
 		p.candidates.length > 1
@@ -1003,10 +1063,12 @@ function closeOverflowMenu(): void {
 	cornerPromptEl?.querySelector(".tp-menu")?.remove();
 }
 
+/** Delegated click handler for all action buttons inside the corner-prompt card. */
 function handleCornerCardClick(e: Event): void {
 	const target = e.target;
 	if (!(target instanceof HTMLElement)) return;
 	const actionEl = target.closest<HTMLElement>("[data-tp-action]");
+	// Any click that isn't the overflow toggle or the menu itself closes an open menu.
 	if (!actionEl || actionEl.dataset.tpAction !== "toggle-menu") {
 		if (!target.closest(".tp-menu")) closeOverflowMenu();
 	}
@@ -1043,6 +1105,8 @@ function handleCornerCardClick(e: Event): void {
 		return;
 	}
 	if (action === "save-new") {
+		// Keep existing entries, add captured credential as a separate login;
+		// same backend path as a fresh save-login.
 		sendCornerResponse("save");
 		removeCornerPrompt();
 		return;
@@ -1058,6 +1122,8 @@ function handleCornerCardClick(e: Event): void {
 		return;
 	}
 	if (action === "save-unlock-first") {
+		// Pass chosenEntryId if picked: the locked-flow commit re-runs dedupe but
+		// honors an explicit choice when present.
 		const radio = cornerPromptEl.querySelector<HTMLInputElement>(
 			'input[name="tp-update-target"]:checked',
 		);
@@ -1077,6 +1143,8 @@ function handleCornerCardClick(e: Event): void {
 	}
 }
 
+// Clicking outside the card closes the overflow menu but keeps the card (so the
+// captured credential isn't lost).
 document.addEventListener(
 	"mousedown",
 	(e) => {
@@ -1088,6 +1156,7 @@ document.addEventListener(
 	true,
 );
 
+/** Mounts the save/update corner prompt in the top-right of the page. */
 function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	removeCornerPrompt();
 	currentPrompt = payload;
@@ -1138,8 +1207,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			!!payload.isAuto,
 		);
 		fillCustomFields(payload.customFields);
+		// Combined login+2FA form: an explicit login pick also fills the OTP
+		// field. No-op when the page has no OTP field.
 		fillOtp(payload.totp);
 		if (filled && payload.autoSubmit) {
+			// Defer one tick so framework state (React controlled inputs) settles
+			// before submit handlers read field values. Re-check for a late-rendered
+			// captcha and skip submit if present (the user must solve it).
 			setTimeout(() => {
 				if (hasInteractiveCaptcha()) return;
 				submitFromField(passwordField);
@@ -1153,7 +1227,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 let lastCheck = 0;
+/** MutationObserver callback: SPA-submit fallback plus a throttled autofill re-query. */
 function onDomChange(): void {
+	// SPA submit fallback: a password the user just edited whose field has now
+	// vanished within the submit window is treated as a submit.
 	if (
 		lastUserEditedPassword !== null &&
 		Date.now() - lastEditAt < SPA_SUBMIT_WINDOW_MS &&
@@ -1167,9 +1244,12 @@ function onDomChange(): void {
 	queryAutofill();
 }
 
+/** Decides what (if anything) to show when the user focuses or edits `field`, based on the cached result. */
 function showFor(field: HTMLInputElement): void {
 	if (silenceAutoOpen) return;
 	if (!cachedResult) {
+		// Focus before bootstrap's query returned: kick one off; handleResult
+		// surfaces the dropdown if the field is still focused on response.
 		queryAutofill();
 		return;
 	}
@@ -1187,6 +1267,8 @@ function showFor(field: HTMLInputElement): void {
 		if (otps.length === 0) {
 			queryAutofill();
 		} else if (otps.length > 1 || !field.value) {
+			// A single match auto-fills on load; only re-offer the picker on a
+			// choice or an empty field.
 			buildDropdown(otps, field, { otpOnly: true });
 		}
 		return;
@@ -1200,6 +1282,7 @@ function showFor(field: HTMLInputElement): void {
 	}
 }
 
+/** Runs initial queries and wires up the focus/input/mousedown/scroll listeners that drive the dropdown. */
 function bootstrap(): void {
 	queryAutofill();
 	queryCornerPrompt();
@@ -1207,19 +1290,25 @@ function bootstrap(): void {
 	mutationObserver = new MutationObserver(() => onDomChange());
 	mutationObserver.observe(document.body, { childList: true, subtree: true });
 
+	// Show on focus; this makes the email-only first step (e.g. ikea.com) work.
 	document.addEventListener(
 		"focusin",
 		(e) => {
 			if (!isAutofillCandidate(e.target)) return;
+			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
 			showFor(e.target);
 		},
 		true,
 	);
 
+	// Surface/dismiss as the user types in an already-focused field (focusin
+	// doesn't fire then).
 	document.addEventListener(
 		"input",
 		(e) => {
+			// fillForm dispatches synthetic input/change events; reacting would
+			// reopen the dropdown the user just dismissed. Only trust real events.
 			if (!e.isTrusted) return;
 			if (!isAutofillCandidate(e.target)) return;
 			silenceAutoOpen = false;
@@ -1228,6 +1317,8 @@ function bootstrap(): void {
 				return;
 			}
 			if (e.target.value && !cachedResult.locked) {
+				// User is typing their own value: get out of the way unless there are
+				// multiple matches of this field's kind to disambiguate.
 				const kind = candidateKind(e.target);
 				const count =
 					kind === "card"
@@ -1245,6 +1336,9 @@ function bootstrap(): void {
 		true,
 	);
 
+	// mousedown (not click): it fires before focusin, so a mousedown on a
+	// `<label>` doesn't race us into an "open + immediate close" flash, and the
+	// same listener detects re-engagement when the dropdown is closed.
 	document.addEventListener(
 		"mousedown",
 		(e) => {
@@ -1258,9 +1352,11 @@ function bootstrap(): void {
 				removeDropdown();
 				return;
 			}
+			// Dropdown closed: a mousedown on a candidate field is re-engagement.
 			const target = e.target;
 			if (isAutofillCandidate(target)) {
 				silenceAutoOpen = false;
+				// Re-click on the already-focused field fires no focusin, so show ourselves.
 				if (document.activeElement === target) showFor(target);
 			}
 		},

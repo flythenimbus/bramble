@@ -2,9 +2,12 @@
 import type { StorageAdapter } from "@core/adapters/storage";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
+/** Recovery snapshot of the previous on-disk vault bytes, written before truncate so a crash leaves a recoverable backup. */
 const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
+/** Corner-prompt write queue: the background stashes ciphertext here when it can't reach an FSA file; the next popup/options mount flushes it. */
 export const PENDING_BLOB_KEY = "vault.pendingFlush";
 
+/** Queued corner-prompt write: the full vault ciphertext plus metadata for the flush UI. */
 interface PendingBlobStash {
 	blobB64: string;
 	entryCount: number;
@@ -14,6 +17,7 @@ const IDB_NAME = "vault-storage";
 const IDB_STORE = "handles";
 const HANDLE_KEY = "vault-file";
 
+/** pickerSupported gates picking a new file, NOT reading the handle (SW can read from IndexedDB). */
 function pickerSupported(): boolean {
 	if (typeof window === "undefined") return false;
 	return (
@@ -79,6 +83,7 @@ async function hasLocalVault(): Promise<boolean> {
 	return typeof result[VAULT_BLOB_KEY] === "string";
 }
 
+/** Read the bytes in the vault target (FSA file or chrome.storage.local). Any error returns null so the pre-write snapshot degrades to "no backup" instead of blocking the write. */
 async function readExistingBlobBytes(
 	handle: FileSystemFileHandle | null,
 ): Promise<Uint8Array | null> {
@@ -97,6 +102,7 @@ async function readExistingBlobBytes(
 	}
 }
 
+/** Snapshot current on-disk bytes into the backup key before truncating. On vault creation (nothing on disk), clear any stale backup so we can't restore over a fresh vault. */
 async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise<void> {
 	const existing = await readExistingBlobBytes(handle);
 	try {
@@ -106,9 +112,11 @@ async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise
 		}
 		await chrome.storage.local.set({ [VAULT_BLOB_BACKUP_KEY]: bytesToBase64(existing) });
 	} catch {
+		// Best-effort: failing the write because the backup failed would block all saves.
 	}
 }
 
+/** File-picker description follows the host brand (manifest.json `name`, same as shell.appName). */
 const VAULT_FILE_TYPES = [
 	{
 		description: `${chrome.runtime.getManifest().name} vault`,
@@ -117,12 +125,14 @@ const VAULT_FILE_TYPES = [
 ];
 
 export const extensionStorage: StorageAdapter = {
+	/** True when a vault exists: a stored FSA handle or a chrome.storage.local blob. */
 	async hasVaultHandle() {
 		const handle = await getHandle();
 		if (handle) return true;
 		return hasLocalVault();
 	},
 
+	/** Prompt for an FSA vault file (create or open) and persist its handle. Throws when no picker is available. */
 	async selectVaultFile(mode) {
 		if (!pickerSupported()) {
 			throw new Error(
@@ -140,6 +150,7 @@ export const extensionStorage: StorageAdapter = {
 		await putHandle(handle);
 	},
 
+	/** Read the vault bytes from the FSA file or the chrome.storage.local fallback. Throws when no vault is stored. */
 	async readVaultBlob() {
 		const handle = await getHandle();
 		if (handle) {
@@ -153,8 +164,10 @@ export const extensionStorage: StorageAdapter = {
 		return base64ToBytes(b64);
 	},
 
+	/** Write the vault bytes to the FSA file or chrome.storage.local, taking a recoverable backup first. */
 	async writeVaultBlob(blob) {
 		const handle = await getHandle();
+		// Snapshot before createWritable() truncates, so a crash leaves a recoverable backup.
 		await snapshotCurrentBlob(handle);
 		if (handle) {
 			await ensurePermission(handle);
@@ -166,12 +179,14 @@ export const extensionStorage: StorageAdapter = {
 		await chrome.storage.local.set({ [VAULT_BLOB_KEY]: bytesToBase64(blob) });
 	},
 
+	/** Restore the last pre-write backup over the live vault. Returns false when no backup exists. */
 	async restoreVaultFromBackup() {
 		const r = await chrome.storage.local.get(VAULT_BLOB_BACKUP_KEY);
 		const b64 = r[VAULT_BLOB_BACKUP_KEY];
 		if (typeof b64 !== "string" || b64.length === 0) return false;
 		const bytes = base64ToBytes(b64);
 		const handle = await getHandle();
+		// Skip snapshotCurrentBlob deliberately: overwriting the backup with the corrupt live file would discard our only good copy.
 		if (handle) {
 			await ensurePermission(handle);
 			const writable = await handle.createWritable();
@@ -183,19 +198,24 @@ export const extensionStorage: StorageAdapter = {
 		return true;
 	},
 
+	/** Read a plaintext metadata value from chrome.storage.local. */
 	async getMeta(key) {
 		const result = await chrome.storage.local.get(key);
 		return result[key];
 	},
 
+	/** Write a plaintext metadata value to chrome.storage.local. */
 	async setMeta(key, value) {
 		await chrome.storage.local.set({ [key]: value });
 	},
 
+	/** True when the background can write the vault directly (no FSA handle, which would need a user gesture). */
 	async canWriteFromBackground() {
+		// FSA writes need a fresh user gesture; chrome.storage.local doesn't, so the background can write directly only without a handle.
 		return (await getHandle()) === null;
 	},
 
+	/** Write through a queued corner-prompt blob (PENDING_BLOB_KEY) and clear it. Returns false when nothing is queued. */
 	async flushPendingVaultBlob() {
 		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
 		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;
@@ -206,6 +226,7 @@ export const extensionStorage: StorageAdapter = {
 		return true;
 	},
 
+	/** Number of entries in the queued corner-prompt blob, or 0 when none is queued. */
 	async getPendingFlushCount() {
 		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
 		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;

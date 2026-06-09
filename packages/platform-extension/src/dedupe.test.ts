@@ -28,6 +28,7 @@ describe("registrableDomain", () => {
 	});
 
 	it("falls back to the raw input for unparseable hostnames", () => {
+		// tldts returns null for IP literals / IDN edge cases: degrade to exact match.
 		expect(registrableDomain("127.0.0.1")).toBe("127.0.0.1");
 		expect(registrableDomain("localhost")).toBe("localhost");
 	});
@@ -66,6 +67,7 @@ describe("hostnameMatches", () => {
 		expect(hostnameMatches(entry, "example.com")).toBe(true);
 		expect(hostnameMatches(entry, "m.example.com")).toBe(true);
 		expect(hostnameMatches(entry, "deep.sub.example.com")).toBe(true);
+		// "subdomain" must not match a domain that merely ends with the host string.
 		expect(hostnameMatches(entry, "notexample.com")).toBe(false);
 	});
 
@@ -85,6 +87,7 @@ describe("hostnameMatches", () => {
 	});
 
 	it("returns false when the entry has no hostnames", () => {
+		// Empty hostnames (legacy/imported entries) must not match every site.
 		const entry = login({ id: "1", hostnames: [] });
 		expect(hostnameMatches(entry, "example.com")).toBe(false);
 	});
@@ -132,6 +135,7 @@ describe("dedupeCapture", () => {
 	});
 
 	it("returns update when the password matches but the username differs", () => {
+		// Same password, changed username counts as an update, not a new save.
 		const index = indexOf(
 			login({
 				id: "1",
@@ -184,6 +188,7 @@ describe("dedupeCapture", () => {
 	});
 
 	it("respects per-entry subdomainMatch when filtering candidates", () => {
+		// "exact" entry must not surface as a candidate on a sibling subdomain.
 		const index = indexOf(
 			login({
 				id: "1",

@@ -1,10 +1,10 @@
-
 interface SectionProps {
 	icon: React.ReactNode;
 	title: string;
 	children: React.ReactNode;
 }
 
+/** Titled card container for a group of Settings rows. */
 export function Section({ icon, title, children }: SectionProps) {
 	return (
 		<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
@@ -26,6 +26,7 @@ interface RowProps {
 	children: React.ReactNode;
 }
 
+/** Label/subtitle row with a right-aligned control slot. */
 export function Row({ icon, title, subtitle, children }: RowProps) {
 	return (
 		<div className="flex items-center justify-between gap-3">
@@ -50,6 +51,7 @@ interface ToggleProps {
 	disabled?: boolean;
 }
 
+/** Switch-style toggle button. */
 export function Toggle({ checked, onChange, label, disabled = false }: ToggleProps) {
 	return (
 		<button

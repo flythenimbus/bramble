@@ -18,6 +18,7 @@ interface PwFormValues {
 	confirmPassword: string;
 }
 
+/** Settings section for setting, changing, or disabling the vault's master password. */
 export function MasterPasswordSection() {
 	const {
 		hasPasswordSlot,

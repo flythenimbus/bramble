@@ -8,6 +8,10 @@ interface TextFieldProps extends Omit<ComponentProps<"input">, "id" | "placehold
 	endAdornment?: ReactNode;
 }
 
+/**
+ * MUI-style outlined text field. The fieldset/legend draws the border so the
+ * label gap is a real notch in the border-top, with no bg-color matching.
+ */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
 	{ label, error, className, type, disabled, startAdornment, endAdornment, ...props },
 	ref,
@@ -65,6 +69,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 						"pointer-events-none absolute top-1/2 -translate-y-1/2 origin-[0]",
 						"text-sm text-muted-foreground transition-all duration-150",
 						startAdornment ? "left-10" : "left-3",
+						// Float when focused, always to left-3 regardless of start adornment
 						"peer-focus:top-0 peer-focus:scale-75 peer-focus:left-3 peer-focus:text-primary",
 						// Float when input has any value
 						"peer-[:not(:placeholder-shown)]:top-0 peer-[:not(:placeholder-shown)]:scale-75 peer-[:not(:placeholder-shown)]:left-3",

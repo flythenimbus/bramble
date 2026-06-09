@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Entry } from "../hooks/useVault";
 import { createAppRouter } from "./router";
 
-
+// Guards are pure functions of injected vault context; headless load() records
+// redirect() on router.state.redirect rather than following it.
 type VaultSlice = { isLocked: boolean; ready: boolean; entries: Entry[] };
 
 const login = (id: string): Entry => ({
@@ -54,10 +55,12 @@ describe("route guards", () => {
 	});
 
 	it("makes no guard decision before context is injected (first-paint placeholder)", async () => {
+		// undefined-vault placeholder: guards must skip, not crash or redirect.
 		expect(await destination("/")).toBe("/");
 	});
 });
 
+// Back button prefers history.back(), falling back to staticData.back when canGoBack() is false.
 describe("back-button history premise", () => {
 	it("a window booted straight onto a deep route has no history (→ uses the fallback target)", async () => {
 		const router = createAppRouter("/vault/abc/edit");

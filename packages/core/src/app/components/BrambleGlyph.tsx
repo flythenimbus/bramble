@@ -4,6 +4,10 @@ interface BrambleGlyphProps {
 	className?: string;
 }
 
+/**
+ * The Bramble glyph, rendered as a currentColor mask so it tints with `text-*` like any icon.
+ * Size and colour come from className (e.g. "w-8 h-8 text-primary-foreground").
+ */
 export function BrambleGlyph({ className }: BrambleGlyphProps) {
 	return (
 		<span

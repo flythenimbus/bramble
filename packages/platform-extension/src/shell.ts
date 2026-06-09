@@ -5,10 +5,13 @@ const DETACHED_FLAG = "detached";
 
 const manifest = chrome.runtime.getManifest();
 
+/** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {
 	appName: manifest.name,
 	version: manifest.version,
 	async openSetup(screen?: OptionsScreen) {
+		// openOptionsPage() can't carry a query string; open a targeted screen as a
+		// tab on options.html with ?screen= instead.
 		if (screen) {
 			await chrome.tabs.create({ url: chrome.runtime.getURL(`options.html?screen=${screen}`) });
 			return;
@@ -34,6 +37,9 @@ export const extensionShell: ShellAdapter = {
 		}
 	},
 	async popOut(handoff?: PopOutHandoff) {
+		// Background SW owns window creation (so the content script can request it
+		// too) and stashes the handoff in chrome.storage.session for the new window.
+		// Wait for the window before closing this popup.
 		await chrome.runtime.sendMessage({ type: "POPOUT_OPEN", payload: { handoff } });
 		window.close();
 	},
@@ -54,6 +60,8 @@ export const extensionShell: ShellAdapter = {
 		return res?.ok === true && res.data === true;
 	},
 	async scanQrFromActiveTab() {
+		// Background SW captures and decodes the visible tab; the screenshot never
+		// leaves it, only the decoded string crosses back.
 		const res = (await chrome.runtime.sendMessage({ type: "CAPTURE_QR_SCAN" })) as
 			| { ok: boolean; data?: string | null }
 			| undefined;

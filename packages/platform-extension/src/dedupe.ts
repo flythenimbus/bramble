@@ -1,11 +1,12 @@
 import type { IndexEntry, LoginIndexEntry } from "@core/adapters/autofill";
 import { getDomain } from "tldts";
 
-
+/** eTLD+1 of a hostname; falls back to the raw input for IPs / unknown TLDs. */
 export function registrableDomain(hostname: string): string {
 	return getDomain(hostname) ?? hostname;
 }
 
+/** Whether a login entry matches a page host under its subdomainMatch policy (default eTLD+1). */
 export function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): boolean {
 	const pageHost = pageHostname.toLowerCase();
 	const policy = entry.subdomainMatch ?? "etld1";
@@ -25,11 +26,13 @@ export function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): b
 	return false;
 }
 
+/** Result of matching a captured credential against the index: identical, new, or update-an-existing. */
 export type DedupeOutcome =
 	| { kind: "exact" }
 	| { kind: "save" }
 	| { kind: "update"; candidates: LoginIndexEntry[] };
 
+/** Classify a captured credential vs the vault index. Null index (locked) degrades to save. */
 export function dedupeCapture(
 	index: Map<string, IndexEntry> | null,
 	hostname: string,
@@ -47,6 +50,7 @@ export function dedupeCapture(
 		candidates.push(entry);
 	}
 	if (candidates.length === 0) return { kind: "save" };
+	// Same-username matches float to the top.
 	candidates.sort((a, b) => {
 		const aMatch = a.username === username ? 0 : 1;
 		const bMatch = b.username === username ? 0 : 1;

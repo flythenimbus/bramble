@@ -7,6 +7,7 @@ interface WeakPasswordNoticeProps {
 	onAccept: (next: boolean) => void;
 }
 
+/** Non-blocking warning for a weak (but allowed) master password; proceeding is an explicit opt-in. */
 export function WeakPasswordNotice({ message, accepted, onAccept }: WeakPasswordNoticeProps) {
 	return (
 		<div className="rounded-md p-3 bg-yellow-500/5 border border-yellow-500/30 text-xs space-y-2.5">

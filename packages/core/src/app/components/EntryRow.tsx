@@ -12,16 +12,21 @@ import { usePlatform } from "../../context/PlatformContext";
 
 interface EntryRowProps {
 	name: string;
+	/** Secondary line under the name (username, masked card number, note preview). */
 	secondary: string;
+	/** Avatar icon, shown unless `initials` is provided. */
 	icon: LucideIcon;
 	initials?: string;
+	/** Login-only "Breached" badge. */
 	leaked?: boolean;
+	/** Quick-copy actions; empty hides the copy button. */
 	copyItems: { label: string; value: string }[];
 	onSelect: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
 }
 
+/** Type-agnostic vault-list row; type-specific projection is computed by the entry mode and passed in. */
 export function EntryRow({
 	name,
 	secondary,
@@ -70,6 +75,7 @@ export function EntryRow({
 			setCopied(label);
 			setCopyOpen(false);
 		} catch {
+			// Best-effort: clipboard write can fail if unfocused or permission revoked.
 		}
 	};
 

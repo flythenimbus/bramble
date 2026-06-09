@@ -1,3 +1,4 @@
+/** Turn a KDBX_* failure code into an actionable, human-readable message. */
 export function kdbxErrorMessage(err: unknown): string {
 	const msg = err instanceof Error ? err.message : String(err);
 	if (msg.includes("KDBX_WRONG_CREDENTIAL")) return "Wrong master password or key file.";

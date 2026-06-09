@@ -9,13 +9,20 @@ import {
 	formToCustomFields,
 } from "../../entry-modes/custom-fields";
 
+/**
+ * Serializable snapshot of the live form, carried verbatim through a pop-out
+ * handoff. Loosely typed: its shape depends on the active mode.
+ */
 export type EntryFormDraft = FieldValues;
 
 interface EntryFormProps {
+	// Keep stable for the host's lifetime: callers key the host by type, so a
+	// type change remounts it.
 	type: EntryType;
 	defaultUrl?: string;
 	initialEntry?: EntryData;
 	initialBreach?: BreachStatus;
+	// Restored pop-out snapshot; wins over initialEntry / defaultUrl when present.
 	draftValues?: EntryFormDraft;
 	registerDraft?: (getter: (() => EntryFormDraft) | null) => void;
 	submitLabel?: string;
@@ -23,6 +30,7 @@ interface EntryFormProps {
 	onSave: (data: EntryData) => Promise<void>;
 }
 
+/** Shared create/edit form chrome for any entry mode; inputs and form-entry mapping come from the mode descriptor. */
 export function EntryForm({
 	type,
 	defaultUrl = "",
@@ -40,6 +48,7 @@ export function EntryForm({
 
 	const methods = useForm<FieldValues>({
 		// A restored draft wins (it already carries custom fields); otherwise seed
+		// from the stored entry (edit) or a blank form (create), plus shared custom fields.
 		defaultValues: draftValues ?? {
 			...(initialEntry ? mode.toForm(initialEntry) : mode.emptyForm({ defaultUrl })),
 			[CUSTOM_FIELDS_NAME]: customFieldsToForm(initialEntry?.customFields),
@@ -70,16 +79,16 @@ export function EntryForm({
 	};
 
 	const Fields = mode.Fields;
+	// Label verbatim so acronyms keep their case (e.g. "SSH key").
 	const heading = `${initialEntry ? "Edit" : "New"} ${mode.label}`;
 	const label = submitLabel ?? `Save ${mode.label}`;
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-3">
 			<FormProvider {...methods}>
-				    peer password managers) that this is an entry editor, not a real
-				    login form, so they don't try to save / autofill the values the
-				    user is *storing*. Chrome ignores autoComplete="off" on bare login
-				    forms, hence the form-type hint. */}
+				{/* data-form-type="other" marks this as an entry editor, not a login form, so
+				    browsers/peer managers don't save/autofill. Chrome ignores autoComplete="off"
+				    on bare login forms, hence the hint. */}
 				<form onSubmit={handleSubmit(onSubmit)} autoComplete="off" data-form-type="other">
 					<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 						<div className="px-5 py-2.5 border-b border-border/50">

@@ -1,5 +1,6 @@
 const crypto = globalThis.crypto;
 
+/** True if `password`'s SHA-1 appears in the HIBP range API (k-anonymity). Throws on network failure. */
 export async function isPasswordLeaked(password: string) {
 	if (typeof password !== "string") throw new Error("Password must be a string");
 
@@ -18,6 +19,7 @@ export async function isPasswordLeaked(password: string) {
 	return data.includes(hashedPasswordString.substring(5).toUpperCase());
 }
 
+/** Check a password against HIBP. Returns undefined on any failure so callers fail-open (not "safe"). */
 export async function checkPasswordBreach(
 	password: string,
 ): Promise<{ leaked: boolean; checkedAt: number } | undefined> {

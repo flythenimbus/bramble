@@ -1,6 +1,4 @@
-//!
-//!
-//!
+//! KDBX4 import: opens a KeePass KDBX4 database inside WASM.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
@@ -36,6 +34,8 @@ const KDF_ARGON2ID: [u8; 16] = [
 const RECYCLE_BIN: &str = "Recycle Bin";
 
 /// A failure with a stable machine code the JS layer switches on to show the
+/// right message (WrongCredential keeps the user on the unlock step, the
+/// Unsupported variants surface an out-of-scope error).
 #[derive(Debug, PartialEq)]
 pub enum KdbxError {
     NotKeepass,
@@ -73,6 +73,7 @@ pub struct OutEntry {
 pub struct OutString {
     pub key: String,
     pub value: String,
+    /// True for KeePass "Protected" fields so the JS layer keeps them hidden.
     pub protected: bool,
 }
 
@@ -87,6 +88,7 @@ pub fn open_kdbx4(
     serde_wasm_bindgen::to_value(&entries).map_err(|e| JsError::new(&format!("KDBX_SERIALIZE:{e}")))
 }
 
+/// A forward byte cursor with bounds-checked reads.
 struct Cursor<'a> {
     b: &'a [u8],
     p: usize,
@@ -122,6 +124,8 @@ struct Kdf {
     version: u32,
 }
 
+/// Parse a KDBX VariantDictionary into Kdf params: u16 version, then
+/// [type:u8][klen:u32][key][vlen:u32][val]*, 0x00 terminator.
 fn parse_variant_dict(d: &[u8]) -> Res<Kdf> {
     let mut c = Cursor::new(d);
     let _ver = c.u16()?;
@@ -143,12 +147,13 @@ fn parse_variant_dict(d: &[u8]) -> Res<Kdf> {
             b"P" => kdf.parallelism = u32::from_le_bytes(val.try_into().map_err(bad)?),
             b"S" => kdf.salt = val.to_vec(),
             b"V" => kdf.version = u32::from_le_bytes(val.try_into().map_err(bad)?),
-            _ => {} // ignore unknown (e.g. AES-KDF rounds) — $UUID gates support
+            _ => {} // ignore unknown params; $UUID gates support
         }
     }
     Ok(kdf)
 }
 
+/// Argon2 transform of the composite key (Argon2d or Argon2id per the KDF UUID).
 fn argon2_transform(kdf: &Kdf, composite: &[u8]) -> Res<Zeroizing<[u8; 32]>> {
     use argon2::{Algorithm, Argon2, Params, Version};
     let algo = if kdf.uuid == KDF_ARGON2D {
@@ -174,6 +179,8 @@ fn argon2_transform(kdf: &Kdf, composite: &[u8]) -> Res<Zeroizing<[u8; 32]>> {
     Ok(out)
 }
 
+/// Resolve a key file's 32-byte key component, per KeePass rules: XML key file,
+/// else 32 raw bytes, else 64 hex chars, else SHA-256 of the contents.
 fn keyfile_key(bytes: &[u8]) -> [u8; 32] {
     if let Some(k) = parse_xml_keyfile(bytes) {
         return k;
@@ -202,6 +209,8 @@ fn decode_hex32(hex: &[u8]) -> Option<[u8; 32]> {
     Some(out)
 }
 
+/// Parse a KeePass XML key file's `<Data>` value (v2.0 hex, v1.0 base64).
+/// Returns None if the bytes don't look like an XML key file.
 fn parse_xml_keyfile(bytes: &[u8]) -> Option<[u8; 32]> {
     let trimmed = bytes.iter().position(|b| !b.is_ascii_whitespace())?;
     if bytes[trimmed] != b'<' {
@@ -251,6 +260,9 @@ fn parse_xml_keyfile(bytes: &[u8]) -> Option<[u8; 32]> {
     }
 }
 
+/// Composite key = SHA256( [SHA256(password)] [|| keyfile_key] ). An unset
+/// component is omitted: an empty password contributes nothing (hashing
+/// SHA256("") would derive the wrong key).
 fn composite_key(password: &str, keyfile: Option<&[u8]>) -> Zeroizing<[u8; 32]> {
     let mut h = Sha256::new();
     if !password.is_empty() {
@@ -267,6 +279,8 @@ struct Keys {
     hmac_base: Zeroizing<[u8; 64]>,
 }
 
+/// cipher key = SHA256(master_seed || transformed);
+/// hmac base = SHA512(master_seed || transformed || 0x01).
 fn derive_keys(master_seed: &[u8], transformed: &[u8; 32]) -> Keys {
     let mut hk = Sha256::new();
     hk.update(master_seed);
@@ -325,6 +339,8 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
     let header_end = c.p;
     let header = &file[..header_end];
 
+    // Reject unsupported cipher/KDF up front, before Argon2, so the error is
+    // credential-independent.
     if cipher != CIPHER_AES256 && cipher != CIPHER_CHACHA20 {
         return Err(KdbxError::UnsupportedCipher);
     }
@@ -336,6 +352,7 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
     let transformed = argon2_transform(&kdf, composite.as_slice())?;
     let keys = derive_keys(&master_seed, &transformed);
 
+    // Authenticate the header; a failing HMAC is the wrong-credential signal.
     let stored_sha = c.take(32)?;
     if Sha256::digest(header).as_slice() != stored_sha {
         return Err(KdbxError::Corrupt("header integrity"));
@@ -347,6 +364,7 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
     mac.verify_slice(stored_hmac)
         .map_err(|_| KdbxError::WrongCredential)?;
 
+    // Verify and concatenate the HMAC block stream into the ciphertext.
     let mut ciphertext: Vec<u8> = Vec::new();
     let mut index: u64 = 0;
     loop {
@@ -395,6 +413,7 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
         _ => return Err(KdbxError::Corrupt("compression flag")),
     };
 
+    // Inner header (KDBX4): inner stream cipher id + key.
     let mut ic = Cursor::new(&inner_payload);
     let mut inner_stream_id = 0u32;
     let mut inner_stream_key = Vec::new();
@@ -409,7 +428,7 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
                     u32::from_le_bytes(data.try_into().map_err(|_| KdbxError::Corrupt("stream id"))?)
             }
             2 => inner_stream_key = data.to_vec(),
-            _ => {} // 3 Binary — attachments out of scope
+            _ => {} // 3 Binary (attachments out of scope)
         }
     }
     if inner_stream_id != 3 {
@@ -420,6 +439,9 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
     parse_inner_xml(xml, &inner_stream_key)
 }
 
+/// Walk the inner XML, decrypting Protected="True" values with the inner ChaCha20
+/// stream. Consume the keystream for EVERY protected value in document order,
+/// including discarded History/Recycle Bin ones; decide emission separately.
 fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
     let kd = Sha512::digest(inner_stream_key);
     let mut stream =
@@ -451,6 +473,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                 b"Group" => group_names.push(String::new()),
                 b"Entry" => entry_stack.push(Vec::new()),
                 b"History" => history_depth += 1,
+                // A group's <Name> only counts outside an Entry.
                 b"Name" if entry_stack.is_empty() => mode = Mode::GroupName,
                 b"Key" => {
                     mode = Mode::Key;
@@ -500,6 +523,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                 }
                 b"Entry" => {
                     if let Some(frame) = entry_stack.pop() {
+                        // Emit only top-level entries: not History, not Recycle Bin.
                         let in_recycle = group_names.iter().any(|n| n == RECYCLE_BIN);
                         if history_depth == 0 && entry_stack.is_empty() && !in_recycle {
                             entries.push(OutEntry { strings: frame });
@@ -517,6 +541,9 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
     Ok(entries)
 }
 
+// Fixtures are AES-256-CBC + Argon2d. Two paths are covered by reasoning, not a
+// fixture: Argon2id (a one-line Algorithm branch) and outer ChaCha20 (shares all
+// framing with AES; the primitive itself runs on every test via inner values).
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,7 +576,7 @@ mod tests {
         let gh = by_title(&entries, "GitHub");
         assert_eq!(field(gh, "UserName"), Some("octocat"));
         assert_eq!(field(gh, "URL"), Some("https://github.com"));
-        assert_eq!(field(gh, "Password"), Some("hunter2")); // protected → ChaCha20 worked
+        assert_eq!(field(gh, "Password"), Some("hunter2")); // protected: inner ChaCha20 worked
         assert_eq!(field(by_title(&entries, "Email"), "Password"), Some("p@ss w0rd&<x>\""));
     }
 
@@ -568,9 +595,11 @@ mod tests {
     #[test]
     fn excludes_recycle_bin_and_history_keeps_totp() {
         let entries = open_inner(RICH, "richpass", None).expect("open rich");
+        // "Trashed" (Recycle Bin) and the "old" History revision are both excluded.
         assert_eq!(entries.len(), 2, "only Keeper + Hist, not Trashed/history");
         assert!(entries.iter().all(|e| field(e, "Title") != Some("Trashed")));
 
+        // The surviving Hist entry is the current revision, not a History one.
         assert_eq!(field(by_title(&entries, "Hist"), "Password"), Some("new"));
 
         // Protected non-standard field (TOTP Seed) decrypted via the inner stream.
@@ -592,11 +621,13 @@ mod tests {
 
     #[test]
     fn opens_keyfile_only_with_empty_password() {
+        // Empty password must not be hashed in (composite_key skips it).
         let entries = open_inner(KEYONLY_DB, "", Some(RAW_KEY)).expect("open key-only");
         assert_eq!(field(by_title(&entries, "KeyOnly"), "Password"), Some("kp"));
         assert_eq!(open_inner(KEYONLY_DB, "", None), Err(KdbxError::WrongCredential));
     }
 
+    // Byte-mutation negative tests: corrupt one field of a real fixture.
     #[test]
     fn rejects_kdbx3_version() {
         let mut f = FIXTURE.to_vec();
@@ -613,9 +644,12 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_cipher() {
+        // Corrupt the AES CipherID UUID to a non-AES/ChaCha value.
         let mut f = FIXTURE.to_vec();
         let pos = f.windows(16).position(|w| w == CIPHER_AES256).expect("cipher uuid present");
         f[pos] ^= 0xFF;
+        // Header SHA is recomputed over the mutated header, so this surfaces as
+        // unsupported cipher (header parse), not a corrupt/HMAC error.
         assert_eq!(open_inner(&f, PASSWORD, None), Err(KdbxError::UnsupportedCipher));
     }
 

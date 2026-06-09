@@ -1,3 +1,7 @@
+/**
+ * Best-effort payment-card issuer detection from the leading digits (for icon,
+ * search, importer tagging). Not validation: an unknown prefix yields no brand.
+ */
 export function cardBrand(number: string): string | undefined {
 	const n = number.replace(/\D/g, "");
 	if (/^4/.test(n)) return "Visa";

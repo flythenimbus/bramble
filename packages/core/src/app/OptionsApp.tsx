@@ -6,6 +6,7 @@ import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ThemeProvider } from "./hooks/useTheme";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
+// Lazy: the import pipeline + parsers load as an on-demand chunk, off the popup's main bundle.
 const ImportShell = lazy(() =>
 	import("./screens/Import/ImportShell").then((m) => ({ default: m.ImportShell })),
 );
@@ -16,6 +17,7 @@ function SetupShell() {
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	const [hasFile, setHasFile] = useState(hasVault);
 	const [done, setDone] = useState<null | "created" | "opened">(null);
+	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
 	const hasPicker = shell.hasFilePicker();
 
@@ -58,6 +60,7 @@ function SetupShell() {
 			mode={mode}
 			onModeChange={(next) => {
 				setMode(next);
+				// Switching modes needs a re-pick (save-dialog for new vs open-dialog for existing).
 				setHasFile(false);
 			}}
 			onChooseFile={async () => {
@@ -65,6 +68,7 @@ function SetupShell() {
 				setHasFile(true);
 			}}
 			onCreate={async (password) => {
+				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password));
 			}}
 			onUnlock={async (password) => {
@@ -76,6 +80,7 @@ function SetupShell() {
 }
 
 export default function OptionsApp() {
+	// `?screen=import` (from Settings) routes to the import flow instead of setup.
 	const screen = new URLSearchParams(window.location.search).get("screen");
 	return (
 		<ThemeProvider>

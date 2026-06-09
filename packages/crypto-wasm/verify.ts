@@ -123,6 +123,7 @@ assertEq(
 	false,
 );
 
+// Wrap the existing VEK under a new KEK (second authenticator) without rotating it.
 console.log("wrap_vek_password under fresh credentials: same VEK, new slot");
 const newSalt = generate_salt();
 const newSlot = wrap_vek_password("new-hunter3", newSalt, slotId, MAGIC_VERSION) as {
@@ -184,6 +185,7 @@ console.log("rotate_vek refuses to run on a locked vault");
 lock();
 expectThrow("rotate_vek locked", () => rotate_vek());
 
+// KDBX4 import through the real wasm-bindgen JS export, the same surface offscreen calls.
 type KdbxEntry = { strings: { key: string; value: string; protected: boolean }[] };
 const kdbxField = (e: KdbxEntry | undefined, key: string) =>
 	e?.strings.find((s) => s.key === key)?.value;

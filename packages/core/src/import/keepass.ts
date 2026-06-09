@@ -3,10 +3,13 @@ import type { EntryData } from "../hooks/useVault";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
+// KeePass 2.x XML export: entries under nested Groups, each with String{Key,Value}
+// pairs plus a History subtree of past revisions we must NOT import.
 const FORMAT_ERROR = "This doesn't look like a KeePass 2.x XML export.";
 const RECYCLE_BIN = "Recycle Bin";
 const STANDARD_KEYS = new Set(["Title", "UserName", "Password", "URL", "Notes"]);
 
+// fast-xml-parser yields an object for a single child, an array for repeated.
 function toArray<T>(v: T | T[] | undefined): T[] {
 	if (v == null) return [];
 	return Array.isArray(v) ? v : [v];
@@ -36,6 +39,7 @@ function readValue(value: string | XmlValue | undefined): { text: string; hidden
 }
 
 // Collect entries from a group tree, skipping the Recycle Bin. History entries
+// nest under Entry.History.Entry, never Group.Entry, so walking groups excludes them.
 function collectEntries(group: XmlGroup): XmlEntry[] {
 	if (group.Name === RECYCLE_BIN) return [];
 	const here = toArray(group.Entry);
@@ -43,6 +47,7 @@ function collectEntries(group: XmlGroup): XmlEntry[] {
 	return [...here, ...nested];
 }
 
+/** Map flat KeePass String fields to a login entry. Shared by the XML export and decrypted .kdbx paths. */
 export function mapKeepassFields(fields: RawField[]): EntryData {
 	let name = "";
 	let username = "";
@@ -78,7 +83,7 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 				if (!totp) totp = value;
 				break;
 			case "TOTP Settings":
-				break; // companion to TOTP Seed — period/digits, not needed
+				break; // companion to TOTP Seed (period/digits), not needed
 			default:
 				if (!STANDARD_KEYS.has(key)) extras.push({ key, value, hidden });
 		}
@@ -88,6 +93,7 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 		type: "login",
 		name,
 		notes: notes || undefined,
+		// KeePass 2.x has one URL per entry; wrap to the array shape.
 		urls: url ? [url] : [],
 		username,
 		password,
@@ -104,6 +110,7 @@ function mapEntry(entry: XmlEntry): EntryData {
 	return mapKeepassFields(fields);
 }
 
+/** Parse a KeePass 2.x XML export into importable login entries. */
 export function parseKeePass(raw: string | Uint8Array): ImportResult {
 	const text = asText(raw);
 	let parsed: { KeePassFile?: { Root?: XmlGroup } };
@@ -112,6 +119,7 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 			ignoreAttributes: false,
 			attributeNamePrefix: "@_",
 			parseTagValue: false,
+			// Disable entity processing to block billion-laughs payloads.
 			processEntities: false,
 		}).parse(text);
 	} catch {

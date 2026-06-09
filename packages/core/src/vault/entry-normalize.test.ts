@@ -110,11 +110,13 @@ describe("normalizeEntryData — Zod tripwire", () => {
 		const msg = String(consoleError.mock.calls[0]?.[0] ?? "");
 		expect(msg).toContain("unexpected shape");
 		expect(msg).toContain("type=login");
+		// Critical: never log the values, only the field names.
 		expect(msg).not.toContain("alice");
 		expect(msg).not.toContain("Missing required password");
 	});
 
 	it("returns the candidate even when validation fails (forward-compat)", () => {
+		// Unknown future fields shouldn't drop the entry; the user keeps
 		// their data and a re-save under the current schema later
 		// (re-)applies its rules.
 		const result = normalizeEntryData({

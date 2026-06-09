@@ -6,6 +6,7 @@ export interface PasswordSlotBlob {
 	wrappedVek: string;
 }
 
+/** JS-facing surface of the Rust WASM crypto module (slot wrapping, entry encryption, KDBX import). */
 export interface VaultCrypto {
 	is_locked(): boolean;
 	lock(): void;
@@ -75,6 +76,8 @@ export interface VaultCrypto {
 	encrypt_with_vek(plaintext: string): { iv: string; ciphertext: string };
 	decrypt_with_vek(iv: string, ciphertext: string): string;
 
+	// Returns each entry's raw key/value pairs with protected values decrypted.
+	// Throws a JsError whose message is a stable KDBX_* code on failure.
 	open_kdbx4(
 		file: Uint8Array,
 		password: string,
@@ -84,6 +87,7 @@ export interface VaultCrypto {
 
 let cached: Promise<VaultCrypto> | null = null;
 
+/** Lazily imports and instantiates the WASM crypto module, caching the singleton. */
 export function loadWasm(): Promise<VaultCrypto> {
 	if (cached) return cached;
 	cached = (async () => {

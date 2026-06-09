@@ -5,6 +5,8 @@ import { cardBrand } from "../util/card";
 import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
+// Proton Pass export: a zip holding data.json with a `vaults` map. Schema lenient except `vaults`.
+// `content` is loose so the identity/unknown fold keeps unmodelled keys. State: 1 active, 2 trashed.
 const extraFieldSchema = z.object({
 	fieldName: z.string().nullish(),
 	type: z.string().nullish(), // "text" | "hidden" | "totp"
@@ -57,6 +59,7 @@ function mapExtraFields(extra: PpExtraField[] | null | undefined): RawField[] {
 	}));
 }
 
+/** Split Proton card expiry; handles both "MMYYYY" and "YYYY-MM" forms. */
 function splitExpiry(raw: string | null | undefined): { expMonth: string; expYear: string } {
 	if (!raw) return { expMonth: "", expYear: "" };
 	if (raw.includes("-")) {
@@ -66,6 +69,7 @@ function splitExpiry(raw: string | null | undefined): { expMonth: string; expYea
 	return { expMonth: String(Number(raw.slice(0, 2))), expYear: raw.slice(2) };
 }
 
+/** Parse a Proton Pass zip export into Bramble entries. Throws on non-Proton input. */
 export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 	let files: Record<string, Uint8Array>;
 	try {
@@ -107,9 +111,11 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 					}
 					const username =
 						content.itemUsername || content.username || content.itemEmail || item.aliasEmail || "";
+					// Keep the email only when distinct from the chosen username.
 					const email = content.itemEmail;
 					const emailField: RawField[] =
 						email && email !== username ? [{ key: "email", value: email }] : [];
+					// Keep every non-blank URL so multi-URL logins survive.
 					const urls = (content.urls ?? []).filter(
 						(u): u is string => typeof u === "string" && u.length > 0,
 					);
@@ -152,6 +158,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 					imported.push({ type: "note", name, notes, customFields: toCustomFields(extra) });
 					break;
 				default:
+					// identity / unknown types: a note folding content + extras in.
 					imported.push({
 						type: "note",
 						name,

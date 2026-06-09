@@ -7,6 +7,7 @@ import { EntryDetail } from "../screens/EntryDetail/EntryDetail";
 
 const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+/** Route for a single entry's detail view; lazily refreshes login breach status. */
 export function EntryDetailRoute() {
 	const navigate = useNavigate();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId" });
@@ -15,8 +16,10 @@ export function EntryDetailRoute() {
 	const entry = entries.find((e) => e.id === entryId);
 	const refreshAttemptedRef = useRef<string | null>(null);
 
-
+	// Lazily refresh stale/missing breach status, once per entry per mount.
+	// refreshAttemptedRef stops the updateEntry write-back from re-triggering the effect.
 	useEffect(() => {
+		// Breach status is login-only.
 		if (!entry || entry.type !== "login" || !prefsLoaded) return;
 		if (!prefs.breachCheckEnabled) return;
 		if (refreshAttemptedRef.current === entry.id) return;
@@ -33,6 +36,7 @@ export function EntryDetailRoute() {
 
 	if (!entry) return null;
 
+	// Hide a stored breach result while breach checking is off.
 	const viewEntry =
 		prefs.breachCheckEnabled || entry.type !== "login" ? entry : { ...entry, breach: undefined };
 

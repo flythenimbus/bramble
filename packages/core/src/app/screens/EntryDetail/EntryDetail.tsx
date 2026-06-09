@@ -11,6 +11,7 @@ interface EntryDetailProps {
 	onDelete: () => Promise<void>;
 }
 
+/** Shared chrome for viewing any entry (banner, header, delete/edit footer); the mode supplies the fields. */
 export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
 	const [copied, setCopied] = useState<string | null>(null);

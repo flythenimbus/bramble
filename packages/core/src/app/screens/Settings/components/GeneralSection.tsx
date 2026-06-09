@@ -3,6 +3,7 @@ import { usePrefs } from "../../../../hooks/usePrefs";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
+/** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 
@@ -51,7 +52,8 @@ export function GeneralSection() {
 				</div>
 			</Row>
 
-			    app, so the subtitle is explicit about what's sent. */}
+			{/* Breach check is opt-in and the only network egress, so the subtitle
+			    is explicit about what's sent. */}
 			<Row
 				icon={<ShieldCheck className="w-4 h-4 text-primary" />}
 				title="Check passwords for breaches"
@@ -64,6 +66,7 @@ export function GeneralSection() {
 				/>
 			</Row>
 
+			{/* Offer to save logins drives the corner-prompt card. */}
 			<Row
 				icon={<ShieldCheck className="w-4 h-4 text-primary" />}
 				title="Offer to save logins"

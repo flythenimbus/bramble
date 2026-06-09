@@ -9,6 +9,10 @@ interface SecretAreaProps extends Omit<ComponentProps<"textarea">, "id" | "place
 	defaultRevealed?: boolean;
 }
 
+/**
+ * Multi-line secret field for SSH keys etc. Masking uses CSS `-webkit-text-security`
+ * (Chromium-only) so the textarea stays editable while hidden.
+ */
 export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(function SecretArea(
 	{ label, error, className, disabled, rows = 6, defaultRevealed = false, ...props },
 	ref,
@@ -34,6 +38,7 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 						"px-3 pt-3 pb-3 pr-10 text-sm text-foreground font-mono resize-none",
 						"placeholder-transparent outline-none",
 						"disabled:opacity-50 disabled:cursor-not-allowed",
+						// Mask characters while hidden, editable unlike type=password.
 						!revealed && "[-webkit-text-security:disc]",
 						className,
 					)}

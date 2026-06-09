@@ -6,13 +6,15 @@ import { getEntryMode } from "../entry-modes";
 import { customFieldsCopyItems, customFieldsSearchText } from "../entry-modes/custom-fields";
 import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
 
+/** Vault list route: projects entries into rows via their entry-mode descriptors. */
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
 	const { entries, deleteEntry } = useVault();
 	const { prefs } = usePrefs();
-
+	// Hide stored breach flags when breach checking is off.
 	const showBreaches = prefs.breachCheckEnabled;
 
+	// Project each entry into a list row via its mode descriptor (type-agnostic).
 	const items = useMemo<VaultListItem[]>(
 		() =>
 			entries.map((entry) => {

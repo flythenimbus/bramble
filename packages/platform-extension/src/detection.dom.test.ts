@@ -188,6 +188,7 @@ describe("detectCardFields — autocomplete tokens", () => {
 		expect(c.expMonth?.getAttribute("name")).toBe("em");
 		expect(c.expYear?.getAttribute("name")).toBe("ey");
 		expect(c.cvv?.getAttribute("name")).toBe("cvc");
+		// Combined expiry must not fire when both split fields exist.
 		expect(c.expCombined).toBeNull();
 	});
 
@@ -222,10 +223,12 @@ describe("detectCardFields — regex fallback", () => {
 		expect(c.name?.getAttribute("name")).toBe("cardholder");
 		expect(c.expMonth?.getAttribute("name")).toBe("exp_month");
 		expect(c.expYear?.getAttribute("name")).toBe("exp_year");
+		// CVV may be type=password.
 		expect(c.cvv?.getAttribute("name")).toBe("cvv-code");
 	});
 
 	it("does not match a CVV when the name is underscore-fused (\\bcvv\\b limitation)", () => {
+		// `\bcvv\b` has no boundary in `cvv_field`; locks the current limitation.
 		loadHTML(`<input type="password" name="cvv_field" />`);
 		expect(detectCardFields().cvv).toBeNull();
 	});
@@ -238,6 +241,7 @@ describe("detectCardFields — regex fallback", () => {
 
 describe("cardFieldsPresent / isCardField", () => {
 	it("returns false when only a cardholder-name field exists", () => {
+		// Name alone false-positives on checkout shipping forms.
 		loadHTML(`<input name="cardholder" />`);
 		expect(cardFieldsPresent(detectCardFields())).toBe(false);
 	});
@@ -300,6 +304,7 @@ describe("otpInputs", () => {
 	});
 
 	it("card detection beats OTP for ambiguous 'verification-code' naming", () => {
+		// CC_CSC_RE claims "verification-code" as CVV over OTP; locks the tradeoff.
 		loadHTML(`<input name="verification-code" />`);
 		expect(otpInputs()).toEqual([]);
 		expect(detectCardFields().cvv?.getAttribute("name")).toBe("verification-code");
@@ -344,6 +349,7 @@ describe("otpInputs", () => {
 });
 
 describe("hasInteractiveCaptcha", () => {
+	// happy-dom returns 0x0 rects; stub visible elements.
 	function makeVisible(selector: string): void {
 		for (const el of document.querySelectorAll(selector)) {
 			el.getBoundingClientRect = () =>

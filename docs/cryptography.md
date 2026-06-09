@@ -1,0 +1,118 @@
+# Cryptography: the VEK / slot / KEK wrapping model
+
+This is the core of how Bramble protects vault data. All of it lives in
+`packages/crypto-wasm/src/lib.rs` (the Rust/WASM crypto) and is driven from
+`packages/core/src/hooks/useVault.tsx` (the orchestration).
+
+## The key hierarchy
+
+Everything encrypts under one key, the **VEK** (Vault Encryption Key):
+
+```
+                password ──Argon2id──┐
+                                     ├──> KEK ──wraps──> VEK ──> entry DEKs ──> entry plaintext
+            security key ──HKDF──────┤                      └──> outer entries blob, settings
+           recovery code ──Argon2id──┘
+```
+
+- The **VEK** is a random 32-byte key generated once at vault creation
+  (`generate_vek`) and never derived from a password. It is the only thing that
+  decrypts vault contents.
+- Each **slot** (password, security key, recovery code) derives its own **KEK**
+  and stores a copy of the VEK wrapped under that KEK. Unlocking means: derive
+  the KEK, unwrap the VEK, hold it in memory.
+- Each **entry** has its own random **DEK**; the entry plaintext is encrypted
+  under the DEK, and the DEK is wrapped under the VEK. The outer entries blob and
+  settings are encrypted directly under the VEK.
+
+The in-memory VEK lives in a single global slot in WASM
+(`vek_slot()`), wrapped in `Zeroizing` so it is wiped on drop. The master
+password and all decrypted secrets stay in WASM memory and never cross to the JS
+heap; only the resulting plaintext entries do.
+
+Why this shape: adding, revoking, or rotating a slot only rewraps the VEK. It
+never re-encrypts per-entry ciphertext, so changing unlock methods is cheap and
+does not touch the bulk of the vault.
+
+## KEK derivation (the difference between slot kinds)
+
+Password and security-key slots are byte-identical on disk (verifier, wrap IV,
+wrapped VEK). The only thing that differs is how the KEK is produced:
+
+- **Password / recovery code**: Argon2id over `password + salt`, with parameters
+  `time=3, memory=64 MiB, parallelism=1`, producing a 32-byte KEK
+  (`derive_kek`). A recovery code is just a high-entropy passphrase, so it reuses
+  the password KDF.
+- **Security key**: HKDF-SHA256 over the 32-byte hmac-secret returned by the
+  authenticator, domain-separated by the info string `titanpass/webauthn/v1`
+  (`derive_kek_hkdf`). The authenticator owns the entropy; HKDF just shapes it
+  into a KEK that cannot collide with other HKDF callers. See
+  [security-keys.md](security-keys.md).
+
+Reusing the same on-disk slot layout for both keeps slot serialization uniform on
+the JS side.
+
+## Verifier-based unlock (reject wrong credentials cheaply)
+
+Each slot stores a **verifier**: `HMAC-SHA256(KEK, magic_version || slot_id)`.
+On every unlock attempt the KEK is re-derived, the verifier is recomputed, and
+the two are compared in **constant time** (`ct_eq`) before any AES-GCM unwrap
+runs.
+
+This lets a wrong password be rejected without paying for a failing AEAD tag
+check, and without leaking timing. The `magic_version` prefix
+(`"VLT1" || 0x02`) binds a verifier to a specific format version so a verifier
+from one format revision cannot be replayed against another.
+
+`verify_*_slot` does the verifier check only (no unwrap). It is used to confirm
+the current password while the vault is already unlocked, for example in the
+Settings change-password flow, without touching the live in-memory VEK.
+
+## Password change does NOT rotate the VEK
+
+This is a deliberate tradeoff (see `writeMasterPasswordSlot` in `useVault.tsx`).
+
+A password change re-wraps the VEK under a new KEK and replaces the password
+slot's verifier. It does **not** generate a new VEK. The reasons:
+
+- The recovery slot's code is offline and cannot be re-wrapped on demand.
+- Every security key would each need a physical tap to re-wrap.
+
+Keeping the VEK stable lets those other slots survive a password change
+untouched. The cost is no VEK forward-secrecy on password change. That is
+acceptable because a leaked *password* is still fully addressed: its KEK and
+verifier are replaced, so the old password no longer unlocks. Entries are never
+re-encrypted (same VEK), so a bad write can only damage the password-unlock path,
+not the data. The write is verified after the fact and rolled back from backup if
+the post-write verifier check fails.
+
+`rotate_vek` (a real VEK rotation, used on key revocation rather than password
+change) generates a fresh VEK and requires the caller to re-wrap every slot under
+it before persisting. It refuses to run on a locked vault, since rotating from a
+zero state would silently drop the old key.
+
+## Entry and outer encryption
+
+- **Per entry** (`encrypt_entry` / `decrypt_entry`): a fresh random DEK and IV
+  per entry. The plaintext is AES-256-GCM under the DEK; the DEK is wrapped under
+  the VEK with its own IV. Re-randomized on every save (sub-millisecond per
+  entry), so slot rotations never need to re-encrypt entries.
+- **Outer blobs** (`encrypt_with_vek` / `decrypt_with_vek`): the entries blob,
+  settings, and similar single-use payloads are encrypted directly under the VEK
+  with a random IV, skipping the per-entry DEK indirection.
+
+## Session resume
+
+After Chrome kills the service worker, the offscreen document caches the VEK in
+`chrome.storage.session` and re-injects it via `unlock_with_vek`, so the user
+does not retype their password. See [auth-and-unlock.md](auth-and-unlock.md) and
+[storage.md](storage.md).
+
+## Tests
+
+`lib.rs` drives the primitives directly (HKDF, AES-GCM, verifier compute,
+`ct_eq`) with fixed inputs rather than going through the global VEK slot, which
+would make parallel tests racy. The round-trip and rejection tests
+(wrong secret, tampered verifier, tampered ciphertext, webauthn-vs-password KEK
+separation) lock in that a security key set up today keeps unlocking against any
+future build.

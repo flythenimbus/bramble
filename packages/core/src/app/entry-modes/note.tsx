@@ -10,6 +10,7 @@ export interface NoteFormValues {
 	notes: string;
 }
 
+/** First non-blank line of the body, for the list's secondary line. */
 function firstLine(notes: string | undefined): string {
 	const line = (notes ?? "").split("\n").find((l) => l.trim().length > 0);
 	return line?.trim() ?? "";
@@ -35,6 +36,7 @@ function NoteDetail({ entry }: EntryDetailBodyProps) {
 	);
 }
 
+/** EntryMode for secure notes. */
 export const noteMode: EntryMode = {
 	type: "note",
 	label: "Secure note",

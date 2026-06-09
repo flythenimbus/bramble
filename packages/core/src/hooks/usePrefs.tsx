@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
 
+// Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
+// background.ts for the auto-lock + clipboard TTL values the SW reads itself.
 export const PREF_AUTOLOCK_MINUTES = "pref.autoLockMinutes";
 export const PREF_BREACH_CHECK = "pref.breachCheckEnabled";
 export const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
@@ -8,19 +10,24 @@ export const PREF_OFFER_TO_SAVE = "pref.offerToSave";
 export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
+// Off by default: the breach check is the app's only network egress (k-anonymous
+// SHA-1 prefix to HIBP), so we don't opt users in silently.
 export const DEFAULT_BREACH_CHECK = false;
 export const DEFAULT_CLIPBOARD_SECONDS = 30;
 export const DEFAULT_OFFER_TO_SAVE = true;
 export const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 
+/** Resolved user preferences with their defaults. */
 export interface Prefs {
 	autoLockMinutes: number;
 	breachCheckEnabled: boolean;
 	clipboardClearSeconds: number;
 	offerToSave: boolean;
+	// eTLD+1 hostnames muted via "Never for this site".
 	neverSaveSites: string[];
 }
 
+/** Load and update user preferences via the platform storage adapter. */
 export function usePrefs() {
 	const { storage } = usePlatform();
 	const [prefs, setPrefs] = useState<Prefs>({
