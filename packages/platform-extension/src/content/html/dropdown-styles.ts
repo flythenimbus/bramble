@@ -1,3 +1,5 @@
+import { html } from "../template";
+
 export const dropdownStyles = html`
 		<style>
 			:host {

@@ -1,3 +1,5 @@
+import { html } from "../template";
+
 /** Uppercase avatar initials: first letter of the first two words, else first two letters. */
 function initials(name: string): string {
 	const trimmed = name.trim();

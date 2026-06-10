@@ -1,3 +1,5 @@
+import { html } from "../template";
+
 export const dropdownLocked = html`
 		<div class="tp-item tp-locked" data-tp-popout="1">
 			<div class="tp-avatar tp-avatar-locked">🔒</div>

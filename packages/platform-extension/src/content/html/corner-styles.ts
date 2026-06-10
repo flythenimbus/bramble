@@ -1,3 +1,5 @@
+import { html } from "../template";
+
 export const cornerStyles = html`
 		<style>
 			:host {
