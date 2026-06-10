@@ -5,12 +5,6 @@
 // (the cached query result and the auto-open silence flag); the picker reports
 // user actions back through callbacks.
 
-import { maybeEmitSpaSubmit, onPasswordEnter } from "./content/capture";
-import { handleCornerPromptShow, queryCornerPrompt } from "./content/corner-prompt";
-import { fillCard, fillCustomFields, fillForm, fillOtp, submitFromField } from "./content/fill";
-import { onTeardown, safeSendMessage } from "./content/lifecycle";
-import { picker } from "./content/picker";
-import type { CornerPromptPayload, FillPayload, QueryResult } from "./content/types";
 import {
 	candidateKind,
 	cardFieldsPresent,
@@ -19,7 +13,13 @@ import {
 	hasInteractiveCaptcha,
 	isAutofillCandidate,
 	otpInputs,
-} from "./detection";
+} from "../detection";
+import { maybeEmitSpaSubmit, onPasswordEnter } from "./capture";
+import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
+import { fillCard, fillCustomFields, fillForm, fillOtp, submitFromField } from "./fill";
+import { onTeardown, safeSendMessage } from "./lifecycle";
+import { picker } from "./picker";
+import type { CornerPromptPayload, FillPayload, QueryResult } from "./types";
 
 let mutationObserver: MutationObserver | null = null;
 
