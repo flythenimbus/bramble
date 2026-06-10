@@ -1,5 +1,5 @@
 // Test harness for the background service worker. Builds an in-memory mock of
-// the chrome.* APIs the background uses, then imports background/index.ts fresh
+// the chrome.* APIs the background uses, then imports the background entry fresh
 // (vi.resetModules) so each test gets clean module state. Not a test file (no
 // `.test.ts` suffix) so vitest skips it; it is imported by the *.test.ts files.
 
@@ -229,12 +229,12 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-/** Stub global chrome, import background/index.ts fresh, and return drivers. */
+/** Stub global chrome, import the background entry fresh, and return drivers. */
 export async function loadBackground(opts: ChromeMockOptions = {}): Promise<BackgroundHarness> {
 	vi.resetModules();
 	const { chrome, state } = makeChrome(opts);
 	vi.stubGlobal("chrome", chrome);
-	await import("./index");
+	await import("./background");
 
 	const send = (message: AnyMsg, sender: any = {}) =>
 		new Promise<{ handled: boolean; resp: any }>((resolve) => {
