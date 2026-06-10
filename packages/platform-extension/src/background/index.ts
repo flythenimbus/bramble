@@ -5,21 +5,21 @@
 // idle, prefs). Each concern module registers its own message handlers; the
 // router (./background/router) owns the single onMessage dispatcher.
 
-import "./background/corner-prompt";
-import "./background/popout";
-import "./background/qr";
-import { indexHydration } from "./background/autofill-index";
-import { CLIPBOARD_ALARM, runClipboardClear } from "./background/clipboard";
-import { ensureOffscreen, sendToOffscreen } from "./background/offscreen-client";
-import { PREF_AUTOLOCK_MINUTES } from "./background/prefs";
-import { setReady } from "./background/router";
+import "./corner-prompt";
+import "./popout";
+import "./qr";
+import { indexHydration } from "./autofill-index";
+import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
+import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
+import { PREF_AUTOLOCK_MINUTES } from "./prefs";
+import { setReady } from "./router";
 import {
 	AUTOLOCK_ALARM,
 	clearSession,
 	scheduleAutoLock,
 	sessionHydration,
 	vaultLocked,
-} from "./background/session";
+} from "./session";
 
 // Gate every handler on both hydrations (session VEK + known hostnames) completing.
 setReady(Promise.all([sessionHydration, indexHydration]));
