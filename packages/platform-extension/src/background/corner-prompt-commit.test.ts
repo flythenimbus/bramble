@@ -6,7 +6,7 @@ import {
 	loadBackground,
 	type OffscreenResponse,
 	pageSender,
-} from "./test-harness";
+} from "../test/test-harness";
 
 // Sidestep IndexedDB/FSA and the binary vault format: the commit path is about
 // the decide -> offscreen-encrypt -> write -> index-update glue, which we assert

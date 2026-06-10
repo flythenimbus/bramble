@@ -4,7 +4,7 @@ import {
 	extensionSender,
 	loadBackground,
 	pageSender,
-} from "./test-harness";
+} from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
