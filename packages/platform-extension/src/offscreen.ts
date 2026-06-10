@@ -126,33 +126,17 @@ function b64ToBytes(b64: string): Uint8Array {
 	return out;
 }
 
-async function sha256Hex(text: string): Promise<string> {
-	const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-	const bytes = new Uint8Array(buf);
-	let out = "";
-	for (let i = 0; i < bytes.length; i++) out += bytes[i]!.toString(16).padStart(2, "0");
-	return out;
-}
-
-// Clear the clipboard only if it still holds the value we wrote (hash match),
-// so we never wipe something the user copied since.
-async function clearClipboardIfMatches(expectedHash: string): Promise<boolean> {
-	let current = "";
-	try {
-		current = await navigator.clipboard.readText();
-	} catch {
-		// On read failure, skip the clear rather than risk wiping unrelated data.
-		return false;
-	}
-	if (!current) return false;
-	const hash = await sha256Hex(current);
-	if (hash !== expectedHash) return false;
+// Clear the clipboard after the copy-timeout. We deliberately don't read it
+// back to confirm it still holds our value: that would need the clipboardRead
+// permission (a user-visible "read data you copy" grant we don't want on a
+// password manager), so we clear unconditionally.
+async function clearClipboard(): Promise<boolean> {
 	try {
 		await navigator.clipboard.writeText("");
+		return true;
 	} catch {
 		return false;
 	}
-	return true;
 }
 
 chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
@@ -162,10 +146,7 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 		try {
 			const msgType = message.type ?? "";
 			if (msgType === "CLIPBOARD_CLEAR") {
-				const expectedHash = (message.payload as { expectedHash?: string } | undefined)
-					?.expectedHash;
-				const cleared = expectedHash ? await clearClipboardIfMatches(expectedHash) : false;
-				sendResponse({ ok: true, data: cleared });
+				sendResponse({ ok: true, data: await clearClipboard() });
 				return;
 			}
 			if (!msgType.startsWith("CRYPTO_")) {
