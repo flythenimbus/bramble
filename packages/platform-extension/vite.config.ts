@@ -33,11 +33,14 @@ export default defineConfig({
 		outDir,
 		emptyOutDir: true,
 		chunkSizeWarningLimit: 600,
+		// Chrome 116+ has native modulepreload; dropping the polyfill keeps autofill-ui flat.
+		modulePreload: { polyfill: false },
 		rollupOptions: {
 			input: {
 				popup: resolve(root, "popup.html"),
 				options: resolve(root, "options.html"),
 				offscreen: resolve(root, "offscreen.html"),
+				"autofill-ui": resolve(root, "autofill-ui.html"),
 				background: resolve(root, "background.ts"),
 				"content-script": resolve(root, "content-script.ts"),
 			},
