@@ -760,545 +760,514 @@ async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
 	return jsQR(data, width, height)?.data ?? null;
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-	if (message?.target === "offscreen") return false;
+// --- Message router: a typed handler registry replaces the if-chain. ---
 
-	const type = message?.type as string | undefined;
+type MessageEnvelope = { ok: boolean; data?: unknown; error?: string };
+type MessageHandler = (
+	message: any,
+	sender: chrome.runtime.MessageSender,
+) => Promise<MessageEnvelope>;
 
-	if (typeof type === "string" && type.startsWith("CRYPTO_")) {
-		void (async () => {
-			await hydrationPromise;
-			try {
-				const response = await sendToOffscreen(message);
-				if (response.ok) {
-					// Keep the session VEK cache in sync on creation, unlock, and rotation.
-					if (type === "CRYPTO_GENERATE_VEK") {
-						if (typeof response.data === "string") {
-							cachedVek = response.data;
-							offscreenHasKey = true;
-							await persistVek();
-						}
-						await scheduleAutoLock();
-					} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT") {
-						// Only count as an unlock if the verifier matched.
-						if (response.data === true) {
-							offscreenHasKey = true;
-							await scheduleAutoLock();
-							await exportAndCacheVek();
-						}
-					} else if (type === "CRYPTO_ROTATE_VEK") {
-						if (typeof response.data === "string") {
-							cachedVek = response.data;
-							offscreenHasKey = true;
-							await persistVek();
-						}
-					} else if (type === "CRYPTO_UNLOCK_WITH_VEK") {
-						// Used by the popup for rotation rollback; keep the cache in sync.
-						const payload = (message.payload ?? {}) as { vekB64?: string };
-						if (typeof payload.vekB64 === "string") {
-							cachedVek = payload.vekB64;
-							offscreenHasKey = true;
-							await persistVek();
-						}
-					} else if (type === "CRYPTO_LOCK") {
-						await clearSession();
-					}
-				}
-				sendResponse(response);
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+const messageHandlers = new Map<string, MessageHandler>();
+const prefixHandlers: Array<readonly [string, MessageHandler]> = [];
+
+/** Register a handler for an exact message `type`. */
+function on(type: string, handler: MessageHandler): void {
+	messageHandlers.set(type, handler);
+}
+
+/** Register a handler for every message `type` sharing a prefix (e.g. "CRYPTO_"). */
+function onPrefix(prefix: string, handler: MessageHandler): void {
+	prefixHandlers.push([prefix, handler]);
+}
+
+function resolveHandler(type: string | undefined): MessageHandler | undefined {
+	if (type === undefined) return undefined;
+	const exact = messageHandlers.get(type);
+	if (exact) return exact;
+	for (const [prefix, handler] of prefixHandlers) {
+		if (type.startsWith(prefix)) return handler;
 	}
+	return undefined;
+}
 
-	if (type === "AUTOFILL_SET_INDEX") {
-		void (async () => {
-			await hydrationPromise;
-			const entries = message.payload as IndexEntry[];
-			autofillIndex = new Map();
-			knownHostnames.clear();
-			for (const entry of entries) {
-				autofillIndex.set(entry.id, entry);
-				// Register every hostname a login covers so the locked-state hint lights up on all of them.
-				if (entry.type === "login") {
-					for (const h of entry.hostnames) knownHostnames.add(h);
-				}
+// --- Handlers (one per message type; each returns its full response envelope). ---
+
+/**
+ * Forward any CRYPTO_* message to offscreen, then keep the session VEK cache in
+ * sync on creation, unlock, and rotation. Returns the raw offscreen envelope.
+ */
+async function cryptoHandler(message: any): Promise<MessageEnvelope> {
+	const type = message.type as string;
+	const response = await sendToOffscreen(message);
+	if (response.ok) {
+		if (type === "CRYPTO_GENERATE_VEK") {
+			if (typeof response.data === "string") {
+				cachedVek = response.data;
+				offscreenHasKey = true;
+				await persistVek();
 			}
-			await persistKnownHostnames();
 			await scheduleAutoLock();
-			sendResponse({ ok: true, data: null });
-		})();
-		return true;
-	}
-
-	if (type === "AUTOFILL_CLEAR_INDEX") {
-		void (async () => {
-			await hydrationPromise;
-			autofillIndex = null;
-			sendResponse({ ok: true, data: null });
-		})();
-		return true;
-	}
-
-	if (type === "AUTOFILL_FIND") {
-		void (async () => {
-			await hydrationPromise;
-			// Adapter path trusts the body's hostname; restrict to extension pages.
-			if (!isExtensionSender(_sender)) {
-				sendResponse({ ok: false, error: "forbidden" });
-				return;
-			}
-			await hydrateAutofillIndexFromDisk();
-			const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
-				hostname: string;
-				hasLogin?: boolean;
-				hasCard?: boolean;
-				hasOtp?: boolean;
-			};
-			sendResponse({
-				ok: true,
-				data: queryResult(hostname, hasLogin !== false, hasCard === true, hasOtp === true),
-			});
-		})();
-		return true;
-	}
-
-	if (type === "AUTOFILL_FETCH") {
-		void (async () => {
-			await hydrationPromise;
-			// Unscoped secret fetch by id: extension pages only (see AUTOFILL_FIND).
-			if (!isExtensionSender(_sender)) {
-				sendResponse({ ok: false, error: "forbidden" });
-				return;
-			}
-			await hydrateAutofillIndexFromDisk();
-			try {
-				const { entryId } = message.payload as { entryId: string };
-				const data = fetchFill(entryId);
+		} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT") {
+			// Only count as an unlock if the verifier matched.
+			if (response.data === true) {
+				offscreenHasKey = true;
 				await scheduleAutoLock();
-				sendResponse({ ok: true, data });
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
+				await exportAndCacheVek();
 			}
-		})();
-		return true;
+		} else if (type === "CRYPTO_ROTATE_VEK") {
+			if (typeof response.data === "string") {
+				cachedVek = response.data;
+				offscreenHasKey = true;
+				await persistVek();
+			}
+		} else if (type === "CRYPTO_UNLOCK_WITH_VEK") {
+			// Used by the popup for rotation rollback; keep the cache in sync.
+			const payload = (message.payload ?? {}) as { vekB64?: string };
+			if (typeof payload.vekB64 === "string") {
+				cachedVek = payload.vekB64;
+				offscreenHasKey = true;
+				await persistVek();
+			}
+		} else if (type === "CRYPTO_LOCK") {
+			await clearSession();
+		}
 	}
+	return response;
+}
 
-	if (type === "AUTOFILL_QUERY") {
-		void (async () => {
-			await hydrationPromise;
-			const tabId = _sender.tab?.id;
-			// Hostname is derived from the verified sender, never the message body.
-			let hostname = "";
-			try {
-				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
-				if (src) hostname = new URL(src).hostname;
-			} catch {}
-			if (!hostname) {
-				sendResponse({ ok: false, error: "no verifiable origin on sender" });
-				return;
-			}
-			await hydrateAutofillIndexFromDisk();
-			const hasLogin = message.hasLogin !== false;
-			const hasCard = message.hasCard === true;
-			const hasOtp = message.hasOtp === true;
-			const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
-			// Sliding session: any autofill activity extends the timer.
-			if (!result.locked) await scheduleAutoLock();
-			if (tabId !== undefined) {
-				await chrome.tabs
-					.sendMessage(tabId, { type: "AUTOFILL_MATCHES", payload: result })
-					.catch(() => {});
-			}
-			sendResponse({ ok: true });
-		})();
-		return true;
+async function autofillSetIndex(message: any): Promise<MessageEnvelope> {
+	const entries = message.payload as IndexEntry[];
+	autofillIndex = new Map();
+	knownHostnames.clear();
+	for (const entry of entries) {
+		autofillIndex.set(entry.id, entry);
+		// Register every hostname a login covers so the locked-state hint lights up on all of them.
+		if (entry.type === "login") {
+			for (const h of entry.hostnames) knownHostnames.add(h);
+		}
 	}
+	await persistKnownHostnames();
+	await scheduleAutoLock();
+	return { ok: true, data: null };
+}
 
-	if (type === "AUTOFILL_SELECT") {
-		void (async () => {
-			await hydrationPromise;
-			try {
-				const { entryId, isAuto, otpOnly } = message.payload as {
-					entryId: string;
-					isAuto?: boolean;
-					otpOnly?: boolean;
-				};
-				// Re-check the login against the verified page origin.
-				authorizeFill(entryId, senderHostname(_sender));
-				const fill = fetchFill(entryId);
-				await scheduleAutoLock();
-				if (_sender.tab?.id) {
-					// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
-					await chrome.tabs.sendMessage(_sender.tab.id, {
-						type: "AUTOFILL_FILL",
-						payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
-					});
-				}
-				sendResponse({ ok: true });
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+async function autofillClearIndex(): Promise<MessageEnvelope> {
+	autofillIndex = null;
+	return { ok: true, data: null };
+}
+
+async function autofillFind(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Adapter path trusts the body's hostname; restrict to extension pages.
+	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	await hydrateAutofillIndexFromDisk();
+	const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
+		hostname: string;
+		hasLogin?: boolean;
+		hasCard?: boolean;
+		hasOtp?: boolean;
+	};
+	return {
+		ok: true,
+		data: queryResult(hostname, hasLogin !== false, hasCard === true, hasOtp === true),
+	};
+}
+
+async function autofillFetch(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Unscoped secret fetch by id: extension pages only (see autofillFind).
+	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	await hydrateAutofillIndexFromDisk();
+	const { entryId } = message.payload as { entryId: string };
+	const data = fetchFill(entryId);
+	await scheduleAutoLock();
+	return { ok: true, data };
+}
+
+async function autofillQuery(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	const tabId = sender.tab?.id;
+	// Hostname is derived from the verified sender, never the message body.
+	let hostname = "";
+	try {
+		const src = sender.origin ?? sender.url ?? sender.tab?.url ?? "";
+		if (src) hostname = new URL(src).hostname;
+	} catch {}
+	if (!hostname) return { ok: false, error: "no verifiable origin on sender" };
+	await hydrateAutofillIndexFromDisk();
+	const hasLogin = message.hasLogin !== false;
+	const hasCard = message.hasCard === true;
+	const hasOtp = message.hasOtp === true;
+	const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
+	// Sliding session: any autofill activity extends the timer.
+	if (!result.locked) await scheduleAutoLock();
+	if (tabId !== undefined) {
+		await chrome.tabs
+			.sendMessage(tabId, { type: "AUTOFILL_MATCHES", payload: result })
+			.catch(() => {});
 	}
+	return { ok: true };
+}
 
-	if (type === "POPOUT_OPEN") {
-		void (async () => {
-			try {
-				// Stash the handoff before creating the window so the new window's boot read sees it.
-				const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
-				if (handoff) {
-					await chrome.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
-				} else {
-					await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
-				}
-				const WIDTH = 500;
-				const HEIGHT = 600;
-				const CHROME_INSET = 80;
-				// Prefer the sender's window so the pop-out lands next to the active tab.
-				let anchor: chrome.windows.Window | undefined;
-				if (_sender.tab?.windowId !== undefined) {
-					anchor = await chrome.windows.get(_sender.tab.windowId).catch(() => undefined);
-				}
-				if (!anchor) {
-					anchor = await chrome.windows.getCurrent().catch(() => undefined);
-				}
-				const top = (anchor?.top ?? 0) + CHROME_INSET;
-				const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
-				const created = await chrome.windows.create({
-					url: chrome.runtime.getURL("popup.html?detached=1"),
-					type: "popup",
-					focused: true,
-					width: WIDTH,
-					height: HEIGHT,
-					top,
-					left,
-				});
-				if (created?.id !== undefined) {
-					await chrome.windows.update(created.id, {
-						state: "normal",
-						width: WIDTH,
-						height: HEIGHT,
-						top,
-						left,
-					});
-				}
-				sendResponse({ ok: true });
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+async function autofillSelect(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	const { entryId, isAuto, otpOnly } = message.payload as {
+		entryId: string;
+		isAuto?: boolean;
+		otpOnly?: boolean;
+	};
+	// Re-check the login against the verified page origin.
+	authorizeFill(entryId, senderHostname(sender));
+	const fill = fetchFill(entryId);
+	await scheduleAutoLock();
+	if (sender.tab?.id) {
+		// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
+		await chrome.tabs.sendMessage(sender.tab.id, {
+			type: "AUTOFILL_FILL",
+			payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
+		});
 	}
+	return { ok: true };
+}
 
-	if (type === "POPOUT_CONSUME_HANDOFF") {
-		void (async () => {
-			// Read-and-delete one-shot: reloading the window must not re-seed a stale draft.
-			let handoff: unknown = null;
-			try {
-				const r = await chrome.storage.session.get(POPOUT_HANDOFF_KEY);
-				handoff = r[POPOUT_HANDOFF_KEY] ?? null;
-				await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
-			} catch {}
-			sendResponse({ ok: true, data: handoff });
-		})();
-		return true;
+async function popoutOpen(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Stash the handoff before creating the window so the new window's boot read sees it.
+	const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
+	if (handoff) {
+		await chrome.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
+	} else {
+		await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
 	}
-
-	if (type === "CAPTURE_QR_SCAN") {
-		void (async () => {
-			try {
-				// Filter to normal windows so a detached pop-out resolves the real browsing tab.
-				const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
-				if (win?.id === undefined) {
-					sendResponse({ ok: false, error: "No browser window to capture" });
-					return;
-				}
-				// PNG, not JPEG: lossless pixels decode QR far more reliably.
-				const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
-				const decoded = await decodeQrDataUrl(dataUrl);
-				sendResponse({ ok: true, data: decoded });
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+	const WIDTH = 500;
+	const HEIGHT = 600;
+	const CHROME_INSET = 80;
+	// Prefer the sender's window so the pop-out lands next to the active tab.
+	let anchor: chrome.windows.Window | undefined;
+	if (sender.tab?.windowId !== undefined) {
+		anchor = await chrome.windows.get(sender.tab.windowId).catch(() => undefined);
 	}
-
-	if (type === "CORNER_PROMPT_CAPTURE") {
-		void (async () => {
-			await hydrationPromise;
-			try {
-				// Hostname is derived from the verified sender, never the message body.
-				let hostname = "";
-				try {
-					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
-					if (src) hostname = new URL(src).hostname;
-				} catch {}
-				if (!hostname) {
-					sendResponse({ ok: false, error: "no verifiable origin on sender" });
-					return;
-				}
-				const { username, password } = message.payload as {
-					username: string;
-					password: string;
-				};
-				if (!password) {
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				const etld1 = registrableDomain(hostname);
-				const capture: PendingCapture = {
-					promptId: globalThis.crypto.randomUUID(),
-					etld1,
-					hostname,
-					username,
-					password,
-					capturedAt: Date.now(),
-				};
-				const dispatched = await dispatchCornerPromptForCapture(capture, _sender.tab?.id);
-				sendResponse({ ok: true, data: dispatched });
-			} catch (err) {
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+	if (!anchor) {
+		anchor = await chrome.windows.getCurrent().catch(() => undefined);
 	}
-
-	if (type === "CORNER_PROMPT_QUERY") {
-		void (async () => {
-			await hydrationPromise;
-			// Page-load poll: surface a capture stashed by a previous page that navigated away.
-			let hostname = "";
-			try {
-				const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
-				if (src) hostname = new URL(src).hostname;
-			} catch {}
-			if (!hostname) {
-				sendResponse({ ok: true, data: null });
-				return;
-			}
-			const offerToSave = await getOfferToSavePref();
-			if (!offerToSave) {
-				sendResponse({ ok: true, data: null });
-				return;
-			}
-			const etld1 = registrableDomain(hostname);
-			const capture = await readPendingCapture(etld1);
-			if (!capture) {
-				sendResponse({ ok: true, data: null });
-				return;
-			}
-			// Re-run dedupe against the current index (hydrate first, else every
-			// recurring entry would mis-label as a fresh save).
-			await hydrateAutofillIndexFromDisk();
-			const locked = vaultLocked();
-			const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
-			const payload = buildCornerPayload(capture, outcome, locked);
-			if (!payload) {
-				await clearPendingCapture(etld1);
-				sendResponse({ ok: true, data: null });
-				return;
-			}
-			sendResponse({ ok: true, data: payload });
-		})();
-		return true;
+	const top = (anchor?.top ?? 0) + CHROME_INSET;
+	const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
+	const created = await chrome.windows.create({
+		url: chrome.runtime.getURL("popup.html?detached=1"),
+		type: "popup",
+		focused: true,
+		width: WIDTH,
+		height: HEIGHT,
+		top,
+		left,
+	});
+	if (created?.id !== undefined) {
+		await chrome.windows.update(created.id, {
+			state: "normal",
+			width: WIDTH,
+			height: HEIGHT,
+			top,
+			left,
+		});
 	}
+	return { ok: true };
+}
 
-	if (type === "CORNER_PROMPT_RESPONSE") {
-		void (async () => {
-			await hydrationPromise;
-			try {
-				const response = message.payload as CornerPromptResponse;
-				// Hostname (and stash key) from the verified sender; promptId guards
-				// against a stale prompt committing across an unlock cycle.
-				let hostname = "";
-				try {
-					const src = _sender.origin ?? _sender.url ?? _sender.tab?.url ?? "";
-					if (src) hostname = new URL(src).hostname;
-				} catch {}
-				const etld1 = hostname ? registrableDomain(hostname) : "";
-				const capture = etld1 ? await readPendingCapture(etld1) : null;
-				if (!capture || capture.promptId !== response.promptId) {
-					// Stale or missing prompt: honor dismiss/never but commit nothing.
-					if (response.action === "never" && etld1) await appendNeverSaveSite(etld1);
-					if (etld1) await clearPendingCapture(etld1);
-					sendResponse({ ok: true, data: null });
-					return;
-				}
+async function popoutConsumeHandoff(): Promise<MessageEnvelope> {
+	// Read-and-delete one-shot: reloading the window must not re-seed a stale draft.
+	let handoff: unknown = null;
+	try {
+		const r = await chrome.storage.session.get(POPOUT_HANDOFF_KEY);
+		handoff = r[POPOUT_HANDOFF_KEY] ?? null;
+		await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
+	} catch {}
+	return { ok: true, data: handoff };
+}
 
-				if (response.action === "dismiss") {
-					await clearPendingCapture(etld1);
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				if (response.action === "never") {
-					await appendNeverSaveSite(etld1);
-					await clearPendingCapture(etld1);
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				if (response.action === "save-unlock-first") {
-					// Fast path: if already unlocked, commit directly instead of routing through the popup.
-					if (!vaultLocked()) {
-						await hydrateAutofillIndexFromDisk();
-						const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
-						try {
-							if (outcome.kind === "exact") {
-								// no-op
-							} else if (
-								outcome.kind === "update" &&
-								(response.chosenEntryId || outcome.candidates.length === 1)
-							) {
-								const targetId = response.chosenEntryId ?? outcome.candidates[0]!.id;
-								await commitCornerUpdate(capture, targetId);
-							} else {
-								await commitCornerSave(capture, undefined);
-							}
-						} finally {
-							await clearPendingCapture(etld1);
-						}
-						sendResponse({ ok: true, data: null });
-						return;
-					}
-					const handoff: CornerHandoff = {
-						intent: response.chosenEntryId ? "update" : "save",
-						capture,
-						chosenEntryId: response.chosenEntryId,
-					};
-					await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
-					try {
-						// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
-						const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
-							.openPopup;
-						if (typeof openPopupFn === "function") {
-							await openPopupFn.call(chrome.action);
-						} else {
-							throw new Error("openPopup unavailable");
-						}
-					} catch {
-						try {
-							await chrome.windows.create({
-								url: chrome.runtime.getURL("popup.html?detached=1"),
-								type: "popup",
-								focused: true,
-								width: 500,
-								height: 600,
-							});
-						} catch {}
-					}
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				if (response.action === "save") {
-					await hydrateAutofillIndexFromDisk();
-					const editedCapture: PendingCapture = response.editedUsername
-						? { ...capture, username: response.editedUsername }
-						: capture;
-					const outcome = dedupeCapture(
-						editedCapture.hostname,
-						editedCapture.username,
-						editedCapture.password,
-					);
-					try {
-						if (outcome.kind === "exact") {
-							// no-op
-						} else if (outcome.kind === "update" && outcome.candidates.length === 1) {
-							// Unambiguous match upgrades to update; multiple candidates means user chose Save.
-							await commitCornerUpdate(editedCapture, outcome.candidates[0]!.id);
-						} else {
-							await commitCornerSave(editedCapture, undefined);
-						}
-					} finally {
-						// Always clear, else a lingering stash re-surfaces the card on every reload.
-						await clearPendingCapture(etld1);
-					}
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				if (response.action === "update") {
-					if (!response.chosenEntryId) {
-						sendResponse({ ok: false, error: "update missing chosenEntryId" });
-						return;
-					}
-					await hydrateAutofillIndexFromDisk();
-					try {
-						await commitCornerUpdate(capture, response.chosenEntryId);
-					} finally {
-						await clearPendingCapture(etld1);
-					}
-					sendResponse({ ok: true, data: null });
-					return;
-				}
-				sendResponse({ ok: false, error: `unknown action: ${response.action}` });
-			} catch (err) {
-				console.error("[titanpass:bg] CORNER_PROMPT_RESPONSE failed", err);
-				sendResponse({ ok: false, error: String(err) });
-			}
-		})();
-		return true;
+async function captureQrScan(): Promise<MessageEnvelope> {
+	// Filter to normal windows so a detached pop-out resolves the real browsing tab.
+	const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+	if (win?.id === undefined) {
+		return { ok: false, error: "No browser window to capture" };
 	}
+	// PNG, not JPEG: lossless pixels decode QR far more reliably.
+	const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
+	const decoded = await decodeQrDataUrl(dataUrl);
+	return { ok: true, data: decoded };
+}
 
-	if (type === "CORNER_FLUSH_HANDOFF") {
-		// Popup signals a post-unlock flush of a parked corner-prompt handoff;
-		// commit here so unlocked and unlock-first flows share one encrypt path.
-		void (async () => {
-			await hydrationPromise;
-			try {
-				const r = await chrome.storage.session.get(CORNER_HANDOFF_KEY);
-				const handoff = r[CORNER_HANDOFF_KEY] as CornerHandoff | undefined;
-				if (!handoff) {
-					sendResponse({ ok: true, data: false });
-					return;
-				}
-				// Clear first so a racing duplicate flush cannot double-write.
-				await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
+async function cornerPromptCapture(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Hostname is derived from the verified sender, never the message body.
+	let hostname = "";
+	try {
+		const src = sender.origin ?? sender.url ?? sender.tab?.url ?? "";
+		if (src) hostname = new URL(src).hostname;
+	} catch {}
+	if (!hostname) return { ok: false, error: "no verifiable origin on sender" };
+	const { username, password } = message.payload as {
+		username: string;
+		password: string;
+	};
+	if (!password) return { ok: true, data: null };
+	const etld1 = registrableDomain(hostname);
+	const capture: PendingCapture = {
+		promptId: globalThis.crypto.randomUUID(),
+		etld1,
+		hostname,
+		username,
+		password,
+		capturedAt: Date.now(),
+	};
+	const dispatched = await dispatchCornerPromptForCapture(capture, sender.tab?.id);
+	return { ok: true, data: dispatched };
+}
+
+async function cornerPromptQuery(
+	_message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Page-load poll: surface a capture stashed by a previous page that navigated away.
+	let hostname = "";
+	try {
+		const src = sender.origin ?? sender.url ?? sender.tab?.url ?? "";
+		if (src) hostname = new URL(src).hostname;
+	} catch {}
+	if (!hostname) return { ok: true, data: null };
+	const offerToSave = await getOfferToSavePref();
+	if (!offerToSave) return { ok: true, data: null };
+	const etld1 = registrableDomain(hostname);
+	const capture = await readPendingCapture(etld1);
+	if (!capture) return { ok: true, data: null };
+	// Re-run dedupe against the current index (hydrate first, else every
+	// recurring entry would mis-label as a fresh save).
+	await hydrateAutofillIndexFromDisk();
+	const locked = vaultLocked();
+	const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+	const payload = buildCornerPayload(capture, outcome, locked);
+	if (!payload) {
+		await clearPendingCapture(etld1);
+		return { ok: true, data: null };
+	}
+	return { ok: true, data: payload };
+}
+
+async function cornerPromptResponse(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	try {
+		const response = message.payload as CornerPromptResponse;
+		// Hostname (and stash key) from the verified sender; promptId guards
+		// against a stale prompt committing across an unlock cycle.
+		let hostname = "";
+		try {
+			const src = sender.origin ?? sender.url ?? sender.tab?.url ?? "";
+			if (src) hostname = new URL(src).hostname;
+		} catch {}
+		const etld1 = hostname ? registrableDomain(hostname) : "";
+		const capture = etld1 ? await readPendingCapture(etld1) : null;
+		if (!capture || capture.promptId !== response.promptId) {
+			// Stale or missing prompt: honor dismiss/never but commit nothing.
+			if (response.action === "never" && etld1) await appendNeverSaveSite(etld1);
+			if (etld1) await clearPendingCapture(etld1);
+			return { ok: true, data: null };
+		}
+
+		if (response.action === "dismiss") {
+			await clearPendingCapture(etld1);
+			return { ok: true, data: null };
+		}
+		if (response.action === "never") {
+			await appendNeverSaveSite(etld1);
+			await clearPendingCapture(etld1);
+			return { ok: true, data: null };
+		}
+		if (response.action === "save-unlock-first") {
+			// Fast path: if already unlocked, commit directly instead of routing through the popup.
+			if (!vaultLocked()) {
 				await hydrateAutofillIndexFromDisk();
-				if (vaultLocked()) {
-					sendResponse({ ok: false, error: "vault still locked" });
-					return;
-				}
-				const outcome = dedupeCapture(
-					handoff.capture.hostname,
-					handoff.capture.username,
-					handoff.capture.password,
-				);
+				const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
 				try {
 					if (outcome.kind === "exact") {
 						// no-op
-					} else if (outcome.kind === "update") {
-						const targetId = handoff.chosenEntryId ?? outcome.candidates[0]?.id;
-						if (!targetId) throw new Error("no update target");
-						await commitCornerUpdate(handoff.capture, targetId);
+					} else if (
+						outcome.kind === "update" &&
+						(response.chosenEntryId || outcome.candidates.length === 1)
+					) {
+						const targetId = response.chosenEntryId ?? outcome.candidates[0]!.id;
+						await commitCornerUpdate(capture, targetId);
 					} else {
-						await commitCornerSave(handoff.capture, undefined);
+						await commitCornerSave(capture, undefined);
 					}
 				} finally {
-					await clearPendingCapture(handoff.capture.etld1);
+					await clearPendingCapture(etld1);
 				}
-				sendResponse({ ok: true, data: true });
-			} catch (err) {
-				console.error("[titanpass:bg] CORNER_FLUSH_HANDOFF failed", err);
-				sendResponse({ ok: false, error: String(err) });
+				return { ok: true, data: null };
 			}
-		})();
-		return true;
-	}
-
-	if (type === "CLIPBOARD_SCHEDULE_CLEAR") {
-		void (async () => {
-			const { expectedHash } = (message.payload ?? {}) as { expectedHash?: string };
-			if (typeof expectedHash === "string" && expectedHash.length > 0) {
-				await scheduleClipboardClear(expectedHash);
+			const handoff: CornerHandoff = {
+				intent: response.chosenEntryId ? "update" : "save",
+				capture,
+				chosenEntryId: response.chosenEntryId,
+			};
+			await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
+			try {
+				// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
+				const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
+					.openPopup;
+				if (typeof openPopupFn === "function") {
+					await openPopupFn.call(chrome.action);
+				} else {
+					throw new Error("openPopup unavailable");
+				}
+			} catch {
+				try {
+					await chrome.windows.create({
+						url: chrome.runtime.getURL("popup.html?detached=1"),
+						type: "popup",
+						focused: true,
+						width: 500,
+						height: 600,
+					});
+				} catch {}
 			}
-			sendResponse({ ok: true, data: null });
-		})();
-		return true;
+			return { ok: true, data: null };
+		}
+		if (response.action === "save") {
+			await hydrateAutofillIndexFromDisk();
+			const editedCapture: PendingCapture = response.editedUsername
+				? { ...capture, username: response.editedUsername }
+				: capture;
+			const outcome = dedupeCapture(
+				editedCapture.hostname,
+				editedCapture.username,
+				editedCapture.password,
+			);
+			try {
+				if (outcome.kind === "exact") {
+					// no-op
+				} else if (outcome.kind === "update" && outcome.candidates.length === 1) {
+					// Unambiguous match upgrades to update; multiple candidates means user chose Save.
+					await commitCornerUpdate(editedCapture, outcome.candidates[0]!.id);
+				} else {
+					await commitCornerSave(editedCapture, undefined);
+				}
+			} finally {
+				// Always clear, else a lingering stash re-surfaces the card on every reload.
+				await clearPendingCapture(etld1);
+			}
+			return { ok: true, data: null };
+		}
+		if (response.action === "update") {
+			if (!response.chosenEntryId) {
+				return { ok: false, error: "update missing chosenEntryId" };
+			}
+			await hydrateAutofillIndexFromDisk();
+			try {
+				await commitCornerUpdate(capture, response.chosenEntryId);
+			} finally {
+				await clearPendingCapture(etld1);
+			}
+			return { ok: true, data: null };
+		}
+		return { ok: false, error: `unknown action: ${response.action}` };
+	} catch (err) {
+		console.error("[titanpass:bg] CORNER_PROMPT_RESPONSE failed", err);
+		return { ok: false, error: String(err) };
 	}
+}
 
-	return false;
+async function cornerFlushHandoff(): Promise<MessageEnvelope> {
+	// Popup signals a post-unlock flush of a parked corner-prompt handoff;
+	// commit here so unlocked and unlock-first flows share one encrypt path.
+	try {
+		const r = await chrome.storage.session.get(CORNER_HANDOFF_KEY);
+		const handoff = r[CORNER_HANDOFF_KEY] as CornerHandoff | undefined;
+		if (!handoff) {
+			return { ok: true, data: false };
+		}
+		// Clear first so a racing duplicate flush cannot double-write.
+		await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
+		await hydrateAutofillIndexFromDisk();
+		if (vaultLocked()) {
+			return { ok: false, error: "vault still locked" };
+		}
+		const outcome = dedupeCapture(
+			handoff.capture.hostname,
+			handoff.capture.username,
+			handoff.capture.password,
+		);
+		try {
+			if (outcome.kind === "exact") {
+				// no-op
+			} else if (outcome.kind === "update") {
+				const targetId = handoff.chosenEntryId ?? outcome.candidates[0]?.id;
+				if (!targetId) throw new Error("no update target");
+				await commitCornerUpdate(handoff.capture, targetId);
+			} else {
+				await commitCornerSave(handoff.capture, undefined);
+			}
+		} finally {
+			await clearPendingCapture(handoff.capture.etld1);
+		}
+		return { ok: true, data: true };
+	} catch (err) {
+		console.error("[titanpass:bg] CORNER_FLUSH_HANDOFF failed", err);
+		return { ok: false, error: String(err) };
+	}
+}
+
+async function clipboardScheduleClear(message: any): Promise<MessageEnvelope> {
+	const { expectedHash } = (message.payload ?? {}) as { expectedHash?: string };
+	if (typeof expectedHash === "string" && expectedHash.length > 0) {
+		await scheduleClipboardClear(expectedHash);
+	}
+	return { ok: true, data: null };
+}
+
+onPrefix("CRYPTO_", cryptoHandler);
+on("AUTOFILL_SET_INDEX", autofillSetIndex);
+on("AUTOFILL_CLEAR_INDEX", autofillClearIndex);
+on("AUTOFILL_FIND", autofillFind);
+on("AUTOFILL_FETCH", autofillFetch);
+on("AUTOFILL_QUERY", autofillQuery);
+on("AUTOFILL_SELECT", autofillSelect);
+on("POPOUT_OPEN", popoutOpen);
+on("POPOUT_CONSUME_HANDOFF", popoutConsumeHandoff);
+on("CAPTURE_QR_SCAN", captureQrScan);
+on("CORNER_PROMPT_CAPTURE", cornerPromptCapture);
+on("CORNER_PROMPT_QUERY", cornerPromptQuery);
+on("CORNER_PROMPT_RESPONSE", cornerPromptResponse);
+on("CORNER_FLUSH_HANDOFF", cornerFlushHandoff);
+on("CLIPBOARD_SCHEDULE_CLEAR", clipboardScheduleClear);
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (message?.target === "offscreen") return false;
+	const handler = resolveHandler(message?.type as string | undefined);
+	if (!handler) return false;
+	void (async () => {
+		// Hydration (session VEK + known hostnames) is awaited once for every handler.
+		await hydrationPromise;
+		try {
+			sendResponse(await handler(message, sender));
+		} catch (err) {
+			sendResponse({ ok: false, error: String(err) });
+		}
+	})();
+	return true;
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
