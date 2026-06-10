@@ -1,3 +1,5 @@
+import { html } from "../template";
+
 type Candidate = { id: string; name: string; username: string };
 
 export function updateLoginBody({
