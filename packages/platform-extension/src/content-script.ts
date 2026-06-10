@@ -1,5 +1,25 @@
 /// <reference types="chrome" />
 
+import {
+	candidateKind,
+	cardFieldsPresent,
+	deriveMatcher,
+	detectCardFields,
+	detectLoginFields,
+	findNewPasswordOnChangeForm,
+	getFillableInputs,
+	hasInteractiveCaptcha,
+	isAutofillCandidate,
+	matchesField,
+	otpInputs,
+} from "./detection";
+import { cornerStyles } from "./html/corner-styles";
+import { dropdownItem } from "./html/dropdown-item";
+import { dropdownLocked } from "./html/dropdown-locked";
+import { dropdownStyles } from "./html/dropdown-styles";
+import { saveLoginBody } from "./html/save-login-body";
+import { updateLoginBody } from "./html/update-login-body";
+
 let extensionAlive = true;
 let mutationObserver: MutationObserver | null = null;
 
@@ -18,6 +38,7 @@ function teardown(): void {
 	mutationObserver?.disconnect();
 	mutationObserver = null;
 	removeDropdown();
+	destroyIframeHost();
 	removeCornerPrompt();
 }
 
@@ -102,20 +123,6 @@ type CornerPromptPayload =
 			candidates: { id: string; name: string; username: string }[];
 			newPassword: string;
 	  };
-
-import {
-	candidateKind,
-	cardFieldsPresent,
-	deriveMatcher,
-	detectCardFields,
-	detectLoginFields,
-	findNewPasswordOnChangeForm,
-	getFillableInputs,
-	hasInteractiveCaptcha,
-	isAutofillCandidate,
-	matchesField,
-	otpInputs,
-} from "./detection";
 
 /** Sets an input's value via the native setter so frameworks (React) observe the change. */
 function setNativeValue(el: HTMLInputElement, value: string): void {
@@ -347,126 +354,269 @@ function removeDropdown(): void {
 
 function positionDropdown(field: HTMLInputElement): void {
 	if (!dropdownEl) return;
+	positionHostElement(dropdownEl, field);
+}
+
+// Iframe renderer (primary); the shadow path above is the COEP fallback. See docs/autofill.md.
+
+const AUTOFILL_UI_URL = chrome.runtime.getURL("autofill-ui.html");
+const EXT_ORIGIN = new URL(AUTOFILL_UI_URL).origin;
+
+type IframeRender =
+	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean }
+	| { kind: "locked" };
+
+// "probe" until the first mount resolves to iframe (READY) or shadow (timeout).
+let uiMode: "probe" | "iframe" | "shadow" = "probe";
+let iframeHostEl: HTMLElement | null = null;
+let iframeEl: HTMLIFrameElement | null = null;
+let iframeReady = false;
+let pendingRender: IframeRender | null = null;
+let readinessTimer: number | null = null;
+let iframeMatchesKey = "";
+// Whether the iframe has a keyboard-highlighted row (drives Enter-to-pick).
+let iframeHasHighlight = false;
+
+/** Anchor a host element below `field`, matching the dropdown's geometry. */
+function positionHostElement(el: HTMLElement, field: HTMLInputElement): void {
 	const rect = field.getBoundingClientRect();
-	dropdownEl.style.top = `${rect.bottom + window.scrollY + 2}px`;
-	dropdownEl.style.left = `${rect.left + window.scrollX}px`;
+	el.style.top = `${rect.bottom + window.scrollY + 2}px`;
+	el.style.left = `${rect.left + window.scrollX}px`;
 	// One third of the field, floored at 240px for readability on narrow fields.
-	const width = Math.max(rect.width / 3, 240);
-	dropdownEl.style.width = `${width}px`;
+	el.style.width = `${Math.max(rect.width / 3, 240)}px`;
 }
 
-/** Uppercase avatar initials: first letter of the first two words, else first two letters. */
-function initials(name: string): string {
-	const trimmed = name.trim();
-	if (!trimmed) return "??";
-	const words = trimmed.split(/\s+/);
-	if (words.length >= 2 && words[0] && words[1]) {
-		return (words[0][0]! + words[1][0]!).toUpperCase();
+/** The host element of whichever picker is currently *visible* (shadow or iframe). */
+function activeHost(): HTMLElement | null {
+	if (dropdownEl) return dropdownEl;
+	if (iframeHostEl && iframeHostEl.style.display !== "none") return iframeHostEl;
+	return null;
+}
+
+function repositionActive(): void {
+	const host = activeHost();
+	if (host && anchorField) positionHostElement(host, anchorField);
+}
+
+/** Dismiss whichever picker is showing (shadow dropdown or iframe). The iframe is hidden, not destroyed, so it can be reused without re-loading. */
+function removeActiveUi(): void {
+	removeDropdown();
+	hideIframe();
+}
+
+/** Hide the iframe host (kept alive for reuse). */
+function hideIframe(): void {
+	if (iframeHostEl) iframeHostEl.style.display = "none";
+	iframeMatchesKey = "";
+	iframeHasHighlight = false;
+	anchorField = null;
+}
+
+/** Tear the iframe host down entirely (extension teardown / COEP fallback). */
+function destroyIframeHost(): void {
+	if (readinessTimer !== null) {
+		clearTimeout(readinessTimer);
+		readinessTimer = null;
 	}
-	return trimmed.slice(0, 2).toUpperCase();
+	if (iframeHostEl) {
+		iframeHostEl.remove();
+		iframeHostEl = null;
+	}
+	iframeEl = null;
+	iframeReady = false;
+	pendingRender = null;
+	iframeMatchesKey = "";
+	iframeHasHighlight = false;
+	anchorField = null;
 }
 
-// Stable colour per entry: same name always lands on the same swatch.
-const AVATAR_COLORS = [
-	"#7C3AED",
-	"#2563EB",
-	"#0891B2",
-	"#059669",
-	"#65A30D",
-	"#CA8A04",
-	"#EA580C",
-	"#DC2626",
-	"#DB2777",
-];
-function colorForName(name: string): string {
-	let hash = 0;
-	for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-	return AVATAR_COLORS[hash % AVATAR_COLORS.length]!;
+/** Create the iframe host (closed-shadow wrapper around the extension-origin iframe), or un-hide it if it exists. */
+function ensureIframeHost(): void {
+	if (iframeHostEl) {
+		iframeHostEl.style.display = "block";
+		return;
+	}
+	const host = document.createElement("div");
+	// Random id: no stable selector for the page to target the host by.
+	host.id = `tp-${Math.random().toString(36).slice(2, 10)}`;
+	host.style.cssText = "position: absolute; z-index: 2147483647; margin: 0; padding: 0; border: 0;";
+	const shadow = host.attachShadow({ mode: "closed" });
+	const frame = document.createElement("iframe");
+	frame.src = `${AUTOFILL_UI_URL}?parentOrigin=${encodeURIComponent(location.origin)}`;
+	frame.setAttribute("scrolling", "no");
+	// color-scheme: light dark so the iframe isn't given an opaque Canvas backdrop
+	// on dark pages (that bled a halo around the card).
+	frame.style.cssText =
+		"display: block; width: 100%; height: 0; border: 0; margin: 0; background: transparent; color-scheme: light dark;";
+	shadow.appendChild(frame);
+	document.body.appendChild(host);
+	iframeHostEl = host;
+	iframeEl = frame;
+	iframeReady = false;
 }
 
-function dropdownStyles(): string {
-	return html`
-		<style>
-			#${DROPDOWN_ID} {
-				background: rgba(28, 28, 30, 0.96);
-				-webkit-backdrop-filter: saturate(180%) blur(20px);
-				backdrop-filter: saturate(180%) blur(20px);
-				border: 1px solid rgba(255, 255, 255, 0.06);
-				border-radius: 14px;
-				box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.3);
-				font-family:
-					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-				font-size: 13px;
-				color: #fff;
-				max-height: 320px;
-				overflow-y: auto;
-				padding: 4px;
-				box-sizing: border-box;
-			}
-			#${DROPDOWN_ID} .tp-item {
-				padding: 6px 8px;
-				cursor: pointer !important;
-				display: flex;
-				align-items: center;
-				gap: 12px;
-				border-radius: 10px;
-				transition: background 0.1s ease;
-			}
-			#${DROPDOWN_ID} .tp-item:hover {
-				background: rgba(255, 255, 255, 0.08);
-			}
-			#${DROPDOWN_ID} .tp-locked {
-				cursor: default;
-			}
-			#${DROPDOWN_ID} .tp-locked:hover {
-				background: transparent;
-			}
-			#${DROPDOWN_ID} .tp-avatar {
-				width: 40px;
-				height: 40px;
-				border-radius: 10px;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				font-size: 14px;
-				font-weight: 600;
-				color: #fff;
-				flex-shrink: 0;
-				letter-spacing: 0.5px;
-			}
-			#${DROPDOWN_ID} .tp-avatar-locked {
-				background: rgba(255, 255, 255, 0.08);
-				color: rgba(255, 255, 255, 0.6);
-				font-size: 18px;
-			}
-			#${DROPDOWN_ID} .tp-text {
-				display: flex;
-				flex-direction: column;
-				min-width: 0;
-				flex: 1;
-			}
-			#${DROPDOWN_ID} .tp-name {
-				font-weight: 600;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				color: #fff;
-				line-height: 1.3;
-			}
-			#${DROPDOWN_ID} .tp-user {
-				color: rgba(235, 235, 245, 0.55);
-				font-size: 12px;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				margin-top: 2px;
-				line-height: 1.3;
-			}
-		</style>
-	`;
+function flushPendingRender(): void {
+	const win = iframeEl?.contentWindow;
+	if (!win || !pendingRender) return;
+	const render = pendingRender;
+	pendingRender = null;
+	if (render.kind === "matches") {
+		win.postMessage(
+			{ type: "RENDER_MATCHES", matches: render.matches, otpOnly: render.otpOnly },
+			EXT_ORIGIN,
+		);
+	} else {
+		win.postMessage({ type: "RENDER_LOCKED" }, EXT_ORIGIN);
+	}
 }
 
-function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
+/** First-mount fallback: if the iframe never reports ready (e.g. COEP blocks it), switch to the shadow renderer. */
+function armReadinessTimeout(): void {
+	if (readinessTimer !== null || iframeReady) return;
+	readinessTimer = window.setTimeout(() => {
+		readinessTimer = null;
+		if (iframeReady) return;
+		uiMode = "shadow";
+		const field = anchorField;
+		const render = pendingRender;
+		destroyIframeHost();
+		if (field && render) {
+			if (render.kind === "matches")
+				buildDropdown(render.matches, field, { otpOnly: render.otpOnly });
+			else buildLockedDropdown(field);
+		}
+	}, 700);
+}
+
+function iframeShow(field: HTMLInputElement, render: IframeRender): void {
+	ensureIframeHost();
+	if (!iframeHostEl) return;
+	anchorField = field;
+	positionHostElement(iframeHostEl, field);
+	// Skip a redundant re-post when the same content is already showing here.
+	const key = render.kind === "matches" ? matchesKey(render.matches) : "\0locked";
+	if (iframeReady && key === iframeMatchesKey) return;
+	iframeMatchesKey = key;
+	pendingRender = render;
+	if (iframeReady) flushPendingRender();
+	else armReadinessTimeout();
+}
+
+/** Pick-time anti-clickjacking: reject a pick when the host is hidden, clipped, overlaid, or off-field. */
+function pickIsTrustworthy(): boolean {
+	if (!iframeHostEl) return false;
+	const rect = iframeHostEl.getBoundingClientRect();
+	if (rect.width < 60 || rect.height < 20) return false;
+	if (
+		rect.bottom <= 0 ||
+		rect.right <= 0 ||
+		rect.top >= window.innerHeight ||
+		rect.left >= window.innerWidth
+	) {
+		return false;
+	}
+	const cs = getComputedStyle(iframeHostEl);
+	if (cs.visibility !== "visible" || cs.display === "none") return false;
+	if (Number.parseFloat(cs.opacity) < 0.9) return false;
+	if (cs.filter !== "none" || cs.mixBlendMode !== "normal" || cs.clipPath !== "none") return false;
+	// elementFromPoint resolves to the host (closed shadow); an unrelated element means an overlay.
+	const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+	if (!top) return false;
+	return top === iframeHostEl || iframeHostEl.contains(top) || top.contains(iframeHostEl);
+}
+
+// --- Renderer routing: iframe is primary, shadow is the COEP fallback. ---
+
+function showMatchesUi(
+	matches: MatchSummary[],
+	field: HTMLInputElement,
+	opts?: { otpOnly?: boolean },
+): void {
+	if (matches.length === 0) return;
+	if (uiMode === "shadow") {
+		buildDropdown(matches, field, opts);
+		return;
+	}
+	iframeShow(field, { kind: "matches", matches, otpOnly: opts?.otpOnly === true });
+}
+
+function showLockedUi(field: HTMLInputElement): void {
+	if (uiMode === "shadow") {
+		buildLockedDropdown(field);
+		return;
+	}
+	iframeShow(field, { kind: "locked" });
+}
+
+// Bridge from the iframe: honor only OUR iframe on the extension origin (a
+// page-forged postMessage has a different source/origin and is dropped).
+window.addEventListener("message", (e) => {
+	if (!iframeEl || e.source !== iframeEl.contentWindow || e.origin !== EXT_ORIGIN) return;
+	const msg = e.data as
+		| { type: "AUTOFILL_UI_READY" }
+		| { type: "UI_RESIZE"; height?: number }
+		| { type: "UI_PICK"; entryId?: string; otpOnly?: boolean }
+		| { type: "UI_POPOUT" }
+		| { type: "UI_HIGHLIGHT"; active?: boolean }
+		| undefined;
+	switch (msg?.type) {
+		case "AUTOFILL_UI_READY":
+			iframeReady = true;
+			uiMode = "iframe";
+			if (readinessTimer !== null) {
+				clearTimeout(readinessTimer);
+				readinessTimer = null;
+			}
+			flushPendingRender();
+			break;
+		case "UI_RESIZE":
+			if (iframeEl) {
+				iframeEl.style.height = `${Math.max(0, Math.min(360, Number(msg.height) || 0))}px`;
+			}
+			break;
+		case "UI_PICK":
+			if (typeof msg.entryId === "string" && pickIsTrustworthy()) {
+				selectMatch(msg.entryId, false, !!msg.otpOnly);
+			}
+			break;
+		case "UI_HIGHLIGHT":
+			iframeHasHighlight = !!msg.active;
+			break;
+		case "UI_POPOUT":
+			hideIframe();
+			safeSendMessage({ type: "POPOUT_OPEN" });
+			break;
+	}
+});
+
+/** Arrow/Enter/Escape navigation for the open iframe dropdown; returns true if the key was consumed. */
+function handleDropdownKey(e: KeyboardEvent): boolean {
+	if (uiMode !== "iframe" || !iframeReady || !iframeHostEl) return false;
+	if (iframeHostEl.style.display === "none") return false;
+	if (document.activeElement !== anchorField) return false;
+	const win = iframeEl?.contentWindow;
+	if (!win) return false;
+	if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+		e.preventDefault();
+		win.postMessage({ type: "UI_KEY", key: e.key }, EXT_ORIGIN);
+		return true;
+	}
+	if (e.key === "Escape") {
+		e.preventDefault();
+		silenceAutoOpen = true;
+		hideIframe();
+		return true;
+	}
+	// Enter only picks when a row is highlighted; otherwise the form submits normally.
+	if (e.key === "Enter" && iframeHasHighlight) {
+		e.preventDefault();
+		win.postMessage({ type: "UI_KEY", key: "Enter" }, EXT_ORIGIN);
+		return true;
+	}
+	return false;
+}
+
+function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	removeDropdown();
 	anchorField = field;
 
@@ -474,12 +624,14 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): HTMLElement {
 	root.id = DROPDOWN_ID;
 	// Inline so positioning doesn't depend on the inner stylesheet parsing first.
 	root.style.cssText = "position: absolute; z-index: 2147483647;";
-	root.innerHTML = dropdownStyles() + bodyHtml;
+	// Closed: page gets `root.shadowRoot === null`. Listener attaches to the returned shadow.
+	const shadow = root.attachShadow({ mode: "closed" });
+	shadow.innerHTML = dropdownStyles + bodyHtml;
 
 	dropdownEl = root;
 	document.body.appendChild(dropdownEl);
 	positionDropdown(field);
-	return root;
+	return shadow;
 }
 
 /** Renders the match picker anchored to `field`; no-op when matches are unchanged to avoid flicker. */
@@ -504,19 +656,7 @@ function buildDropdown(
 	}
 
 	const body = html`
-		${matches.map(
-			(m) => html`
-				<div class="tp-item" data-entry-id="${m.id}">
-					<div class="tp-avatar" style="background: ${colorForName(m.name)};">
-						${initials(m.name)}
-					</div>
-					<div class="tp-text">
-						<span class="tp-name">${m.name}</span>
-						<span class="tp-user">${m.secondary}</span>
-					</div>
-				</div>
-			`,
-		)}
+		${matches.map((m) => dropdownItem({ ...m }))}
 	`;
 	const root = mountDropdown(field, body);
 	openMatchesKey = key;
@@ -525,6 +665,8 @@ function buildDropdown(
 	// mousedown (not click) beats the field's blur; otherwise focus leaves first
 	// and the click never reaches us.
 	root.addEventListener("mousedown", (e) => {
+		// Only a real user mousedown may pull a secret (no synthetic events).
+		if (!e.isTrusted) return;
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-entry-id]");
 		if (!item) return;
 		e.preventDefault();
@@ -538,20 +680,13 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 		positionDropdown(field);
 		return;
 	}
-	const body = html`
-		<div class="tp-item tp-locked" data-tp-popout="1">
-			<div class="tp-avatar tp-avatar-locked">🔒</div>
-			<div class="tp-text">
-				<span class="tp-name">Vault locked</span>
-				<span class="tp-user">Click to unlock in a window</span>
-			</div>
-		</div>
-	`;
-	const root = mountDropdown(field, body);
+	const root = mountDropdown(field, dropdownLocked);
 	openDropdownKind = "locked";
 
 	// mousedown beats the field's blur; otherwise the row never gets the click.
 	root.addEventListener("mousedown", (e) => {
+		// Only a genuine user click opens the pop-out.
+		if (!e.isTrusted) return;
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-tp-popout]");
 		if (!item) return;
 		e.preventDefault();
@@ -565,7 +700,7 @@ function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 	// Manual selection counts as an explicit dismissal; silence auto-redisplay
 	// (e.g. a re-query landing mid-fill) until the user re-engages a field.
 	if (!isAuto) silenceAutoOpen = true;
-	removeDropdown();
+	removeActiveUi();
 	safeSendMessage({
 		type: "AUTOFILL_SELECT",
 		payload: { entryId, hostname: location.hostname, isAuto, otpOnly },
@@ -606,22 +741,22 @@ function handleResult(result: QueryResult | undefined): void {
 	if (!focused) return;
 
 	if (result.locked) {
-		buildLockedDropdown(focused);
+		showLockedUi(focused);
 		return;
 	}
 
 	const kind = candidateKind(focused);
 	if (kind === "card") {
-		if (result.cards.length > 0) buildDropdown(result.cards, focused);
+		if (result.cards.length > 0) showMatchesUi(result.cards, focused);
 		return;
 	}
 	if (kind === "otp") {
 		const otps = result.otps ?? [];
-		if (otps.length > 0) buildDropdown(otps, focused, { otpOnly: true });
+		if (otps.length > 0) showMatchesUi(otps, focused, { otpOnly: true });
 		return;
 	}
 	// login
-	if (result.logins.length > 0) buildDropdown(result.logins, focused);
+	if (result.logins.length > 0) showMatchesUi(result.logins, focused);
 }
 
 /** Asks the background what's available for this page, but only if a fillable field exists. */
@@ -722,6 +857,8 @@ document.addEventListener(
 	"keydown",
 	(e) => {
 		if (!e.isTrusted) return;
+		// Drive the open iframe dropdown with the keyboard first.
+		if (handleDropdownKey(e)) return;
 		if (e.key !== "Enter") return;
 		const target = e.target;
 		if (!(target instanceof HTMLInputElement)) return;
@@ -752,6 +889,8 @@ function queryCornerPrompt(): void {
 const CORNER_ID = "titanpass-corner-prompt";
 
 let cornerPromptEl: HTMLElement | null = null;
+// Closed shadow root of the corner prompt; in-card DOM queries go through this.
+let cornerShadow: ShadowRoot | null = null;
 let currentPrompt: CornerPromptPayload | null = null;
 
 function removeCornerPrompt(): void {
@@ -759,249 +898,22 @@ function removeCornerPrompt(): void {
 		cornerPromptEl.remove();
 		cornerPromptEl = null;
 	}
+	cornerShadow = null;
 	currentPrompt = null;
-}
-
-function cornerStyles(): string {
-	return html`
-		<style>
-			#${CORNER_ID} {
-				background: rgba(28, 28, 30, 0.96);
-				-webkit-backdrop-filter: saturate(180%) blur(20px);
-				backdrop-filter: saturate(180%) blur(20px);
-				border: 1px solid rgba(255, 255, 255, 0.08);
-				border-radius: 14px;
-				box-shadow:
-					0 16px 48px rgba(0, 0, 0, 0.5),
-					0 0 0 1px rgba(0, 0, 0, 0.3);
-				font-family:
-					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-				font-size: 13px;
-				color: #fff;
-				padding: 20px;
-				box-sizing: border-box;
-				width: 360px;
-			}
-			#${CORNER_ID} .tp-head {
-				display: flex;
-				align-items: flex-start;
-				justify-content: space-between;
-				gap: 12px;
-				margin-bottom: 18px;
-			}
-			#${CORNER_ID} .tp-title {
-				font-weight: 600;
-				font-size: 16px;
-				line-height: 1.3;
-			}
-			#${CORNER_ID} .tp-host {
-				color: rgba(235, 235, 245, 0.55);
-				font-size: 12px;
-				margin-top: 4px;
-			}
-			#${CORNER_ID} .tp-close {
-				background: transparent;
-				border: 0;
-				color: rgba(235, 235, 245, 0.55);
-				cursor: pointer;
-				font-size: 18px;
-				line-height: 1;
-				padding: 2px 6px;
-				border-radius: 6px;
-			}
-			#${CORNER_ID} .tp-close:hover {
-				background: rgba(255, 255, 255, 0.06);
-				color: #fff;
-			}
-			#${CORNER_ID} .tp-row {
-				display: flex;
-				flex-direction: column;
-				gap: 7px;
-				margin-bottom: 14px;
-			}
-			#${CORNER_ID} .tp-label {
-				font-size: 11px;
-				color: rgba(235, 235, 245, 0.55);
-				text-transform: uppercase;
-				letter-spacing: 0.5px;
-				font-weight: 500;
-			}
-			#${CORNER_ID} input.tp-input {
-				background: rgba(255, 255, 255, 0.06);
-				border: 1px solid rgba(255, 255, 255, 0.1);
-				border-radius: 8px;
-				color: #fff;
-				padding: 10px 12px;
-				font: inherit;
-				font-size: 13px;
-				outline: none;
-				width: 100%;
-				box-sizing: border-box;
-			}
-			#${CORNER_ID} input.tp-input:focus {
-				border-color: rgba(255, 255, 255, 0.4);
-			}
-			#${CORNER_ID} .tp-password-wrap {
-				position: relative;
-			}
-			#${CORNER_ID} .tp-password-toggle {
-				position: absolute;
-				right: 6px;
-				top: 50%;
-				transform: translateY(-50%);
-				background: transparent;
-				border: 0;
-				color: rgba(235, 235, 245, 0.55);
-				cursor: pointer;
-				font-size: 11px;
-				padding: 6px 8px;
-				border-radius: 6px;
-			}
-			#${CORNER_ID} .tp-password-toggle:hover {
-				background: rgba(255, 255, 255, 0.08);
-				color: #fff;
-			}
-			#${CORNER_ID} .tp-candidates {
-				display: flex;
-				flex-direction: column;
-				gap: 8px;
-				margin-bottom: 16px;
-			}
-			#${CORNER_ID} .tp-candidate {
-				display: flex;
-				align-items: center;
-				gap: 12px;
-				padding: 12px 14px;
-				background: rgba(255, 255, 255, 0.04);
-				border: 1px solid rgba(255, 255, 255, 0.08);
-				border-radius: 10px;
-				cursor: pointer;
-			}
-			#${CORNER_ID} .tp-candidate:hover {
-				background: rgba(255, 255, 255, 0.08);
-			}
-			#${CORNER_ID} .tp-candidate input[type="radio"] {
-				accent-color: #fff;
-			}
-			#${CORNER_ID} .tp-candidate .tp-cand-name {
-				font-weight: 600;
-				font-size: 13px;
-			}
-			#${CORNER_ID} .tp-candidate .tp-cand-user {
-				color: rgba(235, 235, 245, 0.55);
-				font-size: 12px;
-				margin-top: 2px;
-			}
-			#${CORNER_ID} .tp-actions {
-				display: flex;
-				gap: 10px;
-				align-items: center;
-				margin-top: 18px;
-				position: relative;
-			}
-			#${CORNER_ID} button.tp-btn {
-				background: transparent;
-				color: #fff;
-				border: 1px solid rgba(255, 255, 255, 0.14);
-				border-radius: 8px;
-				padding: 10px 16px;
-				font: inherit;
-				font-size: 13px;
-				font-weight: 500;
-				cursor: pointer;
-				transition:
-					background 0.1s ease,
-					border-color 0.1s ease;
-			}
-			#${CORNER_ID} .tp-btn:hover {
-				background: rgba(255, 255, 255, 0.06);
-				border-color: rgba(255, 255, 255, 0.24);
-			}
-			#${CORNER_ID} button.tp-btn-primary {
-				background: #fafafa;
-				color: #18181b;
-				border: 1px solid rgba(255, 255, 255, 0.2);
-			}
-			#${CORNER_ID} button.tp-btn-primary:hover {
-				background: #e4e4e7;
-				border-color: rgba(255, 255, 255, 0.3);
-			}
-			#${CORNER_ID} .tp-overflow {
-				margin-left: auto;
-				background: transparent;
-				border: 1px solid transparent;
-				color: rgba(235, 235, 245, 0.55);
-				cursor: pointer;
-				font-size: 18px;
-				padding: 6px 10px;
-				border-radius: 8px;
-				line-height: 1;
-			}
-			#${CORNER_ID} .tp-overflow:hover {
-				background: rgba(255, 255, 255, 0.06);
-				border-color: rgba(255, 255, 255, 0.14);
-				color: #fff;
-			}
-			#${CORNER_ID} .tp-menu {
-				position: absolute;
-				right: 0;
-				bottom: 52px;
-				background: rgba(40, 40, 44, 0.98);
-				border: 1px solid rgba(255, 255, 255, 0.1);
-				border-radius: 10px;
-				padding: 6px;
-				box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-				z-index: 1;
-				min-width: 160px;
-			}
-			#${CORNER_ID} .tp-menu button {
-				background: transparent;
-				color: #fff;
-				border: 0;
-				padding: 9px 12px;
-				font: inherit;
-				font-size: 13px;
-				cursor: pointer;
-				border-radius: 6px;
-				width: 100%;
-				text-align: left;
-			}
-			#${CORNER_ID} .tp-menu button:hover {
-				background: rgba(255, 255, 255, 0.08);
-			}
-		</style>
-	`;
 }
 
 /** Renders the "Save New Login" card body. */
 function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login" }>): string {
 	const primaryLabel = p.locked ? "Unlock & Save" : "Save";
 	const primaryAction = p.locked ? "save-unlock-first" : "save";
-	return html`
-		<div class="tp-head">
-			<div>
-				<div class="tp-title">Save New Login</div>
-				<div class="tp-host">${p.hostname}</div>
-			</div>
-			<button class="tp-close" data-tp-action="dismiss" aria-label="Dismiss">×</button>
-		</div>
-		<div class="tp-row">
-			<div class="tp-label">Username</div>
-			<input class="tp-input" id="tp-username" type="text" value="${p.username}" autocomplete="off" />
-		</div>
-		<div class="tp-row">
-			<div class="tp-label">Password</div>
-			<div class="tp-password-wrap">
-				<input class="tp-input" id="tp-password" type="password" value="${p.password}" autocomplete="off" readonly />
-				<button class="tp-password-toggle" data-tp-action="toggle-password">Show</button>
-			</div>
-		</div>
-		<div class="tp-actions">
-			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
-			<button class="tp-btn" data-tp-action="dismiss">Not now</button>
-			<button class="tp-overflow" data-tp-action="toggle-menu" aria-label="More">⋯</button>
-		</div>
-	`;
+	const { username, password, hostname } = p;
+	return saveLoginBody({
+		username,
+		password,
+		hostname,
+		primaryAction,
+		primaryLabel,
+	});
 }
 
 /** Renders the "Update login" card body; "Save as new" keeps existing entries instead of rotating. */
@@ -1010,45 +922,13 @@ function buildUpdateLoginBody(p: Extract<CornerPromptPayload, { kind: "update-lo
 	const primaryAction = p.locked ? "save-unlock-first" : "update";
 	// >1 candidate: ask which entry to update; exactly 1: confirm the rotation.
 	const title = p.candidates.length > 1 ? "Update an existing login?" : "Update saved login?";
-	const candidatesBody =
-		p.candidates.length > 1
-			? html`
-					<div class="tp-candidates">
-						${p.candidates.map(
-							(c, i) => html`
-								<label class="tp-candidate">
-									<input type="radio" name="tp-update-target" value="${c.id}" ${i === 0 ? "checked" : ""} />
-									<div>
-										<div class="tp-cand-name">${c.name}</div>
-										<div class="tp-cand-user">${c.username}</div>
-									</div>
-								</label>
-							`,
-						)}
-					</div>
-				`
-			: html`
-					<div class="tp-row">
-						<div class="tp-label">Account</div>
-						<div>${p.candidates[0]?.name ?? ""} <span style="color: rgba(235,235,245,0.55)">(${p.candidates[0]?.username ?? ""})</span></div>
-						<input type="hidden" name="tp-update-target" value="${p.candidates[0]?.id ?? ""}" />
-					</div>
-				`;
-	return html`
-		<div class="tp-head">
-			<div>
-				<div class="tp-title">${title}</div>
-				<div class="tp-host">${p.hostname}</div>
-			</div>
-			<button class="tp-close" data-tp-action="dismiss" aria-label="Dismiss">×</button>
-		</div>
-		${candidatesBody}
-		<div class="tp-actions">
-			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
-			<button class="tp-btn" data-tp-action="save-new" title="Save as a separate login instead of updating">Save as new</button>
-			<button class="tp-overflow" data-tp-action="toggle-menu" aria-label="More">⋯</button>
-		</div>
-	`;
+	return updateLoginBody({
+		title,
+		hostname: p.hostname,
+		primaryAction,
+		primaryLabel,
+		candidates: p.candidates,
+	});
 }
 
 function sendCornerResponse(action: string, extra?: Record<string, unknown>): void {
@@ -1060,7 +940,7 @@ function sendCornerResponse(action: string, extra?: Record<string, unknown>): vo
 }
 
 function closeOverflowMenu(): void {
-	cornerPromptEl?.querySelector(".tp-menu")?.remove();
+	cornerShadow?.querySelector(".tp-menu")?.remove();
 }
 
 /** Delegated click handler for all action buttons inside the corner-prompt card. */
@@ -1072,19 +952,19 @@ function handleCornerCardClick(e: Event): void {
 	if (!actionEl || actionEl.dataset.tpAction !== "toggle-menu") {
 		if (!target.closest(".tp-menu")) closeOverflowMenu();
 	}
-	if (!actionEl || !cornerPromptEl?.contains(actionEl)) return;
+	if (!actionEl || !cornerShadow?.contains(actionEl)) return;
 	const action = actionEl.dataset.tpAction;
 	if (!action || !currentPrompt) return;
 
 	if (action === "toggle-password") {
-		const pw = cornerPromptEl.querySelector<HTMLInputElement>("#tp-password");
+		const pw = cornerShadow.querySelector<HTMLInputElement>("#tp-password");
 		if (!pw) return;
 		pw.type = pw.type === "password" ? "text" : "password";
 		actionEl.textContent = pw.type === "password" ? "Show" : "Hide";
 		return;
 	}
 	if (action === "toggle-menu") {
-		const existing = cornerPromptEl.querySelector(".tp-menu");
+		const existing = cornerShadow.querySelector(".tp-menu");
 		if (existing) {
 			existing.remove();
 			return;
@@ -1092,13 +972,13 @@ function handleCornerCardClick(e: Event): void {
 		const menu = document.createElement("div");
 		menu.className = "tp-menu";
 		menu.innerHTML = html`<button data-tp-action="never">Never for this site</button>`;
-		const actions = cornerPromptEl.querySelector(".tp-actions");
-		(actions ?? cornerPromptEl).appendChild(menu);
+		const actions = cornerShadow.querySelector(".tp-actions");
+		(actions ?? cornerShadow).appendChild(menu);
 		return;
 	}
 
 	if (action === "save") {
-		const usernameInput = cornerPromptEl.querySelector<HTMLInputElement>("#tp-username");
+		const usernameInput = cornerShadow.querySelector<HTMLInputElement>("#tp-username");
 		const edited = usernameInput?.value;
 		sendCornerResponse("save", { editedUsername: edited });
 		removeCornerPrompt();
@@ -1113,8 +993,8 @@ function handleCornerCardClick(e: Event): void {
 	}
 	if (action === "update") {
 		const radio =
-			cornerPromptEl.querySelector<HTMLInputElement>('input[name="tp-update-target"]:checked') ??
-			cornerPromptEl.querySelector<HTMLInputElement>('input[name="tp-update-target"]');
+			cornerShadow.querySelector<HTMLInputElement>('input[name="tp-update-target"]:checked') ??
+			cornerShadow.querySelector<HTMLInputElement>('input[name="tp-update-target"]');
 		const chosenEntryId = radio?.value;
 		if (!chosenEntryId) return;
 		sendCornerResponse("update", { chosenEntryId });
@@ -1124,7 +1004,7 @@ function handleCornerCardClick(e: Event): void {
 	if (action === "save-unlock-first") {
 		// Pass chosenEntryId if picked: the locked-flow commit re-runs dedupe but
 		// honors an explicit choice when present.
-		const radio = cornerPromptEl.querySelector<HTMLInputElement>(
+		const radio = cornerShadow.querySelector<HTMLInputElement>(
 			'input[name="tp-update-target"]:checked',
 		);
 		sendCornerResponse("save-unlock-first", radio ? { chosenEntryId: radio.value } : undefined);
@@ -1165,12 +1045,15 @@ function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	root.id = CORNER_ID;
 	// Inline so we don't depend on the inner stylesheet loading first.
 	root.style.cssText = "position: fixed; top: 16px; right: 16px; z-index: 2147483647;";
+	// Closed shadow root: keeps the captured credential out of page-readable DOM.
+	const shadow = root.attachShadow({ mode: "closed" });
 	const body =
 		payload.kind === "save-login" ? buildSaveLoginBody(payload) : buildUpdateLoginBody(payload);
-	root.innerHTML = cornerStyles() + body;
-	root.addEventListener("click", handleCornerCardClick, true);
+	shadow.innerHTML = cornerStyles + body;
+	shadow.addEventListener("click", handleCornerCardClick, true);
 
 	cornerPromptEl = root;
+	cornerShadow = shadow;
 	document.body.appendChild(root);
 }
 
@@ -1254,11 +1137,11 @@ function showFor(field: HTMLInputElement): void {
 		return;
 	}
 	if (cachedResult.locked) {
-		buildLockedDropdown(field);
+		showLockedUi(field);
 		return;
 	}
 	if (candidateKind(field) === "card") {
-		if (cachedResult.cards.length > 0) buildDropdown(cachedResult.cards, field);
+		if (cachedResult.cards.length > 0) showMatchesUi(cachedResult.cards, field);
 		else queryAutofill();
 		return;
 	}
@@ -1269,7 +1152,7 @@ function showFor(field: HTMLInputElement): void {
 		} else if (otps.length > 1 || !field.value) {
 			// A single match auto-fills on load; only re-offer the picker on a
 			// choice or an empty field.
-			buildDropdown(otps, field, { otpOnly: true });
+			showMatchesUi(otps, field, { otpOnly: true });
 		}
 		return;
 	}
@@ -1278,7 +1161,7 @@ function showFor(field: HTMLInputElement): void {
 		return;
 	}
 	if (cachedResult.logins.length > 1 || !field.value) {
-		buildDropdown(cachedResult.logins, field);
+		showMatchesUi(cachedResult.logins, field);
 	}
 }
 
@@ -1342,17 +1225,19 @@ function bootstrap(): void {
 	document.addEventListener(
 		"mousedown",
 		(e) => {
-			if (dropdownEl) {
+			const host = activeHost();
+			if (host) {
 				const target = e.target;
 				if (target instanceof Node) {
-					if (dropdownEl.contains(target)) return;
+					// Clicks inside a cross-origin iframe never reach here.
+					if (host.contains(target)) return;
 					if (clickIsOnAnchor(target)) return;
 				}
 				silenceAutoOpen = true;
-				removeDropdown();
+				removeActiveUi();
 				return;
 			}
-			// Dropdown closed: a mousedown on a candidate field is re-engagement.
+			// Picker closed: a mousedown on a candidate field is re-engagement.
 			const target = e.target;
 			if (isAutofillCandidate(target)) {
 				silenceAutoOpen = false;
@@ -1362,24 +1247,8 @@ function bootstrap(): void {
 		},
 		true,
 	);
-	window.addEventListener(
-		"scroll",
-		() => {
-			if (dropdownEl && anchorField) {
-				positionDropdown(anchorField);
-			}
-		},
-		true,
-	);
-	window.addEventListener(
-		"resize",
-		() => {
-			if (dropdownEl && anchorField) {
-				positionDropdown(anchorField);
-			}
-		},
-		true,
-	);
+	window.addEventListener("scroll", () => repositionActive(), true);
+	window.addEventListener("resize", () => repositionActive(), true);
 }
 
 if (document.readyState === "loading") {

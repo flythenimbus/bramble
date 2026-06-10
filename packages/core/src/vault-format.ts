@@ -1,4 +1,6 @@
-// VLT1 v2 multi-key vault blob format.
+// VLT1 v2 multi-key vault blob format. See docs/vault-format.md.
+
+import { z } from "zod";
 
 export const MAGIC = new Uint8Array([0x56, 0x4c, 0x54, 0x31]);
 export const VERSION = 0x02;
@@ -20,61 +22,92 @@ export const SLOT_KIND_RECOVERY = 0x03;
 
 const HEADER_FIXED_LEN = MAGIC.length + 1 + 1; // magic + version + slotCount
 const TLV_PREFIX_LEN = 1 + 2; // kind + len
+const PASSWORD_PAYLOAD_LEN = LEN_SLOT_ID + LEN_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK;
+const WEBAUTHN_FIXED_LEN =
+	LEN_SLOT_ID + 2 + LEN_HMAC_SECRET_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK;
+
+const KNOWN_KINDS = [SLOT_KIND_PASSWORD, SLOT_KIND_WEBAUTHN, SLOT_KIND_RECOVERY];
+
+/** Any Uint8Array, kept loose (Uint8Array<ArrayBufferLike>) to match the in-memory struct types. */
+const u8 = z.custom<Uint8Array>((v) => v instanceof Uint8Array, "expected Uint8Array");
+
+/** A fixed-length byte field; the label rides the error so callers can see which field failed. */
+const bytes = (n: number, label: string) =>
+	u8.refine((u) => u.length === n, { message: `${label} must be ${n} bytes` });
 
 /** Master-password slot: KEK is an Argon2id derivation of the password. */
-export interface PasswordSlot {
-	kind: typeof SLOT_KIND_PASSWORD;
-	slotId: Uint8Array; // 16 bytes
-	salt: Uint8Array; // 16 bytes (Argon2id salt)
-	verifier: Uint8Array; // 32 bytes (HMAC-SHA256(KEK, magic||version||slotId))
-	wrapIv: Uint8Array; // 12 bytes
-	wrappedVek: Uint8Array; // 48 bytes (32-byte VEK + GCM tag)
-}
+export const PasswordSlotSchema = z.object({
+	kind: z.literal(SLOT_KIND_PASSWORD),
+	slotId: bytes(LEN_SLOT_ID, "slotId"),
+	salt: bytes(LEN_SALT, "salt"),
+	verifier: bytes(LEN_VERIFIER, "verifier"),
+	wrapIv: bytes(LEN_WRAP_IV, "wrapIv"),
+	wrappedVek: bytes(LEN_WRAPPED_VEK, "wrappedVek"),
+});
+export type PasswordSlot = z.infer<typeof PasswordSlotSchema>;
 
-/** FIDO2 slot: KEK is HKDF over the authenticator's `hmac-secret`. */
-export interface WebauthnSlot {
-	kind: typeof SLOT_KIND_WEBAUTHN;
-	slotId: Uint8Array; // 16 bytes
-	credentialId: Uint8Array; // variable; drives allowCredentials, not secret
-	salt: Uint8Array; // 32 bytes (hmac-secret salt)
-	verifier: Uint8Array; // 32 bytes
-	wrapIv: Uint8Array; // 12 bytes
-	wrappedVek: Uint8Array; // 48 bytes
-}
+/** FIDO2 slot: KEK is HKDF over the authenticator's `hmac-secret`. credentialId is variable. */
+export const WebauthnSlotSchema = z.object({
+	kind: z.literal(SLOT_KIND_WEBAUTHN),
+	slotId: bytes(LEN_SLOT_ID, "slotId"),
+	credentialId: u8.refine((u) => u.length >= 1 && u.length <= 0xffff, {
+		message: "credentialId must be 1..65535 bytes",
+	}),
+	salt: bytes(LEN_HMAC_SECRET_SALT, "salt"),
+	verifier: bytes(LEN_VERIFIER, "verifier"),
+	wrapIv: bytes(LEN_WRAP_IV, "wrapIv"),
+	wrappedVek: bytes(LEN_WRAPPED_VEK, "wrappedVek"),
+});
+export type WebauthnSlot = z.infer<typeof WebauthnSlotSchema>;
 
-/** Offline recovery code. Byte-identical to PasswordSlot; only the kind differs. */
-export interface RecoverySlot {
-	kind: typeof SLOT_KIND_RECOVERY;
-	slotId: Uint8Array; // 16 bytes
-	salt: Uint8Array; // 16 bytes (Argon2id salt)
-	verifier: Uint8Array; // 32 bytes
-	wrapIv: Uint8Array; // 12 bytes
-	wrappedVek: Uint8Array; // 48 bytes
-}
+/** Offline recovery code. Byte-identical to a password slot; only the kind differs. */
+export const RecoverySlotSchema = z.object({
+	kind: z.literal(SLOT_KIND_RECOVERY),
+	slotId: bytes(LEN_SLOT_ID, "slotId"),
+	salt: bytes(LEN_SALT, "salt"),
+	verifier: bytes(LEN_VERIFIER, "verifier"),
+	wrapIv: bytes(LEN_WRAP_IV, "wrapIv"),
+	wrappedVek: bytes(LEN_WRAPPED_VEK, "wrappedVek"),
+});
+export type RecoverySlot = z.infer<typeof RecoverySlotSchema>;
 
-/** Unknown slot kind, preserved verbatim for round-trip. */
-export interface OpaqueSlot {
-	kind: number;
-	payload: Uint8Array;
-}
+/** Unknown slot kind, preserved verbatim for round-trip. The kind must not collide with a known one. */
+export const OpaqueSlotSchema = z.object({
+	kind: z
+		.number()
+		.refine((k) => !KNOWN_KINDS.includes(k), { message: "opaque slot kind is reserved" }),
+	payload: u8,
+});
+export type OpaqueSlot = z.infer<typeof OpaqueSlotSchema>;
 
-export type Slot = PasswordSlot | WebauthnSlot | RecoverySlot | OpaqueSlot;
+export const SlotSchema = z.union([
+	PasswordSlotSchema,
+	WebauthnSlotSchema,
+	RecoverySlotSchema,
+	OpaqueSlotSchema,
+]);
+export type Slot = z.infer<typeof SlotSchema>;
 
 /** One entry's ciphertext plus its wrapped per-entry DEK. */
-export interface EncryptedEntry {
-	id: string;
-	wrappedDek: string;
-	dekIv: string;
-	ciphertext: string;
-	iv: string;
-}
+export const EncryptedEntrySchema = z.object({
+	id: z.string(),
+	wrappedDek: z.string(),
+	dekIv: z.string(),
+	ciphertext: z.string(),
+	iv: z.string(),
+});
+export type EncryptedEntry = z.infer<typeof EncryptedEntrySchema>;
 
 /** Decoded vault: unlock slots plus the encrypted entries blob. */
-export interface VaultBlob {
-	slots: Slot[];
-	entriesIv: Uint8Array;
-	entriesCiphertext: Uint8Array;
-}
+export const VaultBlobSchema = z.object({
+	slots: z
+		.array(SlotSchema)
+		.min(1, { message: "vault must have at least one slot" })
+		.max(MAX_SLOTS, { message: `vault has more slots than the max of ${MAX_SLOTS}` }),
+	entriesIv: bytes(LEN_IV, "entriesIv"),
+	entriesCiphertext: u8,
+});
+export type VaultBlob = z.infer<typeof VaultBlobSchema>;
 
 /** Magic+version bytes that bind a verifier to this format version. */
 export function verifierPrefix(): Uint8Array {
@@ -84,24 +117,7 @@ export function verifierPrefix(): Uint8Array {
 	return out;
 }
 
-const PASSWORD_PAYLOAD_LEN = LEN_SLOT_ID + LEN_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK;
-
-function encodePasswordPayload(slot: PasswordSlot): Uint8Array {
-	if (slot.slotId.length !== LEN_SLOT_ID) {
-		throw new Error(`slotId must be ${LEN_SLOT_ID} bytes, got ${slot.slotId.length}`);
-	}
-	if (slot.salt.length !== LEN_SALT) {
-		throw new Error(`salt must be ${LEN_SALT} bytes, got ${slot.salt.length}`);
-	}
-	if (slot.verifier.length !== LEN_VERIFIER) {
-		throw new Error(`verifier must be ${LEN_VERIFIER} bytes, got ${slot.verifier.length}`);
-	}
-	if (slot.wrapIv.length !== LEN_WRAP_IV) {
-		throw new Error(`wrapIv must be ${LEN_WRAP_IV} bytes, got ${slot.wrapIv.length}`);
-	}
-	if (slot.wrappedVek.length !== LEN_WRAPPED_VEK) {
-		throw new Error(`wrappedVek must be ${LEN_WRAPPED_VEK} bytes, got ${slot.wrappedVek.length}`);
-	}
+function encodePasswordPayload(slot: PasswordSlot | RecoverySlot): Uint8Array {
 	const out = new Uint8Array(PASSWORD_PAYLOAD_LEN);
 	let off = 0;
 	out.set(slot.slotId, off);
@@ -116,56 +132,7 @@ function encodePasswordPayload(slot: PasswordSlot): Uint8Array {
 	return out;
 }
 
-function decodePasswordPayload(payload: Uint8Array): PasswordSlot {
-	if (payload.length !== PASSWORD_PAYLOAD_LEN) {
-		throw new Error(
-			`password slot payload must be ${PASSWORD_PAYLOAD_LEN} bytes, got ${payload.length}`,
-		);
-	}
-	let off = 0;
-	const slotId = payload.slice(off, off + LEN_SLOT_ID);
-	off += LEN_SLOT_ID;
-	const salt = payload.slice(off, off + LEN_SALT);
-	off += LEN_SALT;
-	const verifier = payload.slice(off, off + LEN_VERIFIER);
-	off += LEN_VERIFIER;
-	const wrapIv = payload.slice(off, off + LEN_WRAP_IV);
-	off += LEN_WRAP_IV;
-	const wrappedVek = payload.slice(off, off + LEN_WRAPPED_VEK);
-	return {
-		kind: SLOT_KIND_PASSWORD,
-		slotId,
-		salt,
-		verifier,
-		wrapIv,
-		wrappedVek,
-	};
-}
-
-const WEBAUTHN_FIXED_LEN =
-	LEN_SLOT_ID + 2 + LEN_HMAC_SECRET_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK;
-
 function encodeWebauthnPayload(slot: WebauthnSlot): Uint8Array {
-	if (slot.slotId.length !== LEN_SLOT_ID) {
-		throw new Error(`slotId must be ${LEN_SLOT_ID} bytes, got ${slot.slotId.length}`);
-	}
-	if (slot.credentialId.length === 0 || slot.credentialId.length > 0xffff) {
-		throw new Error(
-			`credentialId length out of range: ${slot.credentialId.length} (need 1..65535)`,
-		);
-	}
-	if (slot.salt.length !== LEN_HMAC_SECRET_SALT) {
-		throw new Error(`salt must be ${LEN_HMAC_SECRET_SALT} bytes, got ${slot.salt.length}`);
-	}
-	if (slot.verifier.length !== LEN_VERIFIER) {
-		throw new Error(`verifier must be ${LEN_VERIFIER} bytes, got ${slot.verifier.length}`);
-	}
-	if (slot.wrapIv.length !== LEN_WRAP_IV) {
-		throw new Error(`wrapIv must be ${LEN_WRAP_IV} bytes, got ${slot.wrapIv.length}`);
-	}
-	if (slot.wrappedVek.length !== LEN_WRAPPED_VEK) {
-		throw new Error(`wrappedVek must be ${LEN_WRAPPED_VEK} bytes, got ${slot.wrappedVek.length}`);
-	}
 	const out = new Uint8Array(WEBAUTHN_FIXED_LEN + slot.credentialId.length);
 	let off = 0;
 	out.set(slot.slotId, off);
@@ -184,18 +151,38 @@ function encodeWebauthnPayload(slot: WebauthnSlot): Uint8Array {
 	return out;
 }
 
-function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
-	if (payload.length < WEBAUTHN_FIXED_LEN + 1) {
-		throw new Error(
-			`webauthn slot payload too short: ${payload.length} (need at least ${WEBAUTHN_FIXED_LEN + 1})`,
-		);
-	}
+// OpaqueSlot.kind is `number`, so the union doesn't discriminate at the type
+// level; cast after the runtime kind check.
+function encodeSlotPayload(slot: Slot): Uint8Array {
+	if (slot.kind === SLOT_KIND_PASSWORD) return encodePasswordPayload(slot as PasswordSlot);
+	if (slot.kind === SLOT_KIND_WEBAUTHN) return encodeWebauthnPayload(slot as WebauthnSlot);
+	if (slot.kind === SLOT_KIND_RECOVERY) return encodePasswordPayload(slot as RecoverySlot);
+	return (slot as OpaqueSlot).payload;
+}
+
+/** Slice the five fixed-length fields shared by password and recovery slots. */
+function slicePasswordFields(payload: Uint8Array) {
 	let off = 0;
 	const slotId = payload.slice(off, off + LEN_SLOT_ID);
 	off += LEN_SLOT_ID;
+	const salt = payload.slice(off, off + LEN_SALT);
+	off += LEN_SALT;
+	const verifier = payload.slice(off, off + LEN_VERIFIER);
+	off += LEN_VERIFIER;
+	const wrapIv = payload.slice(off, off + LEN_WRAP_IV);
+	off += LEN_WRAP_IV;
+	const wrappedVek = payload.slice(off, off + LEN_WRAPPED_VEK);
+	return { slotId, salt, verifier, wrapIv, wrappedVek };
+}
+
+function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
+	if (payload.length < WEBAUTHN_FIXED_LEN + 1) {
+		throw new Error(`webauthn slot payload too short: ${payload.length}`);
+	}
+	let off = LEN_SLOT_ID;
+	const slotId = payload.slice(0, off);
 	const credIdLen = ((payload[off]! << 8) | payload[off + 1]!) & 0xffff;
 	off += 2;
-	if (credIdLen === 0) throw new Error("webauthn credentialId length is zero");
 	if (
 		off + credIdLen + LEN_HMAC_SECRET_SALT + LEN_VERIFIER + LEN_WRAP_IV + LEN_WRAPPED_VEK !==
 		payload.length
@@ -211,7 +198,7 @@ function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
 	const wrapIv = payload.slice(off, off + LEN_WRAP_IV);
 	off += LEN_WRAP_IV;
 	const wrappedVek = payload.slice(off, off + LEN_WRAPPED_VEK);
-	return {
+	return WebauthnSlotSchema.parse({
 		kind: SLOT_KIND_WEBAUTHN,
 		slotId,
 		credentialId,
@@ -219,57 +206,27 @@ function decodeWebauthnPayload(payload: Uint8Array): WebauthnSlot {
 		verifier,
 		wrapIv,
 		wrappedVek,
-	};
-}
-
-function encodeRecoveryPayload(slot: RecoverySlot): Uint8Array {
-	return encodePasswordPayload({ ...slot, kind: SLOT_KIND_PASSWORD });
-}
-
-function decodeRecoveryPayload(payload: Uint8Array): RecoverySlot {
-	return { ...decodePasswordPayload(payload), kind: SLOT_KIND_RECOVERY };
-}
-
-function encodeSlotPayload(slot: Slot): Uint8Array {
-	if (slot.kind === SLOT_KIND_PASSWORD) {
-		return encodePasswordPayload(slot as PasswordSlot);
-	}
-	if (slot.kind === SLOT_KIND_WEBAUTHN) {
-		return encodeWebauthnPayload(slot as WebauthnSlot);
-	}
-	if (slot.kind === SLOT_KIND_RECOVERY) {
-		return encodeRecoveryPayload(slot as RecoverySlot);
-	}
-	return (slot as OpaqueSlot).payload;
+	});
 }
 
 function decodeSlotPayload(kind: number, payload: Uint8Array): Slot {
 	if (kind === SLOT_KIND_PASSWORD) {
-		return decodePasswordPayload(payload);
+		return PasswordSlotSchema.parse({ kind, ...slicePasswordFields(payload) });
 	}
 	if (kind === SLOT_KIND_WEBAUTHN) {
 		return decodeWebauthnPayload(payload);
 	}
 	if (kind === SLOT_KIND_RECOVERY) {
-		return decodeRecoveryPayload(payload);
+		return RecoverySlotSchema.parse({ kind, ...slicePasswordFields(payload) });
 	}
-	// preserve unknown slot kinds verbatim for round-trip
 	return { kind, payload };
 }
 
 /** Serialize a vault to the VLT1 v2 byte layout. */
 export function encodeVaultBlob(blob: VaultBlob): Uint8Array {
-	if (blob.slots.length === 0) {
-		throw new Error("vault must have at least one slot");
-	}
-	if (blob.slots.length > MAX_SLOTS) {
-		throw new Error(`vault has ${blob.slots.length} slots (max ${MAX_SLOTS})`);
-	}
-	if (blob.entriesIv.length !== LEN_IV) {
-		throw new Error(`entriesIv must be ${LEN_IV} bytes, got ${blob.entriesIv.length}`);
-	}
+	const v = VaultBlobSchema.parse(blob);
 
-	const slotPayloads = blob.slots.map(encodeSlotPayload);
+	const slotPayloads = v.slots.map(encodeSlotPayload);
 	let totalSlotsLen = 0;
 	for (const payload of slotPayloads) {
 		if (payload.length > 0xffff) {
@@ -279,15 +236,15 @@ export function encodeVaultBlob(blob: VaultBlob): Uint8Array {
 	}
 
 	const out = new Uint8Array(
-		HEADER_FIXED_LEN + totalSlotsLen + LEN_IV + blob.entriesCiphertext.length,
+		HEADER_FIXED_LEN + totalSlotsLen + LEN_IV + v.entriesCiphertext.length,
 	);
 	let off = 0;
 	out.set(MAGIC, off);
 	off += MAGIC.length;
 	out[off++] = VERSION;
-	out[off++] = blob.slots.length;
-	for (let i = 0; i < blob.slots.length; i++) {
-		const slot = blob.slots[i]!;
+	out[off++] = v.slots.length;
+	for (let i = 0; i < v.slots.length; i++) {
+		const slot = v.slots[i]!;
 		const payload = slotPayloads[i]!;
 		out[off++] = slot.kind;
 		out[off++] = (payload.length >> 8) & 0xff;
@@ -295,13 +252,13 @@ export function encodeVaultBlob(blob: VaultBlob): Uint8Array {
 		out.set(payload, off);
 		off += payload.length;
 	}
-	out.set(blob.entriesIv, off);
+	out.set(v.entriesIv, off);
 	off += LEN_IV;
-	out.set(blob.entriesCiphertext, off);
+	out.set(v.entriesCiphertext, off);
 	return out;
 }
 
-/** Parse a VLT1 v2 blob, preserving unknown slot kinds. */
+/** Parse a VLT1 v2 blob, preserving unknown slot kinds. Bounds checks guard the untrusted byte stream. */
 export function decodeVaultBlob(bytes: Uint8Array): VaultBlob {
 	if (bytes.length < HEADER_FIXED_LEN) {
 		throw new Error(

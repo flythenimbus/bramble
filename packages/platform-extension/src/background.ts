@@ -288,7 +288,7 @@ function queryResult(
 				});
 			}
 		} else if (hasCard) {
-			// Cards are not hostname-scoped: every card is offered on a payment form.
+			// Cards are not hostname-scoped: offered on any payment form (see docs/autofill.md).
 			cards.push({ id: entry.id, name: entry.name, secondary: cardSecondary(entry) });
 		}
 	}
@@ -323,6 +323,32 @@ function fetchFill(entryId: string): FillPayload {
 		cvv: entry.cvv,
 		customFields: entry.customFields,
 	};
+}
+
+// Extension pages send the extension origin; content scripts send the page origin.
+const EXTENSION_ORIGIN = new URL(chrome.runtime.getURL("")).origin;
+
+/** Verified page hostname for a content-script sender, or "" when none can be derived. */
+function senderHostname(sender: chrome.runtime.MessageSender): string {
+	try {
+		const src = sender.origin ?? sender.url ?? sender.tab?.url ?? "";
+		if (src) return new URL(src).hostname;
+	} catch {}
+	return "";
+}
+
+/** True only for senders on the extension origin (popup/options/offscreen), not a content script. */
+function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
+	const src = sender.origin ?? sender.url ?? "";
+	return src === EXTENSION_ORIGIN || src.startsWith(`${EXTENSION_ORIGIN}/`);
+}
+
+/** A login may be filled only on a page its hostname matches; cards are site-agnostic. See docs/autofill.md. */
+function authorizeFill(entryId: string, pageHostname: string): void {
+	const entry = autofillIndex?.get(entryId);
+	if (entry?.type === "login" && !hostnameMatches(entry, pageHostname)) {
+		throw new Error("entry is not offered on this origin");
+	}
 }
 
 async function getOfferToSavePref(): Promise<boolean> {
@@ -818,6 +844,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FIND") {
 		void (async () => {
 			await hydrationPromise;
+			// Adapter path trusts the body's hostname; restrict to extension pages.
+			if (!isExtensionSender(_sender)) {
+				sendResponse({ ok: false, error: "forbidden" });
+				return;
+			}
 			await hydrateAutofillIndexFromDisk();
 			const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
 				hostname: string;
@@ -836,6 +867,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (type === "AUTOFILL_FETCH") {
 		void (async () => {
 			await hydrationPromise;
+			// Unscoped secret fetch by id: extension pages only (see AUTOFILL_FIND).
+			if (!isExtensionSender(_sender)) {
+				sendResponse({ ok: false, error: "forbidden" });
+				return;
+			}
 			await hydrateAutofillIndexFromDisk();
 			try {
 				const { entryId } = message.payload as { entryId: string };
@@ -889,6 +925,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					isAuto?: boolean;
 					otpOnly?: boolean;
 				};
+				// Re-check the login against the verified page origin.
+				authorizeFill(entryId, senderHostname(_sender));
 				const fill = fetchFill(entryId);
 				await scheduleAutoLock();
 				if (_sender.tab?.id) {
