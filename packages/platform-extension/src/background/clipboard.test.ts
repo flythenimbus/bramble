@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadBackground } from "./test-harness";
+import { loadBackground } from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();

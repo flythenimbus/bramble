@@ -234,7 +234,7 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 	vi.resetModules();
 	const { chrome, state } = makeChrome(opts);
 	vi.stubGlobal("chrome", chrome);
-	await import("./background");
+	await import("../background/background");
 
 	const send = (message: AnyMsg, sender: any = {}) =>
 		new Promise<{ handled: boolean; resp: any }>((resolve) => {

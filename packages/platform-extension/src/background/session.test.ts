@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { extensionSender, loadBackground, pageSender } from "./test-harness";
+import { extensionSender, loadBackground, pageSender } from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
