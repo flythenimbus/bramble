@@ -1,0 +1,65 @@
+/// <reference types="chrome" />
+
+import { type MessageEnvelope, on } from "./router";
+
+// In-memory only: a draft can hold a plaintext password, never persist to local.
+export const POPOUT_HANDOFF_KEY = "popout.handoff";
+
+async function popoutOpen(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	// Stash the handoff before creating the window so the new window's boot read sees it.
+	const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
+	if (handoff) {
+		await chrome.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
+	} else {
+		await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
+	}
+	const WIDTH = 500;
+	const HEIGHT = 600;
+	const CHROME_INSET = 80;
+	// Prefer the sender's window so the pop-out lands next to the active tab.
+	let anchor: chrome.windows.Window | undefined;
+	if (sender.tab?.windowId !== undefined) {
+		anchor = await chrome.windows.get(sender.tab.windowId).catch(() => undefined);
+	}
+	if (!anchor) {
+		anchor = await chrome.windows.getCurrent().catch(() => undefined);
+	}
+	const top = (anchor?.top ?? 0) + CHROME_INSET;
+	const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
+	const created = await chrome.windows.create({
+		url: chrome.runtime.getURL("popup.html?detached=1"),
+		type: "popup",
+		focused: true,
+		width: WIDTH,
+		height: HEIGHT,
+		top,
+		left,
+	});
+	if (created?.id !== undefined) {
+		await chrome.windows.update(created.id, {
+			state: "normal",
+			width: WIDTH,
+			height: HEIGHT,
+			top,
+			left,
+		});
+	}
+	return { ok: true };
+}
+
+async function popoutConsumeHandoff(): Promise<MessageEnvelope> {
+	// Read-and-delete one-shot: reloading the window must not re-seed a stale draft.
+	let handoff: unknown = null;
+	try {
+		const r = await chrome.storage.session.get(POPOUT_HANDOFF_KEY);
+		handoff = r[POPOUT_HANDOFF_KEY] ?? null;
+		await chrome.storage.session.remove([POPOUT_HANDOFF_KEY]);
+	} catch {}
+	return { ok: true, data: handoff };
+}
+
+on("POPOUT_OPEN", popoutOpen);
+on("POPOUT_CONSUME_HANDOFF", popoutConsumeHandoff);
