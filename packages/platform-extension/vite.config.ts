@@ -41,8 +41,8 @@ export default defineConfig({
 				options: resolve(root, "options.html"),
 				offscreen: resolve(root, "offscreen.html"),
 				"autofill-ui": resolve(root, "autofill-ui.html"),
-				background: resolve(root, "background/index.ts"),
-				"content-script": resolve(root, "content/index.ts"),
+				background: resolve(root, "background/background.ts"),
+				"content-script": resolve(root, "content/content.ts"),
 			},
 			output: {
 				entryFileNames: "[name].js",
