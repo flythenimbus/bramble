@@ -5,7 +5,7 @@ import {
 	getFillableInputs,
 	matchesField,
 	otpInputs,
-} from "../detection";
+} from "./detection";
 import type { CustomFieldData, FillPayload } from "./types";
 
 /** Sets an input's value via the native setter so frameworks (React) observe the change. */
