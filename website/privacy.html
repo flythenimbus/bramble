@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Bramble — Privacy Policy</title>
+		<meta
+			name="description"
+			content="Bramble is a local-first password manager. It collects nothing, sends nothing, and stores everything encrypted on your device."
+		/>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<main class="wrap">
+			<header class="site">
+				<div class="logo" aria-hidden="true"></div>
+				<h1>Privacy Policy</h1>
+			</header>
+			<p class="tagline">Bramble password manager</p>
+
+			<!-- TODO before publishing: replace [CONTACT EMAIL] below with a real address. -->
+			<div class="lede">
+				<p style="margin-top: 0">
+					<strong>The short version:</strong> Bramble is a local-first password manager. It does
+					not collect, transmit, sell, or share any of your data. There is no account, no server,
+					no sync service, and no analytics. Everything stays on your device, encrypted.
+				</p>
+			</div>
+
+			<p class="muted small">Effective date: 10 June 2026</p>
+
+			<h2>What data Bramble handles</h2>
+			<p>
+				Bramble stores the data <em>you</em> choose to save in it — for example login usernames and
+				passwords, payment cards, secure notes, and two-factor (TOTP) seeds — together with your own
+				app preferences. This data is created and used only to provide the password-manager features
+				you asked for (saving, searching, and autofilling your credentials).
+			</p>
+
+			<h2>Where it is stored</h2>
+			<p>
+				Your vault is stored <strong>only on your device</strong> — in your browser's local
+				extension storage and/or in a vault file you pick on your own computer. Bramble has no
+				server and no cloud, so your data never leaves your device through Bramble.
+			</p>
+
+			<h2>How it is protected</h2>
+			<p>
+				Your vault is encrypted. The key that protects it is derived from your master password using
+				Argon2id, and individual entries are encrypted with AES-256-GCM. Encryption and decryption
+				happen locally on your device. Your master password and the keys derived from it are never
+				stored in plaintext and never leave your device.
+			</p>
+
+			<h2>What Bramble does not do</h2>
+			<ul>
+				<li>No data collection, tracking, analytics, telemetry, or advertising.</li>
+				<li>No accounts, sign-up, or login to any service.</li>
+				<li>No servers and no built-in sync — Bramble makes no network requests.</li>
+				<li>No selling, renting, or sharing of your data with anyone.</li>
+				<li>No use of your data for any purpose other than the features you use.</li>
+			</ul>
+
+			<h2>Autofill and website access</h2>
+			<p>
+				To offer to fill saved credentials, Bramble's content script runs on web pages and looks at
+				the structure of forms on the page (for example, whether a field is a username, password, or
+				one-time-code field). This happens entirely on your device. Bramble does not read, collect,
+				or transmit the content of the pages you visit, and it only fills a credential when you
+				explicitly choose one.
+			</p>
+
+			<h2>Clipboard</h2>
+			<p>
+				When you copy a password, Bramble writes it to your clipboard and, after a short timeout,
+				clears the clipboard to reduce the chance of a secret lingering there. This is done locally
+				and the copied value is never sent anywhere.
+			</p>
+
+			<h2>Permissions, in plain language</h2>
+			<ul>
+				<li><strong>Access to websites</strong> — to detect login fields and offer autofill.</li>
+				<li><strong>Storage</strong> — to keep your encrypted vault and preferences on your device.</li>
+				<li><strong>Clipboard</strong> — to copy a password and clear it after a timeout.</li>
+				<li><strong>Alarms / idle</strong> — to lock the vault automatically after inactivity or when your screen locks.</li>
+				<li><strong>Offscreen</strong> — to run the encryption module.</li>
+			</ul>
+
+			<h2>Importing other password files</h2>
+			<p>
+				If you import a vault from another manager (for example a KeePass <code>.kdbx</code> file),
+				Bramble reads that file locally to add its entries to your vault. The file and its contents
+				are processed only on your device and are not transmitted anywhere.
+			</p>
+
+			<h2>Data retention and deletion</h2>
+			<p>
+				Because your data lives only on your device, you are in control of it. Removing the extension
+				and/or deleting your vault file and clearing the extension's browser storage removes your
+				data. Bramble retains nothing on your behalf because it holds nothing about you anywhere
+				else.
+			</p>
+
+			<h2>Children</h2>
+			<p>
+				Bramble is a general-purpose tool and is not directed at children, and it does not knowingly
+				collect any information from anyone (it collects no information at all).
+			</p>
+
+			<h2>Changes to this policy</h2>
+			<p>
+				If this policy changes, the updated version will be posted here with a new effective date.
+			</p>
+
+			<h2>Contact</h2>
+			<p>
+				Questions about this policy or your privacy? Email
+				<a href="mailto:[CONTACT EMAIL]">[CONTACT EMAIL]</a>.
+			</p>
+
+			<hr />
+			<footer>
+				<p><a href="index.html">← Back to Bramble</a></p>
+			</footer>
+		</main>
+	</body>
+</html>
