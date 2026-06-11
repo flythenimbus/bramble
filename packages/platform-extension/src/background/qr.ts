@@ -1,10 +1,12 @@
 /// <reference types="chrome" />
 
-import jsQR from "jsqr";
 import { type MessageEnvelope, on } from "./router";
 
 /** Decode a single QR code from a PNG data URL via OffscreenCanvas (no DOM); null if none found. */
 async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
+	// jsqr is ~250KB and only the QR-scan path needs it; load it lazily so it
+	// stays out of the service-worker bundle that re-parses on every cold wake.
+	const { default: jsQR } = await import("jsqr");
 	const blob = await (await fetch(dataUrl)).blob();
 	const bitmap = await createImageBitmap(blob);
 	const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
