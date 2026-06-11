@@ -1,0 +1,76 @@
+{
+  "encrypted": false,
+  "folders": [],
+  "items": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "type": 1,
+      "name": "GitHub",
+      "notes": "Personal dev account.",
+      "favorite": false,
+      "login": {
+        "uris": [{ "match": null, "uri": "https://github.com" }],
+        "username": "octocat@example.com",
+        "password": "hunter2-c0rrect-h0rse",
+        "totp": "otpauth://totp/GitHub:octocat@example.com?secret=JBSWY3DPEHPK3PXP"
+      },
+      "fields": [
+        { "name": "Recovery email", "value": "octocat-backup@example.com", "type": 0 },
+        { "name": "PAT", "value": "ghp_xWoRkSt0kEnExAmPLE0000000000000000", "type": 1 }
+      ]
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "type": 1,
+      "name": "Google",
+      "notes": "SSO across Google services.",
+      "favorite": false,
+      "login": {
+        "uris": [
+          { "match": null, "uri": "https://accounts.google.com" },
+          { "match": null, "uri": "https://mail.google.com" },
+          { "match": null, "uri": "https://drive.google.com" }
+        ],
+        "username": "jane.doe@example.com",
+        "password": "Tr0ub4dor3xkcd!",
+        "totp": null
+      }
+    },
+    {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "type": 1,
+      "name": "Amazon",
+      "notes": "Shopping; card on file.",
+      "favorite": false,
+      "login": {
+        "uris": [{ "match": null, "uri": "https://www.amazon.com" }],
+        "username": "jdoe-shopping@example.com",
+        "password": "Pr1me-Sh1pping!2024",
+        "totp": null
+      }
+    },
+    {
+      "id": "44444444-4444-4444-8444-444444444444",
+      "type": 3,
+      "name": "Personal Visa",
+      "notes": "Default payment card.",
+      "favorite": false,
+      "card": {
+        "cardholderName": "Jane Q. Doe",
+        "brand": "Visa",
+        "number": "4111111111111111",
+        "expMonth": "8",
+        "expYear": "2027",
+        "code": "123"
+      }
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555555",
+      "type": 2,
+      "name": "Home Wi-Fi",
+      "notes": "SSID: Nimbus-5G\nPassword: correct-horse-battery-staple-42",
+      "favorite": false,
+      "secureNote": { "type": 0 }
+    }
+  ]
+}
