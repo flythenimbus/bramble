@@ -3,7 +3,7 @@ import {
 	findNewPasswordOnChangeForm,
 	hasInteractiveCaptcha,
 	otpInputs,
-} from "../detection";
+} from "./detection";
 import { getLastFilledPassword } from "./fill";
 import { safeSendMessage } from "./lifecycle";
 

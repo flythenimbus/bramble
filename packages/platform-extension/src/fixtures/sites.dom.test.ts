@@ -10,7 +10,7 @@ import {
 	findNewPasswordOnChangeForm,
 	hasInteractiveCaptcha,
 	otpInputs,
-} from "../detection";
+} from "../content/detection";
 import { loadFixture } from "./load";
 
 beforeEach(() => {
