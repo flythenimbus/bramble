@@ -44,6 +44,8 @@ pub enum KdbxError {
     UnsupportedKdf,
     UnsupportedStream,
     WrongCredential,
+    /// KDF parameters from the file exceed our safety ceilings (OOM / hang guard).
+    KdfTooExpensive,
     Corrupt(&'static str),
 }
 
@@ -56,6 +58,7 @@ impl KdbxError {
             KdbxError::UnsupportedKdf => "KDBX_UNSUPPORTED_KDF".into(),
             KdbxError::UnsupportedStream => "KDBX_UNSUPPORTED_STREAM".into(),
             KdbxError::WrongCredential => "KDBX_WRONG_CREDENTIAL".into(),
+            KdbxError::KdfTooExpensive => "KDBX_KDF_TOO_EXPENSIVE".into(),
             KdbxError::Corrupt(s) => format!("KDBX_CORRUPT:{s}"),
         }
     }
@@ -163,6 +166,18 @@ fn argon2_transform(kdf: &Kdf, composite: &[u8]) -> Res<Zeroizing<[u8; 32]>> {
     } else {
         return Err(KdbxError::UnsupportedKdf);
     };
+    // Reject implausible parameters from the untrusted file before allocating: a
+    // malicious .kdbx could request terabytes of memory or millions of passes
+    // (OOM / hang). These ceilings sit far above any real KeePass file.
+    const MAX_KDF_MEM_BYTES: u64 = 1 << 30; // 1 GiB
+    const MAX_KDF_ITERATIONS: u64 = 64;
+    const MAX_KDF_PARALLELISM: u32 = 64;
+    if kdf.mem_bytes > MAX_KDF_MEM_BYTES
+        || kdf.iterations > MAX_KDF_ITERATIONS
+        || kdf.parallelism > MAX_KDF_PARALLELISM
+    {
+        return Err(KdbxError::KdfTooExpensive);
+    }
     let mem_kib = u32::try_from(kdf.mem_bytes / 1024).map_err(|_| KdbxError::Corrupt("KDF mem"))?;
     let iters = u32::try_from(kdf.iterations).map_err(|_| KdbxError::Corrupt("KDF iters"))?;
     let params = Params::new(mem_kib, iters, kdf.parallelism, Some(32))
@@ -625,6 +640,34 @@ mod tests {
         let entries = open_inner(KEYONLY_DB, "", Some(RAW_KEY)).expect("open key-only");
         assert_eq!(field(by_title(&entries, "KeyOnly"), "Password"), Some("kp"));
         assert_eq!(open_inner(KEYONLY_DB, "", None), Err(KdbxError::WrongCredential));
+    }
+
+    #[test]
+    fn rejects_oversized_kdf_params() {
+        let mk = |mem_bytes: u64, iterations: u64, parallelism: u32| Kdf {
+            uuid: KDF_ARGON2ID.to_vec(),
+            iterations,
+            mem_bytes,
+            parallelism,
+            salt: vec![0u8; 16],
+            version: 0x13,
+        };
+        let composite = [0u8; 32];
+        // In-bounds (tiny) params derive without tripping the safety gate.
+        assert!(argon2_transform(&mk(64 * 1024, 1, 1), &composite).is_ok());
+        // Each axis over its ceiling is rejected before any allocation.
+        assert_eq!(
+            argon2_transform(&mk(2 << 30, 1, 1), &composite),
+            Err(KdbxError::KdfTooExpensive)
+        );
+        assert_eq!(
+            argon2_transform(&mk(64 * 1024, 1000, 1), &composite),
+            Err(KdbxError::KdfTooExpensive)
+        );
+        assert_eq!(
+            argon2_transform(&mk(64 * 1024, 1, 1000), &composite),
+            Err(KdbxError::KdfTooExpensive)
+        );
     }
 
     // Byte-mutation negative tests: corrupt one field of a real fixture.
