@@ -450,6 +450,30 @@ pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String
 mod tests {
     use super::*;
 
+    /// Measure the configured vault Argon2id cost. Native release is a lower
+    /// bound; browser WASM runs ~2-3x slower. Run with:
+    ///   cargo test --release bench_vault_kek_derive -- --ignored --nocapture
+    #[test]
+    #[ignore = "benchmark"]
+    fn bench_vault_kek_derive() {
+        use std::time::Instant;
+        let salt = [0u8; SALT_LEN];
+        let pw = "correct horse battery staple";
+        let _ = derive_kek(pw, &salt).unwrap(); // warm up
+        let runs = 5;
+        let start = Instant::now();
+        for _ in 0..runs {
+            let _ = derive_kek(pw, &salt).unwrap();
+        }
+        let per = start.elapsed() / runs;
+        println!(
+            "Argon2id m={}MiB t={} p={}: {per:?}/derive (native release)",
+            ARGON2_MEM_KIB / 1024,
+            ARGON2_TIME,
+            ARGON2_PARALLELISM,
+        );
+    }
+
     #[test]
     fn derive_kek_hkdf_is_deterministic_and_32_bytes() {
         let secret = [0xa5u8; 32];
