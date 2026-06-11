@@ -13,6 +13,7 @@
 			"!**/dist",
 			"!packages/crypto-wasm/target",
 			"!packages/platform-extension/public/wasm",
+			"!packages/platform-extension/src/fixtures/imports",
 			"!icon",
 			"!**/*.lockb"
 		]
