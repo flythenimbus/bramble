@@ -179,10 +179,17 @@ pick up another device's edits). The user's Dropbox path cannot be targeted prog
    sync. Medium effort.
 4. **Defer or re-scope Firefox.** If matching Chrome's sync is a hard requirement and native
    messaging is unacceptable, Firefox may not be worth shipping yet.
+5. **P2P device-to-device sync (no filesystem, no binary).** Move sync off the filesystem
+   entirely: a WebRTC data channel carries the encrypted vault directly between the user's own
+   devices, with a merge engine reconciling edits. Same-network/all-online for v1; signaling via
+   a user-chosen Nostr-subset relay; trust anchored on a per-device roster so the relay is an
+   untrusted pipe. Cross-browser (works on Chrome too) and independent of the FSA gap. Full
+   design in [p2p-sync.md](p2p-sync.md).
 
 Recommendation: Option 2 for v1 (ships honestly, unblocks the rest of the port), with Option 1
 tracked as a follow-up for users who need Firefox + sync. Avoid Option 3 unless its push-only nature
-is messaged very clearly. The rest of the port is independent of this choice.
+is messaged very clearly. Option 5 is the cross-browser sync path being designed and supersedes 1
+and 3 if it lands. The rest of the port is independent of this choice.
 
 ## Risks / open items
 
