@@ -23,14 +23,7 @@
 		"service_worker": "background.js",
 		"type": "module"
 	},
-	"permissions": [
-		"storage",
-		"unlimitedStorage",
-		"alarms",
-		"idle",
-		"offscreen",
-		"clipboardWrite"
-	],
+	"permissions": ["storage", "unlimitedStorage", "alarms", "idle", "offscreen", "clipboardWrite"],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [
 		{
