@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<KeePassFile>
+  <Meta>
+    <Generator>KeePassXC</Generator>
+    <DatabaseName>Bramble Sample</DatabaseName>
+  </Meta>
+  <Root>
+    <Group>
+      <Name>Root</Name>
+      <Entry>
+        <String><Key>Title</Key><Value>GitHub</Value></String>
+        <String><Key>UserName</Key><Value>octocat@example.com</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">hunter2-c0rrect-h0rse</Value></String>
+        <String><Key>URL</Key><Value>https://github.com</Value></String>
+        <String><Key>Notes</Key><Value>Personal dev account.</Value></String>
+        <String><Key>otp</Key><Value ProtectInMemory="True">otpauth://totp/GitHub:octocat@example.com?secret=JBSWY3DPEHPK3PXP</Value></String>
+        <String><Key>Recovery email</Key><Value>octocat-backup@example.com</Value></String>
+        <String><Key>PAT</Key><Value ProtectInMemory="True">ghp_xWoRkSt0kEnExAmPLE0000000000000000</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>Google</Value></String>
+        <String><Key>UserName</Key><Value>jane.doe@example.com</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">Tr0ub4dor3xkcd!</Value></String>
+        <String><Key>URL</Key><Value>https://accounts.google.com</Value></String>
+        <String><Key>Notes</Key><Value>SSO across Google services.</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>Amazon</Value></String>
+        <String><Key>UserName</Key><Value>jdoe-shopping@example.com</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">Pr1me-Sh1pping!2024</Value></String>
+        <String><Key>URL</Key><Value>https://www.amazon.com</Value></String>
+        <String><Key>Notes</Key><Value>Shopping; card on file.</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>Personal Visa</Value></String>
+        <String><Key>UserName</Key><Value>Jane Q. Doe</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">123</Value></String>
+        <String><Key>Notes</Key><Value>Default payment card.</Value></String>
+        <String><Key>Card Number</Key><Value ProtectInMemory="True">4111111111111111</Value></String>
+        <String><Key>Expiration</Key><Value>08/2027</Value></String>
+        <String><Key>CVV</Key><Value ProtectInMemory="True">123</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>Home Wi-Fi</Value></String>
+        <String><Key>Notes</Key><Value>SSID: Nimbus-5G
+Password: correct-horse-battery-staple-42</Value></String>
+      </Entry>
+    </Group>
+  </Root>
+</KeePassFile>
