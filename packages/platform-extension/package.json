@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "vite build",
+		"bundle": "vite build && rm -f bramble.zip && (cd dist && zip -rq ../bramble.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
 		"dev": "vite build --watch --mode development",
 		"typecheck": "tsc --noEmit",
 		"lint": "echo 'TODO: lint'",
