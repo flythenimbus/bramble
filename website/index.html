@@ -6,18 +6,20 @@
         <title>Bramble Privacy Policy</title>
         <meta
             name="description"
-            content="Bramble is a local-first password manager. It collects nothing, sends nothing, and stores everything encrypted on your device."
+            content="Bramble is a local-first password manager. It stores everything encrypted on your device and makes no network requests, apart from an optional password breach check you can turn on."
         />
     </head>
     <body>
         <h1>Bramble Privacy Policy</h1>
 
-        <!-- TODO before publishing: replace [CONTACT EMAIL] below with a real address. -->
         <p>
             <strong>The short version:</strong> Bramble is a local-first
-            password manager. It does not collect, transmit, sell, or share any
-            of your data. There is no account, no server, no sync service, and
-            no analytics. Everything stays on your device, encrypted.
+            password manager. It does not collect, sell, or share any of your
+            data. There is no account, no server, no sync service, and no
+            analytics. Everything stays on your device, encrypted. The one
+            exception is an optional password breach check, off by default, that
+            you can turn on; even then, your passwords never leave your device
+            (see below).
         </p>
 
         <p>Effective date: 10 June 2026</p>
@@ -56,8 +58,8 @@
             </li>
             <li>No accounts, sign-up, or login to any service.</li>
             <li>
-                No servers and no built-in sync; Bramble makes no network
-                requests.
+                No servers and no built-in sync. Bramble makes no network
+                requests other than the optional breach check described below.
             </li>
             <li>No selling, renting, or sharing of your data with anyone.</li>
             <li>
@@ -65,6 +67,32 @@
                 use.
             </li>
         </ul>
+
+        <h2>Password breach check (optional)</h2>
+        <p>
+            Bramble can tell you whether one of your saved passwords has appeared
+            in a known data breach. This feature is off by default; you turn it
+            on in Settings. It is the only feature that contacts a server.
+        </p>
+        <p>
+            When it is on, Bramble checks a password using the Have I Been Pwned
+            "Pwned Passwords" service with a privacy-preserving method called
+            k-anonymity: it computes a SHA-1 hash of the password and sends only
+            the first five characters of that hash to its API
+            (api.pwnedpasswords.com). The service returns a list of possible
+            matches and Bramble compares them
+            on your device. Your password, and even its full hash, never leave
+            your device, and Have I Been Pwned cannot tell which password you
+            checked. Bramble also asks the service to pad its response so the
+            amount of data returned reveals nothing about your query.
+        </p>
+        <p>
+            Have I Been Pwned is operated by a third party under its own privacy
+            policy:
+            <a href="https://haveibeenpwned.com/Privacy"
+                >haveibeenpwned.com/Privacy</a
+            >.
+        </p>
 
         <h2>Autofill and website access</h2>
         <p>
@@ -109,6 +137,16 @@
             device and are not transmitted anywhere.
         </p>
 
+        <h2>Recovery and lost access</h2>
+        <p>
+            Bramble has no copy of your master password or the keys derived from
+            it, so it cannot recover your vault or reset your password for you.
+            If you set up a recovery code or a security key, you can use those to
+            regain access. If you lose your master password and every recovery
+            method you set up, your vault cannot be decrypted by you, by us, or
+            by anyone. That is the trade-off for there being no backdoor.
+        </p>
+
         <h2>Data retention and deletion</h2>
         <p>
             Because your data lives only on your device, you are in control of
@@ -120,9 +158,8 @@
 
         <h2>Children</h2>
         <p>
-            Bramble is a general-purpose tool and is not directed at children,
-            and it does not knowingly collect any information from anyone (it
-            collects no information at all).
+            Bramble is a general-purpose tool, not directed at children, and
+            collects no information from anyone.
         </p>
 
         <h2>Changes to this policy</h2>
