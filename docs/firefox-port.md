@@ -191,6 +191,32 @@ tracked as a follow-up for users who need Firefox + sync. Avoid Option 3 unless 
 is messaged very clearly. Option 5 is the cross-browser sync path being designed and supersedes 1
 and 3 if it lands. The rest of the port is independent of this choice.
 
+### Storage durability (Firefox, no FSA)
+
+Without FSA the vault lives in `storage.local` as the **primary** store, not a fallback, so its
+durability properties become load-bearing. Three facts to design around (verified mid-2026):
+
+- **Size cap.** `storage.local` is capped (Chrome: 10 MB, 5 MB on Chrome 113 and earlier;
+  Firefox: bounded by the IndexedDB quota, a slice of ~50% free disk). A typical vault is well
+  under 1 MB, but ~10k entries can reach ~5-9 MB and bump the Chrome cap. Fix: declare the
+  **`unlimitedStorage`** permission (manifest-only, no API) in **both** manifests, after which
+  storage is disk-bounded. The manifest table above lists `storage.local` but not this
+  permission; add it.
+- **Uninstall clears it.** Unlike an FSA file (which survives), `storage.local` is wiped on
+  extension uninstall, and a profile reset loses it too. So on Firefox the vault can vanish with
+  no file to fall back on. This makes **export/import backup (Option 2) non-optional**, and is a
+  second reason to want **P2P sync (Option 5)**: with sync the vault also lives on peer devices,
+  giving redundancy against this failure mode.
+- **Eviction under disk pressure.** Firefox's Quota Manager can evict an origin's storage when
+  the global limit is hit; only **persistent** buckets are exempt. `unlimitedStorage` lifts the
+  quota cap but does not clearly mark the bucket persistent. Smoke-test whether extension storage
+  is treated as persistent, and if not, call `navigator.storage.persist()` to request it. Silent
+  eviction of the only copy is the failure most worth ruling out for a password manager.
+
+Sources: [`storage.local` (MDN)](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage/local),
+[`chrome.storage`](https://developer.chrome.com/docs/extensions/reference/api/storage),
+[Storage quotas and eviction (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria).
+
 ## Risks / open items
 
 - **Clipboard clear from the Firefox background**: `navigator.clipboard.writeText("")` from an
