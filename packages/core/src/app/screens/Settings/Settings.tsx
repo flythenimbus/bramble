@@ -1,7 +1,8 @@
 import { Download, Info, Lock, Palette } from "lucide-react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
-import { useTheme } from "../../hooks/useTheme";
+import { SelectField } from "../../components/ui/select-field";
+import { type ThemeMode, useTheme } from "../../hooks/useTheme";
 import { GeneralSection } from "./components/GeneralSection";
 import { MasterPasswordSection } from "./components/MasterPasswordSection";
 import { Row, Section } from "./components/primitives";
@@ -9,7 +10,7 @@ import { RecoveryCodeSection } from "./components/RecoveryCodeSection";
 import { SecurityKeysSection } from "./components/SecurityKeysSection";
 
 export function Settings() {
-	const { darkMode, toggleTheme } = useTheme();
+	const { themeMode, setThemeMode } = useTheme();
 	const { shell } = usePlatform();
 	const { entries } = useVault();
 
@@ -28,29 +29,18 @@ export function Settings() {
 					<Row
 						icon={<Palette className="w-4 h-4 text-primary" />}
 						title="Theme"
-						subtitle="Choose light or dark mode"
+						subtitle="Use light, dark, or match your system"
 					>
-						<div className="flex items-center gap-2">
-							<button
-								onClick={toggleTheme}
-								className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
-									!darkMode
-										? "bg-primary text-primary-foreground border-primary/20"
-										: "border-border hover:bg-primary/5 hover:border-primary/50"
-								}`}
+						<div className="w-44">
+							<SelectField
+								label="Mode"
+								value={themeMode}
+								onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
 							>
-								Light
-							</button>
-							<button
-								onClick={toggleTheme}
-								className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
-									darkMode
-										? "bg-primary text-primary-foreground border-primary/20"
-										: "border-border hover:bg-primary/5 hover:border-primary/50"
-								}`}
-							>
-								Dark
-							</button>
+								<option value="light">Light</option>
+								<option value="dark">Dark</option>
+								<option value="system">System</option>
+							</SelectField>
 						</div>
 					</Row>
 				</Section>

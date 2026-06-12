@@ -1,16 +1,14 @@
 import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, Lock, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
+import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { BrambleGlyph } from "../components/BrambleGlyph";
 import { usePopOut } from "../hooks/usePopOut";
-import { useTheme } from "../hooks/useTheme";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
 export function AppLayout() {
 	const router = useRouter();
 	const navigate = useNavigate();
-	const { darkMode, toggleTheme } = useTheme();
 	const { lock, pendingSyncCount } = useVault();
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
@@ -97,14 +95,6 @@ export function AppLayout() {
 								title="Lock vault"
 							>
 								<Lock className="w-4 h-4" />
-							</button>
-							<button
-								type="button"
-								onClick={toggleTheme}
-								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label="Toggle theme"
-							>
-								{darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
 							</button>
 							<button
 								type="button"
