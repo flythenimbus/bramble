@@ -1,17 +1,18 @@
 name: Release
 
-# Builds the Chromium extension bundle and publishes it as a GitHub Release
-# asset whenever a tag is pushed. The tag name (minus any leading "v") becomes
-# <version> in the asset name: bramble_chromium_<version>.zip. Only the
-# Chromium build exists today; add sibling assets here when other targets land.
+# Builds the extension bundle and publishes it as a GitHub Release asset
+# whenever a <version>-<platform> tag is pushed (e.g. 1.0.0-chromium). The tag
+# splits into <version> and <platform>, naming the asset
+# bramble_<platform>_<version>.zip and titling the release
+# "<Platform> Extension <version>". Only the Chromium build exists today.
 on:
   push:
     tags:
       - "*"
 
 # softprops/action-gh-release creates the release and uploads the asset, both
-# of which write to the repo's releases — the default read-only GITHUB_TOKEN
-# can't do that.
+# of which write to the repo's releases, which the default read-only
+# GITHUB_TOKEN can't do.
 permissions:
   contents: write
 
@@ -26,7 +27,7 @@ jobs:
         with:
           bun-version: latest
 
-      # Same pinned Rust + wasm-pack toolchain as CI — the bundle's `vite build`
+      # Same pinned Rust + wasm-pack toolchain as CI: the bundle's `vite build`
       # copies the crypto WASM out of public/wasm/ (gitignored), so it must be
       # freshly built here before bundling, exactly as in ci.yml.
       - name: Setup Rust
@@ -51,15 +52,22 @@ jobs:
       - name: Bundle extension
         run: bun run bundle
 
-      # Tag v0.1.0 -> bramble_chromium_0.1.0.zip; a bare 0.1.0 tag works too.
-      - name: Name the release asset
-        id: asset
+      # Tag 1.0.0-chromium -> version 1.0.0, platform chromium. Platform is the
+      # last "-"-delimited segment; manifest versions are numeric (no dashes),
+      # so the split is unambiguous. `title` upper-cases the first letter for
+      # the release name (portable idiom; bash's ${x^} needs bash 4+).
+      - name: Derive release metadata
+        id: meta
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          cp packages/platform-extension/bramble.zip "bramble_chromium_${version}.zip"
-          echo "path=bramble_chromium_${version}.zip" >> "$GITHUB_OUTPUT"
+          version="${GITHUB_REF_NAME%-*}"
+          platform="${GITHUB_REF_NAME##*-}"
+          title="$(tr '[:lower:]' '[:upper:]' <<< "${platform:0:1}")${platform:1}"
+          cp packages/platform-extension/bramble.zip "bramble_${platform}_${version}.zip"
+          echo "asset=bramble_${platform}_${version}.zip" >> "$GITHUB_OUTPUT"
+          echo "name=${title} Extension ${version}" >> "$GITHUB_OUTPUT"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.asset.outputs.path }}
+          name: ${{ steps.meta.outputs.name }}
+          files: ${{ steps.meta.outputs.asset }}
