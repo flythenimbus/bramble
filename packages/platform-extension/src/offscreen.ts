@@ -139,6 +139,18 @@ async function clearClipboard(): Promise<boolean> {
 	}
 }
 
+// Report the OS colour scheme so the background can pick the matching
+// monochrome toolbar icon. The service worker can't read prefers-color-scheme;
+// this offscreen document can, and it stays alive to catch later changes.
+const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+function reportColorScheme(): void {
+	void chrome.runtime
+		.sendMessage({ type: "THEME_ICON_SET", payload: { dark: colorScheme.matches } })
+		.catch(() => {});
+}
+reportColorScheme();
+colorScheme.addEventListener("change", reportColorScheme);
+
 chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
 	if (message?.target !== "offscreen") return false;
 

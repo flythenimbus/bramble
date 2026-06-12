@@ -8,6 +8,7 @@
 import "./corner-prompt";
 import "./popout";
 import "./qr";
+import "./theme";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
