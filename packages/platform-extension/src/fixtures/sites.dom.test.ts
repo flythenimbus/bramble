@@ -463,6 +463,42 @@ describe("github.com — 2FA (TOTP)", () => {
 	});
 });
 
+describe("reddit.com — sign in (faceplate-text-input web components)", () => {
+	// Reddit wraps its login + password inputs in <faceplate-text-input> custom
+	// elements. The real <input> is rendered by Reddit's JS into the component's
+	// shadow root at runtime (the slotted <span slot="label"> children prove a
+	// shadow root exists). A static capture therefore has NO login <input> at
+	// all, and our detectors only walk light-DOM inputs.
+
+	it("the login fields are web components, not light-DOM inputs", () => {
+		loadFixture("reddit-login");
+		expect(document.querySelector('faceplate-text-input[name="username"]')).not.toBeNull();
+		expect(document.querySelector('faceplate-text-input[name="password"]')).not.toBeNull();
+		// No real password input in the light DOM.
+		expect(document.querySelector('input[type="password"]')).toBeNull();
+	});
+
+	it("the only light-DOM input is the search box", () => {
+		loadFixture("reddit-login");
+		const inputs = document.querySelectorAll("input");
+		expect(inputs.length).toBe(1);
+		expect(inputs[0]?.getAttribute("name")).toBe("q");
+	});
+
+	it("KNOWN LIMITATION: detectLoginFields finds nothing (inputs live in shadow DOM)", () => {
+		// Our detectors walk light-DOM inputs only; they never pierce a component's
+		// shadow root. So Reddit's login form yields no candidates and autofill
+		// never offers. This locks in the current behavior; flip it when/if
+		// shadow-DOM traversal lands.
+		loadFixture("reddit-login");
+		const { username, password } = detectLoginFields();
+		expect(username).toBeNull();
+		expect(password).toBeNull();
+		expect(otpInputs()).toEqual([]);
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+});
+
 describe("biteasy.co — sign in with invisible/managed Cloudflare Turnstile", () => {
 	// Invisible Turnstile must not block autofill: token is in a hidden input,
 	// the container is 0x0, and `cf-turnstile` is an id (not the class we match).
