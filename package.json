@@ -18,6 +18,7 @@
 		"check": "biome check --write  --unsafe .",
 		"ci:check": "biome ci .",
 		"release": "bun run scripts/release.ts",
+		"tag:delete": "f(){ [ -z \"$1\" ] && { echo 'usage: bun run tag:delete <tag>'; exit 1; }; git tag -d \"$1\"; git push origin --delete \"$1\"; }; f",
 		"test": "bun run wasm:test && bun run --filter '*' test",
 		"typecheck": "bun run --filter '*' typecheck"
 	},
