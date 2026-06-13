@@ -1,0 +1,1154 @@
+{
+  "encrypted": false,
+  "folders": [
+    {
+      "id": "f0000000-0000-4000-8000-000000000001",
+      "name": "Personal"
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000002",
+      "name": "Work"
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000003",
+      "name": "Finance"
+    },
+    {
+      "id": "f0000000-0000-4000-8000-000000000004",
+      "name": "Social"
+    }
+  ],
+  "items": [
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000001",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Google",
+      "notes": "Primary account. SSO into most things.",
+      "favorite": true,
+      "fields": [
+        {
+          "name": "Recovery email",
+          "value": "jordan.avery.recovery@gmail.com",
+          "type": 0
+        },
+        {
+          "name": "Recovery phone",
+          "value": "+1 (415) 555-0148",
+          "type": 0
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://accounts.google.com"
+          },
+          {
+            "match": null,
+            "uri": "https://mail.google.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "qT7$vR2mK9wL@pX4",
+        "totp": "otpauth://totp/Google:jordan.avery%40gmail.com?secret=JBSWY3DPEHPK3PXP&issuer=Google&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000002",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Apple",
+      "notes": "iCloud, App Store, Find My.",
+      "favorite": true,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://appleid.apple.com"
+          },
+          {
+            "match": null,
+            "uri": "https://icloud.com"
+          }
+        ],
+        "username": "jordan.avery@icloud.com",
+        "password": "Hn4!zB8qW2eR6tY1",
+        "totp": "otpauth://totp/Apple:jordan.avery%40icloud.com?secret=KRSXG5CTMVRXEZLU&issuer=Apple&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000003",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "GitHub",
+      "notes": "Personal + work orgs.",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Personal access token",
+          "value": "ghp_X9kLm2nP4qR7sT9uV1wX3yZ5aB6cD8eF0gH",
+          "type": 1
+        },
+        {
+          "name": "Recovery email",
+          "value": "jordan.avery@gmail.com",
+          "type": 0
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://github.com"
+          }
+        ],
+        "username": "jordanavery",
+        "password": "gH3#kP9mD7xQ2vN5",
+        "totp": "otpauth://totp/GitHub:jordanavery?secret=MFRGGZDFMZTWQ2LK&issuer=GitHub&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000004",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Amazon",
+      "notes": "Prime; card on file.",
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.amazon.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Pm5@tL8wK3eD9rB2",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000005",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Netflix",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.netflix.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Nf8#qW2mR6vT4xL9",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000006",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Spotify",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.spotify.com"
+          },
+          {
+            "match": null,
+            "uri": "https://open.spotify.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Sp3$kD7nM2wQ8vR5",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000007",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Dropbox",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.dropbox.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Db6!wP3kL9mT2xN7",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000008",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "PayPal",
+      "notes": null,
+      "favorite": true,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.paypal.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Pp9#vK4mD8wR2tL6",
+        "totp": "otpauth://totp/PayPal:jordan.avery%40gmail.com?secret=NB2W45DFOIZAUDCN&issuer=PayPal&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000009",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Reddit",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.reddit.com"
+          }
+        ],
+        "username": "jorda_av",
+        "password": "Rd4$tN8wK2mQ6vL9",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000a",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "X (Twitter)",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://x.com"
+          },
+          {
+            "match": null,
+            "uri": "https://twitter.com"
+          }
+        ],
+        "username": "@jordanavery",
+        "password": "Xt7!mP3kD9wR4vN2",
+        "totp": "otpauth://totp/X:%40jordanavery?secret=ONXW2ZJAMRXXEZLU&issuer=X&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000b",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Instagram",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.instagram.com"
+          }
+        ],
+        "username": "jordan.avery",
+        "password": "Ig5#wL8kM2tQ7vR3",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000c",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "LinkedIn",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.linkedin.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Li6$kD3mP9wT2xN8",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000d",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Facebook",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.facebook.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Fb8!tW4kM2qR7vL5",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000e",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "eBay",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.ebay.com"
+          }
+        ],
+        "username": "javery_finds",
+        "password": "Eb3#mK9wD2tQ6vN4",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000000f",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Steam",
+      "notes": "Steam Guard authenticator also on phone.",
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://store.steampowered.com"
+          }
+        ],
+        "username": "jorda_plays",
+        "password": "St7$wP2kL8mR4vT9",
+        "totp": "otpauth://totp/Steam:jorda_plays?secret=GEZDGNBVGY3TQOJQ&issuer=Steam&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000010",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "Discord",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://discord.com"
+          }
+        ],
+        "username": "jordanavery",
+        "password": "Dc4!mW8kD2tQ6vL3",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000011",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Notion",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.notion.so"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "No5$wK8mD3tQ7vL2",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000012",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Adobe Creative Cloud",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://account.adobe.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Ad6!mP9kW2tR4vN8",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000013",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Airbnb",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.airbnb.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Ab3#kD7mL2wQ8vT5",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000014",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Delta Air Lines",
+      "notes": "SkyMiles Medallion.",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "SkyMiles number",
+          "value": "2049 118 376",
+          "type": 0
+        },
+        {
+          "name": "Known Traveler #",
+          "value": "TT1029384756",
+          "type": 0
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.delta.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Dl8$wP4kM9tR2vL6",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000015",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Uber",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.uber.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Ub5#mK2wD8tQ4vN7",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000016",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Chase Bank",
+      "notes": null,
+      "favorite": true,
+      "fields": [
+        {
+          "name": "Account number",
+          "value": "483920174",
+          "type": 1
+        },
+        {
+          "name": "Routing",
+          "value": "021000021",
+          "type": 0
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.chase.com"
+          },
+          {
+            "match": null,
+            "uri": "https://secure.chase.com"
+          }
+        ],
+        "username": "jordan.avery",
+        "password": "Ch9!kP4mW2tR8vL3",
+        "totp": "otpauth://totp/Chase:jordan.avery?secret=HXDMVJECJJWSRB3H&issuer=Chase&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000017",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Bank of America",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.bankofamerica.com"
+          }
+        ],
+        "username": "javery1990",
+        "password": "Ba6$wK3mD9tQ2vN8",
+        "totp": "otpauth://totp/Bank%20of%20America:javery1990?secret=IFBEGRCFIZDUQSKK&issuer=Bank%20of%20America&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000018",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Fidelity Investments",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.fidelity.com"
+          }
+        ],
+        "username": "jordanavery",
+        "password": "Fi7#mP2kW8tR4vL9",
+        "totp": "otpauth://totp/Fidelity:jordanavery?secret=KZXW6YTBOJUXG43J&issuer=Fidelity&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000019",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Coinbase",
+      "notes": "Hardware wallet for cold storage; this is the exchange account only.",
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.coinbase.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Co4!kD8mW2tQ6vN3",
+        "totp": "otpauth://totp/Coinbase:jordan.avery%40gmail.com?secret=L5QXIZLTOQYTEMZU&issuer=Coinbase&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001a",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Venmo",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://venmo.com"
+          }
+        ],
+        "username": "@Jordan-Avery",
+        "password": "Ve8$wP3kM9tR2vL7",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001b",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 1,
+      "name": "Robinhood",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://robinhood.com"
+          }
+        ],
+        "username": "jordan.avery@gmail.com",
+        "password": "Ro5#kW2mD8tQ4vN9",
+        "totp": "otpauth://totp/Robinhood:jordan.avery%40gmail.com?secret=JBSWY3DPFQQFO33S&issuer=Robinhood&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001c",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Microsoft 365",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://login.microsoftonline.com"
+          },
+          {
+            "match": null,
+            "uri": "https://outlook.office.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Ms9!kP3mW8tR2vL6",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001d",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Slack",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://nimbuslabs.slack.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Sl4$wK8mD2tQ7vN3",
+        "totp": "otpauth://totp/Slack:j.avery%40nimbuslabs.io?secret=MZXW6YTBOIZA2MJS&issuer=Slack&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001e",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "AWS Console",
+      "notes": "IAM user, not root. Root creds in the team vault.",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Account ID",
+          "value": "920184756301",
+          "type": 0
+        },
+        {
+          "name": "Access key ID",
+          "value": "AKIA2X9KLMNP4QRSTUVW",
+          "type": 1
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://nimbuslabs.signin.aws.amazon.com/console"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Aw7#mP2kW9tR4vL8",
+        "totp": "otpauth://totp/AWS:j.avery%40nimbuslabs.io?secret=JBSWY3DPEHPK3PXP&issuer=AWS&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000001f",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Cloudflare",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://dash.cloudflare.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Cf5$kD9mW2tQ8vN4",
+        "totp": "otpauth://totp/Cloudflare:j.avery%40nimbuslabs.io?secret=KRSXG5CTMVRXEZLU&issuer=Cloudflare&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000020",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "DigitalOcean",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://cloud.digitalocean.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Do6!wP3kM8tR2vL9",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000021",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Stripe Dashboard",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://dashboard.stripe.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Sr8#kW2mD9tQ4vN7",
+        "totp": "otpauth://totp/Stripe:j.avery%40nimbuslabs.io?secret=MFRGGZDFMZTWQ2LK&issuer=Stripe&period=30&digits=6"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000022",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Atlassian (Jira)",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://nimbuslabs.atlassian.net"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "At3$mP8kW2tR9vL4",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000023",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Figma",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://www.figma.com"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Fg7!kD2mW8tQ3vN6",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000024",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 1,
+      "name": "Zoom",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://zoom.us"
+          }
+        ],
+        "username": "j.avery@nimbuslabs.io",
+        "password": "Zm4#wP9kM2tR8vL5",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000025",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 1,
+      "name": "Yahoo Mail",
+      "notes": "Old account from college. Barely use it anymore.",
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://login.yahoo.com"
+          }
+        ],
+        "username": "jordan_avery@yahoo.com",
+        "password": "letmein",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000026",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000004",
+      "type": 1,
+      "name": "RuneScape Forums",
+      "notes": "Ancient gaming forum login.",
+      "favorite": false,
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://forum.runescape-fan.example"
+          }
+        ],
+        "username": "jorda_2008",
+        "password": "qwerty123",
+        "totp": null
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000027",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 3,
+      "name": "Chase Sapphire Reserve",
+      "notes": "Primary travel card.",
+      "favorite": true,
+      "fields": [],
+      "card": {
+        "cardholderName": "Jordan A Avery",
+        "brand": "Visa",
+        "number": "4147202938475610",
+        "expMonth": "11",
+        "expYear": "2028",
+        "code": "829"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000028",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 3,
+      "name": "Citi Double Cash",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "card": {
+        "cardholderName": "Jordan A Avery",
+        "brand": "Mastercard",
+        "number": "5412750193847265",
+        "expMonth": "04",
+        "expYear": "2027",
+        "code": "412"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000029",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 3,
+      "name": "Amex Gold",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "card": {
+        "cardholderName": "Jordan A Avery",
+        "brand": "Amex",
+        "number": "374512938475610",
+        "expMonth": "09",
+        "expYear": "2026",
+        "code": "3920"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002a",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000003",
+      "type": 3,
+      "name": "Chase Debit",
+      "notes": "Linked to checking.",
+      "favorite": false,
+      "fields": [],
+      "card": {
+        "cardholderName": "Jordan A Avery",
+        "brand": "Visa",
+        "number": "4485019384726150",
+        "expMonth": "02",
+        "expYear": "2029",
+        "code": "551"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002b",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 2,
+      "name": "Home Wi-Fi",
+      "notes": "Network: Nimbus-5G\nPassword: copper-lantern-quiet-river-72\n\nGuest network: Nimbus-Guest\nGuest password: welcome-friend-88\n\nRouter admin: http://192.168.1.1  (admin / see Router Admin field)",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Router admin password",
+          "value": "r0ut3r-Adm1n!2025",
+          "type": 1
+        }
+      ],
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002c",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 2,
+      "name": "Passport",
+      "notes": "US Passport.\nIssued: 2021-06-14\nExpires: 2031-06-13\nIssuing office: Los Angeles",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Passport number",
+          "value": "519384726",
+          "type": 1
+        },
+        {
+          "name": "Full name",
+          "value": "Jordan Alex Avery",
+          "type": 0
+        },
+        {
+          "name": "Nationality",
+          "value": "USA",
+          "type": 0
+        }
+      ],
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002d",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 2,
+      "name": "Software Licenses",
+      "notes": "License keys for paid apps.",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Windows 11 Pro",
+          "value": "VK7JG-NPHTM-C97JM-9MPGT-3V66T",
+          "type": 1
+        },
+        {
+          "name": "Sublime Text 4",
+          "value": "8A3C-7F21-9D44-EXAMPLE-NOT-REAL",
+          "type": 1
+        },
+        {
+          "name": "Affinity Photo",
+          "value": "AFP-2049-1183-7620-XX91",
+          "type": 1
+        }
+      ],
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002e",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 2,
+      "name": "Account Recovery Codes",
+      "notes": "Backup 2FA codes. Keep offline copies too.",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Google",
+          "value": "4829 1047\n9183 7261\n5028 4917\n7361 2940\n1928 4756",
+          "type": 1
+        },
+        {
+          "name": "GitHub",
+          "value": "a1b2c-3d4e5\nf6g7h-8i9j0\nk1l2m-3n4o5",
+          "type": 1
+        }
+      ],
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-00000000002f",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 2,
+      "name": "Auto Insurance Policy",
+      "notes": "Geico full coverage.\nPolicy period: 2026-01-01 to 2026-12-31\n24h claims: 1-800-555-0177",
+      "favorite": false,
+      "fields": [
+        {
+          "name": "Policy number",
+          "value": "4920-1847-3651",
+          "type": 0
+        },
+        {
+          "name": "Agent",
+          "value": "M. Reyes, ext. 412",
+          "type": 0
+        }
+      ],
+      "secureNote": {
+        "type": 0
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000030",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000001",
+      "type": 4,
+      "name": "Personal Identity",
+      "notes": null,
+      "favorite": false,
+      "fields": [],
+      "identity": {
+        "title": "Mr",
+        "firstName": "Jordan",
+        "middleName": "Alex",
+        "lastName": "Avery",
+        "email": "jordan.avery@gmail.com",
+        "phone": "+1 (415) 555-0148",
+        "address1": "1847 Larkspur Lane",
+        "address2": "Apt 3B",
+        "city": "San Francisco",
+        "state": "CA",
+        "postalCode": "94114",
+        "country": "United States",
+        "company": "Nimbus Labs",
+        "ssn": "xxx-xx-4821",
+        "licenseNumber": "D1938472"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000031",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 5,
+      "name": "Personal Laptop SSH Key",
+      "notes": "ed25519 key on the MacBook Pro. Used for GitHub + personal servers.",
+      "favorite": false,
+      "fields": [],
+      "sshKey": {
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACB/JkJNaVcdKy97Ge2HtmkHzenFPXV3k4B45Spj6EbE7gAAAJiVZ0t0lWdL\ndAAAAAtzc2gtZWQyNTUxOQAAACB/JkJNaVcdKy97Ge2HtmkHzenFPXV3k4B45Spj6EbE7g\nAAAEC3rN3xkExAMpLeFiCepLEXAMPLEonlyNOTaREALkeyZZZZZZZZZZZZZZZZZZZZZZZ==\n-----END OPENSSH PRIVATE KEY-----",
+        "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH8mQk1pVx0rL3sZ7Yw2bQfN6cU9dXeTgHjKmPoRsTu jordan@macbook-pro",
+        "keyFingerprint": ""
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000032",
+      "organizationId": null,
+      "folderId": "f0000000-0000-4000-8000-000000000002",
+      "type": 5,
+      "name": "Production Deploy Key",
+      "notes": "Read-only deploy key for nimbus-prod. Rotate quarterly.",
+      "favorite": false,
+      "fields": [],
+      "sshKey": {
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEAxExampleRsaPrivateKeyBlockNotRealOnlyForScreenshots00\nAAAEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEdeploy\n-----END OPENSSH PRIVATE KEY-----",
+        "publicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDExampleRsaKeyMaterialNotRealJ8kLm2nP4qR7sT9uV1wX3yZ5aB6cD8eF0gH2iJ4kL6mN8oP0qR2sT4uV6wX8yZ deploy@nimbus-prod",
+        "keyFingerprint": ""
+      }
+    }
+  ]
+}

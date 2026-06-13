@@ -9,6 +9,11 @@ import type { CornerPromptPayload } from "./types";
 
 const CORNER_ID = "titanpass-corner-prompt";
 
+// The save/update card is page-level UI, so render it only in the top frame.
+// Capture still runs in every frame (so logins inside an iframe, e.g. Apple ID,
+// are caught); the resulting prompt is shown once, on the page itself.
+const isTopFrame = (): boolean => window.top === window.self;
+
 let cornerPromptEl: HTMLElement | null = null;
 // Closed shadow root of the corner prompt; in-card DOM queries go through this.
 let cornerShadow: ShadowRoot | null = null;
@@ -25,6 +30,7 @@ export function removeCornerPrompt(): void {
 
 /** Picks up a save/update prompt stashed by a prior page's submit (post-navigation capture). */
 export function queryCornerPrompt(): void {
+	if (!isTopFrame()) return;
 	if (!isExtensionAlive()) return;
 	try {
 		chrome.runtime
@@ -162,6 +168,9 @@ function handleCornerCardClick(e: Event): void {
 
 /** Mounts the save/update corner prompt in the top-right of the page. */
 export function handleCornerPromptShow(payload: CornerPromptPayload): void {
+	// CORNER_PROMPT_SHOW is broadcast to every frame in the tab; only the top
+	// frame paints the card (sub-frames would render it inside the iframe).
+	if (!isTopFrame()) return;
 	removeCornerPrompt();
 	currentPrompt = payload;
 
