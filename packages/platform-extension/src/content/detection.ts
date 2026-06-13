@@ -9,11 +9,80 @@ export const NEGATIVE_HINT_RE = /search|captcha|coupon|otp|code/i;
 const USERNAME_TEXT_SELECTOR =
 	'input[type="text"]:not([readonly]):not([disabled]), input[type="email"]:not([readonly]):not([disabled]), input[type="tel"]:not([readonly]):not([disabled]), input:not([type]):not([readonly]):not([disabled])';
 
+// --- Shadow-DOM-aware traversal -------------------------------------------
+// Detectors must see inputs that web components (e.g. Reddit's
+// faceplate-text-input) render into an OPEN shadow root. querySelector(All)
+// stops at shadow boundaries, so these helpers also walk el.shadowRoot. Closed
+// roots report shadowRoot === null and are silently skipped (unreachable).
+
+/** querySelectorAll that descends into open shadow roots, in DFS pre-order. */
+export function deepQueryAll<E extends Element = HTMLElement>(
+	selector: string,
+	root: ParentNode = document,
+): E[] {
+	const out: E[] = [];
+	const visit = (parent: ParentNode): void => {
+		for (const el of Array.from(parent.children)) {
+			if (el.matches(selector)) out.push(el as unknown as E);
+			if (el.shadowRoot) visit(el.shadowRoot);
+			visit(el);
+		}
+	};
+	visit(root);
+	return out;
+}
+
+/** First match of deepQueryAll, short-circuiting the walk. */
+export function deepQuery<E extends Element = HTMLElement>(
+	selector: string,
+	root: ParentNode = document,
+): E | null {
+	const visit = (parent: ParentNode): E | null => {
+		for (const el of Array.from(parent.children)) {
+			if (el.matches(selector)) return el as unknown as E;
+			const inShadow = el.shadowRoot ? visit(el.shadowRoot) : null;
+			if (inShadow) return inShadow;
+			const inLight = visit(el);
+			if (inLight) return inLight;
+		}
+		return null;
+	};
+	return visit(root);
+}
+
+/** closest() that crosses shadow boundaries by hopping to each root's host. */
+export function closestAcrossShadow(el: Element, selector: string): Element | null {
+	let cur: Element | null = el;
+	while (cur) {
+		const found = cur.closest(selector);
+		if (found) return found;
+		const root = cur.getRootNode();
+		cur = root instanceof ShadowRoot ? root.host : null;
+	}
+	return null;
+}
+
+/** The truly-focused element, descending through open shadow roots. */
+export function deepActiveElement(doc: Document = document): Element | null {
+	let active: Element | null = doc.activeElement;
+	while (active?.shadowRoot?.activeElement) {
+		active = active.shadowRoot.activeElement;
+	}
+	return active;
+}
+
+/**
+ * The real event target, piercing open shadow boundaries. A document-level
+ * listener sees `event.target` retargeted to the shadow host; composedPath()[0]
+ * is the actual element (open roots only; closed roots stop at the host).
+ */
+export function composedTarget(e: Event): EventTarget | null {
+	return e.composedPath()[0] ?? e.target;
+}
+
 /** First non-readonly, non-disabled `type=password` input, or null. */
 export function findPasswordField(doc: Document = document): HTMLInputElement | null {
-	return doc.querySelector<HTMLInputElement>(
-		'input[type="password"]:not([readonly]):not([disabled])',
-	);
+	return deepQuery<HTMLInputElement>('input[type="password"]:not([readonly]):not([disabled])', doc);
 }
 
 /** Concatenated attribute hint (name, id, placeholder, autocomplete, aria-label) for regex matching. */
@@ -24,26 +93,29 @@ export function attrHint(el: HTMLInputElement): string {
 /**
  * Visible text of the element's associated label(s): `<label for=id>`, a
  * wrapping `<label>`, or `aria-labelledby` targets. Low-priority hint fallback.
+ * ID/label lookups resolve within the element's own tree (`getRootNode()`), so
+ * they work inside a shadow root.
  */
 export function labelText(el: HTMLInputElement, doc: Document = document): string {
 	const parts: string[] = [];
+	const root = el.getRootNode() as Document | ShadowRoot;
 	if (el.id) {
 		const sel = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(el.id) : el.id;
 		try {
-			for (const lbl of doc.querySelectorAll<HTMLLabelElement>(`label[for="${sel}"]`)) {
+			for (const lbl of root.querySelectorAll<HTMLLabelElement>(`label[for="${sel}"]`)) {
 				parts.push(lbl.textContent ?? "");
 			}
 		} catch {
 			// Unusable id even after escaping: skip the for= lookup.
 		}
 	}
-	const wrapping = el.closest("label");
+	const wrapping = closestAcrossShadow(el, "label");
 	if (wrapping) parts.push(wrapping.textContent ?? "");
 	const labelledby = el.getAttribute("aria-labelledby");
 	if (labelledby) {
 		for (const id of labelledby.split(/\s+/)) {
 			if (!id) continue;
-			const ref = doc.getElementById(id);
+			const ref = root.getElementById(id) ?? doc.getElementById(id);
 			if (ref) parts.push(ref.textContent ?? "");
 		}
 	}
@@ -61,17 +133,22 @@ function looksLikeUsername(el: HTMLInputElement): boolean {
 
 /** Latest text/email input appearing before `password` in DOM order, or null. */
 export function findUsernameNearPassword(password: HTMLInputElement): HTMLInputElement | null {
-	const form = password.closest("form");
+	const form = closestAcrossShadow(password, "form");
 	const scope: ParentNode = form ?? password.ownerDocument;
-	const candidates = scope.querySelectorAll<HTMLInputElement>(USERNAME_TEXT_SELECTOR);
+	// Walk text-like inputs AND password inputs together in pre-order: the
+	// username is the latest text-like input appearing before `password`. A
+	// single ordered traversal works even when each field lives in its own
+	// shadow host, where compareDocumentPosition would report DISCONNECTED.
+	const ordered = deepQueryAll<HTMLInputElement>(
+		`${USERNAME_TEXT_SELECTOR}, input[type="password"]`,
+		scope,
+	);
 	let best: HTMLInputElement | null = null;
-	for (const c of candidates) {
-		if (c === password) continue;
+	for (const c of ordered) {
+		if (c === password) return best;
+		if (c.type === "password") continue;
 		if (NEGATIVE_HINT_RE.test(attrHint(c))) continue;
-		const pos = c.compareDocumentPosition(password);
-		if (pos & Node.DOCUMENT_POSITION_FOLLOWING) {
-			best = c; // c precedes password; keep the latest such candidate
-		}
+		best = c; // c precedes password; keep the latest such candidate
 	}
 	return best;
 }
@@ -96,8 +173,9 @@ export const CC_CSC_RE =
 
 /** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
 export function ccByToken(token: string, doc: Document = document): HTMLInputElement | null {
-	return doc.querySelector<HTMLInputElement>(
+	return deepQuery<HTMLInputElement>(
 		`input[autocomplete~="${token}"]:not([readonly]):not([disabled])`,
+		doc,
 	);
 }
 
@@ -112,9 +190,7 @@ export function findByHint(
 	doc: Document = document,
 ): HTMLInputElement | null {
 	const inputs: HTMLInputElement[] = [];
-	for (const el of doc.querySelectorAll<HTMLInputElement>(
-		"input:not([readonly]):not([disabled])",
-	)) {
+	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
 		if (el.type === "hidden" || el.type === "checkbox" || el.type === "radio") continue;
 		if (el.type === "password" && !allowPassword) continue;
 		inputs.push(el);
@@ -192,18 +268,15 @@ export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
  */
 export function otpInputs(doc: Document = document): HTMLInputElement[] {
 	// Multiple `one-time-code` tokens means a segmented widget tagging every box.
-	const tokened = Array.from(
-		doc.querySelectorAll<HTMLInputElement>(
-			'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
-		),
+	const tokened = deepQueryAll<HTMLInputElement>(
+		'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
+		doc,
 	);
 	if (tokened.length >= 1) return tokened;
 
 	const card = detectCardFields(doc);
 	let hinted: HTMLInputElement | null = null;
-	for (const el of doc.querySelectorAll<HTMLInputElement>(
-		"input:not([readonly]):not([disabled])",
-	)) {
+	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
 		if (el.type === "password" || el.type === "hidden" || el.type === "checkbox") continue;
 		if (el.type === "radio" || el.type === "submit" || el.type === "button") continue;
 		if (isCardField(card, el)) continue;
@@ -284,7 +357,7 @@ export const CUSTOM_FILLABLE_TYPES = new Set(["text", "tel", "number", "search",
 /** All non-readonly inputs of a custom-fillable type. */
 export function getFillableInputs(doc: Document = document): HTMLInputElement[] {
 	const out: HTMLInputElement[] = [];
-	for (const el of doc.querySelectorAll<HTMLInputElement>("input")) {
+	for (const el of deepQueryAll<HTMLInputElement>("input", doc)) {
 		if (el.readOnly || el.disabled) continue;
 		if (!CUSTOM_FILLABLE_TYPES.has(el.type)) continue;
 		out.push(el);
@@ -364,19 +437,21 @@ export function detectLoginFields(doc: Document = document): LoginFields {
 	}
 
 	// 2. Explicit autocomplete tokens.
-	const explicit = doc.querySelector<HTMLInputElement>(
+	const explicit = deepQuery<HTMLInputElement>(
 		'input[autocomplete~="username"]:not([readonly]):not([disabled]), input[autocomplete="email"]:not([readonly]):not([disabled])',
+		doc,
 	);
 	if (explicit) return { username: explicit, password };
 
 	// 3. A single visible email input.
-	const email = doc.querySelector<HTMLInputElement>(
+	const email = deepQuery<HTMLInputElement>(
 		'input[type="email"]:not([readonly]):not([disabled])',
+		doc,
 	);
 	if (email) return { username: email, password };
 
 	// 4. Attribute heuristics on text inputs.
-	const candidates = doc.querySelectorAll<HTMLInputElement>(USERNAME_TEXT_SELECTOR);
+	const candidates = deepQueryAll<HTMLInputElement>(USERNAME_TEXT_SELECTOR, doc);
 	for (const c of candidates) {
 		if (looksLikeUsername(c)) return { username: c, password };
 	}
@@ -395,10 +470,9 @@ export function detectLoginFields(doc: Document = document): LoginFields {
  * (a matching second field). Returns null when ambiguous or mid-edit.
  */
 export function findNewPasswordOnChangeForm(doc: Document = document): HTMLInputElement | null {
-	const fields = Array.from(
-		doc.querySelectorAll<HTMLInputElement>(
-			'input[type="password"]:not([readonly]):not([disabled])',
-		),
+	const fields = deepQueryAll<HTMLInputElement>(
+		'input[type="password"]:not([readonly]):not([disabled])',
+		doc,
 	);
 	if (fields.length < 2) return null;
 	const NEW_RE = /new|set/i;

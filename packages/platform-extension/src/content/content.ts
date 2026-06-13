@@ -10,6 +10,8 @@ import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
 	candidateKind,
 	cardFieldsPresent,
+	composedTarget,
+	deepActiveElement,
 	detectCardFields,
 	detectLoginFields,
 	hasInteractiveCaptcha,
@@ -44,7 +46,7 @@ function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 }
 
 function focusedCandidate(): HTMLInputElement | null {
-	const focused = document.activeElement;
+	const focused = deepActiveElement();
 	return focused instanceof HTMLInputElement && isAutofillCandidate(focused) ? focused : null;
 }
 
@@ -252,10 +254,11 @@ function bootstrap(): void {
 	document.addEventListener(
 		"focusin",
 		(e) => {
-			if (!isAutofillCandidate(e.target)) return;
+			const target = composedTarget(e);
+			if (!isAutofillCandidate(target)) return;
 			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
-			showFor(e.target);
+			showFor(target);
 		},
 		true,
 	);
@@ -268,16 +271,17 @@ function bootstrap(): void {
 			// fillForm dispatches synthetic input/change events; reacting would
 			// reopen the dropdown the user just dismissed. Only trust real events.
 			if (!e.isTrusted) return;
-			if (!isAutofillCandidate(e.target)) return;
+			const target = composedTarget(e);
+			if (!isAutofillCandidate(target)) return;
 			silenceAutoOpen = false;
 			if (!cachedResult) {
 				queryAutofill();
 				return;
 			}
-			if (e.target.value && !cachedResult.locked) {
+			if (target.value && !cachedResult.locked) {
 				// User is typing their own value: get out of the way unless there are
 				// multiple matches of this field's kind to disambiguate.
-				const kind = candidateKind(e.target);
+				const kind = candidateKind(target);
 				const count =
 					kind === "card"
 						? cachedResult.cards.length
@@ -289,7 +293,7 @@ function bootstrap(): void {
 					return;
 				}
 			}
-			showFor(e.target);
+			showFor(target);
 		},
 		true,
 	);
@@ -302,7 +306,7 @@ function bootstrap(): void {
 		(e) => {
 			const host = picker.activeHost();
 			if (host) {
-				const target = e.target;
+				const target = composedTarget(e);
 				if (target instanceof Node) {
 					// Clicks inside a cross-origin iframe never reach here.
 					if (host.contains(target)) return;
@@ -313,11 +317,11 @@ function bootstrap(): void {
 				return;
 			}
 			// Picker closed: a mousedown on a candidate field is re-engagement.
-			const target = e.target;
+			const target = composedTarget(e);
 			if (isAutofillCandidate(target)) {
 				silenceAutoOpen = false;
 				// Re-click on the already-focused field fires no focusin, so show ourselves.
-				if (document.activeElement === target) showFor(target);
+				if (deepActiveElement() === target) showFor(target);
 			}
 		},
 		true,

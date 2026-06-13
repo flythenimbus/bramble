@@ -15,6 +15,13 @@ export const cornerStyles = html`
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				font-size: 13px;
 				color: #fff;
+				/* Reset inherited text props so a centered/RTL host page can't bleed
+				   alignment into the card. */
+				text-align: left;
+				letter-spacing: normal;
+				text-transform: none;
+				font-style: normal;
+				text-indent: 0;
 				padding: 20px;
 				box-sizing: border-box;
 				width: 360px;

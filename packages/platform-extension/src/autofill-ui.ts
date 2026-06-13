@@ -85,6 +85,7 @@ const STYLE = `
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 		font-size: 13px;
 		color: #fff;
+		text-align: left;
 		max-height: 320px;
 		overflow-y: auto;
 		padding: 4px;

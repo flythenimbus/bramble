@@ -41,13 +41,88 @@ function clickIsOnAnchor(target: Node): boolean {
 	return false;
 }
 
-/** Anchor a host element below `field`, matching the dropdown's geometry. */
+/** Anchor a host below `field` via a compositor-friendly transform (no layout). */
 function positionHostElement(el: HTMLElement, field: HTMLInputElement): void {
 	const rect = field.getBoundingClientRect();
-	el.style.top = `${rect.bottom + window.scrollY + 2}px`;
-	el.style.left = `${rect.left + window.scrollX}px`;
+	const x = rect.left + window.scrollX;
+	const y = rect.bottom + window.scrollY + 2;
 	// One third of the field, floored at 240px for readability on narrow fields.
-	el.style.width = `${Math.max(rect.width / 3, 240)}px`;
+	const width = `${Math.max(rect.width / 3, 240)}px`;
+	// translate (compositor-only) instead of top/left (layout) so the per-frame
+	// tracker doesn't thrash layout; write only on change.
+	const transform = `translate3d(${x}px, ${y}px, 0)`;
+	if (el.style.transform !== transform) el.style.transform = transform;
+	if (el.style.width !== width) el.style.width = width;
+}
+
+// Per-frame position tracking while a picker is visible. window 'scroll' is
+// composed:false and doesn't bubble, so it never fires for scrolls inside a
+// shadow root or a nested modal scroller (e.g. Reddit's login modal). The rAF
+// loop keeps the picker pinned; transform writes keep the common case smooth.
+let trackingRaf: number | null = null;
+let lastX = Number.NaN;
+let lastY = Number.NaN;
+let lastWidth = Number.NaN;
+let lastAnchor: HTMLInputElement | null = null;
+// Hidden mid-scroll: JS tracking trails the compositor inside a modal/shadow
+// scroller, so we hide while the field moves and snap back once it settles.
+let scrollHidden = false;
+let lastMoveTs = 0;
+const SCROLL_SETTLE_MS = 120;
+
+function startPositionTracking(): void {
+	if (trackingRaf !== null) return;
+	// Fresh loop: clear the baseline so the first frame doesn't read as a scroll.
+	lastX = Number.NaN;
+	lastAnchor = null;
+	scrollHidden = false;
+	const tick = (ts: number): void => {
+		const host = activeHost();
+		if (!host || !anchorField) {
+			trackingRaf = null;
+			return;
+		}
+		const rect = anchorField.getBoundingClientRect();
+		const x = rect.left + window.scrollX;
+		const y = rect.bottom + window.scrollY + 2;
+		const width = Math.max(rect.width / 3, 240);
+		// New field or first frame: re-baseline without treating it as a scroll.
+		const rebaseline = Number.isNaN(lastX) || anchorField !== lastAnchor;
+		const moved = !rebaseline && (x !== lastX || y !== lastY || width !== lastWidth);
+
+		if (rebaseline || moved) {
+			host.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+			host.style.width = `${width}px`;
+		}
+		lastX = x;
+		lastY = y;
+		lastWidth = width;
+		lastAnchor = anchorField;
+
+		// A change in the field's *document* position is an internal/modal scroll
+		// (a window scroll leaves document coords constant, so the picker rides
+		// along natively). Hide while it moves; snap back once settled.
+		if (moved) {
+			lastMoveTs = ts;
+			if (!scrollHidden) {
+				host.style.visibility = "hidden";
+				scrollHidden = true;
+			}
+		} else if (scrollHidden && (rebaseline || ts - lastMoveTs >= SCROLL_SETTLE_MS)) {
+			host.style.visibility = "";
+			scrollHidden = false;
+		}
+		trackingRaf = requestAnimationFrame(tick);
+	};
+	trackingRaf = requestAnimationFrame(tick);
+}
+
+function stopPositionTracking(): void {
+	if (trackingRaf !== null) {
+		cancelAnimationFrame(trackingRaf);
+		trackingRaf = null;
+	}
+	scrollHidden = false;
 }
 
 // --- Shadow dropdown (COEP fallback renderer) ---
@@ -82,7 +157,7 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	const root = document.createElement("div");
 	root.id = DROPDOWN_ID;
 	// Inline so positioning doesn't depend on the inner stylesheet parsing first.
-	root.style.cssText = "position: absolute; z-index: 2147483647;";
+	root.style.cssText = "position: absolute; top: 0; left: 0; z-index: 2147483647;";
 	// Closed: page gets `root.shadowRoot === null`. Listener attaches to the returned shadow.
 	const shadow = root.attachShadow({ mode: "closed" });
 	shadow.innerHTML = dropdownStyles + bodyHtml;
@@ -90,6 +165,7 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	dropdownEl = root;
 	document.body.appendChild(dropdownEl);
 	positionDropdown(field);
+	startPositionTracking();
 	return shadow;
 }
 
@@ -209,7 +285,8 @@ function ensureIframeHost(): void {
 	const host = document.createElement("div");
 	// Random id: no stable selector for the page to target the host by.
 	host.id = `tp-${Math.random().toString(36).slice(2, 10)}`;
-	host.style.cssText = "position: absolute; z-index: 2147483647; margin: 0; padding: 0; border: 0;";
+	host.style.cssText =
+		"position: absolute; top: 0; left: 0; z-index: 2147483647; margin: 0; padding: 0; border: 0;";
 	const shadow = host.attachShadow({ mode: "closed" });
 	const frame = document.createElement("iframe");
 	frame.src = `${AUTOFILL_UI_URL}?parentOrigin=${encodeURIComponent(location.origin)}`;
@@ -263,6 +340,7 @@ function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 	if (!iframeHostEl) return;
 	anchorField = field;
 	positionHostElement(iframeHostEl, field);
+	startPositionTracking();
 	// Skip a redundant re-post when the same content is already showing here.
 	const key = render.kind === "matches" ? matchesKey(render.matches) : "\0locked";
 	if (iframeReady && key === iframeMatchesKey) return;
@@ -408,6 +486,7 @@ function handleDropdownKey(e: KeyboardEvent): boolean {
 
 // Tear both renderers down when the extension context is lost.
 onTeardown(() => {
+	stopPositionTracking();
 	removeDropdown();
 	destroyIframeHost();
 });

@@ -466,9 +466,12 @@ describe("github.com — 2FA (TOTP)", () => {
 describe("reddit.com — sign in (faceplate-text-input web components)", () => {
 	// Reddit wraps its login + password inputs in <faceplate-text-input> custom
 	// elements. The real <input> is rendered by Reddit's JS into the component's
-	// shadow root at runtime (the slotted <span slot="label"> children prove a
-	// shadow root exists). A static capture therefore has NO login <input> at
-	// all, and our detectors only walk light-DOM inputs.
+	// OPEN shadow root at runtime (the slotted <span slot="label"> children prove
+	// a shadow root exists). A static HTML capture runs no JS and innerHTML
+	// doesn't build shadow roots, so this fixture has NO login <input> at all
+	// (only the search box). Detection pierces open shadow roots now; that path
+	// is covered by detection.shadow.dom.test.ts. Here there's simply nothing
+	// rendered to find.
 
 	it("the login fields are web components, not light-DOM inputs", () => {
 		loadFixture("reddit-login");
@@ -485,11 +488,11 @@ describe("reddit.com — sign in (faceplate-text-input web components)", () => {
 		expect(inputs[0]?.getAttribute("name")).toBe("q");
 	});
 
-	it("KNOWN LIMITATION: detectLoginFields finds nothing (inputs live in shadow DOM)", () => {
-		// Our detectors walk light-DOM inputs only; they never pierce a component's
-		// shadow root. So Reddit's login form yields no candidates and autofill
-		// never offers. This locks in the current behavior; flip it when/if
-		// shadow-DOM traversal lands.
+	it("no candidates: the static capture has no rendered login inputs", () => {
+		// Not a detector limitation: detection pierces open shadow roots now (see
+		// detection.shadow.dom.test.ts for the live-DOM behavior). This capture
+		// just has nothing to find, because Reddit injects the inputs at runtime
+		// and innerHTML neither runs that JS nor builds shadow roots.
 		loadFixture("reddit-login");
 		const { username, password } = detectLoginFields();
 		expect(username).toBeNull();
