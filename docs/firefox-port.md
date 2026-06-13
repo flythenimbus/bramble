@@ -95,7 +95,7 @@ the codebase is already promise-native.
 
 ## Manifest deltas (Chrome vs Firefox)
 
-The build already copies `packages/manifests/chrome/manifest.json`. A Firefox manifest is identical
+The build already copies `packages/manifests/chromium/manifest.json`. A Firefox manifest is identical
 except:
 
 | Field | Chrome | Firefox |
