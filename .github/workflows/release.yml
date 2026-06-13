@@ -49,6 +49,15 @@ jobs:
       - name: Build WASM
         run: bun run wasm:build
 
+      # Gate the release on the same lint + tests CI runs on main. Any failure
+      # here aborts the job, so no tag ever ships a broken bundle. Placed after
+      # the WASM build because the tests exercise the freshly-built crypto bytes.
+      - name: Lint
+        run: bun run ci:check
+
+      - name: Test
+        run: bun run test
+
       - name: Bundle extension
         run: bun run bundle
 
