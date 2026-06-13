@@ -18,7 +18,7 @@ export default defineConfig({
 			writeBundle() {
 				mkdirSync(outDir, { recursive: true });
 				copyFileSync(
-					resolve(__dirname, "../manifests/chrome/manifest.json"),
+					resolve(__dirname, "../manifests/chromium/manifest.json"),
 					resolve(outDir, "manifest.json"),
 				);
 			},

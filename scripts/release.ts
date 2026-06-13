@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 // Platform name (as it appears in the release asset) -> manifest path on disk.
 // "chromium" is all we ship today; add a row per target as they land.
 const MANIFESTS: Record<string, string> = {
-	chromium: "packages/manifests/chrome/manifest.json",
+	chromium: "packages/manifests/chromium/manifest.json",
 };
 
 const fail = (msg: string): never => {
