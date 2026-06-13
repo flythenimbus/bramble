@@ -1,8 +1,9 @@
 // Cut a release: bump a platform's manifest version, commit, tag, and push.
-// Usage: bun run release <platform> <version>   e.g. bun run release chromium 0.1.0
+// Usage: bun run release <platform> <version>   e.g. bun run release chromium 1.0.0
 //
-// Pushing the tag triggers .github/workflows/release.yml, which bundles the
-// extension and publishes bramble_<platform>_<version>.zip to the GitHub release.
+// Tags as <version>-<platform> (e.g. 1.0.0-chromium). Pushing the tag triggers
+// .github/workflows/release.yml, which bundles the extension and publishes
+// bramble_<platform>_<version>.zip under a "<Platform> Extension <version>" release.
 
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -39,7 +40,7 @@ if (parts.length > 4 || parts.some((p) => !PART.test(p) || Number(p) > 65535)) {
 	fail(`invalid version "${version}". want 1-4 ints, each 0-65535 (e.g. 0.1.0)`);
 }
 
-const tag = `v${version}`;
+const tag = `${version}-${platform}`;
 
 // Refuse to fold unrelated edits into the release commit, or to clobber a tag.
 if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
@@ -58,7 +59,7 @@ writeFileSync(manifest, after);
 
 const branch = capture("git rev-parse --abbrev-ref HEAD");
 run(`git add ${manifest}`);
-run(`git commit -m "chore(release): ${platform} ${tag}"`);
+run(`git commit -m "chore(release): ${platform} ${version}"`);
 run(`git tag ${tag}`);
 run(`git push origin ${branch}`);
 run(`git push origin ${tag}`);
