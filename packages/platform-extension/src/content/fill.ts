@@ -1,4 +1,5 @@
 import {
+	closestAcrossShadow,
 	deriveMatcher,
 	detectCardFields,
 	detectLoginFields,
@@ -64,7 +65,7 @@ export function fillForm(
  */
 export function submitFromField(field: HTMLInputElement | null): void {
 	if (!field) return;
-	const form = field.closest("form");
+	const form = closestAcrossShadow(field, "form") as HTMLFormElement | null;
 	if (form && typeof form.requestSubmit === "function") {
 		try {
 			form.requestSubmit();

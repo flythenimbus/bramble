@@ -1,4 +1,7 @@
 import {
+	composedTarget,
+	deepQuery,
+	deepQueryAll,
 	detectLoginFields,
 	findNewPasswordOnChangeForm,
 	hasInteractiveCaptcha,
@@ -24,9 +27,7 @@ function buildCapture(): { username: string; password: string } | null {
 	const login = detectLoginFields();
 	if (otpInputs().length > 0 && !login.password) return null;
 
-	const pwFields = document.querySelectorAll(
-		'input[type="password"]:not([readonly]):not([disabled])',
-	);
+	const pwFields = deepQueryAll('input[type="password"]:not([readonly]):not([disabled])');
 	let capturePassword = lastUserEditedPassword;
 	if (pwFields.length >= 2) {
 		// Change form (old/new/confirm): only capture when the new-password field
@@ -40,7 +41,7 @@ function buildCapture(): { username: string; password: string } | null {
 
 	const username =
 		login.username?.value ??
-		document.querySelector<HTMLInputElement>('input[autocomplete~="username"]')?.value ??
+		deepQuery<HTMLInputElement>('input[autocomplete~="username"]')?.value ??
 		"";
 	return { username, password: capturePassword };
 }
@@ -60,7 +61,7 @@ function emitCapture(): void {
 /** Enter inside a password field is an effective submit for forms with no native submit; capture on it. */
 export function onPasswordEnter(e: KeyboardEvent): void {
 	if (e.key !== "Enter") return;
-	const target = e.target;
+	const target = composedTarget(e);
 	if (!(target instanceof HTMLInputElement)) return;
 	if (target.type !== "password") return;
 	// A real submit event may also fire; the duplicate emitCapture is harmless.
@@ -72,7 +73,7 @@ export function maybeEmitSpaSubmit(): void {
 	if (
 		lastUserEditedPassword !== null &&
 		Date.now() - lastEditAt < SPA_SUBMIT_WINDOW_MS &&
-		!document.querySelector('input[type="password"]:not([readonly]):not([disabled])')
+		!deepQuery('input[type="password"]:not([readonly]):not([disabled])')
 	) {
 		emitCapture();
 	}
@@ -84,7 +85,7 @@ document.addEventListener(
 	"input",
 	(e) => {
 		if (!e.isTrusted) return;
-		const target = e.target;
+		const target = composedTarget(e);
 		if (!(target instanceof HTMLInputElement)) return;
 		if (target.type !== "password") return;
 		lastUserEditedPassword = target.value;

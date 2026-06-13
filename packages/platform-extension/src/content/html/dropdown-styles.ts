@@ -14,6 +14,13 @@ export const dropdownStyles = html`
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				font-size: 13px;
 				color: #fff;
+				/* Reset inherited text props so a centered/RTL host page (e.g. Apple's
+				   account page) can't bleed alignment into the dropdown. */
+				text-align: left;
+				letter-spacing: normal;
+				text-transform: none;
+				font-style: normal;
+				text-indent: 0;
 				max-height: 320px;
 				overflow-y: auto;
 				padding: 4px;
