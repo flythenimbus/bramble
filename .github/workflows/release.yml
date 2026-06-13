@@ -1,0 +1,65 @@
+name: Release
+
+# Builds the Chromium extension bundle and publishes it as a GitHub Release
+# asset whenever a tag is pushed. The tag name (minus any leading "v") becomes
+# <version> in the asset name: bramble_chromium_<version>.zip. Only the
+# Chromium build exists today; add sibling assets here when other targets land.
+on:
+  push:
+    tags:
+      - "*"
+
+# softprops/action-gh-release creates the release and uploads the asset, both
+# of which write to the repo's releases — the default read-only GITHUB_TOKEN
+# can't do that.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Same pinned Rust + wasm-pack toolchain as CI — the bundle's `vite build`
+      # copies the crypto WASM out of public/wasm/ (gitignored), so it must be
+      # freshly built here before bundling, exactly as in ci.yml.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/crypto-wasm
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'v0.13.1'
+
+      - name: Install JS deps
+        run: bun install
+
+      - name: Build WASM
+        run: bun run wasm:build
+
+      - name: Bundle extension
+        run: bun run bundle
+
+      # Tag v0.1.0 -> bramble_chromium_0.1.0.zip; a bare 0.1.0 tag works too.
+      - name: Name the release asset
+        id: asset
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp packages/platform-extension/bramble.zip "bramble_chromium_${version}.zip"
+          echo "path=bramble_chromium_${version}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.asset.outputs.path }}

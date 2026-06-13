@@ -8,6 +8,7 @@
 	],
 	"scripts": {
 		"build": "bun run --filter '@vault/platform-extension' build",
+		"bundle": "bun run --filter '@vault/platform-extension' bundle",
 		"dev": "bun run --filter '@vault/platform-extension' dev",
 		"wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
 		"wasm:verify": "bun run packages/crypto-wasm/verify.ts",
@@ -16,6 +17,7 @@
 		"format": "biome format --write .",
 		"check": "biome check --write  --unsafe .",
 		"ci:check": "biome ci .",
+		"release": "bun run scripts/release.ts",
 		"test": "bun run wasm:test && bun run --filter '*' test",
 		"typecheck": "bun run --filter '*' typecheck"
 	},
