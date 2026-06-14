@@ -1,18 +1,32 @@
-// Cut a release: bump a platform's manifest version, commit, tag, and push.
+// Cut a release entirely from your machine: bump the manifest, build + sign the
+// bundle LOCALLY (the signing key never leaves this machine / your YubiKey),
+// tag, push, then publish a GitHub release with the signed artifacts attached.
 // Usage: bun run release <platform> <version>   e.g. bun run release chromium 1.0.0
 //
-// Tags as <version>-<platform> (e.g. 1.0.0-chromium). Pushing the tag triggers
-// .github/workflows/release.yml, which bundles the extension and publishes
-// bramble_<platform>_<version>.zip under a "<Platform> Extension <version>" release.
+// Tags as <version>-<platform> (e.g. 1.0.0-chromium). Publishing the release
+// fires .github/workflows/release.yml, which only verifies the signed .crx made
+// it onto the release; CI never builds or signs. Signing requires the one-time
+// setup in docs/release-signing.md (age + YubiKey).
 
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Platform name (as it appears in the release asset) -> manifest path on disk.
 // "chromium" is all we ship today; add a row per target as they land.
 const MANIFESTS: Record<string, string> = {
 	chromium: "packages/manifests/chromium/manifest.json",
 };
+
+const DIST = "packages/platform-extension";
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
@@ -46,6 +60,15 @@ const tag = `${version}-${platform}`;
 if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
+// Gate on the same lint + tests CI enforces on main, before we touch anything,
+// so a tag never ships from a red tree.
+try {
+	run("bun run ci:check");
+	run("bun run test");
+} catch {
+	fail("lint or tests failed; fix them before releasing");
+}
+
 const before = readFileSync(manifest, "utf8");
 // Targeted replace keeps the diff to one line. "manifest_version" is untouched:
 // the pattern requires a quote immediately before `version`, which it lacks.
@@ -57,22 +80,52 @@ const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
 if (replaced !== 1) fail(`expected exactly one "version" field in ${manifest}, found ${replaced}`);
 
 const branch = capture("git rev-parse --abbrev-ref HEAD");
+const bumped = after !== before;
 
-// When the manifest is already at this version (e.g. re-tagging after deleting
-// the tag), there's nothing to bump or commit; tag the current commit as-is
-// instead of failing on an empty release commit.
-if (after === before) {
-	console.log(`${manifest} already at ${version}; tagging current commit without a release commit`);
-} else {
-	writeFileSync(manifest, after);
-	run(`git add ${manifest}`);
-	run(`git commit -m "chore(release): ${platform} ${version}"`);
+// Bump the manifest in place (uncommitted) so the build carries the new version.
+if (bumped) writeFileSync(manifest, after);
+
+// Build + sign BEFORE we commit or tag, so a signing failure (e.g. no YubiKey)
+// leaves no tag behind. wasm/ is gitignored, so rebuild it first as CI used to.
+try {
+	run("bun run wasm:build");
+	run(`bun run --filter '@vault/platform-extension' bundle`);
+	run("bun run sign");
+} catch {
+	fail(`build or signing failed; run \`git checkout ${manifest}\` to undo the bump`);
 }
 
+const zip = `${DIST}/bramble.zip`;
+const crx = `${DIST}/bramble.crx`;
+if (!existsSync(zip) || !existsSync(crx)) fail("expected bramble.zip and a signed bramble.crx");
+
+// Commit the bump (if any), then tag and push.
+if (bumped) {
+	run(`git add ${manifest}`);
+	run(`git commit -m "chore(release): ${platform} ${version}"`);
+} else {
+	console.log(`${manifest} already at ${version}; tagging current commit without a release commit`);
+}
 run(`git tag ${tag}`);
 run(`git push origin ${branch}`);
 run(`git push origin ${tag}`);
 
+// Publish the release with the locally-signed assets. Draft -> upload -> publish
+// so the `release: published` event fires only once the .crx is attached.
+const title = `${platform.charAt(0).toUpperCase()}${platform.slice(1)} Extension ${version}`;
+const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+const crxAsset = join(stage, `bramble_${platform}_${version}.crx`);
+const zipAsset = join(stage, `bramble_${platform}_${version}.zip`);
+copyFileSync(crx, crxAsset);
+copyFileSync(zip, zipAsset);
+try {
+	run(`gh release create ${tag} --draft --generate-notes --title ${JSON.stringify(title)}`);
+	run(`gh release upload ${tag} ${crxAsset} ${zipAsset}`);
+	run(`gh release edit ${tag} --draft=false`);
+} finally {
+	rmSync(stage, { recursive: true, force: true });
+}
+
 console.log(
-	`\nreleased ${tag}: the release workflow will attach bramble_${platform}_${version}.zip`,
+	`\nreleased ${tag}: signed bramble_${platform}_${version}.crx attached to the release.`,
 );
