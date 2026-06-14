@@ -8,7 +8,7 @@
 	],
 	"scripts": {
 		"build": "bun run --filter '@vault/platform-extension' build",
-		"bundle": "bun run --filter '@vault/platform-extension' bundle",
+		"bundle": "bun run --filter '@vault/platform-extension' bundle && bun run scripts/sign.ts --optional",
 		"dev": "bun run --filter '@vault/platform-extension' dev",
 		"wasm:build": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
 		"wasm:verify": "bun run packages/crypto-wasm/verify.ts",
@@ -18,12 +18,14 @@
 		"check": "biome check --write  --unsafe .",
 		"ci:check": "biome ci .",
 		"release": "bun run scripts/release.ts",
+		"sign": "bun run scripts/sign.ts",
 		"tag:delete": "f(){ [ -z \"$1\" ] && { echo 'usage: bun run tag:delete <tag>'; exit 1; }; git tag -d \"$1\"; git push origin --delete \"$1\"; }; f",
 		"test": "bun run wasm:test && bun run --filter '*' test",
 		"typecheck": "bun run --filter '*' typecheck"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.15",
-		"@types/node": "^22.10.0"
+		"@types/node": "^22.10.0",
+		"crx3": "^2.0.0"
 	}
 }

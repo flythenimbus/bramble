@@ -11,3 +11,7 @@ packages/platform-extension/public/wasm/
 # Bun
 bun.lockb
 .bun/
+
+# Signing keys must never be committed (see docs/release-signing.md)
+*.pem
+*.age

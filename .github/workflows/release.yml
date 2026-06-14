@@ -1,82 +1,31 @@
-name: Release
+name: Verify release
 
-# Builds the extension bundle and publishes it as a GitHub Release asset
-# whenever a <version>-<platform> tag is pushed (e.g. 1.0.0-chromium). The tag
-# splits into <version> and <platform>, naming the asset
-# bramble_<platform>_<version>.zip and titling the release
-# "<Platform> Extension <version>". Only the Chromium build exists today.
+# Releases are built, signed, and published from a maintainer's machine by
+# `bun run release` (the signing key never leaves that machine). This job does
+# NOT build or sign; it only confirms that a publish carried a real signed .crx,
+# so a release can't silently go out without the verified-upload artifact.
+# Triggered on publish (not the tag push), by which point the asset is attached.
 on:
-  push:
-    tags:
-      - "*"
+  release:
+    types: [published]
 
-# softprops/action-gh-release creates the release and uploads the asset, both
-# of which write to the repo's releases, which the default read-only
-# GITHUB_TOKEN can't do.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  verify-signed-crx:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      # Same pinned Rust + wasm-pack toolchain as CI: the bundle's `vite build`
-      # copies the crypto WASM out of public/wasm/ (gitignored), so it must be
-      # freshly built here before bundling, exactly as in ci.yml.
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Cache Rust deps
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/crypto-wasm
-
-      - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          version: 'v0.13.1'
-
-      - name: Install JS deps
-        run: bun install
-
-      - name: Build WASM
-        run: bun run wasm:build
-
-      # Gate the release on the same lint + tests CI runs on main. Any failure
-      # here aborts the job, so no tag ever ships a broken bundle. Placed after
-      # the WASM build because the tests exercise the freshly-built crypto bytes.
-      - name: Lint
-        run: bun run ci:check
-
-      - name: Test
-        run: bun run test
-
-      - name: Bundle extension
-        run: bun run bundle
-
-      # Tag 1.0.0-chromium -> version 1.0.0, platform chromium. Platform is the
-      # last "-"-delimited segment; manifest versions are numeric (no dashes),
-      # so the split is unambiguous. `title` upper-cases the first letter for
-      # the release name (portable idiom; bash's ${x^} needs bash 4+).
-      - name: Derive release metadata
-        id: meta
+      - name: Assert a signed CRX3 is attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          version="${GITHUB_REF_NAME%-*}"
-          platform="${GITHUB_REF_NAME##*-}"
-          title="$(tr '[:lower:]' '[:upper:]' <<< "${platform:0:1}")${platform:1}"
-          cp packages/platform-extension/bramble.zip "bramble_${platform}_${version}.zip"
-          echo "asset=bramble_${platform}_${version}.zip" >> "$GITHUB_OUTPUT"
-          echo "name=${title} Extension ${version}" >> "$GITHUB_OUTPUT"
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ steps.meta.outputs.name }}
-          files: ${{ steps.meta.outputs.asset }}
+          set -euo pipefail
+          crx="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets -q '.assets[].name' | grep -E '\.crx$' | head -1)"
+          [ -n "$crx" ] || { echo "::error::no .crx asset on release $TAG"; exit 1; }
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.crx' --dir .
+          magic="$(head -c 4 "$crx")"
+          [ "$magic" = "Cr24" ] || { echo "::error::$crx is not a CRX3 (magic: $magic)"; exit 1; }
+          echo "ok: $crx is a signed CRX3"
