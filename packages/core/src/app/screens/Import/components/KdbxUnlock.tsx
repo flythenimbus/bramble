@@ -52,7 +52,7 @@ export function KdbxUnlock({
 					onChange={(e) => setPassword(e.target.value)}
 					error={error ?? undefined}
 				/>
-				<label className="block space-y-1.5">
+				<label className="flex flex-col gap-3">
 					<span className="text-sm">Key file (optional)</span>
 					<input
 						type="file"
