@@ -55,11 +55,20 @@ const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
 	return `${p1}${version}${p2}`;
 });
 if (replaced !== 1) fail(`expected exactly one "version" field in ${manifest}, found ${replaced}`);
-writeFileSync(manifest, after);
 
 const branch = capture("git rev-parse --abbrev-ref HEAD");
-run(`git add ${manifest}`);
-run(`git commit -m "chore(release): ${platform} ${version}"`);
+
+// When the manifest is already at this version (e.g. re-tagging after deleting
+// the tag), there's nothing to bump or commit; tag the current commit as-is
+// instead of failing on an empty release commit.
+if (after === before) {
+	console.log(`${manifest} already at ${version}; tagging current commit without a release commit`);
+} else {
+	writeFileSync(manifest, after);
+	run(`git add ${manifest}`);
+	run(`git commit -m "chore(release): ${platform} ${version}"`);
+}
+
 run(`git tag ${tag}`);
 run(`git push origin ${branch}`);
 run(`git push origin ${tag}`);
