@@ -13,16 +13,38 @@ export function markOffscreenKey(present: boolean): void {
 	offscreenHasKey = present;
 }
 
+// A single in-flight createDocument, so concurrent callers (e.g. the mount probe
+// and the first crypto op) don't both call createDocument and race the
+// "Only a single offscreen document may be created" error.
+let creating: Promise<void> | null = null;
+
 /** Create the offscreen crypto document if absent; a fresh one starts locked. */
 export async function ensureOffscreen(): Promise<void> {
-	const existing = await chrome.offscreen.hasDocument?.();
-	if (existing) return;
-	await chrome.offscreen.createDocument({
-		url: OFFSCREEN_URL,
-		reasons: [chrome.offscreen.Reason.WORKERS, chrome.offscreen.Reason.CLIPBOARD],
-		justification: "Hosts the Vault WASM crypto module and clears the clipboard after a copy.",
-	});
-	offscreenHasKey = false;
+	if (await chrome.offscreen.hasDocument?.()) return;
+	if (!creating) {
+		creating = chrome.offscreen
+			.createDocument({
+				url: OFFSCREEN_URL,
+				reasons: [
+					chrome.offscreen.Reason.WORKERS,
+					chrome.offscreen.Reason.CLIPBOARD,
+					chrome.offscreen.Reason.WEB_RTC,
+				],
+				justification:
+					"Hosts the Vault WASM crypto module, clears the clipboard after a copy, and runs the WebRTC sync transport.",
+			})
+			.then(() => {
+				offscreenHasKey = false; // a fresh document starts locked
+			})
+			.catch((e: unknown) => {
+				// A concurrent caller already created it: treat as success, not a hang.
+				if (!String(e).includes("Only a single offscreen document")) throw e;
+			})
+			.finally(() => {
+				creating = null;
+			});
+	}
+	await creating;
 }
 
 /**
@@ -39,7 +61,8 @@ export async function sendToOffscreen(
 		type === "CRYPTO_UNWRAP_PASSWORD_SLOT" ||
 		type === "CRYPTO_UNLOCK_WITH_VEK" ||
 		type === "CRYPTO_GENERATE_VEK" ||
-		type === "CLIPBOARD_CLEAR";
+		type === "CLIPBOARD_CLEAR" ||
+		type?.startsWith("SYNC_") === true;
 	const cachedVek = getVek();
 	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {
 		offscreenHasKey = true;

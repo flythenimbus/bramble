@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import type { StorageAdapter } from "@core/adapters/storage";
+import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
 /** Recovery snapshot of the previous on-disk vault bytes, written before truncate so a crash leaves a recoverable backup. */
@@ -63,19 +64,6 @@ async function ensurePermission(handle: FileSystemFileHandle): Promise<void> {
 	if (result !== "granted") {
 		throw new Error("permission denied for vault file");
 	}
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-	let s = "";
-	for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ?? 0);
-	return btoa(s);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-	const s = atob(b64);
-	const out = new Uint8Array(s.length);
-	for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-	return out;
 }
 
 async function hasLocalVault(): Promise<boolean> {
@@ -150,6 +138,12 @@ export const extensionStorage: StorageAdapter = {
 		await putHandle(handle);
 	},
 
+	/** Grant FSA read/write permission up front (within a user gesture) so later reads/writes in the same flow don't prompt. No-op without an FSA handle. */
+	async requestVaultAccess() {
+		const handle = await getHandle();
+		if (handle) await ensurePermission(handle);
+	},
+
 	/** Read the vault bytes from the FSA file or the chrome.storage.local fallback. Throws when no vault is stored. */
 	async readVaultBlob() {
 		const handle = await getHandle();
@@ -209,10 +203,11 @@ export const extensionStorage: StorageAdapter = {
 		await chrome.storage.local.set({ [key]: value });
 	},
 
-	/** True when the background can write the vault directly (no FSA handle, which would need a user gesture). */
+	/** True when the background can write the vault directly. chrome.storage.local always can; an FSA file can iff its read/write permission is already granted (createWritable itself needs no gesture, only requestPermission does). Otherwise the background queues for the next popup to flush. */
 	async canWriteFromBackground() {
-		// FSA writes need a fresh user gesture; chrome.storage.local doesn't, so the background can write directly only without a handle.
-		return (await getHandle()) === null;
+		const handle = await getHandle();
+		if (handle === null) return true;
+		return (await handle.queryPermission({ mode: "readwrite" })) === "granted";
 	},
 
 	/** Write through a queued corner-prompt blob (PENDING_BLOB_KEY) and clear it. Returns false when nothing is queued. */

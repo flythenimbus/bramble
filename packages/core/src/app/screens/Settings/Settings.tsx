@@ -8,6 +8,7 @@ import { MasterPasswordSection } from "./components/MasterPasswordSection";
 import { Row, Section } from "./components/primitives";
 import { RecoveryCodeSection } from "./components/RecoveryCodeSection";
 import { SecurityKeysSection } from "./components/SecurityKeysSection";
+import { SyncConnectSection } from "./components/SyncConnectSection";
 
 export function Settings() {
 	const { themeMode, setThemeMode } = useTheme();
@@ -60,6 +61,8 @@ export function Settings() {
 						</button>
 					</Row>
 				</Section>
+
+				<SyncConnectSection />
 
 				<Section icon={<Info className="w-4 h-4 text-primary" />} title="About">
 					<div className="flex items-center justify-between text-sm">

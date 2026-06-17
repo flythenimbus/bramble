@@ -23,6 +23,11 @@ base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 
+# --- Sync roster-auth handshake (Noise). default-resolver = pure Rust, wasm-clean ---
+snow = "0.9"
+# --- Nostr event signing (BIP340 schnorr / secp256k1) for sync signaling ---
+k256 = { version = "0.13", default-features = false, features = ["schnorr", "alloc"] }
+
 # --- KDBX4 import spike (de-risking wasm compat) ---
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }

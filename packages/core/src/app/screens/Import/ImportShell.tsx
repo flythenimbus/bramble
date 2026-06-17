@@ -10,11 +10,11 @@ import {
 	kdbxEntriesToResult,
 	parseImport,
 } from "../../../import";
+import { bytesToBase64 } from "../../../util/bytes";
 import { Header } from "./components/Header";
 import { KdbxUnlock } from "./components/KdbxUnlock";
 import { Shell } from "./components/Shell";
 import { UnlockGate } from "./components/UnlockGate";
-import { bytesToB64 } from "./util/bytes-to-b64";
 import { countLine } from "./util/count-line";
 import { kdbxErrorMessage } from "./util/kdbx-error";
 
@@ -102,7 +102,7 @@ export function ImportShell() {
 			// Encrypted .kdbx: stash bytes, collect the password in the next step.
 			if (p.needsCredential) {
 				const bytes = new Uint8Array(await file.arrayBuffer());
-				setKdbxPending({ provider: p, fileB64: bytesToB64(bytes) });
+				setKdbxPending({ provider: p, fileB64: bytesToBase64(bytes) });
 				return;
 			}
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());

@@ -1,7 +1,7 @@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { TextField } from "../../../components/ui/text-field";
-import { bytesToB64 } from "../util/bytes-to-b64";
+import { bytesToBase64 } from "../../../../util/bytes";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
@@ -20,13 +20,13 @@ export function KdbxUnlock({
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
-	const submit = async (e: React.FormEvent) => {
+	const submit = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
 		setError(null);
 		setBusy(true);
 		try {
 			const keyfileB64 = keyfile
-				? bytesToB64(new Uint8Array(await keyfile.arrayBuffer()))
+				? bytesToBase64(new Uint8Array(await keyfile.arrayBuffer()))
 				: undefined;
 			await onOpen(password, keyfileB64);
 		} catch (err) {

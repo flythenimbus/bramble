@@ -1,4 +1,4 @@
-import { Asterisk, ExternalLink, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Asterisk, ExternalLink, Eye, EyeOff, KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { usePlatform } from "../../../context/PlatformContext";
@@ -21,6 +21,7 @@ export function Auth() {
 		unlockWithSecurityKey,
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
+		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
 	const { popOut, canPopOut } = usePopOut();
@@ -75,7 +76,7 @@ export function Auth() {
 		}
 	};
 
-	const handleRecovery = async (e: React.FormEvent) => {
+	const handleRecovery = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
 		setRecoveryError(null);
 		setBusy(true);
@@ -88,8 +89,15 @@ export function Auth() {
 		}
 	};
 
-	const showPasswordForm = hasVault && hasPasswordSlot;
-	const securityKeyAvailable = hasVault && hasWebauthnSlot;
+	const firstRun = !hasVault;
+	// A vault exists but its blob couldn't be read yet (commonly an FSA file whose
+	// read permission needs a user gesture). Rather than a scary error + extra step,
+	// show the unlock controls optimistically: the unlock click is itself a gesture,
+	// so it grants file access, reads, and unlocks in one go. We can't know which
+	// methods the vault has until it's read, so offer both password and security key.
+	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
+	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
+	const securityKeyAvailable = hasVault && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 
 	return (
@@ -112,70 +120,99 @@ export function Auth() {
 							<BrambleGlyph className="w-16 h-16 text-foreground" />
 						</div>
 						<h1 className="text-xl bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-							{showPasswordForm
-								? "Enter your master password to unlock your vault"
-								: "Unlock your vault with your security key"}
+							{firstRun
+								? `Welcome to ${appName}`
+								: showPasswordForm
+									? "Enter your master password to unlock your vault"
+									: "Unlock your vault with your security key"}
 						</h1>
+						{firstRun && (
+							<p className="mt-2 text-sm text-muted-foreground">
+								Set up a vault to start saving your passwords, cards, and notes.
+							</p>
+						)}
 					</div>
 
-					<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-						{showPasswordForm && (
-							<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
-								<TextField
-									label="Master password"
-									type={showPassword ? "text" : "password"}
-									autoFocus
-									error={errors.masterPassword?.message}
-									endAdornment={
-										<button
-											type="button"
-											onClick={() => setShowPassword(!showPassword)}
-											className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-											aria-label={showPassword ? "Hide password" : "Show password"}
-										>
-											{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-										</button>
-									}
-									{...register("masterPassword", {
-										required: "Please enter your master password",
-									})}
-								/>
+					{firstRun && (
+						<button
+							type="button"
+							onClick={handleOpenSetup}
+							disabled={busy}
+							className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							<Plus className="w-4 h-4" />
+							{busy ? "Opening…" : "Create your vault"}
+						</button>
+					)}
 
-								<button
-									type="submit"
-									disabled={busy || !hasVault}
-									className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									<Asterisk className="w-4 h-4" />
-									{busy
-										? "Unlocking…"
-										: !hasVault
-											? "No vault, create one below"
+					{!firstRun && (
+						<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+							{showPasswordForm && (
+								<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
+									<TextField
+										label="Master password"
+										type={showPassword ? "text" : "password"}
+										autoFocus
+										error={errors.masterPassword?.message}
+										endAdornment={
+											<button
+												type="button"
+												onClick={() => setShowPassword(!showPassword)}
+												className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+												aria-label={showPassword ? "Hide password" : "Show password"}
+											>
+												{showPassword ? (
+													<EyeOff className="w-4 h-4" />
+												) : (
+													<Eye className="w-4 h-4" />
+												)}
+											</button>
+										}
+										{...register("masterPassword", {
+											required: "Please enter your master password",
+										})}
+									/>
+
+									<button
+										type="submit"
+										disabled={busy}
+										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<Asterisk className="w-4 h-4" />
+										{busy
+											? "Unlocking…"
 											: securityKeyAvailable
 												? "Unlock with master password"
 												: "Unlock Vault"}
-								</button>
-							</form>
-						)}
+									</button>
+								</form>
+							)}
 
-						{securityKeyAvailable && (
-							<div className={showPasswordForm ? "px-6 pb-6 -mt-3" : "p-6"}>
-								<button
-									type="button"
-									onClick={handleSecurityKey}
-									disabled={busy}
-									className={
-										showPasswordForm
-											? "w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-											: "w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-									}
-								>
-									<KeyRound className="w-4 h-4" />
-									{busy ? "Waiting for your key…" : "Unlock with security key"}
-								</button>
-							</div>
-						)}
-					</div>
+							{securityKeyAvailable && (
+								<div className={showPasswordForm ? "px-6 pb-6 -mt-3" : "p-6"}>
+									<button
+										type="button"
+										onClick={handleSecurityKey}
+										disabled={busy}
+										className={
+											showPasswordForm
+												? "w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+												: "w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+										}
+									>
+										<KeyRound className="w-4 h-4" />
+										{busy ? "Waiting for your key…" : "Unlock with security key"}
+									</button>
+								</div>
+							)}
+						</div>
+					)}
+
+					{couldNotRead && (
+						<p className="mt-3 text-center text-xs text-muted-foreground">
+							Your browser may ask for access to your vault file when you unlock.
+						</p>
+					)}
 
 					{recoveryAvailable && (
 						<div className="mt-4">
@@ -238,22 +275,24 @@ export function Auth() {
 						</div>
 					)}
 
-					<div className="mt-6 text-center space-y-3">
-						<div className="flex items-center gap-4 text-xs text-muted-foreground">
-							<div className="flex-1 h-px bg-border/50"></div>
-							<span>New to {appName}?</span>
-							<div className="flex-1 h-px bg-border/50"></div>
-						</div>
+					{!firstRun && !couldNotRead && (
+						<div className="mt-6 text-center space-y-3">
+							<div className="flex items-center gap-4 text-xs text-muted-foreground">
+								<div className="flex-1 h-px bg-border/50"></div>
+								<span>New to {appName}?</span>
+								<div className="flex-1 h-px bg-border/50"></div>
+							</div>
 
-						<button
-							type="button"
-							onClick={handleOpenSetup}
-							disabled={busy}
-							className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all disabled:opacity-50"
-						>
-							Create new vault
-						</button>
-					</div>
+							<button
+								type="button"
+								onClick={handleOpenSetup}
+								disabled={busy}
+								className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all disabled:opacity-50"
+							>
+								Create new vault
+							</button>
+						</div>
+					)}
 
 					<div className="mt-6 p-4 rounded-lg border border-border/30 bg-card/30 backdrop-blur-sm">
 						<div className="flex items-start gap-3">

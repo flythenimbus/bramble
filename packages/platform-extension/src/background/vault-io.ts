@@ -1,21 +1,19 @@
 /// <reference types="chrome" />
 
+import {
+	decodeEntriesPayload,
+	type EntriesPayload,
+	emptyEntriesPayload,
+	encodeEntriesPayload,
+} from "@core/sync";
+import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, type EncryptedEntry, type VaultBlob } from "@core/vault-format";
 import { extensionStorage, PENDING_BLOB_KEY } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
+import { witnessStamp } from "./sync-clock";
 
-export function bytesToBase64(bytes: Uint8Array): string {
-	let s = "";
-	for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] ?? 0);
-	return btoa(s);
-}
-
-export function base64ToBytes(b64: string): Uint8Array {
-	const s = atob(b64);
-	const out = new Uint8Array(s.length);
-	for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-	return out;
-}
+// Re-exported so existing background importers keep their import site.
+export { base64ToBytes, bytesToBase64 };
 
 export async function readAndDecodeVault(): Promise<VaultBlob> {
 	const bytes = await extensionStorage.readVaultBlob();
@@ -43,9 +41,9 @@ export async function reencryptOuterWithEntryChange(
 	currentBlob: VaultBlob,
 	mutate: (entries: EncryptedEntry[]) => Promise<EncryptedEntry[]>,
 ): Promise<{ entriesIv: Uint8Array; entriesCiphertext: Uint8Array; entryCount: number }> {
-	let entries: EncryptedEntry[];
+	let payload: EntriesPayload;
 	if (currentBlob.entriesCiphertext.length === 0) {
-		entries = [];
+		payload = emptyEntriesPayload();
 	} else {
 		const decrypted = await sendToOffscreen({
 			type: "CRYPTO_DECRYPT_OUTER",
@@ -57,10 +55,14 @@ export async function reencryptOuterWithEntryChange(
 		if (!decrypted.ok || typeof decrypted.data !== "string") {
 			throw new Error(`outer decrypt failed: ${decrypted.error ?? "no data"}`);
 		}
-		entries = JSON.parse(decrypted.data) as EncryptedEntry[];
+		payload = decodeEntriesPayload(decrypted.data);
 	}
-	const mutated = await mutate(entries);
-	const json = JSON.stringify(mutated);
+	// Keep the background clock ahead of every stamp already on disk.
+	for (const e of payload.entries) await witnessStamp(e.hlc);
+	for (const t of payload.tombstones) await witnessStamp(t.hlc);
+	const mutated = await mutate(payload.entries);
+	// Tombstones pass through untouched; the mutate callbacks only add/replace entries.
+	const json = encodeEntriesPayload({ entries: mutated, tombstones: payload.tombstones });
 	const encrypted = await sendToOffscreen({
 		type: "CRYPTO_ENCRYPT_OUTER",
 		payload: { plaintext: json },

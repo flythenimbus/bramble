@@ -8,16 +8,14 @@
 import { maybeEmitSpaSubmit, onPasswordEnter } from "./capture";
 import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
-	candidateKind,
 	cardFieldsPresent,
 	composedTarget,
 	deepActiveElement,
-	detectCardFields,
-	detectLoginFields,
 	hasInteractiveCaptcha,
-	isAutofillCandidate,
-	otpInputs,
+	isCandidate,
+	kindOf,
 } from "./detection";
+import { getPageFields, invalidatePageFields } from "./field-model";
 import { fillCard, fillCustomFields, fillForm, fillOtp, submitFromField } from "./fill";
 import { onTeardown, safeSendMessage } from "./lifecycle";
 import { picker } from "./picker";
@@ -47,7 +45,9 @@ function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 
 function focusedCandidate(): HTMLInputElement | null {
 	const focused = deepActiveElement();
-	return focused instanceof HTMLInputElement && isAutofillCandidate(focused) ? focused : null;
+	return focused instanceof HTMLInputElement && isCandidate(getPageFields(), focused)
+		? focused
+		: null;
 }
 
 function isQueryResult(v: unknown): v is QueryResult {
@@ -83,7 +83,7 @@ function handleResult(result: QueryResult | undefined): void {
 		return;
 	}
 
-	const kind = candidateKind(focused);
+	const kind = kindOf(getPageFields(), focused);
 	if (kind === "card") {
 		if (result.cards.length > 0) picker.showMatches(result.cards, focused);
 		return;
@@ -99,10 +99,10 @@ function handleResult(result: QueryResult | undefined): void {
 
 /** Asks the background what's available for this page, but only if a fillable field exists. */
 function queryAutofill(): void {
-	const login = detectLoginFields();
-	const hasLogin = !!(login.username || login.password);
-	const hasCard = cardFieldsPresent(detectCardFields());
-	const hasOtp = otpInputs().length > 0;
+	const fields = getPageFields();
+	const hasLogin = !!(fields.login.username || fields.login.password);
+	const hasCard = cardFieldsPresent(fields.card);
+	const hasOtp = fields.otp.length > 0;
 	if (!hasLogin && !hasCard && !hasOtp) return;
 
 	safeSendMessage({
@@ -127,12 +127,13 @@ function showFor(field: HTMLInputElement): void {
 		picker.showLocked(field);
 		return;
 	}
-	if (candidateKind(field) === "card") {
+	const kind = kindOf(getPageFields(), field);
+	if (kind === "card") {
 		if (cachedResult.cards.length > 0) picker.showMatches(cachedResult.cards, field);
 		else queryAutofill();
 		return;
 	}
-	if (candidateKind(field) === "otp") {
+	if (kind === "otp") {
 		const otps = cachedResult.otps ?? [];
 		if (otps.length === 0) {
 			queryAutofill();
@@ -154,6 +155,8 @@ function showFor(field: HTMLInputElement): void {
 
 /** MutationObserver callback: SPA-submit fallback plus a throttled autofill re-query. */
 function onDomChange(): void {
+	// The DOM changed: drop the cached field model so the next read re-parses.
+	invalidatePageFields();
 	// SPA submit fallback: a password the user just edited whose field has now
 	// vanished within the submit window is treated as a submit.
 	maybeEmitSpaSubmit();
@@ -255,7 +258,7 @@ function bootstrap(): void {
 		"focusin",
 		(e) => {
 			const target = composedTarget(e);
-			if (!isAutofillCandidate(target)) return;
+			if (!isCandidate(getPageFields(), target)) return;
 			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
 			showFor(target);
@@ -272,7 +275,7 @@ function bootstrap(): void {
 			// reopen the dropdown the user just dismissed. Only trust real events.
 			if (!e.isTrusted) return;
 			const target = composedTarget(e);
-			if (!isAutofillCandidate(target)) return;
+			if (!isCandidate(getPageFields(), target)) return;
 			silenceAutoOpen = false;
 			if (!cachedResult) {
 				queryAutofill();
@@ -281,7 +284,7 @@ function bootstrap(): void {
 			if (target.value && !cachedResult.locked) {
 				// User is typing their own value: get out of the way unless there are
 				// multiple matches of this field's kind to disambiguate.
-				const kind = candidateKind(target);
+				const kind = kindOf(getPageFields(), target);
 				const count =
 					kind === "card"
 						? cachedResult.cards.length
@@ -318,7 +321,7 @@ function bootstrap(): void {
 			}
 			// Picker closed: a mousedown on a candidate field is re-engagement.
 			const target = composedTarget(e);
-			if (isAutofillCandidate(target)) {
+			if (isCandidate(getPageFields(), target)) {
 				silenceAutoOpen = false;
 				// Re-click on the already-focused field fires no focusin, so show ourselves.
 				if (deepActiveElement() === target) showFor(target);

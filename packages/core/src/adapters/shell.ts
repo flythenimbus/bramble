@@ -1,3 +1,5 @@
+import type { EntriesPayload, RosterEntry, RosterPayload } from "../sync";
+
 /** State carried from the originating popup into a freshly-opened detached window so the pop-out lands on the same route. */
 export interface PopOutHandoff {
 	/** Router href to restore, e.g. "/vault/new/card". */
@@ -42,4 +44,40 @@ export interface ShellAdapter {
 	 * password-verify so a locked-vault "Unlock & save" flow finishes transparently. Returns true iff a handoff was consumed.
 	 */
 	flushPendingCornerCapture(): Promise<boolean>;
+	/** Tear down the offscreen sync host (enrollment / ongoing sync). */
+	stopSyncSpike(): Promise<void>;
+	/** Subscribe to the sync host's status lines (shown in the dev panel). Returns an unsubscribe function. */
+	onSyncStatus(callback: (status: string) => void): () => void;
+	/** This device's Noise static public key (base64), for the roster and pairing code. Generated + persisted on first call. */
+	syncDevicePublicKey(): Promise<string>;
+	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
+	startEnrollInvite(opts: {
+		relayUrl: string;
+		groupKeyB64: string;
+		psk: string;
+		roster: RosterPayload;
+		entries: EntriesPayload;
+	}): Promise<void>;
+	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
+	startEnrollJoin(opts: {
+		relayUrl: string;
+		groupKeyB64: string;
+		psk: string;
+		inviterPub: string;
+		ownEntry: RosterEntry;
+		password?: string;
+		webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
+	}): Promise<void>;
+	/** Subscribe to structured enrollment events from the sync host (e.g. the joiner's rebuilt vault). Returns an unsubscribe function. */
+	onSyncEvent(callback: (event: SyncEvent) => void): () => void;
+}
+
+/** A structured event from the sync host (vs. the human-readable status strings). */
+export interface SyncEvent {
+	kind: string;
+	/** Joiner: the rebuilt, VEK-wrapped vault blob (base64) for the host to write. */
+	vaultBlobB64?: string;
+	roster?: RosterPayload;
+	/** Inviter: a joining device's roster entry (JSON), to add to our roster. */
+	entryJson?: string;
 }

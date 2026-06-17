@@ -1,12 +1,5 @@
-import {
-	closestAcrossShadow,
-	deriveMatcher,
-	detectCardFields,
-	detectLoginFields,
-	getFillableInputs,
-	matchesField,
-	otpInputs,
-} from "./detection";
+import { closestAcrossShadow, deriveMatcher, getFillableInputs, matchesField } from "./detection";
+import { getPageFields } from "./field-model";
 import type { CustomFieldData, FillPayload } from "./types";
 
 /** Sets an input's value via the native setter so frameworks (React) observe the change. */
@@ -43,7 +36,7 @@ export function fillForm(
 	filled: boolean;
 	passwordField: HTMLInputElement | null;
 } {
-	const { username: userField, password: pwField } = detectLoginFields();
+	const { username: userField, password: pwField } = getPageFields().login;
 	let filled = false;
 	if (userField && !(isAuto && autoFilledFields.has(userField))) {
 		fillField(userField, username);
@@ -88,10 +81,9 @@ export function submitFromField(field: HTMLInputElement | null): void {
 /** Inputs owned by built-in login/card autofill; custom fields never fill these, so they can't hijack a primary slot. */
 function reservedInputs(): Set<HTMLInputElement> {
 	const reserved = new Set<HTMLInputElement>();
-	const login = detectLoginFields();
+	const { login, card, otp } = getPageFields();
 	if (login.username) reserved.add(login.username);
 	if (login.password) reserved.add(login.password);
-	const card = detectCardFields();
 	for (const el of [
 		card.number,
 		card.name,
@@ -102,7 +94,7 @@ function reservedInputs(): Set<HTMLInputElement> {
 	]) {
 		if (el) reserved.add(el);
 	}
-	for (const el of otpInputs()) reserved.add(el);
+	for (const el of otp) reserved.add(el);
 	return reserved;
 }
 
@@ -138,7 +130,7 @@ function expYearFor(field: HTMLInputElement, year: string): string {
 }
 
 export function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean {
-	const c = detectCardFields();
+	const c = getPageFields().card;
 	let filled = false;
 	const put = (el: HTMLInputElement | null, value: string) => {
 		if (!el || !value || autoFilledFields.has(el)) return;
@@ -159,7 +151,7 @@ export function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean 
 /** Fills the page's OTP field(s): whole code into a single field, one char per box for a segmented widget. */
 export function fillOtp(code: string | undefined): boolean {
 	if (!code) return false;
-	const fields = otpInputs();
+	const fields = getPageFields().otp;
 	if (fields.length === 0) return false;
 	if (fields.length === 1) {
 		const el = fields[0]!;

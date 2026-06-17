@@ -9,8 +9,11 @@ service worker commits a write it cannot make directly. Code:
 A vault is backed by one of:
 
 - **File System Access (FSA)**: a real file the user picked, with the handle
-  stored in IndexedDB. Preferred, but `createWritable()` requires a fresh user
-  gesture, so the background cannot write to it unprompted.
+  stored in IndexedDB. Preferred. Reading and `createWritable()` need only that the
+  handle's read-write permission is already `granted` (not a fresh gesture); only
+  `requestPermission()` needs a gesture. So the background CAN write the file
+  headlessly once permission is granted. `requestVaultAccess()` secures that grant
+  inside a user gesture (unlock / enroll / the "Grant file access" affordance).
 - **chrome.storage.local**: the fallback when the platform blocks the file picker
   (for example Brave Shields). No gesture constraint, so the background can write
   through directly.
@@ -18,9 +21,12 @@ A vault is backed by one of:
 `pickerSupported()` gates picking a *new* file (it needs `window` plus the picker
 APIs). It deliberately does not gate reading the stored handle: IndexedDB is
 reachable from the service worker, so the SW can fetch an existing FSA handle even
-though it cannot pick a new file. `canWriteFromBackground()` returns true only for
-the chrome.storage.local backend, and that distinction drives the corner-prompt
-commit path.
+though it cannot pick a new file. `canWriteFromBackground()` returns true for the
+chrome.storage.local backend, and for an FSA vault whose read-write permission is
+already `granted` (a `queryPermission` check). That distinction drives both the
+corner-prompt commit and the headless P2P-sync write paths: a granted FSA vault
+(or local storage) is written through directly; otherwise the write is stashed
+(below).
 
 ## Crash recovery via a backup key
 
@@ -48,13 +54,15 @@ unable to save at all.
 
 ## Pending-blob stashing (FSA + background)
 
-When the background needs to commit a corner-prompt save but the vault is
-FSA-backed, it cannot reach disk without a gesture. So it encrypts the new outer
-blob via the offscreen document, base64-encodes the full vault bytes, and stashes
-them under `PENDING_BLOB_KEY` in `chrome.storage.session`.
+When the background needs to commit a write (a corner-prompt save, or a P2P-sync
+merge) to an FSA vault whose permission is **not** granted, it cannot reach disk.
+So it encrypts the new outer blob via the offscreen document, base64-encodes the
+full vault bytes, and stashes them under `PENDING_BLOB_KEY` in
+`chrome.storage.session`.
 
 The next popup or options mount calls `flushPendingVaultBlob`, which writes the
 stashed bytes through (snapshotting first, since it is replacing whatever is on
 disk) and clears the key. `getPendingFlushCount` lets the UI surface that a
 pending save is waiting. The stash is in-memory (wiped on browser restart), but
-the bytes are ciphertext, so surviving a vault lock is fine.
+the bytes are ciphertext, so surviving a vault lock is fine. Granting file access
+(above) avoids the stash entirely, which is what makes fully headless sync work.

@@ -2,6 +2,10 @@
 export interface StorageAdapter {
 	hasVaultHandle(): Promise<boolean>;
 	selectVaultFile(mode: "create" | "open"): Promise<void>;
+	// Ensure the vault file is readable/writable, prompting for FSA permission if
+	// needed. MUST be called from within a user gesture (the permission request
+	// requires transient activation). No-op for the chrome.storage backend.
+	requestVaultAccess(): Promise<void>;
 	readVaultBlob(): Promise<Uint8Array>;
 	// Must snapshot the on-disk bytes into a recovery store BEFORE truncating, so
 	// a crash mid-write leaves the previous good bytes recoverable.

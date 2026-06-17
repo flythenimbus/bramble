@@ -2,9 +2,11 @@
 
 How a FIDO2 security key unlocks the vault. The crypto (HKDF KEK derivation, the
 uniform slot layout) is in [cryptography.md](cryptography.md); this doc covers the
-WebAuthn ceremonies and their quirks. Code: `registerSecurityKey`,
-`unlockWithSecurityKey`, and `callGetWithSalt` in `useVault.tsx`, plus the
-webauthn helpers in `slot-policy.ts`.
+WebAuthn ceremonies and their quirks. The create()/get() PRF dance lives in
+`vault/webauthn-ceremony.ts` (`createPrfCredential`, `getPrfSecret`,
+`isWebauthnAvailable`), shared by `registerSecurityKey`, `unlockWithSecurityKey`,
+and device enrollment; the slot bookkeeping stays in `useVault.tsx` +
+`slot-policy.ts`.
 
 ## The unlock material is the PRF / hmac-secret
 
@@ -48,6 +50,25 @@ translated into a clear "this takes two taps, please complete both prompts"
 message instead of the raw WebAuthn error.
 
 The non-secret label for the key is stored separately, keyed by slot id.
+
+## Enrolling a device with a security key
+
+Joining a P2P sync group (see [p2p-sync.md](p2p-sync.md)) can unlock the new
+device with a security key instead of a master password. It reuses the same
+`createPrfCredential` ceremony, with two wrinkles from the enrollment flow:
+
+- The ceremony runs **first**, on the Join click's user activation, before the
+  (async, multi-second) handshake; otherwise the gesture is spent and `create()`
+  fails. The resulting `{ credentialId, salt, hmacSecret }` is held while the group
+  VEK arrives over the channel.
+- The VEK never reaches the popup: only the hmac-secret crosses to the offscreen
+  (exactly as a password would), which mints the webauthn slot against the
+  transferred VEK via `wrapWebauthnSlot`. The popup then finishes the unlock with
+  the in-hand secret (`finishWebauthnUnlock`), no second tap.
+
+The option is gated on `isWebauthnAvailable()`, so it's hidden where WebAuthn / PRF
+can't work (mobile webviews; see [mobile-port.md](mobile-port.md)). Desktop only
+for now.
 
 ## Unlock and the salt-mismatch retry
 

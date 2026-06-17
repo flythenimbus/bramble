@@ -108,6 +108,36 @@ After Chrome kills the service worker, the offscreen document caches the VEK in
 does not retype their password. See [auth-and-unlock.md](auth-and-unlock.md) and
 [storage.md](storage.md).
 
+### Where the VEK lives while unlocked (and the threat reality)
+
+The VEK's home is the Rust WASM module (generated there, `Zeroizing`-wrapped so it
+can be wiped). While the vault is unlocked it also exists as a base64 JS value in a
+few places: the session cache above (`chrome.storage.session` + the SW's in-memory
+copy) for resume, and transiently during device enrollment (it is exported, sealed
+Noise-only over the channel, and re-loaded; see [p2p-sync.md](p2p-sync.md)).
+
+This is the floor for every pure browser-extension password manager, not a gap
+specific to this project: the platform gives an extension no secure enclave for its
+own symmetric vault key, and JS can read WASM linear memory anyway, so while
+unlocked the key is reachable by code running in the extension's process. Managers
+that do better (e.g. biometric unlock) delegate the secure store to a native app
+behind an OS keychain, which this project intentionally does not require.
+
+What actually bounds exposure is therefore **lock policy**, not where the key sits
+during the unlocked window: auto-lock on idle (sliding alarm), lock on OS screen
+lock (`chrome.idle`), and lock on browser close (the session cache clears, so the
+vault is locked on next launch and needs the password again).
+
+### Deferred hardening: "VEK never in JS"
+
+Keeping the VEK exclusively inside WASM (encrypt or drop the session cache; seal the
+enrollment bundle inside WASM so it never becomes a JS string) is a possible
+defense-in-depth step. It is deferred because the gain is modest (WASM memory is
+still JS-readable, so it raises the bar against casual heap inspection and lingering
+GC'd strings, but is not a hard boundary) and the session-cache half trades against
+headless resume (dropping the cache means re-unlocking whenever the offscreen
+restarts). The enrollment-seal half is cheap and self-contained if pursued alone.
+
 ## Tests
 
 `lib.rs` drives the primitives directly (HKDF, AES-GCM, verifier compute,

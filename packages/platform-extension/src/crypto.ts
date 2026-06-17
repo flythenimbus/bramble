@@ -13,9 +13,36 @@ import type {
 	WrapPasswordSlotInput,
 	WrapWebauthnSlotInput,
 } from "@core/adapters/crypto";
+import type {
+	CryptoDecrypt,
+	CryptoDecryptOuter,
+	CryptoEncrypt,
+	CryptoEncryptOuter,
+	CryptoUnlockWithVek,
+	CryptoUnwrapPasswordSlot,
+	CryptoUnwrapWebauthnSlot,
+	CryptoVerifyPasswordSlot,
+	CryptoVerifyWebauthnSlot,
+	CryptoWrapPasswordSlot,
+	CryptoWrapWebauthnSlot,
+} from "./crypto/messages";
+
+// Backstop a stalled offscreen round-trip (e.g. a cold-start createDocument that
+// never resolves) so the UI surfaces a retryable error instead of hanging forever.
+const SEND_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+	return new Promise((resolve, reject) => {
+		const t = setTimeout(
+			() => reject(new Error(`${label} timed out — try again`)),
+			SEND_TIMEOUT_MS,
+		);
+		promise.then(resolve, reject).finally(() => clearTimeout(t));
+	});
+}
 
 async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
-	const res = await chrome.runtime.sendMessage({ type, payload });
+	const res = await withTimeout(chrome.runtime.sendMessage({ type, payload }), type);
 	if (!res?.ok) throw new Error(res?.error ?? `crypto ${type} failed`);
 	return res.data as T;
 }
@@ -24,7 +51,7 @@ async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
 const VEK_SESSION_KEY = "vault.vek";
 
 // sendMessage mangles Uint8Array into a plain object; send magicVersion as number[] instead.
-function slotPayload(input: WrapPasswordSlotInput) {
+function slotPayload(input: WrapPasswordSlotInput): CryptoWrapPasswordSlot {
 	return {
 		password: input.password,
 		saltB64: input.saltB64,
@@ -33,7 +60,7 @@ function slotPayload(input: WrapPasswordSlotInput) {
 	};
 }
 
-function webauthnSlotPayload(input: WrapWebauthnSlotInput) {
+function webauthnSlotPayload(input: WrapWebauthnSlotInput): CryptoWrapWebauthnSlot {
 	return {
 		hmacSecretB64: input.hmacSecretB64,
 		slotIdB64: input.slotIdB64,
@@ -66,7 +93,8 @@ export const extensionCrypto: CryptoAdapter = {
 	},
 
 	generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
-	unlockWithVek: (vekB64) => send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 }),
+	unlockWithVek: (vekB64) =>
+		send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 } satisfies CryptoUnlockWithVek),
 	exportVek: () => send<string>("CRYPTO_EXPORT_VEK"),
 	rotateVek: () => send<string>("CRYPTO_ROTATE_VEK"),
 
@@ -82,13 +110,13 @@ export const extensionCrypto: CryptoAdapter = {
 			verifierB64: input.verifierB64,
 			wrapIvB64: input.wrapIvB64,
 			wrappedVekB64: input.wrappedVekB64,
-		}),
+		} satisfies CryptoUnwrapPasswordSlot),
 
 	verifyPasswordSlot: (input: VerifyPasswordSlotInput) =>
 		send<boolean>("CRYPTO_VERIFY_PASSWORD_SLOT", {
 			...slotPayload(input),
 			verifierB64: input.verifierB64,
-		}),
+		} satisfies CryptoVerifyPasswordSlot),
 
 	wrapVekWebauthn: (input: WrapWebauthnSlotInput) =>
 		send<PasswordSlotBlob>("CRYPTO_WRAP_WEBAUTHN_SLOT", webauthnSlotPayload(input)),
@@ -99,18 +127,21 @@ export const extensionCrypto: CryptoAdapter = {
 			verifierB64: input.verifierB64,
 			wrapIvB64: input.wrapIvB64,
 			wrappedVekB64: input.wrappedVekB64,
-		}),
+		} satisfies CryptoUnwrapWebauthnSlot),
 
 	verifyWebauthnSlot: (input: VerifyWebauthnSlotInput) =>
 		send<boolean>("CRYPTO_VERIFY_WEBAUTHN_SLOT", {
 			...webauthnSlotPayload(input),
 			verifierB64: input.verifierB64,
-		}),
+		} satisfies CryptoVerifyWebauthnSlot),
 
-	encryptEntry: (plaintextJson) => send<EncryptedPayload>("CRYPTO_ENCRYPT", { plaintextJson }),
-	decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload),
-	encryptWithVek: (plaintext) => send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext }),
-	decryptWithVek: (iv, ciphertext) => send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext }),
+	encryptEntry: (plaintextJson) =>
+		send<EncryptedPayload>("CRYPTO_ENCRYPT", { plaintextJson } satisfies CryptoEncrypt),
+	decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload satisfies CryptoDecrypt),
+	encryptWithVek: (plaintext) =>
+		send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext } satisfies CryptoEncryptOuter),
+	decryptWithVek: (iv, ciphertext) =>
+		send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
 
 	openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
 };
