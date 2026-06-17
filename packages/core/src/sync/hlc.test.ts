@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	compareHlc,
 	formatHlc,
-	type Hlc,
 	HLC_MAX_DRIFT_MS,
+	type Hlc,
 	HybridClock,
 	maxHlc,
 	parseHlc,
