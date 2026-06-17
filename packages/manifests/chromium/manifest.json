@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Bramble",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Local-first, encrypted password manager. No server, no sync service.",
 	"minimum_chrome_version": "116",
 	"action": {
