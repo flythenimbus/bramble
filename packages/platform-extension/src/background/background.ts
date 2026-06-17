@@ -8,6 +8,7 @@
 import "./corner-prompt";
 import "./popout";
 import "./qr";
+import "./sync";
 import "./theme";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
@@ -21,9 +22,16 @@ import {
 	sessionHydration,
 	vaultLocked,
 } from "./session";
+import { maybeStartSync } from "./sync";
 
 // Gate every handler on both hydrations (session VEK + known hostnames) completing.
-setReady(Promise.all([sessionHydration, indexHydration]));
+const hydrated = Promise.all([sessionHydration, indexHydration]);
+setReady(hydrated);
+
+// Resume continuous sync after a service-worker restart if the vault is unlocked.
+void hydrated.then(() => {
+	if (!vaultLocked()) void maybeStartSync();
+});
 
 chrome.runtime.onInstalled.addListener(() => {
 	void ensureOffscreen();

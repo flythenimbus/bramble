@@ -1,0 +1,3 @@
+# Captured third-party site HTML used as autofill/detection test fixtures.
+# Not code we wrote; exclude from GitHub's language stats.
+packages/platform-extension/src/fixtures/sites/*.html linguist-vendored

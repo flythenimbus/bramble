@@ -43,7 +43,7 @@ export function RecoveryCodeSection() {
 		}
 	};
 
-	const confirmWithPassword = async (e: React.FormEvent) => {
+	const confirmWithPassword = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
 		setError(null);
 		setBusy(true);

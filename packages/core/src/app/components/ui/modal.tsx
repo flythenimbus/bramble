@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "./utils";
 
 interface ModalProps {
@@ -8,11 +9,20 @@ interface ModalProps {
 	// dialogs (e.g. a one-time recovery code the user has to save first).
 	dismissable?: boolean;
 	className?: string;
+	/** Backdrop styling; defaults to a 50% blurred scrim. Override to dim harder. */
+	backdropClassName?: string;
 	children: React.ReactNode;
 }
 
 /** Centered modal with a blurred backdrop. No focus-trap; Esc + backdrop dismiss when `dismissable`. */
-export function Modal({ open, onClose, dismissable = true, className, children }: ModalProps) {
+export function Modal({
+	open,
+	onClose,
+	dismissable = true,
+	className,
+	backdropClassName = "bg-black/50 backdrop-blur-sm",
+	children,
+}: ModalProps) {
 	useEffect(() => {
 		if (!open || !dismissable) return;
 		const onKey = (e: KeyboardEvent) => {
@@ -22,15 +32,27 @@ export function Modal({ open, onClose, dismissable = true, className, children }
 		return () => window.removeEventListener("keydown", onKey);
 	}, [open, dismissable, onClose]);
 
+	// Lock page scroll while open so the dimmed page behind can't move.
+	useEffect(() => {
+		if (!open) return;
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	}, [open]);
+
 	if (!open) return null;
-	return (
+	// Portal to <body> so the fixed overlay is viewport-relative (not trapped by an
+	// ancestor's containing block / stacking context) and dims the whole page.
+	return createPortal(
 		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 			<button
 				type="button"
 				aria-label="Close"
 				tabIndex={-1}
 				onClick={dismissable ? onClose : undefined}
-				className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+				className={cn("absolute inset-0", backdropClassName)}
 			/>
 			<div
 				role="dialog"
@@ -45,6 +67,7 @@ export function Modal({ open, onClose, dismissable = true, className, children }
 			>
 				{children}
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }

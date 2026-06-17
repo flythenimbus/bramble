@@ -266,7 +266,10 @@ export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
  * Inputs making up the one-time-code entry, in DOM order. Usually one field;
  * some sites split it into N single-char boxes. Empty array when none found.
  */
-export function otpInputs(doc: Document = document): HTMLInputElement[] {
+export function otpInputs(
+	doc: Document = document,
+	precomputedCard?: CardFields,
+): HTMLInputElement[] {
 	// Multiple `one-time-code` tokens means a segmented widget tagging every box.
 	const tokened = deepQueryAll<HTMLInputElement>(
 		'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
@@ -274,7 +277,8 @@ export function otpInputs(doc: Document = document): HTMLInputElement[] {
 	);
 	if (tokened.length >= 1) return tokened;
 
-	const card = detectCardFields(doc);
+	// Reuse a card scan from parsePageFields when given; otherwise compute it lazily.
+	const card = precomputedCard ?? detectCardFields(doc);
 	let hinted: HTMLInputElement | null = null;
 	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
 		if (el.type === "password" || el.type === "hidden" || el.type === "checkbox") continue;
@@ -392,29 +396,59 @@ export function matchesField(el: HTMLInputElement, m: FieldMatcher): boolean {
 	return false;
 }
 
+/** The page's fillable fields, parsed once: login, card, and one-time-code inputs. */
+export interface PageFieldModel {
+	login: LoginFields;
+	card: CardFields;
+	otp: HTMLInputElement[];
+}
+
 /**
- * Classify a field as login / card / otp, or null if not a candidate.
+ * Parse the page's fillable fields in a single pass. The content cluster reads
+ * this model (cached in field-model.ts) instead of each call site re-scanning
+ * the DOM. The card scan is shared with the OTP detection.
+ */
+export function parsePageFields(doc: Document = document): PageFieldModel {
+	const card = detectCardFields(doc);
+	const login = detectLoginFields(doc);
+	const otp = otpInputs(doc, card);
+	return { login, card, otp };
+}
+
+/**
+ * Classify `el` against an already-parsed model: login / card / otp, or null.
  * Login wins over card except for CVV-as-password (e.g. BMO's login id is a
  * debit card number, which login must still claim).
  */
+export function kindOf(
+	model: PageFieldModel,
+	el: EventTarget | null,
+): "login" | "card" | "otp" | null {
+	if (!(el instanceof HTMLInputElement)) return null;
+	if (el.readOnly || el.disabled) return null;
+	const isCard = cardFieldsPresent(model.card) && isCardField(model.card, el);
+	if (isCard && el === model.card.cvv && el.type === "password") return "card";
+	if (el === model.login.username || el === model.login.password) return "login";
+	if (el.type === "password") return "login";
+	if (isCard) return "card";
+	if (model.otp.includes(el)) return "otp";
+	return null;
+}
+
+/** True if `el` is any autofill candidate in the parsed model. */
+export function isCandidate(model: PageFieldModel, el: EventTarget | null): el is HTMLInputElement {
+	return kindOf(model, el) !== null;
+}
+
+/** Classify a focused field by parsing the live DOM. Prefer `kindOf(model, el)` on a cached model. */
 export function candidateKind(
 	el: EventTarget | null,
 	doc: Document = document,
 ): "login" | "card" | "otp" | null {
-	if (!(el instanceof HTMLInputElement)) return null;
-	if (el.readOnly || el.disabled) return null;
-	const card = detectCardFields(doc);
-	const isCard = cardFieldsPresent(card) && isCardField(card, el);
-	if (isCard && el === card.cvv && el.type === "password") return "card";
-	const login = detectLoginFields(doc);
-	if (el === login.username || el === login.password) return "login";
-	if (el.type === "password") return "login";
-	if (isCard) return "card";
-	if (otpInputs(doc).includes(el)) return "otp";
-	return null;
+	return kindOf(parsePageFields(doc), el);
 }
 
-/** True if `el` is any autofill candidate (login, card, or otp). */
+/** True if `el` is any autofill candidate (login, card, or otp). Parses the live DOM. */
 export function isAutofillCandidate(
 	el: EventTarget | null,
 	doc: Document = document,

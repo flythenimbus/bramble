@@ -16,7 +16,8 @@
 		"jsqr": "^1.4.0",
 		"react": "^19.2.6",
 		"react-dom": "^19.2.6",
-		"tldts": "^6.1.0"
+		"tldts": "^6.1.0",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.3.0",

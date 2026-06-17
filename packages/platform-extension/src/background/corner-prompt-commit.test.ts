@@ -18,6 +18,8 @@ vi.mock("../storage", () => ({
 		readVaultBlob: async () => new Uint8Array([1, 2, 3]),
 		writeVaultBlob: async () => {},
 		canWriteFromBackground: async () => true,
+		getMeta: async () => undefined,
+		setMeta: async () => {},
 	},
 }));
 
@@ -55,9 +57,19 @@ function commitOffscreen(msg: Record<string, any>): OffscreenResponse {
 		case "CRYPTO_DECRYPT_OUTER":
 			return {
 				ok: true,
-				data: JSON.stringify([
-					{ id: "login1", ciphertext: "c", iv: "i", wrappedDek: "w", dekIv: "d" },
-				]),
+				data: JSON.stringify({
+					entries: [
+						{
+							id: "login1",
+							ciphertext: "c",
+							iv: "i",
+							wrappedDek: "w",
+							dekIv: "d",
+							hlc: { wall: 1, counter: 0, node: "seed" },
+						},
+					],
+					tombstones: [],
+				}),
 			};
 		case "CRYPTO_DECRYPT":
 			return {

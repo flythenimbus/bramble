@@ -21,6 +21,12 @@ type HmacSha256 = Hmac<Sha256>;
 // KDBX4 import (not wasm-exported yet).
 mod kdbx;
 
+// Sync roster-auth handshake (Noise KK). Exports handshake_* via wasm-bindgen.
+mod handshake;
+
+// Nostr event signing (secp256k1 schnorr) for sync signaling. Exports nostr_*.
+mod nostr;
+
 const ARGON2_TIME: u32 = 3;
 const ARGON2_MEM_KIB: u32 = 64 * 1024;
 const ARGON2_PARALLELISM: u32 = 1;

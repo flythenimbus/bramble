@@ -233,6 +233,42 @@ entry's history list, recovering the lost value without ever decrypting it to me
 - Ship the minimal Nostr-subset relay source in `/signaling/` for users who want to self-host;
   the default relay URL is overridable in settings.
 
+## Implementation status (built)
+
+The design above is implemented and working across two real browsers (transport,
+enrollment, roster-auth, and headless background sync). Notes on how it maps to code:
+
+- **Transport-free core** (`packages/core/src/sync/`): merge kernel + HLC, entries
+  payload + tombstones, `applyRemotePayload`, roster CRDT, the nostr signaling codec
+  + `connectSignaling`, the pairing/enrollment codecs. The Noise (KK + XXpsk3) and
+  BIP340 primitives are in `packages/crypto-wasm`.
+- **Transport + hosts** (`packages/platform-extension/src/sync/`): `mesh` (relay +
+  discovery + WebRTC peers), `handshake` (one runner for KK and XXpsk3),
+  `peer-session` (the shared mesh-session lifecycle: join room + per-peer handler +
+  teardown, returned as a handle so there is no module-level singleton), with
+  `enroll-host` (enrollment) and `roster-sync` (continuous sync) each a configuration
+  of it. All run in the **offscreen document** (the `WEB_RTC` reason); it has no
+  `chrome.storage`, so it bridges storage to the background.
+- **Separate rooms.** `deriveRoomId(groupKey, label)` — enrollment uses
+  `bramble/enroll`, ongoing sync uses `bramble/sync` — so the enroll handshake never
+  collides with running sync meshes.
+- **Enrollment** seals `{vek, roster, entries}` Noise-only; the joiner rebuilds its
+  vault entirely in the offscreen via `core/vault/build-vault` (the VEK never reaches
+  the popup) and hands the inviter its roster entry so both rosters stay symmetric.
+- **Headless sync** is background-driven: started on unlock / SW-startup, the offscreen
+  runs `roster-sync` continuously; the merge runs in the background via `vault-io`
+  (`SYNC_LOCAL_PAYLOAD` / `SYNC_APPLY_REMOTE`). Re-broadcast is periodic (~4s) +
+  on-connect; an instant on-change nudge is a follow-up.
+- **FSA reality:** the background can read/write a file-backed vault only when its
+  permission is already granted (`createWritable` needs no gesture, only
+  `requestPermission` does), so `canWriteFromBackground` checks `queryPermission`;
+  otherwise writes queue for the next popup. `chrome.storage.local` is fully headless.
+- **Deferred:** VEK-never-in-JS hardening (the VEK is currently a transient JS string
+  during enrollment + session caching, no worse than the existing session cache);
+  instant on-change nudge; VEK rotation; async/cross-internet (see above).
+
+Testing rig: [p2p-sync-testing.md](p2p-sync-testing.md).
+
 ## Sources
 
 - `chrome.offscreen` reasons (incl. `WEB_RTC`): https://developer.chrome.com/docs/extensions/reference/api/offscreen

@@ -188,6 +188,14 @@ source of truth and reliable persistence APIs. The offscreen exists only
 because the SW can't reliably host a long-lived WASM module across its own
 idle-kill cycle.
 
+The offscreen has since grown a second job (so the box above understates it): the
+**WebRTC sync host**. `RTCPeerConnection` isn't available in a service worker, so
+the offscreen (created with the `WEB_RTC` reason) runs the P2P sync transport
+(enrollment and ongoing roster-sync) alongside the crypto. It still owns no
+storage: it bridges reads/writes back to the background, and the SW now forwards
+`SYNC_*` as well as `CRYPTO_*`. Both wire protocols are zod-validated at the
+offscreen seam (`sync/messages.ts`, `crypto/messages.ts`). See docs/p2p-sync.md.
+
 ---
 
 ## Session Lifecycle
@@ -1311,6 +1319,22 @@ The handler fires *before* any UI moment, with no user gesture:
   `verification-code` field is classified as card-CVV (via
   `card.?code`) — both locked in with explicit tests so a future regex
   tweak knows the tradeoff.
+- **Device sync (P2P, behind Settings → Device sync).** Direct device-to-device
+  vault sync with no server and no installed binary. A sync *group* is one logical
+  vault sharing one VEK; a new device enrolls by pasting/scanning a one-time
+  pairing code (Noise XXpsk3, PSK carried in the code), receives the VEK + roster +
+  entries sealed Noise-only over a WebRTC data channel, and mints **its own**
+  unlock slot (master password **or security key**) without the VEK ever reaching
+  the popup. Reconnecting devices authenticate by their roster keys (Noise KK, no
+  code) and sync continuously in the background while unlocked; reconciliation is an
+  **entry-level last-writer-wins merge** over HLC stamps + tombstones, comparing
+  only the sealed-envelope index (no per-entry DEK unwrap, so deletes don't
+  resurrect and merge never sees plaintext). WebRTC runs in the offscreen document
+  (`WEB_RTC` reason); signaling is a user-chosen Nostr-subset relay (a minimal
+  ~100-line relay ships in `/signaling`). Transport-free core in `core/sync/`, hosts
+  in `platform-extension/src/sync/`, Noise (KK + XXpsk3) + BIP340 in `crypto-wasm`.
+  v1 scope: same-network, all-online; cross-internet sync and VEK rotation are
+  deferred. Full design + build status in docs/p2p-sync.md.
 
 #### Schema migrations
 
@@ -1382,7 +1406,6 @@ decrypted entry before Zod validation. Currently:
 - Firefox / Safari / mobile browsers
 - File attachments on entries
 - Iframe and Shadow DOM autofill
-- Vault sync conflict resolution (rely on cloud provider's versioning)
 - Native messaging host
 - Biometric unlock
 - Browser bookmark / history integration

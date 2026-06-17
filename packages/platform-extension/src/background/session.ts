@@ -6,6 +6,7 @@ import { markOffscreenKey, sendToOffscreen } from "./offscreen-client";
 import { POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
 import { type MessageEnvelope, onPrefix } from "./router";
+import { maybeStartSync, stopSync } from "./sync";
 
 const VEK_KEY = "vault.vek";
 const LEGACY_AUTOFILL_INDEX_KEY = "autofill.index";
@@ -76,6 +77,7 @@ export async function clearSession(): Promise<void> {
 	cachedVek = null;
 	clearIndex();
 	markOffscreenKey(false);
+	void stopSync();
 	try {
 		const all = await chrome.storage.session.get(null);
 		const toRemove: string[] = [VEK_KEY, POPOUT_HANDOFF_KEY, CORNER_HANDOFF_KEY];
@@ -109,6 +111,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				markOffscreenKey(true);
 				await scheduleAutoLock();
 				await exportAndCacheVek();
+				void maybeStartSync(); // begin continuous sync if this vault is in a group
 			}
 		} else if (type === "CRYPTO_ROTATE_VEK") {
 			if (typeof response.data === "string") {

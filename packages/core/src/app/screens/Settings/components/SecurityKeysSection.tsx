@@ -10,7 +10,7 @@ export function SecurityKeysSection() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const handleAdd = async (e: React.FormEvent) => {
+	const handleAdd = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
 		setError(null);
 		setBusy(true);

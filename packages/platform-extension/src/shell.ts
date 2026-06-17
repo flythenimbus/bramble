@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
+import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
 
@@ -67,4 +68,48 @@ export const extensionShell: ShellAdapter = {
 			| undefined;
 		return res?.ok ? (res.data ?? null) : null;
 	},
+	async stopSyncSpike() {
+		await chrome.runtime.sendMessage({ type: "SYNC_DISCONNECT" });
+	},
+	onSyncStatus(callback: (status: string) => void) {
+		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {
+			if (msg?.type !== "SYNC_STATUS") return;
+			const parsed = SyncStatusMsgSchema.safeParse(msg.payload);
+			if (parsed.success) callback(parsed.data.status);
+		};
+		chrome.runtime.onMessage.addListener(handler);
+		return () => chrome.runtime.onMessage.removeListener(handler);
+	},
+	async syncDevicePublicKey() {
+		const res = (await chrome.runtime.sendMessage({ type: "SYNC_DEVICE_PUBKEY" })) as
+			| { ok: boolean; data?: string; error?: string }
+			| undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
+		if (typeof res.data !== "string") throw new Error("device key response malformed");
+		return res.data;
+	},
+	async startEnrollInvite(opts) {
+		await syncStart("SYNC_ENROLL_INVITE", opts);
+	},
+	async startEnrollJoin(opts) {
+		await syncStart("SYNC_ENROLL_JOIN", opts);
+	},
+	onSyncEvent(callback) {
+		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {
+			if (msg?.type !== "SYNC_EVENT") return;
+			const parsed = SyncEventMsgSchema.safeParse(msg.payload);
+			if (parsed.success) callback(parsed.data);
+		};
+		chrome.runtime.onMessage.addListener(handler);
+		return () => chrome.runtime.onMessage.removeListener(handler);
+	},
 };
+
+/** Start a sync host in the offscreen; throw the background's error so the UI can show it. */
+async function syncStart(type: string, payload: unknown): Promise<void> {
+	const res = (await chrome.runtime.sendMessage({ type, payload })) as
+		| { ok?: boolean; error?: string }
+		| undefined;
+	if (res && res.ok === false) throw new Error(res.error ?? `${type} failed`);
+}

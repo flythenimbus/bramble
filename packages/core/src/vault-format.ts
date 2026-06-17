@@ -1,6 +1,7 @@
 // VLT1 v2 multi-key vault blob format. See docs/vault-format.md.
 
 import { z } from "zod";
+import { HlcSchema } from "./sync/hlc";
 
 export const MAGIC = new Uint8Array([0x56, 0x4c, 0x54, 0x31]);
 export const VERSION = 0x02;
@@ -88,13 +89,16 @@ export const SlotSchema = z.union([
 ]);
 export type Slot = z.infer<typeof SlotSchema>;
 
-/** One entry's ciphertext plus its wrapped per-entry DEK. */
+/** One entry's ciphertext plus its wrapped per-entry DEK and its HLC stamp.
+ * The stamp rides on the outer envelope (under the VEK but outside the per-entry
+ * DEK) so the merge can compare versions without unwrapping any secret. */
 export const EncryptedEntrySchema = z.object({
 	id: z.string(),
 	wrappedDek: z.string(),
 	dekIv: z.string(),
 	ciphertext: z.string(),
 	iv: z.string(),
+	hlc: HlcSchema,
 });
 export type EncryptedEntry = z.infer<typeof EncryptedEntrySchema>;
 

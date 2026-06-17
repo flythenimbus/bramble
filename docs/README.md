@@ -17,9 +17,14 @@ comments point here instead of repeating it.
 | [vault-format.md](vault-format.md) | The VLT1 v2 on-disk binary layout and TLV slots |
 | [autofill.md](autofill.md) | Index, matching, the fetch-on-pick fill model, corner prompt, password generation |
 | [field-detection.md](field-detection.md) | Page field detection heuristics and fixtures |
-| [storage.md](storage.md) | FSA vs chrome.storage, crash recovery, pending-blob stashing |
+| [storage.md](storage.md) | FSA vs chrome.storage, crash recovery, pending-blob stashing, background writes |
 | [kdbx-import.md](kdbx-import.md) | KDBX4 import internals |
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |
+| [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
+| [p2p-sync-testing.md](p2p-sync-testing.md) | Exercising device sync locally with two browser profiles + the relay |
+| [firefox-port.md](firefox-port.md) | Firefox MV3 port feasibility and the filesystem-sync gap P2P sync fills |
+| [mobile-port.md](mobile-port.md) | Tauri 2 mobile port feasibility; native autofill + biometric-unlock constraints |
+| [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
 
 ## Vocabulary
 

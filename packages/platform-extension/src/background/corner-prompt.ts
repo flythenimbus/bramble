@@ -20,6 +20,7 @@ import { sendToOffscreen } from "./offscreen-client";
 import { appendNeverSaveSite, getNeverSaveSites, getOfferToSavePref } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
 import { vaultLocked } from "./session";
+import { nextStamp } from "./sync-clock";
 import {
 	broadcastVaultChanged,
 	readAndDecodeVault,
@@ -127,9 +128,9 @@ async function commitCornerSave(
 	if (!encryptedEntryResp.ok || !encryptedEntryResp.data) {
 		throw new Error(`encrypt new entry failed: ${encryptedEntryResp.error ?? "no data"}`);
 	}
-	const encEntry = encryptedEntryResp.data as Omit<EncryptedEntry, "id">;
+	const encEntry = encryptedEntryResp.data as Omit<EncryptedEntry, "id" | "hlc">;
 	const id = globalThis.crypto.randomUUID();
-	const newEnc: EncryptedEntry = { id, ...encEntry };
+	const newEnc: EncryptedEntry = { id, ...encEntry, hlc: await nextStamp() };
 	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => [...entries, newEnc]);
 	const newBlob: VaultBlob = {
 		slots: blob.slots,
@@ -186,8 +187,8 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 			if (!reenc.ok || !reenc.data) {
 				throw new Error(`reencrypt entry failed: ${reenc.error ?? "no data"}`);
 			}
-			const fresh = reenc.data as Omit<EncryptedEntry, "id">;
-			next.push({ id: enc.id, ...fresh });
+			const fresh = reenc.data as Omit<EncryptedEntry, "id" | "hlc">;
+			next.push({ id: enc.id, ...fresh, hlc: await nextStamp() });
 		}
 		return next;
 	});
