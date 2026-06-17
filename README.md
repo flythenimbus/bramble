@@ -4,7 +4,7 @@ A password manager that lives in your browser and keeps your secrets on your own
 
 Bramble is a Chromium extension (Chrome, Edge, Brave, Arc, and friends). Install it and you're up and running in a minute.
 
-> **Get it from the Chrome Web Store.** (Listing link coming soon.)
+[**Get it from the Chrome Web Store.**](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
 
 ## What it does
 
