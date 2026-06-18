@@ -15,6 +15,12 @@ import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT ?? 7400);
 
+// Cheap abuse guards (kept in parity with cf-worker): a signaling blob is a few
+// KB of encrypted SDP/ICE, so reject larger frames before parsing, and bound
+// subscriptions per connection (a device needs ~1).
+const MAX_MSG_BYTES = 64 * 1024;
+const MAX_SUBS_PER_CONN = 8;
+
 /** True if `event` matches a single REQ `filter` (kinds, authors, #<tag>). */
 function matches(filter, event) {
 	if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
@@ -45,6 +51,8 @@ wss.on("connection", (ws) => {
 	ws.on("close", () => sockets.delete(ws));
 
 	ws.on("message", (raw) => {
+		if (raw.length > MAX_MSG_BYTES) return;
+
 		let msg;
 		try {
 			msg = JSON.parse(raw.toString());
@@ -56,6 +64,7 @@ wss.on("connection", (ws) => {
 
 		if (type === "REQ") {
 			const [, subId, ...filters] = msg;
+			if (!ws.subs.has(subId) && ws.subs.size >= MAX_SUBS_PER_CONN) return;
 			ws.subs.set(subId, filters);
 			ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
 			return;
