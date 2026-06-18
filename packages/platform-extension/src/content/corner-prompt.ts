@@ -92,7 +92,7 @@ function handleCornerCardClick(e: Event): void {
 	if (!(target instanceof HTMLElement)) return;
 	const actionEl = target.closest<HTMLElement>("[data-tp-action]");
 	// Any click that isn't the overflow toggle or the menu itself closes an open menu.
-	if (!actionEl || actionEl.dataset.tpAction !== "toggle-menu") {
+	if (actionEl?.dataset.tpAction !== "toggle-menu") {
 		if (!target.closest(".tp-menu")) closeOverflowMenu();
 	}
 	if (!actionEl || !cornerShadow?.contains(actionEl)) return;

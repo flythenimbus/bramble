@@ -20,7 +20,7 @@ export function EntryDetailRoute() {
 	// refreshAttemptedRef stops the updateEntry write-back from re-triggering the effect.
 	useEffect(() => {
 		// Breach status is login-only.
-		if (!entry || entry.type !== "login" || !prefsLoaded) return;
+		if (entry?.type !== "login" || !prefsLoaded) return;
 		if (!prefs.breachCheckEnabled) return;
 		if (refreshAttemptedRef.current === entry.id) return;
 		const stale = !entry.breach || Date.now() - entry.breach.checkedAt > BREACH_STALE_MS;
