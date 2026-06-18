@@ -52,7 +52,7 @@ export async function getStoredGroup(): Promise<GroupConfig | null> {
 }
 
 const RELAY_KEY = "sync.relay";
-const DEFAULT_RELAY = "ws://localhost:7400";
+const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 /** The signaling relay URL the background uses for ongoing sync. */
 export async function getStoredRelay(): Promise<string> {
