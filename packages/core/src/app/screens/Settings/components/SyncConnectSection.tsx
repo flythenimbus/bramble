@@ -1,4 +1,4 @@
-import { Wifi, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
@@ -27,7 +27,9 @@ const toggleClass = (active: boolean) =>
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, joinGroup } = useVault();
-	const [relayUrl, setRelayUrl] = useState("ws://localhost:7400");
+	// Hosted relay by default; overridable under Advanced (own/self-host or any public Nostr relay).
+	const [relayUrl, setRelayUrl] = useState("wss://bramble-relay.flythenimbus.workers.dev");
+	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
 	const [joinCode, setJoinCode] = useState("");
 	const [joinPassword, setJoinPassword] = useState("");
@@ -73,12 +75,6 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title="Device sync">
-			<TextField
-				label="Nostr relay URL"
-				value={relayUrl}
-				onChange={(e) => setRelayUrl(e.target.value)}
-			/>
-
 			{import.meta.env.DEV && log.length > 0 && (
 				<div
 					ref={logRef}
@@ -217,6 +213,35 @@ export function SyncConnectSection() {
 				Once enrolled, devices sync automatically in the background while unlocked, no button or
 				window needed.
 			</p>
+
+			<div>
+				<button
+					type="button"
+					onClick={() => setAdvancedOpen((o) => !o)}
+					className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
+					aria-expanded={advancedOpen}
+				>
+					{advancedOpen ? (
+						<ChevronDown className="w-3.5 h-3.5" />
+					) : (
+						<ChevronRight className="w-3.5 h-3.5" />
+					)}
+					Advanced
+				</button>
+				{advancedOpen && (
+					<div className="mt-3 space-y-1.5 pl-4 border-l border-border/40">
+						<TextField
+							label="Nostr relay URL"
+							value={relayUrl}
+							onChange={(e) => setRelayUrl(e.target.value)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							The signaling relay that introduces devices. Defaults to the hosted relay; point it at
+							your own self-hosted copy or any public Nostr relay.
+						</p>
+					</div>
+				)}
+			</div>
 		</Section>
 	);
 }
