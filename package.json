@@ -7,6 +7,7 @@
 		"packages/platform-extension"
 	],
 	"scripts": {
+		"prepare": "git config core.hooksPath .githooks",
 		"build": "bun run --filter '@vault/platform-extension' build",
 		"bundle": "bun run --filter '@vault/platform-extension' bundle && bun run scripts/sign.ts --optional",
 		"dev": "bun run --filter '@vault/platform-extension' dev",
@@ -25,7 +26,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.15",
-		"@types/node": "^22.10.0",
+		"@types/node": "^24.0.0",
 		"crx3": "^2.0.0"
 	}
 }
