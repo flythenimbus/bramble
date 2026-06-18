@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -36,15 +36,15 @@ jobs:
         with:
           workspaces: packages/crypto-wasm
 
-      # Downloads a precompiled wasm-pack binary instead of `cargo install`-
-      # ing it from source (the latter recompiled wasm-pack + every transitive
-      # crate each run, ~2 minutes wasted). Version pin is what makes the
-      # WASM toolchain fully reproducible alongside the Rust pin above —
-      # bump deliberately, never accidentally. Latest stable as of writing.
+      # Downloads a precompiled wasm-pack binary (taiki-e/install-action, Node 24
+      # runtime) instead of `cargo install`-ing from source (the latter recompiled
+      # wasm-pack + every transitive crate each run, ~2 minutes wasted). The pinned
+      # version keeps the WASM toolchain reproducible alongside the Rust pin above;
+      # bump deliberately, never accidentally.
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
+        uses: taiki-e/install-action@v2
         with:
-          version: 'v0.13.1'
+          tool: wasm-pack@0.13.1
 
       - name: Install JS deps
         run: bun install

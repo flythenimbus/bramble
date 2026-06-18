@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# Keep commits in parity with CI's `biome ci .` gate: auto-fix the staged files
+# the same way CI checks them (organize imports, format, lint), re-stage the
+# fixes, and block the commit if anything is left that Biome can't safely fix.
+# Fix the whole repo at once instead with: bun run check
+biome="$(git rev-parse --show-toplevel)/node_modules/.bin/biome"
+[ -x "$biome" ] || exit 0   # no Biome installed (e.g. fresh clone pre-install): don't block
+
+"$biome" check --write --staged --no-errors-on-unmatched
+status=$?
+git update-index --again    # re-stage whatever Biome just fixed
+exit $status                 # non-zero => unfixable issues remain; commit is blocked
