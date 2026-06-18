@@ -60,13 +60,16 @@ const tag = `${version}-${platform}`;
 if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
-// Gate on the same lint + tests CI enforces on main, before we touch anything,
-// so a tag never ships from a red tree.
+// Gate on the same lint + typecheck + tests CI enforces on main, before we touch
+// anything, so a tag never ships from a red tree. typecheck matters here because
+// `vite build` strips types without checking them, so a type error would
+// otherwise sail straight into a signed release.
 try {
 	run("pnpm run ci:check");
+	run("pnpm run typecheck");
 	run("pnpm run test");
 } catch {
-	fail("lint or tests failed; fix them before releasing");
+	fail("lint, typecheck, or tests failed; fix them before releasing");
 }
 
 const before = readFileSync(manifest, "utf8");

@@ -1,12 +1,20 @@
 #!/usr/bin/env sh
-# Keep commits in parity with CI's `biome ci .` gate: auto-fix the staged files
-# the same way CI checks them (organize imports, format, lint), re-stage the
-# fixes, and block the commit if anything is left that Biome can't safely fix.
-# Fix the whole repo at once instead with: bun run check
-biome="$(git rev-parse --show-toplevel)/node_modules/.bin/biome"
-[ -x "$biome" ] || exit 0   # no Biome installed (e.g. fresh clone pre-install): don't block
+# Block commits that would fail CI. First auto-fix what Biome safely can on the
+# staged files (organize imports, format, lint) and re-stage those fixes; then
+# run the workspace typecheck. Anything Biome can't fix, or any type error,
+# blocks the commit. Fix the whole repo at once with: pnpm run check
+# Tests are NOT run here (cargo + vitest would make every commit slow); they are
+# gated by CI and `pnpm run release`, so failing tests can never ship.
+root="$(git rev-parse --show-toplevel)"
+biome="$root/node_modules/.bin/biome"
+[ -x "$biome" ] || exit 0   # no install yet (e.g. fresh clone): don't block
 
+# 1) Lint/format the staged files, auto-fixing and re-staging the safe fixes.
 "$biome" check --write --staged --no-errors-on-unmatched
 status=$?
-git update-index --again    # re-stage whatever Biome just fixed
-exit $status                 # non-zero => unfixable issues remain; commit is blocked
+git update-index --again              # re-stage whatever Biome just fixed
+[ "$status" -eq 0 ] || exit "$status" # unfixable lint/format => block the commit
+
+# 2) Typecheck the workspace, the same gate CI runs. `vite build` never
+#    typechecks, so without this a type error would commit cleanly.
+pnpm run typecheck || exit 1          # type error => block the commit
