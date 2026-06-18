@@ -1,7 +1,7 @@
 // Cut a release entirely from your machine: bump the manifest, build + sign the
 // bundle LOCALLY (the signing key never leaves this machine / your YubiKey),
 // tag, push, then publish a GitHub release with the signed artifacts attached.
-// Usage: bun run release <platform> <version>   e.g. bun run release chromium 1.0.0
+// Usage: pnpm run release <platform> <version>   e.g. pnpm run release chromium 1.0.0
 //
 // Tags as <version>-<platform> (e.g. 1.0.0-chromium). Publishing the release
 // fires .github/workflows/release.yml, which only verifies the signed .crx made
@@ -45,7 +45,7 @@ if (!manifest) {
 // Accept either 0.1.0 or v0.1.0; the manifest stores the bare numeric version.
 const version = (rawVersion ?? "").replace(/^v/, "");
 if (!version)
-	fail("missing version. usage: bun run release <platform> <version>  (e.g. chromium 0.1.0)");
+	fail("missing version. usage: pnpm run release <platform> <version>  (e.g. chromium 0.1.0)");
 
 // Chrome manifest versions: 1-4 dot-separated integers, 0-65535, no leading zeros.
 const PART = /^(0|[1-9]\d{0,4})$/;
@@ -63,8 +63,8 @@ if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 // Gate on the same lint + tests CI enforces on main, before we touch anything,
 // so a tag never ships from a red tree.
 try {
-	run("bun run ci:check");
-	run("bun run test");
+	run("pnpm run ci:check");
+	run("pnpm run test");
 } catch {
 	fail("lint or tests failed; fix them before releasing");
 }
@@ -88,9 +88,9 @@ if (bumped) writeFileSync(manifest, after);
 // Build + sign BEFORE we commit or tag, so a signing failure (e.g. no YubiKey)
 // leaves no tag behind. wasm/ is gitignored, so rebuild it first as CI used to.
 try {
-	run("bun run wasm:build");
-	run(`bun run --filter '@vault/platform-extension' bundle`);
-	run("bun run sign");
+	run("pnpm run wasm:build");
+	run(`pnpm --filter @vault/platform-extension run bundle`);
+	run("pnpm run sign");
 } catch {
 	fail(`build or signing failed; run \`git checkout ${manifest}\` to undo the bump`);
 }

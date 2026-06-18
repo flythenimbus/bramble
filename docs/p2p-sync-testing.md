@@ -10,7 +10,7 @@ document, and WebRTC connects them over loopback.
 1. **Run the relay** (separate terminal, leave it running):
 
    ```sh
-   bun signaling/relay.mjs        # ws://localhost:7400
+   node signaling/relay.mjs       # ws://localhost:7400
    ```
 
    See [../signaling/README.md](../signaling/README.md). Any Nostr relay works;
@@ -19,7 +19,7 @@ document, and WebRTC connects them over loopback.
 2. **Build and load the extension as two devices:**
 
    ```sh
-   bun run build                  # outputs dist/
+   pnpm run build                  # outputs dist/
    ```
 
    Use two separate Chromium profiles, or two Chromium browsers (e.g. Chrome +
@@ -79,14 +79,14 @@ closed. `requestPermission` needs a user gesture, so:
 The merge engine is exercised in isolation by unit tests, no browser needed:
 `core/src/sync/{merge,vault-merge,apply-remote,hlc,roster}.test.ts` cover the
 last-writer-wins merge, tombstones, and the apply seam against hand-built payloads.
-Run them with `bun run test`. (The old copy-paste "sneakernet" bridge that did this
+Run them with `pnpm run test`. (The old copy-paste "sneakernet" bridge that did this
 in-app was removed once the real WebRTC transport landed.)
 
 ## Dev loop
 
-After code changes: `bun run build`, then click the reload icon on the extension on
+After code changes: `pnpm run build`, then click the reload icon on the extension on
 `chrome://extensions` in **both** installs. After any `crypto-wasm` (Rust) change
-also run `bun run wasm:build` — `bun run build` does **not** rebuild the wasm, and a
+also run `pnpm run wasm:build` — `pnpm run build` does **not** rebuild the wasm, and a
 stale wasm shows up as `x.foo is not a function` in the browser.
 
 ## Caveats

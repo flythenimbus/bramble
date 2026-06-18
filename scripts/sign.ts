@@ -1,12 +1,12 @@
 // Sign the built extension into a .crx for Chrome Web Store verified upload.
-// Usage: bun run sign [path/to/dist] [--optional]   (dist defaults to platform-extension)
+// Usage: pnpm run sign [path/to/dist] [--optional]   (dist defaults to platform-extension)
 //
 // Decrypts the RSA signing key (age, unlocked by your YubiKey: PIN + touch),
 // packs the unpacked extension into a signed .crx, then wipes the plaintext key.
 // Upload the resulting .crx via the CWS dashboard or the Update API.
 //
 // --optional skips (exit 0) when the key or age tooling is absent, instead of
-// failing. `bun run bundle` uses it so CI and keyless builds still succeed.
+// failing. `pnpm run bundle` uses it so CI and keyless builds still succeed.
 //
 // One-time setup lives in docs/release-signing.md.
 
@@ -46,7 +46,7 @@ const has = (bin: string) => {
 };
 
 if (!existsSync(join(DIST, "manifest.json")))
-	fail(`no manifest.json in ${DIST}; run 'bun run bundle' first`);
+	fail(`no manifest.json in ${DIST}; run 'pnpm run bundle' first`);
 if (!existsSync(KEY_AGE)) need(`encrypted key not found at ${KEY_AGE} (override with CWS_KEY_AGE)`);
 for (const bin of ["age", "age-plugin-yubikey"]) {
 	if (!has(bin)) need(`${bin} not found; see docs/release-signing.md for setup`);
