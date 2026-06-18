@@ -1,0 +1,14 @@
+{
+	"name": "@vault/signaling-relay",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"typescript": "^5.5.0",
+		"wrangler": "^4.101.0"
+	}
+}

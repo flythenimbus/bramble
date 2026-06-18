@@ -230,7 +230,7 @@ entry's history list, recovering the lost value without ever decrypting it to me
   import time, so the Chrome service worker can import them and the offscreen document / FF
   event page provides the document context. This mirrors the offscreen refactor already planned
   in `firefox-port.md`.
-- Ship the minimal Nostr-subset relay source in `/signaling/` for users who want to self-host;
+- Ship the minimal Nostr-subset relay source in `/nostr-relay/` for users who want to self-host;
   the default relay URL is overridable in settings.
 
 ## Implementation status (built)

@@ -4,8 +4,8 @@
 // to current subscribers, and stores nothing. The vault never touches it; it
 // only relays encrypted, group-key-addressed signaling blobs.
 //
-// Run:  node signaling/relay.mjs            (defaults to ws://localhost:7400)
-//       PORT=9000 node signaling/relay.mjs
+// Run:  node nostr-relay/node/relay.mjs            (defaults to ws://localhost:7400)
+//       PORT=9000 node nostr-relay/node/relay.mjs
 //
 // Clients publish:  ["EVENT", { kind: 20000, tags: [["d", roomId]], content, ... }]
 //          and sub: ["REQ", subId, { kinds: [20000], "#d": [roomId] }]

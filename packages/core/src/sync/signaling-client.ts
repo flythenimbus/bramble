@@ -1,5 +1,5 @@
 // Thin client over a relay WebSocket: subscribe to a room, publish signed events,
-// dispatch peers' events. Speaks the Nostr subset the relay (signaling/relay.mjs)
+// dispatch peers' events. Speaks the Nostr subset the relay (nostr-relay/node/relay.mjs)
 // and public relays understand. The WebSocket is injected so this is testable
 // without a live server. See docs/p2p-sync.md.
 
