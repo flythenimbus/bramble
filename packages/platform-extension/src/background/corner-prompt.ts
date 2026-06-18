@@ -154,7 +154,7 @@ async function commitCornerSave(
 /** Overwrite an existing login's username and password with a captured credential. */
 async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string): Promise<void> {
 	const indexEntry = getIndexEntry(chosenEntryId);
-	if (!indexEntry || indexEntry.type !== "login") {
+	if (indexEntry?.type !== "login") {
 		throw new Error(`update target not in index: ${chosenEntryId}`);
 	}
 	const blob = await readAndDecodeVault();
