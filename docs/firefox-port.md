@@ -132,8 +132,8 @@ Verified Firefox facts behind these choices:
 - Set `gecko.id` and `strict_min_version`.
 - Privacy policy URL is required for a password manager; reuse `website/` and include the HIBP
   breach-check disclosure already written for the Chrome listing.
-- AMO requires source for bundled JS and WASM. Document the reproducible build (`bun install`,
-  `bun run wasm:build`, `TARGET=firefox bun run build:firefox`); `rust-toolchain.toml` already pins
+- AMO requires source for bundled JS and WASM. Document the reproducible build (`pnpm install`,
+  `pnpm run wasm:build`, `TARGET=firefox pnpm run build:firefox`); `rust-toolchain.toml` already pins
   the Rust toolchain for `packages/crypto-wasm`.
 - Sign via `web-ext sign` or AMO web upload to produce the `.xpi`.
 

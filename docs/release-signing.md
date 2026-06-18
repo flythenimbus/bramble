@@ -54,7 +54,7 @@ offline backup; keep nothing plaintext.
 One command, run from your machine (it will prompt for a YubiKey touch):
 
 ```sh
-bun run release chromium 1.0.0
+pnpm run release chromium 1.0.0
 ```
 
 It runs lint + tests, bumps the manifest, builds WASM, bundles, signs
@@ -70,10 +70,10 @@ store upload stays manual, so CWS publish credentials never live in CI either.)
 
 ### Building without releasing
 
-`bun run bundle` builds and signs locally too (`dist` + `bramble.zip` +
+`pnpm run bundle` builds and signs locally too (`dist` + `bramble.zip` +
 `bramble.crx`), via `sign --optional`: it packs the `.crx` when the key is
 present and **skips** (no error) when it is not. To force signing and error if
-the key is missing, run `bun run sign` on its own. Overrides: pass a dist path as
+the key is missing, run `pnpm run sign` on its own. Overrides: pass a dist path as
 the first arg to `sign`; set `CWS_KEY_AGE` to point at a different encrypted key.
 
 ## If the YubiKey is lost

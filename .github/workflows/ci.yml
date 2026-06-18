@@ -11,10 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
         with:
-          bun-version: latest
+          node-version: 24
+          cache: pnpm
 
       # Reads rust-toolchain.toml automatically — single source of truth for
       # the pinned toolchain version, components (rustfmt, clippy), and the
@@ -47,10 +51,10 @@ jobs:
           tool: wasm-pack@0.13.1
 
       - name: Install JS deps
-        run: bun install
+        run: pnpm install --frozen-lockfile
 
       - name: Build WASM
-        run: bun run wasm:build
+        run: pnpm run wasm:build
 
       # Behavioural reproducibility gate: exercises the full WASM crypto
       # surface (slot wrap/unwrap, encrypt/decrypt roundtrip, lock/unlock,
@@ -58,16 +62,16 @@ jobs:
       # change that silently broke a contract fails the build here, before
       # the rest of the suite ever runs.
       - name: Verify WASM
-        run: bun run wasm:verify
+        run: pnpm run wasm:verify
 
       - name: Typecheck
-        run: bun run typecheck
+        run: pnpm run typecheck
 
       - name: Biome
-        run: bun run ci:check
+        run: pnpm run ci:check
 
       - name: Test
-        run: bun run test
+        run: pnpm run test
 
       - name: Build extension
-        run: bun run build
+        run: pnpm run build

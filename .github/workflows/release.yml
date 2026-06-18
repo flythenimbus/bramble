@@ -1,7 +1,7 @@
 name: Verify release
 
 # Releases are built, signed, and published from a maintainer's machine by
-# `bun run release` (the signing key never leaves that machine). This job does
+# `pnpm run release` (the signing key never leaves that machine). This job does
 # NOT build or sign; it only confirms that a publish carried a real signed .crx,
 # so a release can't silently go out without the verified-upload artifact.
 # Triggered on publish (not the tag push), by which point the asset is attached.

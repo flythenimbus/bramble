@@ -14,8 +14,8 @@ user-configurable; there is no default).
 ## Run
 
 ```sh
-bun signaling/relay.mjs            # ws://localhost:7400
-PORT=9000 bun signaling/relay.mjs  # custom port
+node signaling/relay.mjs            # ws://localhost:7400
+PORT=9000 node signaling/relay.mjs  # custom port
 ```
 
 ## Wire contract
