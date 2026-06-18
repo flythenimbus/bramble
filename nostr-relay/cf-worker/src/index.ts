@@ -14,6 +14,15 @@
 
 import { DurableObject } from "cloudflare:workers";
 
+// Cheap abuse guards for the dumb pipe. A signaling blob is a few KB of
+// encrypted SDP/ICE, so reject anything larger before parsing: Cloudflare now
+// allows WebSocket frames up to 32 MiB, and parsing attacker-sized payloads on
+// a single-threaded Durable Object is the obvious cost/DoS footgun. A device
+// needs ~1 room subscription, so bound subs-per-connection too (caps both the
+// fan-out inner loop and the serialized attachment).
+const MAX_MSG_BYTES = 64 * 1024;
+const MAX_SUBS_PER_CONN = 8;
+
 /** A subscriber's REQ filters, keyed by subscription id. Stored as the socket
  *  attachment so it persists across hibernation. */
 type Subs = Record<string, NostrFilter[]>;
@@ -57,6 +66,8 @@ export class Relay extends DurableObject {
 	}
 
 	async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+		if ((typeof raw === "string" ? raw.length : raw.byteLength) > MAX_MSG_BYTES) return;
+
 		let msg: unknown;
 		try {
 			msg = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
@@ -69,6 +80,7 @@ export class Relay extends DurableObject {
 		if (type === "REQ") {
 			const [, subId, ...filters] = msg;
 			const subs = ws.deserializeAttachment() as Subs;
+			if (!(subId in subs) && Object.keys(subs).length >= MAX_SUBS_PER_CONN) return;
 			subs[subId] = filters;
 			ws.serializeAttachment(subs);
 			ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
