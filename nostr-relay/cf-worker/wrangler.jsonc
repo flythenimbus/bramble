@@ -1,0 +1,24 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "bramble-relay",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-18",
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["Relay"]
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"class_name": "Relay",
+				"name": "RELAY"
+			}
+		]
+	},
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true
+}
