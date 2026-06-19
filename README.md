@@ -103,7 +103,7 @@ Open source and contributions welcome. A few things worth knowing:
 
 - **Open an issue first for anything big.** Bug reports and small fixes can go straight to a PR.
 - **Security software has a higher bar.** Expect changes to come with tests, and the crypto and vault-format paths to get extra scrutiny.
-- **Found a security issue?** Please don't file it in the public tracker. Report it privately so it can be fixed before it's out in the open. (Email: flythenimbus@pm.me)
+- **Found a security issue?** Please don't file it in the public tracker. Report it privately via [GitHub Security Advisories](https://github.com/flythenimbus/bramble/security/advisories) or email, so it can be fixed before it's out in the open. See [SECURITY.md](SECURITY.md) for details.
 
 PRs that add real-site autofill fixtures or import-format coverage are especially handy.
 
