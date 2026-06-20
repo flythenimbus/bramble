@@ -61,7 +61,12 @@ async function deviceKeypair(): Promise<DeviceKeypair> {
 
 const statusSubs = new Set<(s: string) => void>();
 const eventSubs = new Set<(e: SyncEvent) => void>();
+// Ring buffer of recent status so a panel that mounts after sync started (e.g. it
+// starts on unlock, before Settings is opened) still shows the current state.
+const statusHistory: string[] = [];
 const report = (s: string) => {
+	statusHistory.push(s);
+	if (statusHistory.length > 50) statusHistory.shift();
 	for (const cb of statusSubs) cb(s);
 };
 const emit = (e: SyncEvent) => {
@@ -70,6 +75,7 @@ const emit = (e: SyncEvent) => {
 
 export function onSyncStatus(cb: (s: string) => void): () => void {
 	statusSubs.add(cb);
+	for (const s of statusHistory) cb(s); // replay recent lines to a fresh subscriber
 	return () => statusSubs.delete(cb);
 }
 export function onSyncEvent(cb: (e: SyncEvent) => void): () => void {
