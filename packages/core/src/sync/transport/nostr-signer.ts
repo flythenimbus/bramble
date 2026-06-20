@@ -1,8 +1,8 @@
 // Adapts the wasm BIP340 exports (base64) to nostr.ts's NostrSigner/Verifier
 // (hex wire format). Each sync session uses a fresh ephemeral signing key.
 
-import type { NostrSigner, NostrVerifier } from "@core/sync";
-import { base64ToHex, hexToBase64 } from "@core/util/bytes";
+import { base64ToHex, hexToBase64 } from "../../util/bytes";
+import type { NostrSigner, NostrVerifier } from "..";
 
 /** The wasm nostr exports. nostr_generate_key returns camelCase (#[serde(rename_all)]). */
 export interface NostrWasm {

@@ -7,7 +7,7 @@
 // the background (fetchLocalPayload / pushRemotePayload), so this stays storage-free.
 // See docs/p2p-sync.md.
 
-import type { RosterPayload } from "@core/sync";
+import type { RosterPayload } from "..";
 import type { Channel } from "./channel";
 import { type PumpWasm, runInitiator, runResponder } from "./handshake";
 import type { PeerSession } from "./mesh";

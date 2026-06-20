@@ -4,7 +4,7 @@
 // returned as a handle the caller holds, not a module-level singleton, so both
 // flows stay testable with a fake mesh. See docs/p2p-sync.md.
 
-import { base64ToBytes } from "@core/util/bytes";
+import { base64ToBytes } from "../../util/bytes";
 import { joinMesh, type Mesh, type MeshOptions, type PeerSession } from "./mesh";
 import { makeNostr, type NostrWasm } from "./nostr-signer";
 

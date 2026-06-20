@@ -13,7 +13,7 @@ import {
 	type SignalingClient,
 	type SocketLike,
 	verifyEvent,
-} from "@core/sync";
+} from "..";
 import { type Channel, makeChannel } from "./channel";
 import type { SignerPair } from "./nostr-signer";
 import { createPeer, type Peer, type PeerSignal } from "./webrtc-peer";
