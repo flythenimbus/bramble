@@ -14,7 +14,7 @@ export function ModeTabs({ mode, onChange, disabled, pill }: ModeTabsProps) {
 		<div
 			className={
 				pill
-					? "flex gap-2 mb-5"
+					? "flex gap-4 mb-5"
 					: "flex gap-2 mb-4 p-1 rounded-lg bg-muted/40 border border-border/50"
 			}
 		>
@@ -58,7 +58,7 @@ function PillTab({ active, disabled, onClick, children }: TabProps) {
 			type="button"
 			onClick={onClick}
 			disabled={disabled}
-			className={`flex-1 px-4 py-2 text-sm rounded-full border transition-all disabled:opacity-50 ${
+			className={`flex-1 px-4 py-2 text-sm rounded-full border-2 transition-all disabled:opacity-50 ${
 				active
 					? "border-border text-foreground"
 					: "border-transparent text-muted-foreground hover:text-foreground"
