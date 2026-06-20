@@ -31,6 +31,15 @@ module-level concepts that name good seams.
   roster-sync port directly over an EntriesBlobStore, so a remote merge writes exactly
   what a local edit does.
 
+## Crypto
+
+- **buildCryptoAdapter** — the single `CryptoAdapter` method -> wasm-call mapping
+  (`core/adapters/crypto-wasm.ts`), shared by every transport: the mobile webview
+  binds it to its lazy wasm loader + vault-session hooks; the extension offscreen
+  routes its `CRYPTO_*` IPC messages through it. Each platform's `wasm-loader`
+  only owns instantiation; the `VaultCrypto` interface (the wasm surface) is
+  declared once in `core/wasm.ts`.
+
 ## Autofill detection
 
 - **PageFieldModel** — the parsed, in-memory description of a web page's fillable

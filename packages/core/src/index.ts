@@ -1,6 +1,7 @@
 export * from "./adapters/autofill";
 export * from "./adapters/clipboard";
 export * from "./adapters/crypto";
+export * from "./adapters/crypto-wasm";
 export * from "./adapters/messaging";
 export * from "./adapters/shell";
 export * from "./adapters/storage";

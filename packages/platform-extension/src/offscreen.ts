@@ -1,9 +1,9 @@
 /// <reference types="chrome" />
 
+import { buildCryptoAdapter, type CryptoAdapter } from "@core/index";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
-import { base64ToBytes } from "@core/util/bytes";
 import {
 	CryptoDecryptOuterSchema,
 	CryptoDecryptSchema,
@@ -56,112 +56,122 @@ async function getWasm(): Promise<VaultCrypto> {
 	return wasm;
 }
 
+// The method->wasm mapping is shared with mobile (@core buildCryptoAdapter); the
+// offscreen only owns the IPC concern: validate the message payload, then call the
+// matching adapter method. No session hooks here — the background owns lock state.
+const cryptoAdapter: CryptoAdapter = buildCryptoAdapter(getWasm);
+
 interface OffscreenMessage {
 	target?: string;
 	type?: string;
 	payload?: any;
 }
 
-function dispatchCrypto(crypto: VaultCrypto, type: string, payload: unknown): unknown {
+function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promise<unknown> {
 	switch (type) {
 		case "CRYPTO_LOCK":
-			crypto.lock();
-			return null;
+			return a.lock().then(() => null);
 		case "CRYPTO_IS_LOCKED":
-			return crypto.is_locked();
+			return a.isLocked();
 
 		case "CRYPTO_GENERATE_VEK":
-			return crypto.generate_vek();
+			return a.generateVek();
 		case "CRYPTO_UNLOCK_WITH_VEK":
-			crypto.unlock_with_vek(CryptoUnlockWithVekSchema.parse(payload).vekB64);
-			return null;
+			return a.unlockWithVek(CryptoUnlockWithVekSchema.parse(payload).vekB64).then(() => null);
 		case "CRYPTO_EXPORT_VEK":
-			return crypto.export_vek();
+			return a.exportVek();
 		case "CRYPTO_ROTATE_VEK":
-			return crypto.rotate_vek();
+			return a.rotateVek();
 
 		case "CRYPTO_GENERATE_SALT":
-			return crypto.generate_salt();
+			return a.generateSalt();
 		case "CRYPTO_GENERATE_SLOT_ID":
-			return crypto.generate_slot_id();
+			return a.generateSlotId();
 
 		case "CRYPTO_WRAP_PASSWORD_SLOT": {
 			const p = CryptoWrapPasswordSlotSchema.parse(payload);
-			return crypto.wrap_vek_password(
-				p.password,
-				p.saltB64,
-				p.slotIdB64,
-				new Uint8Array(p.magicVersion),
-			);
+			return a.wrapVekPassword({
+				password: p.password,
+				saltB64: p.saltB64,
+				slotIdB64: p.slotIdB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 		case "CRYPTO_UNWRAP_PASSWORD_SLOT": {
 			const p = CryptoUnwrapPasswordSlotSchema.parse(payload);
-			return crypto.unwrap_vek_password(
-				p.password,
-				p.saltB64,
-				p.slotIdB64,
-				p.verifierB64,
-				p.wrapIvB64,
-				p.wrappedVekB64,
-				new Uint8Array(p.magicVersion),
-			);
+			return a.unwrapVekPassword({
+				password: p.password,
+				saltB64: p.saltB64,
+				slotIdB64: p.slotIdB64,
+				verifierB64: p.verifierB64,
+				wrapIvB64: p.wrapIvB64,
+				wrappedVekB64: p.wrappedVekB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 		case "CRYPTO_VERIFY_PASSWORD_SLOT": {
 			const p = CryptoVerifyPasswordSlotSchema.parse(payload);
-			return crypto.verify_password_slot(
-				p.password,
-				p.saltB64,
-				p.slotIdB64,
-				p.verifierB64,
-				new Uint8Array(p.magicVersion),
-			);
+			return a.verifyPasswordSlot({
+				password: p.password,
+				saltB64: p.saltB64,
+				slotIdB64: p.slotIdB64,
+				verifierB64: p.verifierB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 
 		case "CRYPTO_WRAP_WEBAUTHN_SLOT": {
 			const p = CryptoWrapWebauthnSlotSchema.parse(payload);
-			return crypto.wrap_vek_webauthn(p.hmacSecretB64, p.slotIdB64, new Uint8Array(p.magicVersion));
+			return a.wrapVekWebauthn({
+				hmacSecretB64: p.hmacSecretB64,
+				slotIdB64: p.slotIdB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 		case "CRYPTO_UNWRAP_WEBAUTHN_SLOT": {
 			const p = CryptoUnwrapWebauthnSlotSchema.parse(payload);
-			return crypto.unwrap_vek_webauthn(
-				p.hmacSecretB64,
-				p.slotIdB64,
-				p.verifierB64,
-				p.wrapIvB64,
-				p.wrappedVekB64,
-				new Uint8Array(p.magicVersion),
-			);
+			return a.unwrapVekWebauthn({
+				hmacSecretB64: p.hmacSecretB64,
+				slotIdB64: p.slotIdB64,
+				verifierB64: p.verifierB64,
+				wrapIvB64: p.wrapIvB64,
+				wrappedVekB64: p.wrappedVekB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 		case "CRYPTO_VERIFY_WEBAUTHN_SLOT": {
 			const p = CryptoVerifyWebauthnSlotSchema.parse(payload);
-			return crypto.verify_webauthn_slot(
-				p.hmacSecretB64,
-				p.slotIdB64,
-				p.verifierB64,
-				new Uint8Array(p.magicVersion),
-			);
+			return a.verifyWebauthnSlot({
+				hmacSecretB64: p.hmacSecretB64,
+				slotIdB64: p.slotIdB64,
+				verifierB64: p.verifierB64,
+				magicVersion: new Uint8Array(p.magicVersion),
+			});
 		}
 
 		case "CRYPTO_ENCRYPT":
-			return crypto.encrypt_entry(CryptoEncryptSchema.parse(payload).plaintextJson);
+			return a.encryptEntry(CryptoEncryptSchema.parse(payload).plaintextJson);
 		case "CRYPTO_DECRYPT": {
 			const p = CryptoDecryptSchema.parse(payload);
-			return crypto.decrypt_entry(p.ciphertext, p.iv, p.wrappedDek, p.dekIv);
+			return a.decryptEntry({
+				ciphertext: p.ciphertext,
+				iv: p.iv,
+				wrappedDek: p.wrappedDek,
+				dekIv: p.dekIv,
+			});
 		}
 		case "CRYPTO_ENCRYPT_OUTER":
-			return crypto.encrypt_with_vek(CryptoEncryptOuterSchema.parse(payload).plaintext);
+			return a.encryptWithVek(CryptoEncryptOuterSchema.parse(payload).plaintext);
 		case "CRYPTO_DECRYPT_OUTER": {
 			const p = CryptoDecryptOuterSchema.parse(payload);
-			return crypto.decrypt_with_vek(p.iv, p.ciphertext);
+			return a.decryptWithVek(p.iv, p.ciphertext);
 		}
 
 		case "CRYPTO_OPEN_KDBX": {
 			// Foreign KeePass database decrypted entirely in WASM; only mapped
 			// key/value pairs come back. Unrelated to the vault VEK.
 			const p = CryptoOpenKdbxSchema.parse(payload);
-			const file = base64ToBytes(p.fileB64);
-			const keyfile = p.keyfileB64 ? base64ToBytes(p.keyfileB64) : undefined;
-			return crypto.open_kdbx4(file, p.password, keyfile);
+			return a.openKdbx({ fileB64: p.fileB64, password: p.password, keyfileB64: p.keyfileB64 });
 		}
 
 		default:
@@ -264,8 +274,7 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 			if (!msgType.startsWith("CRYPTO_")) {
 				throw new Error(`unknown message type: ${msgType}`);
 			}
-			const wasmCrypto = await getWasm();
-			const data = dispatchCrypto(wasmCrypto, msgType, message.payload);
+			const data = await dispatchCrypto(cryptoAdapter, msgType, message.payload);
 			sendResponse({ ok: true, data });
 		} catch (err) {
 			sendResponse({ ok: false, error: String(err) });
