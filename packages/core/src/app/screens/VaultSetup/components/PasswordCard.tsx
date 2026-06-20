@@ -94,16 +94,25 @@ export function PasswordCard({
 					{isCreate && <NoRecoveryWarning />}
 				</div>
 
-				<div className="px-5 py-4 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-3">
+				<div
+					className={`px-5 py-4 bg-muted/30 border-t border-border/50 flex gap-3 ${
+						mobile ? "flex-col items-stretch" : "items-center justify-end"
+					}`}
+				>
 					{submitError && (
-						<p className="flex-1 text-xs text-destructive truncate" title={submitError}>
+						<p
+							className={`text-destructive ${mobile ? "text-sm" : "flex-1 text-xs truncate"}`}
+							title={submitError}
+						>
 							{submitError}
 						</p>
 					)}
 					<button
 						type="submit"
 						disabled={busy || !canSubmit || blockedByWeak}
-						className="px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+						className={`rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+							mobile ? "w-full px-5 py-3 text-base" : "px-5 py-2 text-sm"
+						}`}
 					>
 						<SubmitLabel mode={mode} busy={busy} />
 					</button>
