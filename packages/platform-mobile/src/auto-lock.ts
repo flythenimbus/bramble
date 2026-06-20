@@ -1,7 +1,8 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { DEFAULT_AUTOLOCK_MINUTES, PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
-import { lockForLifecycle, mobileCrypto } from "./adapters/crypto";
+import { mobileCrypto } from "./adapters/crypto";
 import { mobileStorage } from "./adapters/storage";
+import { lockForLifecycle } from "./adapters/vault-session";
 
 // Inactivity auto-lock honoring the user's "Auto-lock timeout" setting. We do NOT
 // lock the instant the app is backgrounded; instead background time counts as

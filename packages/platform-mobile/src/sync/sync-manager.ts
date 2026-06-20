@@ -17,8 +17,9 @@ import {
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
-import { mobileCrypto, notifyExternalChange, onVaultStateChange } from "../adapters/crypto";
+import { mobileCrypto } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
+import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
 import { secureStorage } from "../secure-storage";
 import { loadWasm } from "../wasm-loader";
 

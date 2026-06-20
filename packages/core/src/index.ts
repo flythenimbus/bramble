@@ -11,3 +11,4 @@ export * from "./hooks/useVault";
 export * from "./sync";
 export * from "./vault/entries-blob";
 export * from "./vault-format";
+export * from "./wasm";
