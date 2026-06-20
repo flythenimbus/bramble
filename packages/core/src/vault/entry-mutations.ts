@@ -8,17 +8,10 @@ import type { AutofillAdapter } from "../adapters/autofill";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { StorageAdapter } from "../adapters/storage";
 import type { Entry, EntryData } from "../hooks/useVault";
-import {
-	decodeEntriesPayload,
-	type EntriesPayload,
-	emptyEntriesPayload,
-	encodeEntriesPayload,
-	type Hlc,
-	type HybridClock,
-} from "../sync";
-import { base64ToBytes, bytesToBase64 } from "../util/bytes";
-import { type EncryptedEntry, encodeVaultBlob, type VaultBlob } from "../vault-format";
+import type { EntriesPayload, Hlc, HybridClock } from "../sync";
+import type { EncryptedEntry, VaultBlob } from "../vault-format";
 import { toAutofillIndex } from "./autofill-index";
+import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 
 /**
@@ -60,27 +53,13 @@ export interface EntryMutations {
 export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 	const { crypto, storage, autofill, readDecodedBlob, clock } = deps;
 
-	const readEntriesPayload = async (): Promise<EntriesPayload> => {
-		const { blob } = await readDecodedBlob();
-		if (blob.entriesCiphertext.length === 0) return emptyEntriesPayload();
-		const json = await crypto.decryptWithVek(
-			bytesToBase64(blob.entriesIv),
-			bytesToBase64(blob.entriesCiphertext),
-		);
-		return decodeEntriesPayload(json);
-	};
-
-	const writeEntriesBlob = async (payload: EntriesPayload): Promise<void> => {
-		const { iv, ciphertext } = await crypto.encryptWithVek(encodeEntriesPayload(payload));
-		const { blob } = await readDecodedBlob();
-		await storage.writeVaultBlob(
-			encodeVaultBlob({
-				slots: blob.slots,
-				entriesIv: base64ToBytes(iv),
-				entriesCiphertext: base64ToBytes(ciphertext),
-			}),
-		);
-	};
+	// The on-disk entries format lives in one place (EntriesBlobStore); these are
+	// the same primitives the sync-enrollment path and mobile roster sync use.
+	const { readEntriesPayload, writeEntriesBlob } = createEntriesBlobStore({
+		crypto,
+		storage,
+		readDecodedBlob,
+	});
 
 	// Encrypt each entry under a fresh DEK and pair it with its stamp.
 	const buildPayload = async (next: VaultEntries): Promise<EntriesPayload> => {

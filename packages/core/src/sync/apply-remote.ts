@@ -3,6 +3,7 @@
 // supplies decrypt/encrypt/persist via VaultSyncPort, so this stays free of
 // platform APIs and crypto. See docs/p2p-sync.md.
 
+import type { EntriesBlobStore } from "../vault/entries-blob";
 import type { EntriesPayload } from "./entries-payload";
 import { compareHlc, type Hlc } from "./hlc";
 import { mergeEntriesPayload } from "./vault-merge";
@@ -68,4 +69,24 @@ export async function applyRemotePayload(
 		await port.writeMerged(merged);
 	}
 	return { payload: merged, changed };
+}
+
+/**
+ * Build a VaultSyncPort over the shared EntriesBlobStore, so the on-disk entries
+ * format has one writer across local mutations and sync merges. The host supplies
+ * clock witnessing and an optional post-write notification (e.g. refresh the UI).
+ */
+export function createVaultSyncPort(deps: {
+	store: EntriesBlobStore;
+	witnessRemote: (stamps: Hlc[]) => Promise<void>;
+	onChanged?: () => void | Promise<void>;
+}): VaultSyncPort {
+	return {
+		readLocal: () => deps.store.readEntriesPayload(),
+		witnessRemote: deps.witnessRemote,
+		async writeMerged(merged) {
+			await deps.store.writeEntriesBlob(merged);
+			await deps.onChanged?.();
+		},
+	};
 }

@@ -9,4 +9,5 @@ export { default as OptionsApp } from "./app/OptionsApp";
 export * from "./context/PlatformContext";
 export * from "./hooks/useVault";
 export * from "./sync";
+export * from "./vault/entries-blob";
 export * from "./vault-format";

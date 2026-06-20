@@ -19,12 +19,17 @@ module-level concepts that name good seams.
   it holds no React state. `EntryData` is validated against `entryDataSchema` at
   this seam before anything is encrypted. The autofill index is refreshed here on
   every persist, so it can never drift from what was written.
-- **writeEntriesBlob / readEntriesPayload** — the persist primitive pair under
-  EntryMutations. `writeEntriesBlob(payload)` encrypts an `EntriesPayload` under
-  the VEK, preserves the slot list, and writes the vault blob.
-  `readEntriesPayload()` is its inverse. Both EntryMutations and the sync
-  enrollment path (`useSyncEnrollment`) go through these, so the on-disk entries
-  format has one writer.
+- **EntriesBlobStore** — the single reader/writer of the on-disk entries format
+  for the adapter context (`core/vault/entries-blob.ts`). `writeEntriesBlob(payload)`
+  encrypts an `EntriesPayload` under the VEK, preserves the slot list, and writes the
+  vault blob; `readEntriesPayload()` is its inverse. Parameterized by the crypto +
+  storage adapters, so EntryMutations, the sync-enrollment path (`useSyncEnrollment`),
+  and the mobile roster-sync `VaultSyncPort` all share one implementation — the
+  on-disk entries format has one writer in that context. (The extension *background*
+  uses a different transport — offscreen IPC + a write-queue — and is a separate
+  writer by necessity.) `createVaultSyncPort` (`core/sync/apply-remote.ts`) builds the
+  roster-sync port directly over an EntriesBlobStore, so a remote merge writes exactly
+  what a local edit does.
 
 ## Autofill detection
 
