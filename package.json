@@ -12,7 +12,7 @@
 		"wasm:build:mobile": "cd packages/crypto-wasm && wasm-pack build --target web --out-dir ../platform-mobile/public/wasm",
 		"wasm:verify": "node packages/crypto-wasm/verify.ts",
 		"mobile:dev": "pnpm --filter @vault/platform-mobile run dev",
-		"mobile:build": "pnpm run wasm:build:mobile && pnpm --filter @vault/platform-mobile run build",
+		"core:build": "pnpm run wasm:build:mobile && pnpm --filter @vault/platform-mobile run build",
 		"wasm:test": "cd packages/crypto-wasm && cargo test",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
