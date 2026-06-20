@@ -35,6 +35,11 @@ pnpm run:android      # same for Android
 
 Open the native projects in their IDEs with `pnpm exec cap open ios` / `... android`.
 
+The iOS scripts auto-pick the newest available iPhone simulator (via
+`scripts/pick-ios-target.mjs`) and pass it as `--target`, so `cap run`'s interactive
+device picker is skipped (it can't receive arrow keys when wrapped in `concurrently`).
+To target a specific device, run `pnpm exec cap run ios --target <udid>` directly.
+
 ## Live-reload gotcha (important)
 
 The `dev:*` scripts bake a `server.url` (`http://localhost:5173`) into the native app
