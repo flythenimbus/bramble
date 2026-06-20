@@ -1,3 +1,4 @@
+import { App as CapacitorApp } from "@capacitor/app";
 import { App, OptionsApp, type Platform, PlatformProvider } from "@core/index";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -5,7 +6,7 @@ import "@core/styles/index.css";
 import "./styles/mobile.css";
 import { mobileAutofill } from "./adapters/autofill";
 import { mobileClipboard } from "./adapters/clipboard";
-import { mobileCrypto } from "./adapters/crypto";
+import { lockForLifecycle, mobileCrypto } from "./adapters/crypto";
 import { mobileShell, registerOpenSetup } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 
@@ -24,6 +25,17 @@ const platform: Platform = {
 function Root() {
 	const [setup, setSetup] = useState(false);
 	useEffect(() => registerOpenSetup(() => setSetup(true)), []);
+
+	// Lock the vault whenever the app is backgrounded (a password manager should not
+	// stay unlocked behind the app switcher). onExternalLock then re-locks the UI.
+	useEffect(() => {
+		const handle = CapacitorApp.addListener("pause", () => {
+			void lockForLifecycle();
+		});
+		return () => {
+			void handle.then((h) => h.remove());
+		};
+	}, []);
 
 	return setup ? <OptionsApp onComplete={() => setSetup(false)} mobile /> : <App />;
 }

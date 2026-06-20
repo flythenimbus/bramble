@@ -2,10 +2,25 @@ import type { CryptoAdapter } from "@core/index";
 import { base64ToBytes } from "@core/util/bytes";
 import { loadWasm } from "../wasm-loader";
 
+// External-lock subscribers (useVault listens here to drop decrypted state and
+// bounce to the unlock screen). On mobile the trigger is the app lifecycle, not a
+// background SW: see lockForLifecycle().
+const lockListeners = new Set<() => void>();
+
+/**
+ * Lock the vault in response to an app-lifecycle event (backgrounded), and notify
+ * subscribers so the UI re-locks. Kept separate from the plain `lock()` adapter
+ * method (which useVault uses for an explicit, UI-driven lock that manages its own
+ * state) so we don't double-fire onExternalLock on a manual lock.
+ */
+export async function lockForLifecycle(): Promise<void> {
+	(await loadWasm()).lock();
+	for (const fn of lockListeners) fn();
+}
+
 // Direct in-webview WASM calls. The extension routes these through an offscreen
 // document over chrome.runtime; on mobile the single webview has a DOM, so the
-// crypto module runs in-process and the messaging hop collapses. The external
-// lock/change subscriptions are no-ops here (one UI context, no background SW).
+// crypto module runs in-process and the messaging hop collapses.
 export const mobileCrypto: CryptoAdapter = {
 	async generateVek() {
 		return (await loadWasm()).generate_vek();
@@ -25,8 +40,9 @@ export const mobileCrypto: CryptoAdapter = {
 	async isLocked() {
 		return (await loadWasm()).is_locked();
 	},
-	onExternalLock() {
-		return () => {};
+	onExternalLock(callback) {
+		lockListeners.add(callback);
+		return () => lockListeners.delete(callback);
 	},
 	onExternalChange() {
 		return () => {};
