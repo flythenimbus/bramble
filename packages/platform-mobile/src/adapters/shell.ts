@@ -1,4 +1,12 @@
 import type { ShellAdapter } from "@core/index";
+import {
+	onSyncEvent,
+	onSyncStatus,
+	startEnrollInvite,
+	startEnrollJoin,
+	stopSync,
+	syncDevicePublicKey,
+} from "../sync/sync-manager";
 
 // Single-window in-app navigation to the setup/create-vault flow. The root
 // (main.tsx) registers a handler that swaps the mounted view; `openSetup` invokes
@@ -43,17 +51,12 @@ export const mobileShell: ShellAdapter = {
 		return false;
 	},
 
-	// Sync host is a later phase; inert stubs keep the settings panel from throwing.
-	async stopSyncSpike() {},
-	onSyncStatus() {
-		return () => {};
-	},
-	async syncDevicePublicKey() {
-		throw new Error("sync not implemented in the mobile POC");
-	},
-	async startEnrollInvite() {},
-	async startEnrollJoin() {},
-	onSyncEvent() {
-		return () => {};
-	},
+	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
+	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.
+	stopSyncSpike: stopSync,
+	onSyncStatus,
+	syncDevicePublicKey,
+	startEnrollInvite,
+	startEnrollJoin,
+	onSyncEvent,
 };
