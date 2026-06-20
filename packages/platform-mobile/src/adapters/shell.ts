@@ -1,5 +1,16 @@
 import type { ShellAdapter } from "@core/index";
 
+// Single-window in-app navigation to the setup/create-vault flow. The root
+// (main.tsx) registers a handler that swaps the mounted view; `openSetup` invokes
+// it instead of opening a separate tab the way the extension does.
+let openSetupHandler: (() => void) | null = null;
+export function registerOpenSetup(fn: () => void): () => void {
+	openSetupHandler = fn;
+	return () => {
+		if (openSetupHandler === fn) openSetupHandler = null;
+	};
+}
+
 // Mobile is a single-window app: the pop-out / detached-window machinery and the
 // "active browser tab" concept have no meaning here, so those collapse to no-ops.
 // QR scanning (barcode-scanner plugin) and the sync host are later phases.
@@ -8,7 +19,8 @@ export const mobileShell: ShellAdapter = {
 	version: "0.0.0-mobile",
 
 	async openSetup() {
-		// Settings/import are in-app routes on mobile; nothing to open externally.
+		if (!openSetupHandler) throw new Error("setup view not mounted");
+		openSetupHandler();
 	},
 	hasFilePicker() {
 		return false;

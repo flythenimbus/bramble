@@ -1,0 +1,25 @@
+/*
+ * Mobile-only viewport fixes, loaded after @core styles so these win. Applies to
+ * the mobile build only (imported from main.tsx); the extension is unaffected.
+ *
+ * index.html sets `viewport-fit=cover`, so the WKWebView is edge-to-edge and the
+ * status bar / notch / home indicator overlap the page. We inset content with the
+ * safe-area insets on the screen roots core uses (h-screen / min-h-screen), so the
+ * full-bleed background still reaches the edges while content stays in the safe area.
+ * env(safe-area-inset-*) is 0 when the system already insets the webview, so this is
+ * safe either way (no double inset).
+ */
+
+.h-screen {
+	height: 100dvh;
+}
+
+.h-screen,
+.min-h-screen {
+	min-height: 100dvh;
+	padding-top: env(safe-area-inset-top);
+	padding-right: env(safe-area-inset-right);
+	padding-bottom: env(safe-area-inset-bottom);
+	padding-left: env(safe-area-inset-left);
+	box-sizing: border-box;
+}

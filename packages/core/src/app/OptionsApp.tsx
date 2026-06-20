@@ -11,7 +11,10 @@ const ImportShell = lazy(() =>
 	import("./screens/Import/ImportShell").then((m) => ({ default: m.ImportShell })),
 );
 
-function SetupShell() {
+// `onComplete` lets a single-window host (mobile) return to its main UI instead of
+// the "close this tab" terminal screen. When omitted (the extension's options tab),
+// the terminal done screen is shown as before.
+function SetupShell({ onComplete }: { onComplete?: () => void }) {
 	const { shell } = usePlatform();
 	const { hasVault, pickVaultFile, createVault, unlock } = useVault();
 	const [mode, setMode] = useState<VaultSetupMode>("create");
@@ -29,7 +32,8 @@ function SetupShell() {
 						code={recoveryCode}
 						onContinue={() => {
 							setRecoveryCode(null);
-							setDone("created");
+							if (onComplete) onComplete();
+							else setDone("created");
 						}}
 					/>
 				</div>
@@ -73,13 +77,14 @@ function SetupShell() {
 			}}
 			onUnlock={async (password) => {
 				await unlock(password);
-				setDone("opened");
+				if (onComplete) onComplete();
+				else setDone("opened");
 			}}
 		/>
 	);
 }
 
-export default function OptionsApp() {
+export default function OptionsApp({ onComplete }: { onComplete?: () => void } = {}) {
 	// `?screen=import` (from Settings) routes to the import flow instead of setup.
 	const screen = new URLSearchParams(window.location.search).get("screen");
 	return (
@@ -90,7 +95,7 @@ export default function OptionsApp() {
 						<ImportShell />
 					</Suspense>
 				) : (
-					<SetupShell />
+					<SetupShell onComplete={onComplete} />
 				)}
 			</VaultProvider>
 		</ThemeProvider>
