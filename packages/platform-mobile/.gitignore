@@ -1,6 +1,3 @@
 dist/
 public/wasm/
 node_modules/
-# Capacitor native projects (generated; commit deliberately once real native work begins)
-ios/
-android/
