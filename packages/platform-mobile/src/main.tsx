@@ -9,6 +9,7 @@ import { mobileCrypto } from "./adapters/crypto";
 import { mobileShell, registerOpenSetup } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
+import { initRosterSync } from "./sync/sync-manager";
 
 const platform: Platform = {
 	storage: mobileStorage,
@@ -34,6 +35,9 @@ function Root() {
 	// Auto-lock after the configured inactivity timeout (background time counts as
 	// inactivity); honors the "Never" setting. onExternalLock then re-locks the UI.
 	useEffect(() => startAutoLock(), []);
+
+	// Run ongoing roster sync while unlocked + enrolled (started on unlock).
+	useEffect(() => initRosterSync(), []);
 
 	if (view === "app") return <App />;
 	return (
