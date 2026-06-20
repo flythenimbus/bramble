@@ -112,6 +112,19 @@ This quits Simulator, backs up and clears the per-device window geometry
 (`DevicePreferences`), points it at the newest iPhone, and reopens it. Then re-run
 `pnpm dev:ios`. Backup is written to `/tmp/sim-deviceprefs-backup.txt`.
 
+### 9. Content rendered wider than the screen (WKWebView phantom zoom)
+Symptom: the right edge of every screen is clipped (buttons/cards cut off). Measuring in
+the webview showed `window.innerWidth` (visual viewport, 385) smaller than
+`document.documentElement.clientWidth` (layout viewport, 440) — WKWebView was applying a
+zoom so content laid out at 440 but only 385 was visible. `initial-scale=1` alone did not
+prevent it. Fix in `index.html`: lock the scale.
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+```
+With the scale locked, visual == layout viewport and content fits. (Disabling pinch-zoom
+is expected for a native-app-like shell.) To diagnose a recurrence, temporarily log
+`window.innerWidth` vs `document.documentElement.clientWidth`; if they differ, it's this.
+
 ## Reclaiming disk space
 
 The iOS runtimes are the big consumers (~8 GB each). List and delete unused ones rather
