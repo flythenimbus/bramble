@@ -1,4 +1,8 @@
 /// <reference types="chrome" />
+
+import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
+import type { MeshSession } from "@core/sync/transport/peer-session";
+import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
 import { base64ToBytes } from "@core/util/bytes";
 import {
 	CryptoDecryptOuterSchema,
@@ -14,7 +18,6 @@ import {
 	CryptoWrapPasswordSlotSchema,
 	CryptoWrapWebauthnSlotSchema,
 } from "./crypto/messages";
-import { type EnrollWasm, startEnroll } from "./sync/enroll-host";
 import {
 	type ApplyRemoteMsg,
 	EnrollInviteMsgSchema,
@@ -23,8 +26,6 @@ import {
 	type SyncEventMsg,
 	type SyncStatusMsg,
 } from "./sync/messages";
-import type { MeshSession } from "./sync/peer-session";
-import { type RosterSyncWasm, startRosterSync } from "./sync/roster-sync";
 import type { KeypairWasm } from "./sync/sync-config";
 import { loadWasm, type VaultCrypto } from "./wasm-loader";
 

@@ -1,5 +1,3 @@
-/// <reference types="chrome" />
-
 // One WebRTC connection to a single remote peer (dev sync spike). The initiator
 // creates the data channel and offer; the responder answers. ICE is host-candidate
 // only (same-network v1, no STUN/TURN). SDP/ICE are emitted via onSignal and fed

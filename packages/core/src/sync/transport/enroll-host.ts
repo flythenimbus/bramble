@@ -5,6 +5,13 @@
 // inside the offscreen, so the VEK never leaves it (only the wrapped blob does).
 // See docs/p2p-sync.md.
 
+import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
+import {
+	buildVaultBytes,
+	type VaultBuildCrypto,
+	wrapPasswordSlot,
+	wrapWebauthnSlot,
+} from "../../vault/build-vault";
 import {
 	decodeEnrollmentBundle,
 	type EntriesPayload,
@@ -12,14 +19,7 @@ import {
 	type RosterEntry,
 	RosterEntrySchema,
 	type RosterPayload,
-} from "@core/sync";
-import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
-import {
-	buildVaultBytes,
-	type VaultBuildCrypto,
-	wrapPasswordSlot,
-	wrapWebauthnSlot,
-} from "@core/vault/build-vault";
+} from "..";
 import type { Channel } from "./channel";
 import { type PumpWasm, runInitiator, runResponder, type Session } from "./handshake";
 import type { PeerSession } from "./mesh";
