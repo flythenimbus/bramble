@@ -11,6 +11,7 @@
 		"dev:android:lan": "concurrently -n vite,android -c cyan,green \"vite --host --port 5173\" \"cap run android -l --port 5173\"",
 		"run:ios": "cap run ios --target $(node scripts/pick-ios-target.mjs)",
 		"run:android": "cap run android",
+		"sim:reset": "node scripts/sim-reset.mjs",
 		"build": "vite build",
 		"typecheck": "tsc --noEmit",
 		"cap:sync": "cap sync",
