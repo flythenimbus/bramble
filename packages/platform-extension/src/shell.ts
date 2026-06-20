@@ -54,6 +54,8 @@ export const extensionShell: ShellAdapter = {
 		if (typeof window === "undefined") return false;
 		return new URLSearchParams(window.location.search).has(DETACHED_FLAG);
 	},
+	// Extension QR scan captures the active tab, not a camera; no camera-scan UI.
+	supportsCameraScan: false,
 	async flushPendingCornerCapture() {
 		const res = (await chrome.runtime.sendMessage({ type: "CORNER_FLUSH_HANDOFF" })) as
 			| { ok: boolean; data?: boolean }

@@ -1,4 +1,5 @@
 import type { ShellAdapter } from "@core/index";
+import { scanQrCode } from "../scan";
 import {
 	onSyncEvent,
 	onSyncStatus,
@@ -43,9 +44,11 @@ export const mobileShell: ShellAdapter = {
 	isDetached() {
 		return false;
 	},
+	supportsCameraScan: true,
 	async scanQrFromActiveTab() {
-		// TODO: @capacitor-mlkit/barcode-scanning (camera) in the QR phase.
-		return null;
+		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
+		// used for sync pairing codes and TOTP otpauth:// QRs.
+		return scanQrCode();
 	},
 	async flushPendingCornerCapture() {
 		return false;

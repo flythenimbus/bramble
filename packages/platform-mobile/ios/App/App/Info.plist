@@ -47,5 +47,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Bramble uses the camera to scan device pairing codes and 2FA QR codes.</string>
 </dict>
 </plist>

@@ -34,6 +34,8 @@ export interface ShellAdapter {
 	consumeHandoff(): Promise<PopOutHandoff | null>;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
+	/** True where `scanQrFromActiveTab` is a live camera scan (mobile) rather than an active-tab capture; gates camera-scan affordances (e.g. scanning a pairing QR). */
+	supportsCameraScan: boolean;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.

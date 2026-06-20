@@ -67,6 +67,13 @@ export function SyncConnectSection() {
 					: { kind: "password", password: joinPassword },
 			),
 		);
+	// Camera scan of the inviter's pairing QR (mobile only).
+	const scanForJoinCode = () =>
+		run("scanning…", async () => {
+			const code = await shell.scanQrFromActiveTab();
+			if (code) setJoinCode(code);
+			else note("no code scanned");
+		});
 	const grantAccess = () =>
 		run("granting file access…", async () => {
 			await storage.requestVaultAccess();
@@ -164,6 +171,11 @@ export function SyncConnectSection() {
 					value={joinCode}
 					onChange={(e) => setJoinCode(e.target.value)}
 				/>
+				{shell.supportsCameraScan && (
+					<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
+						Scan QR code
+					</button>
+				)}
 				<div className="space-y-4">
 					{canUseSecurityKey && (
 						<div className="flex gap-2">
