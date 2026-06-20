@@ -16,6 +16,8 @@ interface VaultSetupProps {
 	onChooseFile: () => Promise<void>;
 	onCreate: (password: string) => Promise<void>;
 	onUnlock: (password: string) => Promise<void>;
+	/** Mobile: storage is app-managed, so hide the file-location step and use the compact presentation. */
+	mobile?: boolean;
 }
 
 export function VaultSetup({
@@ -26,6 +28,7 @@ export function VaultSetup({
 	onChooseFile,
 	onCreate,
 	onUnlock,
+	mobile,
 }: VaultSetupProps) {
 	const [busy, setBusy] = useState(false);
 	const [fileError, setFileError] = useState<string | null>(null);
@@ -70,16 +73,18 @@ export function VaultSetup({
 	return (
 		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			<div className="w-full max-w-xl">
-				<SetupHeader mode={mode} />
-				<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} />
-				<FileLocationCard
-					hasPicker={hasPicker}
-					hasFile={hasFile}
-					mode={mode}
-					busy={busy}
-					onPick={handlePick}
-					error={fileError}
-				/>
+				<SetupHeader mode={mode} mobile={mobile} />
+				<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} pill={mobile} />
+				{!mobile && (
+					<FileLocationCard
+						hasPicker={hasPicker}
+						hasFile={hasFile}
+						mode={mode}
+						busy={busy}
+						onPick={handlePick}
+						error={fileError}
+					/>
+				)}
 				<PasswordCard
 					mode={mode}
 					form={form}
@@ -87,6 +92,7 @@ export function VaultSetup({
 					canSubmit={!hasPicker || hasFile}
 					submitError={submitError}
 					onSubmit={handleSubmit}
+					mobile={mobile}
 				/>
 			</div>
 		</div>

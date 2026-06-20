@@ -14,7 +14,7 @@ const ImportShell = lazy(() =>
 // `onComplete` lets a single-window host (mobile) return to its main UI instead of
 // the "close this tab" terminal screen. When omitted (the extension's options tab),
 // the terminal done screen is shown as before.
-function SetupShell({ onComplete }: { onComplete?: () => void }) {
+function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
 	const { hasVault, pickVaultFile, createVault, unlock } = useVault();
 	const [mode, setMode] = useState<VaultSetupMode>("create");
@@ -59,6 +59,7 @@ function SetupShell({ onComplete }: { onComplete?: () => void }) {
 
 	return (
 		<VaultSetup
+			mobile={mobile}
 			hasPicker={hasPicker}
 			hasFile={hasFile}
 			mode={mode}
@@ -84,7 +85,13 @@ function SetupShell({ onComplete }: { onComplete?: () => void }) {
 	);
 }
 
-export default function OptionsApp({ onComplete }: { onComplete?: () => void } = {}) {
+export default function OptionsApp({
+	onComplete,
+	mobile,
+}: {
+	onComplete?: () => void;
+	mobile?: boolean;
+} = {}) {
 	// `?screen=import` (from Settings) routes to the import flow instead of setup.
 	const screen = new URLSearchParams(window.location.search).get("screen");
 	return (
@@ -95,7 +102,7 @@ export default function OptionsApp({ onComplete }: { onComplete?: () => void } =
 						<ImportShell />
 					</Suspense>
 				) : (
-					<SetupShell onComplete={onComplete} />
+					<SetupShell onComplete={onComplete} mobile={mobile} />
 				)}
 			</VaultProvider>
 		</ThemeProvider>

@@ -25,7 +25,7 @@ function Root() {
 	const [setup, setSetup] = useState(false);
 	useEffect(() => registerOpenSetup(() => setSetup(true)), []);
 
-	return setup ? <OptionsApp onComplete={() => setSetup(false)} /> : <App />;
+	return setup ? <OptionsApp onComplete={() => setSetup(false)} mobile /> : <App />;
 }
 
 const root = document.getElementById("root");
