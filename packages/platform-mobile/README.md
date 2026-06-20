@@ -31,7 +31,12 @@ pnpm dev:ios:lan      # physical iOS device + HMR (loads from your Mac's LAN IP)
 pnpm dev:android:lan  # physical Android device + HMR
 pnpm run:ios          # build bundled assets, deploy, launch on iOS (no dev server)
 pnpm run:android      # same for Android
+pnpm sim:reset        # fix an off-screen iOS Simulator window
 ```
+
+For the full dev flow, the build pipeline, and fixes for the environment quirks we hit
+(external-drive simulators, off-screen windows, live-reload blank screens, etc.), see
+[docs/development.md](docs/development.md).
 
 Open the native projects in their IDEs with `pnpm exec cap open ios` / `... android`.
 
