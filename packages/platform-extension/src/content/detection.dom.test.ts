@@ -1,5 +1,5 @@
 /**
- * @vitest-environment happy-dom
+ * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -349,7 +349,7 @@ describe("otpInputs", () => {
 });
 
 describe("hasInteractiveCaptcha", () => {
-	// happy-dom returns 0x0 rects; stub visible elements.
+	// jsdom returns 0x0 rects (no layout); stub visible elements.
 	function makeVisible(selector: string): void {
 		for (const el of document.querySelectorAll(selector)) {
 			el.getBoundingClientRect = () =>

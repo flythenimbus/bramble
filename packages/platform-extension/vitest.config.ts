@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
 // node by default; DOM tests opt in per-file with `@vitest-environment
-// happy-dom` (convention: `*.dom.test.ts`).
+// jsdom` (convention: `*.dom.test.ts`).
 export default defineConfig({
 	resolve: {
 		alias: {
@@ -12,24 +12,13 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.ts"],
-		// happy-dom otherwise fetches external resources referenced by site
-		// fixtures (e.g. reddit-login.html pulls redditstatic CSS and recaptcha
-		// JS). CI has no network, so those aborted fetches surface as unhandled
-		// errors and fail the run. Tests only assert on DOM structure, so disable
-		// all resource loading and frame navigation; treat disabled loads as success
-		// so they don't emit error events either.
+		// jsdom loads no external resources and runs no scripts by default, so
+		// site fixtures (e.g. reddit-login.html, which references redditstatic CSS
+		// and recaptcha JS) parse to DOM structure without any network access.
+		// Tests only assert on structure, which is exactly what these defaults give.
 		environmentOptions: {
-			happyDOM: {
-				settings: {
-					disableJavaScriptEvaluation: true,
-					disableJavaScriptFileLoading: true,
-					disableCSSFileLoading: true,
-					handleDisabledFileLoadingAsSuccess: true,
-					navigation: {
-						disableMainFrameNavigation: true,
-						disableChildFrameNavigation: true,
-					},
-				},
+			jsdom: {
+				url: "https://example.com/",
 			},
 		},
 	},
