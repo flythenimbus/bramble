@@ -13,7 +13,7 @@ later phases (see `docs/mobile-port.md`).
 ## Build the web bundle (run after any web change)
 
 ```bash
-pnpm mobile:build          # from repo root: builds WASM into public/wasm + Vite dist
+pnpm core:build          # from repo root: builds WASM into public/wasm + Vite dist
 ```
 
 Run this once before the first native launch, and again whenever the Rust WASM
@@ -43,7 +43,7 @@ you get a blank screen (`-1004 cannot connect to host`). After a live-reload ses
 run a plain bundled launch once before testing offline:
 
 ```bash
-pnpm mobile:build && pnpm dev:ios     # resets to bundled assets, no dev-server URL
+pnpm core:build && pnpm dev:ios     # resets to bundled assets, no dev-server URL
 ```
 
 So: `*:live` (Vite up) and plain `dev:ios`/`dev:android` (bundled) are two distinct
