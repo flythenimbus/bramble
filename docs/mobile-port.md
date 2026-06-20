@@ -58,7 +58,7 @@ end and are flagged verified vs unconfirmed.
 
 ## The reuse seam: why this is feasible at all
 
-The repo is a Bun workspace with two JS packages plus a Rust crate:
+The repo is a pnpm workspace with two JS packages plus a Rust crate:
 
 - `packages/core` (`@vault/core`): React 19 + TanStack Router + the entire vault domain. Talks to
   its host **only** through adapter interfaces. This is the reusable product.
@@ -136,7 +136,7 @@ work.
 | `clipboard` | `chrome.alarms` + offscreen clear | `@capacitor/clipboard` (mobile is plain-text only) plus our own auto-clear timer (no Capacitor plugin provides a timeout, and none exposes Android `EXTRA_IS_SENSITIVE`, so a tiny custom plugin may be wanted for the sensitive flag). |
 | `shell` (pop-out, open settings, active tab, QR) | `chrome.windows` / `chrome.tabs` | In-app navigation (no pop-out, no `window.close`); settings is a route; "active tab URL" has no meaning on mobile (drop from autofill matching in-app); QR via `@capacitor-mlkit/barcode-scanning` (camera) instead of `captureVisibleTab`. |
 | lifecycle / auto-lock | `chrome.idle`, `chrome.alarms`, `chrome.commands` | `@capacitor/app` `appStateChange` / `pause` / `resume`: lock on the mobile pause event; sliding auto-lock via a timer. No OS screen-lock hook needed (pause covers it). |
-| build | Vite 6-bundle extension build | Single SPA: point Capacitor `webDir` at `dist`, `server.url` at the Vite dev server for live reload, `npx cap sync` to push assets + native deps. Add `packages/platform-mobile` to the Bun workspace. No separate backend process; native code is Capacitor plugins. |
+| build | Vite 6-bundle extension build | Single SPA: point Capacitor `webDir` at `dist`, `server.url` at the Vite dev server for live reload, `npx cap sync` to push assets + native deps. Add `packages/platform-mobile` to the pnpm workspace. No separate backend process; native code is Capacitor plugins. |
 | icons | `icon/web` | `icon/ios` (full `AppIcon-*.png` + `Contents.json` asset catalog) and `icon/android/res/mipmap-*` already exist; feed them through `@capacitor/assets` or drop them into the native projects. The icon pipeline is mobile-ready. |
 
 ## The hard problems (the real unknowns)

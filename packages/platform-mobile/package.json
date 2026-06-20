@@ -1,0 +1,39 @@
+{
+	"name": "@vault/platform-mobile",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"typecheck": "tsc --noEmit",
+		"cap:sync": "cap sync",
+		"cap:add:ios": "cap add ios",
+		"cap:add:android": "cap add android",
+		"test": "vitest run --passWithNoTests"
+	},
+	"dependencies": {
+		"@capacitor/android": "^7.6.7",
+		"@capacitor/app": "^7.0.0",
+		"@capacitor/clipboard": "^7.0.0",
+		"@capacitor/core": "^7.0.0",
+		"@capacitor/filesystem": "^7.0.0",
+		"@capacitor/ios": "^7.6.7",
+		"@capacitor/preferences": "^7.0.0",
+		"@vault/core": "workspace:*",
+		"react": "^19.2.6",
+		"react-dom": "^19.2.6"
+	},
+	"devDependencies": {
+		"@capacitor/cli": "^7.0.0",
+		"@tailwindcss/vite": "^4.3.0",
+		"@types/react": "^19.2.15",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react": "^6.0.2",
+		"tailwindcss": "^4.3.0",
+		"tw-animate-css": "^1.0.0",
+		"typescript": "^5.5.0",
+		"vite": "^8.0.13",
+		"vitest": "^4.1.7"
+	}
+}
