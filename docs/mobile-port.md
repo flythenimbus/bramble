@@ -362,8 +362,9 @@ Kotlin work. Capacitor even ships an official Password AutoFill guide.
 
 Two practical notes, not blockers:
 
-- Each extra iOS target needs its own block in `ios/App/Podfile` mirroring the `App` target, or pod
-  installs miss it.
+- Capacitor 8 generates the iOS project as **Swift Package Manager** (a `CapApp-SPM` local package,
+  no CocoaPods `Podfile`/`.xcworkspace`), so an extra target links the shared Rust `.xcframework` and
+  the Capacitor SPM products through its own SPM/framework references rather than a Podfile block.
 - Capacitor has no official "add an arbitrary app extension" walkthrough, so the sync-survival of a
   hand-added extension target is strongly implied by the workflow docs but not stated verbatim.
   Retire it with a one-hour empirical check (add a trivial extension target, run `cap sync` a few
@@ -403,7 +404,8 @@ is a later additive feature on top of this plumbing.
   full Xcode / Gradle projects under `ios/` and `android/` that are **committed and owned** (opened
   with `cap open`). `cap copy` syncs web assets + config; `cap sync` also installs native plugin
   deps. Neither regenerates native source you have edited.
-- **Toolchain.** iOS needs full Xcode + CocoaPods (or SPM) on a macOS host. Android needs Android
+- **Toolchain.** iOS needs full Xcode on a macOS host (Capacitor 8 defaults to Swift Package Manager,
+  so CocoaPods is no longer required). Android needs Android
   Studio + SDK + (for the Rust `.so`) NDK + JDK. This is the standard, well-supported Apple/Google
   native toolchain, not a bespoke one.
 - **Webviews.** iOS = WKWebView (WebKit), min iOS 14 (Cap 7) / 15 (Cap 8). Android = system WebView

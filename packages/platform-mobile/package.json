@@ -13,19 +13,19 @@
 		"test": "vitest run --passWithNoTests"
 	},
 	"dependencies": {
-		"@capacitor/android": "^7.6.7",
-		"@capacitor/app": "^7.0.0",
-		"@capacitor/clipboard": "^7.0.0",
-		"@capacitor/core": "^7.0.0",
-		"@capacitor/filesystem": "^7.0.0",
-		"@capacitor/ios": "^7.6.7",
-		"@capacitor/preferences": "^7.0.0",
+		"@capacitor/android": "^8.4.1",
+		"@capacitor/app": "^8.1.0",
+		"@capacitor/clipboard": "^8.0.1",
+		"@capacitor/core": "^8.4.1",
+		"@capacitor/filesystem": "^8.1.2",
+		"@capacitor/ios": "^8.4.1",
+		"@capacitor/preferences": "^8.0.1",
 		"@vault/core": "workspace:*",
 		"react": "^19.2.6",
 		"react-dom": "^19.2.6"
 	},
 	"devDependencies": {
-		"@capacitor/cli": "^7.0.0",
+		"@capacitor/cli": "^8.4.1",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/react": "^19.2.15",
 		"@types/react-dom": "^19.2.3",
