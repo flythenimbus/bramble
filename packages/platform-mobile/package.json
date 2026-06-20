@@ -5,6 +5,12 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev:ios": "cap run ios",
+		"dev:android": "cap run android",
+		"dev:ios:live": "concurrently -n vite,ios -c cyan,green \"vite --host --port 5173\" \"cap run ios -l --host localhost --port 5173\"",
+		"dev:android:live": "concurrently -n vite,android -c cyan,green \"vite --host --port 5173\" \"cap run android -l --host localhost --port 5173 --forwardPorts 5173:5173\"",
+		"dev:ios:live:lan": "concurrently -n vite,ios -c cyan,green \"vite --host --port 5173\" \"cap run ios -l --port 5173\"",
+		"dev:android:live:lan": "concurrently -n vite,android -c cyan,green \"vite --host --port 5173\" \"cap run android -l --port 5173\"",
 		"build": "vite build",
 		"typecheck": "tsc --noEmit",
 		"cap:sync": "cap sync",
@@ -27,6 +33,7 @@
 	"devDependencies": {
 		"@capacitor/cli": "^8.4.1",
 		"@tailwindcss/vite": "^4.3.0",
+		"concurrently": "^9.1.0",
 		"@types/react": "^19.2.15",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.2",
