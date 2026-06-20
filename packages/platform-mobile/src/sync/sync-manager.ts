@@ -1,3 +1,4 @@
+import { Preferences } from "@capacitor/preferences";
 import {
 	applyRemotePayload,
 	decodeEntriesPayload,
@@ -21,6 +22,7 @@ import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roste
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { mobileCrypto, notifyExternalChange, onVaultStateChange } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
+import { secureStorage } from "../secure-storage";
 import { loadWasm } from "../wasm-loader";
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
@@ -46,16 +48,24 @@ type KeypairWasm = { handshake_generate_keypair(): DeviceKeypair };
 
 const DEVICE_KEYPAIR_KEY = "sync.deviceKeypair";
 
-// This device's Noise static keypair, generated once and persisted. Only the
-// PUBLIC key ever leaves the device (it goes in the roster). NOTE: the private key
-// sits in Preferences in the clear for the spike; hardening (wrap under VEK /
-// Keychain) is the same follow-up as the extension's sync-config.
+// This device's Noise static keypair, generated once and held in secure storage
+// (Keychain/Keystore). Only the PUBLIC key ever leaves the device (it goes in the
+// roster). The Noise private key authenticates this device in the group, so it
+// belongs in the secure store, not plaintext Preferences.
 async function deviceKeypair(): Promise<DeviceKeypair> {
-	const stored = await mobileStorage.getMeta<DeviceKeypair>(DEVICE_KEYPAIR_KEY);
+	const stored = await secureStorage.get<DeviceKeypair>(DEVICE_KEYPAIR_KEY);
 	if (stored?.privateKey && stored?.publicKey) return stored;
+	// Migrate an earlier keypair out of plaintext Preferences, preserving identity
+	// so an existing pairing keeps working, then purge the insecure copy.
+	const legacy = await mobileStorage.getMeta<DeviceKeypair>(DEVICE_KEYPAIR_KEY);
+	if (legacy?.privateKey && legacy?.publicKey) {
+		await secureStorage.set(DEVICE_KEYPAIR_KEY, legacy);
+		await Preferences.remove({ key: `meta:${DEVICE_KEYPAIR_KEY}` });
+		return legacy;
+	}
 	const wasm = (await loadWasm()) as unknown as KeypairWasm;
 	const kp = wasm.handshake_generate_keypair();
-	await mobileStorage.setMeta(DEVICE_KEYPAIR_KEY, kp);
+	await secureStorage.set(DEVICE_KEYPAIR_KEY, kp);
 	return kp;
 }
 

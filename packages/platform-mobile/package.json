@@ -20,6 +20,7 @@
 		"test": "vitest run --passWithNoTests"
 	},
 	"dependencies": {
+		"@aparajita/capacitor-secure-storage": "^8.0.0",
 		"@capacitor/android": "^8.4.1",
 		"@capacitor/app": "^8.1.0",
 		"@capacitor/clipboard": "^8.0.1",
