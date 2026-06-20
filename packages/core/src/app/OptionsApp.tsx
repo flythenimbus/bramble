@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
+import type { OptionsScreen } from "../adapters/shell";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
@@ -88,18 +89,21 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 export default function OptionsApp({
 	onComplete,
 	mobile,
+	screen,
 }: {
 	onComplete?: () => void;
 	mobile?: boolean;
+	/** Force a screen (single-window hosts pass this); otherwise read from `?screen=`. */
+	screen?: OptionsScreen;
 } = {}) {
 	// `?screen=import` (from Settings) routes to the import flow instead of setup.
-	const screen = new URLSearchParams(window.location.search).get("screen");
+	const active = screen ?? new URLSearchParams(window.location.search).get("screen");
 	return (
 		<ThemeProvider>
 			<VaultProvider>
-				{screen === "import" ? (
+				{active === "import" ? (
 					<Suspense fallback={null}>
-						<ImportShell />
+						<ImportShell onClose={onComplete} />
 					</Suspense>
 				) : (
 					<SetupShell onComplete={onComplete} mobile={mobile} />

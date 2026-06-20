@@ -1,4 +1,4 @@
-import type { ShellAdapter } from "@core/index";
+import type { OptionsScreen, ShellAdapter } from "@core/index";
 import { scanQrCode } from "../scan";
 import {
 	onSyncEvent,
@@ -9,11 +9,12 @@ import {
 	syncDevicePublicKey,
 } from "../sync/sync-manager";
 
-// Single-window in-app navigation to the setup/create-vault flow. The root
-// (main.tsx) registers a handler that swaps the mounted view; `openSetup` invokes
-// it instead of opening a separate tab the way the extension does.
-let openSetupHandler: (() => void) | null = null;
-export function registerOpenSetup(fn: () => void): () => void {
+// Single-window in-app navigation to the setup/create-vault and import flows. The
+// root (main.tsx) registers a handler that swaps the mounted view; `openSetup`
+// invokes it (with the optional screen) instead of opening a separate tab.
+type OpenSetupHandler = (screen?: OptionsScreen) => void;
+let openSetupHandler: OpenSetupHandler | null = null;
+export function registerOpenSetup(fn: OpenSetupHandler): () => void {
 	openSetupHandler = fn;
 	return () => {
 		if (openSetupHandler === fn) openSetupHandler = null;
@@ -27,9 +28,9 @@ export const mobileShell: ShellAdapter = {
 	appName: "Bramble",
 	version: "0.0.0-mobile",
 
-	async openSetup() {
+	async openSetup(screen) {
 		if (!openSetupHandler) throw new Error("setup view not mounted");
-		openSetupHandler();
+		openSetupHandler(screen);
 	},
 	hasFilePicker() {
 		return false;

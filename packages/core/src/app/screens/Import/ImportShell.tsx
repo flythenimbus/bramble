@@ -23,8 +23,10 @@ import { kdbxErrorMessage } from "./util/kdbx-error";
 const MAX_IMPORT_FILE_MB = 50;
 const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
 
-/** Import wizard: pick a provider, parse/decrypt the file, preview, then write into the vault. */
-export function ImportShell() {
+/** Import wizard: pick a provider, parse/decrypt the file, preview, then write into the vault.
+ * `onClose` (single-window hosts like mobile) returns to the app; the extension opens import
+ * in its own tab and passes nothing. */
+export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
 	const { shell, crypto } = usePlatform();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
@@ -41,7 +43,7 @@ export function ImportShell() {
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
 		return (
-			<Shell>
+			<Shell onClose={onClose}>
 				<div className="flex justify-center py-12">
 					<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
 				</div>
@@ -51,7 +53,7 @@ export function ImportShell() {
 
 	if (!hasVault) {
 		return (
-			<Shell>
+			<Shell onClose={onClose}>
 				<Header subtitle="You need a vault before you can import into it" />
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 text-center space-y-4">
 					<p className="text-sm text-muted-foreground">
@@ -73,7 +75,7 @@ export function ImportShell() {
 
 	if (imported !== null) {
 		return (
-			<Shell>
+			<Shell onClose={onClose}>
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-8 text-center space-y-3">
 					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-linear-to-br from-primary to-primary/80">
 						<Check className="w-7 h-7 text-primary-foreground" />
@@ -83,6 +85,15 @@ export function ImportShell() {
 						They're in your vault now. For your safety, delete the export file you just imported, as
 						it holds your passwords in plain text.
 					</p>
+					{onClose && (
+						<button
+							type="button"
+							onClick={onClose}
+							className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+						>
+							Done
+						</button>
+					)}
 				</div>
 			</Shell>
 		);
@@ -160,7 +171,7 @@ export function ImportShell() {
 
 	if (result && provider) {
 		return (
-			<Shell>
+			<Shell onClose={onClose}>
 				<Header subtitle={`Review what we found in your ${provider.label} export`} />
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 					<div className="p-4 space-y-3">
@@ -230,7 +241,7 @@ export function ImportShell() {
 	}
 
 	return (
-		<Shell>
+		<Shell onClose={onClose}>
 			<Header subtitle="Bring your logins, cards and notes over from another manager" />
 			<div className="space-y-2.5">
 				{IMPORT_PROVIDERS.map((p) => (
