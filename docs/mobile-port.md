@@ -1,11 +1,10 @@
-# Mobile app (Tauri 2) spike: feasibility findings
+# Mobile app (Capacitor) plan: feasibility findings
 
-Research notes on shipping Bramble as a native iOS + Android app built with Tauri 2, reusing the
-existing codebase. Captures what the spike explored, what is already portable, what needs a new
-platform implementation, the genuine blockers, the unknown unknowns to retire early, and a phased
-plan.
+Research notes on shipping Bramble as a native iOS + Android app built with Ionic Capacitor, reusing
+the existing codebase. Captures what is already portable, what needs a new platform implementation,
+the genuine blockers, the unknown unknowns to retire early, and a phased plan.
 
-Fast-moving platform facts (Tauri maturity, OS webview behaviour, store rules, plugin status) are
+Fast-moving platform facts (Capacitor maturity, OS webview behaviour, store rules, plugin status) are
 dated **June 2026** and flagged where they are unverified. Re-verify before acting on them later.
 
 ## Bottom line
@@ -16,39 +15,46 @@ dated **June 2026** and flagged where they are unverified. Re-verify before acti
   Firefox is from Chrome.
 - **The reuse story is genuinely strong and already built for.** `packages/core` talks to its host
   only through five adapter interfaces injected by `PlatformContext`. A mobile port is, at its
-  heart, a new `packages/platform-tauri` that implements those adapters. The crypto crate already
-  compiles natively (it has an `rlib` crate type and `cargo test` runs today), and iOS/Android icon
-  asset catalogs are already generated under `icon/`. Someone anticipated this.
+  heart, a new `packages/platform-mobile` that implements those adapters against Capacitor
+  plugins. The crypto crate already compiles natively (it has an `rlib` crate type and `cargo test`
+  runs today), and iOS/Android icon asset catalogs are already generated under `icon/`. Someone
+  anticipated this.
+- **Capacitor fits this project well for one decisive reason:** the native autofill providers (the
+  actual product value on mobile) are ordinary native targets in the committed `ios/` and `android/`
+  Xcode/Android Studio projects, which Capacitor hands you to own and edit directly. There is no
+  generated native project to fight, so the largest, riskiest workstream sits on a standard native
+  development path rather than a tooling gamble.
 - **Three things are hard, and two of them are net-new native subsystems, not ports:**
   1. **System autofill** (the actual product value on mobile) cannot use the webview or any of the
      `content/` code. It is a separate native iOS Credential Provider Extension (Swift) and a native
-     Android autofill provider (Kotlin), each running outside the webview. This
-     is the largest single workstream and shares no code with the extension's autofill.
+     Android autofill provider (Kotlin), each running outside the webview. This is the largest single
+     workstream and shares no code with the extension's autofill.
   2. **Security-key unlock breaks on mobile.** Apple does not pass the WebAuthn `prf` extension to
      roaming authenticators at all, so hardware-key (YubiKey hmac-secret) unlock is impossible on
      iOS and NFC-blocked on Android. Mobile unlock must be re-architected around biometrics + the
      OS keystore, with platform passkeys as the only PRF-capable path (and that path needs native
      code, association files, and an Apple-gated entitlement).
   3. **Storage durability.** iOS evicts webview IndexedDB under storage pressure and inactivity, so
-     the vault must live on the native filesystem via the Rust backend, not in the webview.
+     the vault must live on the native filesystem via a Capacitor filesystem plugin, not in the
+     webview.
 - **The good news cluster:** WASM runs (WKWebView keeps JIT because the webview is out-of-process),
-  WebCrypto works (Tauri serves from a `*.localhost` origin, which is a secure context), the React
+  WebCrypto works (Capacitor serves from a `localhost` origin, which is a secure context), the React
   UI / TanStack Router / vault logic / KDBX import / recovery codes / slot policy are all portable,
   and the offscreen-document indirection collapses (mobile has one webview with a DOM, like
-  Firefox's event page, so crypto runs in-process or natively).
+  Firefox's event page, so crypto runs in-process in WASM or in a native plugin).
 - **Scope note (v1).** Bramble does **not** host passkeys for other sites or apps in v1; that
   credential-provider passkey role is a deferred future feature. v1 mobile autofill fills
   **passwords and TOTP** only. This keeps the credential provider simpler (iOS one extension with
   `ProvidesPasswords`; Android just the classic `AutofillService`) and removes passkey
   attestation/assertion code and the Android Credential Manager provider from the initial build.
 
-## Method (what the spike explored)
+## Method (what the research explored)
 
 Five reads of the codebase (tech stack and build, crypto and storage, auth and unlock, the
-extension-only surface, the UI layer) and two web research passes (Tauri 2 mobile fundamentals, and
-the hard webview blockers) against live June-2026 sources. The codebase findings are grounded in
-file paths below; the platform findings carry source URLs at the end and are flagged verified vs
-unconfirmed.
+extension-only surface, the UI layer) and web research passes against live June-2026 sources
+(Capacitor mobile fundamentals, the hard webview blockers, and the native autofill mechanics). The
+codebase findings are grounded in file paths below; the platform findings carry source URLs at the
+end and are flagged verified vs unconfirmed.
 
 ## The reuse seam: why this is feasible at all
 
@@ -76,15 +82,16 @@ interface Platform {
 ```
 
 (`packages/core/src/adapters/` also defines a `messaging` adapter.) **A mobile port is a new
-`packages/platform-tauri` that implements these five interfaces against Tauri APIs, plus a small
-`src-tauri` Rust backend, plus a single SPA entry (one `index.html` mounting `@core` App) instead of
-the extension's six bundles.** The extension package is left untouched; both ship from one `core`.
+`packages/platform-mobile` that implements these five interfaces against Capacitor plugin APIs,
+plus the native `ios/` and `android/` projects Capacitor generates and you own, plus a single SPA
+entry (one `index.html` mounting `@core` App) instead of the extension's six bundles.** The extension
+package is left untouched; both ship from one `core`.
 
 ### Reuse estimate
 
 | Layer | Reuse | Notes |
 |---|---|---|
-| `packages/crypto-wasm` | ~100% (with a refactor) | Already compiles native. Split into a pure-Rust core + thin `wasm-bindgen` wrapper (browser) + thin `uniffi` wrapper (native), gating `getrandom`'s js feature to `wasm32`. The core then serves three targets: WASM in the webview, native in the Tauri backend, and the same Argon2/AES/KDBX code linked into the Swift/Kotlin autofill providers. See OS-level autofill. |
+| `packages/crypto-wasm` | ~100% (with a refactor) | Already compiles native. Split into a pure-Rust core + thin `wasm-bindgen` wrapper (browser) + thin `uniffi` wrapper (native Swift/Kotlin), gating `getrandom`'s js feature to `wasm32`. The core then serves three targets: WASM in the webview, and Swift + Kotlin bindings linked into both a custom Capacitor crypto plugin (main app) and the autofill providers. See OS-level autofill. |
 | `packages/core` domain (vault-format, slot-policy, recovery-code, import, useVault orchestration) | ~95% | Pure logic over adapters and WASM. The one real change is the WebAuthn path (see blockers). |
 | `packages/core` UI (App, router, screens, components, entry-modes) | ~85% | Ports, but needs a responsive-layout pass (today it is popup-dimensioned) and a shell-adapter rethink (no `window.close`, no pop-out). |
 | `packages/platform-extension` | ~0% for mobile | This is the Chrome impl. `content/` and most of `background/` do not port. Their logic either collapses (offscreen) or becomes native (autofill). |
@@ -92,43 +99,45 @@ the extension's six bundles.** The extension package is left untouched; both shi
 ## What ports cleanly (low or no work)
 
 - **WASM (KDBX parsing, all crypto).** Runs in both mobile webviews. WKWebView gets the four-tier
-  JIT because Tauri's webview is out-of-process (unlike apps that embed JavaScriptCore directly, which
+  JIT because the webview is out-of-process (unlike apps that embed JavaScriptCore directly, which
   are JIT-disabled). For one-shot KDBX open/decrypt the JS-WASM bridge cost is negligible. Better
-  still, the same crate compiles into the Rust backend, so crypto can move out of the webview
-  entirely (see Storage and Hard problem 2).
-- **WebCrypto / SubtleCrypto.** `crypto.subtle` and `isSecureContext` are available: Tauri serves
-  the app from `<scheme>://localhost` (iOS/macOS/Linux) or `https://<scheme>.localhost` (Windows),
-  and `*.localhost` is a "potentially trustworthy" secure context per the W3C spec. A Tauri
-  maintainer confirmed this on an issue filed by another password-manager author; a
-  `useHttpsScheme: true` window flag exists as a belt-and-suspenders fix. `crypto.getRandomValues`
-  and `crypto.randomUUID` (used in recovery-code and entry-id generation) are fine.
+  still, the same crate compiles into native Swift/Kotlin via uniffi, so crypto can move out of the
+  webview entirely into a native plugin (see Storage and Hard problem 2).
+- **WebCrypto / SubtleCrypto.** `crypto.subtle` and `isSecureContext` are available: Capacitor serves
+  the app from `capacitor://localhost` (iOS) and `https://localhost` (Android), and `localhost` is a
+  "potentially trustworthy" secure context per the W3C spec. Capacitor's docs confirm secure-context
+  Web APIs work on this origin. `crypto.getRandomValues` and `crypto.randomUUID` (used in
+  recovery-code and entry-id generation) are fine.
 - **Password and recovery-code unlock.** Pure Argon2id + AES-256-GCM + HMAC in WASM/native, no
   browser APIs. The slot-policy invariant logic (`packages/core/src/vault/slot-policy.ts`) is pure
   and portable.
 - **TanStack Router.** Client-side memory history already; works in a webview. The pop-out
   `?detached` handoff (`packages/core/src/app/hooks/usePopOut.tsx`) goes away on mobile (single
-  window), which simplifies boot.
+  window), which simplifies boot. Capacitor is framework-agnostic, so the React + TanStack SPA ships
+  as-is with no Ionic UI framework required.
 - **The offscreen-document indirection collapses.** Chrome MV3 needs an offscreen document because
-  its service worker has no DOM. Tauri mobile has a single webview with a DOM (like Firefox's event
-  page, per `firefox-port.md`), so the `chrome.runtime.sendMessage` round-trips to `offscreen.ts`
-  become in-process calls, or move to native `invoke`. Extract `dispatchCrypto` / `getWasm` (already
-  flagged as the Firefox refactor) and the mobile crypto adapter calls them directly.
+  its service worker has no DOM. Capacitor mobile has a single webview with a DOM (like Firefox's
+  event page, per `firefox-port.md`), so the `chrome.runtime.sendMessage` round-trips to
+  `offscreen.ts` become in-process calls, or move to a native plugin call. Extract `dispatchCrypto` /
+  `getWasm` (already flagged as the Firefox refactor) and the mobile crypto adapter calls them
+  directly.
 
 ## What needs a new platform implementation (medium effort, mechanical)
 
-Each is a `packages/platform-tauri` adapter plus, where noted, a Tauri plugin or `src-tauri`
-command. None is conceptually hard; this is the bulk of the "make it run" work.
+Each is a `packages/platform-mobile` adapter plus, where noted, a Capacitor plugin (official,
+community, or a small in-house one). None is conceptually hard; this is the bulk of the "make it run"
+work.
 
-| Adapter / concern | Extension uses | Tauri mobile replacement |
+| Adapter / concern | Extension uses | Capacitor mobile replacement |
 |---|---|---|
-| `storage` (vault blob + metadata) | FSA + `chrome.storage.local` | Rust backend writes the VLT1 blob to the app-data dir via `tauri-plugin-fs`; small secrets (wrapping key) in Keychain/Keystore. **Not IndexedDB** (eviction). VLT1 format is unchanged. |
-| `crypto` host transport | `chrome.runtime.sendMessage` to offscreen | In-process WASM call, or `invoke('crypto_*')` to native Rust. |
-| VEK session cache | `chrome.storage.session` | In-webview memory while unlocked + lock-on-background; optional Rust-side managed state. Drop the pending-blob stash (the backend can always write). |
-| `clipboard` | `chrome.alarms` + offscreen clear | `tauri-plugin-clipboard-manager` (mobile is plain-text only) plus our own auto-clear timer (the plugin has `clear()` but no built-in timeout). |
-| `shell` (pop-out, open settings, active tab, QR) | `chrome.windows` / `chrome.tabs` | In-app navigation (no pop-out, no `window.close`); settings is a route; "active tab URL" has no meaning on mobile (drop from autofill matching in-app); QR via `tauri-plugin-barcode-scanner` (mobile-only, uses the camera) instead of `captureVisibleTab`. |
-| lifecycle / auto-lock | `chrome.idle`, `chrome.alarms`, `chrome.commands` | Tauri run-event loop: lock on the mobile **pause** event; sliding auto-lock via a timer. No OS screen-lock hook needed (pause covers it). |
-| build | Vite 6-bundle extension build | Single SPA: `tauri.conf.json` `devUrl` -> Vite dev server, `frontendDist` -> `dist`. Add `packages/platform-tauri` to the Bun workspace and an `src-tauri` crate that can depend on `crypto-wasm` natively. |
-| icons | `icon/web` | `icon/ios` (full `AppIcon-*.png` + `Contents.json` asset catalog) and `icon/android/res/mipmap-*` already exist. The icon pipeline is mobile-ready. |
+| `storage` (vault blob + metadata) | FSA + `chrome.storage.local` | `@capacitor/filesystem` writes the VLT1 blob to the app-private data dir (`Directory.Data`/`Library`); small secrets (wrapping key) in a Keychain/Keystore-backed secure-storage plugin. **Not IndexedDB** (eviction) and **not `@capacitor/preferences`** (plaintext). VLT1 format is unchanged. |
+| `crypto` host transport | `chrome.runtime.sendMessage` to offscreen | In-process WASM call, or a custom Capacitor plugin calling uniffi-bound Rust (iOS plugin calls run off the main thread by default). |
+| VEK session cache | `chrome.storage.session` | In-webview memory while unlocked + lock-on-background; optionally held in native plugin state. Drop the pending-blob stash (the filesystem plugin can always write). |
+| `clipboard` | `chrome.alarms` + offscreen clear | `@capacitor/clipboard` (mobile is plain-text only) plus our own auto-clear timer (no Capacitor plugin provides a timeout, and none exposes Android `EXTRA_IS_SENSITIVE`, so a tiny custom plugin may be wanted for the sensitive flag). |
+| `shell` (pop-out, open settings, active tab, QR) | `chrome.windows` / `chrome.tabs` | In-app navigation (no pop-out, no `window.close`); settings is a route; "active tab URL" has no meaning on mobile (drop from autofill matching in-app); QR via `@capacitor-mlkit/barcode-scanning` (camera) instead of `captureVisibleTab`. |
+| lifecycle / auto-lock | `chrome.idle`, `chrome.alarms`, `chrome.commands` | `@capacitor/app` `appStateChange` / `pause` / `resume`: lock on the mobile pause event; sliding auto-lock via a timer. No OS screen-lock hook needed (pause covers it). |
+| build | Vite 6-bundle extension build | Single SPA: point Capacitor `webDir` at `dist`, `server.url` at the Vite dev server for live reload, `npx cap sync` to push assets + native deps. Add `packages/platform-mobile` to the Bun workspace. No separate backend process; native code is Capacitor plugins. |
+| icons | `icon/web` | `icon/ios` (full `AppIcon-*.png` + `Contents.json` asset catalog) and `icon/android/res/mipmap-*` already exist; feed them through `@capacitor/assets` or drop them into the native projects. The icon pipeline is mobile-ready. |
 
 ## The hard problems (the real unknowns)
 
@@ -139,8 +148,8 @@ is a single OS mechanism per platform, the **credential provider**, and it runs 
 (Swift on iOS, Kotlin on Android) in a target **outside the webview** that must read and decrypt the
 vault itself. None of `packages/platform-extension/src/content/` ports. This is the dominant
 workstream and the reason the project is "a native password manager whose main UI happens to be a
-Tauri webview." Full mechanics, the app-vs-website unification, the cross-process unlock, the memory
-constraint, and the shared-Rust-core enabler are in the dedicated section
+Capacitor webview." Full mechanics, the app-vs-website unification, the cross-process unlock, the
+memory constraint, and the shared-Rust-core enabler are in the dedicated section
 [OS-level autofill](#os-level-autofill-filling-apps-and-websites-natively) below.
 
 ### 2. WebAuthn / PRF / security keys: re-architect mobile unlock
@@ -167,14 +176,15 @@ ceremonies in `packages/core/src/hooks/useVault.tsx`). On mobile this path is co
   NFC-blocked on Android.
 - **Native path (if PRF unlock is wanted on mobile):** iOS `AuthenticationServices`
   (`ASAuthorizationPublicKeyCredentialPRFAssertionInputValues`, explicitly built for deriving a
-  symmetric key) + Android Credential Manager PRF extension, both bridged to JS via a Tauri plugin.
-  No off-the-shelf plugin does this; it is Swift + Kotlin glue, scoped to **platform passkeys only**.
-  Effort medium-high, plus the iOS entitlement and association-file infra (long lead, start early).
+  symmetric key) + Android Credential Manager PRF extension, both bridged to JS via a custom
+  Capacitor plugin. No off-the-shelf plugin does this; it is Swift + Kotlin glue, scoped to
+  **platform passkeys only**. Effort medium-high, plus the iOS entitlement and association-file infra
+  (long lead, start early).
 - **Recommended mobile unlock re-architecture.** Treat mobile as a new primary-unlock class:
-  biometric (Tauri `biometric` plugin, mobile-only: Face ID / Touch ID / Android biometric) gating a
-  wrapping key held in Keychain/Keystore, plus the existing password and recovery-code slots.
-  Platform passkeys (PRF) are an optional add-on once the native bridge exists. Hardware security
-  keys become a desktop/extension-tier feature, dropped on iOS and USB-only on Android. This
+  biometric (`@aparajita/capacitor-biometric-auth`: Face ID / Touch ID / Android `BiometricPrompt`)
+  gating a wrapping key held in Keychain/Keystore, plus the existing password and recovery-code
+  slots. Platform passkeys (PRF) are an optional add-on once the native bridge exists. Hardware
+  security keys become a desktop/extension-tier feature, dropped on iOS and USB-only on Android. This
   intersects the existing invariant-B / slot-policy design (always one primary): mobile adds a
   "biometric/keystore" slot kind to that policy rather than porting the WebAuthn slot verbatim.
 
@@ -185,12 +195,13 @@ after ~7 days without interaction, and for non-browser apps the per-origin quota
 disk. Whether the 7-day purge applies to an embedded WKWebView is officially undocumented and
 developers report data loss. `navigator.storage.persist()` is granted only heuristically.
 
-**Fix:** the encrypted vault blob lives on the native filesystem through the Rust backend (app-data
-dir, not subject to WebKit eviction); small high-value secrets (the key that wraps the VEK) live in
-Keychain/Keystore. This also keeps the decrypted vault in Rust-owned memory rather than the JS heap.
-Avoid the Stronghold plugin: a Tauri maintainer has said it is deprecated and slated for removal in
-v3, and it has open mobile build failures. The replacements (`tauri-plugin-keystore` for
-Keychain/Keystore, others) are alpha / low-adoption, so be ready to write a small in-house plugin.
+**Fix:** the encrypted vault blob lives on the native filesystem through `@capacitor/filesystem`
+(app-private data dir, not subject to WebKit eviction); small high-value secrets (the key that wraps
+the VEK) live in Keychain/Keystore through a secure-storage plugin
+(`@aparajita/capacitor-secure-storage`, iOS Keychain + Android AES-GCM with the key in Keystore).
+`@capacitor/preferences` is **not** secure (plain `UserDefaults` / `SharedPreferences`), so do not
+use it for secrets. If you move decryption into a native crypto plugin, the decrypted vault can live
+in native-owned memory rather than the JS heap.
 
 ### 4. UI layout: popup-dimensioned, needs a responsive pass
 
@@ -325,31 +336,38 @@ what Bitwarden does for biometric unlock).
 
 This is the largest reuse win for autofill, and it leans on a fact already true of the repo:
 `crypto-wasm` compiles natively today. Refactor it into a **pure-Rust core** (Argon2id, AES-256-GCM,
-HKDF, KDBX4, no platform deps) plus three thin wrappers:
+HKDF, KDBX4, no platform deps) plus thin wrappers:
 
-- a `wasm-bindgen` wrapper for the browser extension (as today),
-- a native rlib for the Tauri backend,
+- a `wasm-bindgen` wrapper for the browser extension and the mobile webview (as today),
 - a **`uniffi` wrapper** that generates **both Swift and Kotlin** bindings from one Rust source.
 
-The iOS extension and the Android services then link the **same** Argon2/AES/HKDF/KDBX code through
-uniffi instead of reimplementing crypto twice. Build a `.xcframework` (cargo + lipo +
-`xcodebuild -create-xcframework`) for iOS and `.so` files via `cargo-ndk` into `jniLibs/` for
-Android. Gate `getrandom`'s js backend to `wasm32` only so native builds use the OS RNG. This is how
-Bitwarden (Rust SDK via uniffi) and Proton Pass (Rust common lib) are built, and Proton Pass is the
-closest structural analog to a Tauri-plus-Rust password manager. uniffi is mature but pre-1.0 (0.31,
-Jan 2026), so pin it.
+The iOS extension, the Android service, and a custom Capacitor crypto plugin for the main app then
+link the **same** Argon2/AES/HKDF/KDBX code through uniffi instead of reimplementing crypto. Build a
+`.xcframework` (cargo + lipo + `xcodebuild -create-xcframework`) for iOS, linked via the plugin's
+`.podspec` or SPM `Package.swift`, and `.so` files via `cargo-ndk` into `jniLibs/` for Android. Gate
+`getrandom`'s js backend to `wasm32` only so native builds use the OS RNG. This is how Bitwarden
+(Rust SDK via uniffi) and Proton Pass (Rust common lib) are built, and Proton Pass is the closest
+structural analog to a webview-plus-Rust password manager. uniffi is mature but pre-1.0 (0.31, Jan
+2026), so pin it.
 
-### Shipping it inside Tauri (the rough edge)
+### Shipping it inside Capacitor (the smooth edge)
 
-Tauri generates `gen/apple/` (an XcodeGen `project.yml`) and `gen/android/` (a Gradle project). Add
-the iOS extension as an extra target in `gen/apple/project.yml` (proven for share extensions in
-Tauri issues #10074 / #10431, where a simulator-architecture bug was fixed) and add the Android
-provider `Service`s to the generated manifest. There is **no first-class Tauri support** for app
-extensions (open feature request #14332, Oct 2025), and whether `gen/` survives regeneration is the
-weakest-documented part of the whole stack. Practical stance: commit `gen/`, edit `project.yml` and
-the manifest in place, and treat regeneration as a manual re-apply. Retire this risk with an early
-spike that injects a trivial extension target and reads one value from shared storage, before
-building the real provider.
+This is where Capacitor earns its place. The `ios/App/App.xcodeproj` and `android/` projects are
+**first-class, committed-to-repo native projects you open and edit directly** in Xcode and Android
+Studio. `npx cap copy` pushes only the web assets, and `npx cap sync` adds web assets plus native
+plugin dependencies; neither regenerates your `.pbxproj` or `AndroidManifest.xml`, so a hand-added
+app-extension target or `Service` survives a sync. Adding the iOS Credential Provider Extension is
+ordinary "new target in Xcode" work, and adding the Android `AutofillService` is ordinary manifest +
+Kotlin work. Capacitor even ships an official Password AutoFill guide.
+
+Two practical notes, not blockers:
+
+- Each extra iOS target needs its own block in `ios/App/Podfile` mirroring the `App` target, or pod
+  installs miss it.
+- Capacitor has no official "add an arbitrary app extension" walkthrough, so the sync-survival of a
+  hand-added extension target is strongly implied by the workflow docs but not stated verbatim.
+  Retire it with a one-hour empirical check (add a trivial extension target, run `cap sync` a few
+  times, confirm it persists) before building the real provider.
 
 ### Reference implementations to study
 
@@ -367,67 +385,74 @@ building the real provider.
 
 The highest in the project, even scoped to passwords and TOTP. v1 is one iOS extension plus one
 Android classic `AutofillService`, the shared-core refactor, shared-storage and biometric-unlock
-plumbing, and the Tauri target injection (no passkey attestation/assertion code, no Android
+plumbing, and the native target additions (no passkey attestation/assertion code, no Android
 Credential Manager provider yet). Budget several weeks per platform. An MVP ships without any of it
 (manual copy and paste from the vault app, Phase 1), but password autofill is the reason a password
 manager exists on a phone, so it is the headline post-MVP workstream, not optional. Passkey hosting
 is a later additive feature on top of this plumbing.
 
-## Tauri 2 mobile platform facts (verified June 2026)
+## Capacitor mobile platform facts (verified June 2026)
 
-- **Maturity.** Tauri v2 stable since Oct 2024, actively maintained (2.10.x in early 2026). iOS +
-  Android are a stable, supported API, but Tauri itself does not call mobile "production-ready" or
-  "first-class," and explicitly says the mobile DX is not yet at desktop parity. **No roster of
-  well-known production mobile apps on Tauri could be confirmed (unverified, and a real risk for a
-  security product).**
-- **Project shape.** Existing Vite frontend stays; add `src-tauri/` (Rust + `tauri.conf.json` +
-  `capabilities/`); `tauri android init` / `tauri ios init` generate full Gradle / Xcode projects
-  under `src-tauri/gen/`. iOS commands are macOS-only. Whether to commit `gen/` is not documented;
-  community practice gitignores it as regenerable (**unconfirmed**).
-- **Toolchain.** iOS needs full Xcode + CocoaPods + iOS Rust targets (macOS host). Android needs
-  Android Studio + SDK + NDK + JDK + Android Rust targets. The iOS/Xcode toolchain is widely cited
-  as the worst part of the DX, with recurring build-breakage issues on Xcode upgrades.
-- **Webviews.** iOS = WKWebView (WebKit), min iOS 14.0. Android = system WebView (Chromium, not
-  bundled, version varies by device), min API 24 / Android 7.0. You now test three engines
-  (desktop wry, WKWebView, old Android WebView); WebKit is the stricter renderer.
-- **IPC and ACL.** `#[tauri::command]` + `invoke` (same on mobile). v2 has a mandatory
-  capabilities/permissions/scopes ACL: a command is not callable from the webview unless a
-  capability grants it. **Android native commands run on the main thread** (offload heavy crypto or
-  risk an ANR freeze).
-- **Relevant plugins (mobile support):** `biometric` (mobile-only), `barcode-scanner` (mobile-only,
-  camera), `deep-linking` (must be statically registered, no runtime registration on mobile),
-  `clipboard-manager` (plain-text on mobile, no auto-clear, no documented iOS sensitive-pasteboard
-  flag), `fs`, `opener` (mobile support marked uncertain). `autostart` / `single-instance` are
-  desktop-only.
-- **Distribution.** Android: build AAB, `versionCode` auto-derived, first upload manual; Google's
-  current targetSdk policy is your responsibility (not in Tauri docs). iOS: Apple Developer Program,
-  Bundle ID must match `tauri.conf.json identifier`, provisioning + entitlements, upload via
-  `xcrun altool`. **App Store review risk: Guideline 4.2 (minimum functionality / webview wrapper).**
-  A password manager should clear it by leaning on genuine native integrations (biometric, keychain,
-  camera, autofill) rather than shipping a thin web wrapper. App size should be small (webview not
-  bundled) but exact mobile figures are **unconfirmed**.
-- **Lifecycle.** pause/resume events exist; background execution is OS-constrained (iOS suspends
-  aggressively, Android needs a foreground service). For a password manager this is fine: we want to
-  lock and be killed in the background. Implement lock-on-pause and clipboard-clear-on-timeout
-  ourselves.
+- **Maturity.** Capacitor is stable and widely deployed; the current major is **Capacitor 8**
+  (announced Dec 2025), with iOS and Android both fully supported. It backs a large roster of
+  production apps including finance/enterprise/healthcare (Aflac, Target, Cisco, NHS, the 86400
+  neobank, Bestinvest), which de-risks the platform choice for a security product. **No password
+  manager is known to ship on Capacitor specifically (unverified), so the credential-provider work
+  has no direct Capacitor precedent even though every native primitive it needs exists.**
+- **Project shape.** Existing Vite frontend stays; `npx cap add ios` / `cap add android` generate
+  full Xcode / Gradle projects under `ios/` and `android/` that are **committed and owned** (opened
+  with `cap open`). `cap copy` syncs web assets + config; `cap sync` also installs native plugin
+  deps. Neither regenerates native source you have edited.
+- **Toolchain.** iOS needs full Xcode + CocoaPods (or SPM) on a macOS host. Android needs Android
+  Studio + SDK + (for the Rust `.so`) NDK + JDK. This is the standard, well-supported Apple/Google
+  native toolchain, not a bespoke one.
+- **Webviews.** iOS = WKWebView (WebKit), min iOS 14 (Cap 7) / 15 (Cap 8). Android = system WebView
+  (Chromium, not bundled, version varies by device), `minSdkVersion` 23. You now test three engines
+  (desktop browsers for the extension, WKWebView, Android WebView); WebKit is the stricter renderer.
+- **Web serving / secure context.** iOS default origin `capacitor://localhost`, Android default
+  `https://localhost` (configurable via `server.iosScheme` / `server.androidScheme`). `localhost` is
+  a secure context, so `crypto.subtle`, `isSecureContext`, and other secure-context-only APIs work.
+- **Native bridge and threading.** Plugins are authored in Swift (iOS) and Kotlin/Java (Android) via
+  the official, stable plugin generator (`npm init @capacitor/plugin`); link an `.xcframework` via
+  `.podspec`/SPM and `jniLibs/*.so` via Gradle. **iOS plugin calls run on a background queue by
+  default** (good: heavy Rust crypto does not block the UI thread; you dispatch UI work back to
+  main). Android plugin threading is not documented as off-main, so **manage your own threads for
+  Argon2id on Android** (it is deliberately slow; a main-thread call risks an ANR).
+- **Relevant plugins.** `@capacitor/filesystem` (official, app-private blob storage),
+  `@aparajita/capacitor-secure-storage` (Keychain/Keystore, community, maintained),
+  `@aparajita/capacitor-biometric-auth` (Face ID / Touch ID / `BiometricPrompt`, community,
+  maintained), `@capacitor-mlkit/barcode-scanning` (camera QR), `@capacitor/clipboard` (official,
+  plain-text; **no auto-clear, no `EXTRA_IS_SENSITIVE`**, so a small custom plugin or a JS timer is
+  needed), `@capacitor/app` (lifecycle `appStateChange`/`pause`/`resume`). Avoid
+  `@capacitor/preferences` for secrets (plaintext).
+- **Distribution.** Capacitor apps deploy to the App Store and Play Store like any other native app
+  (real Xcode/Gradle outputs). **App Store review risk: Guideline 4.2 (minimum functionality /
+  webview wrapper).** Capacitor bundles local web assets plus native plugins (unlike a thin remote
+  URL wrapper), and a password manager clears 4.2 by leaning on genuine native integrations
+  (biometric, keychain, camera, autofill). Capacitor apps are routinely approved.
+- **Lifecycle.** `@capacitor/app` exposes pause/resume/appStateChange; background execution is
+  OS-constrained (iOS suspends aggressively, Android needs a foreground service). For a password
+  manager this is fine: we want to lock and be killed in the background. Implement lock-on-pause and
+  clipboard-clear-on-timeout ourselves.
 
 ## Unknown unknowns / risks to retire early
 
-- **Tauri mobile DX and stability for a security product.** No confirmed roster of notable shipping
-  mobile apps; iOS toolchain churn is real. Retire with Phase 0 on real devices before committing.
-- **Native autofill target injection into `gen/`.** Proven for widgets/share-targets, not autofill,
-  and `gen/` regeneration can clobber hand-edits. This is the make-or-break for product value.
-  Retire with an early spike (inject a trivial iOS Credential Provider target + read a value from a
-  shared App Group).
-- **iOS WebAuthn/passkey entitlement approval (future only).** Relevant to the deferred passkey
-  features, not v1 password autofill. If pursuing in-webview passkeys, the browser entitlement is an
-  approval gamble with no published criteria; the native ASAuthorization route avoids it but is more
-  code. Long lead time; start that conversation only when passkeys are scheduled.
-- **Android main-thread crypto -> ANR.** Argon2id is deliberately slow. Native crypto commands must
-  run off the main thread on Android.
+- **No password-manager precedent on Capacitor.** Every native primitive exists, but the
+  credential-provider + shared-storage + biometric-unwrap path has not been walked on Capacitor
+  specifically. Retire with the Phase 0 skeleton and the autofill probe on real devices.
+- **App-extension sync-survival.** Adding native autofill targets to the committed `ios/`/`android/`
+  projects is standard native work, but Capacitor does not document that a hand-added extension
+  target survives `cap sync`. Strongly implied; verify empirically (inject a trivial iOS Credential
+  Provider target + read a value from a shared App Group, run `cap sync` repeatedly).
+- **iOS WebAuthn/passkey entitlement (future only).** Relevant to the deferred passkey features, not
+  v1 password autofill. If pursuing in-webview passkeys, the browser entitlement is an approval
+  gamble with no published criteria; the native ASAuthorization route avoids it but is more code.
+  Long lead time; start that conversation only when passkeys are scheduled.
+- **Android main-thread crypto -> ANR.** Argon2id is deliberately slow, and Android plugin calls are
+  not guaranteed off-main. Native crypto commands must run off the main thread on Android.
 - **Webview fragmentation.** Old Android System WebView versions on low-end devices, and WKWebView
-  quirks a desktop-only Tauri build never hits. Test on real low-end hardware.
-- **Secret hygiene across boundaries.** Secrets crossing the JS<->native `invoke` boundary, the
+  quirks the extension never hits. Test on real low-end hardware.
+- **Secret hygiene across boundaries.** Secrets crossing the JS<->native plugin boundary, the
   decrypted vault in the JS heap, and keeping the native autofill extension's view of the vault in
   sync without leaking plaintext. Design the trust boundary deliberately.
 - **Sync.** Mobile has no File System Access API either, and the desktop build's "vault.db in a
@@ -438,27 +463,28 @@ is a later additive feature on top of this plumbing.
 
 ## Proposed plan (phased, each phase retires a risk)
 
-0. **Walking skeleton (days).** Add `packages/platform-tauri` + `src-tauri`; `tauri ios/android
-   init`; point `frontendDist` at a minimal SPA mounting `@core` App with stub adapters. Get the
-   real React UI + WASM + WebCrypto + router booting in WKWebView and Android System WebView **on
-   real devices**. Icons already exist. Retires the biggest cheap unknown: does our stack even run
-   on-device. Highest information per unit effort.
-1. **In-app vault MVP (weeks).** Implement the five `platform-tauri` adapters: `storage` (Rust fs +
-   keystore), `crypto` (native command or in-webview WASM), `clipboard` (plugin + own timer),
-   `shell` (collapse pop-out, in-app nav), lifecycle lock-on-pause. Result: a standalone vault app:
-   password/recovery unlock, view/edit/copy entries, KDBX import, TOTP. No system autofill yet
-   (manual copy/paste). Shippable as a private build.
+0. **Walking skeleton (days).** Add `packages/platform-mobile`; `npx cap add ios/android`; point
+   `webDir` at a minimal SPA mounting `@core` App with stub adapters. Get the real React UI + WASM +
+   WebCrypto + router booting in WKWebView and Android System WebView **on real devices**. Icons
+   already exist. Retires the biggest cheap unknown: does our stack even run on-device. Highest
+   information per unit effort.
+1. **In-app vault MVP (weeks).** Implement the five `platform-mobile` adapters: `storage`
+   (`@capacitor/filesystem` + secure-storage plugin), `crypto` (in-webview WASM or a native crypto
+   plugin), `clipboard` (plugin + own timer), `shell` (collapse pop-out, in-app nav), lifecycle
+   lock-on-pause via `@capacitor/app`. Result: a standalone vault app: password/recovery unlock,
+   view/edit/copy entries, KDBX import, TOTP. No system autofill yet (manual copy/paste). Shippable
+   as a private build.
 2. **Biometric + secure storage + layout (weeks).** Biometric plugin gates unlock; wrap the VEK key
    in Keychain/Keystore; add the biometric slot to slot-policy; responsive/`dvh`/safe-area UI pass.
 3. **System autofill, passwords and TOTP (many weeks per platform, native, the real schedule).**
    Precursor: refactor `crypto-wasm` into a shared Rust core with a `uniffi` wrapper so Swift and
    Kotlin link the same crypto. Then: iOS AutoFill Credential Provider Extension (Swift,
    `ProvidesPasswords` + `ProvidesOneTimeCodes`) and the Android classic `AutofillService` (Kotlin,
-   API 26+, covering apps and browser web fields on all versions), as native targets injected into
-   `gen/`. Each reads the vault from shared storage (App Group + Keychain on iOS, same-app storage +
-   Keystore on Android) and unlocks via a biometric-gated **cached wrapping key** so it never runs
-   Argon2id inside the memory-capped extension. De-risk with the injection spike first. See OS-level
-   autofill.
+   API 26+, covering apps and browser web fields on all versions), added as native targets in the
+   committed `ios/`/`android/` projects. Each reads the vault from shared storage (App Group +
+   Keychain on iOS, same-app storage + Keystore on Android) and unlocks via a biometric-gated
+   **cached wrapping key** so it never runs Argon2id inside the memory-capped extension. De-risk with
+   the extension-target injection probe first. See OS-level autofill.
 4. **Passkeys / PRF unlock (optional, long lead).** Native ASAuthorization + Credential Manager PRF
    bridge plugin (platform passkeys only); AASA / assetlinks association files; iOS entitlement if
    the in-webview route is chosen. Hardware keys: dropped on iOS, USB-only on Android.
@@ -477,23 +503,23 @@ is a later additive feature on top of this plumbing.
 ### Suggested spike scope (to decide go / no-go)
 
 Do **Phase 0** and the **autofill target-injection probe** from Phase 3 (inject a trivial
-credential-provider target and read the vault from shared storage). Those retire the unknowns that
-actually determine whether this is worth doing. Everything in Phases 1-2 is known-quantity adapter
-work; passkey work is deferred.
+credential-provider target, read the vault from a shared App Group, confirm it survives `cap sync`).
+Those retire the unknowns that actually determine whether this is worth doing. Everything in Phases
+1-2 is known-quantity adapter work; passkey work is deferred.
 
 ## Effort and risk at a glance
 
 | Workstream | Effort | Risk | Reuse |
 |---|---|---|---|
 | Walking skeleton (Phase 0) | Low | Low | n/a |
-| `platform-tauri` adapters + Rust backend (Phase 1) | Medium | Low | high (core unchanged) |
-| Biometric + Keychain/Keystore (Phase 2) | Medium | Medium (alpha plugins) | high |
+| `platform-mobile` adapters (Phase 1) | Medium | Low | high (core unchanged) |
+| Biometric + Keychain/Keystore (Phase 2) | Medium | Low-Medium | high |
 | Responsive UI pass (Phase 2) | Medium | Low | high |
-| Move crypto to native Rust | Low | Low | crate already native |
+| Move crypto to a native plugin | Low | Low | crate already native |
 | Shared Rust crypto core refactor (core + wasm + uniffi wrappers) | Medium | Low | crate logic reused, bindings new |
 | **iOS autofill provider (Swift): passwords + TOTP** | **High** | **High** | **none in webview; crypto via shared Rust core** |
 | **Android autofill: classic `AutofillService` (Kotlin): passwords + TOTP** | **High** | **High** | **none in webview; crypto via shared Rust core** |
-| Injecting extension targets into Tauri `gen/` | Medium | High (under-documented) | n/a |
+| Adding extension targets to the native projects | Medium | Low-Medium (standard Xcode/Studio work; verify sync-survival) | n/a |
 | Passkey hosting (future): CM provider + iOS passkeys + attestation | High | High | additive on Phase 3 plumbing |
 | Passkey/PRF native bridge (Phase 4) | Medium-high | High (Apple entitlement, no plugin) | partial |
 | Sync (cross-cutting) | High | Medium | shared with p2p-sync work |
@@ -501,48 +527,43 @@ work; passkey work is deferred.
 
 ## Open questions to verify before committing
 
-- Can a native iOS Credential Provider target and an Android autofill service be injected into
-  Tauri's generated `gen/` projects durably (surviving `gen/` regeneration), and read a shared vault?
+- Does a hand-added iOS Credential Provider target and Android autofill service survive `cap sync`
+  durably, and read a shared vault? (Strongly implied; verify empirically.)
 - (Future, passkey hosting only) Will Apple approve the web-browser public-key-credential
   entitlement, or must passkey support go fully native? Not needed for v1 password/TOTP autofill.
 - Does `navigator.storage.persist()` actually exempt an embedded WKWebView from eviction, or is the
-  Rust-filesystem path mandatory (assume mandatory)?
-- Which secure-storage plugin is production-viable today, or do we write our own thin Keychain/
-  Keystore plugin?
+  filesystem-plugin path mandatory (assume mandatory)?
+- Is `@aparajita/capacitor-secure-storage` (or another plugin) production-viable for our threat
+  model today, or do we write a thin in-house Keychain/Keystore plugin?
 - What is the mobile sync model, and does it share the p2p-sync engine?
-- Are there confirmed production password managers shipping on Tauri mobile (de-risks the platform
-  choice itself)?
-- Is editing `gen/apple/project.yml` + the Android Gradle manifest a durable way to ship the autofill
-  extension targets, or do we need a custom `cargo-mobile2` template pack (mechanism is
-  under-documented)?
 - Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
   trade-off for skipping Argon2id in the autofill extension (industry-standard, but a deliberate
   choice)?
 - Which `uniffi` version to pin (pre-1.0, churns), and `getrandom` 0.2 js-feature vs 0.3 cfg-flag?
 - Per-browser autofill fidelity on Android (some browsers fill only via the IME): do we need a
   fallback keyboard like KeePassDX?
+- Do we need a small custom clipboard plugin for the Android `EXTRA_IS_SENSITIVE` flag, or is the
+  JS-side auto-clear timer sufficient?
 
 ## Sources (verified June 2026, re-verify later)
 
-Tauri platform:
-- Tauri 2.0 stable / mobile framing: https://v2.tauri.app/blog/tauri-20/
-- Prerequisites (toolchain): https://v2.tauri.app/start/prerequisites/
-- Webview versions (WKWebView, Android WebView, min OS): https://v2.tauri.app/reference/webview-versions/
-- Calling Rust / `invoke` / capabilities: https://v2.tauri.app/develop/calling-rust , https://v2.tauri.app/security/capabilities
-- Plugins matrix / biometric / clipboard / barcode-scanner / deep-linking: https://v2.tauri.app/plugin/
-- Stronghold deprecation (maintainer): https://github.com/orgs/tauri-apps/discussions/7846 ; mobile build bug https://github.com/tauri-apps/plugins-workspace/issues/2242
-- Distribution (Google Play / App Store): https://v2.tauri.app/distribute/google-play/ , https://v2.tauri.app/distribute/app-store/
-- WebCrypto secure-context confirmation: https://github.com/tauri-apps/tauri/issues/12331
-- iOS toolchain pain: https://github.com/orgs/tauri-apps/discussions/10197 , retrospective https://blog.erikhorton.com/2025/10/05/4-mobile-apps-with-tauri-a-retrospective.html
+Capacitor platform:
+- Capacitor 8 announcement: https://ionic.io/blog/announcing-capacitor-8 ; upgrade guide https://capacitorjs.com/docs/updating/8-0
+- Native project workflow (`cap copy` / `cap sync`, committed `ios/`/`android/`): https://capacitorjs.com/docs/basics/workflow , https://capacitorjs.com/docs/cli/commands/copy
+- Config (schemes / secure context / server): https://capacitorjs.com/docs/config
+- iOS / Android webviews + min OS: https://capacitorjs.com/docs/ios , https://capacitorjs.com/docs/android , https://capacitorjs.com/docs/updating/7-0
+- Plugin authoring (Swift/Kotlin, SPM/Gradle, native lib linking): https://capacitorjs.com/docs/plugins/creating-plugins , https://capacitorjs.com/docs/plugins/ios , https://capacitorjs.com/docs/plugins/android , https://capacitorjs.com/docs/ios/spm
+- Password AutoFill guide: https://capacitorjs.com/docs/guides/autofill-credentials
+- Plugins: filesystem https://capacitorjs.com/docs/apis/filesystem ; clipboard https://capacitorjs.com/docs/apis/clipboard ; app/lifecycle https://capacitorjs.com/docs/apis/app ; secure storage https://github.com/aparajita/capacitor-secure-storage ; biometric https://github.com/aparajita/capacitor-biometric-auth ; barcode https://github.com/capawesome-team/capacitor-mlkit
+- Framework-agnostic (no Ionic UI lock-in): https://capacitorjs.com/docs/getting-started/with-ionic
+- App Store deployment / 4.2 posture: https://capacitorjs.com/docs/ios/deploying-to-app-store , https://developer.apple.com/app-store/review/guidelines/
+- Production roster / enterprise: https://ionic.io/customers , https://ionic.io/resources/case-studies/bestinvest
 
 WebAuthn / PRF / autofill:
 - iOS web-browser passkey entitlement: https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.web-browser.public-key-credential
 - Android WebView Credential Manager bridge: https://developer.android.com/identity/sign-in/credential-manager-webview
 - PRF for key derivation (iOS): https://developer.apple.com/documentation/authenticationservices/asauthorizationpublickeycredentialprfassertioninputvalues
 - PRF guide / Apple roaming-authenticator limitation (Yubico): https://developers.yubico.com/WebAuthn/Concepts/PRF_Extension/Developers_Guide_to_PRF.html
-- iOS AutoFill Credential Provider: https://developer.apple.com/documentation/authenticationservices/ascredentialproviderviewcontroller
-- Android Credential / Autofill provider: https://developer.android.com/identity/sign-in/credential-provider
-- Adding native targets to Tauri iOS (technique): https://github.com/orgs/tauri-apps/discussions/14555
 
 OS-level credential providers (autofill in apps + websites):
 - iOS `ASCredentialProviderViewController`: https://developer.apple.com/documentation/AuthenticationServices/ASCredentialProviderViewController
@@ -550,7 +571,8 @@ OS-level credential providers (autofill in apps + websites):
 - iOS `ASCredentialServiceIdentifier` (web URL + app associated-domain matching): https://developer.apple.com/documentation/authenticationservices/ascredentialserviceidentifier
 - iOS passkey provider capabilities (WWDC24 10125): https://developer.apple.com/videos/play/wwdc2024/10125/
 - iOS extension ~120MB / Argon2 limit (KeePassium): https://support.keepassium.com/kb/autofill-memory/
-- Android `AutofillService` (API 26, not deprecated): https://developer.android.com/identity/autofill/autofill-services
+- iOS App Groups / Keychain access groups (shared storage): https://developer.apple.com/documentation/xcode/configuring-app-groups , https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps
+- Android `AutofillService` (API 26, not deprecated): https://developer.android.com/identity/autofill/autofill-services , https://developer.android.com/reference/android/service/autofill/AutofillService
 - Android Credential Manager provider (API 34, passwords + passkeys): https://developer.android.com/identity/sign-in/credential-provider
 - Which APIs the 2024 deprecation actually covered (not autofill): https://android-developers.googleblog.com/2024/09/streamlining-android-authentication-credential-manager-replaces-legacy-apis.html
 - Digital Asset Links (app<->site association): https://developer.android.com/training/app-links/configure-assetlinks
@@ -562,13 +584,11 @@ OS-level credential providers (autofill in apps + websites):
 - KeePassDX (JNI Argon2 + Keystore unlock + IME fallback): https://github.com/Kunzisoft/KeePassDX
 - Mozilla uniffi (Swift + Kotlin bindings from one Rust source): https://github.com/mozilla/uniffi-rs
 - cargo-ndk (Android .so into jniLibs): https://github.com/bbqsrc/cargo-ndk
-- Tauri iOS app-extension injection (proven via share ext): https://github.com/tauri-apps/tauri/issues/10074
-- Tauri app-extension support request (Oct 2025): https://github.com/tauri-apps/tauri/issues/14332
 
 Webview storage:
 - WebKit storage eviction policy: https://webkit.org/blog/14403/updates-to-storage-policy/
 - Storage quotas and eviction (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
-- Secure Contexts (`*.localhost`): https://www.w3.org/TR/secure-contexts/
+- Secure Contexts (`localhost`): https://www.w3.org/TR/secure-contexts/
 
 Related internal docs: [firefox-port.md](firefox-port.md) (same adapter philosophy, the sync
 constraint), [p2p-sync.md](p2p-sync.md) (cross-platform sync), [cryptography.md](cryptography.md),
