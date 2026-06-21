@@ -1,8 +1,36 @@
-import type { EntriesPayload, RosterEntry, RosterPayload, SyncEvent } from "@core/index";
+import {
+	applyRemotePayload,
+	decodeEntriesPayload,
+	decodeVaultBlob,
+	type EntriesPayload,
+	emptyEntriesPayload,
+	encodeEntriesPayload,
+	encodeVaultBlob,
+	ensureDeviceId,
+	type HybridClock,
+	makeClock,
+	type RosterEntry,
+	type RosterPayload,
+	type SyncEvent,
+	type VaultBlob,
+	type VaultSyncPort,
+} from "@core/index";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
+import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
+import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
+import { mobileCrypto, notifyExternalChange, onVaultStateChange } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
 import { loadWasm } from "../wasm-loader";
+
+const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
+const GROUP_KEY = "sync.group";
+const RELAY_KEY = "sync.relay";
+
+interface GroupConfig {
+	groupKey: string;
+	roster: RosterPayload;
+}
 
 // Mobile sync session manager. The extension runs this in an offscreen document
 // driven over chrome.runtime; on mobile the single webview has a DOM, so the same
@@ -109,4 +137,110 @@ export async function stopSync(): Promise<void> {
 	session?.stop();
 	session = null;
 	report("disconnected");
+}
+
+// --- ongoing roster sync (continuous merge after enrollment) ---
+
+// This device's HLC clock (own instance, seeded from the persisted device id, like
+// the extension's background clock). witnessRemote advances it past peers' stamps.
+let clockPromise: Promise<HybridClock> | null = null;
+function getClock(): Promise<HybridClock> {
+	if (!clockPromise) {
+		clockPromise = (async () => {
+			const id = await ensureDeviceId(
+				(k) => mobileStorage.getMeta<string>(k),
+				(k, v) => mobileStorage.setMeta<string>(k, v),
+			);
+			return makeClock(id);
+		})();
+	}
+	return clockPromise;
+}
+
+// Read + decrypt the local outer blob: the blob (for its slots, carried forward on
+// write) plus the decrypted entries payload (empty for a fresh vault).
+async function readLocalState(): Promise<{ blob: VaultBlob; payload: EntriesPayload }> {
+	const blob = decodeVaultBlob(await mobileStorage.readVaultBlob());
+	if (blob.entriesCiphertext.length === 0) return { blob, payload: emptyEntriesPayload() };
+	const json = await mobileCrypto.decryptWithVek(
+		bytesToBase64(blob.entriesIv),
+		bytesToBase64(blob.entriesCiphertext),
+	);
+	return { blob, payload: decodeEntriesPayload(json) };
+}
+
+// Host side of the merge seam (runs in-process here, unlike the extension where it
+// straddles offscreen + background). readLocal runs before writeMerged, so the
+// captured slots are current; sealed per-entry envelopes are carried verbatim.
+function makeVaultSyncPort(): VaultSyncPort {
+	let slots: VaultBlob["slots"] = [];
+	return {
+		async readLocal() {
+			const { blob, payload } = await readLocalState();
+			slots = blob.slots;
+			return payload;
+		},
+		async witnessRemote(stamps) {
+			const clock = await getClock();
+			for (const hlc of stamps) clock.witness(hlc);
+		},
+		async writeMerged(merged) {
+			const { iv, ciphertext } = await mobileCrypto.encryptWithVek(encodeEntriesPayload(merged));
+			const newBlob = encodeVaultBlob({
+				slots,
+				entriesIv: base64ToBytes(iv),
+				entriesCiphertext: base64ToBytes(ciphertext),
+			});
+			await mobileStorage.writeVaultBlob(newBlob);
+			notifyExternalChange(); // refresh the in-app list with the peer's edits
+		},
+	};
+}
+
+let rosterSession: MeshSession | null = null;
+
+async function startRoster(): Promise<void> {
+	const group = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+	if (!group?.groupKey) return; // not enrolled in a group yet
+	const { privateKey, publicKey } = await deviceKeypair();
+	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
+	const wasm = (await loadWasm()) as unknown as RosterSyncWasm;
+	rosterSession?.stop();
+	rosterSession = await startRosterSync({
+		relayUrl: relay,
+		groupKeyB64: group.groupKey,
+		devicePrivB64: privateKey,
+		devicePubB64: publicKey,
+		roster: group.roster,
+		wasm,
+		report,
+		fetchLocalPayload: async () => encodeEntriesPayload((await readLocalState()).payload),
+		pushRemotePayload: async (json) => {
+			await applyRemotePayload(makeVaultSyncPort(), decodeEntriesPayload(json));
+		},
+	});
+}
+
+async function maybeStartRosterSync(): Promise<void> {
+	if (rosterSession) return; // already running
+	try {
+		await startRoster();
+	} catch (e) {
+		report(`sync error: ${(e as Error).message}`);
+	}
+}
+
+function stopRosterSync(): void {
+	rosterSession?.stop();
+	rosterSession = null;
+}
+
+/** Wire ongoing roster sync to the vault lock state: run while unlocked + enrolled,
+ * stop on lock (the VEK is gone, so merges can't decrypt). Call once at boot;
+ * returns an unsubscribe. */
+export function initRosterSync(): () => void {
+	return onVaultStateChange((locked) => {
+		if (locked) stopRosterSync();
+		else void maybeStartRosterSync();
+	});
 }

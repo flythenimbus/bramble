@@ -6,6 +6,26 @@ import { loadWasm } from "../wasm-loader";
 // bounce to the unlock screen). On mobile the trigger is the app lifecycle, not a
 // background SW: see lockForLifecycle().
 const lockListeners = new Set<() => void>();
+// External-change subscribers (useVault reloads entries). Fired after an ongoing-
+// sync merge writes the vault, so the in-app list reflects a peer's edits.
+const changeListeners = new Set<() => void>();
+// Vault lock/unlock transitions, for the sync runtime to start/stop roster sync.
+const vaultStateListeners = new Set<(locked: boolean) => void>();
+
+const fireVaultState = (locked: boolean) => {
+	for (const fn of vaultStateListeners) fn(locked);
+};
+
+/** Subscribe to vault lock(true)/unlock(false) transitions. Returns an unsubscribe. */
+export function onVaultStateChange(cb: (locked: boolean) => void): () => void {
+	vaultStateListeners.add(cb);
+	return () => vaultStateListeners.delete(cb);
+}
+
+/** Notify subscribers that the vault content changed out-of-band (sync merge). */
+export function notifyExternalChange(): void {
+	for (const fn of changeListeners) fn();
+}
 
 /**
  * Lock the vault in response to an app-lifecycle event (backgrounded), and notify
@@ -16,6 +36,7 @@ const lockListeners = new Set<() => void>();
 export async function lockForLifecycle(): Promise<void> {
 	(await loadWasm()).lock();
 	for (const fn of lockListeners) fn();
+	fireVaultState(true);
 }
 
 // Direct in-webview WASM calls. The extension routes these through an offscreen
@@ -23,10 +44,13 @@ export async function lockForLifecycle(): Promise<void> {
 // crypto module runs in-process and the messaging hop collapses.
 export const mobileCrypto: CryptoAdapter = {
 	async generateVek() {
-		return (await loadWasm()).generate_vek();
+		const vek = (await loadWasm()).generate_vek();
+		fireVaultState(false);
+		return vek;
 	},
 	async unlockWithVek(vekB64) {
 		(await loadWasm()).unlock_with_vek(vekB64);
+		fireVaultState(false);
 	},
 	async exportVek() {
 		return (await loadWasm()).export_vek();
@@ -36,6 +60,7 @@ export const mobileCrypto: CryptoAdapter = {
 	},
 	async lock() {
 		(await loadWasm()).lock();
+		fireVaultState(true);
 	},
 	async isLocked() {
 		return (await loadWasm()).is_locked();
@@ -44,8 +69,9 @@ export const mobileCrypto: CryptoAdapter = {
 		lockListeners.add(callback);
 		return () => lockListeners.delete(callback);
 	},
-	onExternalChange() {
-		return () => {};
+	onExternalChange(callback) {
+		changeListeners.add(callback);
+		return () => changeListeners.delete(callback);
 	},
 
 	async generateSalt() {
@@ -59,7 +85,7 @@ export const mobileCrypto: CryptoAdapter = {
 		return (await loadWasm()).wrap_vek_password(i.password, i.saltB64, i.slotIdB64, i.magicVersion);
 	},
 	async unwrapVekPassword(i) {
-		return (await loadWasm()).unwrap_vek_password(
+		const ok = (await loadWasm()).unwrap_vek_password(
 			i.password,
 			i.saltB64,
 			i.slotIdB64,
@@ -68,6 +94,8 @@ export const mobileCrypto: CryptoAdapter = {
 			i.wrappedVekB64,
 			i.magicVersion,
 		);
+		if (ok) fireVaultState(false); // VEK now loaded => unlocked
+		return ok;
 	},
 	async verifyPasswordSlot(i) {
 		return (await loadWasm()).verify_password_slot(
@@ -83,7 +111,7 @@ export const mobileCrypto: CryptoAdapter = {
 		return (await loadWasm()).wrap_vek_webauthn(i.hmacSecretB64, i.slotIdB64, i.magicVersion);
 	},
 	async unwrapVekWebauthn(i) {
-		return (await loadWasm()).unwrap_vek_webauthn(
+		const ok = (await loadWasm()).unwrap_vek_webauthn(
 			i.hmacSecretB64,
 			i.slotIdB64,
 			i.verifierB64,
@@ -91,6 +119,8 @@ export const mobileCrypto: CryptoAdapter = {
 			i.wrappedVekB64,
 			i.magicVersion,
 		);
+		if (ok) fireVaultState(false); // VEK now loaded => unlocked
+		return ok;
 	},
 	async verifyWebauthnSlot(i) {
 		return (await loadWasm()).verify_webauthn_slot(
