@@ -79,9 +79,14 @@ ground truth of what exists.
   + Secure Enclave; Android Keystore key `setUserAuthenticationRequired` + invalidated-by-enrollment
   wrapping the VEK), surfaced through an optional sixth `Platform.biometric` capability in `@core`.
   Decided the attack-surface trade-off in favor of OS-enforced gating (not an app-level check), so
-  it also seeds the Phase 3 autofill biometric-unwrap path. iOS verified on the simulator; Android
-  compiles (needs an on-device/emulator pass). Remaining Phase 2: the broader vault
-  list/detail/edit small-screen sweep.
+  it also seeds the Phase 3 autofill biometric-unwrap path. **iOS functionally verified on the
+  simulator** (enable -> lock -> Face ID unlock, plus cancel/non-match/disable); Android compiles
+  (no on-device/emulator pass yet). Security-key (WebAuthn) unlock is now **hidden on mobile** via a
+  `ShellAdapter.supportsSecurityKeys` flag (false on mobile) since PRF can't work there, and biometric
+  takes its slot in Settings. The mobile package also gained its **first test harness** (was zero):
+  `platform-mobile` 9 tests, `@core` biometric paths 7. Remaining Phase 2: the broader vault
+  list/detail/edit small-screen sweep, the biometric re-enrollment edge (re-enrolling invalidates the
+  cached item but the toggle still reads on until toggled off/on), and the Android device pass.
 - **Architecture:** the pure P2P transport/host modules moved from the extension into
   `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
   the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
@@ -197,6 +202,14 @@ memory constraint, and the shared-Rust-core enabler are in the dedicated section
 [OS-level autofill](#os-level-autofill-filling-apps-and-websites-natively) below.
 
 ### 2. WebAuthn / PRF / security keys: re-architect mobile unlock
+
+**Status: addressed for v1.** Biometric unlock shipped as the mobile primary-unlock class (see the
+implementation status up top), and the security-key UI is hidden on mobile behind a
+`ShellAdapter.supportsSecurityKeys` flag (false on mobile): the Settings registration row and the Auth
+"unlock with security key" button no longer render there, so a vault synced from a desktop that has a
+registered key doesn't dangle a non-functional path on the phone. Platform-passkey/PRF unlock (the
+native ASAuthorization / Credential Manager route) remains the optional, long-lead Phase 4 item.
+Original analysis follows.
 
 Today, security-key unlock derives the KEK from a WebAuthn authenticator's `prf`/`hmac-secret`
 output via HKDF (`packages/crypto-wasm/src/lib.rs` `derive_kek_hkdf`, info `"titanpass/webauthn/v1"`;

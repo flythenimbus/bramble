@@ -36,6 +36,7 @@ dist/               --cap sync-->   ios/, android/     (native web assets)
 | `pnpm dev:ios` / `dev:android` | Device/sim + **HMR** | Vite + `cap run -l` together. Edit web code, it hot-reloads on device. |
 | `pnpm dev:ios:lan` / `dev:android:lan` | Physical device + HMR | App loads from your Mac's LAN IP instead of localhost. |
 | `pnpm run:ios` / `run:android` | Bundled | Build + deploy bundled assets, no dev server. Use for offline testing. |
+| `pnpm test` | Node (vitest) | Unit tests for the adapters. Native plugins are mocked (`registerPlugin`), so this checks JS-side logic only, never the OS biometric/keychain path. |
 | `pnpm sim:reset` | — | Fix an off-screen iOS Simulator window (see quirks). |
 
 `dev:*` (HMR) and `run:*` (bundled) are two distinct modes. The iOS scripts auto-target
