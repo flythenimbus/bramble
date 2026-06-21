@@ -34,6 +34,8 @@ export interface ShellAdapter {
 	consumeHandoff(): Promise<PopOutHandoff | null>;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
+	/** Whether this platform can detach the UI into a standalone window. False on single-window hosts (mobile), which hides the pop-out affordance. */
+	supportsPopOut: boolean;
 	/** True where `scanQrFromActiveTab` is a live camera scan (mobile) rather than an active-tab capture; gates camera-scan affordances (e.g. scanning a pairing QR). */
 	supportsCameraScan: boolean;
 	/**

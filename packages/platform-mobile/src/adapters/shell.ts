@@ -45,6 +45,7 @@ export const mobileShell: ShellAdapter = {
 	isDetached() {
 		return false;
 	},
+	supportsPopOut: false,
 	supportsCameraScan: true,
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):

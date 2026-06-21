@@ -50,7 +50,12 @@ export function PopOutProvider({
 	}, [router, shell]);
 
 	const value = useMemo<PopOutContextValue>(
-		() => ({ canPopOut: !shell.isDetached(), popOut, registerDraftGetter, takeInitialDraft }),
+		() => ({
+			canPopOut: shell.supportsPopOut && !shell.isDetached(),
+			popOut,
+			registerDraftGetter,
+			takeInitialDraft,
+		}),
 		[shell, popOut, registerDraftGetter, takeInitialDraft],
 	);
 
