@@ -146,6 +146,9 @@ importers:
 
   packages/platform-mobile:
     dependencies:
+      '@aparajita/capacitor-secure-storage':
+        specifier: ^8.0.0
+        version: 8.0.0
       '@capacitor/android':
         specifier: ^8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
@@ -215,6 +218,10 @@ importers:
         version: 4.1.9(@types/node@24.13.2)(happy-dom@20.10.6)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
 
 packages:
+
+  '@aparajita/capacitor-secure-storage@8.0.0':
+    resolution: {integrity: sha512-oYnwSjdIh23aRNgz8982+TmFvQH/2yZkEdw1iIg+H2ziFJoOVELPTc7u6Ez2HwOuDIW5AGqBX75GvrzQ+D70Qg==}
+    engines: {node: '>=20.0.0'}
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -324,6 +331,11 @@ packages:
     resolution: {integrity: sha512-EgcAk7NYheHMTyP3CUrA65qKs4D2UEAKgw44HI6Uk3dTw6KjLQkdLOQWvbeRncHaZ2gklfOojUoc5DlSw2lhYg==}
     peerDependencies:
       '@capacitor/core': ^8.4.0
+
+  '@capacitor/keyboard@8.0.5':
+    resolution: {integrity: sha512-oFXygC4eKYA5l2MdpTR06L2M/4x6e2SLD5yS1T9+UBDKTkzyvhWKEhbYLUaTIBPpLKqlfGudJw1X73S1H9eUzQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/preferences@8.0.1':
     resolution: {integrity: sha512-T6no3ebi79XJCk91U3Jp/liJUwgBdvHR+s6vhvPkPxSuch7z3zx5Rv1bdWM6sWruNx+pViuEGqZvbfCdyBvcHQ==}
@@ -2096,6 +2108,14 @@ packages:
 
 snapshots:
 
+  '@aparajita/capacitor-secure-storage@8.0.0':
+    dependencies:
+      '@capacitor/android': 8.4.1(@capacitor/core@8.4.1)
+      '@capacitor/app': 8.1.0(@capacitor/core@8.4.1)
+      '@capacitor/core': 8.4.1
+      '@capacitor/ios': 8.4.1(@capacitor/core@8.4.1)
+      '@capacitor/keyboard': 8.0.5(@capacitor/core@8.4.1)
+
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
       '@asamuzakjp/generational-cache': 1.0.1
@@ -2199,6 +2219,10 @@ snapshots:
       '@capacitor/synapse': 1.0.4
 
   '@capacitor/ios@8.4.1(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
+
+  '@capacitor/keyboard@8.0.5(@capacitor/core@8.4.1)':
     dependencies:
       '@capacitor/core': 8.4.1
 
