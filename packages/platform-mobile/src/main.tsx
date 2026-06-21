@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import "@core/styles/index.css";
 import "./styles/mobile.css";
 import { mobileAutofill } from "./adapters/autofill";
+import { mobileBiometric } from "./adapters/biometric";
 import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
 import { mobileShell, registerOpenSetup } from "./adapters/shell";
@@ -17,6 +18,7 @@ const platform: Platform = {
 	autofill: mobileAutofill,
 	shell: mobileShell,
 	clipboard: mobileClipboard,
+	biometric: mobileBiometric,
 };
 
 // Single-window host: `App` is the vault/unlock UI; the setup flow (create/open a
