@@ -112,7 +112,7 @@ import {
 } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { toAutofillIndex } from "../vault/autofill-index";
-import { enableBiometricUnlock, unlockVekWithBiometric } from "../vault/biometric-unlock";
+import { biometricUnlockFlow, enableBiometricUnlock } from "../vault/biometric-unlock";
 import {
 	wrapPasswordSlot as buildPasswordSlot,
 	wrapRecoverySlot as buildRecoverySlot,
@@ -867,20 +867,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const unlockWithBiometric = useCallback(async () => {
 		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
 		setError(null);
-		await unlockVekWithBiometric(crypto, biometric);
-		try {
-			await loadEntries();
-		} catch (e) {
-			// The gate authenticated and produced a VEK, but it didn't open this vault.
-			// Drop the stale cache and lock back to the password screen.
-			await crypto.lock().catch(() => {});
-			await biometric.disable().catch(() => {});
-			setBiometricEnabled(false);
-			console.error("[vault] biometric VEK failed to open the vault; cache cleared:", e);
-			throw new Error(
-				"Biometric unlock is out of date. Unlock with your password to re-enable it.",
-			);
-		}
+		await biometricUnlockFlow({
+			crypto,
+			biometric,
+			loadEntries,
+			onStaleCache: () => setBiometricEnabled(false),
+		});
 		setIsLocked(false);
 		void shell.flushPendingCornerCapture().catch(() => {});
 	}, [biometric, crypto, loadEntries, shell]);
