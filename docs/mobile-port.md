@@ -48,6 +48,43 @@ dated **June 2026** and flagged where they are unverified. Re-verify before acti
   `ProvidesPasswords`; Android just the classic `AutofillService`) and removes passkey
   attestation/assertion code and the Android Credential Manager provider from the initial build.
 
+## Implementation status (built so far, branch `mobile-poc`)
+
+The go/no-go spike is **done, and it's a go**: the stack runs on the iOS simulator and the
+P2P sync path is validated end-to-end. The sections below this one are the original
+forward-looking analysis (still accurate for the unbuilt parts); this section is the
+ground truth of what exists.
+
+- **Phase 0 — walking skeleton: DONE.** `packages/platform-mobile` is a Vite SPA mounting
+  `@core`'s App with mobile adapters. Capacitor 8 (the iOS project is **Swift Package
+  Manager**, not CocoaPods); `ios/` + `android/` are committed; the React UI + router + WASM
+  + WebCrypto boot in WKWebView (rendered on the simulator).
+- **Phase 1 — in-app vault MVP: mostly DONE.** The five adapters are implemented (storage =
+  `@capacitor/filesystem` blob + `@capacitor/preferences` metadata; crypto = in-webview WASM,
+  no offscreen hop; clipboard = plugin + JS auto-clear; shell = in-app nav, pop-out hidden;
+  autofill = stub). Create/unlock, entry CRUD, TOTP, and KDBX import work. **Auto-lock** honors
+  the `autoLockMinutes` setting (background counts as inactivity — not instant lock-on-pause).
+  Camera **QR scanning** (pairing codes + TOTP) uses `getUserMedia` + `jsQR`, no native plugin
+  (MLKit was dropped — CocoaPods-only, incompatible with our SPM iOS project).
+- **P2P sync: VALIDATED on device.** Both enrollment (pairing → encrypted vault transfer over
+  WebRTC + the Nostr-subset relay) and ongoing roster sync (continuous merge of edits) work on
+  mobile, reusing the transport now in `@core/sync/transport`. Retires the "sync is the
+  load-bearing unknown" risk for the same-network/all-online case.
+- **Phase 2 — biometric + secure storage + layout: STARTED.** Secure-storage substrate
+  (`@aparajita/capacitor-secure-storage`, SPM-verified) is in and holds the sync device
+  keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish
+  landed. **Biometric unlock is not built yet** (design pending — leaning device-local
+  biometric-cached VEK, not a vault-format slot; see Phase 2 below).
+- **Architecture:** the pure P2P transport/host modules moved from the extension into
+  `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
+  the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
+  (`buildCryptoAdapter`). See `CONTEXT.md`.
+- **Not started:** system autofill (Phase 3), passkeys/PRF (Phase 4), distribution (Phase 5).
+
+Dev workflow + the environment quirks hit while building this are in
+[`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
+The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
+
 ## Method (what the research explored)
 
 Five reads of the codebase (tech stack and build, crypto and storage, auth and unlock, the
@@ -190,6 +227,11 @@ ceremonies in `packages/core/src/hooks/useVault.tsx`). On mobile this path is co
 
 ### 3. Storage durability: do not trust webview IndexedDB on iOS
 
+**Status: addressed.** The vault blob is written via `@capacitor/filesystem` (app-private dir) and
+the sync device key now lives in `@aparajita/capacitor-secure-storage`; nothing the vault needs sits
+in evictable webview storage (one cosmetic exception: the theme pref in `localStorage`). Not yet
+stress-tested against a real WebKit purge on hardware. Original analysis follows.
+
 WebKit evicts script-writable storage (IndexedDB, Cache API) under storage pressure, over quota, or
 after ~7 days without interaction, and for non-browser apps the per-origin quota is only ~15% of
 disk. Whether the 7-day purge applies to an embedded WKWebView is officially undocumented and
@@ -204,6 +246,12 @@ use it for secrets. If you move decryption into a native crypto plugin, the decr
 in native-owned memory rather than the JS heap.
 
 ### 4. UI layout: popup-dimensioned, needs a responsive pass
+
+**Status: first pass done.** `viewport-fit=cover` + safe-area insets applied at `#root` (so each
+screen keeps its own padding), `maximum-scale=1` to stop a WKWebView zoom that rendered content
+off-screen, and the setup/unlock screens got a mobile spacing/pill/full-width-button pass; the
+pop-out affordance is hidden on mobile. A broader sweep of the vault list/detail/edit screens on
+small screens is still worthwhile. Original analysis follows.
 
 The popup is hard-coded to 500x550 with `overflow: hidden` (`popup.html`); detached mode flips to
 100%. There are essentially no responsive breakpoints, and layouts use `h-screen` (100vh).
@@ -439,9 +487,9 @@ is a later additive feature on top of this plumbing.
 
 ## Unknown unknowns / risks to retire early
 
-- **No password-manager precedent on Capacitor.** Every native primitive exists, but the
-  credential-provider + shared-storage + biometric-unwrap path has not been walked on Capacitor
-  specifically. Retire with the Phase 0 skeleton and the autofill probe on real devices.
+- **No password-manager precedent on Capacitor.** *(Partly retired.)* The vault app + P2P sync now
+  run on Capacitor on the simulator, so the in-app half is proven. The unproven part is the
+  credential-provider + shared-storage + biometric-unwrap path — retire that with the autofill probe.
 - **App-extension sync-survival.** Adding native autofill targets to the committed `ios/`/`android/`
   projects is standard native work, but Capacitor does not document that a hand-added extension
   target survives `cap sync`. Strongly implied; verify empirically (inject a trivial iOS Credential
@@ -457,28 +505,33 @@ is a later additive feature on top of this plumbing.
 - **Secret hygiene across boundaries.** Secrets crossing the JS<->native plugin boundary, the
   decrypted vault in the JS heap, and keeping the native autofill extension's view of the vault in
   sync without leaking plaintext. Design the trust boundary deliberately.
-- **Sync.** Mobile has no File System Access API either, and the desktop build's "vault.db in a
-  synced folder" model does not exist on a phone. This makes the sync question (already open for
-  Firefox) load-bearing for mobile. The **P2P WebRTC design in [p2p-sync.md](p2p-sync.md)** (option 5
-  in [firefox-port.md](firefox-port.md)) is the natural cross-platform answer and should be treated
-  as a dependency of a useful multi-device mobile app, not an afterthought.
+- **Sync.** *(Retired for same-network/all-online.)* Mobile has no File System Access API and no
+  "vault.db in a synced folder" model, so the **P2P WebRTC design in [p2p-sync.md](p2p-sync.md)** is
+  the answer — and it's now **built and validated on mobile** (enrollment + ongoing roster sync,
+  reusing `@core/sync/transport`). The remaining sync work is the cross-internet/async upgrades
+  (TURN, store-and-forward) listed as deferred in p2p-sync.md, plus the device-management UI.
 
 ## Proposed plan (phased, each phase retires a risk)
 
-0. **Walking skeleton (days).** Add `packages/platform-mobile`; `npx cap add ios/android`; point
+Status as of this session: **0 done · 1 mostly done · 2 started · 3–5 not started** (see
+Implementation status up top).
+
+0. **[DONE] Walking skeleton (days).** Add `packages/platform-mobile`; `npx cap add ios/android`; point
    `webDir` at a minimal SPA mounting `@core` App with stub adapters. Get the real React UI + WASM +
    WebCrypto + router booting in WKWebView and Android System WebView **on real devices**. Icons
    already exist. Retires the biggest cheap unknown: does our stack even run on-device. Highest
    information per unit effort.
-1. **In-app vault MVP (weeks).** Implement the five `platform-mobile` adapters: `storage`
+1. **[MOSTLY DONE] In-app vault MVP (weeks).** Implement the five `platform-mobile` adapters: `storage`
    (`@capacitor/filesystem` + secure-storage plugin), `crypto` (in-webview WASM or a native crypto
    plugin), `clipboard` (plugin + own timer), `shell` (collapse pop-out, in-app nav), lifecycle
    lock-on-pause via `@capacitor/app`. Result: a standalone vault app: password/recovery unlock,
    view/edit/copy entries, KDBX import, TOTP. No system autofill yet (manual copy/paste). Shippable
    as a private build.
-2. **Biometric + secure storage + layout (weeks).** Biometric plugin gates unlock; wrap the VEK key
-   in Keychain/Keystore; add the biometric slot to slot-policy; responsive/`dvh`/safe-area UI pass.
-3. **System autofill, passwords and TOTP (many weeks per platform, native, the real schedule).**
+2. **[STARTED] Biometric + secure storage + layout (weeks).** Secure-storage substrate and the
+   responsive/`dvh`/safe-area UI pass are done. Remaining: biometric plugin gates unlock + caches the
+   VEK behind a biometric-gated Keychain/Keystore item. (Current lean: a device-local biometric-cached
+   VEK rather than a vault-format slot, to keep the vault portable — decide before building.)
+3. **[NOT STARTED] System autofill, passwords and TOTP (many weeks per platform, native, the real schedule).**
    Precursor: refactor `crypto-wasm` into a shared Rust core with a `uniffi` wrapper so Swift and
    Kotlin link the same crypto. Then: iOS AutoFill Credential Provider Extension (Swift,
    `ProvidesPasswords` + `ProvidesOneTimeCodes`) and the Android classic `AutofillService` (Kotlin,
@@ -487,10 +540,10 @@ is a later additive feature on top of this plumbing.
    Keychain on iOS, same-app storage + Keystore on Android) and unlocks via a biometric-gated
    **cached wrapping key** so it never runs Argon2id inside the memory-capped extension. De-risk with
    the extension-target injection probe first. See OS-level autofill.
-4. **Passkeys / PRF unlock (optional, long lead).** Native ASAuthorization + Credential Manager PRF
+4. **[NOT STARTED] Passkeys / PRF unlock (optional, long lead).** Native ASAuthorization + Credential Manager PRF
    bridge plugin (platform passkeys only); AASA / assetlinks association files; iOS entitlement if
    the in-webview route is chosen. Hardware keys: dropped on iOS, USB-only on Android.
-5. **Distribution.** Apple Developer + App Store (mitigate 4.2 with the native integrations), Play
+5. **[NOT STARTED] Distribution.** Apple Developer + App Store (mitigate 4.2 with the native integrations), Play
    Console (signing, targetSdk policy).
 
 ### Deferred (future features, post-v1)
@@ -502,12 +555,14 @@ is a later additive feature on top of this plumbing.
   web-browser public-key-credential entitlement question below is relevant only here, not for v1.
 - **Passkey / PRF unlock of our own vault** (Phase 4) stays optional and long-lead.
 
-### Suggested spike scope (to decide go / no-go)
+### Spike outcome (go / no-go): GO
 
-Do **Phase 0** and the **autofill target-injection probe** from Phase 3 (inject a trivial
-credential-provider target, read the vault from a shared App Group, confirm it survives `cap sync`).
-Those retire the unknowns that actually determine whether this is worth doing. Everything in Phases
-1-2 is known-quantity adapter work; passkey work is deferred.
+Phase 0 is done and the stack runs on-device; Phases 1–2 are proving out as known-quantity adapter
+work as predicted; P2P sync is validated. The **one go/no-go unknown still outstanding** is the
+**autofill target-injection probe** from Phase 3 — inject a trivial iOS Credential Provider target +
+Android `AutofillService`, read the vault from shared storage (App Group + Keychain on iOS), and
+confirm the targets survive `cap sync`. That's the make-or-break for the product's headline feature
+and the next real risk to retire.
 
 ## Effort and risk at a glance
 
@@ -527,25 +582,34 @@ Those retire the unknowns that actually determine whether this is worth doing. E
 | Sync (cross-cutting) | High | Medium | shared with p2p-sync work |
 | Distribution (Phase 5) | Medium | Medium (4.2, targetSdk) | n/a |
 
-## Open questions to verify before committing
+## Open questions
 
-- Does a hand-added iOS Credential Provider target and Android autofill service survive `cap sync`
-  durably, and read a shared vault? (Strongly implied; verify empirically.)
+Resolved this session:
+
+- ~~What is the mobile sync model, and does it share the p2p-sync engine?~~ **Yes** — mobile reuses
+  the same `@core/sync/transport` (enrollment + ongoing roster sync), validated on device.
+- ~~Is `@aparajita/capacitor-secure-storage` production-viable / SPM-compatible, or do we write our
+  own?~~ **Adopted it** — ships a `Package.swift` (works with the SPM iOS project), iOS build
+  verified; holds the sync device key today, the biometric wrapping key next.
+- ~~Does `navigator.storage.persist()` exempt WKWebView from eviction, or is the filesystem path
+  mandatory?~~ **Took the filesystem path** (`@capacitor/filesystem`); didn't rely on `persist()`.
+- ~~QR scanning plugin?~~ Used **`getUserMedia` + `jsQR`** in-webview (MLKit was CocoaPods-only,
+  incompatible with the SPM iOS project). Camera works on device; not on the simulator.
+
+Still open:
+
+- **Does a hand-added iOS Credential Provider target / Android `AutofillService` survive `cap sync`
+  and read a shared vault?** (The Phase 3 make-or-break; not yet probed.)
+- Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
+  trade-off for skipping Argon2id in the autofill extension? (Decide with biometric unlock.)
 - (Future, passkey hosting only) Will Apple approve the web-browser public-key-credential
   entitlement, or must passkey support go fully native? Not needed for v1 password/TOTP autofill.
-- Does `navigator.storage.persist()` actually exempt an embedded WKWebView from eviction, or is the
-  filesystem-plugin path mandatory (assume mandatory)?
-- Is `@aparajita/capacitor-secure-storage` (or another plugin) production-viable for our threat
-  model today, or do we write a thin in-house Keychain/Keystore plugin?
-- What is the mobile sync model, and does it share the p2p-sync engine?
-- Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
-  trade-off for skipping Argon2id in the autofill extension (industry-standard, but a deliberate
-  choice)?
 - Which `uniffi` version to pin (pre-1.0, churns), and `getrandom` 0.2 js-feature vs 0.3 cfg-flag?
+  (Only when the shared Rust core for native autofill is built.)
 - Per-browser autofill fidelity on Android (some browsers fill only via the IME): do we need a
   fallback keyboard like KeePassDX?
 - Do we need a small custom clipboard plugin for the Android `EXTRA_IS_SENSITIVE` flag, or is the
-  JS-side auto-clear timer sufficient?
+  JS-side auto-clear timer sufficient? (Today: JS-side timer only.)
 
 ## Sources (verified June 2026, re-verify later)
 
@@ -556,7 +620,7 @@ Capacitor platform:
 - iOS / Android webviews + min OS: https://capacitorjs.com/docs/ios , https://capacitorjs.com/docs/android , https://capacitorjs.com/docs/updating/7-0
 - Plugin authoring (Swift/Kotlin, SPM/Gradle, native lib linking): https://capacitorjs.com/docs/plugins/creating-plugins , https://capacitorjs.com/docs/plugins/ios , https://capacitorjs.com/docs/plugins/android , https://capacitorjs.com/docs/ios/spm
 - Password AutoFill guide: https://capacitorjs.com/docs/guides/autofill-credentials
-- Plugins: filesystem https://capacitorjs.com/docs/apis/filesystem ; clipboard https://capacitorjs.com/docs/apis/clipboard ; app/lifecycle https://capacitorjs.com/docs/apis/app ; secure storage https://github.com/aparajita/capacitor-secure-storage ; biometric https://github.com/aparajita/capacitor-biometric-auth ; barcode https://github.com/capawesome-team/capacitor-mlkit
+- Plugins: filesystem https://capacitorjs.com/docs/apis/filesystem ; clipboard https://capacitorjs.com/docs/apis/clipboard ; app/lifecycle https://capacitorjs.com/docs/apis/app ; secure storage (adopted, SPM) https://github.com/aparajita/capacitor-secure-storage ; biometric (for Phase 2) https://github.com/aparajita/capacitor-biometric-auth ; QR scanning uses getUserMedia + jsQR https://github.com/cozmo/jsQR (MLKit https://github.com/capawesome-team/capacitor-mlkit was evaluated but is CocoaPods-only, incompatible with the SPM iOS project)
 - Framework-agnostic (no Ionic UI lock-in): https://capacitorjs.com/docs/getting-started/with-ionic
 - App Store deployment / 4.2 posture: https://capacitorjs.com/docs/ios/deploying-to-app-store , https://developer.apple.com/app-store/review/guidelines/
 - Production roster / enterprise: https://ionic.io/customers , https://ionic.io/resources/case-studies/bestinvest
