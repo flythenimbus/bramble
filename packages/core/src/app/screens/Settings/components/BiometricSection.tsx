@@ -1,5 +1,5 @@
 import { Fingerprint } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Toggle } from "./primitives";
 
@@ -12,9 +12,15 @@ export function BiometricSection() {
 		biometricEnabled,
 		enableBiometric,
 		disableBiometric,
+		refreshBiometric,
 	} = useVault();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	// Re-probe on open so a biometric enrolled after launch is picked up here.
+	useEffect(() => {
+		void refreshBiometric();
+	}, [refreshBiometric]);
 
 	if (!biometricSupported) return null;
 
