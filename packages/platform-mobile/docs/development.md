@@ -149,13 +149,20 @@ The biometric unlock ships as a **local plugin** living inside the owned native 
 
 ### 11. Android build needs JDK 21 (Android Studio's JBR)
 The Capacitor plugin Gradle modules declare a Java 21 toolchain, so a system JDK 17 build fails
-with "Cannot find a Java installation ... matching {languageVersion=21}". Point Gradle at the
-JDK 21 that Android Studio bundles:
+with "Cannot find a Java installation ... matching {languageVersion=21}".
+
+`pnpm run:android` / `dev:android` / `dev:android:lan` **handle this automatically** — they go
+through `scripts/run-android.mjs`, which points `JAVA_HOME` at a JDK 21 (an already-21 `JAVA_HOME`,
+else `java_home -v 21` *verified to actually be 21*, else Android Studio's bundled JBR) before
+running `cap`. Android Studio's own Run button is also fine (it uses its embedded JDK).
+
+You only need to set it by hand for **direct Gradle** invocations:
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 (cd android && ./gradlew :app:compileDebugJavaWithJavac)   # fast Java-only compile check
 ```
-The Android SDK path is already in `android/local.properties` (`sdk.dir`).
+The Android SDK path is already in `android/local.properties` (`sdk.dir`). Note `java_home -v 21`
+falls back to the newest JDK when 21 is absent, so don't trust it blindly (the wrapper verifies).
 
 ### 12. Testing biometric unlock on the simulator
 The sim has no real biometrics; enroll a virtual one: Simulator menu **Features -> Face ID ->
