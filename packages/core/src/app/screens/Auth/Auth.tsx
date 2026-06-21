@@ -111,7 +111,10 @@ export function Auth() {
 	// methods the vault has until it's read, so offer both password and security key.
 	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
-	const securityKeyAvailable = hasVault && (hasWebauthnSlot || couldNotRead);
+	// Security-key unlock is hidden where it can't work (mobile): no PRF, so offering it
+	// would be a dead end even for a vault synced from desktop with a registered key.
+	const securityKeyAvailable =
+		hasVault && shell.supportsSecurityKeys && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.

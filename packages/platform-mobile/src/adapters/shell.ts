@@ -47,6 +47,7 @@ export const mobileShell: ShellAdapter = {
 	},
 	supportsPopOut: false,
 	supportsCameraScan: true,
+	supportsSecurityKeys: false,
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
 		// used for sync pairing codes and TOTP otpauth:// QRs.
