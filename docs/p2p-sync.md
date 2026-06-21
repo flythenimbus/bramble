@@ -224,6 +224,30 @@ entry's history list, recovering the lost value without ever decrypting it to me
   from `firefox-port.md` Option 1) are separate workstreams over the same merge engine.
 - **Field-level merge is deferred** (see above).
 
+## Device management & revocation (TODO)
+
+There is no UI yet to see or manage paired devices; the roster is built and merged but only
+surfaced through the pairing flow. Planned:
+
+- **Devices list.** A "Devices" section in Settings (shared `SyncConnectSection`/a new
+  `RosterSection`, so extension + mobile get it) that lists the roster `devices`: label,
+  added date, a "this device" marker, and (if we start tracking it) last-seen. Source of truth
+  is the persisted `sync.group` roster.
+- **Rename.** Edit a device's `label` (a roster-entry field) and let it propagate via the
+  roster CRDT merge.
+- **Revoke.** Add the selected device to the roster `revoked` tombstones and propagate. Two
+  pieces of plumbing to confirm/build: (a) `roster` merge must drop revoked ids from `devices`,
+  and (b) roster-sync KK auth must reject a static key that's revoked (today it only checks
+  presence in the roster, see `roster-sync.ts` "not in roster — ignoring"). Result: the revoked
+  device can no longer connect or sync.
+- **Revoke is not a remote wipe.** Per "VEK rotation is deferred" above, a revoked device still
+  holds the VEK + a local vault copy offline. True lockout requires **VEK rotation + re-wrap of
+  every slot and re-encrypt of entries**, distributed to the remaining devices over sync. That
+  is the load-bearing follow-up that makes revocation a real security boundary; wire the UI now
+  but label plain revoke as "stops future sync," not "wipes that device."
+- **Mobile note.** The device keypair currently lives in plaintext `Preferences`; move it (and
+  the group key) to Keychain/Keystore in the Phase 2 secure-storage hardening before this ships.
+
 ## Build / packaging notes
 
 - Extract the WebRTC + signaling + merge into transport-free modules that touch no DOM at
