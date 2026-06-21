@@ -1,25 +1,22 @@
 import { Preferences } from "@capacitor/preferences";
 import {
 	applyRemotePayload,
+	createEntriesBlobStore,
+	createVaultSyncPort,
 	decodeEntriesPayload,
 	decodeVaultBlob,
 	type EntriesPayload,
-	emptyEntriesPayload,
 	encodeEntriesPayload,
-	encodeVaultBlob,
 	ensureDeviceId,
 	type HybridClock,
 	makeClock,
 	type RosterEntry,
 	type RosterPayload,
 	type SyncEvent,
-	type VaultBlob,
-	type VaultSyncPort,
 } from "@core/index";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
-import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { mobileCrypto, notifyExternalChange, onVaultStateChange } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
 import { secureStorage } from "../secure-storage";
@@ -173,45 +170,13 @@ function getClock(): Promise<HybridClock> {
 	return clockPromise;
 }
 
-// Read + decrypt the local outer blob: the blob (for its slots, carried forward on
-// write) plus the decrypted entries payload (empty for a fresh vault).
-async function readLocalState(): Promise<{ blob: VaultBlob; payload: EntriesPayload }> {
-	const blob = decodeVaultBlob(await mobileStorage.readVaultBlob());
-	if (blob.entriesCiphertext.length === 0) return { blob, payload: emptyEntriesPayload() };
-	const json = await mobileCrypto.decryptWithVek(
-		bytesToBase64(blob.entriesIv),
-		bytesToBase64(blob.entriesCiphertext),
-	);
-	return { blob, payload: decodeEntriesPayload(json) };
-}
-
-// Host side of the merge seam (runs in-process here, unlike the extension where it
-// straddles offscreen + background). readLocal runs before writeMerged, so the
-// captured slots are current; sealed per-entry envelopes are carried verbatim.
-function makeVaultSyncPort(): VaultSyncPort {
-	let slots: VaultBlob["slots"] = [];
-	return {
-		async readLocal() {
-			const { blob, payload } = await readLocalState();
-			slots = blob.slots;
-			return payload;
-		},
-		async witnessRemote(stamps) {
-			const clock = await getClock();
-			for (const hlc of stamps) clock.witness(hlc);
-		},
-		async writeMerged(merged) {
-			const { iv, ciphertext } = await mobileCrypto.encryptWithVek(encodeEntriesPayload(merged));
-			const newBlob = encodeVaultBlob({
-				slots,
-				entriesIv: base64ToBytes(iv),
-				entriesCiphertext: base64ToBytes(ciphertext),
-			});
-			await mobileStorage.writeVaultBlob(newBlob);
-			notifyExternalChange(); // refresh the in-app list with the peer's edits
-		},
-	};
-}
+// The one reader/writer of the on-disk entries format (shared with EntryMutations
+// and the enrollment path), so a remote merge writes exactly what a local edit does.
+const blobStore = createEntriesBlobStore({
+	crypto: mobileCrypto,
+	storage: mobileStorage,
+	readDecodedBlob: async () => ({ blob: decodeVaultBlob(await mobileStorage.readVaultBlob()) }),
+});
 
 let rosterSession: MeshSession | null = null;
 
@@ -230,9 +195,17 @@ async function startRoster(): Promise<void> {
 		roster: group.roster,
 		wasm,
 		report,
-		fetchLocalPayload: async () => encodeEntriesPayload((await readLocalState()).payload),
+		fetchLocalPayload: async () => encodeEntriesPayload(await blobStore.readEntriesPayload()),
 		pushRemotePayload: async (json) => {
-			await applyRemotePayload(makeVaultSyncPort(), decodeEntriesPayload(json));
+			const port = createVaultSyncPort({
+				store: blobStore,
+				witnessRemote: async (stamps) => {
+					const clock = await getClock();
+					for (const hlc of stamps) clock.witness(hlc);
+				},
+				onChanged: notifyExternalChange, // refresh the in-app list with the peer's edits
+			});
+			await applyRemotePayload(port, decodeEntriesPayload(json));
 		},
 	});
 }
