@@ -23,14 +23,26 @@ const platform: Platform = {
 // it completes. The WASM crypto + filesystem are process singletons, so remounting
 // `App` afterwards reflects the now-unlocked vault.
 function Root() {
-	const [setup, setSetup] = useState(false);
-	useEffect(() => registerOpenSetup(() => setSetup(true)), []);
+	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard.
+	// The last two render OptionsApp and dismiss back to "app" on completion/close.
+	const [view, setView] = useState<"app" | "setup" | "import">("app");
+	useEffect(
+		() => registerOpenSetup((screen) => setView(screen === "import" ? "import" : "setup")),
+		[],
+	);
 
 	// Auto-lock after the configured inactivity timeout (background time counts as
 	// inactivity); honors the "Never" setting. onExternalLock then re-locks the UI.
 	useEffect(() => startAutoLock(), []);
 
-	return setup ? <OptionsApp onComplete={() => setSetup(false)} mobile /> : <App />;
+	if (view === "app") return <App />;
+	return (
+		<OptionsApp
+			onComplete={() => setView("app")}
+			mobile
+			screen={view === "import" ? "import" : undefined}
+		/>
+	);
 }
 
 const root = document.getElementById("root");
