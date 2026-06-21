@@ -1,56 +1,22 @@
 import type { CryptoAdapter } from "@core/index";
 import { base64ToBytes } from "@core/util/bytes";
 import { loadWasm } from "../wasm-loader";
-
-// External-lock subscribers (useVault listens here to drop decrypted state and
-// bounce to the unlock screen). On mobile the trigger is the app lifecycle, not a
-// background SW: see lockForLifecycle().
-const lockListeners = new Set<() => void>();
-// External-change subscribers (useVault reloads entries). Fired after an ongoing-
-// sync merge writes the vault, so the in-app list reflects a peer's edits.
-const changeListeners = new Set<() => void>();
-// Vault lock/unlock transitions, for the sync runtime to start/stop roster sync.
-const vaultStateListeners = new Set<(locked: boolean) => void>();
-
-const fireVaultState = (locked: boolean) => {
-	for (const fn of vaultStateListeners) fn(locked);
-};
-
-/** Subscribe to vault lock(true)/unlock(false) transitions. Returns an unsubscribe. */
-export function onVaultStateChange(cb: (locked: boolean) => void): () => void {
-	vaultStateListeners.add(cb);
-	return () => vaultStateListeners.delete(cb);
-}
-
-/** Notify subscribers that the vault content changed out-of-band (sync merge). */
-export function notifyExternalChange(): void {
-	for (const fn of changeListeners) fn();
-}
-
-/**
- * Lock the vault in response to an app-lifecycle event (backgrounded), and notify
- * subscribers so the UI re-locks. Kept separate from the plain `lock()` adapter
- * method (which useVault uses for an explicit, UI-driven lock that manages its own
- * state) so we don't double-fire onExternalLock on a manual lock.
- */
-export async function lockForLifecycle(): Promise<void> {
-	(await loadWasm()).lock();
-	for (const fn of lockListeners) fn();
-	fireVaultState(true);
-}
+import { markLocked, markUnlocked, onExternalChange, onExternalLock } from "./vault-session";
 
 // Direct in-webview WASM calls. The extension routes these through an offscreen
 // document over chrome.runtime; on mobile the single webview has a DOM, so the
-// crypto module runs in-process and the messaging hop collapses.
+// crypto module runs in-process and the messaging hop collapses. Lock/unlock
+// transitions are reported to the vault-session seam (markLocked/markUnlocked);
+// the session owns the subscriber machinery.
 export const mobileCrypto: CryptoAdapter = {
 	async generateVek() {
 		const vek = (await loadWasm()).generate_vek();
-		fireVaultState(false);
+		markUnlocked();
 		return vek;
 	},
 	async unlockWithVek(vekB64) {
 		(await loadWasm()).unlock_with_vek(vekB64);
-		fireVaultState(false);
+		markUnlocked();
 	},
 	async exportVek() {
 		return (await loadWasm()).export_vek();
@@ -60,19 +26,13 @@ export const mobileCrypto: CryptoAdapter = {
 	},
 	async lock() {
 		(await loadWasm()).lock();
-		fireVaultState(true);
+		markLocked();
 	},
 	async isLocked() {
 		return (await loadWasm()).is_locked();
 	},
-	onExternalLock(callback) {
-		lockListeners.add(callback);
-		return () => lockListeners.delete(callback);
-	},
-	onExternalChange(callback) {
-		changeListeners.add(callback);
-		return () => changeListeners.delete(callback);
-	},
+	onExternalLock,
+	onExternalChange,
 
 	async generateSalt() {
 		return (await loadWasm()).generate_salt();
@@ -94,7 +54,7 @@ export const mobileCrypto: CryptoAdapter = {
 			i.wrappedVekB64,
 			i.magicVersion,
 		);
-		if (ok) fireVaultState(false); // VEK now loaded => unlocked
+		if (ok) markUnlocked(); // VEK now loaded => unlocked
 		return ok;
 	},
 	async verifyPasswordSlot(i) {
@@ -119,7 +79,7 @@ export const mobileCrypto: CryptoAdapter = {
 			i.wrappedVekB64,
 			i.magicVersion,
 		);
-		if (ok) fireVaultState(false); // VEK now loaded => unlocked
+		if (ok) markUnlocked(); // VEK now loaded => unlocked
 		return ok;
 	},
 	async verifyWebauthnSlot(i) {
