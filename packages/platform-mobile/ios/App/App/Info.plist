@@ -49,5 +49,7 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Bramble uses the camera to scan device pairing codes and 2FA QR codes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Bramble uses Face ID to unlock your vault on this device.</string>
 </dict>
 </plist>
