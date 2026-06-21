@@ -70,11 +70,18 @@ ground truth of what exists.
   WebRTC + the Nostr-subset relay) and ongoing roster sync (continuous merge of edits) work on
   mobile, reusing the transport now in `@core/sync/transport`. Retires the "sync is the
   load-bearing unknown" risk for the same-network/all-online case.
-- **Phase 2 — biometric + secure storage + layout: STARTED.** Secure-storage substrate
+- **Phase 2 — biometric + secure storage + layout: MOSTLY DONE.** Secure-storage substrate
   (`@aparajita/capacitor-secure-storage`, SPM-verified) is in and holds the sync device
   keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish
-  landed. **Biometric unlock is not built yet** (design pending — leaning device-local
-  biometric-cached VEK, not a vault-format slot; see Phase 2 below).
+  landed. **Biometric unlock is built** as a device-local, OS-gated convenience unlock (not a
+  vault-format slot, so the vault stays portable): the VEK is cached behind a hardware biometric
+  gate by an in-house local Capacitor plugin (`BiometricVault` — iOS Keychain `.biometryCurrentSet`
+  + Secure Enclave; Android Keystore key `setUserAuthenticationRequired` + invalidated-by-enrollment
+  wrapping the VEK), surfaced through an optional sixth `Platform.biometric` capability in `@core`.
+  Decided the attack-surface trade-off in favor of OS-enforced gating (not an app-level check), so
+  it also seeds the Phase 3 autofill biometric-unwrap path. iOS verified on the simulator; Android
+  compiles (needs an on-device/emulator pass). Remaining Phase 2: the broader vault
+  list/detail/edit small-screen sweep.
 - **Architecture:** the pure P2P transport/host modules moved from the extension into
   `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
   the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
@@ -513,7 +520,7 @@ is a later additive feature on top of this plumbing.
 
 ## Proposed plan (phased, each phase retires a risk)
 
-Status as of this session: **0 done · 1 mostly done · 2 started · 3–5 not started** (see
+Status as of this session: **0 done · 1 mostly done · 2 mostly done · 3–5 not started** (see
 Implementation status up top).
 
 0. **[DONE] Walking skeleton (days).** Add `packages/platform-mobile`; `npx cap add ios/android`; point
@@ -527,10 +534,13 @@ Implementation status up top).
    lock-on-pause via `@capacitor/app`. Result: a standalone vault app: password/recovery unlock,
    view/edit/copy entries, KDBX import, TOTP. No system autofill yet (manual copy/paste). Shippable
    as a private build.
-2. **[STARTED] Biometric + secure storage + layout (weeks).** Secure-storage substrate and the
-   responsive/`dvh`/safe-area UI pass are done. Remaining: biometric plugin gates unlock + caches the
-   VEK behind a biometric-gated Keychain/Keystore item. (Current lean: a device-local biometric-cached
-   VEK rather than a vault-format slot, to keep the vault portable — decide before building.)
+2. **[MOSTLY DONE] Biometric + secure storage + layout (weeks).** Secure-storage substrate, the
+   responsive/`dvh`/safe-area UI pass, and **biometric unlock** are done. Biometric is a device-local,
+   OS-gated convenience unlock (a biometric-cached VEK, **not** a vault-format slot, so the vault stays
+   portable): an in-house `BiometricVault` local plugin caches the VEK behind a hardware biometric gate
+   (iOS Keychain `.biometryCurrentSet` + Secure Enclave; Android Keystore `setUserAuthenticationRequired`
+   + invalidated-by-enrollment), exposed via an optional `Platform.biometric` capability. The vault's
+   `slot-policy`/VLT1 format is untouched. Remaining: the broader vault list/detail/edit small-screen sweep.
 3. **[NOT STARTED] System autofill, passwords and TOTP (many weeks per platform, native, the real schedule).**
    Precursor: refactor `crypto-wasm` into a shared Rust core with a `uniffi` wrapper so Swift and
    Kotlin link the same crypto. Then: iOS AutoFill Credential Provider Extension (Swift,
@@ -599,9 +609,14 @@ Resolved this session:
 Still open:
 
 - **Does a hand-added iOS Credential Provider target / Android `AutofillService` survive `cap sync`
-  and read a shared vault?** (The Phase 3 make-or-break; not yet probed.)
-- Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
-  trade-off for skipping Argon2id in the autofill extension? (Decide with biometric unlock.)
+  and read a shared vault?** (The Phase 3 make-or-break; not yet probed.) Partial signal: a hand-added
+  local *plugin* (Swift file + `CAPBridgeViewController` storyboard subclass + pbxproj entries, Android
+  Java plugin + `registerPlugin` in `MainActivity`) **does** survive `cap sync` — the biometric plugin
+  proved it. An app-extension *target* is a heavier addition still to be probed.
+- ~~Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
+  trade-off?~~ **Decided: yes, with OS-enforced gating** (Keychain `.biometryCurrentSet` / Keystore
+  auth-required + invalidated-by-enrollment), not an app-level check. Shipped for the device-local
+  convenience unlock; the same plumbing is reused for skipping Argon2id in the Phase 3 autofill extension.
 - (Future, passkey hosting only) Will Apple approve the web-browser public-key-credential
   entitlement, or must passkey support go fully native? Not needed for v1 password/TOTP autofill.
 - Which `uniffi` version to pin (pre-1.0, churns), and `getrandom` 0.2 js-feature vs 0.3 cfg-flag?

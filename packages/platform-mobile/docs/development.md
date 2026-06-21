@@ -125,6 +125,47 @@ With the scale locked, visual == layout viewport and content fits. (Disabling pi
 is expected for a native-app-like shell.) To diagnose a recurrence, temporarily log
 `window.innerWidth` vs `document.documentElement.clientWidth`; if they differ, it's this.
 
+### 10. Adding an in-house native (local) Capacitor plugin
+The biometric unlock ships as a **local plugin** living inside the owned native projects
+(no separate npm package). The pattern, both platforms:
+
+- **iOS** (`ios/App/App/BiometricVault.swift`): a `CAPPlugin, CAPBridgedPlugin` class plus a
+  `CAPBridgeViewController` subclass that registers it in `capacitorDidLoad()` via
+  `bridge?.registerPluginInstance(...)`. The subclass is wired by changing the bridge VC's
+  `customClass`/`customModule` in `Base.lproj/Main.storyboard` (module is `App`, the target
+  name). A new `.swift` file must be added to `project.pbxproj` in four places (PBXBuildFile,
+  PBXFileReference, the `App` PBXGroup children, and the Sources build phase). JS side:
+  `registerPlugin<T>("BiometricVault")`.
+- **Android** (`android/app/src/main/java/app/bramble/mobile/BiometricVaultPlugin.java`): a
+  `@CapacitorPlugin(name = "BiometricVault")` class extending `Plugin`, registered with
+  `registerPlugin(BiometricVaultPlugin.class)` in `MainActivity.onCreate` (before
+  `super.onCreate`).
+- **Both survive `cap sync`.** Verified: `cap sync` rewrites only `public/`, the generated
+  `capacitor.config.json`, and the plugin list (`Package.swift` / `capacitor.*.gradle`); it does
+  **not** touch the storyboard, `pbxproj`, `MainActivity`, or hand-added native source. Re-check
+  with `grep customClass ios/.../Main.storyboard` and `grep -c BiometricVault.swift
+  ios/App/App.xcodeproj/project.pbxproj` after a sync.
+
+### 11. Android build needs JDK 21 (Android Studio's JBR)
+The Capacitor plugin Gradle modules declare a Java 21 toolchain, so a system JDK 17 build fails
+with "Cannot find a Java installation ... matching {languageVersion=21}". Point Gradle at the
+JDK 21 that Android Studio bundles:
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+(cd android && ./gradlew :app:compileDebugJavaWithJavac)   # fast Java-only compile check
+```
+The Android SDK path is already in `android/local.properties` (`sdk.dir`).
+
+### 12. Testing biometric unlock on the simulator
+The sim has no real biometrics; enroll a virtual one: Simulator menu **Features -> Face ID ->
+Enrolled**. Flow: unlock with the master password, open **Settings -> Biometric unlock** and
+toggle it on (on iOS this stores the VEK with no prompt; the prompt is on *read*), then lock
+(or relaunch) and tap **Unlock with biometrics** on the unlock screen. Trigger the match with
+**Features -> Face ID -> Matching Face**; **Non-matching Face** exercises the failure path. The
+Settings toggle re-probes availability on open, so enrolling Face ID after launch is picked up
+without a relaunch. Enable is iOS-silent; on Android enabling itself shows a `BiometricPrompt`
+(the Keystore key needs auth to encrypt).
+
 ## Reclaiming disk space
 
 The iOS runtimes are the big consumers (~8 GB each). List and delete unused ones rather
