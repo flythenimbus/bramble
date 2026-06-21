@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from "react";
 import type { AutofillAdapter } from "../adapters/autofill";
+import type { BiometricUnlock } from "../adapters/biometric";
 import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { ShellAdapter } from "../adapters/shell";
@@ -11,6 +12,8 @@ export interface Platform {
 	autofill: AutofillAdapter;
 	shell: ShellAdapter;
 	clipboard: ClipboardAdapter;
+	/** Device-local biometric unlock. Mobile only; undefined on the extension. */
+	biometric?: BiometricUnlock;
 }
 
 const PlatformContext = createContext<Platform | null>(null);

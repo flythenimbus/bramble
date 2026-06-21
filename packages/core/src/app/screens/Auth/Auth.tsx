@@ -1,4 +1,4 @@
-import { Asterisk, ExternalLink, Eye, EyeOff, KeyRound, Plus } from "lucide-react";
+import { Asterisk, ExternalLink, Eye, EyeOff, Fingerprint, KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { usePlatform } from "../../../context/PlatformContext";
@@ -21,6 +21,8 @@ export function Auth() {
 		unlockWithSecurityKey,
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
+		biometricEnabled,
+		unlockWithBiometric,
 		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
@@ -76,6 +78,18 @@ export function Auth() {
 		}
 	};
 
+	const handleBiometric = async () => {
+		setBusy(true);
+		try {
+			await unlockWithBiometric();
+		} catch (e) {
+			// A user cancel surfaces here too; the password form stays available below.
+			setError("masterPassword", { message: (e as Error).message });
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	const handleRecovery = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
 		setRecoveryError(null);
@@ -99,6 +113,9 @@ export function Auth() {
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
 	const securityKeyAvailable = hasVault && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
+	// Device-local biometric is the fast path when set up; the password/security-key/
+	// recovery methods stay as the fallback below it.
+	const showBiometric = hasVault && biometricEnabled;
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">
@@ -147,6 +164,19 @@ export function Auth() {
 
 					{!firstRun && (
 						<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+							{showBiometric && (
+								<div className={showPasswordForm || securityKeyAvailable ? "p-6 pb-0" : "p-6"}>
+									<button
+										type="button"
+										onClick={handleBiometric}
+										disabled={busy}
+										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<Fingerprint className="w-4 h-4" />
+										{busy ? "Verifying…" : "Unlock with biometrics"}
+									</button>
+								</div>
+							)}
 							{showPasswordForm && (
 								<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
 									<TextField
@@ -176,12 +206,16 @@ export function Auth() {
 									<button
 										type="submit"
 										disabled={busy}
-										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+										className={
+											showBiometric
+												? "w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+												: "w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+										}
 									>
 										<Asterisk className="w-4 h-4" />
 										{busy
 											? "Unlocking…"
-											: securityKeyAvailable
+											: securityKeyAvailable || showBiometric
 												? "Unlock with master password"
 												: "Unlock Vault"}
 									</button>

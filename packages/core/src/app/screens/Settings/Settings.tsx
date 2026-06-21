@@ -3,6 +3,7 @@ import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { SelectField } from "../../components/ui/select-field";
 import { type ThemeMode, useTheme } from "../../hooks/useTheme";
+import { BiometricSection } from "./components/BiometricSection";
 import { GeneralSection } from "./components/GeneralSection";
 import { MasterPasswordSection } from "./components/MasterPasswordSection";
 import { Row, Section } from "./components/primitives";
@@ -24,6 +25,7 @@ export function Settings() {
 					<MasterPasswordSection />
 					<SecurityKeysSection />
 					<RecoveryCodeSection />
+					<BiometricSection />
 				</Section>
 
 				<Section icon={<Palette className="w-4 h-4 text-primary" />} title="Appearance">

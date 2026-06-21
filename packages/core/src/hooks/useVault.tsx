@@ -112,6 +112,7 @@ import {
 } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { toAutofillIndex } from "../vault/autofill-index";
+import { enableBiometricUnlock, unlockVekWithBiometric } from "../vault/biometric-unlock";
 import {
 	wrapPasswordSlot as buildPasswordSlot,
 	wrapRecoverySlot as buildRecoverySlot,
@@ -187,6 +188,18 @@ export interface UseVault {
 	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
 	unlockWithRecoveryCode(code: string): Promise<void>;
+	/** Platform exposes a device-local biometric gate (mobile). Gates the biometric UI entirely. */
+	biometricSupported: boolean;
+	/** Biometric hardware is present and enrolled, so enabling can be offered. */
+	biometricAvailable: boolean;
+	/** A VEK is cached behind the biometric gate on this device. */
+	biometricEnabled: boolean;
+	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
+	enableBiometric(): Promise<void>;
+	/** Forget the device's biometric-cached VEK. */
+	disableBiometric(): Promise<void>;
+	/** Biometric-prompt, unwrap the cached VEK, and unlock. Disables itself if the cache is stale. */
+	unlockWithBiometric(): Promise<void>;
 	/** Start adding a device: returns a one-time pairing code and listens for the joiner. */
 	inviteDevice(relayUrl: string): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
@@ -196,9 +209,13 @@ export interface UseVault {
 const VaultContext = createContext<UseVault | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-	const { storage, crypto, autofill, shell } = usePlatform();
+	const { storage, crypto, autofill, shell, biometric } = usePlatform();
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
+	// Device-local biometric gate (mobile). `available` = hardware present + enrolled;
+	// `enabled` = a VEK is cached behind it on this device.
+	const [biometricAvailable, setBiometricAvailable] = useState(false);
+	const [biometricEnabled, setBiometricEnabled] = useState(false);
 	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -806,6 +823,68 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[readDecodedBlob, crypto, loadEntries, shell],
 	);
 
+	// Hydrate the biometric gate's availability + enabled state once when the platform
+	// exposes one; enable/disable update the flags directly afterward.
+	useEffect(() => {
+		if (!biometric) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const [available, enabled] = await Promise.all([
+					biometric.isAvailable(),
+					biometric.isEnabled(),
+				]);
+				if (cancelled) return;
+				setBiometricAvailable(available);
+				setBiometricEnabled(enabled);
+			} catch (e) {
+				console.error("[vault] biometric state probe failed:", e);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [biometric]);
+
+	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
+	const enableBiometric = useCallback(async () => {
+		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
+		if (isLocked) throw new Error("Unlock the vault before enabling biometric unlock.");
+		await enableBiometricUnlock(crypto, biometric);
+		setBiometricEnabled(true);
+	}, [biometric, crypto, isLocked]);
+
+	/** Forget the device's biometric-cached VEK. */
+	const disableBiometric = useCallback(async () => {
+		if (!biometric) return;
+		await biometric.disable();
+		setBiometricEnabled(false);
+	}, [biometric]);
+
+	/** Biometric-prompt, unwrap the cached VEK, and unlock. A stale cache (the VEK no
+	 * longer decrypts this vault, e.g. after a reset) disables itself and surfaces a
+	 * fall-back-to-password error. */
+	const unlockWithBiometric = useCallback(async () => {
+		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
+		setError(null);
+		await unlockVekWithBiometric(crypto, biometric);
+		try {
+			await loadEntries();
+		} catch (e) {
+			// The gate authenticated and produced a VEK, but it didn't open this vault.
+			// Drop the stale cache and lock back to the password screen.
+			await crypto.lock().catch(() => {});
+			await biometric.disable().catch(() => {});
+			setBiometricEnabled(false);
+			console.error("[vault] biometric VEK failed to open the vault; cache cleared:", e);
+			throw new Error(
+				"Biometric unlock is out of date. Unlock with your password to re-enable it.",
+			);
+		}
+		setIsLocked(false);
+		void shell.flushPendingCornerCapture().catch(() => {});
+	}, [biometric, crypto, loadEntries, shell]);
+
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.
 	const { inviteDevice, joinGroup } = useSyncEnrollment({
@@ -862,6 +941,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			revokeSecurityKey,
 			generateRecoveryCode,
 			unlockWithRecoveryCode,
+			biometricSupported: biometric !== undefined,
+			biometricAvailable,
+			biometricEnabled,
+			enableBiometric,
+			disableBiometric,
+			unlockWithBiometric,
 			inviteDevice,
 			joinGroup,
 		}),
@@ -895,6 +980,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			revokeSecurityKey,
 			generateRecoveryCode,
 			unlockWithRecoveryCode,
+			biometric,
+			biometricAvailable,
+			biometricEnabled,
+			enableBiometric,
+			disableBiometric,
+			unlockWithBiometric,
 			inviteDevice,
 			joinGroup,
 		],

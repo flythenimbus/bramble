@@ -1,4 +1,5 @@
 export * from "./adapters/autofill";
+export * from "./adapters/biometric";
 export * from "./adapters/clipboard";
 export * from "./adapters/crypto";
 export * from "./adapters/crypto-wasm";
