@@ -23,9 +23,10 @@ export function Settings() {
 
 				<Section icon={<Lock className="w-4 h-4 text-primary" />} title="Security">
 					<MasterPasswordSection />
-					<SecurityKeysSection />
-					<RecoveryCodeSection />
+					{/* Security keys (WebAuthn) don't work on mobile; biometric unlock takes their slot there. */}
+					{shell.supportsSecurityKeys && <SecurityKeysSection />}
 					<BiometricSection />
+					<RecoveryCodeSection />
 				</Section>
 
 				<Section icon={<Palette className="w-4 h-4 text-primary" />} title="Appearance">

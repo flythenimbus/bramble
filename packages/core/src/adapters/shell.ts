@@ -38,6 +38,8 @@ export interface ShellAdapter {
 	supportsPopOut: boolean;
 	/** True where `scanQrFromActiveTab` is a live camera scan (mobile) rather than an active-tab capture; gates camera-scan affordances (e.g. scanning a pairing QR). */
 	supportsCameraScan: boolean;
+	/** Whether WebAuthn security-key unlock works here. False on mobile (iOS doesn't pass `prf` to authenticators, Android is NFC-blocked), where biometric unlock replaces it. Gates the security-key UI. */
+	supportsSecurityKeys: boolean;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.
