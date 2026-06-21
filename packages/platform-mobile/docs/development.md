@@ -167,6 +167,33 @@ Settings toggle re-probes availability on open, so enrolling Face ID after launc
 without a relaunch. Enable is iOS-silent; on Android enabling itself shows a `BiometricPrompt`
 (the Keystore key needs auth to encrypt).
 
+### 13. AutoFill credential-provider probe (the Phase 3 seed)
+`ios/App/AutoFillProbe/` is a minimal AutoFill Credential Provider Extension, added by
+`scripts/add-autofill-probe.rb` (uses the `xcodeproj` gem — `gem install --user-install
+xcodeproj` — to add the target surgically without disturbing the Capacitor/SPM project).
+It's the **seed for the real provider**, kept committed; its VC only shows a debug label
+and `AppDelegate` writes a dummy value to the App Group, so **replace/remove it before any
+shipping build**. Hard-won setup notes:
+
+- **App Group is the app<->extension channel.** Both `App/App.entitlements` and
+  `AutoFillProbe/AutoFillProbe.entitlements` declare `group.app.bramble.mobile`; the app
+  writes with native `UserDefaults(suiteName:)` (Capacitor Preferences can't write to a
+  group). The extension reads the same container.
+- **The AutoFill capability is restricted** — it needs real provisioning, not ad-hoc.
+  `DEVELOPMENT_TEAM` is set on both targets; build with `-allowProvisioningUpdates` so Xcode
+  registers both App IDs + the `autofill-credential-provider` and App Group capabilities
+  under the account. Ad-hoc / `CODE_SIGNING_ALLOWED=NO` silently drops the entitlement.
+- **iOS 18+ requires a capability declaration** or the provider never appears: the Info.plist
+  needs `NSExtension > NSExtensionAttributes > ASCredentialProviderExtensionCapabilities >
+  ProvidesPasswords = true`.
+- **The simulator does NOT list third-party AutoFill providers in Settings.** Registration is
+  fine (`xcrun simctl spawn <udid> pluginkit -m -p com.apple.authentication-services-credential-provider-ui`
+  shows the extension bound to the AutoFill point), but the Settings UI and the live fill flow
+  are **device-only**. Don't chase the sim here — verify the toggle + fill on real hardware.
+- Verify it built into the app: `find <DerivedData>/Build/Products -name '*.appex'` and
+  `ls App.app/PlugIns`. Confirm entitlements via the `*-Simulated.xcent` (the sim variant; the
+  plain `.xcent` is the device one and reads empty on a sim build).
+
 ## Reclaiming disk space
 
 The iOS runtimes are the big consumers (~8 GB each). List and delete unused ones rather

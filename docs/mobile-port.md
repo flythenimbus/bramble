@@ -91,7 +91,20 @@ ground truth of what exists.
   `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
   the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
   (`buildCryptoAdapter`). See `CONTEXT.md`.
-- **Not started:** system autofill (Phase 3), passkeys/PRF (Phase 4), distribution (Phase 5).
+- **Phase 3 autofill: PROBED — GO (iOS).** The make-or-break go/no-go is retired on iOS:
+  a trivial AutoFill Credential Provider extension target (`ios/App/AutoFillProbe/`, added by
+  `scripts/add-autofill-probe.rb`) **survives `cap sync`** (×3, byte-identical — Cap 8 SPM never
+  touches the `pbxproj`), builds + embeds into the app, **reads a value the main app wrote to a shared
+  App Group**, provisions the restricted AutoFill capability under the real team via
+  `-allowProvisioningUpdates`, and is recognized by iOS as a credential provider (`pluginkit` binds it
+  to `com.apple.authentication-services-credential-provider-ui` with `ProvidesPasswords`). The one
+  thing the **simulator can't show is the in-Settings toggle / live fill UI** (a known sim limitation;
+  device-only). The probe target is kept committed as the **seed** for the real provider — it must be
+  replaced/removed before any shipping build (its VC only shows a debug label; `AppDelegate` writes a
+  dummy App Group value). The full provider (fill engine, identity store, shared Rust core) is the
+  remaining Phase 3 work. Android `AutofillService` is **not yet probed**.
+- **Not started:** the real autofill provider + Android probe (rest of Phase 3), passkeys/PRF
+  (Phase 4), distribution (Phase 5).
 
 Dev workflow + the environment quirks hit while building this are in
 [`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
@@ -581,11 +594,14 @@ Implementation status up top).
 ### Spike outcome (go / no-go): GO
 
 Phase 0 is done and the stack runs on-device; Phases 1–2 are proving out as known-quantity adapter
-work as predicted; P2P sync is validated. The **one go/no-go unknown still outstanding** is the
-**autofill target-injection probe** from Phase 3 — inject a trivial iOS Credential Provider target +
-Android `AutofillService`, read the vault from shared storage (App Group + Keychain on iOS), and
-confirm the targets survive `cap sync`. That's the make-or-break for the product's headline feature
-and the next real risk to retire.
+work as predicted; P2P sync is validated. The **autofill target-injection probe** — the make-or-break
+for the product's headline feature — is now **done on iOS, and it's a GO**: a hand-added iOS Credential
+Provider target survives `cap sync`, builds + embeds, reads a shared App Group the main app wrote,
+provisions the restricted AutoFill capability under the real Apple team, and is recognized by the
+system (`pluginkit`) as a password provider. The only unshown step is the simulator's Settings/fill UI
+(a sim limitation, device-only). See the "Phase 3 autofill: PROBED" note in Implementation status and
+`packages/platform-mobile/docs/development.md` (quirk 13). Remaining go/no-go for autofill is the
+**Android `AutofillService` probe**; the iOS unknown is retired.
 
 ## Effort and risk at a glance
 
@@ -621,11 +637,13 @@ Resolved this session:
 
 Still open:
 
-- **Does a hand-added iOS Credential Provider target / Android `AutofillService` survive `cap sync`
-  and read a shared vault?** (The Phase 3 make-or-break; not yet probed.) Partial signal: a hand-added
-  local *plugin* (Swift file + `CAPBridgeViewController` storyboard subclass + pbxproj entries, Android
-  Java plugin + `registerPlugin` in `MainActivity`) **does** survive `cap sync` — the biometric plugin
-  proved it. An app-extension *target* is a heavier addition still to be probed.
+- ~~Does a hand-added iOS Credential Provider target survive `cap sync` and read a shared vault?~~
+  **Answered: yes (GO).** The `AutoFillProbe` target survives `cap sync` ×3 byte-identical, reads a
+  shared App Group the app wrote, provisions the restricted AutoFill capability under the real team,
+  and is recognized by `pluginkit` as a credential provider. Cap 8 SPM never edits the `pbxproj`, so a
+  hand-added target persists. (Local *plugins* — the biometric one — likewise survive.) **The Android
+  `AutofillService` survival/shared-read is still unprobed.** The only iOS step the simulator can't
+  show is the Settings toggle / live fill UI (device-only sim limitation).
 - ~~Is caching a biometric-gated wrapping key in Keychain/Keystore an acceptable attack-surface
   trade-off?~~ **Decided: yes, with OS-enforced gating** (Keychain `.biometryCurrentSet` / Keystore
   auth-required + invalidated-by-enrollment), not an app-level check. Shipped for the device-local
