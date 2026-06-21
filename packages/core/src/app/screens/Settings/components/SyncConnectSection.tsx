@@ -59,14 +59,19 @@ export function SyncConnectSection() {
 	const addDevice = () =>
 		run("creating pairing code…", async () => setPairingCode(await inviteDevice(relayUrl.trim())));
 	const join = () =>
-		run("joining…", () =>
-			joinGroup(
+		run("joining…", async () => {
+			await joinGroup(
 				joinCode,
 				joinMethod === "securityKey"
 					? { kind: "securityKey" }
 					: { kind: "password", password: joinPassword },
-			),
-		);
+			);
+			// joinGroup resolves once the vault bundle has transferred and been written;
+			// the "relay disconnected" status before this is normal teardown, not failure.
+			note("✅ Synced — your entries are now on this device.");
+			setJoinCode("");
+			setJoinPassword("");
+		});
 	// Camera scan of the inviter's pairing QR (mobile only).
 	const scanForJoinCode = () =>
 		run("scanning…", async () => {
@@ -82,7 +87,7 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title="Device sync">
-			{import.meta.env.DEV && log.length > 0 && (
+			{log.length > 0 && (
 				<div
 					ref={logRef}
 					className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background/50 p-2 text-xs font-mono space-y-0.5"
