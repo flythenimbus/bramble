@@ -110,6 +110,31 @@ Dev workflow + the environment quirks hit while building this are in
 [`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
 The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
 
+### Next steps (where to resume)
+
+In rough priority order. The two autofill items are the headline product work; the rest are smaller
+closeouts.
+
+1. **Android `AutofillService` probe** — the one remaining autofill go/no-go (iOS is GO). Mirror the
+   iOS probe: a trivial `AutofillService` (Kotlin/Java) in the committed `android/` project reading
+   the vault from same-package storage + Keystore, confirm it survives `cap sync` and is selectable
+   under Android Settings. Likely cheaper than iOS (no App Group, no managed entitlement).
+2. **Real iOS provider** — replace the `AutoFillProbe` seed VC with the actual fill flow
+   (`prepareCredentialList` / `provideCredentialWithoutUserInteraction`, `ASCredentialIdentityStore`
+   suggestion index populated by the main app while unlocked). Precursor: refactor `crypto-wasm` into
+   a shared Rust core + `uniffi` wrapper so the extension links the same Argon2/AES/KDBX. The extension
+   decrypts via the **Phase 2 biometric-gated cached VEK** (never runs Argon2id in the ~120MB cap).
+3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
+   biometric **re-enrollment edge** (make `isEnabled()` detect an invalidated item so the toggle/button
+   don't dangle); the broader **vault list/detail/edit small-screen UI sweep**.
+4. **Optional now:** a 2-minute **device** confirmation of the iOS autofill fill UI (the simulator
+   can't show third-party providers; everything underneath is verified).
+5. **Later phases:** passkeys / PRF unlock (Phase 4, long-lead, Apple entitlement), distribution
+   (Phase 5, App Store 4.2 + targetSdk).
+
+Before any shipping build: remove the throwaway probe bits (the `AutoFillProbe` debug-label VC and the
+`AppDelegate` dummy App Group write).
+
 ## Method (what the research explored)
 
 Five reads of the codebase (tech stack and build, crypto and storage, auth and unlock, the
