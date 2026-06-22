@@ -91,18 +91,20 @@ ground truth of what exists.
   `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
   the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
   (`buildCryptoAdapter`). See `CONTEXT.md`.
-- **Phase 3 autofill: PROBED — GO (iOS).** The make-or-break go/no-go is retired on iOS:
-  a trivial AutoFill Credential Provider extension target (`ios/App/AutoFillProbe/`, added by
+- **Phase 3 autofill: GO — functionally confirmed end-to-end on real hardware (iOS).** A trivial
+  AutoFill Credential Provider extension target (`ios/App/AutoFillProbe/`, added by
   `scripts/add-autofill-probe.rb`) **survives `cap sync`** (×3, byte-identical — Cap 8 SPM never
-  touches the `pbxproj`), builds + embeds into the app, **reads a value the main app wrote to a shared
-  App Group**, provisions the restricted AutoFill capability under the real team via
-  `-allowProvisioningUpdates`, and is recognized by iOS as a credential provider (`pluginkit` binds it
-  to `com.apple.authentication-services-credential-provider-ui` with `ProvidesPasswords`). The one
-  thing the **simulator can't show is the in-Settings toggle / live fill UI** (a known sim limitation;
-  device-only). The probe target is kept committed as the **seed** for the real provider — it must be
-  replaced/removed before any shipping build (its VC only shows a debug label; `AppDelegate` writes a
-  dummy App Group value). The full provider (fill engine, identity store, shared Rust core) is the
-  remaining Phase 3 work. Android `AutofillService` is **not yet probed**.
+  touches the `pbxproj`), builds + embeds into the app, and via a **TestFlight (distribution) build**
+  it **appears in Settings → AutoFill & Passwords, enables, launches in a live Safari fill, and reads
+  the value the main app wrote to the shared App Group.** The whole chain works on Capacitor. Two
+  things were required to make it list (both now in the repo): the autofill entitlement must be on
+  **both** the app and the extension targets (App Store validation 409s without the app one), and the
+  extension must be built **Release** (Xcode 16's debug-dylib stub can block extension registration).
+  `ITSAppUsesNonExemptEncryption=false` is set so uploads skip the export-compliance prompt. The probe
+  target is kept committed as the **seed** for the real provider — replace/remove it before shipping
+  (its VC only shows a debug label; `AppDelegate` writes a dummy App Group value). The full provider
+  (fill engine, identity store, shared Rust core) is the remaining Phase 3 work. Android
+  `AutofillService` is **not yet probed**.
 - **Not started:** the real autofill provider + Android probe (rest of Phase 3), passkeys/PRF
   (Phase 4), distribution (Phase 5).
 
