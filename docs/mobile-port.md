@@ -114,23 +114,31 @@ The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
 
 ### Next steps (where to resume)
 
-In rough priority order. The two autofill items are the headline product work; the rest are smaller
-closeouts.
+Fresh-session orientation: the auto-loaded memories (`capacitor-mobile-port-plan`,
+`mobile-biometric-unlock-build-status`, `mobile-autofill-probe-go`, `ios-lockdown-mode-breaks-wasm`)
+plus the "Implementation status" up top and `CONTEXT.md` are the ground truth. Phases 0–1 done,
+Phase 2 biometric done (iOS verified), **Phase 3 autofill GO and functionally confirmed end-to-end on
+a real device** (TestFlight). In rough priority/leverage order:
 
-1. **Android `AutofillService` probe** — the one remaining autofill go/no-go (iOS is GO). Mirror the
-   iOS probe: a trivial `AutofillService` (Kotlin/Java) in the committed `android/` project reading
-   the vault from same-package storage + Keystore, confirm it survives `cap sync` and is selectable
-   under Android Settings. Likely cheaper than iOS (no App Group, no managed entitlement).
-2. **Real iOS provider** — replace the `AutoFillProbe` seed VC with the actual fill flow
-   (`prepareCredentialList` / `provideCredentialWithoutUserInteraction`, `ASCredentialIdentityStore`
-   suggestion index populated by the main app while unlocked). Precursor: refactor `crypto-wasm` into
-   a shared Rust core + `uniffi` wrapper so the extension links the same Argon2/AES/KDBX. The extension
-   decrypts via the **Phase 2 biometric-gated cached VEK** (never runs Argon2id in the ~120MB cap).
-3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
+1. **Shared Rust crypto core (uniffi) — highest leverage, unblocks two things at once.** Refactor
+   `crypto-wasm` into a pure-Rust core + the existing `wasm-bindgen` wrapper + a new `uniffi` wrapper
+   that emits Swift + Kotlin. This is load-bearing for **both**: (a) the real autofill provider, whose
+   extension must decrypt natively (Argon2id won't fit the ~120 MB extension cap — it biometric-unwraps
+   the Phase 2 cached VEK then does only AES + KDBX), and (b) **Lockdown Mode**: native crypto needs no
+   JIT, so it fixes the "no WebAssembly under Lockdown Mode" product limitation (see
+   [[ios-lockdown-mode-breaks-wasm]]). Do this before the real provider.
+2. **Real iOS autofill provider** — on top of #1, replace the `AutoFillProbe` seed VC with the actual
+   fill flow (`prepareCredentialList` / `provideCredentialWithoutUserInteraction`,
+   `ASCredentialIdentityStore` suggestion index populated by the main app while unlocked). The probe
+   already proved the plumbing (lists, launches, reads the App Group). Keep the entitlement on **both**
+   targets and build Release (see development.md quirk 13).
+3. **Android `AutofillService` probe** — the one remaining autofill go/no-go (iOS is done). A trivial
+   `AutofillService` (Java) in the committed `android/` project reading the vault from same-package
+   storage + Keystore; confirm it survives `cap sync` and is selectable under Android Settings. Cheaper
+   than iOS (no App Group, no managed entitlement). Cheap to do in parallel with #1.
+4. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
    biometric **re-enrollment edge** (make `isEnabled()` detect an invalidated item so the toggle/button
    don't dangle); the broader **vault list/detail/edit small-screen UI sweep**.
-4. **Optional now:** a 2-minute **device** confirmation of the iOS autofill fill UI (the simulator
-   can't show third-party providers; everything underneath is verified).
 5. **Later phases:** passkeys / PRF unlock (Phase 4, long-lead, Apple entitlement), distribution
    (Phase 5, App Store 4.2 + targetSdk).
 
