@@ -200,6 +200,18 @@ shipping build**. Hard-won setup notes:
 - Verify it built into the app: `find <DerivedData>/Build/Products -name '*.appex'` and
   `ls App.app/PlugIns`. Confirm entitlements via the `*-Simulated.xcent` (the sim variant; the
   plain `.xcent` is the device one and reads empty on a sim build).
+- **Build the extension in Release, not Debug.** Xcode 16's debug-dylib stub
+  (`AutoFillProbe.debug.dylib`) can stop an app extension from registering as a provider;
+  `ENABLE_DEBUG_DYLIB_SUPPORT=NO` did not drop it here, but a Release build has no stub. Test the
+  provider with a Release build (Edit Scheme -> Run -> Build Configuration -> Release).
+- **Confirmed on a real device (2026-06-22):** `idevicesyslog` shows
+  `AuthenticationServicesAgent(PlugInKit)` discovering `app.bramble.mobile.AutoFillProbe` under the
+  credential-provider point alongside Bitwarden + Firefox -- the OS recognizes it. It did NOT show
+  in the Settings AutoFill toggle list only because that test iPhone is a **managed (MDM) device**
+  (log full of ManagedConfiguration/profiled/MCM), which filters the user-selectable provider list
+  to approved App Store apps. Use a non-managed device to see the toggle/fill UI; the discovery log
+  is sufficient proof on its own. To diagnose: `idevicesyslog -u $(idevice_id -l) | grep -iE
+  "credential|EXConcreteExtension|AuthenticationServicesAgent"`.
 
 ### 14. "Can't find variable: WebAssembly" on a real iOS device (JIT disabled)
 All of Bramble's crypto is WASM (Argon2/AES/KDBX), and WASM needs JIT. iOS disables JIT in two
