@@ -200,17 +200,26 @@ shipping build**. Hard-won setup notes:
 - Verify it built into the app: `find <DerivedData>/Build/Products -name '*.appex'` and
   `ls App.app/PlugIns`. Confirm entitlements via the `*-Simulated.xcent` (the sim variant; the
   plain `.xcent` is the device one and reads empty on a sim build).
+- **The autofill entitlement must be on BOTH the app and the extension targets.** Putting it only
+  on the extension installs fine for dev but fails App Store validation with a 409 "Missing
+  Entitlement" for `App.app`, AND keeps the provider out of the Settings list. It's now in both
+  `App/App.entitlements` and `AutoFillProbe/AutoFillProbe.entitlements`. This was the main reason it
+  didn't list.
 - **Build the extension in Release, not Debug.** Xcode 16's debug-dylib stub
   (`AutoFillProbe.debug.dylib`) can stop an app extension from registering as a provider;
-  `ENABLE_DEBUG_DYLIB_SUPPORT=NO` did not drop it here, but a Release build has no stub. Test the
-  provider with a Release build (Edit Scheme -> Run -> Build Configuration -> Release).
-- **Confirmed on a real device (2026-06-22):** `idevicesyslog` shows
-  `AuthenticationServicesAgent(PlugInKit)` discovering `app.bramble.mobile.AutoFillProbe` under the
-  credential-provider point alongside Bitwarden + Firefox -- the OS recognizes it. It did NOT show
-  in the Settings AutoFill toggle list only because that test iPhone is a **managed (MDM) device**
-  (log full of ManagedConfiguration/profiled/MCM), which filters the user-selectable provider list
-  to approved App Store apps. Use a non-managed device to see the toggle/fill UI; the discovery log
-  is sufficient proof on its own. To diagnose: `idevicesyslog -u $(idevice_id -l) | grep -iE
+  `ENABLE_DEBUG_DYLIB_SUPPORT=NO` did not drop it here, but a Release build has no stub.
+- **CONFIRMED end-to-end on a real device (2026-06-22)** via a TestFlight (distribution) build:
+  Bramble appears in Settings → AutoFill & Passwords, enables, launches in a live Safari fill, and
+  reads the App Group value the app wrote. The whole chain works. (A dev build never cleanly
+  isolated dev-signing vs the entitlement because device-trust install walls kept blocking it; the
+  TestFlight build, with the entitlement on both targets, just worked. Earlier notes blaming an
+  "MDM device" were wrong — the phone is personal/unenrolled; `ManagedConfiguration`/`profiled`
+  logs appear on every iOS device and are not MDM evidence.)
+- To make the IPA: archive Release with `-derivedDataPath` on the **internal** disk (the Transcend
+  external drive EPERMs the SPM `SourcePackages` cache), export with the `app-store-connect` method,
+  and ensure a valid **Apple Distribution** cert exists (recreate via Xcode → Manage Certificates if
+  the team's is revoked). `ITSAppUsesNonExemptEncryption=false` in Info.plist skips the upload's
+  export-compliance prompt. Diagnose discovery with `idevicesyslog -u $(idevice_id -l) | grep -iE
   "credential|EXConcreteExtension|AuthenticationServicesAgent"`.
 
 ### 14. "Can't find variable: WebAssembly" on a real iOS device (JIT disabled)
