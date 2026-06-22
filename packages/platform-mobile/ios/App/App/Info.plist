@@ -51,5 +51,10 @@
 	<string>Bramble uses the camera to scan device pairing codes and 2FA QR codes.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Bramble uses Face ID to unlock your vault on this device.</string>
+	<!-- Bramble uses only standard, export-exempt encryption (AES-256-GCM, Argon2id) for the
+	     user's own vault data. Declaring this skips the App Store Connect export-compliance
+	     prompt on every upload. Revisit if non-standard crypto is ever added. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
