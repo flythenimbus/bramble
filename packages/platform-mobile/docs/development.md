@@ -201,6 +201,22 @@ shipping build**. Hard-won setup notes:
   `ls App.app/PlugIns`. Confirm entitlements via the `*-Simulated.xcent` (the sim variant; the
   plain `.xcent` is the device one and reads empty on a sim build).
 
+### 14. "Can't find variable: WebAssembly" on a real iOS device (JIT disabled)
+All of Bramble's crypto is WASM (Argon2/AES/KDBX), and WASM needs JIT. iOS disables JIT in two
+states, and in both the app throws `ReferenceError: Can't find variable: WebAssembly` and the
+vault can't be created/unlocked:
+
+- **Lockdown Mode (Settings → Privacy & Security → Lockdown Mode).** Disables JIT system-wide.
+  This is a **product limitation**, not just a dev issue: the app does not work under Lockdown
+  Mode until crypto moves to the native Rust core (Phase 3 uniffi, no JIT needed). If a test
+  device shows the error and isn't under the debugger, check Lockdown Mode first.
+- **Running attached to the Xcode debugger (lldb).** Launching via Xcode's Run attaches lldb,
+  which disables JIT for the webview. Fix: fully quit the app (swipe away) and **launch from the
+  home-screen icon**, or Edit Scheme → Run → Info → uncheck "Debug executable", or build Release.
+
+The simulator does not enforce either restriction, so WASM always works there — this only bites on
+real hardware.
+
 ## Reclaiming disk space
 
 The iOS runtimes are the big consumers (~8 GB each). List and delete unused ones rather

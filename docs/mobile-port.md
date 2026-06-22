@@ -190,6 +190,17 @@ package is left untouched; both ship from one `core`.
   are JIT-disabled). For one-shot KDBX open/decrypt the JS-WASM bridge cost is negligible. Better
   still, the same crate compiles into native Swift/Kotlin via uniffi, so crypto can move out of the
   webview entirely into a native plugin (see Storage and Hard problem 2).
+  - **CAVEAT (verified on device, June 2026): WASM needs JIT, and iOS disables JIT in two states,
+    breaking all crypto (`ReferenceError: Can't find variable: WebAssembly`):**
+    1. **Lockdown Mode** disables JIT system-wide, so under it **the vault cannot be created or
+       unlocked at all** — and Bramble's security-conscious audience is the most likely to run
+       Lockdown Mode. This is a **real product limitation today**, not a dev-only quirk.
+    2. Running attached to the **Xcode debugger** (lldb) also disables JIT; launch from the home
+       screen instead (dev-only annoyance). See `development.md`.
+    - **The fix for both is the Phase 3 native Rust crypto core (uniffi):** native AES/Argon2/KDBX
+      needs no JIT, so it works under Lockdown Mode. So the uniffi refactor isn't only an autofill
+      enabler — it's what makes the app usable under Lockdown Mode. Until then, document that
+      Bramble requires Lockdown Mode off on iOS.
 - **WebCrypto / SubtleCrypto.** `crypto.subtle` and `isSecureContext` are available: Capacitor serves
   the app from `capacitor://localhost` (iOS) and `https://localhost` (Android), and `localhost` is a
   "potentially trustworthy" secure context per the W3C spec. Capacitor's docs confirm secure-context
