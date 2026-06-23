@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		2DDF94162081AD593FA9CF2F /* AutoFillProbe.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AB572E26C386476F4199D517 /* AutoFillProbe.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+		33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6363800275C7C75D7612C3B4 /* AutofillBridge.swift */; };
+		4499CD105B570A875660CF47 /* VaultCrypto.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */; };
+		465133983C8734E4964900AB /* VaultCrypto.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -16,8 +19,11 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		5B00CCCA4F502D4EBC796737 /* vault_crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */; };
+		5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */; };
 		AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */; };
 		B100000000000000000B0001 /* BiometricVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0001 /* BiometricVault.swift */; };
+		F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,10 +62,14 @@
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
+		6363800275C7C75D7612C3B4 /* AutofillBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutofillBridge.swift; sourceTree = "<group>"; };
+		6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeCrypto.swift; sourceTree = "<group>"; };
 		7032D4DE80695ED12D43BB6A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = VaultCrypto.xcframework; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AB572E26C386476F4199D517 /* AutoFillProbe.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFillProbe.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B100000000000000000A0001 /* BiometricVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricVault.swift; sourceTree = "<group>"; };
+		DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.swift; sourceTree = "<group>"; };
 		FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialProviderViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -69,6 +79,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				465133983C8734E4964900AB /* VaultCrypto.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +87,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4499CD105B570A875660CF47 /* VaultCrypto.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -116,6 +128,7 @@
 				504EC3051FED79650016851F /* Products */,
 				34246ECCB9125ABF7D86DBA4 /* Frameworks */,
 				4FFDD2FF5381F41EDD816FCC /* AutoFillProbe */,
+				5ADFD2E717724F55963BA763 /* VaultCryptoFFI */,
 			);
 			sourceTree = "<group>";
 		};
@@ -141,8 +154,20 @@
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				4614635B51FECD0041526CBB /* App.entitlements */,
+				6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */,
+				6363800275C7C75D7612C3B4 /* AutofillBridge.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		5ADFD2E717724F55963BA763 /* VaultCryptoFFI */ = {
+			isa = PBXGroup;
+			children = (
+				DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */,
+				8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */,
+			);
+			name = VaultCryptoFFI;
+			path = VaultCryptoFFI;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -255,6 +280,9 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				B100000000000000000B0001 /* BiometricVault.swift in Sources */,
+				5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */,
+				F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */,
+				33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,6 +291,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */,
+				5B00CCCA4F502D4EBC796737 /* vault_crypto.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -415,6 +444,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/VaultCryptoFFI",
+				);
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -439,6 +472,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/VaultCryptoFFI",
+				);
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -462,6 +499,10 @@
 				CODE_SIGN_ENTITLEMENTS = AutoFillProbe/AutoFillProbe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/VaultCryptoFFI",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AutoFillProbe/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -489,6 +530,10 @@
 				CODE_SIGN_ENTITLEMENTS = AutoFillProbe/AutoFillProbe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/VaultCryptoFFI",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AutoFillProbe/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;

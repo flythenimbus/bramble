@@ -1,4 +1,16 @@
 //! Vault crypto: VEK-based key wrapping (password/WebAuthn slots) and entry encryption.
+//!
+//! One pure-Rust core, two binding layers selected by feature:
+//! - `wasm` (default): `#[wasm_bindgen]` exports for the browser extension and the
+//!   Capacitor webview.
+//! - `ffi`: `uniffi` exports emitting Swift + Kotlin for the iOS autofill credential
+//!   provider (which can't run Argon2id in its ~120 MB cap, so it AES-unwraps the
+//!   biometric-cached VEK natively) and for Lockdown-Mode-safe main-app crypto (native
+//!   code needs no JIT, unlike WASM).
+//!
+//! The core functions below take/return raw bytes + base64 strings and are unit-tested
+//! natively. The two layers are thin: each maps `CryptoError` to its host's error type
+//! and (for the few struct-returning calls) serializes the result.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -9,23 +21,35 @@ use aes_gcm::{
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
 type HmacSha256 = Hmac<Sha256>;
 
-// KDBX4 import (not wasm-exported yet).
+// KDBX4 import compiles into both layers: import runs in the main app, which uses
+// native crypto under Lockdown Mode, so `open_kdbx4` is on the FFI surface too.
 mod kdbx;
-
-// Sync roster-auth handshake (Noise KK). Exports handshake_* via wasm-bindgen.
+// Sync handshake/nostr stay WASM-only for now: not on the autofill/Lockdown-Mode
+// critical path, so they keep their JsError plumbing. FFI exposure is additive later.
+#[cfg(feature = "wasm")]
 mod handshake;
-
-// Nostr event signing (secp256k1 schnorr) for sync signaling. Exports nostr_*.
+#[cfg(feature = "wasm")]
 mod nostr;
+
+// The two binding layers are mutually exclusive: each owns the bare public names
+// (`generate_vek`, ...), so enabling both would collide. wasm-pack uses `wasm`; the
+// native build uses `--no-default-features --features ffi`.
+#[cfg(all(feature = "wasm", feature = "ffi"))]
+compile_error!("vault-crypto: enable either `wasm` or `ffi`, not both");
+
+#[cfg(feature = "ffi")]
+uniffi::setup_scaffolding!();
 
 const ARGON2_TIME: u32 = 3;
 const ARGON2_MEM_KIB: u32 = 64 * 1024;
@@ -36,6 +60,33 @@ const IV_LEN: usize = 12;
 const SALT_LEN: usize = 16;
 const SLOT_ID_LEN: usize = 16;
 
+/// Framework-agnostic error for the crypto core. Each binding layer maps it to its
+/// host's native error (a JS `Error` under wasm, a Swift/Kotlin exception under ffi).
+#[derive(Debug)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Error))]
+pub enum CryptoError {
+    Crypto { message: String },
+}
+
+impl std::fmt::Display for CryptoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CryptoError::Crypto { message } => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for CryptoError {}
+
+// wasm-bindgen throws any `Err: Into<JsValue>`; route through `JsError` so the JS side
+// still receives a real `Error` object (not a bare string), preserving prior behavior.
+#[cfg(feature = "wasm")]
+impl From<CryptoError> for JsValue {
+    fn from(e: CryptoError) -> JsValue {
+        JsError::new(&e.to_string()).into()
+    }
+}
+
 /// In-memory slot holding the Vault Encryption Key (VEK). Every key-slot wraps a
 /// copy of the VEK; unlocking unwraps it and loads it here.
 fn vek_slot() -> &'static Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> {
@@ -43,24 +94,24 @@ fn vek_slot() -> &'static Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> {
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
-fn err(msg: impl Into<String>) -> JsError {
-    JsError::new(&msg.into())
+fn err(msg: impl Into<String>) -> CryptoError {
+    CryptoError::Crypto { message: msg.into() }
 }
 
-fn random_bytes(buf: &mut [u8]) -> Result<(), JsError> {
+fn random_bytes(buf: &mut [u8]) -> Result<(), CryptoError> {
     getrandom::getrandom(buf).map_err(|e| err(format!("rng: {e}")))
 }
 
-fn b64_decode(s: &str) -> Result<Vec<u8>, JsError> {
+fn b64_decode(s: &str) -> Result<Vec<u8>, CryptoError> {
     B64.decode(s.as_bytes()).map_err(|e| err(format!("base64: {e}")))
 }
 
-fn iv_from(bytes: Vec<u8>) -> Result<[u8; IV_LEN], JsError> {
+fn iv_from(bytes: Vec<u8>) -> Result<[u8; IV_LEN], CryptoError> {
     bytes.try_into().map_err(|_| err("iv must be 12 bytes"))
 }
 
 /// Derive a 32-byte KEK from a password and salt via Argon2id.
-fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsError> {
+fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, CryptoError> {
     let params = Params::new(ARGON2_MEM_KIB, ARGON2_TIME, ARGON2_PARALLELISM, Some(KEY_LEN))
         .map_err(|e| err(format!("argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -74,7 +125,7 @@ fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, J
 const WEBAUTHN_KDF_INFO: &[u8] = b"titanpass/webauthn/v1";
 /// Derive a 32-byte KEK from an authenticator hmac-secret via HKDF-SHA256,
 /// domain-separated by WEBAUTHN_KDF_INFO.
-fn derive_kek_hkdf(hmac_secret: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsError> {
+fn derive_kek_hkdf(hmac_secret: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, CryptoError> {
     let hkdf = Hkdf::<Sha256>::new(None, hmac_secret);
     let mut out = Zeroizing::new([0u8; KEY_LEN]);
     hkdf.expand(WEBAUTHN_KDF_INFO, out.as_mut_slice())
@@ -82,14 +133,14 @@ fn derive_kek_hkdf(hmac_secret: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, JsErr
     Ok(out)
 }
 
-fn aes_encrypt(key: &[u8], iv: &[u8; IV_LEN], plaintext: &[u8]) -> Result<Vec<u8>, JsError> {
+fn aes_encrypt(key: &[u8], iv: &[u8; IV_LEN], plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
     Aes256Gcm::new_from_slice(key)
         .map_err(|_| err("key must be 32 bytes"))?
         .encrypt(Nonce::from_slice(iv), plaintext)
         .map_err(|e| err(format!("aes encrypt: {e}")))
 }
 
-fn aes_decrypt(key: &[u8], iv: &[u8; IV_LEN], ct: &[u8]) -> Result<Zeroizing<Vec<u8>>, JsError> {
+fn aes_decrypt(key: &[u8], iv: &[u8; IV_LEN], ct: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
     Aes256Gcm::new_from_slice(key)
         .map_err(|_| err("key must be 32 bytes"))?
         .decrypt(Nonce::from_slice(iv), ct)
@@ -97,16 +148,16 @@ fn aes_decrypt(key: &[u8], iv: &[u8; IV_LEN], ct: &[u8]) -> Result<Zeroizing<Vec
         .map_err(|e| err(format!("aes decrypt: {e}")))
 }
 
-fn with_vek<F, R>(f: F) -> Result<R, JsError>
+fn with_vek<F, R>(f: F) -> Result<R, CryptoError>
 where
-    F: FnOnce(&[u8]) -> Result<R, JsError>,
+    F: FnOnce(&[u8]) -> Result<R, CryptoError>,
 {
     let guard = vek_slot().lock().unwrap();
     let key = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
     f(key.as_slice())
 }
 
-fn load_vek(bytes: &[u8]) -> Result<(), JsError> {
+fn load_vek(bytes: &[u8]) -> Result<(), CryptoError> {
     if bytes.len() != KEY_LEN {
         return Err(err(format!("VEK must be {} bytes", KEY_LEN)));
     }
@@ -136,46 +187,136 @@ fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
+// Result records returned to both layers: serde-serialized to a JS value under wasm,
+// returned as uniffi records (camelCased in Swift/Kotlin) under ffi.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct EncryptedPayload {
-    ciphertext: String,
-    iv: String,
-    wrapped_dek: String,
-    dek_iv: String,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct EncryptedPayload {
+    pub ciphertext: String,
+    pub iv: String,
+    pub wrapped_dek: String,
+    pub dek_iv: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MasterEncrypted {
-    iv: String,
-    ciphertext: String,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct MasterEncrypted {
+    pub iv: String,
+    pub ciphertext: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PasswordSlotBlob {
-    verifier: String,
-    wrap_iv: String,
-    wrapped_vek: String,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct PasswordSlotBlob {
+    pub verifier: String,
+    pub wrap_iv: String,
+    pub wrapped_vek: String,
 }
+
+// ---- core (binding-agnostic) for the struct-returning calls ----
+
+fn wrap_vek_password_core(
+    password: &str,
+    salt_b64: &str,
+    slot_id_b64: &str,
+    magic_version: &[u8],
+) -> Result<PasswordSlotBlob, CryptoError> {
+    let salt = b64_decode(salt_b64)?;
+    let slot_id = b64_decode(slot_id_b64)?;
+    let kek = derive_kek(password, &salt)?;
+    with_vek(|vek| {
+        let mut wrap_iv = [0u8; IV_LEN];
+        random_bytes(&mut wrap_iv)?;
+        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
+        let verifier = compute_verifier(kek.as_slice(), magic_version, &slot_id);
+        Ok(PasswordSlotBlob {
+            verifier: B64.encode(&verifier),
+            wrap_iv: B64.encode(wrap_iv),
+            wrapped_vek: B64.encode(&wrapped),
+        })
+    })
+}
+
+fn wrap_vek_webauthn_core(
+    hmac_secret_b64: &str,
+    slot_id_b64: &str,
+    magic_version: &[u8],
+) -> Result<PasswordSlotBlob, CryptoError> {
+    let hmac_secret = b64_decode(hmac_secret_b64)?;
+    let slot_id = b64_decode(slot_id_b64)?;
+    let kek = derive_kek_hkdf(&hmac_secret)?;
+    with_vek(|vek| {
+        let mut wrap_iv = [0u8; IV_LEN];
+        random_bytes(&mut wrap_iv)?;
+        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
+        let verifier = compute_verifier(kek.as_slice(), magic_version, &slot_id);
+        Ok(PasswordSlotBlob {
+            verifier: B64.encode(&verifier),
+            wrap_iv: B64.encode(wrap_iv),
+            wrapped_vek: B64.encode(&wrapped),
+        })
+    })
+}
+
+fn encrypt_entry_core(plaintext_json: &str) -> Result<EncryptedPayload, CryptoError> {
+    with_vek(|vek| {
+        let mut dek = Zeroizing::new([0u8; DEK_LEN]);
+        random_bytes(dek.as_mut_slice())?;
+
+        let mut iv = [0u8; IV_LEN];
+        random_bytes(&mut iv)?;
+
+        let mut dek_iv = [0u8; IV_LEN];
+        random_bytes(&mut dek_iv)?;
+
+        let ciphertext = aes_encrypt(dek.as_slice(), &iv, plaintext_json.as_bytes())?;
+        let wrapped_dek = aes_encrypt(vek, &dek_iv, dek.as_slice())?;
+
+        Ok(EncryptedPayload {
+            ciphertext: B64.encode(&ciphertext),
+            iv: B64.encode(iv),
+            wrapped_dek: B64.encode(&wrapped_dek),
+            dek_iv: B64.encode(dek_iv),
+        })
+    })
+}
+
+fn encrypt_with_vek_core(plaintext: &str) -> Result<MasterEncrypted, CryptoError> {
+    with_vek(|vek| {
+        let mut iv = [0u8; IV_LEN];
+        random_bytes(&mut iv)?;
+        let ct = aes_encrypt(vek, &iv, plaintext.as_bytes())?;
+        Ok(MasterEncrypted {
+            iv: B64.encode(iv),
+            ciphertext: B64.encode(&ct),
+        })
+    })
+}
+
+// ---- shared exports (identical body across both layers) ----
 
 /// Whether the vault is locked (no VEK in memory).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn is_locked() -> bool {
     vek_slot().lock().unwrap().is_none()
 }
 
 /// Clear the VEK from memory, locking the vault.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn lock() {
     *vek_slot().lock().unwrap() = None;
 }
 
 /// Generate a fresh VEK at vault creation, load it into memory, and return it
 /// base64-encoded.
-#[wasm_bindgen]
-pub fn generate_vek() -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn generate_vek() -> Result<String, CryptoError> {
     let mut vek = [0u8; KEY_LEN];
     random_bytes(&mut vek)?;
     let encoded = B64.encode(vek);
@@ -183,17 +324,19 @@ pub fn generate_vek() -> Result<String, JsError> {
     Ok(encoded)
 }
 
-/// Session resume: load a cached VEK (from chrome.storage.session) without
-/// re-deriving from a credential.
-#[wasm_bindgen]
-pub fn unlock_with_vek(vek_b64: String) -> Result<(), JsError> {
+/// Session resume: load a cached VEK (from session storage / the biometric cache)
+/// without re-deriving from a credential.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn unlock_with_vek(vek_b64: String) -> Result<(), CryptoError> {
     let bytes = b64_decode(&vek_b64)?;
     load_vek(&bytes)
 }
 
 /// Return the in-memory VEK base64-encoded (for session caching). Errors if locked.
-#[wasm_bindgen]
-pub fn export_vek() -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn export_vek() -> Result<String, CryptoError> {
     let guard = vek_slot().lock().unwrap();
     let key = guard.as_ref().ok_or_else(|| err("vault is locked"))?;
     Ok(B64.encode(key.as_slice()))
@@ -201,8 +344,9 @@ pub fn export_vek() -> Result<String, JsError> {
 
 /// Generate a fresh VEK and replace the in-memory one (caller must re-wrap every
 /// slot). Refuses to run on a locked vault to avoid dropping the old key material.
-#[wasm_bindgen]
-pub fn rotate_vek() -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn rotate_vek() -> Result<String, CryptoError> {
     if vek_slot().lock().unwrap().is_none() {
         return Err(err("vault is locked"));
     }
@@ -214,59 +358,34 @@ pub fn rotate_vek() -> Result<String, JsError> {
 }
 
 /// Generate a random base64 salt for a password slot.
-#[wasm_bindgen]
-pub fn generate_salt() -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn generate_salt() -> Result<String, CryptoError> {
     let mut salt = [0u8; SALT_LEN];
     random_bytes(&mut salt)?;
     Ok(B64.encode(salt))
 }
 
 /// Generate a random base64 slot id.
-#[wasm_bindgen]
-pub fn generate_slot_id() -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn generate_slot_id() -> Result<String, CryptoError> {
     let mut id = [0u8; SLOT_ID_LEN];
     random_bytes(&mut id)?;
     Ok(B64.encode(id))
 }
 
-/// Wrap the in-memory VEK under a KEK derived from `password` + `salt`. Returns
-/// the slot's verifier, wrapIv, and wrappedVek for the vault header.
-#[wasm_bindgen]
-pub fn wrap_vek_password(
-    password: String,
-    salt_b64: String,
-    slot_id_b64: String,
-    magic_version: Vec<u8>,
-) -> Result<JsValue, JsError> {
-    let salt = b64_decode(&salt_b64)?;
-    let slot_id = b64_decode(&slot_id_b64)?;
-    let kek = derive_kek(&password, &salt)?;
-
-    let payload = with_vek(|vek| {
-        let mut wrap_iv = [0u8; IV_LEN];
-        random_bytes(&mut wrap_iv)?;
-        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
-        let verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
-        Ok(PasswordSlotBlob {
-            verifier: B64.encode(&verifier),
-            wrap_iv: B64.encode(wrap_iv),
-            wrapped_vek: B64.encode(&wrapped),
-        })
-    })?;
-
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
-}
-
 /// Verifier-only check (constant-time, no VEK unwrap): does `password` match this
 /// slot's stored verifier? Works while the vault is already unlocked.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn verify_password_slot(
     password: String,
     salt_b64: String,
     slot_id_b64: String,
     verifier_b64: String,
     magic_version: Vec<u8>,
-) -> Result<bool, JsError> {
+) -> Result<bool, CryptoError> {
     let salt = b64_decode(&salt_b64)?;
     let slot_id = b64_decode(&slot_id_b64)?;
     let verifier = b64_decode(&verifier_b64)?;
@@ -277,7 +396,8 @@ pub fn verify_password_slot(
 
 /// Full unlock: verify, then unwrap the VEK and load it into memory. Returns
 /// false (without mutating state) if the verifier doesn't match.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn unwrap_vek_password(
     password: String,
     salt_b64: String,
@@ -286,7 +406,7 @@ pub fn unwrap_vek_password(
     wrap_iv_b64: String,
     wrapped_vek_b64: String,
     magic_version: Vec<u8>,
-) -> Result<bool, JsError> {
+) -> Result<bool, CryptoError> {
     let salt = b64_decode(&salt_b64)?;
     let slot_id = b64_decode(&slot_id_b64)?;
     let verifier = b64_decode(&verifier_b64)?;
@@ -307,40 +427,15 @@ pub fn unwrap_vek_password(
 // WebAuthn slots use the same mechanics as password slots; only the KEK source
 // differs (HKDF over a FIDO2 authenticator hmac-secret instead of Argon2id).
 
-/// Wrap the in-memory VEK under a KEK derived from an authenticator hmac-secret.
-#[wasm_bindgen]
-pub fn wrap_vek_webauthn(
-    hmac_secret_b64: String,
-    slot_id_b64: String,
-    magic_version: Vec<u8>,
-) -> Result<JsValue, JsError> {
-    let hmac_secret = b64_decode(&hmac_secret_b64)?;
-    let slot_id = b64_decode(&slot_id_b64)?;
-    let kek = derive_kek_hkdf(&hmac_secret)?;
-
-    let payload = with_vek(|vek| {
-        let mut wrap_iv = [0u8; IV_LEN];
-        random_bytes(&mut wrap_iv)?;
-        let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, vek)?;
-        let verifier = compute_verifier(kek.as_slice(), &magic_version, &slot_id);
-        Ok(PasswordSlotBlob {
-            verifier: B64.encode(&verifier),
-            wrap_iv: B64.encode(wrap_iv),
-            wrapped_vek: B64.encode(&wrapped),
-        })
-    })?;
-
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
-}
-
 /// Verifier-only check for a WebAuthn slot (constant-time, no VEK unwrap).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn verify_webauthn_slot(
     hmac_secret_b64: String,
     slot_id_b64: String,
     verifier_b64: String,
     magic_version: Vec<u8>,
-) -> Result<bool, JsError> {
+) -> Result<bool, CryptoError> {
     let hmac_secret = b64_decode(&hmac_secret_b64)?;
     let slot_id = b64_decode(&slot_id_b64)?;
     let verifier = b64_decode(&verifier_b64)?;
@@ -351,7 +446,8 @@ pub fn verify_webauthn_slot(
 
 /// Full WebAuthn unlock: verify, then unwrap the VEK into memory. Returns false
 /// (without mutating state) if the verifier doesn't match.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn unwrap_vek_webauthn(
     hmac_secret_b64: String,
     slot_id_b64: String,
@@ -359,7 +455,7 @@ pub fn unwrap_vek_webauthn(
     wrap_iv_b64: String,
     wrapped_vek_b64: String,
     magic_version: Vec<u8>,
-) -> Result<bool, JsError> {
+) -> Result<bool, CryptoError> {
     let hmac_secret = b64_decode(&hmac_secret_b64)?;
     let slot_id = b64_decode(&slot_id_b64)?;
     let verifier = b64_decode(&verifier_b64)?;
@@ -377,41 +473,15 @@ pub fn unwrap_vek_webauthn(
     Ok(true)
 }
 
-/// Encrypt an entry: random DEK encrypts the plaintext, VEK wraps the DEK.
-#[wasm_bindgen]
-pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, JsError> {
-    let payload = with_vek(|vek| {
-        let mut dek = Zeroizing::new([0u8; DEK_LEN]);
-        random_bytes(dek.as_mut_slice())?;
-
-        let mut iv = [0u8; IV_LEN];
-        random_bytes(&mut iv)?;
-
-        let mut dek_iv = [0u8; IV_LEN];
-        random_bytes(&mut dek_iv)?;
-
-        let ciphertext = aes_encrypt(dek.as_slice(), &iv, plaintext_json.as_bytes())?;
-        let wrapped_dek = aes_encrypt(vek, &dek_iv, dek.as_slice())?;
-
-        Ok(EncryptedPayload {
-            ciphertext: B64.encode(&ciphertext),
-            iv: B64.encode(iv),
-            wrapped_dek: B64.encode(&wrapped_dek),
-            dek_iv: B64.encode(dek_iv),
-        })
-    })?;
-
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
-}
-
 /// Decrypt an entry: VEK unwraps the DEK, the DEK decrypts the plaintext.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn decrypt_entry(
     ciphertext: String,
     iv: String,
     wrapped_dek: String,
     dek_iv: String,
-) -> Result<String, JsError> {
+) -> Result<String, CryptoError> {
     with_vek(|vek| {
         let ct = b64_decode(&ciphertext)?;
         let iv = iv_from(b64_decode(&iv)?)?;
@@ -424,24 +494,10 @@ pub fn decrypt_entry(
     })
 }
 
-/// Encrypt plaintext directly under the VEK (no per-item DEK).
-#[wasm_bindgen]
-pub fn encrypt_with_vek(plaintext: String) -> Result<JsValue, JsError> {
-    let payload = with_vek(|vek| {
-        let mut iv = [0u8; IV_LEN];
-        random_bytes(&mut iv)?;
-        let ct = aes_encrypt(vek, &iv, plaintext.as_bytes())?;
-        Ok(MasterEncrypted {
-            iv: B64.encode(iv),
-            ciphertext: B64.encode(&ct),
-        })
-    })?;
-    serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
-}
-
 /// Decrypt ciphertext encrypted directly under the VEK.
-#[wasm_bindgen]
-pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String, JsError> {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String, CryptoError> {
     with_vek(|vek| {
         let iv = iv_from(b64_decode(&iv_b64)?)?;
         let ct = b64_decode(&ciphertext_b64)?;
@@ -450,8 +506,94 @@ pub fn decrypt_with_vek(iv_b64: String, ciphertext_b64: String) -> Result<String
     })
 }
 
+// ---- WASM binding layer ----
+// The struct-returning calls serialize to a JS value; the rest are the shared
+// exports above (wasm-bindgen throws `CryptoError` via its `Into<JsValue>`).
+#[cfg(feature = "wasm")]
+mod wasm_exports {
+    use super::*;
+
+    /// Wrap the in-memory VEK under a KEK derived from `password` + `salt`. Returns
+    /// the slot's verifier, wrapIv, and wrappedVek for the vault header.
+    #[wasm_bindgen]
+    pub fn wrap_vek_password(
+        password: String,
+        salt_b64: String,
+        slot_id_b64: String,
+        magic_version: Vec<u8>,
+    ) -> Result<JsValue, CryptoError> {
+        let blob = wrap_vek_password_core(&password, &salt_b64, &slot_id_b64, &magic_version)?;
+        serde_wasm_bindgen::to_value(&blob).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Wrap the in-memory VEK under a KEK derived from an authenticator hmac-secret.
+    #[wasm_bindgen]
+    pub fn wrap_vek_webauthn(
+        hmac_secret_b64: String,
+        slot_id_b64: String,
+        magic_version: Vec<u8>,
+    ) -> Result<JsValue, CryptoError> {
+        let blob = wrap_vek_webauthn_core(&hmac_secret_b64, &slot_id_b64, &magic_version)?;
+        serde_wasm_bindgen::to_value(&blob).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Encrypt an entry: random DEK encrypts the plaintext, VEK wraps the DEK.
+    #[wasm_bindgen]
+    pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, CryptoError> {
+        let payload = encrypt_entry_core(&plaintext_json)?;
+        serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Encrypt plaintext directly under the VEK (no per-item DEK).
+    #[wasm_bindgen]
+    pub fn encrypt_with_vek(plaintext: String) -> Result<JsValue, CryptoError> {
+        let payload = encrypt_with_vek_core(&plaintext)?;
+        serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+    }
+}
+
+// ---- FFI binding layer (uniffi -> Swift + Kotlin) ----
+// The struct-returning calls hand back the record directly (no JS-value hop).
+#[cfg(feature = "ffi")]
+mod ffi_exports {
+    use super::*;
+
+    /// Wrap the in-memory VEK under a KEK derived from `password` + `salt`.
+    #[uniffi::export]
+    pub fn wrap_vek_password(
+        password: String,
+        salt_b64: String,
+        slot_id_b64: String,
+        magic_version: Vec<u8>,
+    ) -> Result<PasswordSlotBlob, CryptoError> {
+        wrap_vek_password_core(&password, &salt_b64, &slot_id_b64, &magic_version)
+    }
+
+    /// Wrap the in-memory VEK under a KEK derived from an authenticator hmac-secret.
+    #[uniffi::export]
+    pub fn wrap_vek_webauthn(
+        hmac_secret_b64: String,
+        slot_id_b64: String,
+        magic_version: Vec<u8>,
+    ) -> Result<PasswordSlotBlob, CryptoError> {
+        wrap_vek_webauthn_core(&hmac_secret_b64, &slot_id_b64, &magic_version)
+    }
+
+    /// Encrypt an entry: random DEK encrypts the plaintext, VEK wraps the DEK.
+    #[uniffi::export]
+    pub fn encrypt_entry(plaintext_json: String) -> Result<EncryptedPayload, CryptoError> {
+        encrypt_entry_core(&plaintext_json)
+    }
+
+    /// Encrypt plaintext directly under the VEK (no per-item DEK).
+    #[uniffi::export]
+    pub fn encrypt_with_vek(plaintext: String) -> Result<MasterEncrypted, CryptoError> {
+        encrypt_with_vek_core(&plaintext)
+    }
+}
+
 // Drive the primitives directly with known IVs/keys/salts; the global VEK slot
-// makes the #[wasm_bindgen] wrappers awkward to test in parallel.
+// makes the binding wrappers awkward to test in parallel.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,7 +690,7 @@ mod tests {
     }
 
     // Tampered ciphertext fails the AES-GCM tag check. Calls the crate directly
-    // because `aes_decrypt` returns JsError, not constructable off wasm.
+    // because `aes_decrypt` returns CryptoError, not constructable off the binding.
     #[test]
     fn webauthn_unwrap_rejects_tampered_ciphertext() {
         use aes_gcm::aead::Aead;
@@ -572,5 +714,30 @@ mod tests {
         let webauthn_kek = derive_kek_hkdf(&bytes).unwrap();
         let password_kek = derive_kek("\u{0033}".repeat(32).as_str(), &bytes[..16]).unwrap();
         assert_ne!(webauthn_kek.as_slice(), password_kek.as_slice());
+    }
+
+    // Vault-crypto round-trip through the core: encrypt under the VEK then decrypt.
+    // Exercises the shared core used by both binding layers.
+    #[test]
+    fn vek_encrypt_decrypt_round_trip_core() {
+        let vek = B64.encode([0x5au8; KEY_LEN]);
+        unlock_with_vek(vek).unwrap();
+        let plaintext = "{\"u\":\"alice\",\"p\":\"hunter2\"}";
+        let enc = encrypt_with_vek_core(plaintext).unwrap();
+        let back = decrypt_with_vek(enc.iv, enc.ciphertext).unwrap();
+        assert_eq!(back, plaintext);
+        lock();
+        assert!(is_locked());
+    }
+
+    // Entry-level (per-item DEK) round-trip through the shared core.
+    #[test]
+    fn entry_encrypt_decrypt_round_trip_core() {
+        unlock_with_vek(B64.encode([0x11u8; KEY_LEN])).unwrap();
+        let json = "{\"title\":\"GitHub\"}";
+        let p = encrypt_entry_core(json).unwrap();
+        let back = decrypt_entry(p.ciphertext, p.iv, p.wrapped_dek, p.dek_iv).unwrap();
+        assert_eq!(back, json);
+        lock();
     }
 }

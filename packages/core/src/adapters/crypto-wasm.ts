@@ -28,12 +28,14 @@ export function buildCryptoAdapter(
 	const { onUnlocked, onLocked } = hooks;
 	return {
 		async generateVek() {
-			const vek = (await getWasm()).generate_vek();
+			// `await` the call itself (not just the module): the native plugin returns
+			// a promise, and the hook must fire only after the VEK is actually loaded.
+			const vek = await (await getWasm()).generate_vek();
 			onUnlocked?.();
 			return vek;
 		},
 		async unlockWithVek(vekB64) {
-			(await getWasm()).unlock_with_vek(vekB64);
+			await (await getWasm()).unlock_with_vek(vekB64);
 			onUnlocked?.();
 		},
 		async exportVek() {
@@ -43,7 +45,7 @@ export function buildCryptoAdapter(
 			return (await getWasm()).rotate_vek();
 		},
 		async lock() {
-			(await getWasm()).lock();
+			await (await getWasm()).lock();
 			onLocked?.();
 		},
 		async isLocked() {
@@ -68,7 +70,7 @@ export function buildCryptoAdapter(
 			);
 		},
 		async unwrapVekPassword(i) {
-			const ok = (await getWasm()).unwrap_vek_password(
+			const ok = await (await getWasm()).unwrap_vek_password(
 				i.password,
 				i.saltB64,
 				i.slotIdB64,
@@ -94,7 +96,7 @@ export function buildCryptoAdapter(
 			return (await getWasm()).wrap_vek_webauthn(i.hmacSecretB64, i.slotIdB64, i.magicVersion);
 		},
 		async unwrapVekWebauthn(i) {
-			const ok = (await getWasm()).unwrap_vek_webauthn(
+			const ok = await (await getWasm()).unwrap_vek_webauthn(
 				i.hmacSecretB64,
 				i.slotIdB64,
 				i.verifierB64,

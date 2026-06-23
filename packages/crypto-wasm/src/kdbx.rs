@@ -11,6 +11,7 @@ use quick_xml::reader::Reader;
 use serde::Serialize;
 use sha2::{Digest, Sha256, Sha512};
 use std::io::Read;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
@@ -69,10 +70,12 @@ type Res<T> = Result<T, KdbxError>;
 /// One imported entry: its KeePass String key/value pairs, protected values
 /// already decrypted. JS maps these to `EntryData`.
 #[derive(Serialize, Debug, PartialEq)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
 pub struct OutEntry {
     pub strings: Vec<OutString>,
 }
 #[derive(Serialize, Debug, PartialEq)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
 pub struct OutString {
     pub key: String,
     pub value: String,
@@ -81,6 +84,7 @@ pub struct OutString {
 }
 
 /// WASM entry point. `keyfile` is the raw key-file bytes, if any.
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn open_kdbx4(
     file: &[u8],
@@ -89,6 +93,19 @@ pub fn open_kdbx4(
 ) -> Result<JsValue, JsError> {
     let entries = open_inner(file, password, keyfile.as_deref()).map_err(|e| JsError::new(&e.code()))?;
     serde_wasm_bindgen::to_value(&entries).map_err(|e| JsError::new(&format!("KDBX_SERIALIZE:{e}")))
+}
+
+/// FFI entry point (uniffi -> Swift/Kotlin). Same core as the WASM path; the
+/// `KdbxError` code becomes the `CryptoError` message so the TS layer's switch on
+/// the code string (e.g. `KDBX_WRONG_CREDENTIAL`) works identically across layers.
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn open_kdbx4(
+    file: Vec<u8>,
+    password: String,
+    keyfile: Option<Vec<u8>>,
+) -> Result<Vec<OutEntry>, crate::CryptoError> {
+    open_inner(&file, &password, keyfile.as_deref()).map_err(|e| crate::err(e.code()))
 }
 
 /// A forward byte cursor with bounds-checked reads.

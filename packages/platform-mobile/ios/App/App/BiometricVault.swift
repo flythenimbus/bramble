@@ -22,6 +22,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 
 	private let service = "app.bramble.mobile.biometric-vault"
 	private let account = "vek"
+	// Shared Keychain access group so the AutoFill extension (a separate process)
+	// can read the same biometric-gated VEK item. Must match the keychain-access-groups
+	// entitlement on both targets (team-prefixed). See docs/mobile-port.md "the crux".
+	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
 
 	@objc func isAvailable(_ call: CAPPluginCall) {
 		let context = LAContext()
@@ -45,6 +49,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: service,
 			kSecAttrAccount as String: account,
+				kSecAttrAccessGroup as String: accessGroup,
 			kSecReturnData as String: false,
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
 			kSecMatchLimit as String: kSecMatchLimitOne,
@@ -63,6 +68,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: service,
 			kSecAttrAccount as String: account,
+				kSecAttrAccessGroup as String: accessGroup,
 		]
 		// Replace any prior (possibly invalidated) item.
 		SecItemDelete(base as CFDictionary)
@@ -112,6 +118,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 				kSecClass as String: kSecClassGenericPassword,
 				kSecAttrService as String: self.service,
 				kSecAttrAccount as String: self.account,
+				kSecAttrAccessGroup as String: self.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: context,
@@ -136,6 +143,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: service,
 			kSecAttrAccount as String: account,
+				kSecAttrAccessGroup as String: accessGroup,
 		]
 		let status = SecItemDelete(query as CFDictionary)
 		if status == errSecSuccess || status == errSecItemNotFound {
@@ -151,5 +159,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 public class BiometricBridgeViewController: CAPBridgeViewController {
 	override public func capacitorDidLoad() {
 		bridge?.registerPluginInstance(BiometricVaultPlugin())
+		bridge?.registerPluginInstance(NativeCryptoPlugin())
+		bridge?.registerPluginInstance(AutofillBridgePlugin())
 	}
 }

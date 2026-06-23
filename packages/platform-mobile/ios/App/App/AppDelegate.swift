@@ -7,12 +7,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Phase 3 autofill probe: write a value into the shared App Group so the
-        // AutoFillProbe extension can prove it reads what the main app wrote. Stands in
-        // for the real provider's vault-sharing channel. Remove with the probe.
-        let stamp = ISO8601DateFormatter().string(from: Date())
-        UserDefaults(suiteName: "group.app.bramble.mobile")?
-            .set("written by the app at \(stamp)", forKey: "probe.sharedValue")
         return true
     }
 

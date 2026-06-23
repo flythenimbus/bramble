@@ -8,5 +8,9 @@
 	<array>
 		<string>group.app.bramble.mobile</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)app.bramble.mobile.shared</string>
+	</array>
 </dict>
 </plist>
