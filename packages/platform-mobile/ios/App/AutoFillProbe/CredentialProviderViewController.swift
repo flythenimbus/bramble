@@ -512,7 +512,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	private func saveSession(_ vek: String) {
-		guard keepUnlockedMinutes() > 0,
+		// 0 = off; positive = minute window; negative = never expire.
+		guard keepUnlockedMinutes() != 0,
 			let data = try? JSONSerialization.data(withJSONObject: [
 				"vek": vek, "at": Date().timeIntervalSince1970,
 			])
@@ -526,7 +527,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private func loadSession() -> String? {
 		let minutes = keepUnlockedMinutes()
-		guard minutes > 0 else { return nil }
+		guard minutes != 0 else { return nil }  // 0 = off
 		var q = sessionBaseQuery()
 		q[kSecReturnData as String] = true
 		q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -535,7 +536,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
 			let vek = d["vek"] as? String, let at = d["at"] as? Double
 		else { return nil }
-		if Date().timeIntervalSince1970 - at > Double(minutes) * 60 {
+		// Positive = expiring window; negative = never expire (auto-lock "Never").
+		if minutes > 0, Date().timeIntervalSince1970 - at > Double(minutes) * 60 {
 			clearSession()
 			return nil
 		}
