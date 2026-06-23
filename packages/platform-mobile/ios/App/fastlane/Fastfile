@@ -1,0 +1,60 @@
+# Fastlane lanes for the Bramble iOS app (Capacitor). Two lanes:
+#   fastlane ipa   -> distribution IPA to ~/Desktop, no upload (no API key needed)
+#   fastlane beta  -> build + upload to TestFlight, auto-bumping the build number
+#
+# Both run the Capacitor pre-chain first (web bundle + native FFI libs + cap sync) so
+# the archive is always current. Signing is automatic + -allowProvisioningUpdates, which
+# already registers the app + AutoFillProbe extension entitlements (app group + the
+# shared keychain group). Secrets live in fastlane/.env (gitignored); see .env.example.
+
+default_platform(:ios)
+
+REPO = `git rev-parse --show-toplevel`.strip
+BUNDLE_ID = "app.bramble.mobile"
+
+platform :ios do
+  # Web bundle + shared Rust libs (installs ios/App/VaultCryptoFFI/) + Capacitor sync.
+  # Absolute cd so it works regardless of fastlane's working directory.
+  private_lane :prepare do
+    sh("cd '#{REPO}' && pnpm core:build && pnpm ffi:build:ios && " \
+       "cd packages/platform-mobile && npx cap sync ios")
+  end
+
+  desc "Build a distribution IPA to ~/Desktop (no upload; no API key needed)"
+  lane :ipa do
+    prepare
+    build_app(
+      project: "App.xcodeproj",
+      scheme: "App",
+      export_method: "app-store",
+      output_directory: File.expand_path("~/Desktop"),
+      output_name: "Bramble-TestFlight.ipa",
+      xcargs: "-allowProvisioningUpdates",
+    )
+    UI.success("IPA at ~/Desktop/Bramble-TestFlight.ipa")
+  end
+
+  desc "Build + upload to TestFlight (auto-bumps the build number past the latest)"
+  lane :beta do
+    key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH", "./fastlane/AuthKey.p8"),
+    )
+    prepare
+    # One past the highest build already on TestFlight -> never a duplicate-build reject.
+    next_build = latest_testflight_build_number(
+      api_key: key, app_identifier: BUNDLE_ID, initial_build_number: 0
+    ) + 1
+    # Override CURRENT_PROJECT_VERSION at build time (both the app + extension consume it)
+    # instead of mutating the pbxproj, so the working tree stays clean.
+    build_app(
+      project: "App.xcodeproj",
+      scheme: "App",
+      export_method: "app-store",
+      xcargs: "CURRENT_PROJECT_VERSION=#{next_build} -allowProvisioningUpdates",
+    )
+    upload_to_testflight(api_key: key, skip_waiting_for_build_processing: true)
+    UI.success("Uploaded build #{next_build} to TestFlight")
+  end
+end

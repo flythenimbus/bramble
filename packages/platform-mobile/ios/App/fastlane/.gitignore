@@ -1,0 +1,11 @@
+# Secrets — never commit
+.env
+*.p8
+
+# Fastlane run/build artifacts
+report.xml
+Preview.html
+*.ipa
+*.dSYM.zip
+test_output/
+README.md
