@@ -78,7 +78,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			let access = SecAccessControlCreateWithFlags(
 				nil,
 				kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-				.biometryCurrentSet,
+				// userPresence = Face ID / Touch ID, with device-passcode fallback. Lets the
+				// AutoFill extension read the cached VEK even when biometrics aren't enrolled,
+				// and keeps the in-app unlock working via biometrics.
+				.userPresence,
 				&acError
 			)
 		else {
