@@ -1,19 +1,20 @@
 import AuthenticationServices
 import Security
+import SwiftUI
 import UIKit
 
 // AutoFill Credential Provider. Lists the vault's logins from the shared App Group,
 // then on a tap obtains the VEK and decrypts the chosen password natively via the
 // shared Rust core (VaultCryptoFFI). Two ways to get the VEK, in order:
-//   1. a biometric/passcode-cached VEK (the in-app "biometric unlock" item, gated by
-//      Face ID OR device passcode) — the fast path, no typing.
+//   1. a biometric/passcode-cached VEK (Face ID OR device passcode) - the fast path.
 //   2. the master password: the app shares the (non-secret) password slot, so the
-//      extension runs Argon2id itself and unwraps the VEK. The Bitwarden-style flow,
-//      works with no biometrics set up.
-// Passwords are never stored in cleartext; the slot's wrappedVek stays AES-encrypted.
-// docs/mobile-port.md "OS-level autofill".
+//      extension runs Argon2id itself and unwraps the VEK (Bitwarden-style; no
+//      biometrics needed).
+// The UI is SwiftUI styled from the app's design tokens for visual parity with the
+// in-app vault. Passwords are never stored in cleartext. docs/mobile-port.md.
 
-private struct Cred {
+private struct Cred: Identifiable {
+	var id: String { recordId }
 	let recordId: String
 	let name: String
 	let username: String
@@ -38,149 +39,171 @@ private func initials(_ s: String) -> String {
 	return String(chars).uppercased()
 }
 
-// Row styled to resemble the in-app vault list: initials chip + name + username.
-private final class CredCell: UITableViewCell {
-	private let chip = UILabel()
-	private let titleLabel = UILabel()
-	private let subtitleLabel = UILabel()
+// --- design tokens (app dark theme; oklch grayscale converted to sRGB) ---
 
-	override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-		super.init(style: style, reuseIdentifier: reuseIdentifier)
-		chip.textAlignment = .center
-		chip.font = .systemFont(ofSize: 15, weight: .semibold)
-		chip.textColor = .label
-		chip.backgroundColor = UIColor(white: 0.26, alpha: 1)
-		chip.layer.cornerRadius = 10
-		chip.layer.masksToBounds = true
-		titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-		titleLabel.textColor = .label
-		subtitleLabel.font = .systemFont(ofSize: 14)
-		subtitleLabel.textColor = .secondaryLabel
-		let text = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
-		text.axis = .vertical
-		text.spacing = 2
-		[chip, text].forEach {
-			$0.translatesAutoresizingMaskIntoConstraints = false
-			contentView.addSubview($0)
-		}
-		NSLayoutConstraint.activate([
-			chip.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-			chip.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-			chip.widthAnchor.constraint(equalToConstant: 40),
-			chip.heightAnchor.constraint(equalToConstant: 40),
-			text.leadingAnchor.constraint(equalTo: chip.trailingAnchor, constant: 12),
-			text.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -12),
-			text.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-			contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
-		])
+extension Color {
+	fileprivate init(rgb: UInt32) {
+		self.init(
+			.sRGB, red: Double((rgb >> 16) & 0xff) / 255, green: Double((rgb >> 8) & 0xff) / 255,
+			blue: Double(rgb & 0xff) / 255)
 	}
-	required init?(coder: NSCoder) { fatalError() }
+}
+private enum Theme {
+	static let background = Color(rgb: 0x171717)
+	static let card = Color(rgb: 0x21_21_21)
+	static let chip = Color(rgb: 0x2E_2E_2E)
+	static let border = Color(rgb: 0x33_33_33)
+	static let foreground = Color(rgb: 0xF5_F5_F5)
+	static let muted = Color(rgb: 0xA1_A1_A1)
+	static let destructive = Color(rgb: 0xF8_71_71)
+}
 
-	func configure(_ c: Cred) {
-		titleLabel.text = c.name
-		subtitleLabel.text = c.username
-		chip.text = initials(c.name)
+// --- SwiftUI views ---
+
+private struct RowView: View {
+	let cred: Cred
+	var body: some View {
+		HStack(spacing: 12) {
+			Text(initials(cred.name))
+				.font(.system(size: 15, weight: .semibold))
+				.foregroundColor(Theme.foreground)
+				.frame(width: 40, height: 40)
+				.background(Theme.chip)
+				.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+			VStack(alignment: .leading, spacing: 2) {
+				Text(cred.name).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.foreground)
+				Text(cred.username).font(.system(size: 14)).foregroundColor(Theme.muted).lineLimit(1)
+			}
+			Spacer(minLength: 0)
+		}
+		.padding(12)
+		.background(Theme.card)
+		.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+		.overlay(
+			RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.border, lineWidth: 1))
 	}
 }
 
-// Master-password unlock sheet. Collects the password and reports it via onUnlock; the
-// presenter runs Argon2id and either dismisses (success) or calls showError to retry.
-private final class MasterPasswordViewController: UIViewController, UITextFieldDelegate {
-	var onUnlock: ((String) -> Void)?
-	var onCancel: (() -> Void)?
-	private let field = UITextField()
-	private let unlockButton = UIButton(type: .system)
-	private let spinner = UIActivityIndicatorView(style: .medium)
-	private let errorLabel = UILabel()
-	private let prompt: String
+private struct CredentialListView: View {
+	let creds: [Cred]
+	let diagnostic: String?
+	let onSelect: (Cred) -> Void
+	let onCancel: () -> Void
 
-	init(prompt: String) {
-		self.prompt = prompt
-		super.init(nibName: nil, bundle: nil)
-	}
-	required init?(coder: NSCoder) { fatalError() }
+	var body: some View {
+		VStack(spacing: 0) {
+			HStack {
+				Text("Bramble").font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.foreground)
+				Spacer()
+				Button("Cancel", action: onCancel).foregroundColor(Theme.muted)
+			}
+			.padding(.horizontal, 16)
+			.padding(.vertical, 12)
 
-	override func viewDidLoad() {
-		super.viewDidLoad()
-		view.backgroundColor = .systemBackground
-
-		let cancel = UIButton(type: .system)
-		cancel.setTitle("Cancel", for: .normal)
-		cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-
-		let title = UILabel()
-		title.text = prompt
-		title.font = .preferredFont(forTextStyle: .headline)
-		title.textAlignment = .center
-
-		field.placeholder = "Master password"
-		field.isSecureTextEntry = true
-		field.borderStyle = .roundedRect
-		field.autocapitalizationType = .none
-		field.autocorrectionType = .no
-		field.returnKeyType = .go
-		field.delegate = self
-
-		unlockButton.setTitle("Unlock", for: .normal)
-		unlockButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-		unlockButton.addTarget(self, action: #selector(unlockTapped), for: .touchUpInside)
-
-		errorLabel.textColor = .systemRed
-		errorLabel.font = .preferredFont(forTextStyle: .footnote)
-		errorLabel.numberOfLines = 0
-		errorLabel.textAlignment = .center
-
-		let stack = UIStackView(arrangedSubviews: [title, field, unlockButton, errorLabel, spinner])
-		stack.axis = .vertical
-		stack.spacing = 16
-		[cancel, stack].forEach {
-			$0.translatesAutoresizingMaskIntoConstraints = false
-			view.addSubview($0)
+			if creds.isEmpty {
+				Spacer()
+				Text(diagnostic ?? "No logins to fill.")
+					.font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+					.padding(24)
+				Spacer()
+			} else {
+				ScrollView {
+					VStack(alignment: .leading, spacing: 10) {
+						Text("Items (\(creds.count))")
+							.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted)
+							.padding(.top, 4)
+						ForEach(creds) { cred in
+							Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
+						}
+					}
+					.padding(.horizontal, 16)
+					.padding(.bottom, 24)
+				}
+			}
 		}
-		let g = view.safeAreaLayoutGuide
-		NSLayoutConstraint.activate([
-			cancel.topAnchor.constraint(equalTo: g.topAnchor, constant: 8),
-			cancel.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
-			stack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
-			stack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
-			stack.topAnchor.constraint(equalTo: g.topAnchor, constant: 64),
-		])
-	}
-
-	override func viewDidAppear(_ animated: Bool) {
-		super.viewDidAppear(animated)
-		field.becomeFirstResponder()
-	}
-
-	func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-		unlockTapped()
-		return true
-	}
-
-	@objc private func unlockTapped() {
-		errorLabel.text = nil
-		setBusy(true)
-		onUnlock?(field.text ?? "")
-	}
-
-	@objc private func cancelTapped() { onCancel?() }
-
-	func showError(_ message: String) {
-		setBusy(false)
-		errorLabel.text = message
-		field.becomeFirstResponder()
-	}
-
-	private func setBusy(_ busy: Bool) {
-		busy ? spinner.startAnimating() : spinner.stopAnimating()
-		field.isEnabled = !busy
-		unlockButton.isEnabled = !busy
+		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.background(Theme.background.ignoresSafeArea())
 	}
 }
 
-class CredentialProviderViewController: ASCredentialProviderViewController, UITableViewDataSource,
-	UITableViewDelegate
-{
+private final class UnlockModel: ObservableObject {
+	@Published var busy = false
+	@Published var error: String?
+	let name: String
+	let onSubmit: (String) -> Void
+	let onCancel: () -> Void
+	init(name: String, onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
+		self.name = name
+		self.onSubmit = onSubmit
+		self.onCancel = onCancel
+	}
+}
+
+private struct MasterPasswordView: View {
+	@ObservedObject var model: UnlockModel
+	@State private var password = ""
+	@FocusState private var focused: Bool
+
+	var body: some View {
+		VStack(spacing: 0) {
+			HStack {
+				Button("Cancel", action: model.onCancel).foregroundColor(Theme.muted)
+				Spacer()
+			}
+			.padding(.horizontal, 16)
+			.padding(.vertical, 12)
+
+			Spacer()
+			VStack(spacing: 16) {
+				Text("Unlock \(model.name)")
+					.font(.system(size: 20, weight: .semibold)).foregroundColor(Theme.foreground)
+				SecureField("Master password", text: $password)
+					.textContentType(.password)
+					.autocorrectionDisabled()
+					.textInputAutocapitalization(.never)
+					.focused($focused)
+					.padding(12)
+					.background(Theme.card)
+					.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+					.overlay(
+						RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.border, lineWidth: 1)
+					)
+					.foregroundColor(Theme.foreground)
+					.onSubmit(submit)
+				if let error = model.error {
+					Text(error).font(.footnote).foregroundColor(Theme.destructive).multilineTextAlignment(.center)
+				}
+				Button(action: submit) {
+					HStack {
+						if model.busy { ProgressView().tint(.black) }
+						Text("Unlock").font(.system(size: 17, weight: .semibold))
+					}
+					.frame(maxWidth: .infinity).padding(.vertical, 12)
+					.background(Theme.foreground).foregroundColor(.black)
+					.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+				}
+				.disabled(model.busy || password.isEmpty)
+			}
+			.padding(.horizontal, 24)
+			Spacer()
+			Spacer()
+		}
+		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.background(Theme.background.ignoresSafeArea())
+		.onAppear { focused = true }
+	}
+
+	private func submit() {
+		guard !model.busy, !password.isEmpty else { return }
+		model.error = nil
+		model.busy = true
+		model.onSubmit(password)
+	}
+}
+
+// --- provider controller (UIKit shell hosting the SwiftUI views) ---
+
+class CredentialProviderViewController: ASCredentialProviderViewController {
 	private let appGroup = "group.app.bramble.mobile"
 	private let secretsKey = "autofill.secrets"
 	private let slotKey = "autofill.slot"
@@ -190,12 +213,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 
 	private enum VekOutcome { case ok(String), missing, denied(String) }
 
-	private var creds: [Cred] = []
-	private let table = UITableView(frame: .zero, style: .insetGrouped)
-	private let emptyLabel = UILabel()
-
-	// JSON blobs written by AutofillBridge (App-side). JSON avoids the plist
-	// array-of-dicts cast that can silently fail across the process boundary.
 	private func loadCreds() -> [Cred] {
 		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: secretsKey),
 			let raw = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
@@ -223,114 +240,64 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			magicVersion: mv)
 	}
 
-	override func viewDidLoad() {
-		super.viewDidLoad()
-		view.backgroundColor = .systemBackground
-
-		let header = UIView()
-		let titleLabel = UILabel()
-		titleLabel.text = "Bramble"
-		titleLabel.font = .preferredFont(forTextStyle: .headline)
-		let cancel = UIButton(type: .system)
-		cancel.setTitle("Cancel", for: .normal)
-		cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-		[header, titleLabel, cancel, table, emptyLabel].forEach {
-			$0.translatesAutoresizingMaskIntoConstraints = false
+	// Swap the hosted SwiftUI root.
+	private func host(_ view: some View) {
+		children.forEach {
+			$0.willMove(toParent: nil)
+			$0.view.removeFromSuperview()
+			$0.removeFromParent()
 		}
-		header.addSubview(titleLabel)
-		header.addSubview(cancel)
-		view.addSubview(header)
-		view.addSubview(table)
-		view.addSubview(emptyLabel)
-
-		table.dataSource = self
-		table.delegate = self
-		table.backgroundColor = .clear
-		table.rowHeight = UITableView.automaticDimension
-		table.estimatedRowHeight = 64
-		table.register(CredCell.self, forCellReuseIdentifier: "cred")
-
-		emptyLabel.numberOfLines = 0
-		emptyLabel.textAlignment = .center
-		emptyLabel.textColor = .secondaryLabel
-		emptyLabel.font = .preferredFont(forTextStyle: .footnote)
-
-		let g = view.safeAreaLayoutGuide
-		NSLayoutConstraint.activate([
-			header.topAnchor.constraint(equalTo: g.topAnchor),
-			header.leadingAnchor.constraint(equalTo: g.leadingAnchor),
-			header.trailingAnchor.constraint(equalTo: g.trailingAnchor),
-			header.heightAnchor.constraint(equalToConstant: 44),
-			titleLabel.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-			titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-			cancel.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
-			cancel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-			table.topAnchor.constraint(equalTo: header.bottomAnchor),
-			table.leadingAnchor.constraint(equalTo: g.leadingAnchor),
-			table.trailingAnchor.constraint(equalTo: g.trailingAnchor),
-			table.bottomAnchor.constraint(equalTo: g.bottomAnchor),
-			emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-			emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-			emptyLabel.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
-			emptyLabel.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
-		])
+		let h = UIHostingController(rootView: view)
+		addChild(h)
+		h.view.frame = self.view.bounds
+		h.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+		self.view.addSubview(h.view)
+		h.didMove(toParent: self)
 	}
 
-	private func render() {
-		table.reloadData()
-		emptyLabel.isHidden = !creds.isEmpty
+	private func showList(_ creds: [Cred]) {
+		let diag: String?
 		if creds.isEmpty {
 			let ud = UserDefaults(suiteName: appGroup)
 			let bytes = ud?.data(forKey: secretsKey)?.count ?? 0
-			emptyLabel.text =
+			diag =
 				"No logins to fill.\n\nApp Group reachable: \(ud != nil)\nStored blob: \(bytes) bytes\n\n"
 				+ "Open Bramble and unlock the vault once so it can sync your logins for autofill."
-			NSLog("[AutoFill] empty list. appGroupReachable=%@ blobBytes=%d", String(ud != nil), bytes)
+			NSLog("[AutoFill] empty list. reachable=%@ bytes=%d", String(ud != nil), bytes)
+		} else {
+			diag = nil
 		}
+		host(
+			CredentialListView(
+				creds: creds, diagnostic: diag,
+				onSelect: { [weak self] in self?.fill($0) },
+				onCancel: { [weak self] in self?.cancel(.userCanceled) }))
 	}
 
-	// --- credential list UI ---
+	// --- credential list entry points ---
 
 	override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
 		let wanted = serviceIdentifiers.map { $0.identifier.lowercased() }
 		let all = loadCreds()
-		NSLog("[AutoFill] prepareCredentialList wanted=%@ loaded=%d", wanted.description, all.count)
 		func matches(_ c: Cred) -> Bool {
 			c.services.contains { svc in
 				let s = svc.lowercased()
 				return wanted.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
 			}
 		}
-		creds = all.sorted { (matches($0) ? 0 : 1) < (matches($1) ? 0 : 1) }
-		render()
+		showList(all.sorted { (matches($0) ? 0 : 1) < (matches($1) ? 0 : 1) })
 	}
 
 	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
 		let all = loadCreds()
 		let match = all.filter { $0.recordId == credentialIdentity.recordIdentifier }
-		creds = match.isEmpty ? all : match
-		render()
+		showList(match.isEmpty ? all : match)
 	}
 
 	override func provideCredentialWithoutUserInteraction(
 		for credentialIdentity: ASPasswordCredentialIdentity
 	) {
 		cancel(.userInteractionRequired)
-	}
-
-	// --- table ---
-
-	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { creds.count }
-
-	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-		let cell = tableView.dequeueReusableCell(withIdentifier: "cred", for: indexPath)
-		(cell as? CredCell)?.configure(creds[indexPath.row])
-		return cell
-	}
-
-	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-		tableView.deselectRow(at: indexPath, animated: true)
-		fill(creds[indexPath.row])
 	}
 
 	// --- unlock + decrypt + complete ---
@@ -364,34 +331,43 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 		guard let slot = loadSlot() else {
 			showError(
 				"Can't unlock here",
-				"This vault has no master password set, or it hasn't been synced yet. Open Bramble and "
-					+ "unlock it once, then try again.")
+				"This vault has no master password set, or it hasn't synced yet. Open Bramble, unlock it "
+					+ "once, then try again.")
 			return
 		}
-		let vc = MasterPasswordViewController(prompt: cred.name)
-		vc.onCancel = { [weak vc, weak self] in vc?.dismiss(animated: true); self?.cancel(.userCanceled) }
-		vc.onUnlock = { [weak self, weak vc] password in
-			DispatchQueue.global(qos: .userInitiated).async {
-				do {
-					let ok = try unwrapVekPassword(
-						password: password, saltB64: slot.salt, slotIdB64: slot.slotId,
-						verifierB64: slot.verifier, wrapIvB64: slot.wrapIv, wrappedVekB64: slot.wrappedVek,
-						magicVersion: slot.magicVersion)
-					DispatchQueue.main.async {
-						guard let self = self else { return }
-						if ok {
-							vc?.dismiss(animated: true) { self.decryptAndComplete(cred) }
-						} else {
-							vc?.showError("Incorrect master password")
-						}
+		let model = UnlockModel(
+			name: cred.name,
+			onSubmit: { [weak self] password in self?.tryPassword(password, slot: slot, cred: cred) },
+			onCancel: { [weak self] in self?.cancel(.userCanceled) })
+		currentUnlock = model
+		host(MasterPasswordView(model: model))
+	}
+
+	private var currentUnlock: UnlockModel?
+
+	private func tryPassword(_ password: String, slot: Slot, cred: Cred) {
+		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+			guard let self = self else { return }
+			do {
+				let ok = try unwrapVekPassword(
+					password: password, saltB64: slot.salt, slotIdB64: slot.slotId,
+					verifierB64: slot.verifier, wrapIvB64: slot.wrapIv, wrappedVekB64: slot.wrappedVek,
+					magicVersion: slot.magicVersion)
+				DispatchQueue.main.async {
+					if ok {
+						self.decryptAndComplete(cred)
+					} else {
+						self.currentUnlock?.busy = false
+						self.currentUnlock?.error = "Incorrect master password"
 					}
-				} catch {
-					DispatchQueue.main.async { vc?.showError(error.localizedDescription) }
+				}
+			} catch {
+				DispatchQueue.main.async {
+					self.currentUnlock?.busy = false
+					self.currentUnlock?.error = error.localizedDescription
 				}
 			}
 		}
-		vc.modalPresentationStyle = .fullScreen
-		present(vc, animated: true)
 	}
 
 	// The VEK is loaded in the native core by this point; decrypt the chosen secret.
@@ -434,7 +410,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			]
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
-			NSLog("[AutoFill] keychain read status=%d", status)
 			if status == errSecSuccess, let data = item as? Data,
 				let secret = String(data: data, encoding: .utf8)
 			{
@@ -454,8 +429,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 		})
 		present(alert, animated: true)
 	}
-
-	@objc private func cancelTapped() { cancel(.userCanceled) }
 
 	private func cancel(_ code: ASExtensionError.Code) {
 		extensionContext.cancelRequest(
