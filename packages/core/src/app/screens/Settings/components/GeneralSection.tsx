@@ -5,21 +5,27 @@ import { usePrefs } from "../../../../hooks/usePrefs";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
-// The autofill keep-unlocked window (minutes) when the toggle is on.
-const KEEP_UNLOCKED_MINUTES = 15;
+const autoLockLabel = (m: number) => (m === 0 ? "Never" : m === 60 ? "1 hour" : `${m} minutes`);
+// The keep-unlocked window reuses the auto-lock timeout. The provider gets: 0 = off,
+// a positive minute count, or -1 = never expire (when auto-lock is "Never").
+const keepUnlockedWindow = (on: boolean, autoLockMinutes: number) =>
+	!on ? 0 : autoLockMinutes > 0 ? autoLockMinutes : -1;
 
 /** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill } = usePlatform();
 
-	// Keep the OS autofill provider's window in sync with the pref (also pushes the
-	// initial value once prefs load). No-op where the platform has no native provider.
+	// Keep the OS autofill provider's window in sync with the toggle + the auto-lock
+	// timeout it reuses (also pushes the initial value once prefs load). No-op where the
+	// platform has no native provider.
 	useEffect(() => {
 		if (loaded) {
-			void autofill.setKeepUnlocked?.(prefs.autofillKeepUnlocked ? KEEP_UNLOCKED_MINUTES : 0);
+			void autofill.setKeepUnlocked?.(
+				keepUnlockedWindow(prefs.autofillKeepUnlocked, prefs.autoLockMinutes),
+			);
 		}
-	}, [loaded, prefs.autofillKeepUnlocked, autofill]);
+	}, [loaded, prefs.autofillKeepUnlocked, prefs.autoLockMinutes, autofill]);
 
 	// Prefs come from a quick local-storage read; hold the section until it
 	// resolves so the selects don't flash their defaults before snapping over.
@@ -53,7 +59,11 @@ export function GeneralSection() {
 				<Row
 					icon={<Smartphone className="w-4 h-4 text-primary" />}
 					title="Keep autofill unlocked"
-					subtitle={`After you unlock autofill, skip re-entering your master password for ${KEEP_UNLOCKED_MINUTES} minutes. The key stays cached behind your device unlock for that window.`}
+					subtitle={
+						prefs.autoLockMinutes === 0
+							? "Reuses your auto-lock timeout, set to Never, so autofill stays unlocked until you lock Bramble. The key stays cached behind your device unlock until then."
+							: `Reuses your auto-lock timeout (${autoLockLabel(prefs.autoLockMinutes)}). After you unlock autofill, fills skip the master password for that long; the key stays cached behind your device unlock for the window.`
+					}
 				>
 					<Toggle
 						checked={prefs.autofillKeepUnlocked}
