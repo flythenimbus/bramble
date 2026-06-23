@@ -39,7 +39,7 @@ platform :ios do
     UI.success("IPA at ~/Desktop/Bramble-TestFlight.ipa")
   end
 
-  desc "Build + upload to TestFlight (auto-bumps the build number past the latest)"
+  desc "Build + upload to TestFlight (monotonic timestamp build number)"
   lane :beta do
     key = app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),
@@ -47,10 +47,10 @@ platform :ios do
       key_filepath: ENV.fetch("ASC_KEY_PATH", "./fastlane/AuthKey.p8"),
     )
     prepare
-    # One past the highest build already on TestFlight -> never a duplicate-build reject.
-    next_build = latest_testflight_build_number(
-      api_key: key, app_identifier: BUNDLE_ID, initial_build_number: 0
-    ) + 1
+    # Build number = seconds since 2020. Strictly increasing and never collides, unlike
+    # `latest_testflight_build_number + 1`, which queries App Store Connect and lags while
+    # builds process -> it kept recomputing already-used numbers ("Redundant Binary Upload").
+    next_build = Time.now.to_i - 1_577_836_800
     # Override CURRENT_PROJECT_VERSION at build time (both the app + extension consume it)
     # instead of mutating the pbxproj, so the working tree stays clean.
     build_app(
