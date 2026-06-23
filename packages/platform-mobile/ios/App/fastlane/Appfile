@@ -1,0 +1,3 @@
+app_identifier("app.bramble.mobile")
+team_id("BHGR3PP64J") # Webvana Inc.
+# apple_id is not needed: the beta lane authenticates with an App Store Connect API key.
