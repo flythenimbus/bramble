@@ -5,30 +5,61 @@ edition = "2021"
 publish = false
 
 [lib]
-# `cdylib` for the WASM build, `rlib` so `cargo test` can build the library
-# as a regular Rust crate against the native target and run unit tests.
-crate-type = ["cdylib", "rlib"]
+# `cdylib` for the WASM (wasm-bindgen) shared lib + the Android jniLibs `.so`;
+# `staticlib` for the iOS XCFramework (`.a` linked into the app + autofill extension);
+# `rlib` so `cargo test` builds the library natively and runs unit tests. (The extra
+# crate-types are inert on the wasm32 build; wasm-pack only consumes the cdylib.)
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+# uniffi-bindgen CLI: generates Swift/Kotlin from the compiled cdylib (library mode).
+# Built only under `ffi`, so wasm-pack (default features) never compiles it.
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["ffi"]
+
+[features]
+default = ["wasm"]
+# WASM binding layer: browser extension + Capacitor webview. Also carries the
+# WASM-only modules (sync handshake/nostr, KDBX4 import) and getrandom's JS backend.
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:serde-wasm-bindgen",
+    "getrandom/js",
+    "dep:snow",
+    "dep:k256",
+]
+# Native FFI binding layer: uniffi -> Swift + Kotlin for the iOS autofill credential
+# provider and Lockdown-Mode-safe (JIT-free) main-app crypto.
+ffi = ["dep:uniffi"]
 
 [dependencies]
-wasm-bindgen = "0.2"
-js-sys = "0.3"
+# --- vault crypto core (compiled into both binding layers) ---
 argon2 = "0.5"
 aes-gcm = "0.10"
 hmac = "0.12"
 hkdf = "0.12"
 sha2 = "0.10"
 zeroize = { version = "1.8", features = ["derive"] }
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = "0.2"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
-serde-wasm-bindgen = "0.6"
+
+# --- WASM binding layer (optional) ---
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+# --- Native FFI binding layer (optional) ---
+uniffi = { version = "0.31", optional = true }
 
 # --- Sync roster-auth handshake (Noise). default-resolver = pure Rust, wasm-clean ---
-snow = "0.9"
+snow = { version = "0.9", optional = true }
 # --- Nostr event signing (BIP340 schnorr / secp256k1) for sync signaling ---
-k256 = { version = "0.13", default-features = false, features = ["schnorr", "alloc"] }
+k256 = { version = "0.13", default-features = false, features = ["schnorr", "alloc"], optional = true }
 
-# --- KDBX4 import spike (de-risking wasm compat) ---
+# --- KDBX4 import (both layers: import runs in the main app) ---
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 chacha20 = "0.9"

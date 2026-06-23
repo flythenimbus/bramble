@@ -1,3 +1,11 @@
 dist/
 public/wasm/
 node_modules/
+
+# Generated native FFI artifacts (regenerate via scripts/build-crypto-ffi.sh)
+native-build/
+
+# Generated native FFI install locations (regenerate via scripts/build-crypto-ffi.sh)
+ios/App/VaultCryptoFFI/
+android/app/src/main/jniLibs/
+android/app/src/main/java/uniffi/
