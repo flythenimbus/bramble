@@ -11,6 +11,10 @@ default_platform(:ios)
 
 REPO = `git rev-parse --show-toplevel`.strip
 BUNDLE_ID = "app.bramble.mobile"
+# Force DerivedData (incl. the SPM checkout cache) onto the internal disk. Xcode's
+# default here points at an external Transcend volume that EPERMs the SPM cache and
+# breaks `build_app` (see packages/platform-mobile/docs/development.md quirks 3-6).
+DERIVED = "/tmp/bramble-derived-data"
 
 platform :ios do
   # Web bundle + shared Rust libs (installs ios/App/VaultCryptoFFI/) + Capacitor sync.
@@ -27,6 +31,7 @@ platform :ios do
       project: "App.xcodeproj",
       scheme: "App",
       export_method: "app-store",
+      derived_data_path: DERIVED,
       output_directory: File.expand_path("~/Desktop"),
       output_name: "Bramble-TestFlight.ipa",
       xcargs: "-allowProvisioningUpdates",
@@ -52,6 +57,7 @@ platform :ios do
       project: "App.xcodeproj",
       scheme: "App",
       export_method: "app-store",
+      derived_data_path: DERIVED,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} -allowProvisioningUpdates",
     )
     upload_to_testflight(api_key: key, skip_waiting_for_build_processing: true)

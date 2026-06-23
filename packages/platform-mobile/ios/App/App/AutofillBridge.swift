@@ -45,7 +45,13 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 						recordIdentifier: recordId))
 			}
 		}
-		UserDefaults(suiteName: appGroup)?.set(stored, forKey: secretsKey)
+		// Store as JSON Data: a plist array-of-dicts can fail to cast back cleanly in the
+		// extension (NSArray<NSDictionary> -> [[String: Any]]); JSON round-trips exactly.
+		let json = (try? JSONSerialization.data(withJSONObject: stored)) ?? Data()
+		let defaults = UserDefaults(suiteName: appGroup)
+		defaults?.set(json, forKey: secretsKey)
+		NSLog("[AutofillBridge] sync wrote %d credentials (%d bytes) to App Group %@",
+			stored.count, json.count, appGroup)
 		// The identity store is a no-op until the user enables Bramble under Settings.
 		ASCredentialIdentityStore.shared.getState { state in
 			guard state.isEnabled else {
