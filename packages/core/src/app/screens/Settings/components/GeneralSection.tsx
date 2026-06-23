@@ -1,31 +1,26 @@
-import { Clock, ShieldCheck, SlidersHorizontal, Smartphone, Timer } from "lucide-react";
+import { Clock, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
 import { useEffect } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
-const autoLockLabel = (m: number) => (m === 0 ? "Never" : m === 60 ? "1 hour" : `${m} minutes`);
-// The keep-unlocked window reuses the auto-lock timeout. The provider gets: 0 = off,
-// a positive minute count, or -1 = never expire (when auto-lock is "Never").
-const keepUnlockedWindow = (on: boolean, autoLockMinutes: number) =>
-	!on ? 0 : autoLockMinutes > 0 ? autoLockMinutes : -1;
+// Auto-lock timeout values: -1 = Immediately, >0 = minutes, 0 = Never. On mobile this
+// one setting also drives the autofill provider's keep-unlocked window: Immediately ->
+// 0 (require auth every fill), N minutes -> N, Never -> -1 (never expire).
+const keepUnlockedWindow = (autoLockMinutes: number) =>
+	autoLockMinutes < 0 ? 0 : autoLockMinutes > 0 ? autoLockMinutes : -1;
 
 /** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill } = usePlatform();
 
-	// Keep the OS autofill provider's window in sync with the toggle + the auto-lock
-	// timeout it reuses (also pushes the initial value once prefs load). No-op where the
-	// platform has no native provider.
+	// On mobile the auto-lock timeout also governs the autofill provider's keep-unlocked
+	// window; push it whenever the setting changes. No-op where there's no native provider.
 	useEffect(() => {
-		if (loaded) {
-			void autofill.setKeepUnlocked?.(
-				keepUnlockedWindow(prefs.autofillKeepUnlocked, prefs.autoLockMinutes),
-			);
-		}
-	}, [loaded, prefs.autofillKeepUnlocked, prefs.autoLockMinutes, autofill]);
+		if (loaded) void autofill.setKeepUnlocked?.(keepUnlockedWindow(prefs.autoLockMinutes));
+	}, [loaded, prefs.autoLockMinutes, autofill]);
 
 	// Prefs come from a quick local-storage read; hold the section until it
 	// resolves so the selects don't flash their defaults before snapping over.
@@ -36,7 +31,11 @@ export function GeneralSection() {
 			<Row
 				icon={<Clock className="w-4 h-4 text-primary" />}
 				title="Auto-lock timeout"
-				subtitle="Lock vault after inactivity"
+				subtitle={
+					autofill.setKeepUnlocked
+						? "Lock the vault, and require autofill re-auth, after inactivity"
+						: "Lock vault after inactivity"
+				}
 			>
 				<div className="w-44">
 					<SelectField
@@ -44,6 +43,9 @@ export function GeneralSection() {
 						value={String(prefs.autoLockMinutes)}
 						onChange={(e) => void update("autoLockMinutes", Number(e.target.value))}
 					>
+						{/* Mobile (native autofill) extreme: lock right away and require auth on
+						    every fill. The default on mobile. */}
+						{autofill.setKeepUnlocked && <option value="-1">Immediately</option>}
 						<option value="5">5 minutes</option>
 						<option value="15">15 minutes</option>
 						<option value="30">30 minutes</option>
@@ -52,26 +54,6 @@ export function GeneralSection() {
 					</SelectField>
 				</div>
 			</Row>
-
-			{/* Mobile only: shown where there's a native autofill provider. Caches the
-			    key behind device-unlock for the window, so it is opt-in and off by default. */}
-			{autofill.setKeepUnlocked && (
-				<Row
-					icon={<Smartphone className="w-4 h-4 text-primary" />}
-					title="Keep autofill unlocked"
-					subtitle={
-						prefs.autoLockMinutes === 0
-							? "Reuses your auto-lock timeout, set to Never, so autofill stays unlocked until you lock Bramble. The key stays cached behind your device unlock until then."
-							: `Reuses your auto-lock timeout (${autoLockLabel(prefs.autoLockMinutes)}). After you unlock autofill, fills skip the master password for that long; the key stays cached behind your device unlock for the window.`
-					}
-				>
-					<Toggle
-						checked={prefs.autofillKeepUnlocked}
-						onChange={(enabled) => void update("autofillKeepUnlocked", enabled)}
-						label="Toggle keep autofill unlocked"
-					/>
-				</Row>
-			)}
 
 			<Row
 				icon={<Timer className="w-4 h-4 text-primary" />}

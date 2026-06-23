@@ -4,28 +4,32 @@ import { mobileCrypto } from "./adapters/crypto";
 import { mobileStorage } from "./adapters/storage";
 import { lockForLifecycle } from "./adapters/vault-session";
 
-// Inactivity auto-lock honoring the user's "Auto-lock timeout" setting. We do NOT
-// lock the instant the app is backgrounded; instead background time counts as
-// inactivity, and the vault locks once the configured timeout has elapsed (and
-// never when the setting is "Never" / 0). Foreground idle is caught by an interval;
-// background idle is caught on resume.
+// Auto-lock honoring the user's "Auto-lock timeout" setting. For a positive timeout,
+// background time counts as inactivity and the vault locks once it elapses; "Never" (0)
+// never locks; "Immediately" (-1) locks the moment the app leaves the foreground (and on
+// return). Foreground idle is caught by an interval.
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
 const CHECK_INTERVAL_MS = 15_000;
 
 let lastActivity = Date.now();
 
-async function timeoutMs(): Promise<number> {
+async function autoLockMinutes(): Promise<number> {
 	const m = await mobileStorage.getMeta<number>(PREF_AUTOLOCK_MINUTES);
-	const minutes = typeof m === "number" ? m : DEFAULT_AUTOLOCK_MINUTES;
-	return minutes <= 0 ? 0 : minutes * 60_000;
+	return typeof m === "number" ? m : DEFAULT_AUTOLOCK_MINUTES;
 }
 
-async function maybeLock(): Promise<void> {
-	const t = await timeoutMs();
-	if (t === 0) return; // "Never"
-	if (Date.now() - lastActivity < t) return;
+// `reason` distinguishes a foreground idle tick from leaving/returning to the app,
+// which is what "Immediately" (-1) keys off.
+async function maybeLock(reason: "idle" | "left" | "returned"): Promise<void> {
+	const minutes = await autoLockMinutes();
+	if (minutes === 0) return; // "Never"
 	if (await mobileCrypto.isLocked()) return;
-	await lockForLifecycle();
+	if (minutes < 0) {
+		// "Immediately": lock on leaving the foreground (backstopped on return).
+		if (reason !== "idle") await lockForLifecycle();
+		return;
+	}
+	if (Date.now() - lastActivity >= minutes * 60_000) await lockForLifecycle();
 }
 
 /** Start inactivity tracking + auto-lock. Returns a cleanup function. */
@@ -36,10 +40,14 @@ export function startAutoLock(): () => void {
 	for (const e of ACTIVITY_EVENTS) {
 		document.addEventListener(e, bump, { passive: true, capture: true });
 	}
-	const interval = setInterval(() => void maybeLock(), CHECK_INTERVAL_MS);
-	// Coming back from the background: check immediately (the interval is suspended
-	// while backgrounded, so resume is when accumulated idle time gets evaluated).
-	const resume = CapacitorApp.addListener("resume", () => void maybeLock());
+	const interval = setInterval(() => void maybeLock("idle"), CHECK_INTERVAL_MS);
+	// Coming back from the background: check accumulated idle time (the interval is
+	// suspended while backgrounded), and lock on return for "Immediately".
+	const resume = CapacitorApp.addListener("resume", () => void maybeLock("returned"));
+	// "Immediately" clears the key the moment the app leaves the foreground.
+	const stateChange = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+		if (!isActive) void maybeLock("left");
+	});
 
 	return () => {
 		for (const e of ACTIVITY_EVENTS) {
@@ -47,5 +55,6 @@ export function startAutoLock(): () => void {
 		}
 		clearInterval(interval);
 		void resume.then((h) => h.remove());
+		void stateChange.then((h) => h.remove());
 	};
 }
