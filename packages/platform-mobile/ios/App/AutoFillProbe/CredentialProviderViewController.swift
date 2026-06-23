@@ -1,5 +1,4 @@
 import AuthenticationServices
-import LocalAuthentication
 import Security
 import UIKit
 
@@ -84,7 +83,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 	private let keychainAccount = "vek"
 	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
 
-	private enum VekOutcome { case ok(String), missing, denied }
+	private enum VekOutcome { case ok(String), missing, denied(String) }
 
 	private var creds: [Cred] = []
 	private let table = UITableView(frame: .zero, style: .insetGrouped)
@@ -129,6 +128,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 		table.dataSource = self
 		table.delegate = self
 		table.backgroundColor = .clear
+		table.rowHeight = UITableView.automaticDimension
+		table.estimatedRowHeight = 64
 		table.register(CredCell.self, forCellReuseIdentifier: "cred")
 
 		emptyLabel.numberOfLines = 0
@@ -225,10 +226,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			DispatchQueue.main.async {
 				guard let self = self else { return }
 				switch outcome {
-				case .denied:
-					self.cancel(.userCanceled)
 				case .missing:
 					self.showNeedsBiometric()
+				case .denied(let msg):
+					// Surface the failure instead of dismissing silently, so the cause is
+					// visible on-device (cancel, lockout, no enrolled biometrics, ...).
+					self.showError("Couldn't unlock", msg)
 				case .ok(let vek):
 					do {
 						try unlockWithVek(vekB64: vek)
@@ -237,23 +240,20 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 							withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
 							completionHandler: nil)
 					} catch {
-						NSLog("[AutoFill] decrypt failed: %@", error.localizedDescription)
-						self.cancel(.failed)
+						self.showError("Couldn't decrypt", error.localizedDescription)
 					}
 				}
 			}
 		}
 	}
 
+	// Read the biometric-gated VEK from the shared Keychain. The item's
+	// `.biometryCurrentSet` access control makes SecItemCopyMatching itself present
+	// Face ID (no separate LAContext, which can fail to present inside an extension);
+	// `kSecUseOperationPrompt` sets the reason. Runs off the main thread since the
+	// call blocks while the prompt is up.
 	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
-		let context = LAContext()
-		context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) {
-			success, evalError in
-			guard success else {
-				NSLog("[AutoFill] biometric failed: %@", evalError?.localizedDescription ?? "?")
-				completion(.denied)
-				return
-			}
+		DispatchQueue.global(qos: .userInitiated).async {
 			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
 				kSecAttrService as String: self.keychainService,
@@ -261,18 +261,19 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 				kSecAttrAccessGroup as String: self.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
-				kSecUseAuthenticationContext as String: context,
-				kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
+				kSecUseOperationPrompt as String: reason,
 			]
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
+			NSLog("[AutoFill] keychain read status=%d group=%@", status, self.accessGroup)
 			if status == errSecSuccess, let data = item as? Data,
 				let secret = String(data: data, encoding: .utf8)
 			{
 				completion(.ok(secret))
+			} else if status == errSecItemNotFound {
+				completion(.missing)
 			} else {
-				NSLog("[AutoFill] keychain read failed: status=%d", status)
-				completion(status == errSecItemNotFound ? .missing : .denied)
+				completion(.denied("Keychain status \(status)"))
 			}
 		}
 	}
@@ -280,11 +281,14 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 	// No cached VEK: the user has not turned on biometric unlock in Bramble, which is
 	// what caches the key the extension decrypts with.
 	private func showNeedsBiometric() {
-		let alert = UIAlertController(
-			title: "Turn on biometric unlock",
-			message: "Open Bramble and enable Biometric unlock in Settings, then try again. "
-				+ "That caches the key this needs to fill your passwords.",
-			preferredStyle: .alert)
+		showError(
+			"Turn on biometric unlock",
+			"Open Bramble, go to Settings, and enable Biometric unlock, then try again. That caches "
+				+ "the key this needs to fill your passwords.")
+	}
+
+	private func showError(_ title: String, _ message: String) {
+		let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
 		alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
 			self?.cancel(.userCanceled)
 		})
