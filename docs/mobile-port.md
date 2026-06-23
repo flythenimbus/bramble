@@ -124,20 +124,37 @@ ground truth of what exists.
   the FFI surface too (so KDBX import works under native crypto). The build script installs into the
   committed project trees (`ios/App/VaultCryptoFFI/`, `android/.../jniLibs/` + `.../uniffi/`, all
   gitignored). **iOS native integration is CODE-COMPLETE and compile-verified** (next bullet).
-- **iOS native crypto + autofill provider: CODE-COMPLETE, compile-verified (xcodebuild App + appex).**
-  On iOS the mobile `crypto` adapter now runs **native** (the uniffi core via a `NativeCrypto` Capacitor
-  plugin) instead of WASM, so the vault works under **Lockdown Mode** (Android + dev browser stay WASM).
-  The **AutoFillProbe seed VC is replaced by the real provider**: it lists the vault's logins, reads the
-  biometric-gated VEK from a **shared Keychain access group** (Face ID), and decrypts the chosen password
-  natively (`unlockWithVek` + `decryptWithVek`, no Argon2id). The main app's `setIndex` encrypts each
-  password under the VEK and pushes (service, username, recordId, encrypted secret) to the App Group +
-  `ASCredentialIdentityStore` via an `AutofillBridge` plugin; passwords are never written in cleartext.
-  Wiring is idempotent (`scripts/add-native-crypto.rb`). **Device-pending (the TestFlight loop):** archive
-  distribution with `-allowProvisioningUpdates`; on device, re-enable biometric (the VEK item moved to the
-  shared access group) and enable Bramble under Settings > Passwords > AutoFill; then verify Lockdown-Mode
-  unlock + a live Safari fill.
+- **iOS native crypto + autofill provider: BUILT and WORKING on a real device (TestFlight).** On iOS the
+  mobile `crypto` adapter runs **native** (the uniffi core via the `NativeCrypto` Capacitor plugin; uniffi
+  free fns are shadowed by the plugin's @objc methods, so they're called module-qualified `App.<fn>`), so
+  the vault works under **Lockdown Mode** (Android + a dev browser stay on WASM). The `AutoFillProbe` target
+  ships the **real credential provider** (SwiftUI in `CredentialProviderViewController.swift`), and the user
+  has confirmed it **fills logins end-to-end on device**. Key properties:
+  - **Auth-first + encrypted at rest (the security model).** The app encrypts the WHOLE login list
+    (names + usernames + passwords) under the VEK (`encryptWithVek`) before writing it to the App Group, so
+    nothing about the vault is readable there in cleartext. The provider shows an **unlock screen first** and
+    only decrypts + lists after it has the VEK. The `ASCredentialIdentityStore` is **not** populated (it
+    would leak usernames in QuickType before auth); trigger is the keyboard key icon, not an inline chip.
+  - **Three unlock paths** (in `CredentialProviderViewController.swift`): the **master password** run
+    natively in the extension (`unwrapVekPassword` = Argon2id 64 MiB; fits the ~120 MB cap, Bitwarden-style;
+    the app shares the non-secret password slot via `AutofillBridge`); a **biometric/passcode** fast path
+    (the cached VEK item's access control is `.userPresence`, so Face ID OR the device passcode; label is the
+    device's actual biometry, e.g. Face ID / Touch ID); and a **keep-unlocked session** (below).
+  - **One setting governs lock + keep-unlocked.** The **Auto-lock timeout** gained an **"Immediately"**
+    option (first, **mobile default**); it controls both the in-app vault auto-lock and the provider's
+    keep-unlocked window. Immediately = lock on app-leave + ask for the master password every fill; 5/15/30/60
+    min = that window; Never = stay unlocked. The old separate "keep autofill unlocked" toggle was removed.
+    Mapping to the extension (a device-unlock-gated, time-stamped Keychain session): Immediately -> 0 (off),
+    N -> N, Never -> -1 (never expire). "Immediately" is mobile-gated (the browser extension is untouched).
+  - **UI is SwiftUI** styled from the app's design tokens (the unlock screen mirrors the app auth screen:
+    glyph, heading, card; the list mirrors the in-app vault). The `bramble-glyph.png` is base64-embedded.
+  - **Release pipeline:** `pnpm ios:beta` (fastlane: build + TestFlight upload, **timestamp build numbers**
+    so the auto-bump can't collide) and `pnpm ios:ipa` (distribution IPA to ~/Desktop). Needs an ASC API key
+    in `ios/App/fastlane/.env` + `AuthKey.p8` (gitignored). Wiring is idempotent (`scripts/add-native-crypto.rb`).
+  - Fixed for App Store: the 1024 marketing icon had an alpha channel (placeholder in ASC); flattened to
+    opaque RGB.
 - **Not started:** Android native crypto plugin + `AutofillService` (Android parity), passkeys/PRF
-  (Phase 4), distribution (Phase 5).
+  (Phase 4), App Store distribution (Phase 5).
 
 Dev workflow + the environment quirks hit while building this are in
 [`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
@@ -146,34 +163,34 @@ The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
 ### Next steps (where to resume)
 
 Fresh-session orientation: the auto-loaded memories (`capacitor-mobile-port-plan`,
-`mobile-biometric-unlock-build-status`, `mobile-autofill-probe-go`, `ios-lockdown-mode-breaks-wasm`)
-plus the "Implementation status" up top and `CONTEXT.md` are the ground truth. Phases 0–1 done,
-Phase 2 biometric done (iOS verified), **Phase 3 autofill GO and functionally confirmed end-to-end on
-a real device** (TestFlight). In rough priority/leverage order:
+`mobile-shared-crypto-core-uniffi`, `mobile-autofill-ios-working`, `ios-lockdown-mode-breaks-wasm`) plus
+the "Implementation status" up top and `CONTEXT.md` are the ground truth. **iOS is essentially done:**
+Phases 0–2 complete, and **Phase 3 autofill is BUILT and filling logins on a real device** (TestFlight),
+with native crypto (Lockdown-Mode-safe), auth-first + encrypted-at-rest storage, the SwiftUI provider, and
+the fastlane release pipeline. In rough priority order:
 
-**Done (this branch): the shared Rust crypto core + the iOS native integration are CODE-COMPLETE and
-compile-verified** (see the two "Shared Rust crypto core" / "iOS native crypto + autofill provider"
-status bullets above). Items 1–3 below are now built on iOS; what remains is **device verification via
-TestFlight** and **Android parity**.
-
-1. **TestFlight verification (iOS) — the immediate next action.** Archive a distribution build
-   (`-allowProvisioningUpdates` registers the new keychain-sharing capability). On the device, re-enable
-   biometric (the VEK item moved to the shared access group) and enable Bramble under Settings >
-   Passwords > AutoFill, then verify: (a) the vault unlocks under **Lockdown Mode** (native crypto, no
-   JIT — see [[ios-lockdown-mode-breaks-wasm]]); (b) autofill fills a saved login in Safari.
-2. **Android parity (the remaining platform work).** Mirror the iOS work on Android: a Kotlin
-   `NativeCrypto` Capacitor plugin over the uniffi Kotlin bindings (jniLibs already built; needs the JNA
-   `@aar` dep + `MainActivity.registerPlugin`), flip `adapters/crypto.ts` to native on Android, then the
-   classic `AutofillService` (a separate provider from iOS — no App Group, same-package storage).
-4. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
-   biometric **re-enrollment edge** (make `isEnabled()` detect an invalidated item so the toggle/button
-   don't dangle); the broader **vault list/detail/edit small-screen UI sweep**.
-5. **Later phases:** passkeys / PRF unlock (Phase 4, long-lead, Apple entitlement), distribution
+1. **On-device re-verify of the latest iOS builds.** The autofill *fill* path is confirmed on device, but
+   the most recent security/UX builds (auth-first + encrypted bundle; the "Immediately" auto-lock default;
+   the dynamic biometry label; the flattened App Store icon) want a fresh pass: install the latest build,
+   confirm the unlock-first flow, master-password + Face-ID/passcode + keep-unlocked paths, and Lockdown-Mode
+   unlock. (Latest TestFlight builds use timestamp numbers, e.g. ~204419414.)
+2. **Android parity: the big remaining workstream.** A Kotlin `NativeCrypto` Capacitor plugin over the
+   uniffi Kotlin bindings (jniLibs + glue already built; needs the JNA `@aar` dep + `MainActivity.registerPlugin`),
+   flip `adapters/crypto.ts` to native on Android, port `AutofillBridge`/`setKeepUnlocked`, then the classic
+   `AutofillService` (a SEPARATE provider model from iOS: no full-screen list, just system-drawn `RemoteViews`
+   datasets + a Compose/Activity unlock screen via `setAuthentication`; same-package storage + Keystore, no
+   App Group). The auth-first + encrypted-bundle design carries over.
+3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
+   biometric **re-enrollment edge** (`isEnabled()` should detect an invalidated item); the broader **vault
+   list/detail/edit small-screen UI sweep**.
+4. **Polish / decisions:** an optional **QuickType opt-in** (re-add `ASCredentialIdentityStore` as a setting
+   for the inline keyboard chip, accepting the domain-scoped username exposure); the ASC app **Name** /
+   subtitle metadata; export the autofill provider behind a real (renamed) extension target if desired.
+5. **Later phases:** passkeys / PRF unlock (Phase 4, long-lead, Apple entitlement), App Store distribution
    (Phase 5, App Store 4.2 + targetSdk).
 
-The throwaway probe bits are now gone (the `AutoFillProbe` debug-label VC became the real provider; the
-`AppDelegate` dummy App Group write was removed). The `AutoFillProbe` target name is retained (renaming it
-is unnecessary pbxproj churn); it now ships the real credential provider.
+The throwaway probe bits are gone (the `AutoFillProbe` VC is the real provider; the `AppDelegate` dummy App
+Group write was removed). The `AutoFillProbe` target name is retained (renaming is unnecessary pbxproj churn).
 
 ## Method (what the research explored)
 
