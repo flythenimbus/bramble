@@ -19,6 +19,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 
 	private let appGroup = "group.app.bramble.mobile"
 	private let secretsKey = "autofill.secrets"
+	private let slotKey = "autofill.slot"
 
 	// credentials: [{ recordId, username, iv, ciphertext, services: [String] }]. The
 	// password ciphertext is encryptWithVek output; the extension decryptWithVek-s it.
@@ -51,8 +52,15 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		let json = (try? JSONSerialization.data(withJSONObject: stored)) ?? Data()
 		let defaults = UserDefaults(suiteName: appGroup)
 		defaults?.set(json, forKey: secretsKey)
-		NSLog("[AutofillBridge] sync wrote %d credentials (%d bytes) to App Group %@",
-			stored.count, json.count, appGroup)
+		// The password slot lets the extension unlock itself with the master password.
+		// Non-secret (the wrappedVek stays AES-encrypted); store as JSON Data.
+		if let slot = call.getObject("slot"),
+			let slotJson = try? JSONSerialization.data(withJSONObject: slot)
+		{
+			defaults?.set(slotJson, forKey: slotKey)
+		}
+		NSLog("[AutofillBridge] sync wrote %d credentials (%d bytes) + slot=%@ to App Group %@",
+			stored.count, json.count, String(call.getObject("slot") != nil), appGroup)
 		// The identity store is a no-op until the user enables Bramble under Settings.
 		ASCredentialIdentityStore.shared.getState { state in
 			guard state.isEnabled else {
@@ -66,7 +74,9 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	@objc func clear(_ call: CAPPluginCall) {
-		UserDefaults(suiteName: appGroup)?.removeObject(forKey: secretsKey)
+		let defaults = UserDefaults(suiteName: appGroup)
+		defaults?.removeObject(forKey: secretsKey)
+		defaults?.removeObject(forKey: slotKey)
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
 	}
 }

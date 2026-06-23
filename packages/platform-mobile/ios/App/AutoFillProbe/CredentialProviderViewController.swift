@@ -2,12 +2,16 @@ import AuthenticationServices
 import Security
 import UIKit
 
-// AutoFill Credential Provider: lists the vault's logins, and on a tap reads the
-// biometric-gated VEK the main app cached in the shared Keychain (Face ID) and
-// decrypts the chosen password natively via the shared Rust core (VaultCryptoFFI) —
-// no Argon2id, which would not fit the extension's ~120 MB cap. The main app writes
-// each login's encrypted password + (name, service, username) to the shared App Group
-// and populates ASCredentialIdentityStore (AutofillBridge.swift). docs/mobile-port.md.
+// AutoFill Credential Provider. Lists the vault's logins from the shared App Group,
+// then on a tap obtains the VEK and decrypts the chosen password natively via the
+// shared Rust core (VaultCryptoFFI). Two ways to get the VEK, in order:
+//   1. a biometric/passcode-cached VEK (the in-app "biometric unlock" item, gated by
+//      Face ID OR device passcode) — the fast path, no typing.
+//   2. the master password: the app shares the (non-secret) password slot, so the
+//      extension runs Argon2id itself and unwraps the VEK. The Bitwarden-style flow,
+//      works with no biometrics set up.
+// Passwords are never stored in cleartext; the slot's wrappedVek stays AES-encrypted.
+// docs/mobile-port.md "OS-level autofill".
 
 private struct Cred {
 	let recordId: String
@@ -18,14 +22,19 @@ private struct Cred {
 	let services: [String]
 }
 
+private struct Slot {
+	let salt: String
+	let slotId: String
+	let verifier: String
+	let wrapIv: String
+	let wrappedVek: String
+	let magicVersion: Data
+}
+
 private func initials(_ s: String) -> String {
 	let words = s.split(whereSeparator: { $0 == " " || $0 == "." })
-	let chars: [Character]
-	if words.count >= 2 {
-		chars = [words[0].first, words[1].first].compactMap { $0 }
-	} else {
-		chars = Array(s.prefix(2))
-	}
+	let chars: [Character] =
+		words.count >= 2 ? [words[0].first, words[1].first].compactMap { $0 } : Array(s.prefix(2))
 	return String(chars).uppercased()
 }
 
@@ -74,11 +83,107 @@ private final class CredCell: UITableViewCell {
 	}
 }
 
+// Master-password unlock sheet. Collects the password and reports it via onUnlock; the
+// presenter runs Argon2id and either dismisses (success) or calls showError to retry.
+private final class MasterPasswordViewController: UIViewController, UITextFieldDelegate {
+	var onUnlock: ((String) -> Void)?
+	var onCancel: (() -> Void)?
+	private let field = UITextField()
+	private let unlockButton = UIButton(type: .system)
+	private let spinner = UIActivityIndicatorView(style: .medium)
+	private let errorLabel = UILabel()
+	private let prompt: String
+
+	init(prompt: String) {
+		self.prompt = prompt
+		super.init(nibName: nil, bundle: nil)
+	}
+	required init?(coder: NSCoder) { fatalError() }
+
+	override func viewDidLoad() {
+		super.viewDidLoad()
+		view.backgroundColor = .systemBackground
+
+		let cancel = UIButton(type: .system)
+		cancel.setTitle("Cancel", for: .normal)
+		cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+		let title = UILabel()
+		title.text = prompt
+		title.font = .preferredFont(forTextStyle: .headline)
+		title.textAlignment = .center
+
+		field.placeholder = "Master password"
+		field.isSecureTextEntry = true
+		field.borderStyle = .roundedRect
+		field.autocapitalizationType = .none
+		field.autocorrectionType = .no
+		field.returnKeyType = .go
+		field.delegate = self
+
+		unlockButton.setTitle("Unlock", for: .normal)
+		unlockButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+		unlockButton.addTarget(self, action: #selector(unlockTapped), for: .touchUpInside)
+
+		errorLabel.textColor = .systemRed
+		errorLabel.font = .preferredFont(forTextStyle: .footnote)
+		errorLabel.numberOfLines = 0
+		errorLabel.textAlignment = .center
+
+		let stack = UIStackView(arrangedSubviews: [title, field, unlockButton, errorLabel, spinner])
+		stack.axis = .vertical
+		stack.spacing = 16
+		[cancel, stack].forEach {
+			$0.translatesAutoresizingMaskIntoConstraints = false
+			view.addSubview($0)
+		}
+		let g = view.safeAreaLayoutGuide
+		NSLayoutConstraint.activate([
+			cancel.topAnchor.constraint(equalTo: g.topAnchor, constant: 8),
+			cancel.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
+			stack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
+			stack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
+			stack.topAnchor.constraint(equalTo: g.topAnchor, constant: 64),
+		])
+	}
+
+	override func viewDidAppear(_ animated: Bool) {
+		super.viewDidAppear(animated)
+		field.becomeFirstResponder()
+	}
+
+	func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+		unlockTapped()
+		return true
+	}
+
+	@objc private func unlockTapped() {
+		errorLabel.text = nil
+		setBusy(true)
+		onUnlock?(field.text ?? "")
+	}
+
+	@objc private func cancelTapped() { onCancel?() }
+
+	func showError(_ message: String) {
+		setBusy(false)
+		errorLabel.text = message
+		field.becomeFirstResponder()
+	}
+
+	private func setBusy(_ busy: Bool) {
+		busy ? spinner.startAnimating() : spinner.stopAnimating()
+		field.isEnabled = !busy
+		unlockButton.isEnabled = !busy
+	}
+}
+
 class CredentialProviderViewController: ASCredentialProviderViewController, UITableViewDataSource,
 	UITableViewDelegate
 {
 	private let appGroup = "group.app.bramble.mobile"
 	private let secretsKey = "autofill.secrets"
+	private let slotKey = "autofill.slot"
 	private let keychainService = "app.bramble.mobile.biometric-vault"
 	private let keychainAccount = "vek"
 	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
@@ -89,7 +194,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 	private let table = UITableView(frame: .zero, style: .insetGrouped)
 	private let emptyLabel = UILabel()
 
-	// JSON blob written by AutofillBridge (App-side). JSON avoids the plist
+	// JSON blobs written by AutofillBridge (App-side). JSON avoids the plist
 	// array-of-dicts cast that can silently fail across the process boundary.
 	private func loadCreds() -> [Cred] {
 		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: secretsKey),
@@ -103,6 +208,19 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 				recordId: recordId, name: (d["name"] as? String) ?? username, username: username,
 				iv: iv, ciphertext: ct, services: (d["services"] as? [String]) ?? [])
 		}
+	}
+
+	private func loadSlot() -> Slot? {
+		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: slotKey),
+			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let salt = d["saltB64"] as? String, let slotId = d["slotIdB64"] as? String,
+			let verifier = d["verifierB64"] as? String, let wrapIv = d["wrapIvB64"] as? String,
+			let wrapped = d["wrappedVekB64"] as? String, let mvB64 = d["magicVersionB64"] as? String,
+			let mv = Data(base64Encoded: mvB64)
+		else { return nil }
+		return Slot(
+			salt: salt, slotId: slotId, verifier: verifier, wrapIv: wrapIv, wrappedVek: wrapped,
+			magicVersion: mv)
 	}
 
 	override func viewDidLoad() {
@@ -187,17 +305,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 		render()
 	}
 
-	// QuickType pick of a specific identity: show that record (tap confirms with Face ID).
 	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
 		let all = loadCreds()
 		let match = all.filter { $0.recordId == credentialIdentity.recordIdentifier }
 		creds = match.isEmpty ? all : match
-		NSLog("[AutoFill] prepareInterface record=%@ loaded=%d shown=%d",
-			credentialIdentity.recordIdentifier ?? "nil", all.count, creds.count)
 		render()
 	}
 
-	// No silent fill: a fill needs the biometric VEK read, so defer to UI.
 	override func provideCredentialWithoutUserInteraction(
 		for credentialIdentity: ASPasswordCredentialIdentity
 	) {
@@ -219,39 +333,94 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 		fill(creds[indexPath.row])
 	}
 
-	// --- decrypt + complete (Face ID runs here: user-initiated, so foregrounded) ---
+	// --- unlock + decrypt + complete ---
 
 	private func fill(_ cred: Cred) {
-		readVek(reason: "Unlock to fill \(cred.username)") { [weak self] outcome in
-			DispatchQueue.main.async {
-				guard let self = self else { return }
-				switch outcome {
-				case .missing:
-					self.showNeedsBiometric()
-				case .denied(let msg):
-					// Surface the failure instead of dismissing silently, so the cause is
-					// visible on-device (cancel, lockout, no enrolled biometrics, ...).
-					self.showError("Couldn't unlock", msg)
-				case .ok(let vek):
-					do {
-						try unlockWithVek(vekB64: vek)
-						let password = try decryptWithVek(ivB64: cred.iv, ciphertextB64: cred.ciphertext)
-						self.extensionContext.completeRequest(
-							withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
-							completionHandler: nil)
-					} catch {
-						self.showError("Couldn't decrypt", error.localizedDescription)
+		// Fast path: a cached VEK (Face ID / passcode). Falls back to the master password.
+		if vekExists() {
+			readVek(reason: "Unlock to fill \(cred.username)") { [weak self] outcome in
+				DispatchQueue.main.async {
+					guard let self = self else { return }
+					switch outcome {
+					case .ok(let vek):
+						do {
+							try unlockWithVek(vekB64: vek)
+							self.decryptAndComplete(cred)
+						} catch { self.showError("Couldn't unlock", error.localizedDescription) }
+					case .missing:
+						self.promptPassword(for: cred)
+					case .denied(let msg):
+						self.showError("Couldn't unlock", msg)
 					}
 				}
 			}
+		} else {
+			promptPassword(for: cred)
 		}
 	}
 
-	// Read the biometric-gated VEK from the shared Keychain. The item's
-	// `.biometryCurrentSet` access control makes SecItemCopyMatching itself present
-	// Face ID (no separate LAContext, which can fail to present inside an extension);
-	// `kSecUseOperationPrompt` sets the reason. Runs off the main thread since the
-	// call blocks while the prompt is up.
+	// Master-password unlock: run Argon2id off the main thread, unwrap the VEK, fill.
+	private func promptPassword(for cred: Cred) {
+		guard let slot = loadSlot() else {
+			showError(
+				"Can't unlock here",
+				"This vault has no master password set, or it hasn't been synced yet. Open Bramble and "
+					+ "unlock it once, then try again.")
+			return
+		}
+		let vc = MasterPasswordViewController(prompt: cred.name)
+		vc.onCancel = { [weak vc, weak self] in vc?.dismiss(animated: true); self?.cancel(.userCanceled) }
+		vc.onUnlock = { [weak self, weak vc] password in
+			DispatchQueue.global(qos: .userInitiated).async {
+				do {
+					let ok = try unwrapVekPassword(
+						password: password, saltB64: slot.salt, slotIdB64: slot.slotId,
+						verifierB64: slot.verifier, wrapIvB64: slot.wrapIv, wrappedVekB64: slot.wrappedVek,
+						magicVersion: slot.magicVersion)
+					DispatchQueue.main.async {
+						guard let self = self else { return }
+						if ok {
+							vc?.dismiss(animated: true) { self.decryptAndComplete(cred) }
+						} else {
+							vc?.showError("Incorrect master password")
+						}
+					}
+				} catch {
+					DispatchQueue.main.async { vc?.showError(error.localizedDescription) }
+				}
+			}
+		}
+		vc.modalPresentationStyle = .fullScreen
+		present(vc, animated: true)
+	}
+
+	// The VEK is loaded in the native core by this point; decrypt the chosen secret.
+	private func decryptAndComplete(_ cred: Cred) {
+		do {
+			let password = try decryptWithVek(ivB64: cred.iv, ciphertextB64: cred.ciphertext)
+			extensionContext.completeRequest(
+				withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
+				completionHandler: nil)
+		} catch { showError("Couldn't decrypt", error.localizedDescription) }
+	}
+
+	// Presence check that never prompts: is a cached VEK available at all?
+	private func vekExists() -> Bool {
+		let q: [String: Any] = [
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: keychainService,
+			kSecAttrAccount as String: keychainAccount,
+			kSecAttrAccessGroup as String: accessGroup,
+			kSecReturnData as String: false,
+			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
+			kSecMatchLimit as String: kSecMatchLimitOne,
+		]
+		let status = SecItemCopyMatching(q as CFDictionary, nil)
+		return status == errSecSuccess || status == errSecInteractionNotAllowed
+	}
+
+	// Read the cached VEK. Its `.userPresence` access control makes SecItemCopyMatching
+	// present Face ID or the device passcode; run off the main thread since it blocks.
 	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let query: [String: Any] = [
@@ -265,7 +434,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			]
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
-			NSLog("[AutoFill] keychain read status=%d group=%@", status, self.accessGroup)
+			NSLog("[AutoFill] keychain read status=%d", status)
 			if status == errSecSuccess, let data = item as? Data,
 				let secret = String(data: data, encoding: .utf8)
 			{
@@ -276,15 +445,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 				completion(.denied("Keychain status \(status)"))
 			}
 		}
-	}
-
-	// No cached VEK: the user has not turned on biometric unlock in Bramble, which is
-	// what caches the key the extension decrypts with.
-	private func showNeedsBiometric() {
-		showError(
-			"Turn on biometric unlock",
-			"Open Bramble, go to Settings, and enable Biometric unlock, then try again. That caches "
-				+ "the key this needs to fill your passwords.")
 	}
 
 	private func showError(_ title: String, _ message: String) {
