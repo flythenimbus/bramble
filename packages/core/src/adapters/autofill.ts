@@ -140,6 +140,12 @@ export interface AutofillAdapter {
 	setIndex(entries: IndexEntry[]): Promise<void>;
 	/** Clear the pushed index (on lock). */
 	clearIndex(): Promise<void>;
+	/**
+	 * Mobile only: how long the OS autofill provider may stay unlocked without
+	 * re-auth (a "keep unlocked" window, 0 = always require auth). Defined only on
+	 * platforms with a native credential provider; absent elsewhere.
+	 */
+	setKeepUnlocked?(minutes: number): Promise<void>;
 
 	/**
 	 * Content-script-side: find matches for a page. `hasLogin`/`hasCard`/`hasOtp`

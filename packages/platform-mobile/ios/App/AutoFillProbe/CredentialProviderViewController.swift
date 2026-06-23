@@ -304,6 +304,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private let keychainService = "app.bramble.mobile.biometric-vault"
 	private let keychainAccount = "vek"
 	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
+	// Keep-unlocked session: the VEK cached behind device-unlock only (no per-access
+	// auth) for the configured window, so fills within it need no re-auth.
+	private let sessionService = "app.bramble.mobile.autofill-session"
+	private let keepUnlockedKey = "autofill.keepUnlockedMinutes"
 
 	private enum VekOutcome { case ok(String), missing, denied(String) }
 
@@ -316,12 +320,24 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
 		pendingDomains = serviceIdentifiers.map { $0.identifier.lowercased() }
 		pendingRecordId = nil
-		showUnlock()
+		resume()
 	}
 
 	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
 		pendingDomains = []
 		pendingRecordId = credentialIdentity.recordIdentifier
+		resume()
+	}
+
+	// Try the keep-unlocked session (no auth) before showing the unlock screen.
+	private func resume() {
+		if let vek = loadSession() {
+			do {
+				try unlockWithVek(vekB64: vek)
+				onUnlocked()
+				return
+			} catch { clearSession() }
+		}
 		showUnlock()
 	}
 
@@ -413,6 +429,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	// VEK is loaded in the native core; decrypt the bundle and show the list (or fill).
 	private func onUnlocked() {
+		// Start / slide the keep-unlocked window (no-op if the feature is off).
+		if let vek = try? exportVek() { saveSession(vek) }
 		guard let bundle = loadBundle() else {
 			showList([])
 			return
@@ -476,6 +494,56 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		return Slot(
 			salt: salt, slotId: slotId, verifier: verifier, wrapIv: wrapIv, wrappedVek: wrapped,
 			magicVersion: mv)
+	}
+
+	// --- keep-unlocked session (device-unlock-gated VEK cache, time-limited) ---
+
+	private func keepUnlockedMinutes() -> Int {
+		UserDefaults(suiteName: appGroup)?.integer(forKey: keepUnlockedKey) ?? 0
+	}
+
+	private func sessionBaseQuery() -> [String: Any] {
+		[
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: sessionService,
+			kSecAttrAccount as String: keychainAccount,
+			kSecAttrAccessGroup as String: accessGroup,
+		]
+	}
+
+	private func saveSession(_ vek: String) {
+		guard keepUnlockedMinutes() > 0,
+			let data = try? JSONSerialization.data(withJSONObject: [
+				"vek": vek, "at": Date().timeIntervalSince1970,
+			])
+		else { return }
+		SecItemDelete(sessionBaseQuery() as CFDictionary)
+		var add = sessionBaseQuery()
+		add[kSecValueData as String] = data
+		add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+		SecItemAdd(add as CFDictionary, nil)
+	}
+
+	private func loadSession() -> String? {
+		let minutes = keepUnlockedMinutes()
+		guard minutes > 0 else { return nil }
+		var q = sessionBaseQuery()
+		q[kSecReturnData as String] = true
+		q[kSecMatchLimit as String] = kSecMatchLimitOne
+		var item: CFTypeRef?
+		guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data,
+			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let vek = d["vek"] as? String, let at = d["at"] as? Double
+		else { return nil }
+		if Date().timeIntervalSince1970 - at > Double(minutes) * 60 {
+			clearSession()
+			return nil
+		}
+		return vek
+	}
+
+	private func clearSession() {
+		SecItemDelete(sessionBaseQuery() as CFDictionary)
 	}
 
 	// --- hosting + Keychain ---

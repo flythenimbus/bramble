@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Capacitor
 import Foundation
+import Security
 
 // Local Capacitor plugin (main-app side) bridging the unlocked vault's login list to the
 // OS credential provider. The whole list (names, usernames, passwords) arrives already
@@ -16,11 +17,15 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	public let pluginMethods: [CAPPluginMethod] = [
 		CAPPluginMethod(name: "sync", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
 	]
 
 	private let appGroup = "group.app.bramble.mobile"
 	private let bundleKey = "autofill.bundle"
 	private let slotKey = "autofill.slot"
+	private let keepUnlockedKey = "autofill.keepUnlockedMinutes"
+	private let sessionService = "app.bramble.mobile.autofill-session"
+	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
 
 	// iv/ciphertext = encryptWithVek over the JSON login list. Opaque without the VEK.
 	@objc func sync(_ call: CAPPluginCall) {
@@ -48,5 +53,22 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		defaults?.removeObject(forKey: bundleKey)
 		defaults?.removeObject(forKey: slotKey)
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
+	}
+
+	// How long the autofill extension may stay unlocked without re-auth (0 = off).
+	// Turning it off clears any live cached session immediately.
+	@objc func setKeepUnlocked(_ call: CAPPluginCall) {
+		let minutes = call.getInt("minutes") ?? 0
+		UserDefaults(suiteName: appGroup)?.set(minutes, forKey: keepUnlockedKey)
+		if minutes == 0 {
+			SecItemDelete(
+				[
+					kSecClass as String: kSecClassGenericPassword,
+					kSecAttrService as String: sessionService,
+					kSecAttrAccount as String: "vek",
+					kSecAttrAccessGroup as String: accessGroup,
+				] as CFDictionary)
+		}
+		call.resolve()
 	}
 }
