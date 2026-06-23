@@ -28,6 +28,7 @@ interface AutofillBridgePlugin {
 	// `iv`/`ciphertext` are encryptWithVek over the JSON login list (see AutofillEntry).
 	sync(o: { iv: string; ciphertext: string; slot?: SlotPayload }): Promise<void>;
 	clear(): Promise<void>;
+	setKeepUnlocked(o: { minutes: number }): Promise<void>;
 }
 
 const Bridge = registerPlugin<AutofillBridgePlugin>("AutofillBridge");
@@ -77,6 +78,12 @@ export const mobileAutofill: AutofillAdapter = {
 		// Deliberately a no-op on iOS. The bundle is VEK-encrypted (unreadable at rest)
 		// and must survive app lock so the provider can still unlock + fill on its own.
 		// setIndex overwrites it when entries change.
+	},
+	async setKeepUnlocked(minutes) {
+		// How long the autofill extension may stay unlocked without re-auth. minutes=0
+		// disables it and clears any live session. iOS-only.
+		if (!isIos) return;
+		await Bridge.setKeepUnlocked({ minutes });
 	},
 	async query() {
 		// The in-webview UI never serves OS autofill; the native provider does.

@@ -1,11 +1,25 @@
-import { Clock, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
+import { Clock, ShieldCheck, SlidersHorizontal, Smartphone, Timer } from "lucide-react";
+import { useEffect } from "react";
+import { usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
+// The autofill keep-unlocked window (minutes) when the toggle is on.
+const KEEP_UNLOCKED_MINUTES = 15;
+
 /** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
+	const { autofill } = usePlatform();
+
+	// Keep the OS autofill provider's window in sync with the pref (also pushes the
+	// initial value once prefs load). No-op where the platform has no native provider.
+	useEffect(() => {
+		if (loaded) {
+			void autofill.setKeepUnlocked?.(prefs.autofillKeepUnlocked ? KEEP_UNLOCKED_MINUTES : 0);
+		}
+	}, [loaded, prefs.autofillKeepUnlocked, autofill]);
 
 	// Prefs come from a quick local-storage read; hold the section until it
 	// resolves so the selects don't flash their defaults before snapping over.
@@ -32,6 +46,22 @@ export function GeneralSection() {
 					</SelectField>
 				</div>
 			</Row>
+
+			{/* Mobile only: shown where there's a native autofill provider. Caches the
+			    key behind device-unlock for the window, so it is opt-in and off by default. */}
+			{autofill.setKeepUnlocked && (
+				<Row
+					icon={<Smartphone className="w-4 h-4 text-primary" />}
+					title="Keep autofill unlocked"
+					subtitle={`After you unlock autofill, skip re-entering your master password for ${KEEP_UNLOCKED_MINUTES} minutes. The key stays cached behind your device unlock for that window.`}
+				>
+					<Toggle
+						checked={prefs.autofillKeepUnlocked}
+						onChange={(enabled) => void update("autofillKeepUnlocked", enabled)}
+						label="Toggle keep autofill unlocked"
+					/>
+				</Row>
+			)}
 
 			<Row
 				icon={<Timer className="w-4 h-4 text-primary" />}
