@@ -9,3 +9,6 @@ native-build/
 ios/App/VaultCryptoFFI/
 android/app/src/main/jniLibs/
 android/app/src/main/java/uniffi/
+
+# JetBrains / Android Studio project config
+.idea/
