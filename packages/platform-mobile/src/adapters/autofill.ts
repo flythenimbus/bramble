@@ -6,13 +6,13 @@ import { mobileCrypto } from "./crypto";
 import { mobileStorage } from "./storage";
 
 // System autofill on mobile is the native iOS Credential Provider extension, not the
-// webview. This adapter is the main-app side of that bridge: on unlock / every persist
-// the core calls setIndex with the decrypted login index; we encrypt each password
-// under the VEK and hand the OS provider (name, service, username) + the encrypted
-// secret via the App Group + ASCredentialIdentityStore (AutofillBridge.swift). We also
-// share the password SLOT (non-secret vault-header data: salt + verifier + the
-// AES-wrapped VEK) so the extension can unlock itself with the master password when no
-// biometric/passcode-cached VEK is available — passwords are never written in cleartext.
+// webview. This adapter is the main-app side of that bridge. To keep Bramble's "nothing
+// readable without authenticating" guarantee, the ENTIRE login list (names, usernames,
+// passwords) is encrypted under the VEK before it is written to the shared App Group, so
+// the extension reveals nothing until the user unlocks it. We also share the password
+// SLOT (non-secret vault-header data: salt + verifier + the AES-wrapped VEK) so the
+// extension can unlock itself with the master password. No cleartext entry data and no
+// ASCredentialIdentityStore (which would leak usernames in QuickType before auth).
 // Android autofill is a separate service (not built yet), so this is iOS-only.
 
 interface SlotPayload {
@@ -25,17 +25,8 @@ interface SlotPayload {
 }
 
 interface AutofillBridgePlugin {
-	sync(o: {
-		credentials: {
-			recordId: string;
-			name: string;
-			username: string;
-			iv: string;
-			ciphertext: string;
-			services: string[];
-		}[];
-		slot?: SlotPayload;
-	}): Promise<void>;
+	// `iv`/`ciphertext` are encryptWithVek over the JSON login list (see AutofillEntry).
+	sync(o: { iv: string; ciphertext: string; slot?: SlotPayload }): Promise<void>;
 	clear(): Promise<void>;
 }
 
@@ -65,28 +56,27 @@ async function readPasswordSlot(): Promise<SlotPayload | undefined> {
 export const mobileAutofill: AutofillAdapter = {
 	async setIndex(entries) {
 		if (!isIos) return;
-		const credentials = [];
+		const list = [];
 		for (const e of entries) {
 			if (e.type !== "login" || !e.password) continue;
-			// Encrypt under the loaded VEK; the extension AES-unwraps it once it has the
-			// VEK (from the biometric/passcode cache, or by unlocking with the password).
-			const enc = await mobileCrypto.encryptWithVek(e.password);
-			credentials.push({
+			list.push({
 				recordId: e.id,
 				name: e.name,
 				username: e.username,
-				iv: enc.iv,
-				ciphertext: enc.ciphertext,
+				password: e.password,
 				services: e.hostnames,
 			});
 		}
-		await Bridge.sync({ credentials, slot: await readPasswordSlot() });
+		// Encrypt the whole list under the VEK. The extension can read no entry data
+		// (names, usernames, passwords) until the user authenticates and it can decrypt
+		// this. Nothing about the vault is in the App Group in cleartext.
+		const enc = await mobileCrypto.encryptWithVek(JSON.stringify(list));
+		await Bridge.sync({ iv: enc.iv, ciphertext: enc.ciphertext, slot: await readPasswordSlot() });
 	},
 	async clearIndex() {
-		// Deliberately a no-op on iOS. The autofill bundle holds only VEK-encrypted
-		// secrets + the (non-secret) password slot, and it must survive app lock so the
-		// credential provider can still fill while the app is locked (it unlocks itself
-		// via biometric/passcode or the master password). setIndex overwrites it.
+		// Deliberately a no-op on iOS. The bundle is VEK-encrypted (unreadable at rest)
+		// and must survive app lock so the provider can still unlock + fill on its own.
+		// setIndex overwrites it when entries change.
 	},
 	async query() {
 		// The in-webview UI never serves OS autofill; the native provider does.
