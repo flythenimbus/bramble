@@ -1,4 +1,5 @@
 import AuthenticationServices
+import LocalAuthentication
 import Security
 import SwiftUI
 import UIKit
@@ -146,14 +147,16 @@ private final class UnlockModel: ObservableObject {
 	@Published var busy = false
 	@Published var error: String?
 	let hasBiometric: Bool
+	let biometricLabel: String
 	let onBiometric: () -> Void
 	let onPassword: (String) -> Void
 	let onCancel: () -> Void
 	init(
-		hasBiometric: Bool, onBiometric: @escaping () -> Void, onPassword: @escaping (String) -> Void,
-		onCancel: @escaping () -> Void
+		hasBiometric: Bool, biometricLabel: String, onBiometric: @escaping () -> Void,
+		onPassword: @escaping (String) -> Void, onCancel: @escaping () -> Void
 	) {
 		self.hasBiometric = hasBiometric
+		self.biometricLabel = biometricLabel
 		self.onBiometric = onBiometric
 		self.onPassword = onPassword
 		self.onCancel = onCancel
@@ -194,8 +197,8 @@ private struct UnlockView: View {
 								model.onBiometric()
 							} label: {
 								HStack(spacing: 8) {
-									Image(systemName: "faceid").font(.system(size: 15))
-									Text("Unlock with Face ID").font(.system(size: 15, weight: .semibold))
+									Image(systemName: biometricSymbol).font(.system(size: 15))
+									Text("Unlock with \(model.biometricLabel)").font(.system(size: 15, weight: .semibold))
 								}
 								.frame(maxWidth: .infinity).padding(.vertical, 12)
 								.background(Theme.foreground).foregroundColor(.black)
@@ -278,6 +281,12 @@ private struct UnlockView: View {
 		}
 	}
 
+	private var biometricSymbol: String {
+		if model.biometricLabel.contains("Face") { return "faceid" }
+		if model.biometricLabel.contains("Touch") { return "touchid" }
+		return "lock"
+	}
+
 	private func submit() {
 		guard !model.busy, !password.isEmpty else { return }
 		model.error = nil
@@ -325,11 +334,25 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func showUnlock() {
 		let m = UnlockModel(
 			hasBiometric: vekExists(),
+			biometricLabel: biometryLabel(),
 			onBiometric: { [weak self] in self?.unlockWithBiometric() },
 			onPassword: { [weak self] in self?.unlockWithPassword($0) },
 			onCancel: { [weak self] in self?.cancel(.userCanceled) })
 		model = m
 		host(UnlockView(model: m))
+	}
+
+	// The device's biometry name + the passcode fallback (the cached VEK is gated by
+	// `.userPresence`, so the device passcode always works too). Touch ID devices and
+	// devices with no enrolled biometric are covered.
+	private func biometryLabel() -> String {
+		let ctx = LAContext()
+		_ = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+		switch ctx.biometryType {
+		case .faceID: return "Face ID or passcode"
+		case .touchID: return "Touch ID or passcode"
+		default: return "biometrics or passcode"
+		}
 	}
 
 	// --- unlock paths (each loads the VEK into the native core, then onUnlocked) ---
