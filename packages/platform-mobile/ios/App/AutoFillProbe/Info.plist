@@ -20,6 +20,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<!-- Required to read the biometric-gated VEK Keychain item (Face ID) from the
+	     extension; without it the biometric read fails and nothing can be decrypted. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Bramble uses Face ID to unlock and fill your saved passwords.</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

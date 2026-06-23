@@ -282,6 +282,20 @@ and adds `NativeCrypto.swift` + `AutofillBridge.swift` to the App). Re-run it af
   biometric once** (the old item won't be found), and **enable Bramble under Settings > Passwords >
   AutoFill**. Archive distribution with `-allowProvisioningUpdates` so Xcode registers the keychain-sharing
   capability + app group.
+- **App Group payload is JSON**, not a plist array-of-dicts: `array(forKey:) as? [[String: Any]]` can
+  silently fail to bridge in the extension process, so AutofillBridge writes `JSONSerialization` Data and
+  the provider reads it back. The provider also triggers Face ID **on the row tap** (user-foregrounded),
+  not on `prepareInterface*` (which hits LAContext's "not running foreground"), and renders an on-screen
+  diagnostic (App Group reachable? blob bytes?) + `NSLog`s when the list is empty.
+
+### 17. Releasing to TestFlight (fastlane)
+`pnpm ios:beta` builds + uploads to TestFlight (auto-bumping the build number); `pnpm ios:ipa` exports a
+distribution IPA to `~/Desktop` with no credentials. Both run the Capacitor pre-chain first
+(`core:build` + `ffi:build:ios` + `cap sync`). Secrets live in `ios/App/fastlane/.env` + `AuthKey.p8`
+(gitignored; see `.env.example`). **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
+(`/tmp/bramble-derived-data`) because Xcode's default DerivedData here is the external Transcend volume,
+which EPERMs the SPM checkout cache and fails `build_app` with "Could not resolve package dependencies"
+(quirks 3-6). Signing stays automatic + `-allowProvisioningUpdates`.
 
 ## Reclaiming disk space
 
