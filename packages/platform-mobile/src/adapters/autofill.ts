@@ -15,6 +15,7 @@ interface AutofillBridgePlugin {
 	sync(o: {
 		credentials: {
 			recordId: string;
+			name: string;
 			username: string;
 			iv: string;
 			ciphertext: string;
@@ -38,6 +39,7 @@ export const mobileAutofill: AutofillAdapter = {
 			const enc = await mobileCrypto.encryptWithVek(e.password);
 			credentials.push({
 				recordId: e.id,
+				name: e.name,
 				username: e.username,
 				iv: enc.iv,
 				ciphertext: enc.ciphertext,
@@ -47,8 +49,10 @@ export const mobileAutofill: AutofillAdapter = {
 		await Bridge.sync({ credentials });
 	},
 	async clearIndex() {
-		if (!isIos) return;
-		await Bridge.clear();
+		// Deliberately a no-op on iOS. The autofill bundle holds only VEK-encrypted
+		// secrets (safe at rest), and it must survive app lock so the credential
+		// provider can still fill while the app is locked (it reads the biometric-gated
+		// VEK itself). setIndex overwrites or empties the bundle when entries change.
 	},
 	async query() {
 		// The in-webview UI never serves OS autofill; the native provider does.

@@ -7,8 +7,74 @@ import UIKit
 // biometric-gated VEK the main app cached in the shared Keychain (Face ID) and
 // decrypts the chosen password natively via the shared Rust core (VaultCryptoFFI) —
 // no Argon2id, which would not fit the extension's ~120 MB cap. The main app writes
-// each login's encrypted password + (service, username) to the shared App Group and
-// populates ASCredentialIdentityStore (AutofillBridge.swift). docs/mobile-port.md.
+// each login's encrypted password + (name, service, username) to the shared App Group
+// and populates ASCredentialIdentityStore (AutofillBridge.swift). docs/mobile-port.md.
+
+private struct Cred {
+	let recordId: String
+	let name: String
+	let username: String
+	let iv: String
+	let ciphertext: String
+	let services: [String]
+}
+
+private func initials(_ s: String) -> String {
+	let words = s.split(whereSeparator: { $0 == " " || $0 == "." })
+	let chars: [Character]
+	if words.count >= 2 {
+		chars = [words[0].first, words[1].first].compactMap { $0 }
+	} else {
+		chars = Array(s.prefix(2))
+	}
+	return String(chars).uppercased()
+}
+
+// Row styled to resemble the in-app vault list: initials chip + name + username.
+private final class CredCell: UITableViewCell {
+	private let chip = UILabel()
+	private let titleLabel = UILabel()
+	private let subtitleLabel = UILabel()
+
+	override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+		super.init(style: style, reuseIdentifier: reuseIdentifier)
+		chip.textAlignment = .center
+		chip.font = .systemFont(ofSize: 15, weight: .semibold)
+		chip.textColor = .label
+		chip.backgroundColor = UIColor(white: 0.26, alpha: 1)
+		chip.layer.cornerRadius = 10
+		chip.layer.masksToBounds = true
+		titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+		titleLabel.textColor = .label
+		subtitleLabel.font = .systemFont(ofSize: 14)
+		subtitleLabel.textColor = .secondaryLabel
+		let text = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+		text.axis = .vertical
+		text.spacing = 2
+		[chip, text].forEach {
+			$0.translatesAutoresizingMaskIntoConstraints = false
+			contentView.addSubview($0)
+		}
+		NSLayoutConstraint.activate([
+			chip.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+			chip.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+			chip.widthAnchor.constraint(equalToConstant: 40),
+			chip.heightAnchor.constraint(equalToConstant: 40),
+			text.leadingAnchor.constraint(equalTo: chip.trailingAnchor, constant: 12),
+			text.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -12),
+			text.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+			contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
+		])
+	}
+	required init?(coder: NSCoder) { fatalError() }
+
+	func configure(_ c: Cred) {
+		titleLabel.text = c.name
+		subtitleLabel.text = c.username
+		chip.text = initials(c.name)
+	}
+}
+
 class CredentialProviderViewController: ASCredentialProviderViewController, UITableViewDataSource,
 	UITableViewDelegate
 {
@@ -18,16 +84,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 	private let keychainAccount = "vek"
 	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
 
-	private struct Cred {
-		let recordId: String
-		let username: String
-		let iv: String
-		let ciphertext: String
-		let services: [String]
-	}
+	private enum VekOutcome { case ok(String), missing, denied }
 
 	private var creds: [Cred] = []
-	private let table = UITableView()
+	private let table = UITableView(frame: .zero, style: .insetGrouped)
 	private let emptyLabel = UILabel()
 
 	// JSON blob written by AutofillBridge (App-side). JSON avoids the plist
@@ -41,8 +101,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 				let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String
 			else { return nil }
 			return Cred(
-				recordId: recordId, username: username, iv: iv, ciphertext: ct,
-				services: (d["services"] as? [String]) ?? [])
+				recordId: recordId, name: (d["name"] as? String) ?? username, username: username,
+				iv: iv, ciphertext: ct, services: (d["services"] as? [String]) ?? [])
 		}
 	}
 
@@ -68,7 +128,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 
 		table.dataSource = self
 		table.delegate = self
-		table.register(UITableViewCell.self, forCellReuseIdentifier: "cred")
+		table.backgroundColor = .clear
+		table.register(CredCell.self, forCellReuseIdentifier: "cred")
 
 		emptyLabel.numberOfLines = 0
 		emptyLabel.textAlignment = .center
@@ -89,10 +150,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			table.leadingAnchor.constraint(equalTo: g.leadingAnchor),
 			table.trailingAnchor.constraint(equalTo: g.trailingAnchor),
 			table.bottomAnchor.constraint(equalTo: g.bottomAnchor),
-			emptyLabel.centerXAnchor.constraint(equalTo: table.centerXAnchor),
-			emptyLabel.centerYAnchor.constraint(equalTo: table.centerYAnchor),
-			emptyLabel.leadingAnchor.constraint(equalTo: table.leadingAnchor, constant: 24),
-			emptyLabel.trailingAnchor.constraint(equalTo: table.trailingAnchor, constant: -24),
+			emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+			emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+			emptyLabel.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
+			emptyLabel.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
 		])
 	}
 
@@ -104,10 +165,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			let bytes = ud?.data(forKey: secretsKey)?.count ?? 0
 			emptyLabel.text =
 				"No logins to fill.\n\nApp Group reachable: \(ud != nil)\nStored blob: \(bytes) bytes\n\n"
-				+ "If 0 bytes: open Bramble and unlock the vault once (that syncs autofill), "
-				+ "and make sure Bramble is enabled under Settings > Passwords."
-			NSLog("[AutoFill] empty list. appGroupReachable=%@ blobBytes=%d",
-				String(ud != nil), bytes)
+				+ "Open Bramble and unlock the vault once so it can sync your logins for autofill."
+			NSLog("[AutoFill] empty list. appGroupReachable=%@ blobBytes=%d", String(ud != nil), bytes)
 		}
 	}
 
@@ -150,11 +209,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 
 	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 		let cell = tableView.dequeueReusableCell(withIdentifier: "cred", for: indexPath)
-		let c = creds[indexPath.row]
-		var config = cell.defaultContentConfiguration()
-		config.text = c.services.first ?? c.username
-		config.secondaryText = c.username
-		cell.contentConfiguration = config
+		(cell as? CredCell)?.configure(creds[indexPath.row])
 		return cell
 	}
 
@@ -166,34 +221,37 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 	// --- decrypt + complete (Face ID runs here: user-initiated, so foregrounded) ---
 
 	private func fill(_ cred: Cred) {
-		readVek(reason: "Unlock to fill \(cred.username)") { [weak self] vek in
+		readVek(reason: "Unlock to fill \(cred.username)") { [weak self] outcome in
 			DispatchQueue.main.async {
 				guard let self = self else { return }
-				guard let vek = vek else {
+				switch outcome {
+				case .denied:
 					self.cancel(.userCanceled)
-					return
-				}
-				do {
-					try unlockWithVek(vekB64: vek)
-					let password = try decryptWithVek(ivB64: cred.iv, ciphertextB64: cred.ciphertext)
-					self.extensionContext.completeRequest(
-						withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
-						completionHandler: nil)
-				} catch {
-					NSLog("[AutoFill] decrypt failed: %@", error.localizedDescription)
-					self.cancel(.failed)
+				case .missing:
+					self.showNeedsBiometric()
+				case .ok(let vek):
+					do {
+						try unlockWithVek(vekB64: vek)
+						let password = try decryptWithVek(ivB64: cred.iv, ciphertextB64: cred.ciphertext)
+						self.extensionContext.completeRequest(
+							withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
+							completionHandler: nil)
+					} catch {
+						NSLog("[AutoFill] decrypt failed: %@", error.localizedDescription)
+						self.cancel(.failed)
+					}
 				}
 			}
 		}
 	}
 
-	private func readVek(reason: String, completion: @escaping (String?) -> Void) {
+	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
 		let context = LAContext()
 		context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) {
 			success, evalError in
 			guard success else {
 				NSLog("[AutoFill] biometric failed: %@", evalError?.localizedDescription ?? "?")
-				completion(nil)
+				completion(.denied)
 				return
 			}
 			let query: [String: Any] = [
@@ -211,12 +269,26 @@ class CredentialProviderViewController: ASCredentialProviderViewController, UITa
 			if status == errSecSuccess, let data = item as? Data,
 				let secret = String(data: data, encoding: .utf8)
 			{
-				completion(secret)
+				completion(.ok(secret))
 			} else {
 				NSLog("[AutoFill] keychain read failed: status=%d", status)
-				completion(nil)
+				completion(status == errSecItemNotFound ? .missing : .denied)
 			}
 		}
+	}
+
+	// No cached VEK: the user has not turned on biometric unlock in Bramble, which is
+	// what caches the key the extension decrypts with.
+	private func showNeedsBiometric() {
+		let alert = UIAlertController(
+			title: "Turn on biometric unlock",
+			message: "Open Bramble and enable Biometric unlock in Settings, then try again. "
+				+ "That caches the key this needs to fill your passwords.",
+			preferredStyle: .alert)
+		alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+			self?.cancel(.userCanceled)
+		})
+		present(alert, animated: true)
 	}
 
 	@objc private func cancelTapped() { cancel(.userCanceled) }

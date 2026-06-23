@@ -32,9 +32,10 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 				let iv = c["iv"] as? String,
 				let ct = c["ciphertext"] as? String
 			else { continue }
+			let name = c["name"] as? String ?? username
 			let services = (c["services"] as? [String]) ?? []
 			stored.append([
-				"recordId": recordId, "username": username, "iv": iv, "ciphertext": ct,
+				"recordId": recordId, "name": name, "username": username, "iv": iv, "ciphertext": ct,
 				"services": services,
 			])
 			for svc in services {
