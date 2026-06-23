@@ -3,23 +3,20 @@ import Security
 import SwiftUI
 import UIKit
 
-// AutoFill Credential Provider. Lists the vault's logins from the shared App Group,
-// then on a tap obtains the VEK and decrypts the chosen password natively via the
-// shared Rust core (VaultCryptoFFI). Two ways to get the VEK, in order:
-//   1. a biometric/passcode-cached VEK (Face ID OR device passcode) - the fast path.
-//   2. the master password: the app shares the (non-secret) password slot, so the
-//      extension runs Argon2id itself and unwraps the VEK (Bitwarden-style; no
-//      biometrics needed).
-// The UI is SwiftUI styled from the app's design tokens for visual parity with the
-// in-app vault + auth screen. Passwords are never stored in cleartext. docs/mobile-port.md.
+// AutoFill Credential Provider. Authenticate FIRST, then reveal entries: on launch it
+// shows an unlock screen (Face ID / passcode, or the master password). Only once it has
+// the VEK does it decrypt the login list (stored encrypted under the VEK in the shared
+// App Group) and show it. Nothing about the vault - names, usernames, passwords - is
+// readable before the user authenticates. The crypto is the shared Rust core
+// (VaultCryptoFFI); the master-password path runs Argon2id natively (no biometrics
+// needed). UI is SwiftUI styled from the app's design tokens. docs/mobile-port.md.
 
-private struct Cred: Identifiable {
+private struct Cred: Identifiable, Decodable {
 	var id: String { recordId }
 	let recordId: String
 	let name: String
 	let username: String
-	let iv: String
-	let ciphertext: String
+	let password: String
 	let services: [String]
 }
 
@@ -59,8 +56,6 @@ private enum Theme {
 	static let destructive = Color(rgb: 0xF8_71_71)
 }
 
-// The Bramble glyph (the app's bramble-glyph.png), embedded so the extension needs no
-// asset-catalog wiring. Rendered as a template tinted with the foreground color.
 private func brambleGlyphImage() -> UIImage? {
 	Data(base64Encoded: brambleGlyphBase64).flatMap { UIImage(data: $0) }
 }
@@ -77,7 +72,7 @@ private struct Glyph: View {
 	}
 }
 
-// --- SwiftUI views ---
+// --- list (shown only after auth) ---
 
 private struct RowView: View {
 	let cred: Cred
@@ -105,7 +100,6 @@ private struct RowView: View {
 
 private struct CredentialListView: View {
 	let creds: [Cred]
-	let diagnostic: String?
 	let onSelect: (Cred) -> Void
 	let onCancel: () -> Void
 
@@ -124,16 +118,14 @@ private struct CredentialListView: View {
 
 			if creds.isEmpty {
 				Spacer()
-				Text(diagnostic ?? "No logins to fill.")
-					.font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center)
-					.padding(24)
+				Text("No logins saved yet.\nAdd one in Bramble.")
+					.font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(24)
 				Spacer()
 			} else {
 				ScrollView {
 					VStack(alignment: .leading, spacing: 10) {
 						Text("Items (\(creds.count))")
-							.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted)
-							.padding(.top, 16)
+							.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted).padding(.top, 16)
 						ForEach(creds) { cred in
 							Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
 						}
@@ -148,24 +140,33 @@ private struct CredentialListView: View {
 	}
 }
 
+// --- unlock screen (shown first) ---
+
 private final class UnlockModel: ObservableObject {
 	@Published var busy = false
 	@Published var error: String?
-	let onSubmit: (String) -> Void
+	let hasBiometric: Bool
+	let onBiometric: () -> Void
+	let onPassword: (String) -> Void
 	let onCancel: () -> Void
-	init(onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
-		self.onSubmit = onSubmit
+	init(
+		hasBiometric: Bool, onBiometric: @escaping () -> Void, onPassword: @escaping (String) -> Void,
+		onCancel: @escaping () -> Void
+	) {
+		self.hasBiometric = hasBiometric
+		self.onBiometric = onBiometric
+		self.onPassword = onPassword
 		self.onCancel = onCancel
 	}
 }
 
-// Mirrors the app's auth screen: glyph, heading, then a card holding the password
-// field and the primary Unlock button (recovery code and below are intentionally
-// omitted for the autofill context).
-private struct MasterPasswordView: View {
+// Mirrors the app's auth screen: glyph, heading, then a card with (when a cached key
+// exists) a Face ID / passcode button and the master-password field + Unlock button.
+private struct UnlockView: View {
 	@ObservedObject var model: UnlockModel
 	@State private var password = ""
 	@State private var showPassword = false
+	@State private var triggered = false
 	@FocusState private var focused: Bool
 
 	var body: some View {
@@ -186,6 +187,23 @@ private struct MasterPasswordView: View {
 						.fixedSize(horizontal: false, vertical: true)
 
 					VStack(spacing: 18) {
+						if model.hasBiometric {
+							Button {
+								model.error = nil
+								model.busy = true
+								model.onBiometric()
+							} label: {
+								HStack(spacing: 8) {
+									Image(systemName: "faceid").font(.system(size: 15))
+									Text("Unlock with Face ID").font(.system(size: 15, weight: .semibold))
+								}
+								.frame(maxWidth: .infinity).padding(.vertical, 12)
+								.background(Theme.foreground).foregroundColor(.black)
+								.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+							}
+							.disabled(model.busy)
+						}
+
 						HStack(spacing: 8) {
 							Group {
 								if showPassword {
@@ -209,8 +227,7 @@ private struct MasterPasswordView: View {
 						.background(Theme.input)
 						.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 						.overlay(
-							RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.border, lineWidth: 1)
-						)
+							RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.border, lineWidth: 1))
 
 						if let error = model.error {
 							Text(error).font(.footnote).foregroundColor(Theme.destructive)
@@ -220,15 +237,20 @@ private struct MasterPasswordView: View {
 						Button(action: submit) {
 							HStack(spacing: 8) {
 								if model.busy {
-									ProgressView().tint(.black)
+									ProgressView().tint(model.hasBiometric ? Theme.foreground : .black)
 								} else {
 									Image(systemName: "asterisk").font(.system(size: 14, weight: .bold))
 								}
 								Text("Unlock Vault").font(.system(size: 15, weight: .semibold))
 							}
 							.frame(maxWidth: .infinity).padding(.vertical, 12)
-							.background(Theme.foreground).foregroundColor(.black)
+							.foregroundColor(model.hasBiometric ? Theme.foreground : .black)
+							.background(model.hasBiometric ? Color.clear : Theme.foreground)
 							.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+							.overlay(
+								model.hasBiometric
+									? RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(
+										Theme.border, lineWidth: 1) : nil)
 						}
 						.disabled(model.busy || password.isEmpty)
 					}
@@ -244,22 +266,31 @@ private struct MasterPasswordView: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Theme.background.ignoresSafeArea())
-		.onAppear { focused = true }
+		.onAppear {
+			// Cached key present: pop Face ID / passcode right away (password is the fallback).
+			if model.hasBiometric, !triggered {
+				triggered = true
+				model.busy = true
+				model.onBiometric()
+			} else if !model.hasBiometric {
+				focused = true
+			}
+		}
 	}
 
 	private func submit() {
 		guard !model.busy, !password.isEmpty else { return }
 		model.error = nil
 		model.busy = true
-		model.onSubmit(password)
+		model.onPassword(password)
 	}
 }
 
-// --- provider controller (UIKit shell hosting the SwiftUI views) ---
+// --- provider controller ---
 
 class CredentialProviderViewController: ASCredentialProviderViewController {
 	private let appGroup = "group.app.bramble.mobile"
-	private let secretsKey = "autofill.secrets"
+	private let bundleKey = "autofill.bundle"
 	private let slotKey = "autofill.slot"
 	private let keychainService = "app.bramble.mobile.biometric-vault"
 	private let keychainAccount = "vek"
@@ -267,18 +298,148 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private enum VekOutcome { case ok(String), missing, denied(String) }
 
-	private func loadCreds() -> [Cred] {
-		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: secretsKey),
-			let raw = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
-		else { return [] }
-		return raw.compactMap { d in
-			guard let recordId = d["recordId"] as? String, let username = d["username"] as? String,
-				let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String
-			else { return nil }
-			return Cred(
-				recordId: recordId, name: (d["name"] as? String) ?? username, username: username,
-				iv: iv, ciphertext: ct, services: (d["services"] as? [String]) ?? [])
+	private var pendingDomains: [String] = []
+	private var pendingRecordId: String?
+	private var model: UnlockModel?
+
+	// --- entry points: authenticate first ---
+
+	override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
+		pendingDomains = serviceIdentifiers.map { $0.identifier.lowercased() }
+		pendingRecordId = nil
+		showUnlock()
+	}
+
+	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
+		pendingDomains = []
+		pendingRecordId = credentialIdentity.recordIdentifier
+		showUnlock()
+	}
+
+	override func provideCredentialWithoutUserInteraction(
+		for credentialIdentity: ASPasswordCredentialIdentity
+	) {
+		cancel(.userInteractionRequired)
+	}
+
+	private func showUnlock() {
+		let m = UnlockModel(
+			hasBiometric: vekExists(),
+			onBiometric: { [weak self] in self?.unlockWithBiometric() },
+			onPassword: { [weak self] in self?.unlockWithPassword($0) },
+			onCancel: { [weak self] in self?.cancel(.userCanceled) })
+		model = m
+		host(UnlockView(model: m))
+	}
+
+	// --- unlock paths (each loads the VEK into the native core, then onUnlocked) ---
+
+	private func unlockWithBiometric() {
+		readVek(reason: "Unlock Bramble") { [weak self] outcome in
+			DispatchQueue.main.async {
+				guard let self = self else { return }
+				switch outcome {
+				case .ok(let vek):
+					do {
+						try unlockWithVek(vekB64: vek)
+						self.onUnlocked()
+					} catch {
+						self.model?.busy = false
+						self.model?.error = error.localizedDescription
+					}
+				case .missing:
+					self.model?.busy = false
+					self.model?.error = "Enter your master password."
+				case .denied(let msg):
+					self.model?.busy = false
+					self.model?.error = msg.isEmpty ? nil : msg  // empty == user canceled
+				}
+			}
 		}
+	}
+
+	private func unlockWithPassword(_ password: String) {
+		guard let slot = loadSlot() else {
+			model?.busy = false
+			model?.error =
+				"This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry."
+			return
+		}
+		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+			do {
+				let ok = try unwrapVekPassword(
+					password: password, saltB64: slot.salt, slotIdB64: slot.slotId,
+					verifierB64: slot.verifier, wrapIvB64: slot.wrapIv, wrappedVekB64: slot.wrappedVek,
+					magicVersion: slot.magicVersion)
+				DispatchQueue.main.async {
+					if ok {
+						self?.onUnlocked()
+					} else {
+						self?.model?.busy = false
+						self?.model?.error = "Incorrect master password"
+					}
+				}
+			} catch {
+				DispatchQueue.main.async {
+					self?.model?.busy = false
+					self?.model?.error = error.localizedDescription
+				}
+			}
+		}
+	}
+
+	// VEK is loaded in the native core; decrypt the bundle and show the list (or fill).
+	private func onUnlocked() {
+		guard let bundle = loadBundle() else {
+			showList([])
+			return
+		}
+		do {
+			let json = try decryptWithVek(ivB64: bundle.iv, ciphertextB64: bundle.ct)
+			let creds = (try? JSONDecoder().decode([Cred].self, from: Data(json.utf8))) ?? []
+			if let rid = pendingRecordId, let c = creds.first(where: { $0.recordId == rid }) {
+				complete(c)
+			} else {
+				showList(sortedByDomain(creds))
+			}
+		} catch {
+			showError("Couldn't load logins", error.localizedDescription)
+		}
+	}
+
+	private func showList(_ creds: [Cred]) {
+		host(
+			CredentialListView(
+				creds: creds,
+				onSelect: { [weak self] in self?.complete($0) },
+				onCancel: { [weak self] in self?.cancel(.userCanceled) }))
+	}
+
+	private func complete(_ cred: Cred) {
+		extensionContext.completeRequest(
+			withSelectedCredential: ASPasswordCredential(user: cred.username, password: cred.password),
+			completionHandler: nil)
+	}
+
+	private func sortedByDomain(_ creds: [Cred]) -> [Cred] {
+		let wanted = pendingDomains
+		func matches(_ c: Cred) -> Bool {
+			c.services.contains { svc in
+				let s = svc.lowercased()
+				return wanted.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
+			}
+		}
+		return creds.sorted { (matches($0) ? 0 : 1) < (matches($1) ? 0 : 1) }
+	}
+
+	// --- App Group reads ---
+
+	private func loadBundle() -> (iv: String, ct: String)? {
+		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: bundleKey),
+			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String
+		else { return nil }
+		return (iv, ct)
 	}
 
 	private func loadSlot() -> Slot? {
@@ -294,7 +455,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			magicVersion: mv)
 	}
 
-	// Swap the hosted SwiftUI root.
+	// --- hosting + Keychain ---
+
 	private func host(_ view: some View) {
 		children.forEach {
 			$0.willMove(toParent: nil)
@@ -309,131 +471,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		h.didMove(toParent: self)
 	}
 
-	private func showList(_ creds: [Cred]) {
-		let diag: String?
-		if creds.isEmpty {
-			let ud = UserDefaults(suiteName: appGroup)
-			let bytes = ud?.data(forKey: secretsKey)?.count ?? 0
-			diag =
-				"No logins to fill.\n\nApp Group reachable: \(ud != nil)\nStored blob: \(bytes) bytes\n\n"
-				+ "Open Bramble and unlock the vault once so it can sync your logins for autofill."
-			NSLog("[AutoFill] empty list. reachable=%@ bytes=%d", String(ud != nil), bytes)
-		} else {
-			diag = nil
-		}
-		host(
-			CredentialListView(
-				creds: creds, diagnostic: diag,
-				onSelect: { [weak self] in self?.fill($0) },
-				onCancel: { [weak self] in self?.cancel(.userCanceled) }))
-	}
-
-	// --- credential list entry points ---
-
-	override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
-		let wanted = serviceIdentifiers.map { $0.identifier.lowercased() }
-		let all = loadCreds()
-		func matches(_ c: Cred) -> Bool {
-			c.services.contains { svc in
-				let s = svc.lowercased()
-				return wanted.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
-			}
-		}
-		showList(all.sorted { (matches($0) ? 0 : 1) < (matches($1) ? 0 : 1) })
-	}
-
-	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
-		let all = loadCreds()
-		let match = all.filter { $0.recordId == credentialIdentity.recordIdentifier }
-		showList(match.isEmpty ? all : match)
-	}
-
-	override func provideCredentialWithoutUserInteraction(
-		for credentialIdentity: ASPasswordCredentialIdentity
-	) {
-		cancel(.userInteractionRequired)
-	}
-
-	// --- unlock + decrypt + complete ---
-
-	private func fill(_ cred: Cred) {
-		// Fast path: a cached VEK (Face ID / passcode). Falls back to the master password.
-		if vekExists() {
-			readVek(reason: "Unlock to fill \(cred.username)") { [weak self] outcome in
-				DispatchQueue.main.async {
-					guard let self = self else { return }
-					switch outcome {
-					case .ok(let vek):
-						do {
-							try unlockWithVek(vekB64: vek)
-							self.decryptAndComplete(cred)
-						} catch { self.showError("Couldn't unlock", error.localizedDescription) }
-					case .missing:
-						self.promptPassword(for: cred)
-					case .denied(let msg):
-						self.showError("Couldn't unlock", msg)
-					}
-				}
-			}
-		} else {
-			promptPassword(for: cred)
-		}
-	}
-
-	// Master-password unlock: run Argon2id off the main thread, unwrap the VEK, fill.
-	private func promptPassword(for cred: Cred) {
-		guard let slot = loadSlot() else {
-			showError(
-				"Can't unlock here",
-				"This vault has no master password set, or it hasn't synced yet. Open Bramble, unlock it "
-					+ "once, then try again.")
-			return
-		}
-		let model = UnlockModel(
-			onSubmit: { [weak self] password in self?.tryPassword(password, slot: slot, cred: cred) },
-			onCancel: { [weak self] in self?.cancel(.userCanceled) })
-		currentUnlock = model
-		host(MasterPasswordView(model: model))
-	}
-
-	private var currentUnlock: UnlockModel?
-
-	private func tryPassword(_ password: String, slot: Slot, cred: Cred) {
-		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-			guard let self = self else { return }
-			do {
-				let ok = try unwrapVekPassword(
-					password: password, saltB64: slot.salt, slotIdB64: slot.slotId,
-					verifierB64: slot.verifier, wrapIvB64: slot.wrapIv, wrappedVekB64: slot.wrappedVek,
-					magicVersion: slot.magicVersion)
-				DispatchQueue.main.async {
-					if ok {
-						self.decryptAndComplete(cred)
-					} else {
-						self.currentUnlock?.busy = false
-						self.currentUnlock?.error = "Incorrect master password"
-					}
-				}
-			} catch {
-				DispatchQueue.main.async {
-					self.currentUnlock?.busy = false
-					self.currentUnlock?.error = error.localizedDescription
-				}
-			}
-		}
-	}
-
-	// The VEK is loaded in the native core by this point; decrypt the chosen secret.
-	private func decryptAndComplete(_ cred: Cred) {
-		do {
-			let password = try decryptWithVek(ivB64: cred.iv, ciphertextB64: cred.ciphertext)
-			extensionContext.completeRequest(
-				withSelectedCredential: ASPasswordCredential(user: cred.username, password: password),
-				completionHandler: nil)
-		} catch { showError("Couldn't decrypt", error.localizedDescription) }
-	}
-
-	// Presence check that never prompts: is a cached VEK available at all?
 	private func vekExists() -> Bool {
 		let q: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
@@ -448,8 +485,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		return status == errSecSuccess || status == errSecInteractionNotAllowed
 	}
 
-	// Read the cached VEK. Its `.userPresence` access control makes SecItemCopyMatching
-	// present Face ID or the device passcode; run off the main thread since it blocks.
+	// `.userPresence` access control makes SecItemCopyMatching present Face ID or the
+	// device passcode; run off the main thread since it blocks while the prompt is up.
 	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let query: [String: Any] = [
@@ -470,7 +507,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			} else if status == errSecItemNotFound {
 				completion(.missing)
 			} else {
-				completion(.denied("Keychain status \(status)"))
+				completion(.denied(status == errSecUserCanceled ? "" : "Keychain status \(status)"))
 			}
 		}
 	}
