@@ -8,8 +8,9 @@ import Security
 // encrypted under the VEK and is stored as an opaque blob in the shared App Group, so the
 // extension reveals nothing about the vault until the user authenticates and can decrypt
 // it. We also store the (non-secret) password slot so the extension can unlock itself
-// with the master password. No cleartext entry data, and no ASCredentialIdentityStore
-// (that would surface usernames in QuickType before auth). docs/mobile-port.md.
+// with the master password. No cleartext entry data lands in the App Group. The OS
+// QuickType identity store (usernames + domains, no passwords) is populated only when the
+// user opts into keyboard suggestions; off by default. docs/mobile-port.md.
 @objc(AutofillBridgePlugin)
 public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	public let identifier = "AutofillBridgePlugin"
@@ -20,27 +21,23 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
 	]
 
-	private let appGroup = "group.app.bramble.mobile"
-	private let bundleKey = "autofill.bundle"
-	private let slotKey = "autofill.slot"
-	private let keepUnlockedKey = "autofill.keepUnlockedMinutes"
-	private let sessionService = "app.bramble.mobile.autofill-session"
-	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
+	// Shared identifiers (App Group, Keychain group, keys) live in BrambleVault, compiled
+	// into both this target and the AutoFill extension so the two processes can't drift.
 
 	// iv/ciphertext = encryptWithVek over the JSON login list. Opaque without the VEK.
 	@objc func sync(_ call: CAPPluginCall) {
-		let defaults = UserDefaults(suiteName: appGroup)
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		if let iv = call.getString("iv"), let ct = call.getString("ciphertext"),
 			let data = try? JSONSerialization.data(withJSONObject: ["iv": iv, "ciphertext": ct])
 		{
-			defaults?.set(data, forKey: bundleKey)
+			defaults?.set(data, forKey: BrambleVault.bundleKey)
 		}
 		// The password slot lets the extension unlock itself with the master password.
 		// Non-secret (the wrappedVek stays AES-encrypted); store as JSON Data.
 		if let slot = call.getObject("slot"),
 			let slotJson = try? JSONSerialization.data(withJSONObject: slot)
 		{
-			defaults?.set(slotJson, forKey: slotKey)
+			defaults?.set(slotJson, forKey: BrambleVault.slotKey)
 		}
 		// QuickType identity store: populated only when the user opted into keyboard
 		// suggestions (the JS sends identities then). Each carries a domain + username +
@@ -71,9 +68,9 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	@objc func clear(_ call: CAPPluginCall) {
-		let defaults = UserDefaults(suiteName: appGroup)
-		defaults?.removeObject(forKey: bundleKey)
-		defaults?.removeObject(forKey: slotKey)
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		defaults?.removeObject(forKey: BrambleVault.bundleKey)
+		defaults?.removeObject(forKey: BrambleVault.slotKey)
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
 	}
 
@@ -81,14 +78,14 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	// Turning it off clears any live cached session immediately.
 	@objc func setKeepUnlocked(_ call: CAPPluginCall) {
 		let minutes = call.getInt("minutes") ?? 0
-		UserDefaults(suiteName: appGroup)?.set(minutes, forKey: keepUnlockedKey)
+		UserDefaults(suiteName: BrambleVault.appGroup)?.set(minutes, forKey: BrambleVault.keepUnlockedKey)
 		if minutes == 0 {
 			SecItemDelete(
 				[
 					kSecClass as String: kSecClassGenericPassword,
-					kSecAttrService as String: sessionService,
-					kSecAttrAccount as String: "vek",
-					kSecAttrAccessGroup as String: accessGroup,
+					kSecAttrService as String: BrambleVault.sessionService,
+					kSecAttrAccount as String: BrambleVault.vekAccount,
+					kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 				] as CFDictionary)
 		}
 		call.resolve()
