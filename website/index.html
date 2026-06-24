@@ -6,7 +6,7 @@
         <title>Bramble Privacy Policy</title>
         <meta
             name="description"
-            content="Bramble is a local-first password manager. It stores everything encrypted on your device and makes no network requests, apart from an optional password breach check you can turn on."
+            content="Bramble is a local-first password manager (browser extension and iOS app). It stores everything encrypted on your device. Its only network use is two optional, off-by-default features you control: a password breach check and peer-to-peer sync between your own devices."
         />
     </head>
     <body>
@@ -14,31 +14,37 @@
 
         <p>
             <strong>The short version:</strong> Bramble is a local-first
-            password manager. It does not collect, sell, or share any of your
-            data. There is no account, no server, no sync service, and no
-            analytics. Everything stays on your device, encrypted. The one
-            exception is an optional password breach check, off by default, that
-            you can turn on; even then, your passwords never leave your device
-            (see below).
+            password manager, available as a browser extension and as an iOS
+            app. It does not collect, sell, or share any of your data. There is
+            no account and no Bramble server that holds your vault. Everything
+            stays on your device, encrypted. Bramble makes network connections
+            only for two optional features that are off by default and that you
+            turn on yourself: a password breach check, and peer-to-peer sync
+            between your own devices. Neither one ever sends your passwords or
+            your vault to us or to anyone else. Details below.
         </p>
 
-        <p>Effective date: 10 June 2026</p>
+        <p>Effective date: 23 June 2026</p>
 
         <h2>What data Bramble handles</h2>
         <p>
             Bramble stores the data you choose to save in it, such as login
-            usernames and passwords, payment cards, secure notes, and two-factor
-            (TOTP) seeds, together with your own app preferences. This data is
-            created and used only to provide the password-manager features you
-            asked for (saving, searching, and autofilling your credentials).
+            usernames and passwords, payment cards, secure notes, SSH keys, and
+            two-factor (TOTP) seeds, together with your own app preferences. This
+            data is created and used only to provide the password-manager
+            features you asked for (saving, searching, and autofilling your
+            credentials).
         </p>
 
         <h2>Where it is stored</h2>
         <p>
-            Your vault is stored only on your device, in your browser's local
-            extension storage and/or in a vault file you pick on your own
-            computer. Bramble has no server and no cloud, so your data never
-            leaves your device through Bramble.
+            Your vault is stored only on your devices. In the browser extension
+            that means your browser's local extension storage and/or a vault
+            file you pick on your own computer. In the iOS app it means the
+            app's private on-device storage, with a small number of secrets (the
+            key that protects your vault) held in the iOS Keychain. Bramble has
+            no vault server and no cloud, so your data is never stored anywhere
+            off your devices.
         </p>
 
         <h2>How it is protected</h2>
@@ -58,8 +64,8 @@
             </li>
             <li>No accounts, sign-up, or login to any service.</li>
             <li>
-                No servers and no built-in sync. Bramble makes no network
-                requests other than the optional breach check described below.
+                No vault server and no cloud. Bramble never uploads your vault,
+                and no copy of it is held off your devices.
             </li>
             <li>No selling, renting, or sharing of your data with anyone.</li>
             <li>
@@ -68,11 +74,19 @@
             </li>
         </ul>
 
+        <h2>Network connections, in full</h2>
+        <p>
+            Bramble works entirely offline by default. There are exactly two
+            features that make network connections, both optional and both off
+            until you turn them on: the password breach check and device sync.
+            They are described next. Bramble makes no other network requests.
+        </p>
+
         <h2>Password breach check (optional)</h2>
         <p>
             Bramble can tell you whether one of your saved passwords has appeared
             in a known data breach. This feature is off by default; you turn it
-            on in Settings. It is the only feature that contacts a server.
+            on in Settings.
         </p>
         <p>
             When it is on, Bramble checks a password using the Have I Been Pwned
@@ -80,11 +94,11 @@
             k-anonymity: it computes a SHA-1 hash of the password and sends only
             the first five characters of that hash to its API
             (api.pwnedpasswords.com). The service returns a list of possible
-            matches and Bramble compares them
-            on your device. Your password, and even its full hash, never leave
-            your device, and Have I Been Pwned cannot tell which password you
-            checked. Bramble also asks the service to pad its response so the
-            amount of data returned reveals nothing about your query.
+            matches and Bramble compares them on your device. Your password, and
+            even its full hash, never leave your device, and Have I Been Pwned
+            cannot tell which password you checked. Bramble also asks the service
+            to pad its response so the amount of data returned reveals nothing
+            about your query.
         </p>
         <p>
             Have I Been Pwned is operated by a third party under its own privacy
@@ -94,25 +108,108 @@
             >.
         </p>
 
-        <h2>Autofill and website access</h2>
+        <h2>Syncing across your own devices (optional)</h2>
         <p>
-            To offer to fill saved credentials, Bramble's content script runs on
-            web pages and looks at the structure of forms on the page (for
-            example, whether a field is a username, password, or one-time-code
-            field). This happens entirely on your device. Bramble does not read,
-            collect, or transmit the content of the pages you visit, and it only
-            fills a credential when you explicitly choose one.
+            Bramble can sync one vault across your own devices (for example
+            between two browsers, or between a browser and the iOS app). This is
+            optional and off until you set it up by linking a device, and it is
+            strictly personal: only your own devices, only your own vault. There
+            is no shared network, and there is no Bramble server that stores or
+            relays your vault.
+        </p>
+        <p>How it works, and what each part can see:</p>
+        <ul>
+            <li>
+                <strong>The vault transfer is device-to-device.</strong> Your
+                devices connect directly to each other over your local network
+                and exchange the vault over that direct, encrypted connection.
+                The vault stays end-to-end encrypted under a key that only your
+                devices hold.
+            </li>
+            <li>
+                <strong>A signaling relay only helps your devices find each
+                other.</strong> To set up the direct connection, your devices
+                exchange brief connection details through a relay (a WebSocket
+                server). By default this is a relay we run, but you can point
+                Bramble at your own relay or at any public relay that speaks the
+                same protocol. The relay never receives your vault, your
+                passwords, your master password, or any key that could decrypt
+                them.
+            </li>
+            <li>
+                <strong>The relay sees only opaque data and basic
+                metadata.</strong> The signaling messages it passes along are
+                themselves encrypted with a key it does not have, and the
+                "room" your devices meet in is addressed by an unguessable value
+                derived from that key, so the relay cannot tie it to you. The
+                most it can observe is that two network addresses connected, and
+                when. Because a sync happens over your local network, your
+                devices typically share one public address, so even that reveals
+                little. The direct channel between your devices is mutually
+                authenticated, so a dishonest relay cannot read, alter, or
+                impersonate either device; it can at most refuse to help, in
+                which case you can link devices by scanning a QR code instead.
+            </li>
+        </ul>
+
+        <h2>Autofill</h2>
+        <p>
+            In the browser extension, Bramble's content script runs on web pages
+            and looks at the structure of forms on the page (for example,
+            whether a field is a username, password, or one-time-code field) so
+            it can offer to fill saved credentials. This happens entirely on your
+            device. Bramble does not read, collect, or transmit the content of
+            the pages you visit, and it only fills a credential when you
+            explicitly choose one.
+        </p>
+        <p>
+            On iOS, autofill uses Apple's AutoFill system instead. When you pick
+            Bramble to fill a login, the system hands Bramble the app or website
+            you are filling so it can find a matching entry. Bramble's autofill
+            runs in a separate, locked component that reads your vault only after
+            you authenticate (with Face ID, Touch ID, your device passcode, or
+            your master password) and then decrypt it; nothing in your vault is
+            readable before that.
         </p>
 
-        <h2>Clipboard</h2>
-        <p>
-            When you copy a password, Bramble writes it to your clipboard and,
-            after a short timeout, clears the clipboard to reduce the chance of
-            a secret lingering there. This is done locally and the copied value
-            is never sent anywhere.
-        </p>
+        <h2>On iOS: unlocking, the Keychain, and keyboard suggestions</h2>
+        <ul>
+            <li>
+                <strong>Biometric unlock.</strong> If you turn it on, Bramble
+                caches your vault key in the iOS Keychain behind a hardware
+                biometric gate (Secure Enclave). The key is released only after a
+                successful Face ID, Touch ID, or device-passcode check, and iOS
+                invalidates it if your enrolled biometrics change. This is a
+                convenience built on the operating system's own protection; it
+                stays on your device.
+            </li>
+            <li>
+                <strong>Shared storage with the autofill component.</strong> So
+                that AutoFill can work, the iOS app and its AutoFill component
+                share an encrypted copy of your login list in a private,
+                app-only storage area on the device. It is encrypted with your
+                vault key and is not readable without unlocking. Nothing leaves
+                the device.
+            </li>
+            <li>
+                <strong>Keyboard suggestions (off by default).</strong> You can
+                optionally let Bramble show matching logins as suggestions above
+                the keyboard. Turning this on provides your saved usernames and
+                the websites they belong to (but never your passwords) to iOS, so
+                the system can show those suggestions even before you unlock
+                Bramble. It is off by default precisely because it makes those
+                usernames visible to the operating system before authentication;
+                you can turn it off at any time.
+            </li>
+            <li>
+                <strong>Camera.</strong> Bramble can scan QR codes (to link a
+                device for sync, or to add a TOTP secret) using your camera. The
+                scanning happens on your device and the camera images are not
+                stored or transmitted.
+            </li>
+        </ul>
 
-        <h2>Permissions, in plain language</h2>
+        <h2>Browser extension permissions, in plain language</h2>
         <ul>
             <li>
                 Access to websites: to detect login fields and offer autofill.
@@ -128,6 +225,14 @@
             </li>
             <li>Offscreen: to run the encryption module.</li>
         </ul>
+
+        <h2>Clipboard</h2>
+        <p>
+            When you copy a password, Bramble writes it to your clipboard and,
+            after a short timeout, clears the clipboard to reduce the chance of
+            a secret lingering there. This is done locally and the copied value
+            is never sent anywhere.
+        </p>
 
         <h2>Importing other password files</h2>
         <p>
@@ -149,9 +254,9 @@
 
         <h2>Data retention and deletion</h2>
         <p>
-            Because your data lives only on your device, you are in control of
-            it. Removing the extension and/or deleting your vault file and
-            clearing the extension's browser storage removes your data. Bramble
+            Because your data lives only on your devices, you are in control of
+            it. Removing the extension or the app, deleting your vault file, and
+            clearing the app's or extension's storage removes your data. Bramble
             retains nothing on your behalf because it holds nothing about you
             anywhere else.
         </p>
