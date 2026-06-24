@@ -76,16 +76,27 @@ platform :ios do
     # Reads fastlane/metadata/** (only en-US for now). Fill in the real privacy + support
     # URLs (metadata/en-US/*_url.txt) before running. App Review contact + notes are NOT
     # managed here (no review_information/ folder); set them in App Store Connect directly.
-    # Screenshots are skipped until screenshots/en-US/ is populated (see screenshots/README.md).
     # app_version tracks the project's MARKETING_VERSION, so deliver targets (and creates,
     # if missing) that App Store version - no need to edit this lane when the version bumps.
+    #
+    # Screenshots: uploaded only when screenshots/<locale>/ actually holds image files. When
+    # it does, overwrite_screenshots replaces App Store Connect's set with the repo's, so any
+    # changes get pushed; when the folder is empty we skip them so a run never wipes the
+    # screenshots already on App Store Connect.
+    shots = Dir.glob(File.join(__dir__, "screenshots", "**", "*.{png,PNG,jpg,JPG,jpeg,JPEG}"))
+    has_shots = !shots.empty?
+    UI.message(
+      has_shots ? "Found #{shots.count} screenshot(s); will overwrite the App Store set" \
+                : "No screenshots in screenshots/; skipping screenshots"
+    )
     upload_to_app_store(
       api_key: asc_api_key,
       app_identifier: BUNDLE_ID,
       app_version: get_version_number(xcodeproj: "App.xcodeproj", target: "App"),
       skip_binary_upload: true,
-      skip_screenshots: true,
       skip_metadata: false,
+      skip_screenshots: !has_shots,
+      overwrite_screenshots: has_shots,
       force: true,                          # skip the HTML preview confirmation
       precheck_include_in_app_purchases: false,
       run_precheck_before_submit: false,

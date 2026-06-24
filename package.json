@@ -19,6 +19,7 @@
 		"ffi:build:android": "bash scripts/build-crypto-ffi.sh android",
 		"ios:ipa": "cd packages/platform-mobile/ios/App && fastlane ipa",
 		"ios:beta": "cd packages/platform-mobile/ios/App && fastlane beta",
+		"ios:metadata": "cd packages/platform-mobile/ios/App && fastlane metadata",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"check": "biome check --write  --unsafe .",
