@@ -42,9 +42,26 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		{
 			defaults?.set(slotJson, forKey: slotKey)
 		}
-		// Never populate the identity store: QuickType identities expose usernames before
-		// the user authenticates. Clear any left over from earlier builds.
-		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in }
+		// QuickType identity store: populated only when the user opted into keyboard
+		// suggestions (the JS sends identities then). Each carries a domain + username +
+		// recordId, never a password; the extension maps the chosen recordId back to the
+		// decrypted login. An empty/absent list clears the store (opt-out, or a left-over
+		// from an earlier build). Replace wholesale so removed logins don't linger.
+		let store = ASCredentialIdentityStore.shared
+		let identities: [ASPasswordCredentialIdentity] = (call.getArray("identities") ?? []).compactMap {
+			guard let d = $0 as? [String: Any],
+				let service = d["service"] as? String,
+				let user = d["username"] as? String,
+				let rid = d["recordId"] as? String
+			else { return nil }
+			return ASPasswordCredentialIdentity(
+				serviceIdentifier: ASCredentialServiceIdentifier(identifier: service, type: .domain),
+				user: user, recordIdentifier: rid)
+		}
+		store.removeAllCredentialIdentities { _, _ in
+			guard !identities.isEmpty else { return }
+			store.saveCredentialIdentities(identities) { _, _ in }
+		}
 		call.resolve()
 	}
 

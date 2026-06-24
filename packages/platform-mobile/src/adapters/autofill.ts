@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { PREF_AUTOFILL_QUICKTYPE } from "@core/hooks/usePrefs";
 import type { AutofillAdapter } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, findPasswordSlot, verifierPrefix } from "@core/vault-format";
@@ -11,9 +12,10 @@ import { mobileStorage } from "./storage";
 // passwords) is encrypted under the VEK before it is written to the shared App Group, so
 // the extension reveals nothing until the user unlocks it. We also share the password
 // SLOT (non-secret vault-header data: salt + verifier + the AES-wrapped VEK) so the
-// extension can unlock itself with the master password. No cleartext entry data and no
-// ASCredentialIdentityStore (which would leak usernames in QuickType before auth).
-// Android autofill is a separate service (not built yet), so this is iOS-only.
+// extension can unlock itself with the master password. No cleartext entry data reaches
+// the App Group. The OS QuickType identity store (usernames + domains, no passwords) is
+// populated ONLY when the user opts into keyboard suggestions; off by default since those
+// identities surface before auth. Android autofill is a separate service (not built yet).
 
 interface SlotPayload {
 	saltB64: string;
@@ -24,11 +26,33 @@ interface SlotPayload {
 	magicVersionB64: string;
 }
 
+// A QuickType identity (cleartext): what the OS shows in the keyboard suggestion bar.
+// Sent only when the user opts into QuickType; carries no password.
+interface QuickTypeIdentity {
+	recordId: string;
+	username: string;
+	service: string;
+}
+
 interface AutofillBridgePlugin {
 	// `iv`/`ciphertext` are encryptWithVek over the JSON login list (see AutofillEntry).
-	sync(o: { iv: string; ciphertext: string; slot?: SlotPayload }): Promise<void>;
+	// `identities`, when present and non-empty, populate the OS QuickType bar; an empty
+	// (or omitted) list clears it.
+	sync(o: {
+		iv: string;
+		ciphertext: string;
+		slot?: SlotPayload;
+		identities?: QuickTypeIdentity[];
+	}): Promise<void>;
 	clear(): Promise<void>;
 	setKeepUnlocked(o: { minutes: number }): Promise<void>;
+}
+
+// Normalize a stored hostname to a bare registrable host for QuickType matching
+// (lowercase, drop a leading "www."), mirroring the extension's normalizeHost.
+function normalizeHost(h: string): string {
+	const s = h.trim().toLowerCase();
+	return s.startsWith("www.") ? s.slice(4) : s;
 }
 
 const Bridge = registerPlugin<AutofillBridgePlugin>("AutofillBridge");
@@ -72,7 +96,25 @@ export const mobileAutofill: AutofillAdapter = {
 		// (names, usernames, passwords) until the user authenticates and it can decrypt
 		// this. Nothing about the vault is in the App Group in cleartext.
 		const enc = await mobileCrypto.encryptWithVek(JSON.stringify(list));
-		await Bridge.sync({ iv: enc.iv, ciphertext: enc.ciphertext, slot: await readPasswordSlot() });
+		// QuickType identities (cleartext usernames + domains) are sent ONLY when the user
+		// opted in; otherwise the list is empty and the bridge clears the OS store.
+		const quickType = (await mobileStorage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE)) === true;
+		const identities: QuickTypeIdentity[] = quickType
+			? list.flatMap((c) =>
+					c.username
+						? c.services
+								.map(normalizeHost)
+								.filter((s) => s.length > 0)
+								.map((service) => ({ recordId: c.recordId, username: c.username, service }))
+						: [],
+				)
+			: [];
+		await Bridge.sync({
+			iv: enc.iv,
+			ciphertext: enc.ciphertext,
+			slot: await readPasswordSlot(),
+			identities,
+		});
 	},
 	async clearIndex() {
 		// Deliberately a no-op on iOS. The bundle is VEK-encrypted (unreadable at rest)
