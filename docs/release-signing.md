@@ -1,4 +1,10 @@
-# Release signing (Chrome Web Store verified uploads)
+# Release signing
+
+Two independent signing setups, both reusing the same age + YubiKey at-rest scheme: the
+**extension** (Chrome Web Store verified uploads) below, and the **Android app**
+([GitHub-released APK](#android-github-released-apk)) at the end.
+
+## Chrome Web Store verified uploads
 
 Verified uploads gate who can publish: CWS rejects any package not signed by our
 registered RSA key, then repackages it with Google's own key before publishing.
@@ -87,4 +93,78 @@ age -d cws-signing-key.backup.age > /tmp/cws.pem        # passphrase
 age-plugin-yubikey --generate                            # new YubiKey recipient
 age -r age1yubikey1NEW -o ~/.config/bramble/cws-signing-key.age /tmp/cws.pem
 rm -P /tmp/cws.pem
+```
+
+## Android (GitHub-released APK)
+
+The Android app is sideloaded from GitHub Releases (no Play Store), so the **APK's own
+signature is the end-user trust anchor**: Android pins the signing certificate and rejects any
+update not signed by the same key. That key is therefore permanent and **non-rotatable** (a
+different key forces users to uninstall, losing their vault), so it is kept **separate from the
+CWS key** and backed up well. It reuses the same age + YubiKey at-rest scheme.
+
+### One-time setup
+
+Needs the YubiKey plugged in. Reuse your existing `age1yubikey1…` recipient.
+
+```sh
+# 1. Pick the keystore password (PKCS12 uses ONE password for store + key). SAVE it in
+#    your password manager now: it is required for every release and cannot be recovered
+#    from the keystore. You export it as ANDROID_KEYSTORE_PASSWORD at release time.
+export KS_PW="$(openssl rand -base64 24)"; echo "$KS_PW"
+
+# 2. Generate a dedicated release key (RSA 4096, 30-year validity).
+keytool -genkeypair -v \
+  -keystore /tmp/bramble-release.jks -storetype PKCS12 -alias bramble \
+  -keyalg RSA -keysize 4096 -validity 10950 -dname "CN=Bramble" \
+  -storepass "$KS_PW" -keypass "$KS_PW"
+
+# 3. Day-to-day copy: encrypt to the YubiKey recipient (PIN + touch to use).
+mkdir -p ~/.config/bramble
+age -r age1yubikey1XXXX -o ~/.config/bramble/android-release-keystore.age /tmp/bramble-release.jks
+
+# 4. Recovery copy: passphrase-encrypted, stored OFFLINE (not in the repo, not in CI).
+age -p -o android-release-keystore.backup.age /tmp/bramble-release.jks
+
+# 5. Record the cert SHA-256 (what users verify); paste it into the "Verifying a release APK"
+#    section of packages/platform-mobile/README.md (the single published source of truth).
+keytool -list -v -keystore /tmp/bramble-release.jks -alias bramble -storepass "$KS_PW" | grep "SHA256:"
+
+# 6. Destroy the plaintext keystore.
+rm -P /tmp/bramble-release.jks
+```
+
+Move `android-release-keystore.backup.age` to offline storage (not the repo, not CI).
+
+### Each release
+
+```sh
+export ANDROID_KEYSTORE_PASSWORD="…"     # from your password manager
+pnpm run release android 1.1.0           # prompts for a YubiKey touch to decrypt the keystore
+```
+
+It runs lint + tests, bumps `versionName`, builds the web bundle + Rust FFI, `cap sync`s,
+assembles a **signed** release APK (JDK 21), prints the cert SHA-256, tags `1.1.0-android`,
+pushes, and publishes a GitHub release with `bramble_android_1.1.0.apk` + `SHA256SUMS`. The
+keystore is decrypted to a temp file and wiped; it never touches the repo. `versionCode` is a
+build-time timestamp and is left alone. Env overrides: `ANDROID_KEYSTORE_AGE` (encrypted
+keystore path), `ANDROID_KEY_ALIAS` (default `bramble`), `ANDROID_KEY_PASSWORD` (defaults to the
+store password). CI verifies an APK + matching `SHA256SUMS` are attached; it never builds or signs.
+
+### Verifying (what users run)
+
+The user-facing verification steps and the published certificate fingerprint live in
+[`packages/platform-mobile/README.md`](../packages/platform-mobile/README.md) under "Verifying a
+release APK", the single published source of truth for the fingerprint.
+
+### If the YubiKey is lost
+
+Same as CWS: decrypt the offline backup and re-wrap under a new YubiKey. The keystore (and thus
+the signing cert) is unchanged, so installed apps keep updating normally.
+
+```sh
+age -d android-release-keystore.backup.age > /tmp/ks.jks         # passphrase
+age-plugin-yubikey --generate                                    # new YubiKey recipient
+age -r age1yubikey1NEW -o ~/.config/bramble/android-release-keystore.age /tmp/ks.jks
+rm -P /tmp/ks.jks
 ```
