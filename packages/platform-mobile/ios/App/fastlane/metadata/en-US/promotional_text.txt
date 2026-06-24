@@ -1,0 +1,1 @@
+No account, no cloud, no company holding your vault. Your passwords stay encrypted on your device. AutoFill, TOTP, and KeePass import included.
