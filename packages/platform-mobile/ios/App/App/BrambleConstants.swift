@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 // Single source of truth for the cross-process autofill + biometric identifiers. The main
 // app (AutofillBridge, BiometricVault) WRITES these and the AutoFill extension READS them,
@@ -8,8 +9,11 @@ import Foundation
 enum BrambleVault {
 	// App Group container shared by the app and the AutoFill extension.
 	static let appGroup = "group.app.bramble.mobile"
-	// Team-prefixed shared Keychain access group (the keychain-access-groups entitlement).
-	static let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
+	// Shared Keychain access group. The team prefix is resolved at RUNTIME (not hardcoded)
+	// so the group always tracks whatever team signs the build - matching the entitlements'
+	// $(AppIdentifierPrefix) - and switching Apple accounts can't silently break the
+	// app<->extension Keychain sharing the autofill unlock depends on.
+	static let accessGroup = "\(appIdentifierPrefix())app.bramble.mobile.shared"
 
 	// Keychain item: the biometric-gated VEK cache (BiometricVault writes, extension reads).
 	static let biometricService = "app.bramble.mobile.biometric-vault"
@@ -21,4 +25,31 @@ enum BrambleVault {
 	static let bundleKey = "autofill.bundle"
 	static let slotKey = "autofill.slot"
 	static let keepUnlockedKey = "autofill.keepUnlockedMinutes"
+
+	// The app-identifier (team) prefix, e.g. "TEAMID.", read back from the Keychain: an item
+	// added without an explicit access group lands in the first keychain-access-group from the
+	// entitlements (our shared group), and its kSecAttrAccessGroup carries the resolved prefix.
+	// Standard technique; computed once via the `static let` above.
+	private static func appIdentifierPrefix() -> String {
+		let probe = "app.bramble.mobile.teamprefix-probe"
+		let query: [String: Any] = [
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: probe,
+			kSecAttrAccount as String: probe,
+			kSecReturnAttributes as String: true,
+			kSecMatchLimit as String: kSecMatchLimitOne,
+		]
+		var item: CFTypeRef?
+		var status = SecItemCopyMatching(query as CFDictionary, &item)
+		if status == errSecItemNotFound {
+			SecItemAdd(query as CFDictionary, nil)
+			status = SecItemCopyMatching(query as CFDictionary, &item)
+		}
+		guard status == errSecSuccess,
+			let attrs = item as? [String: Any],
+			let group = attrs[kSecAttrAccessGroup as String] as? String,
+			let prefix = group.split(separator: ".").first
+		else { return "" }
+		return "\(prefix)."
+	}
 }
