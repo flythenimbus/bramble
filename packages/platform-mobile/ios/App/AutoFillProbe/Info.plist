@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<!-- Required to read the biometric-gated VEK Keychain item (Face ID) from the
 	     extension; without it the biometric read fails and nothing can be decrypted. -->
 	<key>NSFaceIDUsageDescription</key>

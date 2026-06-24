@@ -8,7 +8,7 @@ import { mobileAutofill } from "./adapters/autofill";
 import { mobileBiometric } from "./adapters/biometric";
 import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
-import { mobileShell, registerOpenSetup } from "./adapters/shell";
+import { mobileShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
 import { initRosterSync } from "./sync/sync-manager";
@@ -62,6 +62,7 @@ void (async () => {
 	if ((await mobileStorage.getMeta<number>(PREF_AUTOLOCK_MINUTES)) === undefined) {
 		await mobileStorage.setMeta(PREF_AUTOLOCK_MINUTES, -1);
 	}
+	await resolveAppVersion();
 	createRoot(root).render(
 		<PlatformProvider platform={platform}>
 			<Root />
