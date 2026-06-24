@@ -1,1 +1,1 @@
-Local-first password manager
+Private, local-first vault
