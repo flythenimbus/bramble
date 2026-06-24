@@ -24,11 +24,18 @@ class NativeCryptoPlugin : Plugin() {
 
     // --- helpers ---
 
-    // Surface a uniffi error to JS as its bare code (e.g. "KDBX_WRONG_CREDENTIAL"), so the
-    // TS layer switches on the same stable codes it gets from the iOS plugin. Reading the
-    // variant's own `msg` avoids the "msg=<code>" wrapper uniffi puts on Throwable.message.
-    private fun fail(call: PluginCall, e: Throwable) {
-        call.reject(if (e is CryptoException.Crypto) e.msg else e.message ?: e.toString())
+    // Run a crypto call, rejecting the JS promise on failure. CryptoException.Crypto
+    // stringifies its message as "msg=<code>", so surface the bare `.msg` (e.g.
+    // "KDBX_WRONG_CREDENTIAL") the TS layer switches on, matching the iOS plugin. Any
+    // other throwable (e.g. a JNA/FFI error) is surfaced rather than crashing the bridge.
+    private inline fun PluginCall.runCrypto(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CryptoException.Crypto) {
+            reject(e.msg)
+        } catch (e: Throwable) {
+            reject(e.message ?: e.toString())
+        }
     }
 
     private fun str(call: PluginCall, key: String): String? {
@@ -55,7 +62,7 @@ class NativeCryptoPlugin : Plugin() {
     private fun blobJs(b: PasswordSlotBlob): JSObject =
         JSObject().put("verifier", b.verifier).put("wrapIv", b.wrapIv).put("wrappedVek", b.wrappedVek)
 
-    // --- VEK lifecycle ---
+    // --- VEK lifecycle (isLocked/lock are non-throwing in the core) ---
 
     @PluginMethod
     fun isLocked(call: PluginCall) {
@@ -69,59 +76,37 @@ class NativeCryptoPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun generateVek(call: PluginCall) {
-        try {
-            call.resolve(JSObject().put("value", uniffi.vault_crypto.generateVek()))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+    fun generateVek(call: PluginCall) = call.runCrypto {
+        call.resolve(JSObject().put("value", uniffi.vault_crypto.generateVek()))
     }
 
     @PluginMethod
     fun unlockWithVek(call: PluginCall) {
         val vek = str(call, "vekB64") ?: return
-        try {
+        call.runCrypto {
             uniffi.vault_crypto.unlockWithVek(vek)
             call.resolve()
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
     @PluginMethod
-    fun exportVek(call: PluginCall) {
-        try {
-            call.resolve(JSObject().put("value", uniffi.vault_crypto.exportVek()))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+    fun exportVek(call: PluginCall) = call.runCrypto {
+        call.resolve(JSObject().put("value", uniffi.vault_crypto.exportVek()))
     }
 
     @PluginMethod
-    fun rotateVek(call: PluginCall) {
-        try {
-            call.resolve(JSObject().put("value", uniffi.vault_crypto.rotateVek()))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+    fun rotateVek(call: PluginCall) = call.runCrypto {
+        call.resolve(JSObject().put("value", uniffi.vault_crypto.rotateVek()))
     }
 
     @PluginMethod
-    fun generateSalt(call: PluginCall) {
-        try {
-            call.resolve(JSObject().put("value", uniffi.vault_crypto.generateSalt()))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+    fun generateSalt(call: PluginCall) = call.runCrypto {
+        call.resolve(JSObject().put("value", uniffi.vault_crypto.generateSalt()))
     }
 
     @PluginMethod
-    fun generateSlotId(call: PluginCall) {
-        try {
-            call.resolve(JSObject().put("value", uniffi.vault_crypto.generateSlotId()))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+    fun generateSlotId(call: PluginCall) = call.runCrypto {
+        call.resolve(JSObject().put("value", uniffi.vault_crypto.generateSlotId()))
     }
 
     // --- password slots ---
@@ -132,11 +117,7 @@ class NativeCryptoPlugin : Plugin() {
         val salt = str(call, "saltB64") ?: return
         val slot = str(call, "slotIdB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
-            call.resolve(blobJs(uniffi.vault_crypto.wrapVekPassword(pw, salt, slot, mv)))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+        call.runCrypto { call.resolve(blobJs(uniffi.vault_crypto.wrapVekPassword(pw, salt, slot, mv))) }
     }
 
     @PluginMethod
@@ -148,11 +129,9 @@ class NativeCryptoPlugin : Plugin() {
         val wrapIv = str(call, "wrapIvB64") ?: return
         val wrapped = str(call, "wrappedVekB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
+        call.runCrypto {
             val ok = uniffi.vault_crypto.unwrapVekPassword(pw, salt, slot, verifier, wrapIv, wrapped, mv)
             call.resolve(JSObject().put("value", ok))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -163,11 +142,9 @@ class NativeCryptoPlugin : Plugin() {
         val slot = str(call, "slotIdB64") ?: return
         val verifier = str(call, "verifierB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
+        call.runCrypto {
             val ok = uniffi.vault_crypto.verifyPasswordSlot(pw, salt, slot, verifier, mv)
             call.resolve(JSObject().put("value", ok))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -178,11 +155,7 @@ class NativeCryptoPlugin : Plugin() {
         val secret = str(call, "hmacSecretB64") ?: return
         val slot = str(call, "slotIdB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
-            call.resolve(blobJs(uniffi.vault_crypto.wrapVekWebauthn(secret, slot, mv)))
-        } catch (e: CryptoException) {
-            fail(call, e)
-        }
+        call.runCrypto { call.resolve(blobJs(uniffi.vault_crypto.wrapVekWebauthn(secret, slot, mv))) }
     }
 
     @PluginMethod
@@ -193,11 +166,9 @@ class NativeCryptoPlugin : Plugin() {
         val wrapIv = str(call, "wrapIvB64") ?: return
         val wrapped = str(call, "wrappedVekB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
+        call.runCrypto {
             val ok = uniffi.vault_crypto.unwrapVekWebauthn(secret, slot, verifier, wrapIv, wrapped, mv)
             call.resolve(JSObject().put("value", ok))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -207,11 +178,9 @@ class NativeCryptoPlugin : Plugin() {
         val slot = str(call, "slotIdB64") ?: return
         val verifier = str(call, "verifierB64") ?: return
         val mv = bytes(call, "magicVersionB64") ?: return
-        try {
+        call.runCrypto {
             val ok = uniffi.vault_crypto.verifyWebauthnSlot(secret, slot, verifier, mv)
             call.resolve(JSObject().put("value", ok))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -220,7 +189,7 @@ class NativeCryptoPlugin : Plugin() {
     @PluginMethod
     fun encryptEntry(call: PluginCall) {
         val json = str(call, "plaintextJson") ?: return
-        try {
+        call.runCrypto {
             val p = uniffi.vault_crypto.encryptEntry(json)
             call.resolve(
                 JSObject()
@@ -229,8 +198,6 @@ class NativeCryptoPlugin : Plugin() {
                     .put("wrappedDek", p.wrappedDek)
                     .put("dekIv", p.dekIv)
             )
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -240,21 +207,17 @@ class NativeCryptoPlugin : Plugin() {
         val iv = str(call, "iv") ?: return
         val wd = str(call, "wrappedDek") ?: return
         val di = str(call, "dekIv") ?: return
-        try {
+        call.runCrypto {
             call.resolve(JSObject().put("value", uniffi.vault_crypto.decryptEntry(ct, iv, wd, di)))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
     @PluginMethod
     fun encryptWithVek(call: PluginCall) {
         val pt = str(call, "plaintext") ?: return
-        try {
+        call.runCrypto {
             val p = uniffi.vault_crypto.encryptWithVek(pt)
             call.resolve(JSObject().put("iv", p.iv).put("ciphertext", p.ciphertext))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -262,10 +225,8 @@ class NativeCryptoPlugin : Plugin() {
     fun decryptWithVek(call: PluginCall) {
         val iv = str(call, "ivB64") ?: return
         val ct = str(call, "ciphertextB64") ?: return
-        try {
+        call.runCrypto {
             call.resolve(JSObject().put("value", uniffi.vault_crypto.decryptWithVek(iv, ct)))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 
@@ -276,7 +237,7 @@ class NativeCryptoPlugin : Plugin() {
         val file = bytes(call, "fileB64") ?: return
         val pw = str(call, "password") ?: return
         val keyfile = call.getString("keyfileB64")?.let { Base64.decode(it, Base64.NO_WRAP) }
-        try {
+        call.runCrypto {
             val entries = uniffi.vault_crypto.openKdbx4(file, pw, keyfile)
             val arr = JSArray()
             for (e in entries) {
@@ -289,8 +250,6 @@ class NativeCryptoPlugin : Plugin() {
                 arr.put(JSObject().put("strings", strings))
             }
             call.resolve(JSObject().put("entries", arr))
-        } catch (e: CryptoException) {
-            fail(call, e)
         }
     }
 }

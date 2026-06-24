@@ -50,8 +50,13 @@ xcf.last_known_file_type = "wrapper.xcframework"
   app.add_file_references([ref_in(app_group, name)])
 end
 
-# Glue + xcframework: the App and the credential-provider extension both decrypt.
+# Shared identifiers (App Group / Keychain group / keys), one source of truth compiled
+# into BOTH the App and the credential-provider extension so they can never drift.
+consts = ref_in(app_group, "BrambleConstants.swift")
+
+# Glue + xcframework + shared constants: the App and the extension both decrypt + share keys.
 [app, ext].compact.each do |target|
+  target.add_file_references([consts]) unless has_source?(target, "BrambleConstants.swift")
   target.add_file_references([glue]) unless has_source?(target, "vault_crypto.swift")
   target.frameworks_build_phase.add_file_reference(xcf) unless has_framework?(target, "VaultCrypto.xcframework")
   target.build_configurations.each do |c|

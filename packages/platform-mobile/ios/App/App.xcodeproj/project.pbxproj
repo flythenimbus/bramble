@@ -10,6 +10,7 @@
 		2DDF94162081AD593FA9CF2F /* AutoFillProbe.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AB572E26C386476F4199D517 /* AutoFillProbe.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6363800275C7C75D7612C3B4 /* AutofillBridge.swift */; };
+		42F8623E6B0F198C0367224B /* BrambleConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */; };
 		4499CD105B570A875660CF47 /* VaultCrypto.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */; };
 		465133983C8734E4964900AB /* VaultCrypto.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
@@ -23,6 +24,7 @@
 		5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */; };
 		AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */; };
 		B100000000000000000B0001 /* BiometricVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0001 /* BiometricVault.swift */; };
+		DA77030FEB0F1014AA5F80D0 /* BrambleConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */; };
 		F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */; };
 /* End PBXBuildFile section */
 
@@ -52,6 +54,7 @@
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BrambleConstants.swift; sourceTree = "<group>"; };
 		3AE14515F7A8E1BEEA894346 /* AutoFillProbe.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AutoFillProbe.entitlements; sourceTree = "<group>"; };
 		4614635B51FECD0041526CBB /* App.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
@@ -156,6 +159,7 @@
 				4614635B51FECD0041526CBB /* App.entitlements */,
 				6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */,
 				6363800275C7C75D7612C3B4 /* AutofillBridge.swift */,
+				364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -283,6 +287,7 @@
 				5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */,
 				F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */,
 				33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */,
+				42F8623E6B0F198C0367224B /* BrambleConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +297,7 @@
 			files = (
 				AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */,
 				5B00CCCA4F502D4EBC796737 /* vault_crypto.swift in Sources */,
+				DA77030FEB0F1014AA5F80D0 /* BrambleConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

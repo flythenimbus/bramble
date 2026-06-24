@@ -335,16 +335,10 @@ private struct UnlockView: View {
 // --- provider controller ---
 
 class CredentialProviderViewController: ASCredentialProviderViewController {
-	private let appGroup = "group.app.bramble.mobile"
-	private let bundleKey = "autofill.bundle"
-	private let slotKey = "autofill.slot"
-	private let keychainService = "app.bramble.mobile.biometric-vault"
-	private let keychainAccount = "vek"
-	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
-	// Keep-unlocked session: the VEK cached behind device-unlock only (no per-access
-	// auth) for the configured window, so fills within it need no re-auth.
-	private let sessionService = "app.bramble.mobile.autofill-session"
-	private let keepUnlockedKey = "autofill.keepUnlockedMinutes"
+	// All shared identifiers (App Group, Keychain group/service/account, keys) live in
+	// BrambleVault, compiled into both the app and this extension so they cannot drift.
+	// Keep-unlocked session (BrambleVault.sessionService): the VEK cached behind device-
+	// unlock only for the configured window, so fills within it need no re-auth.
 
 	private enum VekOutcome { case ok(String), missing, denied(String) }
 
@@ -552,7 +546,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// --- App Group reads ---
 
 	private func loadBundle() -> (iv: String, ct: String)? {
-		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: bundleKey),
+		guard let data = UserDefaults(suiteName: BrambleVault.appGroup)?.data(forKey: BrambleVault.bundleKey),
 			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
 			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String
 		else { return nil }
@@ -560,7 +554,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	private func loadSlot() -> Slot? {
-		guard let data = UserDefaults(suiteName: appGroup)?.data(forKey: slotKey),
+		guard let data = UserDefaults(suiteName: BrambleVault.appGroup)?.data(forKey: BrambleVault.slotKey),
 			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
 			let salt = d["saltB64"] as? String, let slotId = d["slotIdB64"] as? String,
 			let verifier = d["verifierB64"] as? String, let wrapIv = d["wrapIvB64"] as? String,
@@ -575,15 +569,15 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// --- keep-unlocked session (device-unlock-gated VEK cache, time-limited) ---
 
 	private func keepUnlockedMinutes() -> Int {
-		UserDefaults(suiteName: appGroup)?.integer(forKey: keepUnlockedKey) ?? 0
+		UserDefaults(suiteName: BrambleVault.appGroup)?.integer(forKey: BrambleVault.keepUnlockedKey) ?? 0
 	}
 
 	private func sessionBaseQuery() -> [String: Any] {
 		[
 			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: sessionService,
-			kSecAttrAccount as String: keychainAccount,
-			kSecAttrAccessGroup as String: accessGroup,
+			kSecAttrService as String: BrambleVault.sessionService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 		]
 	}
 
@@ -643,9 +637,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func vekExists() -> Bool {
 		let q: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: keychainService,
-			kSecAttrAccount as String: keychainAccount,
-			kSecAttrAccessGroup as String: accessGroup,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 			kSecReturnData as String: false,
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
 			kSecMatchLimit as String: kSecMatchLimitOne,
@@ -660,9 +654,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
-				kSecAttrService as String: self.keychainService,
-				kSecAttrAccount as String: self.keychainAccount,
-				kSecAttrAccessGroup as String: self.accessGroup,
+				kSecAttrService as String: BrambleVault.biometricService,
+				kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseOperationPrompt as String: reason,

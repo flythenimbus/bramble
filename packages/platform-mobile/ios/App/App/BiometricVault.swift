@@ -20,12 +20,8 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "deleteSecret", returnType: CAPPluginReturnPromise),
 	]
 
-	private let service = "app.bramble.mobile.biometric-vault"
-	private let account = "vek"
-	// Shared Keychain access group so the AutoFill extension (a separate process)
-	// can read the same biometric-gated VEK item. Must match the keychain-access-groups
-	// entitlement on both targets (team-prefixed). See docs/mobile-port.md "the crux".
-	private let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
+	// service / account / accessGroup live in BrambleVault (shared with the AutoFill
+	// extension and the keychain-access-groups entitlement). See docs/mobile-port.md.
 
 	@objc func isAvailable(_ call: CAPPluginCall) {
 		let context = LAContext()
@@ -47,9 +43,9 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	@objc func hasSecret(_ call: CAPPluginCall) {
 		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: service,
-			kSecAttrAccount as String: account,
-				kSecAttrAccessGroup as String: accessGroup,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 			kSecReturnData as String: false,
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
 			kSecMatchLimit as String: kSecMatchLimitOne,
@@ -66,9 +62,9 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		}
 		let base: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: service,
-			kSecAttrAccount as String: account,
-				kSecAttrAccessGroup as String: accessGroup,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 		]
 		// Replace any prior (possibly invalidated) item.
 		SecItemDelete(base as CFDictionary)
@@ -119,9 +115,9 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			}
 			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
-				kSecAttrService as String: self.service,
-				kSecAttrAccount as String: self.account,
-				kSecAttrAccessGroup as String: self.accessGroup,
+				kSecAttrService as String: BrambleVault.biometricService,
+				kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: context,
@@ -144,9 +140,9 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	@objc func deleteSecret(_ call: CAPPluginCall) {
 		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: service,
-			kSecAttrAccount as String: account,
-				kSecAttrAccessGroup as String: accessGroup,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 		]
 		let status = SecItemDelete(query as CFDictionary)
 		if status == errSecSuccess || status == errSecItemNotFound {
