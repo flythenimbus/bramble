@@ -1,8 +1,13 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 android {
     namespace = "app.bramble.mobile"
     compileSdk = rootProject.ext.compileSdkVersion
+    // Match the Java 21 source/target the Capacitor template sets in capacitor.build.gradle.
+    kotlinOptions {
+        jvmTarget = '21'
+    }
     defaultConfig {
         applicationId "app.bramble.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -36,6 +41,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.biometric:biometric:$androidxBiometricVersion"
+    // JNA backs the uniffi-generated crypto glue; the @aar bundles jnidispatch's native libs.
+    implementation "net.java.dev.jna:jna:5.14.0@aar"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
@@ -45,11 +52,5 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}
+// No Google Play APIs (GitHub-released APKs only, no Play Store): the Capacitor
+// template's com.google.gms.google-services / Firebase push hook was removed.

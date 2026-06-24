@@ -153,8 +153,31 @@ ground truth of what exists.
     in `ios/App/fastlane/.env` + `AuthKey.p8` (gitignored). Wiring is idempotent (`scripts/add-native-crypto.rb`).
   - Fixed for App Store: the 1024 marketing icon had an alpha channel (placeholder in ASC); flattened to
     opaque RGB.
-- **Not started:** Android native crypto plugin + `AutofillService` (Android parity), passkeys/PRF
-  (Phase 4), App Store distribution (Phase 5).
+- **Android native crypto: BUILT + compile-verified (the iOS peer).** Android now runs the same
+  shared Rust core natively (uniffi Kotlin bindings), so `crypto.ts` binds the native plugin on every
+  native platform (`Capacitor.isNativePlatform()`, was iOS-only). What landed: `pnpm ffi:build:android`
+  installs jniLibs for all 4 ABIs + the uniffi Kotlin glue (both gitignored/regenerable, like the iOS
+  XCFramework); a Kotlin `NativeCryptoPlugin` (registered as `"NativeCrypto"`) mirrors `NativeCrypto.swift`
+  method-for-method, calling the uniffi free fns package-qualified (`uniffi.vault_crypto.<fn>`) with the
+  same base64 arg/return shapes; **Kotlin was added to the Android Gradle project** (it had none —
+  `kotlin-android` plugin + classpath 2.2.20, `jvmTarget 21`) plus the JNA `@aar` runtime; `MainActivity`
+  registers the plugin. Fixed a **latent uniffi/Kotlin bug**: the Rust `CryptoError` field `message`
+  collided with Kotlin `Throwable.message` (generated glue wouldn't compile); renamed to `msg` (Display-
+  based, so wasm/JS and the iOS positional match are unaffected). **Verified: `:app:assembleDebug` builds
+  an APK bundling `libvault_crypto.so` + JNA `libjnidispatch.so`; `cargo test` 31 pass; TS typecheck
+  clean.** Not yet run on a device/emulator. Note: the committed iOS Swift glue is now one field-rename
+  behind the Rust source (behavior-neutral; a `ffi:build:ios` re-run resyncs it, the Swift plugin needs
+  no change). The shared `native-crypto.ts` was already platform-agnostic, so it was untouched.
+- **Constraint — NO Google Play APIs (Android ships as GitHub-released APKs, never the Play Store).**
+  No Play Services / Firebase-FCM / `google-services` / Play Billing / Play Integrity / ML Kit-via-Play /
+  Credential-Manager `*-play-services-*`. The Capacitor template's dormant `com.google.gms.google-services`
+  (push) hook was removed from the Gradle files. AndroidX/Jetpack + JNA are fine (not Play APIs). The
+  classic `AutofillService` below is pure AOSP, so it's unaffected; a future passkey/Credential-Manager
+  path must stay Play-free.
+- **Not started:** Android autofill: port `AutofillBridge`/`setKeepUnlocked` (same-package storage +
+  Keystore, no App Group) + the classic `AutofillService` (RemoteViews datasets + a Compose/Activity
+  unlock screen via `setAuthentication`). Then passkeys/PRF (Phase 4), and Android release = a signed APK
+  on GitHub (no Play Store; iOS App Store distribution remains Phase 5).
 
 Dev workflow + the environment quirks hit while building this are in
 [`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
@@ -174,12 +197,16 @@ the fastlane release pipeline. In rough priority order:
    the dynamic biometry label; the flattened App Store icon) want a fresh pass: install the latest build,
    confirm the unlock-first flow, master-password + Face-ID/passcode + keep-unlocked paths, and Lockdown-Mode
    unlock. (Latest TestFlight builds use timestamp numbers, e.g. ~204419414.)
-2. **Android parity: the big remaining workstream.** A Kotlin `NativeCrypto` Capacitor plugin over the
-   uniffi Kotlin bindings (jniLibs + glue already built; needs the JNA `@aar` dep + `MainActivity.registerPlugin`),
-   flip `adapters/crypto.ts` to native on Android, port `AutofillBridge`/`setKeepUnlocked`, then the classic
-   `AutofillService` (a SEPARATE provider model from iOS: no full-screen list, just system-drawn `RemoteViews`
-   datasets + a Compose/Activity unlock screen via `setAuthentication`; same-package storage + Keystore, no
-   App Group). The auth-first + encrypted-bundle design carries over.
+2. **Android parity: the big remaining workstream.** The **native-crypto half is DONE** (Kotlin
+   `NativeCryptoPlugin` over the uniffi bindings, JNA `@aar`, Kotlin added to Gradle, `MainActivity`
+   registration, `crypto.ts` flipped to native on all native platforms; compile + APK verified — see
+   "Android native crypto" in Implementation status). Remaining for autofill: port
+   `AutofillBridge`/`setKeepUnlocked` (same-package storage + Keystore, no App Group), then the classic
+   `AutofillService` (a SEPARATE provider model from iOS: no full-screen list, just system-drawn
+   `RemoteViews` datasets + a Compose/Activity unlock screen via `setAuthentication`). The auth-first +
+   encrypted-bundle design carries over. **First: run the app on an emulator/device** to confirm native
+   crypto unlocks the vault (create/unlock/CRUD/KDBX) — only the build is verified so far. Prereq for any
+   Android build: `pnpm ffi:build:android` (jniLibs + glue are gitignored), same as iOS's `ffi:build:ios`.
 3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
    biometric **re-enrollment edge** (`isEnabled()` should detect an invalidated item); the broader **vault
    list/detail/edit small-screen UI sweep**.

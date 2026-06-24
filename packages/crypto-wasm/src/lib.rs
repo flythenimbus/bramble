@@ -65,13 +65,17 @@ const SLOT_ID_LEN: usize = 16;
 #[derive(Debug)]
 #[cfg_attr(feature = "ffi", derive(uniffi::Error))]
 pub enum CryptoError {
-    Crypto { message: String },
+    // Field is `msg`, not `message`: uniffi maps an Error variant onto Kotlin's
+    // `Throwable`, and a field named `message` collides with `Throwable.message`
+    // (the generated glue then fails to compile). Display is field-name-agnostic,
+    // so the wasm JS error string and the Swift positional match are unaffected.
+    Crypto { msg: String },
 }
 
 impl std::fmt::Display for CryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CryptoError::Crypto { message } => write!(f, "{message}"),
+            CryptoError::Crypto { msg } => write!(f, "{msg}"),
         }
     }
 }
@@ -95,7 +99,7 @@ fn vek_slot() -> &'static Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> {
 }
 
 fn err(msg: impl Into<String>) -> CryptoError {
-    CryptoError::Crypto { message: msg.into() }
+    CryptoError::Crypto { msg: msg.into() }
 }
 
 fn random_bytes(buf: &mut [u8]) -> Result<(), CryptoError> {
