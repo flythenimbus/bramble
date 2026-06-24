@@ -74,8 +74,9 @@ platform :ios do
   desc "Upload App Store metadata (en-US text only; no binary, no screenshots)"
   lane :metadata do
     # Reads fastlane/metadata/** (only en-US for now). Fill in the real privacy + support
-    # URLs (metadata/en-US/*_url.txt) and the review contact before running. Screenshots are
-    # skipped until screenshots/en-US/ is populated (see screenshots/README.md).
+    # URLs (metadata/en-US/*_url.txt) before running. App Review contact + notes are NOT
+    # managed here (no review_information/ folder); set them in App Store Connect directly.
+    # Screenshots are skipped until screenshots/en-US/ is populated (see screenshots/README.md).
     # app_version tracks the project's MARKETING_VERSION, so deliver targets (and creates,
     # if missing) that App Store version - no need to edit this lane when the version bumps.
     upload_to_app_store(
