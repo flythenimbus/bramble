@@ -133,8 +133,9 @@ ground truth of what exists.
   - **Auth-first + encrypted at rest (the security model).** The app encrypts the WHOLE login list
     (names + usernames + passwords) under the VEK (`encryptWithVek`) before writing it to the App Group, so
     nothing about the vault is readable there in cleartext. The provider shows an **unlock screen first** and
-    only decrypts + lists after it has the VEK. The `ASCredentialIdentityStore` is **not** populated (it
-    would leak usernames in QuickType before auth); trigger is the keyboard key icon, not an inline chip.
+    only decrypts + lists after it has the VEK. By default the `ASCredentialIdentityStore` is **not**
+    populated (it would leak usernames in QuickType before auth), so the trigger is the keyboard key icon;
+    an opt-in setting can populate it (see "Domain filtering + QuickType opt-in" below).
   - **Three unlock paths** (in `CredentialProviderViewController.swift`): the **master password** run
     natively in the extension (`unwrapVekPassword` = Argon2id 64 MiB; fits the ~120 MB cap, Bitwarden-style;
     the app shares the non-secret password slot via `AutofillBridge`); a **biometric/passcode** fast path
@@ -146,6 +147,15 @@ ground truth of what exists.
     min = that window; Never = stay unlocked. The old separate "keep autofill unlocked" toggle was removed.
     Mapping to the extension (a device-unlock-gated, time-stamped Keychain session): Immediately -> 0 (off),
     N -> N, Never -> -1 (never expire). "Immediately" is mobile-gated (the browser extension is untouched).
+  - **Domain filtering + QuickType opt-in (build 204423099).** The list now **filters to the page's logins**:
+    the requested service id (Safari passes the full page URL) and the stored hostnames are normalized to a
+    bare host before matching, with a "Show all items" fallback. Previously it only *sorted* by match, and
+    since a full URL never equalled a bare host, nothing matched and the whole vault showed.
+    **QuickType is now an opt-in setting** ("Keyboard suggestions" in General, off by default; `autofillQuickType`
+    pref): when on, the app populates `ASCredentialIdentityStore` (usernames + domains, never passwords) via
+    `AutofillBridge` so logins surface inline in the keyboard, and `provideCredentialWithoutUserInteraction`
+    fills **silently** when a keep-unlocked session is live (otherwise it asks for auth, then fills the chosen
+    record directly). With Auto-lock = "Immediately" every fill still authenticates by design.
   - **UI is SwiftUI** styled from the app's design tokens (the unlock screen mirrors the app auth screen:
     glyph, heading, card; the list mirrors the in-app vault). The `bramble-glyph.png` is base64-embedded.
   - **Release pipeline:** `pnpm ios:beta` (fastlane: build + TestFlight upload, **timestamp build numbers**
@@ -193,10 +203,12 @@ with native crypto (Lockdown-Mode-safe), auth-first + encrypted-at-rest storage,
 the fastlane release pipeline. In rough priority order:
 
 1. **On-device re-verify of the latest iOS builds.** The autofill *fill* path is confirmed on device, but
-   the most recent security/UX builds (auth-first + encrypted bundle; the "Immediately" auto-lock default;
-   the dynamic biometry label; the flattened App Store icon) want a fresh pass: install the latest build,
-   confirm the unlock-first flow, master-password + Face-ID/passcode + keep-unlocked paths, and Lockdown-Mode
-   unlock. (Latest TestFlight builds use timestamp numbers, e.g. ~204419414.)
+   the recent security/UX builds want a fresh pass: auth-first + encrypted bundle; the "Immediately" auto-lock
+   default; the dynamic biometry label; the flattened App Store icon; and **(build 204423099) the autofill
+   domain filtering + the new QuickType opt-in** (toggle on in Settings, confirm github.com shows only the
+   GitHub login + an inline keyboard suggestion; with a keep-unlocked window, tapping a suggestion fills with
+   no unlock screen). Also confirm master-password + Face-ID/passcode + keep-unlocked paths and Lockdown-Mode
+   unlock. (TestFlight builds use timestamp numbers; latest is 204423099.)
 2. **Android parity: the big remaining workstream.** The **native-crypto half is DONE** (Kotlin
    `NativeCryptoPlugin` over the uniffi bindings, JNA `@aar`, Kotlin added to Gradle, `MainActivity`
    registration, `crypto.ts` flipped to native on all native platforms; compile + APK verified — see
@@ -210,9 +222,9 @@ the fastlane release pipeline. In rough priority order:
 3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
    biometric **re-enrollment edge** (`isEnabled()` should detect an invalidated item); the broader **vault
    list/detail/edit small-screen UI sweep**.
-4. **Polish / decisions:** an optional **QuickType opt-in** (re-add `ASCredentialIdentityStore` as a setting
-   for the inline keyboard chip, accepting the domain-scoped username exposure); the ASC app **Name** /
-   subtitle metadata; export the autofill provider behind a real (renamed) extension target if desired.
+4. **Polish / decisions:** the **QuickType opt-in** shipped (build 204423099) - confirm the exposure tradeoff
+   reads well on device; the ASC app **Name** / subtitle metadata; export the autofill provider behind a real
+   (renamed) extension target if desired.
 5. **Later phases:** passkeys / PRF unlock (Phase 4, long-lead, Apple entitlement), App Store distribution
    (Phase 5, App Store 4.2 + targetSdk).
 
