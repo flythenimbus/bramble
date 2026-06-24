@@ -100,9 +100,18 @@ private struct RowView: View {
 }
 
 private struct CredentialListView: View {
-	let creds: [Cred]
+	let matches: [Cred]
+	let all: [Cred]
+	let requestedHost: String?
 	let onSelect: (Cred) -> Void
 	let onCancel: () -> Void
+	@State private var showAll = false
+
+	// Everything that isn't already a domain match (shown under "Show all items").
+	private var others: [Cred] {
+		let ids = Set(matches.map { $0.recordId })
+		return all.filter { !ids.contains($0.recordId) }
+	}
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -117,7 +126,7 @@ private struct CredentialListView: View {
 			.padding(.bottom, 12)
 			Rectangle().fill(Theme.border).frame(height: 1).opacity(0.6)
 
-			if creds.isEmpty {
+			if all.isEmpty {
 				Spacer()
 				Text("No logins saved yet.\nAdd one in Bramble.")
 					.font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(24)
@@ -125,10 +134,29 @@ private struct CredentialListView: View {
 			} else {
 				ScrollView {
 					VStack(alignment: .leading, spacing: 10) {
-						Text("Items (\(creds.count))")
-							.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted).padding(.top, 16)
-						ForEach(creds) { cred in
-							Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
+						if matches.isEmpty {
+							// No domain match for this page: show the whole vault.
+							sectionLabel(requestedHost.map { "No matches for \($0)" } ?? "Items (\(all.count))")
+							ForEach(all) { row($0) }
+						} else {
+							// Filter to the page's logins; the rest are one tap away.
+							sectionLabel(requestedHost.map { "For \($0)" } ?? "Matches")
+							ForEach(matches) { row($0) }
+							if !others.isEmpty {
+								if showAll {
+									sectionLabel("All items")
+									ForEach(others) { row($0) }
+								} else {
+									Button { showAll = true } label: {
+										Text("Show all items (\(others.count) more)")
+											.font(.system(size: 14, weight: .medium))
+											.foregroundColor(Theme.muted)
+											.frame(maxWidth: .infinity, alignment: .leading)
+											.padding(.vertical, 10)
+									}
+									.buttonStyle(.plain)
+								}
+							}
 						}
 					}
 					.padding(.horizontal, 20)
@@ -138,6 +166,15 @@ private struct CredentialListView: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Theme.background.ignoresSafeArea())
+	}
+
+	private func sectionLabel(_ text: String) -> some View {
+		Text(text)
+			.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted).padding(.top, 16)
+	}
+
+	private func row(_ cred: Cred) -> some View {
+		Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
 	}
 }
 
@@ -311,20 +348,22 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private enum VekOutcome { case ok(String), missing, denied(String) }
 
-	private var pendingDomains: [String] = []
+	private var pendingHosts: [String] = []
 	private var pendingRecordId: String?
 	private var model: UnlockModel?
 
 	// --- entry points: authenticate first ---
 
 	override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
-		pendingDomains = serviceIdentifiers.map { $0.identifier.lowercased() }
+		// Safari passes the full page URL here (e.g. https://github.com/login), while the
+		// stored services are bare hostnames; normalize both to a host so they compare.
+		pendingHosts = serviceIdentifiers.map { normalizeHost($0.identifier) }.filter { !$0.isEmpty }
 		pendingRecordId = nil
 		resume()
 	}
 
 	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
-		pendingDomains = []
+		pendingHosts = []
 		pendingRecordId = credentialIdentity.recordIdentifier
 		resume()
 	}
@@ -341,10 +380,28 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		showUnlock()
 	}
 
+	// Tapped a QuickType suggestion. If a keep-unlocked session is live, decrypt and fill
+	// silently (no unlock screen). Otherwise tell the OS we need UI: it relaunches into
+	// prepareInterfaceToProvideCredential, which shows the unlock screen and then fills
+	// this exact record via pendingRecordId. (Previously this always required interaction,
+	// so the unlock screen appeared even when the vault was meant to stay unlocked.)
 	override func provideCredentialWithoutUserInteraction(
 		for credentialIdentity: ASPasswordCredentialIdentity
 	) {
-		cancel(.userInteractionRequired)
+		guard let vek = loadSession(), (try? unlockWithVek(vekB64: vek)) != nil else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		saveSession(vek)  // slide the keep-unlocked window, as the interactive path does
+		guard let bundle = loadBundle(),
+			let json = try? decryptWithVek(ivB64: bundle.iv, ciphertextB64: bundle.ct),
+			let creds = try? JSONDecoder().decode([Cred].self, from: Data(json.utf8)),
+			let cred = creds.first(where: { $0.recordId == credentialIdentity.recordIdentifier })
+		else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		complete(cred)
 	}
 
 	private func showUnlock() {
@@ -432,7 +489,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		// Start / slide the keep-unlocked window (no-op if the feature is off).
 		if let vek = try? exportVek() { saveSession(vek) }
 		guard let bundle = loadBundle() else {
-			showList([])
+			showList(matches: [], all: [], requestedHost: pendingHosts.first)
 			return
 		}
 		do {
@@ -441,17 +498,18 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			if let rid = pendingRecordId, let c = creds.first(where: { $0.recordId == rid }) {
 				complete(c)
 			} else {
-				showList(sortedByDomain(creds))
+				let matches = creds.filter { matchesRequested($0) }
+				showList(matches: matches, all: creds, requestedHost: pendingHosts.first)
 			}
 		} catch {
 			showError("Couldn't load logins", error.localizedDescription)
 		}
 	}
 
-	private func showList(_ creds: [Cred]) {
+	private func showList(matches: [Cred], all: [Cred], requestedHost: String?) {
 		host(
 			CredentialListView(
-				creds: creds,
+				matches: matches, all: all, requestedHost: requestedHost,
 				onSelect: { [weak self] in self?.complete($0) },
 				onCancel: { [weak self] in self?.cancel(.userCanceled) }))
 	}
@@ -462,15 +520,33 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			completionHandler: nil)
 	}
 
-	private func sortedByDomain(_ creds: [Cred]) -> [Cred] {
-		let wanted = pendingDomains
-		func matches(_ c: Cred) -> Bool {
-			c.services.contains { svc in
-				let s = svc.lowercased()
-				return wanted.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
-			}
+	// Normalize a service identifier or a stored URL/hostname to a bare registrable host:
+	// prefer the parsed URL host (Safari passes the full page URL), else strip any
+	// scheme/path/query/port by hand, then drop a leading "www." and lowercase. Without
+	// this, a requested "https://github.com/login" never equals a stored "github.com".
+	private func normalizeHost(_ raw: String) -> String {
+		var s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+		if s.isEmpty { return s }
+		if let h = URL(string: s)?.host {
+			s = h
+		} else {
+			if let r = s.range(of: "://") { s = String(s[r.upperBound...]) }
+			if let slash = s.firstIndex(of: "/") { s = String(s[..<slash]) }
+			if let q = s.firstIndex(of: "?") { s = String(s[..<q]) }
+			if let colon = s.firstIndex(of: ":") { s = String(s[..<colon]) }
 		}
-		return creds.sorted { (matches($0) ? 0 : 1) < (matches($1) ? 0 : 1) }
+		if s.hasPrefix("www.") { s = String(s.dropFirst(4)) }
+		return s
+	}
+
+	// A login matches the page if any of its (normalized) hostnames equals the requested
+	// host or is a subdomain either way (login.github.com ~ github.com).
+	private func matchesRequested(_ c: Cred) -> Bool {
+		guard !pendingHosts.isEmpty else { return false }
+		let services = c.services.map { normalizeHost($0) }.filter { !$0.isEmpty }
+		return services.contains { s in
+			pendingHosts.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
+		}
 	}
 
 	// --- App Group reads ---

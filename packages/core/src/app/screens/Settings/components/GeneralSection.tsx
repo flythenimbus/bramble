@@ -1,7 +1,9 @@
-import { Clock, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
+import { Clock, Keyboard, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
 import { useEffect } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
+import { useVault } from "../../../../hooks/useVault";
+import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
@@ -15,6 +17,7 @@ const keepUnlockedWindow = (autoLockMinutes: number) =>
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill } = usePlatform();
+	const { entries } = useVault();
 
 	// On mobile the auto-lock timeout also governs the autofill provider's keep-unlocked
 	// window; push it whenever the setting changes. No-op where there's no native provider.
@@ -54,6 +57,28 @@ export function GeneralSection() {
 					</SelectField>
 				</div>
 			</Row>
+
+			{/* QuickType opt-in: iOS-only (gated on the native-provider capability). Off by
+			    default; turning it on writes usernames + domains to the OS so logins show
+			    inline above the keyboard. Re-index immediately so the change takes effect. */}
+			{autofill.setKeepUnlocked && (
+				<Row
+					icon={<Keyboard className="w-4 h-4 text-primary" />}
+					title="Keyboard suggestions"
+					subtitle="Show matching logins above the keyboard (QuickType) for one-tap autofill. Exposes their usernames and sites to iOS before you unlock Bramble; passwords stay encrypted."
+				>
+					<Toggle
+						checked={prefs.autofillQuickType}
+						onChange={(enabled) =>
+							void (async () => {
+								await update("autofillQuickType", enabled);
+								await autofill.setIndex(toAutofillIndex(entries));
+							})()
+						}
+						label="Toggle keyboard suggestions"
+					/>
+				</Row>
+			)}
 
 			<Row
 				icon={<Timer className="w-4 h-4 text-primary" />}
