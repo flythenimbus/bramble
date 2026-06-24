@@ -16,7 +16,7 @@ const keepUnlockedWindow = (autoLockMinutes: number) =>
 /** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
-	const { autofill } = usePlatform();
+	const { autofill, shell } = usePlatform();
 	const { entries } = useVault();
 
 	// On mobile the auto-lock timeout also governs the autofill provider's keep-unlocked
@@ -36,7 +36,7 @@ export function GeneralSection() {
 				title="Auto-lock timeout"
 				subtitle={
 					autofill.setKeepUnlocked
-						? "Lock the vault, and require autofill re-auth, after inactivity"
+						? "Lock the vault and require autofill auth after inactivity"
 						: "Lock vault after inactivity"
 				}
 			>
@@ -65,7 +65,7 @@ export function GeneralSection() {
 				<Row
 					icon={<Keyboard className="w-4 h-4 text-primary" />}
 					title="Keyboard suggestions"
-					subtitle="Show matching logins above the keyboard (QuickType) for one-tap autofill. Exposes their usernames and sites to iOS before you unlock Bramble; passwords stay encrypted."
+					subtitle="Show matching logins above the keyboard for one-tap autofill."
 				>
 					<Toggle
 						checked={prefs.autofillQuickType}
@@ -104,7 +104,7 @@ export function GeneralSection() {
 			<Row
 				icon={<ShieldCheck className="w-4 h-4 text-primary" />}
 				title="Check passwords for breaches"
-				subtitle="Sends a 5-char SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity: the password itself never leaves the device). The only off-device traffic in the app."
+				subtitle="Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
 			>
 				<Toggle
 					checked={prefs.breachCheckEnabled}
@@ -113,20 +113,22 @@ export function GeneralSection() {
 				/>
 			</Row>
 
-			{/* Offer to save logins drives the corner-prompt card. */}
-			<Row
-				icon={<ShieldCheck className="w-4 h-4 text-primary" />}
-				title="Offer to save logins"
-				subtitle="Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
-			>
-				<Toggle
-					checked={prefs.offerToSave}
-					onChange={(enabled) => void update("offerToSave", enabled)}
-					label="Toggle offer to save logins"
-				/>
-			</Row>
+			{/* Corner-prompt card; only on platforms with a save-capture surface (not mobile). */}
+			{shell.supportsSaveCapture && (
+				<Row
+					icon={<ShieldCheck className="w-4 h-4 text-primary" />}
+					title="Offer to save logins"
+					subtitle="Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+				>
+					<Toggle
+						checked={prefs.offerToSave}
+						onChange={(enabled) => void update("offerToSave", enabled)}
+						label="Toggle offer to save logins"
+					/>
+				</Row>
+			)}
 
-			{prefs.neverSaveSites.length > 0 && (
+			{shell.supportsSaveCapture && prefs.neverSaveSites.length > 0 && (
 				<Row
 					icon={<ShieldCheck className="w-4 h-4 text-primary" />}
 					title="Sites you've muted"

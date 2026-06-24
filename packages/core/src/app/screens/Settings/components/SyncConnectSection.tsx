@@ -216,16 +216,6 @@ export function SyncConnectSection() {
 				</div>
 			</div>
 
-			<Row
-				icon={<Wifi className="w-4 h-4 text-primary" />}
-				title="Grant file access"
-				subtitle="For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts)."
-			>
-				<button type="button" onClick={() => void grantAccess()} className={btnClass}>
-					Grant access
-				</button>
-			</Row>
-
 			<p className="ml-12 text-xs text-muted-foreground">
 				Once enrolled, devices sync automatically in the background while unlocked, no button or
 				window needed.
@@ -256,6 +246,20 @@ export function SyncConnectSection() {
 							The signaling relay that introduces devices. Defaults to the hosted relay; point it at
 							your own self-hosted copy or any public Nostr relay.
 						</p>
+						{/* FSA-backed vaults only; no file backing to grant elsewhere (mobile, no-FSA browsers). */}
+						{shell.hasFilePicker() && (
+							<div className="pt-2">
+								<Row
+									icon={<Wifi className="w-4 h-4 text-primary" />}
+									title="Grant file access"
+									subtitle="For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts)."
+								>
+									<button type="button" onClick={() => void grantAccess()} className={btnClass}>
+										Grant access
+									</button>
+								</Row>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
