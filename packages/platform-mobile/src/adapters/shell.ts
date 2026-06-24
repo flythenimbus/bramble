@@ -1,3 +1,4 @@
+import { App } from "@capacitor/app";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
 import { scanQrCode } from "../scan";
 import {
@@ -26,6 +27,7 @@ export function registerOpenSetup(fn: OpenSetupHandler): () => void {
 // QR scanning (barcode-scanner plugin) and the sync host are later phases.
 export const mobileShell: ShellAdapter = {
 	appName: "Bramble",
+	// Fallback; resolveAppVersion() overwrites from the native bundle before first render.
 	version: "0.0.0-mobile",
 
 	async openSetup(screen) {
@@ -68,3 +70,13 @@ export const mobileShell: ShellAdapter = {
 	startEnrollJoin,
 	onSyncEvent,
 };
+
+// Set the About-row version from the native bundle (App Store / TestFlight / Play).
+export async function resolveAppVersion(): Promise<void> {
+	try {
+		const { version, build } = await App.getInfo();
+		mobileShell.version = build ? `${version} (${build})` : version;
+	} catch {
+		// getInfo() is web-unimplemented; keep the fallback.
+	}
+}
