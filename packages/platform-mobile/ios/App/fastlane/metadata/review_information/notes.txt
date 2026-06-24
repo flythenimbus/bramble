@@ -1,8 +1,0 @@
-Bramble is a local-first, account-free password manager. No login or demo account is required.
-
-To test:
-1. On first launch, create a vault by setting a master password.
-2. Add a login (name, username, password, and an optional website URL).
-3. To test AutoFill: open Settings > General > AutoFill & Passwords, enable Bramble. Optionally enable "Keyboard suggestions" in Bramble's own Settings > General. Then open a sign-in form in Safari and use the key icon above the keyboard to fill.
-
-There is no server and no account; all data stays on the device.
