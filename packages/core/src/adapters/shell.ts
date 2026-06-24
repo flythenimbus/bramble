@@ -40,6 +40,8 @@ export interface ShellAdapter {
 	supportsCameraScan: boolean;
 	/** Whether WebAuthn security-key unlock works here. False on mobile (iOS doesn't pass `prf` to authenticators, Android is NFC-blocked), where biometric unlock replaces it. Gates the security-key UI. */
 	supportsSecurityKeys: boolean;
+	/** Whether this platform can capture a submitted login and offer to save it (the corner-prompt flow). True on the extension; false on mobile (no save hook wired). Gates the "Offer to save logins" setting. See docs/mobile-port.md. */
+	supportsSaveCapture: boolean;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.

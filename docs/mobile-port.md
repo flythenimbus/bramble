@@ -497,6 +497,29 @@ existing design, which already separates match summaries from secrets in `autofi
   CredentialProviderService`), adding `BIND_CREDENTIAL_PROVIDER_SERVICE` and a `provider.xml` with
   `TYPE_PUBLIC_KEY_CREDENTIAL`.
 
+### Saving captured logins ("Offer to save"): Android-only, and deferred
+
+The extension's "Offer to save logins" setting drives the in-page **corner-prompt**: a content
+script watches form submissions, and the background offers to save (or update) a credential the
+vault doesn't have. None of that ports. Mobile has no content script inside other apps or browsers,
+and the two OSes split on whether a third-party provider can capture a submitted login at all:
+
+- **iOS: not possible.** The AutoFill Credential Provider API is **provide-only**. There is no save
+  or capture delegate; the system's "Save Password?" prompt is iCloud Keychain only, and third-party
+  providers get no hook when a user submits a login in Safari or another app. So "offer to save" from
+  arbitrary surfaces cannot exist on iOS. The only capture paths are manual add (already in the app)
+  or an in-app browser (we don't ship one, and it isn't planned).
+- **Android: possible, but not wired.** `AutofillService` has a real save flow: set `SaveInfo` in
+  `onFillRequest`, and the OS calls `onSaveRequest()` when the user submits a form in any app or
+  browser. This is pure-AOSP (no Play Services), works without a webview card, and would be a native
+  Kotlin implementation. v1 implements fill only; `onSaveRequest` is **not** wired yet.
+
+Until the Android save path lands, "Offer to save logins" is dead UI on mobile. The setting is now
+gated on a `ShellAdapter.supportsSaveCapture` capability (true on the extension, false on mobile),
+so the toggle and its "Sites you've muted" list only render where the corner-prompt flow exists.
+Wiring Android save means setting `supportsSaveCapture: true` in the mobile shell and routing the
+native `onSaveRequest` capture into the existing `offerToSave` / `neverSaveSites` prefs.
+
 ### Passkey hosting is a deferred future feature
 
 Two passkey concerns are easy to conflate, and **both are out of v1 scope**:
