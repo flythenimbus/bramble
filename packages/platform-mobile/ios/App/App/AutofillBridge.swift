@@ -58,9 +58,14 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 				serviceIdentifier: ASCredentialServiceIdentifier(identifier: service, type: .domain),
 				user: user, recordIdentifier: rid)
 		}
-		store.removeAllCredentialIdentities { _, _ in
-			guard !identities.isEmpty else { return }
-			store.saveCredentialIdentities(identities) { _, _ in }
+		// Replace atomically (an empty list clears the store). saveCredentialIdentities is an
+		// upsert and removeAll-then-save can race iOS's indexing; replaceCredentialIdentities
+		// does both in one step. It silently no-ops unless the user has enabled Bramble as an
+		// AutoFill provider, so guard on the store state (and so QuickType only populates once
+		// the provider is actually on).
+		store.getState { state in
+			guard state.isEnabled else { return }
+			store.replaceCredentialIdentities(with: identities) { _, _ in }
 		}
 		call.resolve()
 	}
