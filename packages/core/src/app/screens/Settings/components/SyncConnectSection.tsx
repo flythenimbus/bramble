@@ -52,7 +52,10 @@ export function SyncConnectSection() {
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
-	const canUseSecurityKey = isWebauthnAvailable();
+	// Security-key pairing only where WebAuthn keys actually work: the extension.
+	// Mobile webviews expose PublicKeyCredential but can't use security keys (no prf
+	// on iOS, NFC-blocked on Android), so the join there is master-password only.
+	const canUseSecurityKey = shell.supportsSecurityKeys && isWebauthnAvailable();
 
 	// Group membership (source of truth for "are we paired, and with whom"). undefined
 	// while loading so we don't flash the onboarding UI over an existing group.
