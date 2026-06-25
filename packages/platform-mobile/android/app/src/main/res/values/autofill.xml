@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Palette + theme for the autofill unlock Activity and the dropdown presentations.
+     Mirrors the app's dark design tokens (the same oklch grayscale the iOS extension uses). -->
+<resources>
+    <color name="bramble_af_background">#171717</color>
+    <color name="bramble_af_card">#212121</color>
+    <color name="bramble_af_input">#2A2A2A</color>
+    <color name="bramble_af_chip">#2E2E2E</color>
+    <color name="bramble_af_border">#363636</color>
+    <color name="bramble_af_foreground">#F5F5F5</color>
+    <color name="bramble_af_muted">#A1A1A1</color>
+    <color name="bramble_af_destructive">#F87171</color>
+
+    <style name="BrambleAutofillTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/bramble_af_background</item>
+        <item name="colorAccent">@color/bramble_af_foreground</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

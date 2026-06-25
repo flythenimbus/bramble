@@ -1,5 +1,6 @@
+import { App as CapacitorApp } from "@capacitor/app";
 import { PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
-import { App, OptionsApp, type Platform, PlatformProvider } from "@core/index";
+import { App, OptionsApp, type PendingLogin, type Platform, PlatformProvider } from "@core/index";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@core/styles/index.css";
@@ -11,6 +12,7 @@ import { mobileCrypto } from "./adapters/crypto";
 import { mobileShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
+import { consumePendingAutofillSave } from "./autofill-pending";
 import { initRosterSync } from "./sync/sync-manager";
 
 const platform: Platform = {
@@ -30,10 +32,27 @@ function Root() {
 	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard.
 	// The last two render OptionsApp and dismiss back to "app" on completion/close.
 	const [view, setView] = useState<"app" | "setup" | "import">("app");
+	const [pendingLogin, setPendingLogin] = useState<PendingLogin | null>(null);
 	useEffect(
 		() => registerOpenSetup((screen) => setView(screen === "import" ? "import" : "setup")),
 		[],
 	);
+
+	// Autofill "save login" handoff: the native AutofillService captures a sign-in, writes
+	// it to a file, and launches us. Pick it up on launch and on resume; App opens a
+	// prefilled add-login form once the vault is unlocked. No-op on iOS (no file).
+	useEffect(() => {
+		const check = () => {
+			void consumePendingAutofillSave().then((p) => {
+				if (p) setPendingLogin(p);
+			});
+		};
+		check();
+		const sub = CapacitorApp.addListener("resume", check);
+		return () => {
+			void sub.then((h) => h.remove());
+		};
+	}, []);
 
 	// Auto-lock after the configured inactivity timeout (background time counts as
 	// inactivity); honors the "Never" setting. onExternalLock then re-locks the UI.
@@ -42,7 +61,7 @@ function Root() {
 	// Run ongoing roster sync while unlocked + enrolled (started on unlock).
 	useEffect(() => initRosterSync(), []);
 
-	if (view === "app") return <App />;
+	if (view === "app") return <App pendingLogin={pendingLogin ?? undefined} />;
 	return (
 		<OptionsApp
 			onComplete={() => setView("app")}

@@ -1,4 +1,5 @@
 import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
 import { scanQrCode } from "../scan";
 import {
@@ -50,8 +51,9 @@ export const mobileShell: ShellAdapter = {
 	supportsPopOut: false,
 	supportsCameraScan: true,
 	supportsSecurityKeys: false,
-	// No save-capture surface on mobile yet; see docs/mobile-port.md.
-	supportsSaveCapture: false,
+	// Android has a native AutofillService save flow (onSaveRequest -> SaveInfo prompt ->
+	// prefilled add-login). iOS has no save surface. See docs/mobile-port.md.
+	supportsSaveCapture: Capacitor.getPlatform() === "android",
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
 		// used for sync pairing codes and TOTP otpauth:// QRs.

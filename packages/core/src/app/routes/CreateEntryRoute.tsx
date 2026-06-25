@@ -6,6 +6,7 @@ import { type EntryData, useVault } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
 import { getEntryMode } from "../entry-modes";
 import { usePopOut } from "../hooks/usePopOut";
+import { takePendingCreateEntry } from "../pending-create-entry";
 import { EntryForm, type EntryFormDraft } from "../screens/CreateEntry/EntryForm";
 
 /** Route for creating a new entry, seeding logins from the active tab origin or a pop-out draft. */
@@ -22,15 +23,18 @@ export function CreateEntryRoute() {
 	// A draft handed over from a pop-out already carries its own values, so skip
 	// the active-tab lookup and seed the form from it verbatim.
 	const [draft] = useState(() => takeInitialDraft() as EntryFormDraft | undefined);
+	// A credential captured by the mobile autofill provider, seeded as the initial
+	// entry (its urls already carry the host, so the active-tab lookup is skipped too).
+	const [pendingInitial] = useState(() => takePendingCreateEntry());
 	// Only logins seed their website field from the active tab; other modes are
 	// ready immediately. Wait until the origin is known so the form's
 	// defaultValues see it on first render.
 	const [defaultUrl, setDefaultUrl] = useState<string | null>(
-		draft || entryType !== "login" ? "" : null,
+		draft || pendingInitial || entryType !== "login" ? "" : null,
 	);
 
 	useEffect(() => {
-		if (draft || entryType !== "login") return;
+		if (draft || pendingInitial || entryType !== "login") return;
 		let cancelled = false;
 		shell.getCurrentTabOrigin().then((origin) => {
 			if (!cancelled) setDefaultUrl(origin ?? "");
@@ -38,7 +42,7 @@ export function CreateEntryRoute() {
 		return () => {
 			cancelled = true;
 		};
-	}, [shell, draft, entryType]);
+	}, [shell, draft, pendingInitial, entryType]);
 
 	if (defaultUrl === null) return null;
 
@@ -59,6 +63,7 @@ export function CreateEntryRoute() {
 				key={entryType}
 				type={entryType}
 				defaultUrl={defaultUrl}
+				initialEntry={pendingInitial}
 				draftValues={draft}
 				registerDraft={registerDraftGetter}
 				onBack={() => navigate({ to: "/vault" })}
