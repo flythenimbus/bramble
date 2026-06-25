@@ -1,10 +1,11 @@
 name: Verify release
 
 # Releases are built, signed, and published from a maintainer's machine by
-# `pnpm run release` (the signing key never leaves that machine). This job does
-# NOT build or sign; it only confirms that a publish carried a real signed .crx,
-# so a release can't silently go out without the verified-upload artifact.
-# Triggered on publish (not the tag push), by which point the asset is attached.
+# `pnpm run release` (the signing key never leaves that machine). These jobs do
+# NOT build or sign; they only confirm a publish carried the real signed artifact,
+# so a release can't silently go out without it. Triggered on publish (not the tag
+# push), by which point the assets are attached. One job runs per platform, keyed
+# off the tag suffix (<version>-chromium / <version>-android).
 on:
   release:
     types: [published]
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   verify-signed-crx:
+    if: endsWith(github.event.release.tag_name, '-chromium')
     runs-on: ubuntu-latest
     steps:
       - name: Assert a signed CRX3 is attached
@@ -29,3 +31,25 @@ jobs:
           magic="$(head -c 4 "$crx")"
           [ "$magic" = "Cr24" ] || { echo "::error::$crx is not a CRX3 (magic: $magic)"; exit 1; }
           echo "ok: $crx is a signed CRX3"
+
+  verify-android-apk:
+    if: endsWith(github.event.release.tag_name, '-android')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert a valid APK + matching SHA256SUMS are attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.apk' --pattern 'SHA256SUMS' --dir .
+          apk="$(ls *.apk 2>/dev/null | head -1)"
+          [ -n "$apk" ] || { echo "::error::no .apk asset on release $TAG"; exit 1; }
+          [ -f SHA256SUMS ] || { echo "::error::no SHA256SUMS on release $TAG"; exit 1; }
+          # An APK is a ZIP that contains AndroidManifest.xml; the signing cert is what
+          # users pin (apksigner verify --print-certs against the published fingerprint).
+          unzip -l "$apk" | grep -q AndroidManifest.xml \
+            || { echo "::error::$apk is not a valid APK"; exit 1; }
+          sha256sum -c SHA256SUMS
+          echo "ok: $apk matches SHA256SUMS and is a valid APK"

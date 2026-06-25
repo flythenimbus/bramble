@@ -11,3 +11,5 @@ packages/platform-extension/public/wasm/
 # Signing keys must never be committed (see docs/release-signing.md)
 *.pem
 *.age
+*.jks
+*.keystore
