@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+import { loadNativeCrypto } from "../native-crypto";
 import { loadWasm } from "../wasm-loader";
 
 // The vault session lifecycle, kept separate from crypto operations. Three signals:
@@ -42,7 +44,9 @@ export function notifyExternalChange(): void {
 /** Lock on app background: lock the wasm, relock the UI (onExternalLock), and signal
  * the transition (stops sync). Distinct from the UI-driven crypto adapter `lock()`. */
 export async function lockForLifecycle(): Promise<void> {
-	(await loadWasm()).lock();
+	// Native on device (no WASM under Lockdown Mode); WASM only in the dev browser.
+	const crypto = Capacitor.isNativePlatform() ? await loadNativeCrypto() : await loadWasm();
+	await crypto.lock();
 	for (const fn of lockListeners) fn();
 	markLocked();
 }

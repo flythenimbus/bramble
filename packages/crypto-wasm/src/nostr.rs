@@ -15,6 +15,9 @@ use k256::schnorr::{
     Signature, SigningKey, VerifyingKey,
 };
 use serde::Serialize;
+
+use crate::CryptoError;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 // ---- core (native-testable, no JS types) ----
@@ -51,56 +54,69 @@ fn verify(pubkey: &[u8], msg: &[u8], sig: &[u8]) -> Result<bool, String> {
     Ok(vk.verify(msg, &sig).is_ok())
 }
 
-// ---- wasm-bindgen exports (thin base64 wrappers) ----
+// ---- binding layers: serde -> JsValue under wasm, uniffi under ffi ----
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NostrKey {
-    secret_key: String,
-    public_key: String,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct NostrKey {
+    pub secret_key: String,
+    pub public_key: String,
 }
 
-fn jserr(s: String) -> JsError {
-    JsError::new(&s)
+fn ce(msg: String) -> CryptoError {
+    CryptoError::Crypto { msg }
 }
 
-fn b64d(s: &str) -> Result<Vec<u8>, JsError> {
-    B64.decode(s.as_bytes())
-        .map_err(|e| jserr(format!("base64: {e}")))
+fn b64dec(s: &str) -> Result<Vec<u8>, CryptoError> {
+    B64.decode(s.as_bytes()).map_err(|e| ce(format!("base64: {e}")))
 }
 
-/// Generate a Nostr secp256k1 keypair. Returns base64 secret + x-only public key.
-#[wasm_bindgen]
-pub fn nostr_generate_key() -> Result<JsValue, JsError> {
-    let (secret, public) = generate().map_err(jserr)?;
-    serde_wasm_bindgen::to_value(&NostrKey {
+fn generate_key_core() -> Result<NostrKey, CryptoError> {
+    let (secret, public) = generate().map_err(ce)?;
+    Ok(NostrKey {
         secret_key: B64.encode(secret),
         public_key: B64.encode(public),
     })
-    .map_err(|e| jserr(format!("serialize: {e}")))
 }
 
 /// The x-only public key for a secret key, base64.
-#[wasm_bindgen]
-pub fn nostr_public_key(secret_b64: String) -> Result<String, JsError> {
-    Ok(B64.encode(public_from_secret(&b64d(&secret_b64)?).map_err(jserr)?))
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn nostr_public_key(secret_b64: String) -> Result<String, CryptoError> {
+    Ok(B64.encode(public_from_secret(&b64dec(&secret_b64)?).map_err(ce)?))
 }
 
 /// BIP340-sign a 32-byte event id (base64 in, base64 64-byte sig out).
-#[wasm_bindgen]
-pub fn nostr_sign(secret_b64: String, hash_b64: String) -> Result<String, JsError> {
-    let sig = sign(&b64d(&secret_b64)?, &b64d(&hash_b64)?).map_err(jserr)?;
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn nostr_sign(secret_b64: String, hash_b64: String) -> Result<String, CryptoError> {
+    let sig = sign(&b64dec(&secret_b64)?, &b64dec(&hash_b64)?).map_err(ce)?;
     Ok(B64.encode(sig))
 }
 
 /// Verify a BIP340 signature over a 32-byte event id.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn nostr_verify(
     public_b64: String,
     hash_b64: String,
     sig_b64: String,
-) -> Result<bool, JsError> {
-    verify(&b64d(&public_b64)?, &b64d(&hash_b64)?, &b64d(&sig_b64)?).map_err(jserr)
+) -> Result<bool, CryptoError> {
+    verify(&b64dec(&public_b64)?, &b64dec(&hash_b64)?, &b64dec(&sig_b64)?).map_err(ce)
+}
+
+/// Generate a Nostr secp256k1 keypair. Returns base64 secret + x-only public key.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn nostr_generate_key() -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&generate_key_core()?).map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn nostr_generate_key() -> Result<NostrKey, CryptoError> {
+    generate_key_core()
 }
 
 #[cfg(test)]

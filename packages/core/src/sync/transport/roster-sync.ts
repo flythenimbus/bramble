@@ -9,23 +9,24 @@
 
 import type { RosterPayload } from "..";
 import type { Channel } from "./channel";
-import { type PumpWasm, runInitiator, runResponder } from "./handshake";
+import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./handshake";
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, startMeshSession } from "./peer-session";
 
-/** The Noise KK roster-auth + transport exports. */
+/** The Noise KK roster-auth + transport exports. Returns are Awaitable so the native
+ * plugin (async bridge) and the in-webview WASM module share one interface. */
 interface RosterHandshakeWasm extends PumpWasm {
 	handshake_start_initiator(
 		privB64: string,
 		remotePubB64: string,
-	): {
+	): Awaitable<{
 		sessionId: number;
 		message: string;
-	};
-	handshake_start_responder(privB64: string, remotePubB64: string): number;
-	handshake_encrypt(sessionId: number, plaintext: string): string;
-	handshake_decrypt(sessionId: number, ciphertextB64: string): string;
+	}>;
+	handshake_start_responder(privB64: string, remotePubB64: string): Awaitable<number>;
+	handshake_encrypt(sessionId: number, plaintext: string): Awaitable<string>;
+	handshake_decrypt(sessionId: number, ciphertextB64: string): Awaitable<string>;
 }
 
 export type RosterSyncWasm = NostrWasm & RosterHandshakeWasm;
@@ -110,7 +111,7 @@ async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>
 	if (peers.size === 0) return;
 	const payload = await localEnvelope(opts);
 	for (const { channel, sessionId } of peers.values()) {
-		channel.send(opts.wasm.handshake_encrypt(sessionId, payload));
+		channel.send(await opts.wasm.handshake_encrypt(sessionId, payload));
 	}
 }
 
@@ -137,9 +138,9 @@ async function syncPeer(
 	peers.set(peerPub, { channel, sessionId: sess.sessionId });
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
-	channel.send(wasm.handshake_encrypt(sess.sessionId, await localEnvelope(opts)));
+	channel.send(await wasm.handshake_encrypt(sess.sessionId, await localEnvelope(opts)));
 	for (;;) {
 		const ct = await channel.recv();
-		await applyEnvelope(opts, wasm.handshake_decrypt(sess.sessionId, ct));
+		await applyEnvelope(opts, await wasm.handshake_decrypt(sess.sessionId, ct));
 	}
 }

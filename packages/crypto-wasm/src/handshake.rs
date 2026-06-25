@@ -20,6 +20,9 @@ use std::sync::{Mutex, OnceLock};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::Serialize;
 use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
+
+use crate::CryptoError;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 const NOISE_PARAMS: &str = "Noise_KK_25519_ChaChaPoly_SHA256";
@@ -241,135 +244,188 @@ fn remote_static(session_id: u32) -> Result<Vec<u8>, String> {
     }
 }
 
-// ---- wasm-bindgen exports (thin base64/JsValue wrappers) ----
+// ---- result records: serde -> JsValue under wasm, uniffi::Record under ffi ----
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct KeypairResult {
-    private_key: String,
-    public_key: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StartResult {
-    session_id: u32,
-    message: String,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct KeypairResult {
+    pub private_key: String,
+    pub public_key: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ReadResult {
-    message: Option<String>,
-    done: bool,
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct StartResult {
+    pub session_id: u32,
+    pub message: String,
 }
 
-fn jserr(s: String) -> JsError {
-    JsError::new(&s)
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct ReadResult {
+    pub message: Option<String>,
+    pub done: bool,
 }
 
-fn b64d(s: &str) -> Result<Vec<u8>, JsError> {
-    B64.decode(s.as_bytes())
-        .map_err(|e| jserr(format!("base64: {e}")))
+// ---- binding-agnostic builders (base64 in/out, CryptoError) ----
+
+fn ce(msg: String) -> CryptoError {
+    CryptoError::Crypto { msg }
 }
 
-/// Generate a device static X25519 keypair for enrollment. The private key must
-/// be stored locally only; the public key goes in the roster.
-#[wasm_bindgen]
-pub fn handshake_generate_keypair() -> Result<JsValue, JsError> {
-    let (priv_, pub_) = gen_keypair().map_err(jserr)?;
-    serde_wasm_bindgen::to_value(&KeypairResult {
-        private_key: B64.encode(priv_),
-        public_key: B64.encode(pub_),
+fn b64dec(s: &str) -> Result<Vec<u8>, CryptoError> {
+    B64.decode(s.as_bytes()).map_err(|e| ce(format!("base64: {e}")))
+}
+
+fn generate_keypair_core() -> Result<KeypairResult, CryptoError> {
+    let (private, public) = gen_keypair().map_err(ce)?;
+    Ok(KeypairResult {
+        private_key: B64.encode(private),
+        public_key: B64.encode(public),
     })
-    .map_err(|e| jserr(format!("serialize: {e}")))
 }
 
-/// Begin a handshake as initiator. Returns the session id and the first message.
-#[wasm_bindgen]
-pub fn handshake_start_initiator(
-    local_priv_b64: String,
-    remote_pub_b64: String,
-) -> Result<JsValue, JsError> {
-    let (id, msg) =
-        start_initiator(&b64d(&local_priv_b64)?, &b64d(&remote_pub_b64)?).map_err(jserr)?;
-    serde_wasm_bindgen::to_value(&StartResult {
-        session_id: id,
-        message: B64.encode(msg),
-    })
-    .map_err(|e| jserr(format!("serialize: {e}")))
+fn start_initiator_core(local_priv_b64: &str, remote_pub_b64: &str) -> Result<StartResult, CryptoError> {
+    let (session_id, msg) =
+        start_initiator(&b64dec(local_priv_b64)?, &b64dec(remote_pub_b64)?).map_err(ce)?;
+    Ok(StartResult { session_id, message: B64.encode(msg) })
 }
+
+fn enroll_initiator_core(local_priv_b64: &str, psk_b64: &str) -> Result<StartResult, CryptoError> {
+    let (session_id, msg) =
+        enroll_start_initiator(&b64dec(local_priv_b64)?, &b64dec(psk_b64)?).map_err(ce)?;
+    Ok(StartResult { session_id, message: B64.encode(msg) })
+}
+
+fn read_core(session_id: u32, message_b64: &str) -> Result<ReadResult, CryptoError> {
+    let (reply, done) = read(session_id, &b64dec(message_b64)?).map_err(ce)?;
+    Ok(ReadResult { message: reply.map(|m| B64.encode(m)), done })
+}
+
+// ---- shared scalar exports (one body, both layers) ----
 
 /// Begin a handshake as responder. Returns the session id; awaits the first message.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_start_responder(
     local_priv_b64: String,
     remote_pub_b64: String,
-) -> Result<u32, JsError> {
-    start_responder(&b64d(&local_priv_b64)?, &b64d(&remote_pub_b64)?).map_err(jserr)
-}
-
-/// Feed an incoming handshake message. Returns `{ message?, done }`.
-#[wasm_bindgen]
-pub fn handshake_read(session_id: u32, message_b64: String) -> Result<JsValue, JsError> {
-    let (reply, done) = read(session_id, &b64d(&message_b64)?).map_err(jserr)?;
-    serde_wasm_bindgen::to_value(&ReadResult {
-        message: reply.map(|m| B64.encode(m)),
-        done,
-    })
-    .map_err(|e| jserr(format!("serialize: {e}")))
+) -> Result<u32, CryptoError> {
+    start_responder(&b64dec(&local_priv_b64)?, &b64dec(&remote_pub_b64)?).map_err(ce)
 }
 
 /// Encrypt an app message over an established session. Returns base64 ciphertext.
-#[wasm_bindgen]
-pub fn handshake_encrypt(session_id: u32, plaintext: String) -> Result<String, JsError> {
-    Ok(B64.encode(
-        encrypt(session_id, plaintext.as_bytes()).map_err(jserr)?,
-    ))
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn handshake_encrypt(session_id: u32, plaintext: String) -> Result<String, CryptoError> {
+    Ok(B64.encode(encrypt(session_id, plaintext.as_bytes()).map_err(ce)?))
 }
 
 /// Decrypt an app message over an established session. Returns the plaintext.
-#[wasm_bindgen]
-pub fn handshake_decrypt(session_id: u32, ciphertext_b64: String) -> Result<String, JsError> {
-    let pt = decrypt(session_id, &b64d(&ciphertext_b64)?).map_err(jserr)?;
-    String::from_utf8(pt).map_err(|e| jserr(format!("utf8: {e}")))
-}
-
-/// Begin enrollment as the joiner (initiator). `psk_b64` is the pairing secret
-/// from the paste code. Returns the session id and the first message.
-#[wasm_bindgen]
-pub fn handshake_enroll_initiator(
-    local_priv_b64: String,
-    psk_b64: String,
-) -> Result<JsValue, JsError> {
-    let (id, msg) = enroll_start_initiator(&b64d(&local_priv_b64)?, &b64d(&psk_b64)?).map_err(jserr)?;
-    serde_wasm_bindgen::to_value(&StartResult {
-        session_id: id,
-        message: B64.encode(msg),
-    })
-    .map_err(|e| jserr(format!("serialize: {e}")))
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn handshake_decrypt(session_id: u32, ciphertext_b64: String) -> Result<String, CryptoError> {
+    let pt = decrypt(session_id, &b64dec(&ciphertext_b64)?).map_err(ce)?;
+    String::from_utf8(pt).map_err(|e| ce(format!("utf8: {e}")))
 }
 
 /// Begin enrollment as the inviter (responder). Returns the session id.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_enroll_responder(
     local_priv_b64: String,
     psk_b64: String,
-) -> Result<u32, JsError> {
-    enroll_start_responder(&b64d(&local_priv_b64)?, &b64d(&psk_b64)?).map_err(jserr)
+) -> Result<u32, CryptoError> {
+    enroll_start_responder(&b64dec(&local_priv_b64)?, &b64dec(&psk_b64)?).map_err(ce)
 }
 
 /// The peer's static public key on a completed session, base64. The inviter uses
 /// this to add the joiner to the roster.
-#[wasm_bindgen]
-pub fn handshake_remote_static(session_id: u32) -> Result<String, JsError> {
-    Ok(B64.encode(remote_static(session_id).map_err(jserr)?))
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn handshake_remote_static(session_id: u32) -> Result<String, CryptoError> {
+    Ok(B64.encode(remote_static(session_id).map_err(ce)?))
 }
 
 /// Drop a session and zero its keys.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_close(session_id: u32) {
     close(session_id);
+}
+
+// ---- struct-returning exports (same name per layer; only one compiles) ----
+
+/// Generate a device static X25519 keypair for enrollment. The private key must be
+/// stored locally only; the public key goes in the roster.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn handshake_generate_keypair() -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&generate_keypair_core()?).map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn handshake_generate_keypair() -> Result<KeypairResult, CryptoError> {
+    generate_keypair_core()
+}
+
+/// Begin a handshake as initiator. Returns the session id and the first message.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn handshake_start_initiator(
+    local_priv_b64: String,
+    remote_pub_b64: String,
+) -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&start_initiator_core(&local_priv_b64, &remote_pub_b64)?)
+        .map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn handshake_start_initiator(
+    local_priv_b64: String,
+    remote_pub_b64: String,
+) -> Result<StartResult, CryptoError> {
+    start_initiator_core(&local_priv_b64, &remote_pub_b64)
+}
+
+/// Begin enrollment as the joiner (initiator). `psk_b64` is the pairing secret from
+/// the paste code. Returns the session id and the first message.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn handshake_enroll_initiator(
+    local_priv_b64: String,
+    psk_b64: String,
+) -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&enroll_initiator_core(&local_priv_b64, &psk_b64)?)
+        .map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn handshake_enroll_initiator(
+    local_priv_b64: String,
+    psk_b64: String,
+) -> Result<StartResult, CryptoError> {
+    enroll_initiator_core(&local_priv_b64, &psk_b64)
+}
+
+/// Feed an incoming handshake message. Returns `{ message?, done }`.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn handshake_read(session_id: u32, message_b64: String) -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&read_core(session_id, &message_b64)?)
+        .map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn handshake_read(session_id: u32, message_b64: String) -> Result<ReadResult, CryptoError> {
+    read_core(session_id, &message_b64)
 }
 
 #[cfg(test)]

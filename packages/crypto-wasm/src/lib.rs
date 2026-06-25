@@ -35,11 +35,11 @@ type HmacSha256 = Hmac<Sha256>;
 // KDBX4 import compiles into both layers: import runs in the main app, which uses
 // native crypto under Lockdown Mode, so `open_kdbx4` is on the FFI surface too.
 mod kdbx;
-// Sync handshake/nostr stay WASM-only for now: not on the autofill/Lockdown-Mode
-// critical path, so they keep their JsError plumbing. FFI exposure is additive later.
-#[cfg(feature = "wasm")]
+// Sync handshake/nostr compile into both layers: device sync must run natively so it
+// works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding.
+#[cfg(any(feature = "wasm", feature = "ffi"))]
 mod handshake;
-#[cfg(feature = "wasm")]
+#[cfg(any(feature = "wasm", feature = "ffi"))]
 mod nostr;
 
 // The two binding layers are mutually exclusive: each owns the bare public names

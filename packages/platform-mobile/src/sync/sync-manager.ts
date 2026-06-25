@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import {
 	applyRemotePayload,
@@ -18,11 +19,13 @@ import {
 	type SyncEvent,
 } from "@core/index";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
+import type { Awaitable } from "@core/sync/transport/handshake";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
 import { mobileCrypto } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
+import { nativeSyncCrypto } from "../native-crypto";
 import { secureStorage } from "../secure-storage";
 import { loadWasm } from "../wasm-loader";
 
@@ -45,10 +48,20 @@ interface DeviceKeypair {
 	privateKey: string;
 	publicKey: string;
 }
-// The wasm device-keypair export (camelCase result, see #[serde(rename_all)]).
-type KeypairWasm = { handshake_generate_keypair(): DeviceKeypair };
+// The device-keypair export (camelCase result, see #[serde(rename_all)]). Awaitable:
+// native on device, synchronous on the dev-browser WASM path.
+type KeypairWasm = { handshake_generate_keypair(): Awaitable<DeviceKeypair> };
 
 const DEVICE_KEYPAIR_KEY = "sync.deviceKeypair";
+
+// Sync transport crypto (Noise handshake + Nostr): native on iOS, so it runs under
+// Lockdown Mode where WASM is gone. Android keeps the in-webview WASM path (no Lockdown
+// there; the native handshake isn't wired into the Android plugin yet), as does the dev
+// browser. The transport awaits every call, so the async native / sync WASM split is
+// transparent. Mirror this dispatch when adding the Android native bridge.
+function loadSyncCrypto(): Promise<unknown> {
+	return Capacitor.getPlatform() === "ios" ? Promise.resolve(nativeSyncCrypto) : loadWasm();
+}
 
 // This device's Noise static keypair, generated once and held in secure storage
 // (Keychain/Keystore). Only the PUBLIC key ever leaves the device (it goes in the
@@ -65,8 +78,8 @@ async function deviceKeypair(): Promise<DeviceKeypair> {
 		await Preferences.remove({ key: `meta:${DEVICE_KEYPAIR_KEY}` });
 		return legacy;
 	}
-	const wasm = (await loadWasm()) as unknown as KeypairWasm;
-	const kp = wasm.handshake_generate_keypair();
+	const wasm = (await loadSyncCrypto()) as unknown as KeypairWasm;
+	const kp = await wasm.handshake_generate_keypair();
 	await secureStorage.set(DEVICE_KEYPAIR_KEY, kp);
 	return kp;
 }
@@ -109,7 +122,7 @@ export async function startEnrollInvite(opts: {
 	roster: RosterPayload;
 	entries: EntriesPayload;
 }): Promise<void> {
-	const wasm = (await loadWasm()) as unknown as EnrollWasm;
+	const wasm = (await loadSyncCrypto()) as unknown as EnrollWasm;
 	const { privateKey } = await deviceKeypair();
 	session?.stop();
 	session = await startEnroll("inviter", {
@@ -136,7 +149,7 @@ export async function startEnrollJoin(opts: {
 	password?: string;
 	webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
 }): Promise<void> {
-	const wasm = (await loadWasm()) as unknown as EnrollWasm;
+	const wasm = (await loadSyncCrypto()) as unknown as EnrollWasm;
 	const { privateKey } = await deviceKeypair();
 	session?.stop();
 	session = await startEnroll("joiner", {
@@ -196,7 +209,7 @@ async function startRoster(): Promise<void> {
 	const { privateKey, publicKey } = await deviceKeypair();
 	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
 	const iceUrl = (await mobileStorage.getMeta<string>(ICE_KEY)) ?? "";
-	const wasm = (await loadWasm()) as unknown as RosterSyncWasm;
+	const wasm = (await loadSyncCrypto()) as unknown as RosterSyncWasm;
 	rosterSession?.stop();
 	rosterSession = await startRosterSync({
 		relayUrl: relay,

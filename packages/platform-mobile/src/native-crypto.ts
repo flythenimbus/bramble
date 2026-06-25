@@ -75,6 +75,38 @@ interface NativeCryptoPlugin {
 		password: string;
 		keyfileB64?: string;
 	}): Promise<{ entries: KdbxEntry[] }>;
+
+	// --- sync transport: Noise handshake (KK + XXpsk3) + Nostr (BIP340) ---
+	handshakeGenerateKeypair(): Promise<{ privateKey: string; publicKey: string }>;
+	handshakeStartInitiator(o: {
+		localPrivB64: string;
+		remotePubB64: string;
+	}): Promise<{ sessionId: number; message: string }>;
+	handshakeStartResponder(o: {
+		localPrivB64: string;
+		remotePubB64: string;
+	}): Promise<{ value: number }>;
+	handshakeEnrollInitiator(o: {
+		localPrivB64: string;
+		pskB64: string;
+	}): Promise<{ sessionId: number; message: string }>;
+	handshakeEnrollResponder(o: { localPrivB64: string; pskB64: string }): Promise<{ value: number }>;
+	handshakeRead(o: {
+		sessionId: number;
+		messageB64: string;
+	}): Promise<{ message?: string; done: boolean }>;
+	handshakeEncrypt(o: { sessionId: number; plaintext: string }): Promise<{ value: string }>;
+	handshakeDecrypt(o: { sessionId: number; ciphertextB64: string }): Promise<{ value: string }>;
+	handshakeRemoteStatic(o: { sessionId: number }): Promise<{ value: string }>;
+	handshakeClose(o: { sessionId: number }): Promise<void>;
+	nostrGenerateKey(): Promise<{ secretKey: string; publicKey: string }>;
+	nostrPublicKey(o: { secretB64: string }): Promise<{ value: string }>;
+	nostrSign(o: { secretB64: string; hashB64: string }): Promise<{ value: string }>;
+	nostrVerify(o: {
+		publicB64: string;
+		hashB64: string;
+		sigB64: string;
+	}): Promise<{ value: boolean }>;
 }
 
 const Native = registerPlugin<NativeCryptoPlugin>("NativeCrypto");
@@ -183,3 +215,37 @@ const nativeModule: VaultCrypto = {
 export function loadNativeCrypto(): Promise<VaultCrypto> {
 	return Promise.resolve(nativeModule);
 }
+
+// The sync transport crypto surface (Noise handshake + Nostr + the enrollment vault
+// slice), backed natively. Matches the @core transport *Wasm interfaces structurally,
+// with each call crossing the Capacitor bridge as a Promise (the transport awaits
+// them; on the dev-browser WASM path the same calls are synchronous). Spreads
+// nativeModule so export_vek / unlock_with_vek / generate_salt / generate_slot_id /
+// wrap_vek_* / encrypt_with_vek (the EnrollWasm CryptoWasm slice) come for free.
+export const nativeSyncCrypto = {
+	...nativeModule,
+	handshake_generate_keypair: () => Native.handshakeGenerateKeypair(),
+	handshake_start_initiator: (privB64: string, remotePubB64: string) =>
+		Native.handshakeStartInitiator({ localPrivB64: privB64, remotePubB64 }),
+	handshake_start_responder: async (privB64: string, remotePubB64: string) =>
+		(await Native.handshakeStartResponder({ localPrivB64: privB64, remotePubB64 })).value,
+	handshake_enroll_initiator: (privB64: string, pskB64: string) =>
+		Native.handshakeEnrollInitiator({ localPrivB64: privB64, pskB64 }),
+	handshake_enroll_responder: async (privB64: string, pskB64: string) =>
+		(await Native.handshakeEnrollResponder({ localPrivB64: privB64, pskB64 })).value,
+	handshake_read: (sessionId: number, messageB64: string) =>
+		Native.handshakeRead({ sessionId, messageB64 }),
+	handshake_encrypt: async (sessionId: number, plaintext: string) =>
+		(await Native.handshakeEncrypt({ sessionId, plaintext })).value,
+	handshake_decrypt: async (sessionId: number, ciphertextB64: string) =>
+		(await Native.handshakeDecrypt({ sessionId, ciphertextB64 })).value,
+	handshake_remote_static: async (sessionId: number) =>
+		(await Native.handshakeRemoteStatic({ sessionId })).value,
+	handshake_close: (sessionId: number) => Native.handshakeClose({ sessionId }),
+	nostr_generate_key: () => Native.nostrGenerateKey(),
+	nostr_public_key: async (secretB64: string) => (await Native.nostrPublicKey({ secretB64 })).value,
+	nostr_sign: async (secretB64: string, hashB64: string) =>
+		(await Native.nostrSign({ secretB64, hashB64 })).value,
+	nostr_verify: async (publicB64: string, hashB64: string, sigB64: string) =>
+		(await Native.nostrVerify({ publicB64, hashB64, sigB64 })).value,
+};
