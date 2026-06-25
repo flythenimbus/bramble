@@ -11,6 +11,7 @@ import {
 	RosterEntrySchema,
 	type RosterPayload,
 	randomKeyB64,
+	revokeDevice,
 } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { defaultDeviceLabel } from "../util/device-label";
@@ -29,7 +30,7 @@ export interface SyncEnrollmentDeps {
 	readEntriesPayload: () => Promise<EntriesPayload>;
 }
 
-type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup">;
+type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup" | "removeDevice">;
 
 /**
  * Device enrollment (create group / invite / join), lifted out of VaultProvider.
@@ -193,5 +194,22 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		[shell, storage, ensureClock, unlock, finishWebauthnUnlock, readDecodedBlob],
 	);
 
-	return { inviteDevice, joinGroup };
+	// Revoke a device: a roster tombstone that ongoing sync gossips to peers (so it
+	// drops everywhere), then propagates back. Not a remote wipe — see docs/p2p-sync.md.
+	const removeDevice = useCallback(
+		async (deviceId: string): Promise<void> => {
+			const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
+				"sync.group",
+			);
+			if (!group) return;
+			const hlc = (await ensureClock()).send();
+			await storage.setMeta("sync.group", {
+				groupKey: group.groupKey,
+				roster: revokeDevice(group.roster, deviceId, hlc),
+			});
+		},
+		[storage, ensureClock],
+	);
+
+	return { inviteDevice, joinGroup, removeDevice };
 }

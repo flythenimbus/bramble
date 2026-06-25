@@ -243,6 +243,16 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 						const payload: ApplyRemoteMsg = { payloadJson };
 						await chrome.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
 					},
+					fetchLocalRoster: async () => {
+						const r = await chrome.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER" });
+						return r?.ok && typeof r.data === "string" ? r.data : "";
+					},
+					pushRemoteRoster: async (rosterJson: string) => {
+						await chrome.runtime.sendMessage({
+							type: "SYNC_APPLY_ROSTER",
+							payload: { rosterJson },
+						});
+					},
 				});
 				sendResponse({ ok: true });
 				return;
