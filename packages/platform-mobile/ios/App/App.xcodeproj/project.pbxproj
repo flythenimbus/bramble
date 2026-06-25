@@ -24,6 +24,7 @@
 		5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */; };
 		AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */; };
 		B100000000000000000B0001 /* BiometricVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0001 /* BiometricVault.swift */; };
+		B100000000000000000B0002 /* QrScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0002 /* QrScanner.swift */; };
 		DA77030FEB0F1014AA5F80D0 /* BrambleConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */; };
 		F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */; };
 /* End PBXBuildFile section */
@@ -72,6 +73,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AB572E26C386476F4199D517 /* AutoFillProbe.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFillProbe.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B100000000000000000A0001 /* BiometricVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricVault.swift; sourceTree = "<group>"; };
+		B100000000000000000A0002 /* QrScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrScanner.swift; sourceTree = "<group>"; };
 		DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.swift; sourceTree = "<group>"; };
 		FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialProviderViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -150,6 +152,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				B100000000000000000A0001 /* BiometricVault.swift */,
+				B100000000000000000A0002 /* QrScanner.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -284,6 +287,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				B100000000000000000B0001 /* BiometricVault.swift in Sources */,
+				B100000000000000000B0002 /* QrScanner.swift in Sources */,
 				5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */,
 				F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */,
 				33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */,
