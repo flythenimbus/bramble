@@ -21,40 +21,47 @@ import {
 	type RosterPayload,
 } from "..";
 import type { Channel } from "./channel";
-import { type PumpWasm, runInitiator, runResponder, type Session } from "./handshake";
+import {
+	type Awaitable,
+	type PumpWasm,
+	runInitiator,
+	runResponder,
+	type Session,
+} from "./handshake";
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, startMeshSession } from "./peer-session";
 
-/** The XXpsk3 enrollment handshake exports. */
+/** The XXpsk3 enrollment handshake exports. Returns are Awaitable so the native
+ * plugin (async bridge) and the in-webview WASM module share one interface. */
 interface EnrollHandshakeWasm extends PumpWasm {
 	handshake_enroll_initiator(
 		privB64: string,
 		pskB64: string,
-	): { sessionId: number; message: string };
-	handshake_enroll_responder(privB64: string, pskB64: string): number;
-	handshake_encrypt(sessionId: number, plaintext: string): string;
-	handshake_decrypt(sessionId: number, ciphertextB64: string): string;
+	): Awaitable<{ sessionId: number; message: string }>;
+	handshake_enroll_responder(privB64: string, pskB64: string): Awaitable<number>;
+	handshake_encrypt(sessionId: number, plaintext: string): Awaitable<string>;
+	handshake_decrypt(sessionId: number, ciphertextB64: string): Awaitable<string>;
 }
 
 /** The vault-crypto slice enrollment needs (the VEK is loaded in the wasm). */
 interface CryptoWasm {
-	export_vek(): string;
-	unlock_with_vek(vekB64: string): void;
-	generate_salt(): string;
-	generate_slot_id(): string;
+	export_vek(): Awaitable<string>;
+	unlock_with_vek(vekB64: string): Awaitable<void>;
+	generate_salt(): Awaitable<string>;
+	generate_slot_id(): Awaitable<string>;
 	wrap_vek_password(
 		password: string,
 		saltB64: string,
 		slotIdB64: string,
 		magicVersion: Uint8Array,
-	): { verifier: string; wrapIv: string; wrappedVek: string };
+	): Awaitable<{ verifier: string; wrapIv: string; wrappedVek: string }>;
 	wrap_vek_webauthn(
 		hmacSecretB64: string,
 		slotIdB64: string,
 		magicVersion: Uint8Array,
-	): { verifier: string; wrapIv: string; wrappedVek: string };
-	encrypt_with_vek(plaintext: string): { iv: string; ciphertext: string };
+	): Awaitable<{ verifier: string; wrapIv: string; wrappedVek: string }>;
+	encrypt_with_vek(plaintext: string): Awaitable<{ iv: string; ciphertext: string }>;
 }
 
 export type EnrollWasm = NostrWasm & EnrollHandshakeWasm & CryptoWasm;
@@ -149,13 +156,13 @@ async function handlePeer(
 
 async function sendBundle(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
 	const bundle = encodeEnrollmentBundle({
-		vek: opts.wasm.export_vek(),
+		vek: await opts.wasm.export_vek(),
 		roster: opts.roster ?? { devices: [], revoked: [] },
 		entries: opts.entries ?? { entries: [], tombstones: [] },
 	});
-	channel.send(opts.wasm.handshake_encrypt(sess.sessionId, bundle));
+	channel.send(await opts.wasm.handshake_encrypt(sess.sessionId, bundle));
 	// The joiner acks with its roster entry, so our roster learns it (symmetric).
-	const entryJson = opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv());
+	const entryJson = await opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv());
 	// Validate the entry and pin its publicKey to the static key the joiner actually
 	// proved in the handshake, so it can't seat a key it doesn't control (or a third
 	// party's) into the roster.
@@ -175,9 +182,9 @@ async function sendBundle(opts: EnrollOptions, channel: Channel, sess: Session):
 
 async function receiveBundle(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
 	const bundle = decodeEnrollmentBundle(
-		opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv()),
+		await opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv()),
 	);
-	opts.wasm.unlock_with_vek(bundle.vek); // adopt the group VEK (stays in the wasm)
+	await opts.wasm.unlock_with_vek(bundle.vek); // adopt the group VEK (stays in the wasm)
 	const slotCrypto = wasmSlotCrypto(opts.wasm);
 	const slot = opts.webauthn
 		? await wrapWebauthnSlot(slotCrypto, {
@@ -188,7 +195,7 @@ async function receiveBundle(opts: EnrollOptions, channel: Channel, sess: Sessio
 		: await wrapPasswordSlot(slotCrypto, opts.password ?? "");
 	const bytes = await buildVaultBytes(slotCrypto, [slot], bundle.entries);
 	// Ack with our roster entry so the inviter's roster learns this device.
-	channel.send(opts.wasm.handshake_encrypt(sess.sessionId, JSON.stringify(opts.ownEntry)));
+	channel.send(await opts.wasm.handshake_encrypt(sess.sessionId, JSON.stringify(opts.ownEntry)));
 	opts.report("vault received ✅ — finishing setup");
 	opts.onJoined?.({ vaultBlobB64: bytesToBase64(bytes), roster: bundle.roster });
 }

@@ -32,6 +32,21 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "encryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
+		// Sync transport: Noise handshake (KK roster-auth + XXpsk3 enrollment) + Nostr.
+		CAPPluginMethod(name: "handshakeGenerateKeypair", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeStartInitiator", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeStartResponder", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeEnrollInitiator", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeEnrollResponder", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeRead", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeEncrypt", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeDecrypt", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeRemoteStatic", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "handshakeClose", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "nostrGenerateKey", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "nostrPublicKey", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "nostrSign", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "nostrVerify", returnType: CAPPluginReturnPromise),
 	]
 
 	// --- helpers ---
@@ -65,6 +80,15 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 
 	private func blobJs(_ b: PasswordSlotBlob) -> [String: Any] {
 		["verifier": b.verifier, "wrapIv": b.wrapIv, "wrappedVek": b.wrappedVek]
+	}
+
+	// Noise session ids are u32 handles minted in Rust; they round-trip as JS numbers.
+	private func u32(_ call: CAPPluginCall, _ key: String) -> UInt32? {
+		guard let v = call.getInt(key) else {
+			call.reject("Missing \(key)")
+			return nil
+		}
+		return UInt32(truncatingIfNeeded: v)
 	}
 
 	// --- VEK lifecycle ---
@@ -213,6 +237,115 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 				["strings": e.strings.map { ["key": $0.key, "value": $0.value, "protected": $0.protected] }]
 			}
 			call.resolve(["entries": js])
+		} catch { fail(call, error) }
+	}
+
+	// --- sync transport: Noise handshake ---
+
+	@objc func handshakeGenerateKeypair(_ call: CAPPluginCall) {
+		do {
+			let k = try App.handshakeGenerateKeypair()
+			call.resolve(["privateKey": k.privateKey, "publicKey": k.publicKey])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeStartInitiator(_ call: CAPPluginCall) {
+		guard let priv = str(call, "localPrivB64"), let remote = str(call, "remotePubB64") else { return }
+		do {
+			let s = try App.handshakeStartInitiator(localPrivB64: priv, remotePubB64: remote)
+			call.resolve(["sessionId": Int(s.sessionId), "message": s.message])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeStartResponder(_ call: CAPPluginCall) {
+		guard let priv = str(call, "localPrivB64"), let remote = str(call, "remotePubB64") else { return }
+		do {
+			let id = try App.handshakeStartResponder(localPrivB64: priv, remotePubB64: remote)
+			call.resolve(["value": Int(id)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeEnrollInitiator(_ call: CAPPluginCall) {
+		guard let priv = str(call, "localPrivB64"), let psk = str(call, "pskB64") else { return }
+		do {
+			let s = try App.handshakeEnrollInitiator(localPrivB64: priv, pskB64: psk)
+			call.resolve(["sessionId": Int(s.sessionId), "message": s.message])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeEnrollResponder(_ call: CAPPluginCall) {
+		guard let priv = str(call, "localPrivB64"), let psk = str(call, "pskB64") else { return }
+		do {
+			let id = try App.handshakeEnrollResponder(localPrivB64: priv, pskB64: psk)
+			call.resolve(["value": Int(id)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeRead(_ call: CAPPluginCall) {
+		guard let sid = u32(call, "sessionId"), let msg = str(call, "messageB64") else { return }
+		do {
+			let r = try App.handshakeRead(sessionId: sid, messageB64: msg)
+			var out: [String: Any] = ["done": r.done]
+			if let m = r.message { out["message"] = m } // absent -> JS undefined
+			call.resolve(out)
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeEncrypt(_ call: CAPPluginCall) {
+		guard let sid = u32(call, "sessionId"), let pt = str(call, "plaintext") else { return }
+		do {
+			call.resolve(["value": try App.handshakeEncrypt(sessionId: sid, plaintext: pt)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeDecrypt(_ call: CAPPluginCall) {
+		guard let sid = u32(call, "sessionId"), let ct = str(call, "ciphertextB64") else { return }
+		do {
+			call.resolve(["value": try App.handshakeDecrypt(sessionId: sid, ciphertextB64: ct)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeRemoteStatic(_ call: CAPPluginCall) {
+		guard let sid = u32(call, "sessionId") else { return }
+		do {
+			call.resolve(["value": try App.handshakeRemoteStatic(sessionId: sid)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func handshakeClose(_ call: CAPPluginCall) {
+		guard let sid = u32(call, "sessionId") else { return }
+		App.handshakeClose(sessionId: sid)
+		call.resolve()
+	}
+
+	// --- sync transport: Nostr (BIP340) ---
+
+	@objc func nostrGenerateKey(_ call: CAPPluginCall) {
+		do {
+			let k = try App.nostrGenerateKey()
+			call.resolve(["secretKey": k.secretKey, "publicKey": k.publicKey])
+		} catch { fail(call, error) }
+	}
+
+	@objc func nostrPublicKey(_ call: CAPPluginCall) {
+		guard let secret = str(call, "secretB64") else { return }
+		do {
+			call.resolve(["value": try App.nostrPublicKey(secretB64: secret)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func nostrSign(_ call: CAPPluginCall) {
+		guard let secret = str(call, "secretB64"), let hash = str(call, "hashB64") else { return }
+		do {
+			call.resolve(["value": try App.nostrSign(secretB64: secret, hashB64: hash)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func nostrVerify(_ call: CAPPluginCall) {
+		guard let pub = str(call, "publicB64"), let hash = str(call, "hashB64"),
+			let sig = str(call, "sigB64") else { return }
+		do {
+			call.resolve(["value": try App.nostrVerify(publicB64: pub, hashB64: hash, sigB64: sig)])
 		} catch { fail(call, error) }
 	}
 }

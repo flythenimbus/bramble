@@ -46,7 +46,7 @@ export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSe
 		relayUrl: opts.relayUrl,
 		groupKey: base64ToBytes(opts.groupKeyB64),
 		roomLabel: opts.roomLabel,
-		signer: makeNostr(opts.wasm),
+		signer: await makeNostr(opts.wasm),
 		iceServers,
 		onStatus: opts.report,
 		onPeer: (peer) => void opts.onPeer(peer).catch((e) => opts.report(`peer error: ${String(e)}`)),

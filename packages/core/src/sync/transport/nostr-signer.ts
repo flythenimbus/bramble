@@ -3,12 +3,14 @@
 
 import { base64ToHex, hexToBase64 } from "../../util/bytes";
 import type { NostrSigner, NostrVerifier } from "..";
+import type { Awaitable } from "./handshake";
 
-/** The wasm nostr exports. nostr_generate_key returns camelCase (#[serde(rename_all)]). */
+/** The wasm nostr exports. nostr_generate_key returns camelCase (#[serde(rename_all)]).
+ * Returns are Awaitable so the native plugin (async bridge) satisfies the same shape. */
 export interface NostrWasm {
-	nostr_generate_key(): { secretKey: string; publicKey: string };
-	nostr_sign(secretB64: string, hashB64: string): string;
-	nostr_verify(publicB64: string, hashB64: string, sigB64: string): boolean;
+	nostr_generate_key(): Awaitable<{ secretKey: string; publicKey: string }>;
+	nostr_sign(secretB64: string, hashB64: string): Awaitable<string>;
+	nostr_verify(publicB64: string, hashB64: string, sigB64: string): Awaitable<boolean>;
 }
 
 export interface SignerPair {
@@ -17,21 +19,18 @@ export interface SignerPair {
 	pubkeyHex: string;
 }
 
-export function makeNostr(wasm: NostrWasm): SignerPair {
-	const key = wasm.nostr_generate_key();
+export async function makeNostr(wasm: NostrWasm): Promise<SignerPair> {
+	const key = await wasm.nostr_generate_key();
 	const pubkeyHex = base64ToHex(key.publicKey);
 	return {
 		pubkeyHex,
 		signer: {
 			pubkeyHex,
-			sign: (idHex) =>
-				Promise.resolve(base64ToHex(wasm.nostr_sign(key.secretKey, hexToBase64(idHex)))),
+			sign: async (idHex) => base64ToHex(await wasm.nostr_sign(key.secretKey, hexToBase64(idHex))),
 		},
 		verifier: {
-			verify: (pkHex, idHex, sigHex) =>
-				Promise.resolve(
-					wasm.nostr_verify(hexToBase64(pkHex), hexToBase64(idHex), hexToBase64(sigHex)),
-				),
+			verify: async (pkHex, idHex, sigHex) =>
+				wasm.nostr_verify(hexToBase64(pkHex), hexToBase64(idHex), hexToBase64(sigHex)),
 		},
 	};
 }

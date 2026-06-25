@@ -31,8 +31,9 @@ wasm = [
     "dep:k256",
 ]
 # Native FFI binding layer: uniffi -> Swift + Kotlin for the iOS autofill credential
-# provider and Lockdown-Mode-safe (JIT-free) main-app crypto.
-ffi = ["dep:uniffi"]
+# provider and Lockdown-Mode-safe (JIT-free) main-app crypto. Carries snow/k256 too so
+# sync handshake + nostr run natively on device (no WASM under Lockdown Mode).
+ffi = ["dep:uniffi", "dep:snow", "dep:k256"]
 
 [dependencies]
 # --- vault crypto core (compiled into both binding layers) ---
