@@ -15,9 +15,12 @@ Platform facts are dated **mid-2026**; re-verify before acting on them later. Se
 
 Deliberately narrow, to keep the first version shippable:
 
-- **Same network, all devices online at sync time.** This removes TURN relays (LAN peers
-  connect via WebRTC host candidates) and removes any store-and-forward mailbox (no device is
-  offline during a sync). Cross-internet and async sync are explicit non-goals for v1.
+- **All devices online and active at sync time** (synchronous, no store-and-forward). Same-LAN
+  peers connect via WebRTC host candidates; cross-network peers (different networks, or behind a
+  full-tunnel VPN that routes the app off the LAN) relay through **TURN** (see "Transport"). A
+  store-and-forward mailbox for devices that are *offline* (true async sync) is still out of
+  scope: both peers must be online and unlocked at the same moment. _(Original v1 was same-network
+  only; TURN landed later, see "Implementation status".)_
 - **Multi-device, not just two.** The design is a sync *group* of N devices, not a pair.
 - **No vault server, no installed binary, no infrastructure the project must operate and that
   users cannot verify.** See "Trust model" for how this is achieved rather than asserted.
@@ -146,9 +149,29 @@ This maps onto the host abstraction the Firefox port already introduces:
 - **Firefox:** run WebRTC in the **background event page**, which is a real DOM document. (Mark
   for smoke-test: confirm `RTCPeerConnection` is exposed in the FF MV3 event page before
   relying on it; WebRTC is a document API and the event page is a document, so it is expected.)
+- **Mobile (Capacitor):** the single webview is a real DOM, so the same transport modules run
+  in-process, with no offscreen indirection. WebRTC + the WebSocket relay are standard webview APIs.
 
 So the "crypto host" the port plan already builds becomes the "sync host" too: one
-transport-free core, two thin entry points.
+transport-free core, three thin entry points (offscreen, FF event page, mobile webview).
+
+**ICE servers: host candidates, then TURN.** A connection first tries direct **host candidates**
+(LAN), which is enough when both devices share a network. When they don't (different networks,
+or a full-tunnel VPN like Proton that binds the app's sockets to the tunnel so the LAN path is
+gone), direct fails and the channel needs a **TURN relay** both peers can always reach. Before
+each connection the client fetches ICE servers from a minting endpoint (`POST /ice-servers` on the
+relay Worker, which mints short-lived Cloudflare TURN credentials server-side) and passes them to
+`RTCPeerConnection`; the fetch failing degrades to host-only, not an error. TURN only ever relays
+the **DTLS + Noise ciphertext**, so it is the same "dumb untrusted pipe" as the signaling relay
+(it learns that the two endpoints synced and the byte volume, nothing more; behind a VPN it sees
+the VPN's exit IP). The ICE endpoint **derives from the relay URL** by default (one Worker serves
+both), and is separately overridable for self-hosters who put signaling on a public Nostr relay
+(no `/ice-servers`) and TURN elsewhere. Both the relay and ICE URLs are configurable in Settings,
+persisted, and **carried in the pairing code** so a joined device adopts and displays them.
+
+Platform note (learned the hard way): iOS VPNs (NetworkExtension) leave local-network traffic
+*outside* the tunnel by default, so same-LAN host candidates kept working with a VPN on; Android's
+`VpnService` full-tunnel does not, so Android needed TURN to sync under the same VPN.
 
 ## Topology: pairwise-gossip mesh, no coordinator
 
@@ -219,34 +242,51 @@ entry's history list, recovering the lost value without ever decrypting it to me
   forward; it is not a remote wipe.** A stolen device that already holds the VEK and a local
   vault copy still has that data offline. True lockout requires rotation, which is the natural
   follow-up. State this clearly so it is not mistaken for the stronger guarantee.
-- **Async / cross-internet sync is out of scope.** v1 is same-network, all-online. The natural
-  upgrades (TURN for hard NATs, a store-and-forward mailbox, or the native-bridge transport
-  from `firefox-port.md` Option 1) are separate workstreams over the same merge engine.
+- **Async (offline) sync is out of scope.** Cross-network sync now works (TURN, above), but it is
+  still *synchronous*: both devices must be online and unlocked at once. "Edit on A now, B picks
+  it up tomorrow" needs a **store-and-forward mailbox** (a server that holds encrypted deltas for
+  an offline device); that's separate infrastructure over the same merge engine, and it changes
+  the metadata/availability surface (the relay would then *store* ciphertext, not just relay it).
+  Mobile compounds this: the OS suspends backgrounded apps and there's no FCM wake (no Google
+  Play), so mobile is realistically "syncs when you open it."
 - **Field-level merge is deferred** (see above).
 
-## Device management & revocation (TODO)
+## Device management & revocation
 
-There is no UI yet to see or manage paired devices; the roster is built and merged but only
-surfaced through the pairing flow. Planned:
+The Settings "Device sync" panel (shared `SyncConnectSection`, so extension + mobile get it) is
+state-aware: not-in-a-group shows add/join; in-a-group shows a status dot, the **devices list**
+(label, key fingerprint, added date, a "this device" marker keyed by public key), a per-device
+**remove**, **Disconnect** (leave the group, go offline-only), and a demoted "Add another device".
+Source of truth is the persisted `sync.group` roster.
 
-- **Devices list.** A "Devices" section in Settings (shared `SyncConnectSection`/a new
-  `RosterSection`, so extension + mobile get it) that lists the roster `devices`: label,
-  added date, a "this device" marker, and (if we start tracking it) last-seen. Source of truth
-  is the persisted `sync.group` roster.
-- **Rename.** Edit a device's `label` (a roster-entry field) and let it propagate via the
-  roster CRDT merge.
-- **Revoke.** Add the selected device to the roster `revoked` tombstones and propagate. Two
-  pieces of plumbing to confirm/build: (a) `roster` merge must drop revoked ids from `devices`,
-  and (b) roster-sync KK auth must reject a static key that's revoked (today it only checks
-  presence in the roster, see `roster-sync.ts` "not in roster — ignoring"). Result: the revoked
-  device can no longer connect or sync.
-- **Revoke is not a remote wipe.** Per "VEK rotation is deferred" above, a revoked device still
-  holds the VEK + a local vault copy offline. True lockout requires **VEK rotation + re-wrap of
-  every slot and re-encrypt of entries**, distributed to the remaining devices over sync. That
-  is the load-bearing follow-up that makes revocation a real security boundary; wire the UI now
-  but label plain revoke as "stops future sync," not "wipes that device."
-- **Mobile note.** The device keypair currently lives in plaintext `Preferences`; move it (and
-  the group key) to Keychain/Keystore in the Phase 2 secure-storage hardening before this ships.
+- **Remove (revoke), built.** A trash icon on each non-"this device" row → confirm →
+  `useVault.removeDevice(id)` → a roster `revoked` tombstone (`revokeDevice`) persisted to
+  `sync.group`. The roster CRDT already drops revoked ids from `devices` (`mergeRosters` /
+  `activeDevices`), and roster-sync auth checks membership in `devices`, so a revoked key is
+  rejected once the revocation has merged in.
+- **Roster propagation, built.** Ongoing sync now gossips the **roster** alongside entries (a
+  `{entries, roster}` envelope in `roster-sync.ts`, with `fetchLocalRoster`/`pushRemoteRoster`
+  hooks). So a removal (or an enrollment) fans out to peers and converges; the receiver merges +
+  persists and nudges the popup (`SYNC_EVENT {kind: "roster"}`). Bridged on both hosts: extension
+  offscreen↔background (`SYNC_LOCAL_ROSTER` / `SYNC_APPLY_ROSTER`), mobile sync-manager direct.
+- **No re-auth on remove (by choice).** The panel is already behind an unlocked vault (the actor
+  can read every secret), revoke is not a wipe, and it's reversible by re-pairing, so a
+  *confirmation* is the right bar, not a master-password/biometric step-up. Add the step-up when
+  **VEK rotation** makes revoke a true lockout (then "silently revoke the owner's other devices"
+  becomes a takeover move worth gating; reuse the device's existing unlock factor).
+- **Revoke is not a remote wipe.** Per "VEK rotation is deferred", a revoked device still holds the
+  VEK + a local vault copy offline. True lockout requires **VEK rotation + re-wrap of every slot
+  and re-encrypt of entries**, distributed over sync. Plain revoke = "stops future sync," not
+  "wipes that device."
+- **Known edges.** A revoked-but-currently-connected peer keeps its open channel until the session
+  restarts (auth uses the start-time roster snapshot); re-check `isActiveDevice` per inbound auth
+  to cut mid-session. **Rename** (edit `label`, propagate via the roster CRDT) is still TODO.
+- **Device labels.** New enrollments self-label by platform (`defaultDeviceLabel`: "Android device",
+  "Firefox on Mac", …) instead of a generic "This device"; the UI marks the current device by
+  public-key match, so a label collision is only cosmetic.
+- **Secure storage, done.** The device keypair (and group key) now live in Keychain/Keystore on
+  mobile and `chrome.storage` on the extension (the earlier plaintext-`Preferences` note is
+  resolved).
 
 ## Build / packaging notes
 
@@ -259,22 +299,33 @@ surfaced through the pairing flow. Planned:
 
 ## Implementation status (built)
 
-The design above is implemented and working across two real browsers (transport,
-enrollment, roster-auth, and headless background sync). Notes on how it maps to code:
+The design above is implemented and working across two browsers and the iOS/Android mobile
+app (transport, enrollment, roster-auth, headless background sync, cross-network TURN, and
+device management). Notes on how it maps to code:
 
 - **Transport-free core** (`packages/core/src/sync/`): merge kernel + HLC, entries
   payload + tombstones, `applyRemotePayload`, roster CRDT, the nostr signaling codec
   + `connectSignaling`, the pairing/enrollment codecs. The Noise (KK + XXpsk3) and
   BIP340 primitives are in `packages/crypto-wasm`.
-- **Transport + hosts** (`packages/platform-extension/src/sync/`): `mesh` (relay +
-  discovery + WebRTC peers), `handshake` (one runner for KK and XXpsk3),
-  `peer-session` (the shared mesh-session lifecycle: join room + per-peer handler +
-  teardown, returned as a handle so there is no module-level singleton), with
-  `enroll-host` (enrollment) and `roster-sync` (continuous sync) each a configuration
-  of it. All run in the **offscreen document** (the `WEB_RTC` reason); it has no
-  `chrome.storage`, so it bridges storage to the background.
-- **Separate rooms.** `deriveRoomId(groupKey, label)` — enrollment uses
-  `bramble/enroll`, ongoing sync uses `bramble/sync` — so the enroll handshake never
+- **Transport + hosts** (`packages/core/src/sync/transport/`): `mesh` (relay + discovery
+  + WebRTC peers), `ice` (`deriveIceUrl` + `fetchIceServers` for STUN/TURN), `handshake`
+  (one runner for KK and XXpsk3), `peer-session` (the shared mesh-session lifecycle: join
+  room + per-peer handler + teardown, returned as a handle so there is no module-level
+  singleton), with `enroll-host` (enrollment) and `roster-sync` (continuous sync) each a
+  configuration of it. The **extension** runs these in the offscreen document (the `WEB_RTC`
+  reason; no `chrome.storage`, so it bridges to the background); **mobile** runs them
+  in-process in the webview (`platform-mobile/src/sync/sync-manager.ts`).
+- **Cross-network TURN** (`nostr-relay/cf-worker` + `transport/ice.ts`): the relay Worker's
+  `POST /ice-servers` mints short-lived Cloudflare TURN credentials; `startMeshSession`
+  fetches them (URL derived from the relay, or an explicit override) and passes them to the
+  peers, so enrollment *and* ongoing sync cross networks/VPNs. The relay + ICE URLs are
+  configurable in Settings (persisted; the ICE field pre-fills the derived endpoint) and ride
+  the pairing code so a joiner adopts them.
+- **Device management** (`SyncConnectSection` + `useSyncEnrollment.removeDevice`): per-device
+  revoke (roster tombstone) with the roster gossiped alongside entries in `roster-sync` (the
+  `{entries, roster}` envelope) so revocations converge; see "Device management & revocation".
+- **Separate rooms.** `deriveRoomId(groupKey, label)`: enrollment uses
+  `bramble/enroll`, ongoing sync uses `bramble/sync`, so the enroll handshake never
   collides with running sync meshes.
 - **Enrollment** seals `{vek, roster, entries}` Noise-only; the joiner rebuilds its
   vault entirely in the offscreen via `core/vault/build-vault` (the VEK never reaches
@@ -289,7 +340,8 @@ enrollment, roster-auth, and headless background sync). Notes on how it maps to 
   otherwise writes queue for the next popup. `chrome.storage.local` is fully headless.
 - **Deferred:** VEK-never-in-JS hardening (the VEK is currently a transient JS string
   during enrollment + session caching, no worse than the existing session cache);
-  instant on-change nudge; VEK rotation; async/cross-internet (see above).
+  instant on-change nudge; VEK rotation; async (offline store-and-forward mailbox);
+  device rename; mid-session revoke cutoff (see above).
 
 Testing rig: [p2p-sync-testing.md](p2p-sync-testing.md).
 
