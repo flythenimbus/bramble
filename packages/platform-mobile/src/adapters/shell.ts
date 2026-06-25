@@ -1,6 +1,7 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
+import { scanQrNative } from "../qr-scanner";
 import { scanQrCode } from "../scan";
 import {
 	onSyncEvent,
@@ -25,7 +26,7 @@ export function registerOpenSetup(fn: OpenSetupHandler): () => void {
 
 // Mobile is a single-window app: the pop-out / detached-window machinery and the
 // "active browser tab" concept have no meaning here, so those collapse to no-ops.
-// QR scanning (barcode-scanner plugin) and the sync host are later phases.
+// QR scanning is native AVFoundation on iOS (../qr-scanner) and jsQR on Android (../scan).
 export const mobileShell: ShellAdapter = {
 	appName: "Bramble",
 	// Fallback; resolveAppVersion() overwrites from the native bundle before first render.
@@ -56,8 +57,10 @@ export const mobileShell: ShellAdapter = {
 	supportsSaveCapture: Capacitor.getPlatform() === "android",
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
-		// used for sync pairing codes and TOTP otpauth:// QRs.
-		return scanQrCode();
+		// used for sync pairing codes and TOTP otpauth:// QRs. iOS WKWebView can't use
+		// getUserMedia from the capacitor:// scheme, so iOS goes through a native
+		// AVFoundation plugin; Android (served from https://localhost) uses jsQR.
+		return Capacitor.getPlatform() === "ios" ? scanQrNative() : scanQrCode();
 	},
 	async flushPendingCornerCapture() {
 		return false;

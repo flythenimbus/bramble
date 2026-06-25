@@ -160,5 +160,6 @@ public class BiometricBridgeViewController: CAPBridgeViewController {
 		bridge?.registerPluginInstance(BiometricVaultPlugin())
 		bridge?.registerPluginInstance(NativeCryptoPlugin())
 		bridge?.registerPluginInstance(AutofillBridgePlugin())
+		bridge?.registerPluginInstance(QrScannerPlugin())
 	}
 }
