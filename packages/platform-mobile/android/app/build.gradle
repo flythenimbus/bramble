@@ -57,6 +57,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.biometric:biometric:$androidxBiometricVersion"
+    // Inline autofill suggestions (InlinePresentation slices). AndroidX, not a Play API.
+    implementation "androidx.autofill:autofill:$androidxAutofillVersion"
     // JNA backs the uniffi-generated crypto glue; the @aar bundles jnidispatch's native libs.
     implementation "net.java.dev.jna:jna:5.14.0@aar"
     implementation project(':capacitor-android')

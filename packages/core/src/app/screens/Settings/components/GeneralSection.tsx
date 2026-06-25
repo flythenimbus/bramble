@@ -1,5 +1,5 @@
 import { Clock, Keyboard, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
@@ -24,6 +24,21 @@ export function GeneralSection() {
 	useEffect(() => {
 		if (loaded) void autofill.setKeepUnlocked?.(keepUnlockedWindow(prefs.autoLockMinutes));
 	}, [loaded, prefs.autoLockMinutes, autofill]);
+
+	// Inline keyboard suggestions only work on a keyboard that supports them (always on iOS;
+	// keyboard-dependent on Android). Hide the toggle where they can't render so we don't
+	// surface a dead control. Starts hidden until the capability resolves.
+	const [inlineAvailable, setInlineAvailable] = useState(false);
+	useEffect(() => {
+		let cancelled = false;
+		if (!autofill.inlineSuggestionsAvailable) return;
+		void autofill.inlineSuggestionsAvailable().then((v) => {
+			if (!cancelled) setInlineAvailable(v);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [autofill]);
 
 	// Prefs come from a quick local-storage read; hold the section until it
 	// resolves so the selects don't flash their defaults before snapping over.
@@ -58,10 +73,11 @@ export function GeneralSection() {
 				</div>
 			</Row>
 
-			{/* QuickType opt-in: iOS-only (gated on the native-provider capability). Off by
-			    default; turning it on writes usernames + domains to the OS so logins show
-			    inline above the keyboard. Re-index immediately so the change takes effect. */}
-			{autofill.setKeepUnlocked && (
+			{/* Keyboard suggestions opt-in: only shown where inline suggestions can actually
+			    render (always on iOS; on Android only on a keyboard that supports them). Off by
+			    default; turning it on surfaces matching logins inline above the keyboard.
+			    Re-index immediately so the change takes effect. */}
+			{autofill.setKeepUnlocked && inlineAvailable && (
 				<Row
 					icon={<Keyboard className="w-4 h-4 text-primary" />}
 					title="Keyboard suggestions"

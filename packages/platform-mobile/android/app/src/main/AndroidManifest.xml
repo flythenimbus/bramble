@@ -32,6 +32,33 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Unlock + searchable credential list for autofill. Same :autofill process as the
+             service; not exported (only the service's PendingIntent launches it). -->
+        <activity
+            android:name=".AutofillUnlockActivity"
+            android:exported="false"
+            android:process=":autofill"
+            android:theme="@style/BrambleAutofillTheme"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
+        <!-- System autofill provider. Runs in a dedicated :autofill process so its decrypted
+             VEK never touches the app's webview session. -->
+        <service
+            android:name=".BrambleAutofillService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:process=":autofill"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/autofill_service" />
+        </service>
     </application>
 
     <!-- Permissions -->

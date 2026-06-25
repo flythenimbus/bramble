@@ -148,6 +148,14 @@ export interface AutofillAdapter {
 	setKeepUnlocked?(minutes: number): Promise<void>;
 
 	/**
+	 * Mobile only: whether the platform can actually render inline keyboard suggestions
+	 * (iOS QuickType is always available; on Android it depends on the active keyboard, so
+	 * the AOSP keyboard returns false). Settings hides the keyboard-suggestions control when
+	 * this resolves false. Absent where there is no native provider.
+	 */
+	inlineSuggestionsAvailable?(): Promise<boolean>;
+
+	/**
 	 * Content-script-side: find matches for a page. `hasLogin`/`hasCard`/`hasOtp`
 	 * say which field kinds the page exposes, so only the relevant lists are returned.
 	 */
