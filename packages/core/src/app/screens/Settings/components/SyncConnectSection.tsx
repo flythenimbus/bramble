@@ -95,8 +95,6 @@ export function SyncConnectSection() {
 		void storage.setMeta("sync.iceUrl", v);
 	};
 
-	// Stream the sync host's status lines into the log.
-	useEffect(() => shell.onSyncStatus((s) => setLog((prev) => [...prev.slice(-40), s])), [shell]);
 	// A device finishing enrollment (inviter side) or this device joining changes the roster.
 	useEffect(
 		() =>
