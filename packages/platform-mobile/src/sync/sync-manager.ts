@@ -26,6 +26,7 @@ import { loadWasm } from "../wasm-loader";
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
 const RELAY_KEY = "sync.relay";
+const ICE_KEY = "sync.iceUrl";
 
 interface GroupConfig {
 	groupKey: string;
@@ -99,6 +100,7 @@ let session: MeshSession | null = null;
 
 export async function startEnrollInvite(opts: {
 	relayUrl: string;
+	iceUrl?: string;
 	groupKeyB64: string;
 	psk: string;
 	roster: RosterPayload;
@@ -109,6 +111,7 @@ export async function startEnrollInvite(opts: {
 	session?.stop();
 	session = await startEnroll("inviter", {
 		relayUrl: opts.relayUrl,
+		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
 		psk: opts.psk,
 		roster: opts.roster,
@@ -122,6 +125,7 @@ export async function startEnrollInvite(opts: {
 
 export async function startEnrollJoin(opts: {
 	relayUrl: string;
+	iceUrl?: string;
 	groupKeyB64: string;
 	psk: string;
 	inviterPub: string;
@@ -134,6 +138,7 @@ export async function startEnrollJoin(opts: {
 	session?.stop();
 	session = await startEnroll("joiner", {
 		relayUrl: opts.relayUrl,
+		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
 		psk: opts.psk,
 		inviterPub: opts.inviterPub,
@@ -150,6 +155,7 @@ export async function startEnrollJoin(opts: {
 export async function stopSync(): Promise<void> {
 	session?.stop();
 	session = null;
+	stopRosterSync(); // full teardown: halt ongoing roster sync too, not just enrollment
 	report("disconnected");
 }
 
@@ -186,10 +192,12 @@ async function startRoster(): Promise<void> {
 	if (!group?.groupKey) return; // not enrolled in a group yet
 	const { privateKey, publicKey } = await deviceKeypair();
 	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
+	const iceUrl = (await mobileStorage.getMeta<string>(ICE_KEY)) ?? "";
 	const wasm = (await loadWasm()) as unknown as RosterSyncWasm;
 	rosterSession?.stop();
 	rosterSession = await startRosterSync({
 		relayUrl: relay,
+		iceUrl,
 		groupKeyB64: group.groupKey,
 		devicePrivB64: privateKey,
 		devicePubB64: publicKey,

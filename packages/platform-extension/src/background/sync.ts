@@ -19,6 +19,7 @@ import { ApplyRemoteMsgSchema, type RosterSyncMsg } from "../sync/messages";
 import {
 	type DeviceKeypair,
 	getStoredGroup,
+	getStoredIceUrl,
 	getStoredKeypair,
 	getStoredRelay,
 	storeKeypair,
@@ -73,6 +74,7 @@ export async function maybeStartSync(): Promise<void> {
 	if (!group || !kp) return;
 	const payload: RosterSyncMsg = {
 		relayUrl: await getStoredRelay(),
+		iceUrl: await getStoredIceUrl(),
 		groupKeyB64: group.groupKey,
 		roster: group.roster,
 		devicePrivB64: kp.privateKey,

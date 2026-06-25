@@ -68,6 +68,7 @@ export interface JoinResult {
 
 export interface EnrollOptions {
 	relayUrl: string;
+	iceUrl?: string;
 	groupKeyB64: string;
 	psk: string;
 	devicePrivB64: string;
@@ -93,6 +94,7 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 	let session: MeshSession | null = null;
 	session = await startMeshSession({
 		relayUrl: opts.relayUrl,
+		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
 		roomLabel: "bramble/enroll",
 		wasm: opts.wasm,

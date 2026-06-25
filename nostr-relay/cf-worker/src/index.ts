@@ -23,6 +23,40 @@ import { DurableObject } from "cloudflare:workers";
 const MAX_MSG_BYTES = 64 * 1024;
 const MAX_SUBS_PER_CONN = 8;
 
+// POST /ice-servers mints short-lived Cloudflare TURN creds so peers across
+// networks/VPNs can relay. See docs/p2p-sync.md.
+const TURN_TTL_SECONDS = 86400;
+const CORS = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Methods": "POST, OPTIONS",
+	"Access-Control-Allow-Headers": "Content-Type",
+} as const;
+
+// TURN secrets are `wrangler secret put`, so absent from the generated Env.
+interface RelayEnv extends Env {
+	TURN_KEY_TOKEN_ID?: string;
+	TURN_KEY_API_TOKEN?: string;
+}
+
+const jsonCors = (body: string, status = 200): Response =>
+	new Response(body, { status, headers: { "Content-Type": "application/json", ...CORS } });
+
+// Empty list on any failure → client falls back to host-only candidates.
+async function handleIceServers(env: RelayEnv): Promise<Response> {
+	const { TURN_KEY_TOKEN_ID: id, TURN_KEY_API_TOKEN: token } = env;
+	if (!id || !token) return jsonCors(JSON.stringify({ iceServers: [] }));
+	const res = await fetch(
+		`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`,
+		{
+			method: "POST",
+			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+		},
+	);
+	if (!res.ok) return jsonCors(JSON.stringify({ iceServers: [], error: `turn ${res.status}` }));
+	return jsonCors(await res.text());
+}
+
 /** A subscriber's REQ filters, keyed by subscription id. Stored as the socket
  *  attachment so it persists across hibernation. */
 type Subs = Record<string, NostrFilter[]>;
@@ -75,50 +109,62 @@ export class Relay extends DurableObject {
 			return;
 		}
 		if (!Array.isArray(msg)) return;
-		const [type] = msg;
 
-		if (type === "REQ") {
-			const [, subId, ...filters] = msg;
-			const subs = ws.deserializeAttachment() as Subs;
-			if (!(subId in subs) && Object.keys(subs).length >= MAX_SUBS_PER_CONN) return;
-			subs[subId] = filters;
-			ws.serializeAttachment(subs);
-			ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
-			return;
-		}
-		if (type === "CLOSE") {
-			const subs = ws.deserializeAttachment() as Subs;
-			delete subs[msg[1]];
-			ws.serializeAttachment(subs);
-			return;
-		}
-		if (type === "EVENT") {
-			const event = msg[1] as NostrEvent;
-			if (!event || event.kind < 20000 || event.kind >= 30000) {
-				ws.send(JSON.stringify(["OK", event?.id ?? "", false, "only ephemeral kinds"]));
+		switch (msg[0]) {
+			case "REQ": {
+				const [, subId, ...filters] = msg;
+				const subs = ws.deserializeAttachment() as Subs;
+				if (!(subId in subs) && Object.keys(subs).length >= MAX_SUBS_PER_CONN) return;
+				subs[subId] = filters;
+				ws.serializeAttachment(subs);
+				ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
 				return;
 			}
-			// Fan out to every other socket's matching subscription; store nothing.
-			for (const peer of this.ctx.getWebSockets()) {
-				if (peer === ws) continue;
-				const subs = peer.deserializeAttachment() as Subs | null;
-				if (!subs) continue;
-				for (const [subId, filters] of Object.entries(subs)) {
-					if (filters.some((f) => matches(f, event))) {
-						peer.send(JSON.stringify(["EVENT", subId, event]));
-						break;
+			case "CLOSE": {
+				const subs = ws.deserializeAttachment() as Subs;
+				delete subs[msg[1]];
+				ws.serializeAttachment(subs);
+				return;
+			}
+			case "EVENT": {
+				const event = msg[1] as NostrEvent;
+				if (!event || event.kind < 20000 || event.kind >= 30000) {
+					ws.send(JSON.stringify(["OK", event?.id ?? "", false, "only ephemeral kinds"]));
+					return;
+				}
+				// Fan out to every other socket's matching subscription; store nothing.
+				for (const peer of this.ctx.getWebSockets()) {
+					if (peer === ws) continue;
+					const subs = peer.deserializeAttachment() as Subs | null;
+					if (!subs) continue;
+					for (const [subId, filters] of Object.entries(subs)) {
+						if (filters.some((f) => matches(f, event))) {
+							peer.send(JSON.stringify(["EVENT", subId, event]));
+							break;
+						}
 					}
 				}
+				ws.send(JSON.stringify(["OK", event.id ?? "", true, ""]));
+				return;
 			}
-			ws.send(JSON.stringify(["OK", event.id ?? "", true, ""]));
 		}
 	}
 }
 
 export default {
-	// All connections land on one global DO instance; the room is addressed
-	// in-band by the event's #d tag, exactly as with the node relay.
-	fetch(req: Request, env: Env): Response | Promise<Response> {
+	// Signaling WS → the global DO; POST /ice-servers handled here in the Worker.
+	async fetch(req: Request, env: RelayEnv): Promise<Response> {
+		const { pathname } = new URL(req.url);
+		if (pathname === "/ice-servers") {
+			switch (req.method) {
+				case "OPTIONS":
+					return new Response(null, { status: 204, headers: CORS });
+				case "POST":
+					return handleIceServers(env);
+				default:
+					return new Response("method not allowed", { status: 405, headers: CORS });
+			}
+		}
 		return env.RELAY.getByName("relay").fetch(req);
 	},
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<RelayEnv>;

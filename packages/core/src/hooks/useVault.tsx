@@ -203,7 +203,7 @@ export interface UseVault {
 	/** Re-probe biometric availability + enabled (e.g. when Settings opens). */
 	refreshBiometric(): Promise<void>;
 	/** Start adding a device: returns a one-time pairing code and listens for the joiner. */
-	inviteDevice(relayUrl: string): Promise<string>;
+	inviteDevice(relayUrl: string, iceUrl?: string): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
 	joinGroup(pairingCode: string, unlock: JoinUnlock): Promise<void>;
 }

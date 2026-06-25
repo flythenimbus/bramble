@@ -18,6 +18,7 @@ export interface Peer {
 export interface PeerCallbacks {
 	/** True for the side that creates the offer + data channel (deterministic, see sync-host). */
 	initiator: boolean;
+	iceServers?: RTCIceServer[];
 	onSignal(signal: PeerSignal): void;
 	onOpen(): void;
 	onMessage(data: string): void;
@@ -26,12 +27,13 @@ export interface PeerCallbacks {
 
 export function createPeer({
 	initiator,
+	iceServers,
 	onSignal,
 	onOpen,
 	onMessage,
 	onClose,
 }: PeerCallbacks): Peer {
-	const pc = new RTCPeerConnection({ iceServers: [] });
+	const pc = new RTCPeerConnection({ iceServers: iceServers ?? [] });
 	let channel: RTCDataChannel | null = null;
 	let remoteSet = false;
 	// addIceCandidate before the remote description is set throws; buffer until then.

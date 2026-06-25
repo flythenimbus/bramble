@@ -5,6 +5,7 @@
 // flows stay testable with a fake mesh. See docs/p2p-sync.md.
 
 import { base64ToBytes } from "../../util/bytes";
+import { deriveIceUrl, fetchIceServers } from "./ice";
 import { joinMesh, type Mesh, type MeshOptions, type PeerSession } from "./mesh";
 import { makeNostr, type NostrWasm } from "./nostr-signer";
 
@@ -23,6 +24,8 @@ export interface MeshSessionOptions {
 	groupKeyB64: string;
 	/** Separate rooms keep enrollment and ongoing sync from colliding. */
 	roomLabel: string;
+	/** Empty/undefined derives the ICE endpoint from the relay URL. */
+	iceUrl?: string;
 	wasm: NostrWasm;
 	report: (status: string) => void;
 	/** Handle one authenticated peer (run the handshake + the role's phase). */
@@ -31,15 +34,20 @@ export interface MeshSessionOptions {
 	onStop?: () => void;
 	/** The mesh joiner; overridden in tests with a fake. */
 	join?: (opts: MeshOptions) => Promise<Stoppable>;
+	fetchIce?: (iceUrl: string) => Promise<RTCIceServer[]>;
 }
 
 export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSession> {
 	const join: (opts: MeshOptions) => Promise<Stoppable> = opts.join ?? joinMesh;
+	const fetchIce = opts.fetchIce ?? fetchIceServers;
+	const iceServers = await fetchIce(opts.iceUrl || deriveIceUrl(opts.relayUrl));
+	opts.report(iceServers.length ? "ICE: relay servers ready" : "ICE: direct (host) only");
 	const mesh = await join({
 		relayUrl: opts.relayUrl,
 		groupKey: base64ToBytes(opts.groupKeyB64),
 		roomLabel: opts.roomLabel,
 		signer: makeNostr(opts.wasm),
+		iceServers,
 		onStatus: opts.report,
 		onPeer: (peer) => void opts.onPeer(peer).catch((e) => opts.report(`peer error: ${String(e)}`)),
 	});

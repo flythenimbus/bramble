@@ -32,12 +32,25 @@ export interface MeshOptions {
 	/** Room-id label, so enrollment and ongoing sync occupy separate rooms. */
 	roomLabel: string;
 	signer: SignerPair;
+	iceServers?: RTCIceServer[];
 	onStatus: (status: string) => void;
 	onPeer: (session: PeerSession) => void;
 }
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 const short = (pubkey: string): string => pubkey.slice(0, 8);
+const relayHost = (url: string): string => {
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
+};
+// A connect that never reaches the relay (firewall/VPN/no network access, or a
+// loopback URL that only resolves on the inviter's machine) should say so instead
+// of stalling silently; the relay handshake is a sub-second affair on any reachable
+// network, so anything past this is a reachability failure, not slowness.
+const CONNECT_TIMEOUT_MS = 10_000;
 
 class Mesh {
 	private readonly peers = new Map<string, Peer>();
@@ -51,11 +64,49 @@ class Mesh {
 	) {}
 
 	start(): void {
-		this.socket = new WebSocket(this.opts.relayUrl);
-		this.socket.onerror = () => this.opts.onStatus("relay connection error");
-		this.socket.onclose = () => this.opts.onStatus("relay disconnected");
-		this.client = connectSignaling(this.socket as unknown as SocketLike, this.room, (ev) =>
-			this.onEvent(ev),
+		const url = this.opts.relayUrl;
+		const host = relayHost(url);
+		this.socket = new WebSocket(url);
+		let opened = false;
+		// Report the outcome once: the close code distinguishes "couldn't reach the
+		// relay" (1006/immediate close — network access, VPN, firewall, or a relay URL
+		// only reachable from the inviter) from a relay-side reject, which is the one
+		// fact this log was silently dropping. A clean teardown after we connected is
+		// expected, not a failure.
+		let settled = false;
+		const settle = (msg: string) => {
+			if (settled) return;
+			settled = true;
+			this.opts.onStatus(msg);
+		};
+		const timer = setTimeout(() => {
+			if (opened) return;
+			settle(`relay unreachable — no response from ${host} (check this device's network access)`);
+			try {
+				this.socket.close();
+			} catch {}
+		}, CONNECT_TIMEOUT_MS);
+		this.socket.onerror = () => {
+			if (!opened) this.opts.onStatus(`relay connection error (${host})`);
+		};
+		this.socket.onclose = (ev) => {
+			clearTimeout(timer);
+			const code = (ev as CloseEvent | undefined)?.code;
+			settle(
+				opened
+					? "relay disconnected"
+					: `relay unreachable${code ? ` (code ${code})` : ""} — couldn't reach ${host}`,
+			);
+		};
+		this.client = connectSignaling(
+			this.socket as unknown as SocketLike,
+			this.room,
+			(ev) => this.onEvent(ev),
+			() => {
+				opened = true;
+				clearTimeout(timer);
+				this.opts.onStatus(`relay connected (${host})`);
+			},
 		);
 		void this.publish({ kind: "hello" });
 	}
@@ -118,6 +169,7 @@ class Mesh {
 		const { channel, push } = makeChannel((data) => peer.send(data));
 		peer = createPeer({
 			initiator,
+			iceServers: this.opts.iceServers,
 			onSignal: (signal) => void this.publish({ to: remote, ...signal }),
 			onMessage: push,
 			onOpen: () =>

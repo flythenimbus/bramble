@@ -27,6 +27,8 @@ export const PairingCodeSchema = z.object({
 	psk: z.string().min(1),
 	/** Relay URL the joiner should connect to. */
 	relay: z.string().min(1),
+	/** ICE-servers (STUN/TURN) endpoint to adopt; omitted derives it from the relay. */
+	iceUrl: z.string().optional(),
 });
 export type PairingCode = z.infer<typeof PairingCodeSchema>;
 

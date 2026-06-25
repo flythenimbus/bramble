@@ -61,6 +61,7 @@ export interface ShellAdapter {
 	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
 	startEnrollInvite(opts: {
 		relayUrl: string;
+		iceUrl?: string;
 		groupKeyB64: string;
 		psk: string;
 		roster: RosterPayload;
@@ -69,6 +70,7 @@ export interface ShellAdapter {
 	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
 	startEnrollJoin(opts: {
 		relayUrl: string;
+		iceUrl?: string;
 		groupKeyB64: string;
 		psk: string;
 		inviterPub: string;

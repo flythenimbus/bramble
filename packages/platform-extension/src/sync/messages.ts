@@ -12,6 +12,7 @@ import { z } from "zod";
 /** background -> offscreen: start the continuous roster-sync host. */
 export const RosterSyncMsgSchema = z.object({
 	relayUrl: z.string(),
+	iceUrl: z.string().optional(),
 	groupKeyB64: z.string(),
 	roster: RosterPayloadSchema,
 	devicePrivB64: z.string(),
@@ -23,6 +24,7 @@ export type RosterSyncMsg = z.infer<typeof RosterSyncMsgSchema>;
  * background injects devicePrivB64; the popup never sees the private key. */
 export const EnrollInviteMsgSchema = z.object({
 	relayUrl: z.string(),
+	iceUrl: z.string().optional(),
 	groupKeyB64: z.string(),
 	psk: z.string(),
 	devicePrivB64: z.string(),
@@ -35,6 +37,7 @@ export type EnrollInviteMsg = z.infer<typeof EnrollInviteMsgSchema>;
  * vault is unlocked by a password OR a security-key slot (exactly one is sent). */
 export const EnrollJoinMsgSchema = z.object({
 	relayUrl: z.string(),
+	iceUrl: z.string().optional(),
 	groupKeyB64: z.string(),
 	psk: z.string(),
 	devicePrivB64: z.string(),

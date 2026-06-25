@@ -203,6 +203,11 @@ export const extensionStorage: StorageAdapter = {
 		await chrome.storage.local.set({ [key]: value });
 	},
 
+	/** Delete a metadata key from chrome.storage.local. */
+	async removeMeta(key) {
+		await chrome.storage.local.remove(key);
+	},
+
 	/** True when the background can write the vault directly. chrome.storage.local always can; an FSA file can iff its read/write permission is already granted (createWritable itself needs no gesture, only requestPermission does). Otherwise the background queues for the next popup to flush. */
 	async canWriteFromBackground() {
 		const handle = await getHandle();

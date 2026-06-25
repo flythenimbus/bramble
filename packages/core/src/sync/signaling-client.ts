@@ -33,6 +33,7 @@ export function connectSignaling(
 	socket: SocketLike,
 	room: string,
 	onEvent: (event: NostrEvent) => void,
+	onOpen?: () => void,
 ): SignalingClient {
 	const subId = `s${subCounter++}`;
 	let open = false;
@@ -45,6 +46,7 @@ export function connectSignaling(
 
 	socket.onopen = () => {
 		open = true;
+		onOpen?.();
 		socket.send(JSON.stringify(["REQ", subId, signalFilter(room)]));
 		for (const frame of pending) socket.send(frame);
 		pending.length = 0;

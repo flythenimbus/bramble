@@ -13,6 +13,7 @@ import {
 	randomKeyB64,
 } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
+import { defaultDeviceLabel } from "../util/device-label";
 import { createPrfCredential } from "../vault/webauthn-ceremony";
 import { findWebauthnSlots, type VaultBlob, type WebauthnSlot } from "../vault-format";
 import type { JoinUnlock, UseVault } from "./useVault";
@@ -53,7 +54,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		const roster = addDevice(emptyRoster(), {
 			id: hlc.node,
 			publicKey: inviterPub,
-			label: "This device",
+			label: defaultDeviceLabel(),
 			addedAt: Date.now(),
 			hlc,
 		});
@@ -64,9 +65,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// Generate a fresh one-time pairing code and start listening for a device to
 	// join. The code carries no vault secrets (groupKey + our pubkey + PSK + relay).
 	const inviteDevice = useCallback(
-		async (relayUrl: string): Promise<string> => {
+		async (relayUrl: string, iceUrl?: string): Promise<string> => {
 			await storage.requestVaultAccess(); // grant FSA permission within this click gesture
-			await storage.setMeta("sync.relay", relayUrl); // background uses this for ongoing sync
+			// Persist + propagate (via the pairing code) both relays so a joiner adopts them.
+			await storage.setMeta("sync.relay", relayUrl);
+			await storage.setMeta("sync.iceUrl", iceUrl ?? "");
 			const groupKey = await ensureGroup();
 			const inviterPub = await shell.syncDevicePublicKey();
 			const psk = randomKeyB64();
@@ -96,8 +99,23 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 					enrollUnsubRef.current = null;
 				})();
 			});
-			await shell.startEnrollInvite({ relayUrl, groupKeyB64: groupKey, psk, roster, entries });
-			return encodePairingCode({ v: 1, groupKey, inviterPub, psk, relay: relayUrl });
+			await shell.startEnrollInvite({
+				relayUrl,
+				iceUrl,
+				groupKeyB64: groupKey,
+				psk,
+				roster,
+				entries,
+			});
+			// Omit iceUrl from the code when empty (the joiner then derives it from the relay).
+			return encodePairingCode({
+				v: 1,
+				groupKey,
+				inviterPub,
+				psk,
+				relay: relayUrl,
+				iceUrl: iceUrl || undefined,
+			});
 		},
 		[ensureGroup, shell, storage, readEntriesPayload],
 	);
@@ -122,7 +140,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			const ownEntry: RosterEntry = {
 				id: hlc.node,
 				publicKey: ownPub,
-				label: "This device",
+				label: defaultDeviceLabel(),
 				addedAt: Date.now(),
 				hlc,
 			};
@@ -137,6 +155,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			});
 			await shell.startEnrollJoin({
 				relayUrl: code.relay,
+				iceUrl: code.iceUrl,
 				groupKeyB64: code.groupKey,
 				psk: code.psk,
 				inviterPub: code.inviterPub,
@@ -158,6 +177,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				roster: addDevice(roster, ownEntry),
 			});
 			await storage.setMeta("sync.relay", code.relay); // background uses this for ongoing sync
+			await storage.setMeta("sync.iceUrl", code.iceUrl ?? ""); // adopt the inviter's TURN endpoint
 			await shell.stopSyncSpike();
 
 			if (cred) {
