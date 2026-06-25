@@ -22,9 +22,26 @@ export async function fetchIceServers(iceUrl: string): Promise<RTCIceServer[]> {
 	try {
 		const res = await fetch(iceUrl, { method: "POST" });
 		if (!res.ok) return [];
-		const data = (await res.json()) as { iceServers?: RTCIceServer[] };
-		return Array.isArray(data.iceServers) ? data.iceServers : [];
+		return normalizeIceServers(await res.json());
 	} catch {
 		return [];
 	}
+}
+
+const hasUrls = (s: { urls?: unknown }): boolean =>
+	typeof s.urls === "string" || Array.isArray(s.urls);
+
+// Accept the WebRTC-native shapes: { iceServers: [...] } (Cloudflare/standard), a bare
+// array, or a single { iceServers: {...} } object. Entries must already be RTCIceServer
+// ({ urls, username?, credential? }); provider-specific schemas (Twilio ice_servers/url,
+// coturn-rest uris/password) aren't remapped — wrap those server-side.
+function normalizeIceServers(data: unknown): RTCIceServer[] {
+	const unwrapped =
+		data && typeof data === "object" && !Array.isArray(data)
+			? (data as { iceServers?: unknown }).iceServers
+			: data;
+	const list = Array.isArray(unwrapped) ? unwrapped : unwrapped ? [unwrapped] : [];
+	return list.filter(
+		(s): s is RTCIceServer => !!s && typeof s === "object" && hasUrls(s as { urls?: unknown }),
+	);
 }
