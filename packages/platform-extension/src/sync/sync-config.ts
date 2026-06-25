@@ -51,6 +51,11 @@ export async function getStoredGroup(): Promise<GroupConfig | null> {
 	return g?.groupKey ? g : null;
 }
 
+/** Persist the group config (e.g. after merging a peer's roster). */
+export async function storeGroup(group: GroupConfig): Promise<void> {
+	await chrome.storage.local.set({ [GROUP_KEY]: group });
+}
+
 const RELAY_KEY = "sync.relay";
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 

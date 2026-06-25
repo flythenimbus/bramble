@@ -9,19 +9,28 @@
 import {
 	applyRemotePayload,
 	decodeEntriesPayload,
+	decodeRoster,
 	type EntriesPayload,
 	emptyEntriesPayload,
 	encodeEntriesPayload,
+	encodeRoster,
+	mergeRosters,
 	type VaultSyncPort,
 } from "@core/sync";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
-import { ApplyRemoteMsgSchema, type RosterSyncMsg } from "../sync/messages";
+import {
+	ApplyRemoteMsgSchema,
+	ApplyRosterMsgSchema,
+	type RosterSyncMsg,
+	type SyncEventMsg,
+} from "../sync/messages";
 import {
 	type DeviceKeypair,
 	getStoredGroup,
 	getStoredIceUrl,
 	getStoredKeypair,
 	getStoredRelay,
+	storeGroup,
 	storeKeypair,
 } from "../sync/sync-config";
 import { sendToOffscreen } from "./offscreen-client";
@@ -145,4 +154,25 @@ on("SYNC_APPLY_REMOTE", async (message) => {
 	const remote = decodeEntriesPayload(payloadJson);
 	const { changed } = await applyRemotePayload(makeVaultSyncPort(), remote);
 	return { ok: true, data: changed };
+});
+
+// The offscreen asks for our roster to gossip alongside entries.
+on("SYNC_LOCAL_ROSTER", async () => {
+	const group = await getStoredGroup();
+	return { ok: true, data: group ? encodeRoster(group.roster) : "" };
+});
+
+// A peer's roster arrived: merge revocations/additions, persist, and nudge the popup.
+on("SYNC_APPLY_ROSTER", async (message) => {
+	const { rosterJson } = ApplyRosterMsgSchema.parse(message.payload);
+	const group = await getStoredGroup();
+	if (!group) return { ok: true };
+	await storeGroup({
+		groupKey: group.groupKey,
+		roster: mergeRosters(group.roster, decodeRoster(rosterJson)),
+	});
+	chrome.runtime
+		.sendMessage({ type: "SYNC_EVENT", payload: { kind: "roster" } satisfies SyncEventMsg })
+		.catch(() => {});
+	return { ok: true };
 });

@@ -46,6 +46,33 @@ export interface RosterSyncOptions {
 	fetchLocalPayload: () => Promise<string>;
 	/** Hand a peer's EntriesPayload (JSON) to the background to merge + persist. */
 	pushRemotePayload: (json: string) => Promise<void>;
+	/** Read this device's roster (JSON) to gossip alongside entries, so revocations propagate. */
+	fetchLocalRoster?: () => Promise<string>;
+	/** Merge a peer's roster (JSON) into the local one + persist. */
+	pushRemoteRoster?: (json: string) => Promise<void>;
+}
+
+/** What a peer broadcast carries: entries always, the roster when wired. */
+interface SyncEnvelope {
+	entries: string;
+	roster?: string;
+}
+
+async function localEnvelope(opts: RosterSyncOptions): Promise<string> {
+	const entries = await opts.fetchLocalPayload();
+	const roster = opts.fetchLocalRoster ? await opts.fetchLocalRoster() : undefined;
+	return JSON.stringify({ entries, roster } satisfies SyncEnvelope);
+}
+
+async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<void> {
+	let env: SyncEnvelope;
+	try {
+		env = JSON.parse(json) as SyncEnvelope;
+	} catch {
+		return;
+	}
+	if (env.roster && opts.pushRemoteRoster) await opts.pushRemoteRoster(env.roster);
+	if (env.entries) await opts.pushRemotePayload(env.entries);
 }
 
 interface AuthedPeer {
@@ -81,7 +108,7 @@ function inRoster(roster: RosterPayload, pubkey: string): boolean {
 /** Send our current payload to every authenticated peer (closed channels no-op). */
 async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>): Promise<void> {
 	if (peers.size === 0) return;
-	const payload = await opts.fetchLocalPayload();
+	const payload = await localEnvelope(opts);
 	for (const { channel, sessionId } of peers.values()) {
 		channel.send(opts.wasm.handshake_encrypt(sessionId, payload));
 	}
@@ -110,9 +137,9 @@ async function syncPeer(
 	peers.set(peerPub, { channel, sessionId: sess.sessionId });
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
-	channel.send(wasm.handshake_encrypt(sess.sessionId, await opts.fetchLocalPayload()));
+	channel.send(wasm.handshake_encrypt(sess.sessionId, await localEnvelope(opts)));
 	for (;;) {
 		const ct = await channel.recv();
-		await opts.pushRemotePayload(wasm.handshake_decrypt(sess.sessionId, ct));
+		await applyEnvelope(opts, wasm.handshake_decrypt(sess.sessionId, ct));
 	}
 }

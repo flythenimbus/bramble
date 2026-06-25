@@ -58,6 +58,10 @@ export type EnrollJoinMsg = z.infer<typeof EnrollJoinMsgSchema>;
 export const ApplyRemoteMsgSchema = z.object({ payloadJson: z.string() });
 export type ApplyRemoteMsg = z.infer<typeof ApplyRemoteMsgSchema>;
 
+/** offscreen -> background: a peer's roster (JSON) to merge locally (revocations propagate). */
+export const ApplyRosterMsgSchema = z.object({ rosterJson: z.string() });
+export type ApplyRosterMsg = z.infer<typeof ApplyRosterMsgSchema>;
+
 /** offscreen -> popup broadcast: a structured enrollment event. Mirrors core's SyncEvent. */
 export const SyncEventMsgSchema = z.object({
 	kind: z.string(),

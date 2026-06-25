@@ -4,12 +4,15 @@ import {
 	createEntriesBlobStore,
 	createVaultSyncPort,
 	decodeEntriesPayload,
+	decodeRoster,
 	decodeVaultBlob,
 	type EntriesPayload,
 	encodeEntriesPayload,
+	encodeRoster,
 	ensureDeviceId,
 	type HybridClock,
 	makeClock,
+	mergeRosters,
 	type RosterEntry,
 	type RosterPayload,
 	type SyncEvent,
@@ -204,6 +207,19 @@ async function startRoster(): Promise<void> {
 		roster: group.roster,
 		wasm,
 		report,
+		fetchLocalRoster: async () => {
+			const g = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+			return g ? encodeRoster(g.roster) : "";
+		},
+		pushRemoteRoster: async (rosterJson) => {
+			const g = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+			if (!g) return;
+			await mobileStorage.setMeta(GROUP_KEY, {
+				...g,
+				roster: mergeRosters(g.roster, decodeRoster(rosterJson)),
+			});
+			emit({ kind: "roster" });
+		},
 		fetchLocalPayload: async () => encodeEntriesPayload(await blobStore.readEntriesPayload()),
 		pushRemotePayload: async (json) => {
 			const port = createVaultSyncPort({

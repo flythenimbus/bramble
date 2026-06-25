@@ -206,6 +206,8 @@ export interface UseVault {
 	inviteDevice(relayUrl: string, iceUrl?: string): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
 	joinGroup(pairingCode: string, unlock: JoinUnlock): Promise<void>;
+	/** Revoke a device from the sync group (roster tombstone); propagates over ongoing sync. */
+	removeDevice(deviceId: string): Promise<void>;
 }
 
 const VaultContext = createContext<UseVault | null>(null);
@@ -879,7 +881,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.
-	const { inviteDevice, joinGroup } = useSyncEnrollment({
+	const { inviteDevice, joinGroup, removeDevice } = useSyncEnrollment({
 		ensureClock,
 		readDecodedBlob,
 		unlock,
@@ -942,6 +944,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			refreshBiometric,
 			inviteDevice,
 			joinGroup,
+			removeDevice,
 		}),
 		[
 			hasVault,
@@ -982,6 +985,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			refreshBiometric,
 			inviteDevice,
 			joinGroup,
+			removeDevice,
 		],
 	);
 

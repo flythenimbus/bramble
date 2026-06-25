@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Plus, Unplug, Wifi, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
@@ -35,12 +35,11 @@ const addedOn = (ms: number): string =>
 /**
  * Device sync panel. State-aware: before you're in a group it offers "add a device"
  * and "join from a code"; once enrolled it shows the synced devices + a disconnect
- * (leave the group, go offline-only). Status streams into the log at the top.
- * See docs/p2p-sync.md.
+ * (leave the group, go offline-only) and per-device remove. See docs/p2p-sync.md.
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
-	const { inviteDevice, joinGroup } = useVault();
+	const { inviteDevice, joinGroup, removeDevice } = useVault();
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
@@ -50,6 +49,7 @@ export function SyncConnectSection() {
 	const [joinPassword, setJoinPassword] = useState("");
 	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+	const [removingId, setRemovingId] = useState<string | null>(null);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
 	const canUseSecurityKey = isWebauthnAvailable();
@@ -99,7 +99,8 @@ export function SyncConnectSection() {
 	useEffect(
 		() =>
 			shell.onSyncEvent((e) => {
-				if (e.kind === "enrolled" || e.kind === "joined") void refreshGroup();
+				if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
+					void refreshGroup();
 			}),
 		[shell, refreshGroup],
 	);
@@ -160,6 +161,15 @@ export function SyncConnectSection() {
 			await storage.requestVaultAccess();
 			note("file access granted ✅");
 		});
+	const remove = async (d: RosterEntry) => {
+		setRemovingId(null);
+		try {
+			await removeDevice(d.id); // roster tombstone; ongoing sync propagates it
+			await refreshGroup();
+		} catch (e) {
+			note(`error: ${(e as Error).message}`);
+		}
+	};
 	const disconnect = () =>
 		run("disconnecting…", async () => {
 			setConfirmDisconnect(false);
@@ -200,7 +210,7 @@ export function SyncConnectSection() {
 
 					<div className="rounded-lg border border-border divide-y divide-border/60">
 						{sortedDevices.map((d: RosterEntry) => (
-							<div key={d.publicKey} className="flex items-center justify-between px-3 py-2">
+							<div key={d.publicKey} className="flex items-center justify-between gap-2 px-3 py-2">
 								<div className="min-w-0">
 									<div className="text-sm truncate flex items-center gap-2">
 										{d.label || "Unnamed device"}
@@ -214,6 +224,34 @@ export function SyncConnectSection() {
 										{fingerprint(d.publicKey)} · added {addedOn(d.addedAt)}
 									</div>
 								</div>
+								{d.publicKey !== myPub &&
+									(removingId === d.id ? (
+										<span className="flex shrink-0 items-center gap-2">
+											<button
+												type="button"
+												onClick={() => void remove(d)}
+												className="text-xs text-red-500 hover:underline"
+											>
+												Remove
+											</button>
+											<button
+												type="button"
+												onClick={() => setRemovingId(null)}
+												className="text-xs text-muted-foreground hover:underline"
+											>
+												Cancel
+											</button>
+										</span>
+									) : (
+										<button
+											type="button"
+											onClick={() => setRemovingId(d.id)}
+											aria-label={`Remove ${d.label || "device"}`}
+											className="shrink-0 p-1 text-muted-foreground hover:text-red-500 transition-colors"
+										>
+											<Trash2 className="w-4 h-4" />
+										</button>
+									))}
 							</div>
 						))}
 					</div>
