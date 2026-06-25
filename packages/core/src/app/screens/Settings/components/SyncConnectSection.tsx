@@ -43,7 +43,7 @@ export function SyncConnectSection() {
 	const { inviteDevice, joinGroup } = useVault();
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
-	const [iceUrl, setIceUrl] = useState("");
+	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
 	const [joinCode, setJoinCode] = useState("");
@@ -80,7 +80,8 @@ export function SyncConnectSection() {
 				storage.getMeta<string>("sync.iceUrl"),
 			]);
 			if (r) setRelayUrl(r);
-			if (typeof i === "string") setIceUrl(i);
+			// Show the stored endpoint, else the one derived from the relay (never blank).
+			setIceUrl(i || deriveIceUrl(r || DEFAULT_RELAY));
 		})();
 	}, [storage]);
 
@@ -407,27 +408,28 @@ export function SyncConnectSection() {
 					Advanced
 				</button>
 				{advancedOpen && (
-					<div className="mt-3 space-y-1.5 pl-4 border-l border-border/40">
-						<TextField
-							label="Nostr relay URL"
-							value={relayUrl}
-							onChange={(e) => onRelayChange(e.target.value)}
-						/>
-						<p className="text-xs text-muted-foreground">
-							The signaling relay that introduces devices. Defaults to the hosted relay; point it at
-							your own self-hosted copy or any public Nostr relay.
-						</p>
-						<TextField
-							label="TURN / ICE servers URL"
-							value={iceUrl}
-							onChange={(e) => onIceChange(e.target.value)}
-						/>
-						<p className="text-xs text-muted-foreground">
-							Where devices fetch STUN/TURN credentials so they can connect across networks or
-							behind a VPN. Leave blank to derive it from the relay
-							{deriveIceUrl(relayUrl) ? ` (${deriveIceUrl(relayUrl)})` : ""}. Both relays propagate
-							to devices you add.
-						</p>
+					<div className="mt-3 space-y-5 pl-4 border-l border-border/40">
+						<div className="space-y-1.5">
+							<TextField
+								label="Nostr relay URL"
+								value={relayUrl}
+								onChange={(e) => onRelayChange(e.target.value)}
+							/>
+							<p className="text-xs text-muted-foreground">
+								The signaling relay that introduces devices. Defaults to the hosted relay; point it
+								at your own or any public Nostr relay.
+							</p>
+						</div>
+						<div className="space-y-1.5">
+							<TextField
+								label="TURN / ICE servers URL"
+								value={iceUrl}
+								onChange={(e) => onIceChange(e.target.value)}
+							/>
+							<p className="text-xs text-muted-foreground">
+								An endpoint that returns your own ICE servers as JSON. Defaults to the relay's.
+							</p>
+						</div>
 						{/* FSA-backed vaults only; no file backing to grant elsewhere (mobile, no-FSA browsers). */}
 						{shell.hasFilePicker() && (
 							<div className="pt-2">
