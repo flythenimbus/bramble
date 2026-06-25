@@ -16,6 +16,8 @@ export interface StorageAdapter {
 	restoreVaultFromBackup(): Promise<boolean>;
 	getMeta<T>(key: string): Promise<T | undefined>;
 	setMeta<T>(key: string, value: T): Promise<void>;
+	/** Delete a metadata key (e.g. clearing `sync.group` when leaving the sync group). */
+	removeMeta(key: string): Promise<void>;
 
 	// True iff the background can call writeVaultBlob directly. FSA = false (its
 	// createWritable needs a user gesture the background lacks), so for FSA the

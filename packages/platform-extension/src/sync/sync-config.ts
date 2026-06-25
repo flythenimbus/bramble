@@ -63,3 +63,11 @@ export async function getStoredRelay(): Promise<string> {
 export async function storeRelay(url: string): Promise<void> {
 	await chrome.storage.local.set({ [RELAY_KEY]: url });
 }
+
+const ICE_KEY = "sync.iceUrl";
+
+/** ICE-servers endpoint for ongoing sync; empty = derive from the relay URL. */
+export async function getStoredIceUrl(): Promise<string> {
+	const r = (await chrome.storage.local.get(ICE_KEY))[ICE_KEY];
+	return typeof r === "string" ? r : "";
+}

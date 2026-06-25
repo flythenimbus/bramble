@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight, Wifi, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
+import { activeDevices, type RosterEntry, type RosterPayload } from "../../../../sync";
+import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
 import { Modal } from "../../../components/ui/modal";
 import { TextField } from "../../../components/ui/text-field";
@@ -19,27 +21,89 @@ const toggleClass = (active: boolean) =>
 			: "border-border text-muted-foreground"
 	}`;
 
+const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
+
+interface SyncGroup {
+	groupKey: string;
+	roster: RosterPayload;
+}
+
+const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
+const addedOn = (ms: number): string =>
+	new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+
 /**
- * Device sync panel: add a device (pairing code + QR), join from a pairing code,
- * and grant file access for headless sync. Status streams into the log at the top.
+ * Device sync panel. State-aware: before you're in a group it offers "add a device"
+ * and "join from a code"; once enrolled it shows the synced devices + a disconnect
+ * (leave the group, go offline-only). Status streams into the log at the top.
  * See docs/p2p-sync.md.
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, joinGroup } = useVault();
-	// Hosted relay by default; overridable under Advanced (own/self-host or any public Nostr relay).
-	const [relayUrl, setRelayUrl] = useState("wss://bramble-relay.flythenimbus.workers.dev");
+	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
+	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
+	const [iceUrl, setIceUrl] = useState("");
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
 	const [joinCode, setJoinCode] = useState("");
 	const [joinPassword, setJoinPassword] = useState("");
 	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
+	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
 	const canUseSecurityKey = isWebauthnAvailable();
 
-	// Stream the offscreen sync host's status lines into the log.
+	// Group membership (source of truth for "are we paired, and with whom"). undefined
+	// while loading so we don't flash the onboarding UI over an existing group.
+	const [group, setGroup] = useState<SyncGroup | null | undefined>(undefined);
+	const [myPub, setMyPub] = useState<string | null>(null);
+
+	const refreshGroup = useCallback(async () => {
+		const [g, pub] = await Promise.all([
+			storage.getMeta<SyncGroup>("sync.group"),
+			shell.syncDevicePublicKey().catch(() => null),
+		]);
+		setGroup(g ?? null);
+		setMyPub(pub);
+	}, [storage, shell]);
+
+	useEffect(() => {
+		void refreshGroup();
+	}, [refreshGroup]);
+
+	// Reflect the relays this device actually uses (default, or adopted at enrollment).
+	useEffect(() => {
+		void (async () => {
+			const [r, i] = await Promise.all([
+				storage.getMeta<string>("sync.relay"),
+				storage.getMeta<string>("sync.iceUrl"),
+			]);
+			if (r) setRelayUrl(r);
+			if (typeof i === "string") setIceUrl(i);
+		})();
+	}, [storage]);
+
+	// Persist on edit so the choice survives and ongoing sync + Settings pick it up.
+	const onRelayChange = (v: string) => {
+		setRelayUrl(v);
+		void storage.setMeta("sync.relay", v);
+	};
+	const onIceChange = (v: string) => {
+		setIceUrl(v);
+		void storage.setMeta("sync.iceUrl", v);
+	};
+
+	// Stream the sync host's status lines into the log.
 	useEffect(() => shell.onSyncStatus((s) => setLog((prev) => [...prev.slice(-40), s])), [shell]);
+	// A device finishing enrollment (inviter side) or this device joining changes the roster.
+	useEffect(
+		() =>
+			shell.onSyncEvent((e) => {
+				if (e.kind === "enrolled" || e.kind === "joined") void refreshGroup();
+			}),
+		[shell, refreshGroup],
+	);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll to newest on each line
 	useEffect(() => {
@@ -56,8 +120,20 @@ export function SyncConnectSection() {
 		}
 	};
 
+	const devices = group ? activeDevices(group.roster) : [];
+	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
+	const inGroup = group != null;
+	const paired = others.length > 0;
+	// "This device" first, then most-recently-added.
+	const sortedDevices = [...devices].sort((a, b) =>
+		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
+	);
+
 	const addDevice = () =>
-		run("creating pairing code…", async () => setPairingCode(await inviteDevice(relayUrl.trim())));
+		run("creating pairing code…", async () => {
+			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined));
+			await refreshGroup();
+		});
 	const join = () =>
 		run("joining…", async () => {
 			await joinGroup(
@@ -71,6 +147,7 @@ export function SyncConnectSection() {
 			note("✅ Synced — your entries are now on this device.");
 			setJoinCode("");
 			setJoinPassword("");
+			await refreshGroup();
 		});
 	// Camera scan of the inviter's pairing QR (mobile only).
 	const scanForJoinCode = () =>
@@ -83,6 +160,14 @@ export function SyncConnectSection() {
 		run("granting file access…", async () => {
 			await storage.requestVaultAccess();
 			note("file access granted ✅");
+		});
+	const disconnect = () =>
+		run("disconnecting…", async () => {
+			setConfirmDisconnect(false);
+			await shell.stopSyncSpike(); // halt enrollment + ongoing sync on this host
+			await storage.removeMeta("sync.group"); // leave the group: nothing to resume
+			await refreshGroup();
+			note("✅ Disconnected — this device is now offline-only.");
 		});
 
 	return (
@@ -101,15 +186,167 @@ export function SyncConnectSection() {
 				</div>
 			)}
 
-			<Row
-				icon={<Wifi className="w-4 h-4 text-primary" />}
-				title="Add a device"
-				subtitle="Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
-			>
-				<button type="button" onClick={() => void addDevice()} className={btnClass}>
-					Add a device
-				</button>
-			</Row>
+			{/* Paired / in-a-group: show the synced devices + disconnect. */}
+			{inGroup ? (
+				<>
+					<div className="flex items-center gap-2">
+						<span
+							className={`inline-block w-2 h-2 rounded-full ${paired ? "bg-emerald-500" : "bg-amber-500"}`}
+							aria-hidden
+						/>
+						<span className="text-sm font-medium">
+							{paired ? `Synced · ${devices.length} devices` : "Waiting for a device to join…"}
+						</span>
+					</div>
+
+					<div className="rounded-lg border border-border divide-y divide-border/60">
+						{sortedDevices.map((d: RosterEntry) => (
+							<div key={d.publicKey} className="flex items-center justify-between px-3 py-2">
+								<div className="min-w-0">
+									<div className="text-sm truncate flex items-center gap-2">
+										{d.label || "Unnamed device"}
+										{d.publicKey === myPub && (
+											<span className="text-[10px] uppercase tracking-wide text-primary/80 border border-primary/40 rounded px-1 py-px">
+												This device
+											</span>
+										)}
+									</div>
+									<div className="text-xs text-muted-foreground font-mono">
+										{fingerprint(d.publicKey)} · added {addedOn(d.addedAt)}
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+
+					{!paired && (
+						<p className="text-xs text-muted-foreground">
+							Open Bramble on your other device and scan the code, or paste it there.
+						</p>
+					)}
+
+					<div className="flex flex-wrap items-center gap-2">
+						<button
+							type="button"
+							onClick={() => void addDevice()}
+							className={`${btnClass} inline-flex items-center gap-1.5`}
+						>
+							<Plus className="w-3.5 h-3.5" /> Add another device
+						</button>
+						{confirmDisconnect ? (
+							<span className="inline-flex items-center gap-2">
+								<button
+									type="button"
+									onClick={() => void disconnect()}
+									className="px-3 py-1.5 text-xs rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 active:scale-[0.98] transition-all"
+								>
+									Confirm disconnect
+								</button>
+								<button
+									type="button"
+									onClick={() => setConfirmDisconnect(false)}
+									className={btnClass}
+								>
+									Cancel
+								</button>
+							</span>
+						) : (
+							<button
+								type="button"
+								onClick={() => setConfirmDisconnect(true)}
+								className={`${btnClass} inline-flex items-center gap-1.5 text-muted-foreground`}
+							>
+								<Unplug className="w-3.5 h-3.5" /> Disconnect
+							</button>
+						)}
+					</div>
+					{confirmDisconnect && (
+						<p className="text-xs text-muted-foreground">
+							Stops syncing this device and keeps it offline-only. Your entries stay here; your
+							other devices aren't affected.
+						</p>
+					)}
+				</>
+			) : (
+				// Not in a group yet: onboarding (create a group, or join an existing one).
+				<>
+					<Row
+						icon={<Wifi className="w-4 h-4 text-primary" />}
+						title="Add a device"
+						subtitle="Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
+					>
+						<button type="button" onClick={() => void addDevice()} className={btnClass}>
+							Add a device
+						</button>
+					</Row>
+
+					<Row
+						icon={<Wifi className="w-4 h-4 text-primary" />}
+						title="Join with a pairing code"
+						subtitle="Paste the code from your other device to sync this one to it. Replaces this profile's vault."
+					>
+						<button
+							type="button"
+							onClick={() => void join()}
+							disabled={!joinCode.trim() || (joinMethod === "password" && !joinPassword)}
+							className={btnClass}
+						>
+							Join
+						</button>
+					</Row>
+
+					<div className="ml-12 mt-1 space-y-4">
+						<TextField
+							label="Pairing code"
+							value={joinCode}
+							onChange={(e) => setJoinCode(e.target.value)}
+						/>
+						{shell.supportsCameraScan && (
+							<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
+								Scan QR code
+							</button>
+						)}
+						<div className="space-y-4">
+							{canUseSecurityKey && (
+								<div className="flex gap-2">
+									<button
+										type="button"
+										onClick={() => setJoinMethod("password")}
+										className={toggleClass(joinMethod === "password")}
+									>
+										Master password
+									</button>
+									<button
+										type="button"
+										onClick={() => setJoinMethod("securityKey")}
+										className={toggleClass(joinMethod === "securityKey")}
+									>
+										Security key
+									</button>
+								</div>
+							)}
+							{joinMethod === "password" ? (
+								<TextField
+									type="password"
+									label="Master password for this device"
+									value={joinPassword}
+									onChange={(e) => setJoinPassword(e.target.value)}
+								/>
+							) : (
+								<p className="text-xs text-muted-foreground">
+									You'll tap your security key when you press Join. No master password is set on
+									this device.
+								</p>
+							)}
+						</div>
+					</div>
+
+					<p className="ml-12 text-xs text-muted-foreground">
+						Once enrolled, devices sync automatically in the background while unlocked, no button or
+						window needed.
+					</p>
+				</>
+			)}
 
 			<Modal
 				open={pairingCode !== null}
@@ -155,72 +392,6 @@ export function SyncConnectSection() {
 				)}
 			</Modal>
 
-			<Row
-				icon={<Wifi className="w-4 h-4 text-primary" />}
-				title="Join with a pairing code"
-				subtitle="Paste the code from your other device to sync this one to it. Replaces this profile's vault."
-			>
-				<button
-					type="button"
-					onClick={() => void join()}
-					disabled={!joinCode.trim() || (joinMethod === "password" && !joinPassword)}
-					className={btnClass}
-				>
-					Join
-				</button>
-			</Row>
-
-			<div className="ml-12 mt-1 space-y-4">
-				<TextField
-					label="Pairing code"
-					value={joinCode}
-					onChange={(e) => setJoinCode(e.target.value)}
-				/>
-				{shell.supportsCameraScan && (
-					<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
-						Scan QR code
-					</button>
-				)}
-				<div className="space-y-4">
-					{canUseSecurityKey && (
-						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={() => setJoinMethod("password")}
-								className={toggleClass(joinMethod === "password")}
-							>
-								Master password
-							</button>
-							<button
-								type="button"
-								onClick={() => setJoinMethod("securityKey")}
-								className={toggleClass(joinMethod === "securityKey")}
-							>
-								Security key
-							</button>
-						</div>
-					)}
-					{joinMethod === "password" ? (
-						<TextField
-							type="password"
-							label="Master password for this device"
-							value={joinPassword}
-							onChange={(e) => setJoinPassword(e.target.value)}
-						/>
-					) : (
-						<p className="text-xs text-muted-foreground">
-							You'll tap your security key when you press Join. No master password is set on this
-							device.
-						</p>
-					)}
-				</div>
-			</div>
-
-			<p className="ml-12 text-xs text-muted-foreground">
-				Once enrolled, devices sync automatically in the background while unlocked, no button or
-				window needed.
-			</p>
-
 			<div>
 				<button
 					type="button"
@@ -240,11 +411,22 @@ export function SyncConnectSection() {
 						<TextField
 							label="Nostr relay URL"
 							value={relayUrl}
-							onChange={(e) => setRelayUrl(e.target.value)}
+							onChange={(e) => onRelayChange(e.target.value)}
 						/>
 						<p className="text-xs text-muted-foreground">
 							The signaling relay that introduces devices. Defaults to the hosted relay; point it at
 							your own self-hosted copy or any public Nostr relay.
+						</p>
+						<TextField
+							label="TURN / ICE servers URL"
+							value={iceUrl}
+							onChange={(e) => onIceChange(e.target.value)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							Where devices fetch STUN/TURN credentials so they can connect across networks or
+							behind a VPN. Leave blank to derive it from the relay
+							{deriveIceUrl(relayUrl) ? ` (${deriveIceUrl(relayUrl)})` : ""}. Both relays propagate
+							to devices you add.
 						</p>
 						{/* FSA-backed vaults only; no file backing to grant elsewhere (mobile, no-FSA browsers). */}
 						{shell.hasFilePicker() && (

@@ -56,6 +56,9 @@ export const mobileStorage: StorageAdapter = {
 	async setMeta<T>(key: string, value: T): Promise<void> {
 		await Preferences.set({ key: `meta:${key}`, value: JSON.stringify(value) });
 	},
+	async removeMeta(key: string): Promise<void> {
+		await Preferences.remove({ key: `meta:${key}` });
+	},
 
 	// Single foreground context for the POC: no background writer, no stash.
 	async canWriteFromBackground() {

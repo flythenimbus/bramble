@@ -36,6 +36,7 @@ const base = {
 	wasm: fakeWasm,
 	report: () => {},
 	onPeer: async () => {},
+	fetchIce: async () => [], // stay offline in tests
 };
 
 describe("startMeshSession", () => {

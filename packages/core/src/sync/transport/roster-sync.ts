@@ -35,6 +35,7 @@ const REBROADCAST_MS = 4000;
 
 export interface RosterSyncOptions {
 	relayUrl: string;
+	iceUrl?: string;
 	groupKeyB64: string;
 	devicePrivB64: string;
 	devicePubB64: string;
@@ -57,6 +58,7 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 	let timer: ReturnType<typeof setInterval> | undefined;
 	const session = await startMeshSession({
 		relayUrl: opts.relayUrl,
+		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
 		roomLabel: "bramble/sync",
 		wasm: opts.wasm,
