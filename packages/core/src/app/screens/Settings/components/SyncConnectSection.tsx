@@ -191,6 +191,8 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title="Device sync">
+			{/* Debug transport status log: hidden for now. Uncomment to surface the live
+			    sync diagnostics (offer sent / answer applied / ice connected / channel open).
 			{log.length > 0 && (
 				<div
 					ref={logRef}
@@ -204,6 +206,7 @@ export function SyncConnectSection() {
 					))}
 				</div>
 			)}
+			*/}
 
 			{/* Paired / in-a-group: show the synced devices + disconnect. */}
 			{inGroup ? (
