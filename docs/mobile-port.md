@@ -69,7 +69,22 @@ ground truth of what exists.
 - **P2P sync: VALIDATED on device.** Both enrollment (pairing → encrypted vault transfer over
   WebRTC + the Nostr-subset relay) and ongoing roster sync (continuous merge of edits) work on
   mobile, reusing the transport now in `@core/sync/transport`. Retires the "sync is the
-  load-bearing unknown" risk for the same-network/all-online case.
+  load-bearing unknown" risk for the same-network/all-online case. One iOS gap is now closed: the
+  `capacitor://` webview exposes no `RTCPeerConnection`, so the iOS transport needed a native WebRTC
+  backend (see the next bullet).
+- **Native iOS WebRTC transport: BUILT + device-verified.** iOS WKWebView on the `capacitor://`
+  scheme exposes **no `RTCPeerConnection`** (a privileged-context API, and iOS also can't serve
+  `https://localhost`), so the shared sync transport died on device with `can't find variable:
+  RTCPeerConnection`. Backed it with a **pure-Rust webrtc-rs (`webrtc` 0.17) data-channel stack**
+  through the existing uniffi pipeline, plus a JS shim (`native-webrtc.ts`) that re-creates the
+  browser `RTCPeerConnection`/`RTCDataChannel` API so `@core/sync/transport` runs unchanged and
+  still interops with the **extension's browser WebRTC** (standard ICE/DTLS/SCTP). iOS-only, behind
+  a new `webrtc` Cargo feature: the Android System WebView already has WebRTC and webrtc-rs won't
+  target wasm32, so it is cfg-excluded from both the wasm and Android builds. Keeps STUN/TURN; mDNS
+  is disabled so iOS gathers raw-IP host candidates (no multicast entitlement). Events flow Rust to
+  Swift via a uniffi callback interface, and a `NativeWebRTC` Capacitor plugin forwards them to the
+  shim. **Verified on device:** iOS pairs with the extension over the native channel and the Noise
+  handshake + vault transfer complete. Closes the last gap for iOS sync.
 - **Phase 2 — biometric + secure storage + layout: MOSTLY DONE.** Secure-storage substrate
   (`@aparajita/capacitor-secure-storage`, SPM-verified) is in and holds the sync device
   keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish
@@ -175,19 +190,37 @@ ground truth of what exists.
   collided with Kotlin `Throwable.message` (generated glue wouldn't compile); renamed to `msg` (Display-
   based, so wasm/JS and the iOS positional match are unaffected). **Verified: `:app:assembleDebug` builds
   an APK bundling `libvault_crypto.so` + JNA `libjnidispatch.so`; `cargo test` 31 pass; TS typecheck
-  clean.** Not yet run on a device/emulator. Note: the committed iOS Swift glue is now one field-rename
+  clean.** **Now device-tested:** native crypto unlocks the vault on an Android device (create / unlock /
+  CRUD). Note: the committed iOS Swift glue is now one field-rename
   behind the Rust source (behavior-neutral; a `ffi:build:ios` re-run resyncs it, the Swift plugin needs
   no change). The shared `native-crypto.ts` was already platform-agnostic, so it was untouched.
+- **Crate rename + iOS ipa ~4.4 MB.** The Rust crate dir was renamed **`packages/crypto-wasm` ->
+  `packages/core-rust`** (no longer crypto- or wasm-only: it carries the sync transport, Noise,
+  Nostr, and now native WebRTC, plus KDBX import; the Cargo crate name stays `vault-crypto`). On
+  binary size: webrtc-rs is large, so besides keeping it iOS-only, the **autofill extension links a
+  webrtc-free uniffi glue** (`vault_crypto.autofill.swift`, generated from the `ffi`-only feature
+  set) so the linker dead-strips the whole webrtc/ICE/DTLS/SCTP/rustls stack from its binary (the
+  extension never syncs). Measured on an unsigned Release device build (stripped): appex binary
+  **6.4 -> 1.2 MB**, the shipped **`.ipa` 6.7 -> 4.4 MB (~34% smaller)**; the main app keeps webrtc.
+  A bigger size win still on the table: make `VaultCrypto` a dynamic framework so the app + extension
+  share one copy of the whole crypto core.
 - **Constraint — NO Google Play APIs (Android ships as GitHub-released APKs, never the Play Store).**
   No Play Services / Firebase-FCM / `google-services` / Play Billing / Play Integrity / ML Kit-via-Play /
   Credential-Manager `*-play-services-*`. The Capacitor template's dormant `com.google.gms.google-services`
   (push) hook was removed from the Gradle files. AndroidX/Jetpack + JNA are fine (not Play APIs). The
   classic `AutofillService` below is pure AOSP, so it's unaffected; a future passkey/Credential-Manager
   path must stay Play-free.
-- **Not started:** Android autofill: port `AutofillBridge`/`setKeepUnlocked` (same-package storage +
-  Keystore, no App Group) + the classic `AutofillService` (RemoteViews datasets + a Compose/Activity
-  unlock screen via `setAuthentication`). Then passkeys/PRF (Phase 4), and Android release = a signed APK
-  on GitHub (no Play Store; iOS App Store distribution remains Phase 5).
+- **Android autofill: BUILT + device-tested, at iOS parity (commit `a51edca`).** The classic AOSP
+  `AutofillService` (`BrambleAutofillService` + `Datasets`/`InlineHelper`/`AutofillCaps`, registered via
+  `res/xml/autofill_service.xml` + the manifest) runs in its own `:autofill` process, reads the real vault
+  via the uniffi core (`VaultReader`), and fills with dataset-level auth through an `AutofillUnlockActivity`
+  unlock screen (`setAuthentication`), plus a `KeepUnlockedStore` keep-unlocked window, inline (IME)
+  suggestions, and TOTP. The auth-first + encrypted-bundle design carries over from iOS (same-package
+  storage + Keystore, no App Group). **Confirmed working on an Android device by the user**, so **both
+  platforms now have native crypto + system autofill**.
+- **Remaining:** passkeys / PRF unlock (Phase 4), and release packaging (Android = a signed APK on GitHub,
+  no Play Store; iOS App Store distribution = Phase 5), plus the Phase 2 closeouts (biometric re-enrollment
+  edge, the small-screen UI sweep).
 
 Dev workflow + the environment quirks hit while building this are in
 [`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
@@ -197,10 +230,11 @@ The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
 
 Fresh-session orientation: the auto-loaded memories (`capacitor-mobile-port-plan`,
 `mobile-shared-crypto-core-uniffi`, `mobile-autofill-ios-working`, `ios-lockdown-mode-breaks-wasm`) plus
-the "Implementation status" up top and `CONTEXT.md` are the ground truth. **iOS is essentially done:**
-Phases 0–2 complete, and **Phase 3 autofill is BUILT and filling logins on a real device** (TestFlight),
-with native crypto (Lockdown-Mode-safe), auth-first + encrypted-at-rest storage, the SwiftUI provider, and
-the fastlane release pipeline. In rough priority order:
+the "Implementation status" up top and `CONTEXT.md` are the ground truth. **Both platforms are now
+essentially done:** iOS (Phases 0–2 + autofill filling logins on a real device via TestFlight, native
+Lockdown-safe crypto, native WebRTC sync, the SwiftUI provider + fastlane pipeline) and Android (native
+crypto + the system `AutofillService`, both device-tested). What's left is release packaging and the
+Phase 4 passkey/PRF work. In rough priority order:
 
 1. **On-device re-verify of the latest iOS builds.** The autofill *fill* path is confirmed on device, but
    the recent security/UX builds want a fresh pass: auth-first + encrypted bundle; the "Immediately" auto-lock
@@ -208,17 +242,14 @@ the fastlane release pipeline. In rough priority order:
    domain filtering + the new QuickType opt-in** (toggle on in Settings, confirm github.com shows only the
    GitHub login + an inline keyboard suggestion; with a keep-unlocked window, tapping a suggestion fills with
    no unlock screen). Also confirm master-password + Face-ID/passcode + keep-unlocked paths and Lockdown-Mode
-   unlock. (TestFlight builds use timestamp numbers; latest is 204423099.)
-2. **Android parity: the big remaining workstream.** The **native-crypto half is DONE** (Kotlin
-   `NativeCryptoPlugin` over the uniffi bindings, JNA `@aar`, Kotlin added to Gradle, `MainActivity`
-   registration, `crypto.ts` flipped to native on all native platforms; compile + APK verified — see
-   "Android native crypto" in Implementation status). Remaining for autofill: port
-   `AutofillBridge`/`setKeepUnlocked` (same-package storage + Keystore, no App Group), then the classic
-   `AutofillService` (a SEPARATE provider model from iOS: no full-screen list, just system-drawn
-   `RemoteViews` datasets + a Compose/Activity unlock screen via `setAuthentication`). The auth-first +
-   encrypted-bundle design carries over. **First: run the app on an emulator/device** to confirm native
-   crypto unlocks the vault (create/unlock/CRUD/KDBX) — only the build is verified so far. Prereq for any
-   Android build: `pnpm ffi:build:android` (jniLibs + glue are gitignored), same as iOS's `ffi:build:ios`.
+   unlock. (TestFlight builds use timestamp numbers; latest is 204423099.) Also confirm **device
+   sync** now pairs iOS to the extension over the native WebRTC channel (enrollment + ongoing), and
+   that the **autofill extension still fills** after the webrtc-free-glue change (its crypto glue
+   changed, so it wants a quick smoke test).
+2. **Android parity: DONE.** Native crypto and the system `AutofillService` are both built and
+   **device-tested** (see "Android autofill" in Implementation status). Nothing load-bearing is left here;
+   the remaining Android items are the Phase 2 closeouts below and release packaging. Prereq for any Android
+   build: `pnpm ffi:build:android` (jniLibs + glue are gitignored), same as iOS's `ffi:build:ios`.
 3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
    biometric **re-enrollment edge** (`isEnabled()` should detect an invalidated item); the broader **vault
    list/detail/edit small-screen UI sweep**.
