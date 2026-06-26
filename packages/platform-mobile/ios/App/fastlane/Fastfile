@@ -57,7 +57,9 @@ platform :ios do
     # Build number = seconds since 2020. Strictly increasing and never collides, unlike
     # `latest_testflight_build_number + 1`, which queries App Store Connect and lags while
     # builds process -> it kept recomputing already-used numbers ("Redundant Binary Upload").
-    next_build = Time.now.to_i - 1_577_836_800
+    # `pnpm run release ios` precomputes the same value and passes it via BRAMBLE_IOS_BUILD so the
+    # git tag it cuts matches this uploaded build; a bare `fastlane beta` computes its own.
+    next_build = (ENV["BRAMBLE_IOS_BUILD"] || (Time.now.to_i - 1_577_836_800)).to_i
     # Override CURRENT_PROJECT_VERSION at build time (both the app + extension consume it)
     # instead of mutating the pbxproj, so the working tree stays clean.
     build_app(

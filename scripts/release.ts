@@ -4,10 +4,15 @@
 // Usage:
 //   pnpm run release chromium <version>   e.g. pnpm run release chromium 1.0.0
 //   pnpm run release android  <version>   e.g. pnpm run release android  1.1.0
+//   pnpm run release ios      <version>   e.g. pnpm run release ios      1.1.0
+//   pnpm run release ios      <version> --ipa   dry run: build the signed IPA to ~/Desktop,
+//                                               no upload, no tag (test the pipeline first)
 //
-// Tags as <version>-<platform> (e.g. 1.0.0-chromium, 1.1.0-android). Publishing the
-// release fires .github/workflows/release.yml, which only verifies the artifact made it
-// onto the release; CI never builds or signs. Signing setup lives in docs/release-signing.md.
+// Tags as <version>-<platform> (e.g. 1.0.0-chromium, 1.1.0-android, 1.1.0-ios). chromium +
+// android publish a GitHub release; publishing fires .github/workflows/release.yml, which only
+// verifies the artifact made it onto the release (CI never builds or signs). ios has no GitHub
+// release: the binary goes to TestFlight via fastlane, and you submit for App Store review
+// manually in App Store Connect. Signing setup lives in docs/release-signing.md.
 
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -32,13 +37,16 @@ const fail = (msg: string): never => {
 const run = (cmd: string) => execSync(cmd, { stdio: "inherit" });
 const capture = (cmd: string) => execSync(cmd, { encoding: "utf8" }).trim();
 
-const [platform, rawVersion] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const flags = new Set(argv.filter((a) => a.startsWith("--")));
+const [platform, rawVersion] = argv.filter((a) => !a.startsWith("--"));
 // Accept either 0.1.0 or v0.1.0; the stored version is the bare numeric form.
 const version = (rawVersion ?? "").replace(/^v/, "");
-if (!platform) fail("usage: pnpm run release <chromium|android> <version>");
+if (!platform) fail("usage: pnpm run release <chromium|android|ios> <version>");
 if (!version) fail(`missing version. usage: pnpm run release ${platform} <version>`);
 
 if (platform === "android") releaseAndroid(version);
+else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
 else releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
@@ -50,7 +58,9 @@ function releaseExtension(target: string, version: string) {
 	const DIST = "packages/platform-extension";
 	const manifest = MANIFESTS[target];
 	if (!manifest)
-		fail(`unknown platform "${target}". supported: ${Object.keys(MANIFESTS).join(", ")}, android`);
+		fail(
+			`unknown platform "${target}". supported: ${Object.keys(MANIFESTS).join(", ")}, android, ios`,
+		);
 
 	// Chrome manifest versions: 1-4 dot-separated integers, 0-65535, no leading zeros.
 	const PART = /^(0|[1-9]\d{0,4})$/;
@@ -216,6 +226,85 @@ function releaseAndroid(version: string) {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(`\nreleased ${tag}: signed ${apkName} + SHA256SUMS attached to the release.`);
+}
+
+// ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
+
+function releaseIos(version: string, ipaOnly: boolean) {
+	const IOS = "packages/platform-mobile/ios/App";
+	const PBXPROJ = `${IOS}/App.xcodeproj/project.pbxproj`;
+
+	// CFBundleShortVersionString: 1-3 dot-separated ints (matches Android + App Store rules).
+	if (!/^\d+(\.\d+){0,2}$/.test(version))
+		fail(`invalid version "${version}". want 1-3 ints (e.g. 1.1 or 1.1.0)`);
+
+	// TestFlight build number = seconds since 2020, computed here (not in the lane) so the tag this
+	// cuts and the uploaded build agree. Unique per run, so multiple TestFlight builds of one
+	// marketing version each get their own tag (no `tag already exists` collision on re-upload).
+	const build = Math.floor(Date.now() / 1000) - 1_577_836_800;
+	const tag = `${version}-ios+${build}`;
+	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
+	if (!ipaOnly && capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+
+	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
+	// fastlane/.env. The actual signing is Xcode-automatic (-allowProvisioningUpdates), so unlike
+	// Android there's no keystore to decrypt here.
+	if (!has("fastlane"))
+		fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");
+	if (!existsSync(join(IOS, "fastlane", ".env")))
+		fail(
+			`missing ${IOS}/fastlane/.env (ASC_KEY_ID/ASC_ISSUER_ID + AuthKey.p8); copy fastlane/.env.example`,
+		);
+
+	if (!ipaOnly) gate(); // a dry run only tests build + signing, so skip the slow CI gate
+
+	// Bump MARKETING_VERSION across ALL build configs. The app + AutoFillProbe extension must
+	// share a version or App Store validation rejects the upload, so replace every occurrence.
+	// The build number is left to the `beta` lane's monotonic timestamp.
+	const before = readFileSync(PBXPROJ, "utf8");
+	let replaced = 0;
+	const after = before.replace(/MARKETING_VERSION = [^;]+;/g, () => {
+		replaced++;
+		return `MARKETING_VERSION = ${version};`;
+	});
+	if (replaced === 0) fail(`no MARKETING_VERSION found in ${PBXPROJ}`);
+	const branch = capture("git rev-parse --abbrev-ref HEAD");
+	const bumped = after !== before;
+	if (bumped) writeFileSync(PBXPROJ, after);
+
+	// --ipa: dry run. Build the signed IPA to ~/Desktop (no upload), then revert the bump so the
+	// tree stays clean and nothing is tagged. Lets you smoke-test the pipeline first.
+	if (ipaOnly) {
+		try {
+			run("pnpm run ios:ipa");
+			console.log(
+				`\ndry run: signed IPA at ~/Desktop/Bramble-TestFlight.ipa (v${version}); not uploaded, not tagged.`,
+			);
+		} finally {
+			if (bumped) run(`git checkout ${PBXPROJ}`);
+		}
+		return;
+	}
+
+	// Build + upload to TestFlight (fastlane `beta`: prepare -> build_app -> upload_to_testflight).
+	// BRAMBLE_IOS_BUILD pins the build number to the one in the tag; the lane reads MARKETING_VERSION
+	// from the bump above.
+	process.env.BRAMBLE_IOS_BUILD = String(build);
+	try {
+		run("pnpm run ios:beta");
+	} catch {
+		if (bumped) run(`git checkout ${PBXPROJ}`);
+		fail("TestFlight build/upload failed; the version bump was reverted");
+	}
+
+	// Tag the released version+build + push. No GitHub release: the binary lives on TestFlight,
+	// and you submit for App Store review manually in App Store Connect.
+	commitTagPush(bumped, PBXPROJ, `chore(release): ios ${version} (build ${build})`, tag, branch);
+	console.log(
+		`\nreleased ${tag}: uploaded to TestFlight (marketing version ${version}, build ${build}).` +
+			"\nNext: in App Store Connect, attach build " +
+			`${build} to an App Store version and submit for review.`,
+	);
 }
 
 // ----- shared helpers -----
