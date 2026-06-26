@@ -62,6 +62,13 @@ class NativeCryptoPlugin : Plugin() {
     private fun blobJs(b: PasswordSlotBlob): JSObject =
         JSObject().put("verifier", b.verifier).put("wrapIv", b.wrapIv).put("wrappedVek", b.wrappedVek)
 
+    // Noise session ids are u32 handles minted in Rust; they round-trip as JS numbers.
+    private fun u32(call: PluginCall, key: String): UInt? {
+        val v = call.getInt(key)
+        if (v == null) call.reject("Missing $key")
+        return v?.toUInt()
+    }
+
     // --- VEK lifecycle (isLocked/lock are non-throwing in the core) ---
 
     @PluginMethod
@@ -250,6 +257,134 @@ class NativeCryptoPlugin : Plugin() {
                 arr.put(JSObject().put("strings", strings))
             }
             call.resolve(JSObject().put("entries", arr))
+        }
+    }
+
+    // --- sync transport: Noise handshake (KK + XXpsk3) ---
+
+    @PluginMethod
+    fun handshakeGenerateKeypair(call: PluginCall) = call.runCrypto {
+        val k = uniffi.vault_crypto.handshakeGenerateKeypair()
+        call.resolve(JSObject().put("privateKey", k.privateKey).put("publicKey", k.publicKey))
+    }
+
+    @PluginMethod
+    fun handshakeStartInitiator(call: PluginCall) {
+        val priv = str(call, "localPrivB64") ?: return
+        val remote = str(call, "remotePubB64") ?: return
+        call.runCrypto {
+            val s = uniffi.vault_crypto.handshakeStartInitiator(priv, remote)
+            call.resolve(JSObject().put("sessionId", s.sessionId.toLong()).put("message", s.message))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeStartResponder(call: PluginCall) {
+        val priv = str(call, "localPrivB64") ?: return
+        val remote = str(call, "remotePubB64") ?: return
+        call.runCrypto {
+            val id = uniffi.vault_crypto.handshakeStartResponder(priv, remote)
+            call.resolve(JSObject().put("value", id.toLong()))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeEnrollInitiator(call: PluginCall) {
+        val priv = str(call, "localPrivB64") ?: return
+        val psk = str(call, "pskB64") ?: return
+        call.runCrypto {
+            val s = uniffi.vault_crypto.handshakeEnrollInitiator(priv, psk)
+            call.resolve(JSObject().put("sessionId", s.sessionId.toLong()).put("message", s.message))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeEnrollResponder(call: PluginCall) {
+        val priv = str(call, "localPrivB64") ?: return
+        val psk = str(call, "pskB64") ?: return
+        call.runCrypto {
+            val id = uniffi.vault_crypto.handshakeEnrollResponder(priv, psk)
+            call.resolve(JSObject().put("value", id.toLong()))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeRead(call: PluginCall) {
+        val sid = u32(call, "sessionId") ?: return
+        val msg = str(call, "messageB64") ?: return
+        call.runCrypto {
+            val r = uniffi.vault_crypto.handshakeRead(sid, msg)
+            val out = JSObject().put("done", r.done)
+            if (r.message != null) out.put("message", r.message) // absent -> JS undefined
+            call.resolve(out)
+        }
+    }
+
+    @PluginMethod
+    fun handshakeEncrypt(call: PluginCall) {
+        val sid = u32(call, "sessionId") ?: return
+        val pt = str(call, "plaintext") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.handshakeEncrypt(sid, pt)))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeDecrypt(call: PluginCall) {
+        val sid = u32(call, "sessionId") ?: return
+        val ct = str(call, "ciphertextB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.handshakeDecrypt(sid, ct)))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeRemoteStatic(call: PluginCall) {
+        val sid = u32(call, "sessionId") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.handshakeRemoteStatic(sid)))
+        }
+    }
+
+    @PluginMethod
+    fun handshakeClose(call: PluginCall) {
+        val sid = u32(call, "sessionId") ?: return
+        uniffi.vault_crypto.handshakeClose(sid)
+        call.resolve()
+    }
+
+    // --- sync transport: Nostr (BIP340) ---
+
+    @PluginMethod
+    fun nostrGenerateKey(call: PluginCall) = call.runCrypto {
+        val k = uniffi.vault_crypto.nostrGenerateKey()
+        call.resolve(JSObject().put("secretKey", k.secretKey).put("publicKey", k.publicKey))
+    }
+
+    @PluginMethod
+    fun nostrPublicKey(call: PluginCall) {
+        val secret = str(call, "secretB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.nostrPublicKey(secret)))
+        }
+    }
+
+    @PluginMethod
+    fun nostrSign(call: PluginCall) {
+        val secret = str(call, "secretB64") ?: return
+        val hash = str(call, "hashB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.nostrSign(secret, hash)))
+        }
+    }
+
+    @PluginMethod
+    fun nostrVerify(call: PluginCall) {
+        val pub = str(call, "publicB64") ?: return
+        val hash = str(call, "hashB64") ?: return
+        val sig = str(call, "sigB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.nostrVerify(pub, hash, sig)))
         }
     }
 }

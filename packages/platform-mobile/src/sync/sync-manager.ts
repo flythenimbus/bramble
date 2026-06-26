@@ -54,13 +54,14 @@ type KeypairWasm = { handshake_generate_keypair(): Awaitable<DeviceKeypair> };
 
 const DEVICE_KEYPAIR_KEY = "sync.deviceKeypair";
 
-// Sync transport crypto (Noise handshake + Nostr): native on iOS, so it runs under
-// Lockdown Mode where WASM is gone. Android keeps the in-webview WASM path (no Lockdown
-// there; the native handshake isn't wired into the Android plugin yet), as does the dev
-// browser. The transport awaits every call, so the async native / sync WASM split is
-// transparent. Mirror this dispatch when adding the Android native bridge.
+// Sync transport crypto (Noise handshake + Nostr): native on device (iOS + Android),
+// so it shares the one native module that holds the VEK (the vault already runs native
+// there) and works under iOS Lockdown Mode where WASM is gone. The in-webview WASM
+// module is only the dev-browser fallback. The transport awaits every call, so the
+// async native / sync WASM split is transparent. Mirrors the vault dispatch in
+// adapters/crypto.ts.
 function loadSyncCrypto(): Promise<unknown> {
-	return Capacitor.getPlatform() === "ios" ? Promise.resolve(nativeSyncCrypto) : loadWasm();
+	return Capacitor.isNativePlatform() ? Promise.resolve(nativeSyncCrypto) : loadWasm();
 }
 
 // This device's Noise static keypair, generated once and held in secure storage

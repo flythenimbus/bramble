@@ -9,13 +9,12 @@ export type { VaultCrypto };
 let cached: Promise<VaultCrypto> | null = null;
 
 export function loadWasm(): Promise<VaultCrypto> {
-	// Guardrail: on iOS every crypto path (vault + sync) runs natively via the uniffi
-	// plugin, so the app works under Lockdown Mode where WASM is absent. Reaching WASM
-	// on iOS is a wiring bug, so fail loudly instead of dying later under Lockdown.
-	// (Android has no Lockdown Mode; its sync still uses WASM until the native handshake
-	// is wired there, so the guard is iOS-only.)
-	if (Capacitor.getPlatform() === "ios") {
-		throw new Error("WASM crypto must not load on iOS; use the native plugin");
+	// Guardrail: on a real device (iOS + Android) every crypto path (vault + sync) runs
+	// natively via the uniffi plugin, so the app works under iOS Lockdown Mode where WASM
+	// is absent, and sync shares the native module that holds the VEK. WASM is only the
+	// dev-browser fallback; reaching it on a device is a wiring bug, so fail loudly.
+	if (Capacitor.isNativePlatform()) {
+		throw new Error("WASM crypto must not load on a native device; use the native plugin");
 	}
 	if (cached) return cached;
 	cached = (async () => {
