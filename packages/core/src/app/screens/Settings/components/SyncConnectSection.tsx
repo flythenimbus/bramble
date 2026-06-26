@@ -108,12 +108,19 @@ export function SyncConnectSection() {
 		[shell, refreshGroup],
 	);
 
+	// Stream transport status into the log for the panel's lifetime so enrollment
+	// progress shows on both sides. The inviter's connection happens after its pairing
+	// modal is dismissed, so a modal- or action-scoped subscription would miss it.
+	useEffect(() => shell.onSyncStatus((s) => setLog((prev) => [...prev, s])), [shell]);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll to newest on each line
 	useEffect(() => {
 		logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
 	}, [log]);
 
 	const note = (line: string) => setLog((prev) => [...prev, line]);
+	// Status streaming is a panel-lifetime subscription (below); here we just reset the
+	// log to the action's label and surface a thrown failure.
 	const run = async (label: string, fn: () => Promise<void>) => {
 		setLog([label]);
 		try {

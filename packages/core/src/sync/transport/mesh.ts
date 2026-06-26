@@ -117,9 +117,15 @@ class Mesh {
 	}
 
 	private async publish(obj: unknown): Promise<void> {
-		const content = await encryptSignal(this.opts.groupKey, JSON.stringify(obj));
-		const event = await buildSignalEvent(this.opts.signer.signer, this.room, content, nowSec());
-		this.client.publish(event);
+		try {
+			const content = await encryptSignal(this.opts.groupKey, JSON.stringify(obj));
+			const event = await buildSignalEvent(this.opts.signer.signer, this.room, content, nowSec());
+			this.client.publish(event);
+		} catch (e) {
+			// Callers fire-and-forget this; surface failures (e.g. a native sign error)
+			// instead of silently never announcing, which strands the peer at discovery.
+			this.opts.onStatus(`publish failed: ${(e as Error).message}`);
+		}
 	}
 
 	private onEvent(ev: NostrEvent): void {
@@ -128,7 +134,12 @@ class Mesh {
 
 	private async handleEvent(ev: NostrEvent): Promise<void> {
 		if (ev.pubkey === this.opts.signer.pubkeyHex) return; // our own echo
-		if (!(await verifyEvent(this.opts.signer.verifier, ev))) return;
+		if (!(await verifyEvent(this.opts.signer.verifier, ev))) {
+			// A peer whose events fail verification never gets discovered; say so rather
+			// than dropping it silently (e.g. a cross-impl sign/verify mismatch).
+			this.opts.onStatus(`ignored bad-signature event from ${short(ev.pubkey)}`);
+			return;
+		}
 		let payload: { kind?: string; to?: string; sdp?: string; candidate?: RTCIceCandidateInit };
 		try {
 			payload = JSON.parse(await decryptSignal(this.opts.groupKey, ev.content));
@@ -148,7 +159,13 @@ class Mesh {
 		void this.publish({ kind: "hello" });
 		if (this.opts.signer.pubkeyHex < remote) {
 			this.opts.onStatus(`peer ${short(remote)} found — initiating`);
-			this.makePeer(remote, true);
+			try {
+				this.makePeer(remote, true);
+			} catch (e) {
+				// RTCPeerConnection / createDataChannel throwing here is otherwise swallowed
+				// by the void-ed event handler and looks identical to a stuck "initiating".
+				this.opts.onStatus(`peer setup failed: ${(e as Error).message}`);
+			}
 		} else {
 			this.opts.onStatus(`peer ${short(remote)} found — awaiting offer`);
 		}
@@ -159,7 +176,12 @@ class Mesh {
 		if (!peer) {
 			if (signal.kind !== "offer") return; // only an offer bootstraps a responder
 			this.known.add(remote);
-			peer = this.makePeer(remote, false);
+			try {
+				peer = this.makePeer(remote, false);
+			} catch (e) {
+				this.opts.onStatus(`peer setup failed: ${(e as Error).message}`);
+				return;
+			}
 		}
 		await peer.handleSignal(signal);
 	}
@@ -178,6 +200,7 @@ class Mesh {
 				this.peers.delete(remote);
 				this.opts.onStatus(`channel closed with ${short(remote)}`);
 			},
+			onState: (state) => this.opts.onStatus(`${short(remote)}: ${state}`),
 		});
 		this.peers.set(remote, peer);
 		return peer;
