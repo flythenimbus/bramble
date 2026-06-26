@@ -16,7 +16,12 @@ import {
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { defaultDeviceLabel } from "../util/device-label";
 import { createPrfCredential } from "../vault/webauthn-ceremony";
-import { findWebauthnSlots, type VaultBlob, type WebauthnSlot } from "../vault-format";
+import {
+	findPasswordSlot,
+	findWebauthnSlots,
+	type VaultBlob,
+	type WebauthnSlot,
+} from "../vault-format";
 import type { JoinUnlock, UseVault } from "./useVault";
 
 /** Shared vault internals the enrollment ops need from VaultProvider. */
@@ -77,6 +82,16 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			const group = await storage.getMeta<{ roster: RosterPayload }>("sync.group");
 			const roster = group?.roster ?? emptyRoster();
 			const entries = await readEntriesPayload();
+			// Ship our password-slot verifier so the joiner can PROVE its typed password
+			// matches this device's. Omitted when this device unlocks by security key only.
+			const pwSlot = findPasswordSlot((await readDecodedBlob()).blob);
+			const passwordCheck = pwSlot
+				? {
+						saltB64: bytesToBase64(pwSlot.salt),
+						slotIdB64: bytesToBase64(pwSlot.slotId),
+						verifierB64: bytesToBase64(pwSlot.verifier),
+					}
+				: undefined;
 			// When the device finishes joining, add its roster entry to ours (symmetric rosters).
 			enrollUnsubRef.current?.();
 			enrollUnsubRef.current = shell.onSyncEvent((ev) => {
@@ -107,6 +122,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				psk,
 				roster,
 				entries,
+				passwordCheck,
 			});
 			// Omit iceUrl from the code when empty (the joiner then derives it from the relay).
 			return encodePairingCode({
@@ -118,7 +134,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				iceUrl: iceUrl || undefined,
 			});
 		},
-		[ensureGroup, shell, storage, readEntriesPayload],
+		[ensureGroup, shell, storage, readEntriesPayload, readDecodedBlob],
 	);
 
 	// Join from a pairing code: the offscreen runs the handshake and rebuilds the
@@ -146,14 +162,19 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				hlc,
 			};
 
-			const joined = new Promise<{ vaultBlobB64: string; roster: RosterPayload }>((resolve) => {
-				const off = shell.onSyncEvent((ev) => {
-					if (ev.kind === "joined" && ev.vaultBlobB64 && ev.roster) {
-						off();
-						resolve({ vaultBlobB64: ev.vaultBlobB64, roster: ev.roster });
-					}
-				});
-			});
+			const joined = new Promise<{ vaultBlobB64: string; roster: RosterPayload }>(
+				(resolve, reject) => {
+					const off = shell.onSyncEvent((ev) => {
+						if (ev.kind === "joined" && ev.vaultBlobB64 && ev.roster) {
+							off();
+							resolve({ vaultBlobB64: ev.vaultBlobB64, roster: ev.roster });
+						} else if (ev.kind === "join-error") {
+							off();
+							reject(new Error(ev.message || "Join failed."));
+						}
+					});
+				},
+			);
 			await shell.startEnrollJoin({
 				relayUrl: code.relay,
 				iceUrl: code.iceUrl,
@@ -171,7 +192,16 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 						}
 					: { password: method.kind === "password" ? method.password : "" }),
 			});
-			const { vaultBlobB64, roster } = await joined;
+			let vaultBlobB64: string;
+			let roster: RosterPayload;
+			try {
+				({ vaultBlobB64, roster } = await joined);
+			} catch (e) {
+				// A recoverable failure (e.g. password mismatch): halt the enrollment host so a
+				// retry starts clean, then surface the reason to the caller.
+				await shell.stopSyncSpike().catch(() => {});
+				throw e;
+			}
 			await storage.writeVaultBlob(base64ToBytes(vaultBlobB64));
 			await storage.setMeta("sync.group", {
 				groupKey: code.groupKey,

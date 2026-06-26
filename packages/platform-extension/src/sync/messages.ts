@@ -30,6 +30,9 @@ export const EnrollInviteMsgSchema = z.object({
 	devicePrivB64: z.string(),
 	roster: RosterPayloadSchema,
 	entries: EntriesPayloadSchema,
+	passwordCheck: z
+		.object({ saltB64: z.string(), slotIdB64: z.string(), verifierB64: z.string() })
+		.optional(),
 });
 export type EnrollInviteMsg = z.infer<typeof EnrollInviteMsgSchema>;
 
@@ -68,6 +71,7 @@ export const SyncEventMsgSchema = z.object({
 	vaultBlobB64: z.string().optional(),
 	roster: RosterPayloadSchema.optional(),
 	entryJson: z.string().optional(),
+	message: z.string().optional(),
 });
 export type SyncEventMsg = z.infer<typeof SyncEventMsgSchema>;
 

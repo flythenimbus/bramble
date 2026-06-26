@@ -12,6 +12,7 @@ import {
 	wrapPasswordSlot,
 	wrapWebauthnSlot,
 } from "../../vault/build-vault";
+import { verifierPrefix } from "../../vault-format";
 import {
 	decodeEnrollmentBundle,
 	type EntriesPayload,
@@ -62,6 +63,15 @@ interface CryptoWasm {
 		magicVersion: Uint8Array,
 	): Awaitable<{ verifier: string; wrapIv: string; wrappedVek: string }>;
 	encrypt_with_vek(plaintext: string): Awaitable<{ iv: string; ciphertext: string }>;
+	/** Constant-time verifier check (no VEK unwrap) used to prove the joiner's typed
+	 * password matches the inviter's existing master password. */
+	verify_password_slot(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		magicVersion: Uint8Array,
+	): Awaitable<boolean>;
 }
 
 export type EnrollWasm = NostrWasm & EnrollHandshakeWasm & CryptoWasm;
@@ -84,6 +94,9 @@ export interface EnrollOptions {
 	/** Inviter: the bundle's non-secret parts (the VEK is added from the wasm here). */
 	roster?: RosterPayload;
 	entries?: EntriesPayload;
+	/** Inviter: this device's own password-slot fields (base64), shipped so the joiner
+	 * can prove its typed password matches. Omitted when there is no password slot. */
+	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 	/** Joiner: pin the inviter's static key, the unlock material for the rebuilt vault
 	 * (a password OR a security-key slot), and this device's roster entry to hand the
 	 * inviter so both rosters end up symmetric. */
@@ -93,6 +106,9 @@ export interface EnrollOptions {
 	ownEntry?: RosterEntry;
 	/** Joiner: deliver the rebuilt (VEK-wrapped) vault blob to the host for writing. */
 	onJoined?: (result: JoinResult) => void;
+	/** Joiner: report a recoverable enrollment failure (e.g. the typed password did not
+	 * match the existing device) so the host surfaces it instead of hanging. */
+	onJoinError?: (message: string) => void;
 	/** Inviter: the joiner's roster entry (JSON), to add to our roster. */
 	onEnrolled?: (entryJson: string) => void;
 }
@@ -150,15 +166,22 @@ async function handlePeer(
 		await sendBundle(opts, channel, sess);
 		stop();
 	} else {
-		await receiveBundle(opts, channel, sess);
+		await receiveBundle(opts, peer, sess);
 	}
 }
 
-async function sendBundle(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
+// Exported for unit tests (the mesh/handshake wrapping is covered elsewhere); these
+// are the two seams carrying the new provable-password-match logic.
+export async function sendBundle(
+	opts: EnrollOptions,
+	channel: Channel,
+	sess: Session,
+): Promise<void> {
 	const bundle = encodeEnrollmentBundle({
 		vek: await opts.wasm.export_vek(),
 		roster: opts.roster ?? { devices: [], revoked: [] },
 		entries: opts.entries ?? { entries: [], tombstones: [] },
+		primaryPasswordCheck: opts.passwordCheck,
 	});
 	channel.send(await opts.wasm.handshake_encrypt(sess.sessionId, bundle));
 	// The joiner acks with its roster entry, so our roster learns it (symmetric).
@@ -180,10 +203,34 @@ async function sendBundle(opts: EnrollOptions, channel: Channel, sess: Session):
 	opts.report("device enrolled ✅");
 }
 
-async function receiveBundle(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
+export async function receiveBundle(
+	opts: EnrollOptions,
+	peer: PeerSession,
+	sess: Session,
+): Promise<void> {
+	const { channel } = peer;
 	const bundle = decodeEnrollmentBundle(
 		await opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv()),
 	);
+	// Provable same-password enforcement: when the inviter shipped its password-slot
+	// verifier and this device is joining with a password, the typed password MUST
+	// match the existing device's master password. An absent check (security-key
+	// inviter or older build) falls back to the joiner-local confirm-password guard.
+	if (bundle.primaryPasswordCheck && !opts.webauthn) {
+		const ok = await opts.wasm.verify_password_slot(
+			opts.password ?? "",
+			bundle.primaryPasswordCheck.saltB64,
+			bundle.primaryPasswordCheck.slotIdB64,
+			bundle.primaryPasswordCheck.verifierB64,
+			verifierPrefix(),
+		);
+		if (!ok) {
+			opts.report("⚠ password doesn't match your existing device — aborting");
+			peer.close();
+			opts.onJoinError?.("That doesn't match your other device's master password.");
+			return;
+		}
+	}
 	await opts.wasm.unlock_with_vek(bundle.vek); // adopt the group VEK (stays in the wasm)
 	const slotCrypto = wasmSlotCrypto(opts.wasm);
 	const slot = opts.webauthn
