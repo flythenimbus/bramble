@@ -1,7 +1,7 @@
 # Cryptography: the VEK / slot / KEK wrapping model
 
 This is the core of how Bramble protects vault data. All of it lives in
-`packages/crypto-wasm/src/lib.rs` (the Rust/WASM crypto) and is driven from
+`packages/core-rust/src/lib.rs` (the Rust/WASM crypto) and is driven from
 `packages/core/src/hooks/useVault.tsx` (the orchestration).
 
 ## The key hierarchy

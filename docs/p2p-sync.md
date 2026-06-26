@@ -306,7 +306,7 @@ device management). Notes on how it maps to code:
 - **Transport-free core** (`packages/core/src/sync/`): merge kernel + HLC, entries
   payload + tombstones, `applyRemotePayload`, roster CRDT, the nostr signaling codec
   + `connectSignaling`, the pairing/enrollment codecs. The Noise (KK + XXpsk3) and
-  BIP340 primitives are in `packages/crypto-wasm`.
+  BIP340 primitives are in `packages/core-rust`.
 - **Transport + hosts** (`packages/core/src/sync/transport/`): `mesh` (relay + discovery
   + WebRTC peers), `ice` (`deriveIceUrl` + `fetchIceServers` for STUN/TURN), `handshake`
   (one runner for KK and XXpsk3), `peer-session` (the shared mesh-session lifecycle: join

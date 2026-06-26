@@ -19,7 +19,7 @@ set -euo pipefail
 
 cmd="${1:-bindings}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-crate="$here/packages/crypto-wasm"
+crate="$here/packages/core-rust"
 mobile="$here/packages/platform-mobile"
 out="$mobile/native-build"
 lib_name="vault_crypto"            # cdylib/staticlib stem (libvault_crypto.*)

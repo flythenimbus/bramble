@@ -1,6 +1,6 @@
 # KDBX4 import
 
-Importing a KeePass KDBX4 database. Code: `packages/crypto-wasm/src/kdbx.rs`,
+Importing a KeePass KDBX4 database. Code: `packages/core-rust/src/kdbx.rs`,
 driven from `keepass.ts` on the JS side. This is the spike for reading external
 vaults; export reuses the same VariantDictionary codec and `derive_keys` chain.
 

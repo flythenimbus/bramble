@@ -42,7 +42,7 @@ jobs:
       - name: Cache Rust deps
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/crypto-wasm
+          workspaces: packages/core-rust
 
       # Downloads a precompiled wasm-pack binary (taiki-e/install-action, Node 24
       # runtime) instead of `cargo install`-ing from source (the latter recompiled
