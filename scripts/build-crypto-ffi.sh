@@ -42,7 +42,12 @@ mkdir -p "$out/swift" "$out/swift-autofill" "$out/kotlin" "$out/ios" "$out/andro
 # host dylib built with its own feature set; the shared target/debug dylib is rebuilt in
 # between, so generate each right after its build.
 gen_lang() {
-  local lang="$1" feats="$2" outdir="${3:-$out/$lang}"
+  # Separate `local` statements on purpose: the macOS system bash (3.2, what pnpm invokes)
+  # expands a `local` line's args before assigning them, so `outdir`'s default can't see `lang`
+  # if they share a line (-> "lang: unbound variable" under `set -u`).
+  local lang="$1"
+  local feats="$2"
+  local outdir="${3:-$out/$lang}"
   echo "==> building host cdylib ($feats) for $lang bindgen -> $outdir"
   ( cd "$crate" && cargo build $feats --lib )
   local dylib="$crate/target/debug/lib${lib_name}.dylib"
