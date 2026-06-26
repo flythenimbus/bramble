@@ -47,6 +47,11 @@ export function SyncConnectSection() {
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
 	const [joinCode, setJoinCode] = useState("");
 	const [joinPassword, setJoinPassword] = useState("");
+	const [joinPasswordConfirm, setJoinPasswordConfirm] = useState("");
+	// Join failure (e.g. password doesn't match the other device), shown as an inline
+	// validation error under the password field. The debug status log is hidden, so
+	// this is the only user-facing surface for a failed join.
+	const [joinError, setJoinError] = useState<string | null>(null);
 	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
@@ -146,17 +151,26 @@ export function SyncConnectSection() {
 		});
 	const join = () =>
 		run("joining…", async () => {
-			await joinGroup(
-				joinCode,
-				joinMethod === "securityKey"
-					? { kind: "securityKey" }
-					: { kind: "password", password: joinPassword },
-			);
+			setJoinError(null);
+			try {
+				await joinGroup(
+					joinCode,
+					joinMethod === "securityKey"
+						? { kind: "securityKey" }
+						: { kind: "password", password: joinPassword },
+				);
+			} catch (e) {
+				// Surface the reason (e.g. "doesn't match your other device") visibly, then
+				// rethrow so run() still logs it to the hidden diagnostics.
+				setJoinError((e as Error).message);
+				throw e;
+			}
 			// joinGroup resolves once the vault bundle has transferred and been written;
 			// the "relay disconnected" status before this is normal teardown, not failure.
 			note("✅ Synced — your entries are now on this device.");
 			setJoinCode("");
 			setJoinPassword("");
+			setJoinPasswordConfirm("");
 			await refreshGroup();
 		});
 	// Camera scan of the inviter's pairing QR (mobile only).
@@ -338,7 +352,11 @@ export function SyncConnectSection() {
 						<button
 							type="button"
 							onClick={() => void join()}
-							disabled={!joinCode.trim() || (joinMethod === "password" && !joinPassword)}
+							disabled={
+								!joinCode.trim() ||
+								(joinMethod === "password" &&
+									(!joinPassword || joinPassword !== joinPasswordConfirm))
+							}
 							className={btnClass}
 						>
 							Join
@@ -376,12 +394,29 @@ export function SyncConnectSection() {
 								</div>
 							)}
 							{joinMethod === "password" ? (
-								<TextField
-									type="password"
-									label="Master password for this device"
-									value={joinPassword}
-									onChange={(e) => setJoinPassword(e.target.value)}
-								/>
+								<div className="space-y-4">
+									<TextField
+										type="password"
+										label="Master password for this device"
+										value={joinPassword}
+										onChange={(e) => {
+											setJoinPassword(e.target.value);
+											setJoinError(null);
+										}}
+										error={joinError ?? undefined}
+									/>
+									<TextField
+										type="password"
+										label="Confirm master password"
+										value={joinPasswordConfirm}
+										onChange={(e) => setJoinPasswordConfirm(e.target.value)}
+										error={
+											joinPasswordConfirm.length > 0 && joinPassword !== joinPasswordConfirm
+												? "Passwords don't match"
+												: undefined
+										}
+									/>
+								</div>
 							) : (
 								<p className="text-xs text-muted-foreground">
 									You'll tap your security key when you press Join. No master password is set on

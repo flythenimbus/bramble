@@ -122,6 +122,7 @@ export async function startEnrollInvite(opts: {
 	psk: string;
 	roster: RosterPayload;
 	entries: EntriesPayload;
+	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 }): Promise<void> {
 	const wasm = (await loadSyncCrypto()) as unknown as EnrollWasm;
 	const { privateKey } = await deviceKeypair();
@@ -133,6 +134,7 @@ export async function startEnrollInvite(opts: {
 		psk: opts.psk,
 		roster: opts.roster,
 		entries: opts.entries,
+		passwordCheck: opts.passwordCheck,
 		devicePrivB64: privateKey,
 		wasm,
 		report,
@@ -166,6 +168,7 @@ export async function startEnrollJoin(opts: {
 		wasm,
 		report,
 		onJoined: (r) => emit({ kind: "joined", vaultBlobB64: r.vaultBlobB64, roster: r.roster }),
+		onJoinError: (message) => emit({ kind: "join-error", message }),
 	});
 }
 

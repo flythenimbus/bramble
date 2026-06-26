@@ -66,6 +66,9 @@ export interface ShellAdapter {
 		psk: string;
 		roster: RosterPayload;
 		entries: EntriesPayload;
+		/** This device's password-slot fields (base64) so a joining device can prove its
+		 * typed password matches; omitted when this device has no password slot. */
+		passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 	}): Promise<void>;
 	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
 	startEnrollJoin(opts: {
@@ -90,4 +93,6 @@ export interface SyncEvent {
 	roster?: RosterPayload;
 	/** Inviter: a joining device's roster entry (JSON), to add to our roster. */
 	entryJson?: string;
+	/** Joiner: a human-readable reason a join failed recoverably (e.g. password mismatch). */
+	message?: string;
 }

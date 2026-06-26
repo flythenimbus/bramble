@@ -53,6 +53,13 @@ export const EnrollmentBundleSchema = z.object({
 	vek: z.string().min(1),
 	roster: RosterPayloadSchema,
 	entries: EntriesPayloadSchema,
+	/** Inviter's password-slot fields (base64), so the joiner can PROVE its typed
+	 * password matches the existing device's master password before building the
+	 * vault. Optional: absent from a security-key-only inviter or an older build, in
+	 * which case the joiner falls back to its local confirm-password guard. */
+	primaryPasswordCheck: z
+		.object({ saltB64: z.string(), slotIdB64: z.string(), verifierB64: z.string() })
+		.optional(),
 });
 export type EnrollmentBundle = z.infer<typeof EnrollmentBundleSchema>;
 
