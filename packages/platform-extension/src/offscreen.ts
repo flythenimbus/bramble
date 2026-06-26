@@ -276,6 +276,7 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 					wasm,
 					report: reportSyncStatus,
 					onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
+					onJoinError: (message) => broadcastSyncEvent({ kind: "join-error", message }),
 					onEnrolled: (entryJson) => broadcastSyncEvent({ kind: "enrolled", entryJson }),
 				});
 				sendResponse({ ok: true });
