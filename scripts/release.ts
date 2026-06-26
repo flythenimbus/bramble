@@ -229,7 +229,7 @@ function releaseAndroid(version: string) {
 
 	commitTagPush(bumped, BUILD_GRADLE, `chore(release): android ${version}`, tag, branch);
 	try {
-		publish(tag, `Bramble Android ${version}`, [apkAsset, sumsAsset]);
+		publish(tag, `Android ${version}`, [apkAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
