@@ -35,26 +35,32 @@ ios_ffi="$mobile/ios/App/VaultCryptoFFI"
 and_jni="$mobile/android/app/src/main/jniLibs"
 and_kt="$mobile/android/app/src/main/java/uniffi/vault_crypto"
 
-mkdir -p "$out/swift" "$out/kotlin" "$out/ios" "$out/android"
+mkdir -p "$out/swift" "$out/swift-autofill" "$out/kotlin" "$out/ios" "$out/android"
 
 # --- bindings: host build + library-mode bindgen (one feature set per language) ---
 # Swift carries webrtc (iOS), Kotlin doesn't (Android). Each language regenerates from a
 # host dylib built with its own feature set; the shared target/debug dylib is rebuilt in
 # between, so generate each right after its build.
 gen_lang() {
-  local lang="$1" feats="$2"
-  echo "==> building host cdylib ($feats) for $lang bindgen"
+  local lang="$1" feats="$2" outdir="${3:-$out/$lang}"
+  echo "==> building host cdylib ($feats) for $lang bindgen -> $outdir"
   ( cd "$crate" && cargo build $feats --lib )
   local dylib="$crate/target/debug/lib${lib_name}.dylib"
   [ -f "$dylib" ] || dylib="$crate/target/debug/lib${lib_name}.so"
   ( cd "$crate" && cargo run -q $feats --features uniffi/cli --bin uniffi-bindgen -- \
-      generate --library "$dylib" --language "$lang" --no-format --out-dir "$out/$lang" )
+      generate --library "$dylib" --language "$lang" --no-format --out-dir "$outdir" )
 }
 
 gen_bindings() {
+  # Full Swift glue (App target): carries the iOS-only webrtc exports.
   gen_lang swift "$ffi_ios"
+  # Slim Swift glue (autofill extension): no webrtc. The extension never does sync, so
+  # omitting the exports from its glue lets the linker dead-strip the whole
+  # webrtc/ICE/DTLS/SCTP/rustls stack from the appex binary, even though it links the same
+  # fat xcframework. Halves webrtc's footprint in the ipa. See docs/p2p-sync.md.
+  gen_lang swift "$ffi" "$out/swift-autofill"
   gen_lang kotlin "$ffi"
-  echo "==> bindings written to $out/{swift,kotlin}"
+  echo "==> bindings written to $out/{swift,swift-autofill,kotlin}"
 }
 
 # --- ios: per-arch staticlib -> XCFramework ---
@@ -92,7 +98,9 @@ build_ios() {
   rm -rf "$ios_ffi/VaultCrypto.xcframework"
   cp -R "$out/ios/VaultCrypto.xcframework" "$ios_ffi/VaultCrypto.xcframework"
   cp "$out/swift/${lib_name}.swift" "$ios_ffi/vault_crypto.swift"
-  echo "==> installed XCFramework + Swift glue to $ios_ffi"
+  # Slim glue for the autofill extension target (no webrtc -> dead-stripped from its binary).
+  cp "$out/swift-autofill/${lib_name}.swift" "$ios_ffi/vault_crypto.autofill.swift"
+  echo "==> installed XCFramework + Swift glue (full + autofill-slim) to $ios_ffi"
 }
 
 # --- android: jniLibs per ABI via cargo-ndk ---
