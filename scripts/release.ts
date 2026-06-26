@@ -132,19 +132,27 @@ function releaseAndroid(version: string) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
-	// Signing inputs. The keystore is age+YubiKey encrypted (docs/release-signing.md);
-	// passwords come from the env so no plaintext secret is written to the repo.
+	// Signing inputs. The keystore is age+YubiKey encrypted (docs/release-signing.md). Passwords
+	// resolve from the env first (CI / one-off), then the macOS login Keychain, so nothing plaintext
+	// lands in the repo OR your shell history. Store them once with:
+	//   security add-generic-password -s bramble-android-keystore -a "$USER" -w
+	//   security add-generic-password -s bramble-android-key       -a "$USER" -w   (only if the key
+	//                                                                                password differs)
 	const ksAge =
 		process.env.ANDROID_KEYSTORE_AGE ?? join(HOME, ".config/bramble/android-release-keystore.age");
-	const storePassword = process.env.ANDROID_KEYSTORE_PASSWORD;
+	const storePassword =
+		process.env.ANDROID_KEYSTORE_PASSWORD ?? secretFromKeychain("bramble-android-keystore");
 	if (!existsSync(ksAge))
 		fail(
 			`encrypted keystore not at ${ksAge} (override ANDROID_KEYSTORE_AGE). See docs/release-signing.md.`,
 		);
 	if (!storePassword)
-		fail("set ANDROID_KEYSTORE_PASSWORD (and ANDROID_KEY_PASSWORD if it differs)");
+		fail(
+			'no keystore password. Store it once: `security add-generic-password -s bramble-android-keystore -a "$USER" -w`, or set ANDROID_KEYSTORE_PASSWORD.',
+		);
 	const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "bramble";
-	const keyPassword = process.env.ANDROID_KEY_PASSWORD ?? storePassword;
+	const keyPassword =
+		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key") ?? storePassword;
 	for (const bin of ["age", "age-plugin-yubikey"])
 		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
 	const java21 = resolveJava21();
@@ -348,14 +356,27 @@ function publish(tag: string, title: string, assets: string[]) {
 	run(`gh release edit ${tag} --draft=false`);
 }
 
-const has = (bin: string) => {
+function has(bin: string) {
 	try {
 		execFileSync("/bin/sh", ["-c", `command -v ${bin}`], { stdio: "ignore" });
 		return true;
 	} catch {
 		return false;
 	}
-};
+}
+
+// Read a secret from the macOS login Keychain (encrypted at rest, unlocked at login). Returns
+// null off macOS or when the service isn't stored, so callers can fall back to the env var.
+function secretFromKeychain(service: string): string | null {
+	if (process.platform !== "darwin") return null;
+	try {
+		return execFileSync("security", ["find-generic-password", "-s", service, "-w"], {
+			encoding: "utf8",
+		}).replace(/\n$/, ""); // strip only the trailing newline `security -w` adds
+	} catch {
+		return null;
+	}
+}
 
 // The Capacitor Android plugins need a JDK 21 toolchain; the system default is often 17.
 // Resolution order: an already-21 JAVA_HOME, `java_home -v 21` (verified), then the JBR.
