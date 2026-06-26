@@ -248,7 +248,7 @@ The repo is a pnpm workspace with two JS packages plus a Rust crate:
 - `packages/platform-extension` (`@vault/platform-extension`): the Chrome MV3 implementation of
   those adapters, plus all the extension-only machinery (background SW, content scripts, offscreen
   doc, popup/options pages).
-- `packages/crypto-wasm`: the Rust crypto + KDBX4 crate. `crate-type = ["cdylib", "rlib"]`, so it
+- `packages/core-rust`: the Rust crypto + KDBX4 crate. `crate-type = ["cdylib", "rlib"]`, so it
   already builds both to WASM (`wasm:build`) and natively (`wasm:test` runs `cargo test`).
 
 The seam is `packages/core/src/context/PlatformContext.tsx`. The whole product is parameterised over
@@ -274,7 +274,7 @@ package is left untouched; both ship from one `core`.
 
 | Layer | Reuse | Notes |
 |---|---|---|
-| `packages/crypto-wasm` | ~100% (with a refactor) | Already compiles native. Split into a pure-Rust core + thin `wasm-bindgen` wrapper (browser) + thin `uniffi` wrapper (native Swift/Kotlin), gating `getrandom`'s js feature to `wasm32`. The core then serves three targets: WASM in the webview, and Swift + Kotlin bindings linked into both a custom Capacitor crypto plugin (main app) and the autofill providers. See OS-level autofill. |
+| `packages/core-rust` | ~100% (with a refactor) | Already compiles native. Split into a pure-Rust core + thin `wasm-bindgen` wrapper (browser) + thin `uniffi` wrapper (native Swift/Kotlin), gating `getrandom`'s js feature to `wasm32`. The core then serves three targets: WASM in the webview, and Swift + Kotlin bindings linked into both a custom Capacitor crypto plugin (main app) and the autofill providers. See OS-level autofill. |
 | `packages/core` domain (vault-format, slot-policy, recovery-code, import, useVault orchestration) | ~95% | Pure logic over adapters and WASM. The one real change is the WebAuthn path (see blockers). |
 | `packages/core` UI (App, router, screens, components, entry-modes) | ~85% | Ports, but needs a responsive-layout pass (today it is popup-dimensioned) and a shell-adapter rethink (no `window.close`, no pop-out). |
 | `packages/platform-extension` | ~0% for mobile | This is the Chrome impl. `content/` and most of `background/` do not port. Their logic either collapses (offscreen) or becomes native (autofill). |
@@ -357,7 +357,7 @@ native ASAuthorization / Credential Manager route) remains the optional, long-le
 Original analysis follows.
 
 Today, security-key unlock derives the KEK from a WebAuthn authenticator's `prf`/`hmac-secret`
-output via HKDF (`packages/crypto-wasm/src/lib.rs` `derive_kek_hkdf`, info `"titanpass/webauthn/v1"`;
+output via HKDF (`packages/core-rust/src/lib.rs` `derive_kek_hkdf`, info `"titanpass/webauthn/v1"`;
 ceremonies in `packages/core/src/hooks/useVault.tsx`). On mobile this path is constrained hard:
 
 - `navigator.credentials` does not work in the webview by default. iOS WKWebView needs the
@@ -571,7 +571,7 @@ what Bitwarden does for biometric unlock).
 ### The enabler: one Rust crypto core, three compile targets
 
 This is the largest reuse win for autofill, and it leans on a fact already true of the repo:
-`crypto-wasm` compiles natively today. Refactor it into a **pure-Rust core** (Argon2id, AES-256-GCM,
+`core-rust` compiles natively today. Refactor it into a **pure-Rust core** (Argon2id, AES-256-GCM,
 HKDF, KDBX4, no platform deps) plus thin wrappers:
 
 - a `wasm-bindgen` wrapper for the browser extension and the mobile webview (as today),
@@ -723,7 +723,7 @@ Implementation status up top).
    + invalidated-by-enrollment), exposed via an optional `Platform.biometric` capability. The vault's
    `slot-policy`/VLT1 format is untouched. Remaining: the broader vault list/detail/edit small-screen sweep.
 3. **[NOT STARTED] System autofill, passwords and TOTP (many weeks per platform, native, the real schedule).**
-   Precursor: refactor `crypto-wasm` into a shared Rust core with a `uniffi` wrapper so Swift and
+   Precursor: refactor `core-rust` into a shared Rust core with a `uniffi` wrapper so Swift and
    Kotlin link the same crypto. Then: iOS AutoFill Credential Provider Extension (Swift,
    `ProvidesPasswords` + `ProvidesOneTimeCodes`) and the Android classic `AutofillService` (Kotlin,
    API 26+, covering apps and browser web fields on all versions), added as native targets in the

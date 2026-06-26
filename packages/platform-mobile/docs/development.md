@@ -17,7 +17,7 @@ committed and owned (edit them directly in Xcode / Android Studio).
 ## The build pipeline
 
 ```
-crypto-wasm (Rust)  --wasm-pack-->  public/wasm/      (WASM crypto module)
+core-rust (Rust)  --wasm-pack-->  public/wasm/      (WASM crypto module)
 @core + src         --vite------->  dist/             (the SPA)
 dist/               --cap sync-->   ios/, android/     (native web assets)
 ```
@@ -239,7 +239,7 @@ The simulator does not enforce either restriction, so WASM always works there â€
 real hardware.
 
 ### 15. Native crypto (uniffi) shares one Rust crate with WASM
-`packages/crypto-wasm` (`vault-crypto`) builds **two binding layers from one pure core**, chosen by
+`packages/core-rust` (`vault-crypto`) builds **two binding layers from one pure core**, chosen by
 Cargo feature, so the same audited crypto serves the webview and native code:
 
 - **`wasm` (default):** the `#[wasm_bindgen]` surface wasm-pack already builds. Unchanged; the JS

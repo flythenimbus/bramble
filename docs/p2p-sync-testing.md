@@ -85,7 +85,7 @@ in-app was removed once the real WebRTC transport landed.)
 ## Dev loop
 
 After code changes: `pnpm run build`, then click the reload icon on the extension on
-`chrome://extensions` in **both** installs. After any `crypto-wasm` (Rust) change
+`chrome://extensions` in **both** installs. After any `core-rust` (Rust) change
 also run `pnpm run wasm:build` — `pnpm run build` does **not** rebuild the wasm, and a
 stale wasm shows up as `x.foo is not a function` in the browser.
 

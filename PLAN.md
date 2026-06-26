@@ -137,7 +137,7 @@ packages/
 │       ├── shell.ts                   # ShellAdapter — chrome.tabs / chrome.runtime
 │       └── wasm-loader.ts             # Boots wasm-bindgen runtime in offscreen
 │
-├── crypto-wasm/                       # Rust crate compiled to WASM
+├── core-rust/                       # Rust crate compiled to WASM
 │   ├── Cargo.toml
 │   └── src/lib.rs
 │
@@ -333,7 +333,7 @@ interface NativeMessagingAdapter { ... }
 
 ---
 
-## WASM Crypto API (`packages/crypto-wasm/src/lib.rs`)
+## WASM Crypto API (`packages/core-rust/src/lib.rs`)
 
 ```rust
 // VEK lifecycle (the in-memory key slot now holds the Vault Encryption Key).
@@ -1255,7 +1255,7 @@ The handler fires *before* any UI moment, with no user gesture:
   `content.urls[]`), so an SSO account that already pointed at five sites comes
   across as one login with five URLs, not five duplicates. `.kdbx` is the
   exception to the pure-parser shape: it's encrypted, so it's opened **inside
-  WASM** (`crypto-wasm/src/kdbx.rs`, `open_kdbx4` via `CRYPTO_OPEN_KDBX`) with
+  WASM** (`core-rust/src/kdbx.rs`, `open_kdbx4` via `CRYPTO_OPEN_KDBX`) with
   the database's own master password + optional key file — the foreign password
   and decrypted secrets never touch the JS heap. WASM returns the raw String
   pairs and `import/kdbx.ts` maps them through the *same* `mapKeepassFields` the
@@ -1332,7 +1332,7 @@ The handler fires *before* any UI moment, with no user gesture:
   resurrect and merge never sees plaintext). WebRTC runs in the offscreen document
   (`WEB_RTC` reason); signaling is a user-chosen Nostr-subset relay (a minimal
   ~100-line relay ships in `/signaling`). Transport-free core in `core/sync/`, hosts
-  in `platform-extension/src/sync/`, Noise (KK + XXpsk3) + BIP340 in `crypto-wasm`.
+  in `platform-extension/src/sync/`, Noise (KK + XXpsk3) + BIP340 in `core-rust`.
   v1 scope: same-network, all-online; cross-internet sync and VEK rotation are
   deferred. Full design + build status in docs/p2p-sync.md.
 

@@ -11,7 +11,7 @@
 			"**/*.{ts,tsx,js,jsx,json,jsonc}",
 			"!**/node_modules",
 			"!**/dist",
-			"!packages/crypto-wasm/target",
+			"!packages/core-rust/target",
 			"!packages/platform-extension/public/wasm",
 			"!packages/platform-extension/src/fixtures/imports",
 			"!icon",

@@ -4,8 +4,8 @@ dist/
 .DS_Store
 
 # Rust / WASM
-packages/crypto-wasm/target/
-packages/crypto-wasm/Cargo.lock
+packages/core-rust/target/
+packages/core-rust/Cargo.lock
 packages/platform-extension/public/wasm/
 
 # Signing keys must never be committed (see docs/release-signing.md)

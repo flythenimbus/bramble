@@ -134,7 +134,7 @@ Verified Firefox facts behind these choices:
   breach-check disclosure already written for the Chrome listing.
 - AMO requires source for bundled JS and WASM. Document the reproducible build (`pnpm install`,
   `pnpm run wasm:build`, `TARGET=firefox pnpm run build:firefox`); `rust-toolchain.toml` already pins
-  the Rust toolchain for `packages/crypto-wasm`.
+  the Rust toolchain for `packages/core-rust`.
 - Sign via `web-ext sign` or AMO web upload to produce the `.xpi`.
 
 ## Filesystem sync (the hard constraint)
@@ -162,7 +162,7 @@ pick up another device's edits). The user's Dropbox path cannot be targeted prog
 ### Options
 
 1. **Native messaging companion (true parity).** A small native host (Rust, reusing the
-   `crypto-wasm` stack) reads/writes the user's chosen path; the extension talks to it via
+   `core-rust` stack) reads/writes the user's chosen path; the extension talks to it via
    `runtime.connectNative`. Restores Chrome-equivalent sync. Cost: a separate native app, a per-OS
    installer, macOS signing/notarization, a native-messaging manifest the user registers, and a new
    security surface. AMO ships only the extension; the host is installed separately. Large, separate
