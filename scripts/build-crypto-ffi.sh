@@ -24,6 +24,11 @@ mobile="$here/packages/platform-mobile"
 out="$mobile/native-build"
 lib_name="vault_crypto"            # cdylib/staticlib stem (libvault_crypto.*)
 ffi="--no-default-features --features ffi"
+# iOS additionally builds the native WebRTC data channel (its WKWebView on capacitor://
+# has no RTCPeerConnection). Android's WebView has WebRTC, so its build stays lean and
+# pays no webrtc-rs size. So: Swift bindings + the iOS staticlib carry `webrtc`; Kotlin
+# bindings + the Android .so do not. See docs/p2p-sync.md.
+ffi_ios="--no-default-features --features ffi,webrtc"
 # Where the built artifacts are installed into the committed native projects
 # (gitignored generated paths the Xcode/Gradle projects reference directly).
 ios_ffi="$mobile/ios/App/VaultCryptoFFI"
@@ -32,17 +37,23 @@ and_kt="$mobile/android/app/src/main/java/uniffi/vault_crypto"
 
 mkdir -p "$out/swift" "$out/kotlin" "$out/ios" "$out/android"
 
-# --- bindings: host build + library-mode bindgen (Swift + Kotlin) ---
-gen_bindings() {
-  echo "==> building host cdylib for bindgen (library mode)"
-  ( cd "$crate" && cargo build $ffi --lib )
+# --- bindings: host build + library-mode bindgen (one feature set per language) ---
+# Swift carries webrtc (iOS), Kotlin doesn't (Android). Each language regenerates from a
+# host dylib built with its own feature set; the shared target/debug dylib is rebuilt in
+# between, so generate each right after its build.
+gen_lang() {
+  local lang="$1" feats="$2"
+  echo "==> building host cdylib ($feats) for $lang bindgen"
+  ( cd "$crate" && cargo build $feats --lib )
   local dylib="$crate/target/debug/lib${lib_name}.dylib"
   [ -f "$dylib" ] || dylib="$crate/target/debug/lib${lib_name}.so"
-  echo "==> generating Swift + Kotlin from $dylib"
-  for lang in swift kotlin; do
-    ( cd "$crate" && cargo run -q $ffi --features uniffi/cli --bin uniffi-bindgen -- \
-        generate --library "$dylib" --language "$lang" --no-format --out-dir "$out/$lang" )
-  done
+  ( cd "$crate" && cargo run -q $feats --features uniffi/cli --bin uniffi-bindgen -- \
+      generate --library "$dylib" --language "$lang" --no-format --out-dir "$out/$lang" )
+}
+
+gen_bindings() {
+  gen_lang swift "$ffi_ios"
+  gen_lang kotlin "$ffi"
   echo "==> bindings written to $out/{swift,kotlin}"
 }
 
@@ -55,7 +66,9 @@ build_ios() {
   rustup target add "$device" "$sim_arm" "$sim_x86"
   for t in "$device" "$sim_arm" "$sim_x86"; do
     echo "==> cargo build --release ($t)"
-    ( cd "$crate" && cargo build --release $ffi --lib --target "$t" )
+    # iOS carries webrtc (its WebView lacks RTCPeerConnection); the swift glue is
+    # generated from the same feature set in gen_bindings, so the symbols line up.
+    ( cd "$crate" && cargo build --release $ffi_ios --lib --target "$t" )
   done
   local rel="$crate/target"
   # Fat simulator staticlib (arm64 + x86_64).

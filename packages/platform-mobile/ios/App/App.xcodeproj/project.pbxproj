@@ -22,6 +22,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		5B00CCCA4F502D4EBC796737 /* vault_crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */; };
 		5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */; };
+		B100000000000000000B0003 /* NativeWebRTC.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000B0004 /* NativeWebRTC.swift */; };
 		AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */; };
 		B100000000000000000B0001 /* BiometricVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0001 /* BiometricVault.swift */; };
 		B100000000000000000B0002 /* QrScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0002 /* QrScanner.swift */; };
@@ -68,6 +69,7 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		6363800275C7C75D7612C3B4 /* AutofillBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutofillBridge.swift; sourceTree = "<group>"; };
 		6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeCrypto.swift; sourceTree = "<group>"; };
+		B100000000000000000B0004 /* NativeWebRTC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeWebRTC.swift; sourceTree = "<group>"; };
 		7032D4DE80695ED12D43BB6A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8768B92E0984CF34C27632BF /* VaultCrypto.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = VaultCrypto.xcframework; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -161,6 +163,7 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 				4614635B51FECD0041526CBB /* App.entitlements */,
 				6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */,
+				B100000000000000000B0004 /* NativeWebRTC.swift */,
 				6363800275C7C75D7612C3B4 /* AutofillBridge.swift */,
 				364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */,
 			);
@@ -289,6 +292,7 @@
 				B100000000000000000B0001 /* BiometricVault.swift in Sources */,
 				B100000000000000000B0002 /* QrScanner.swift in Sources */,
 				5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */,
+				B100000000000000000B0003 /* NativeWebRTC.swift in Sources */,
 				F640023DF2FD4BE8BBD9503A /* vault_crypto.swift in Sources */,
 				33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */,
 				42F8623E6B0F198C0367224B /* BrambleConstants.swift in Sources */,

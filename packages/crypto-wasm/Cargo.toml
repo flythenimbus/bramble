@@ -34,6 +34,13 @@ wasm = [
 # provider and Lockdown-Mode-safe (JIT-free) main-app crypto. Carries snow/k256 too so
 # sync handshake + nostr run natively on device (no WASM under Lockdown Mode).
 ffi = ["dep:uniffi", "dep:snow", "dep:k256"]
+# Native WebRTC data channel (iOS only): iOS WKWebView on the capacitor:// scheme has
+# no RTCPeerConnection, so the P2P sync transport runs on the pure-Rust `webrtc` crate
+# behind a uniffi bridge + a JS shim. Implies ffi (the exports are uniffi). Excluded from
+# wasm (webrtc-rs won't target wasm32) and from the Android build (its WebView has WebRTC),
+# so only the iOS staticlib pays the size. `dep:webrtc` suppresses the implicit same-name
+# feature, letting this richer feature own the name. See docs/p2p-sync.md.
+webrtc = ["ffi", "dep:webrtc", "dep:tokio", "dep:serde_json"]
 
 [dependencies]
 # --- vault crypto core (compiled into both binding layers) ---
@@ -54,6 +61,13 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 
 # --- Native FFI binding layer (optional) ---
 uniffi = { version = "0.31", optional = true }
+
+# --- Native WebRTC data channel (iOS only, `webrtc` feature) ---
+# Pure-Rust WebRTC (ICE/DTLS/SCTP); interops with browser data channels. tokio drives
+# its async runtime; serde_json parses the ICE-server list + ICE candidates.
+webrtc = { version = "0.17", optional = true }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "time", "sync"], optional = true }
+serde_json = { version = "1", optional = true }
 
 # --- Sync roster-auth handshake (Noise). default-resolver = pure Rust, wasm-clean ---
 snow = { version = "0.9", optional = true }

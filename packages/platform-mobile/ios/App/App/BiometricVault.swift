@@ -159,6 +159,7 @@ public class BiometricBridgeViewController: CAPBridgeViewController {
 	override public func capacitorDidLoad() {
 		bridge?.registerPluginInstance(BiometricVaultPlugin())
 		bridge?.registerPluginInstance(NativeCryptoPlugin())
+		bridge?.registerPluginInstance(NativeWebRTCPlugin())
 		bridge?.registerPluginInstance(AutofillBridgePlugin())
 		bridge?.registerPluginInstance(QrScannerPlugin())
 	}
