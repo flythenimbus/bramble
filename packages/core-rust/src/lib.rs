@@ -608,6 +608,12 @@ mod ffi_exports {
 mod tests {
     use super::*;
 
+    // The two `*_round_trip_core` tests drive the process-global VEK slot, so they must not run
+    // concurrently (cargo runs tests in parallel). Serialize them on a shared lock; `into_inner`
+    // ignores poisoning so one failure doesn't cascade into a confusing second. Other tests use
+    // the primitives directly and stay parallel.
+    static VEK_SLOT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Measure the configured vault Argon2id cost. Native release is a lower
     /// bound; browser WASM runs ~2-3x slower. Run with:
     ///   cargo test --release bench_vault_kek_derive -- --ignored --nocapture
@@ -730,6 +736,7 @@ mod tests {
     // Exercises the shared core used by both binding layers.
     #[test]
     fn vek_encrypt_decrypt_round_trip_core() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let vek = B64.encode([0x5au8; KEY_LEN]);
         unlock_with_vek(vek).unwrap();
         let plaintext = "{\"u\":\"alice\",\"p\":\"hunter2\"}";
@@ -743,6 +750,7 @@ mod tests {
     // Entry-level (per-item DEK) round-trip through the shared core.
     #[test]
     fn entry_encrypt_decrypt_round_trip_core() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unlock_with_vek(B64.encode([0x11u8; KEY_LEN])).unwrap();
         let json = "{\"title\":\"GitHub\"}";
         let p = encrypt_entry_core(json).unwrap();
