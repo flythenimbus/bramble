@@ -13,7 +13,12 @@ import { mobileShell, registerOpenSetup, resolveAppVersion } from "./adapters/sh
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
 import { consumePendingAutofillSave } from "./autofill-pending";
+import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/sync-manager";
+
+// iOS WKWebView (capacitor:// scheme) has no RTCPeerConnection; install the native-backed
+// shim before any sync transport runs. No-op on Android/extension/dev-browser.
+installNativeWebRtc();
 
 const platform: Platform = {
 	storage: mobileStorage,

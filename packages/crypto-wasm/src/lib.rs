@@ -41,6 +41,12 @@ mod kdbx;
 mod handshake;
 #[cfg(any(feature = "wasm", feature = "ffi"))]
 mod nostr;
+// Native WebRTC data channel: iOS only (its WKWebView on capacitor:// has no
+// RTCPeerConnection). Pure-Rust webrtc-rs behind uniffi; gated by `webrtc` (which
+// implies ffi). Excluded from the wasm build (webrtc-rs won't target wasm32) and the
+// Android build (its WebView has WebRTC). See docs/p2p-sync.md.
+#[cfg(feature = "webrtc")]
+mod webrtc;
 
 // The two binding layers are mutually exclusive: each owns the bare public names
 // (`generate_vek`, ...), so enabling both would collide. wasm-pack uses `wasm`; the
