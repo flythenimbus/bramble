@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
 import { type ComponentProps, forwardRef, useId, useState } from "react";
 import { cn } from "./utils";
@@ -17,6 +18,7 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 	{ label, error, className, disabled, rows = 6, defaultRevealed = false, ...props },
 	ref,
 ) {
+	const { t } = useLingui();
 	const id = useId();
 	const invalid = Boolean(error);
 	const [revealed, setRevealed] = useState(defaultRevealed);
@@ -48,7 +50,7 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 					type="button"
 					onClick={() => setRevealed((v) => !v)}
 					className="absolute right-2 top-2 z-10 p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-					aria-label={revealed ? "Hide value" : "Show value"}
+					aria-label={revealed ? t`Hide value` : t`Show value`}
 				>
 					{revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 				</button>

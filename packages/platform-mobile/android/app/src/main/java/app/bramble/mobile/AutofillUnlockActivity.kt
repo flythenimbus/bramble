@@ -113,7 +113,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
         col.addView(glyph(64), centered())
 
         col.addView(TextView(this).apply {
-            text = "Enter your master password to unlock your vault"
+            text = getString(R.string.af_unlock_title)
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 20f
             setPadding(0, dp(20), 0, dp(20))
@@ -126,12 +126,12 @@ class AutofillUnlockActivity : AppCompatActivity() {
         }
 
         if (BiometricUnlock.isAvailable(this)) {
-            card.addView(filledButton("Unlock with biometrics") { doBiometric() })
+            card.addView(filledButton(getString(R.string.af_unlock_biometrics)) { doBiometric() })
             card.addView(spacer(dp(14)))
         }
 
         val pw = EditText(this).apply {
-            hint = "Master password"
+            hint = getString(R.string.af_master_password)
             setHintTextColor(color(R.color.bramble_af_muted))
             setTextColor(color(R.color.bramble_af_foreground))
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -151,7 +151,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
         }
         card.addView(errorView)
 
-        card.addView(outlinedButton("Unlock Vault") { doPassword(pw.text.toString()) })
+        card.addView(outlinedButton(getString(R.string.af_unlock_vault)) { doPassword(pw.text.toString()) })
         col.addView(card)
         scroll.addView(col)
         setContent(scroll)
@@ -163,11 +163,11 @@ class AutofillUnlockActivity : AppCompatActivity() {
     private fun doBiometric() {
         if (busy) return
         setError(null)
-        BiometricUnlock.unlock(this, "Unlock Bramble") { result ->
+        BiometricUnlock.unlock(this, getString(R.string.af_biometric_prompt_title)) { result ->
             when (result) {
                 is BiometricUnlock.Result.Ok -> proceedWithVek(result.vekB64)
-                BiometricUnlock.Result.NoSecret -> setError("Enter your master password.")
-                BiometricUnlock.Result.Invalidated -> setError("Biometrics changed. Use your master password.")
+                BiometricUnlock.Result.NoSecret -> setError(getString(R.string.af_err_enter_password))
+                BiometricUnlock.Result.Invalidated -> setError(getString(R.string.af_err_biometrics_changed))
                 BiometricUnlock.Result.Cancelled -> { /* stay on the password screen */ }
                 is BiometricUnlock.Result.Error -> setError(result.message)
             }
@@ -183,7 +183,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
             null
         }
         if (slot == null) {
-            setError("This vault has no master password.")
+            setError(getString(R.string.af_err_no_password))
             return
         }
         busy = true
@@ -206,9 +206,9 @@ class AutofillUnlockActivity : AppCompatActivity() {
             runOnUiThread {
                 busy = false
                 outcome.onSuccess { vek ->
-                    if (vek != null) proceedWithVek(vek) else setError("Incorrect master password")
+                    if (vek != null) proceedWithVek(vek) else setError(getString(R.string.af_err_incorrect_password))
                 }
-                outcome.onFailure { setError(it.message ?: "Unlock failed") }
+                outcome.onFailure { setError(it.message ?: getString(R.string.af_err_unlock_failed)) }
             }
         }.start()
     }
@@ -227,7 +227,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 if (loaded == null) {
-                    setError("Couldn't load logins.")
+                    setError(getString(R.string.af_err_load_logins))
                     if (passwordField == null) showUnlock()
                 } else {
                     logins = loaded
@@ -250,18 +250,18 @@ class AutofillUnlockActivity : AppCompatActivity() {
         }
         header.addView(glyph(26))
         header.addView(TextView(this).apply {
-            text = "Bramble"
+            text = getString(R.string.app_name)
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 19f
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(10), 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        header.addView(textButton("Cancel") { cancel() })
+        header.addView(textButton(getString(R.string.af_cancel)) { cancel() })
         outer.addView(header)
 
         val search = EditText(this).apply {
-            hint = "Search logins"
+            hint = getString(R.string.af_search_logins)
             setHintTextColor(color(R.color.bramble_af_muted))
             setTextColor(color(R.color.bramble_af_foreground))
             inputType = InputType.TYPE_CLASS_TEXT
@@ -294,25 +294,25 @@ class AutofillUnlockActivity : AppCompatActivity() {
         container.removeAllViews()
         val q = query.trim().lowercase()
         if (logins.isEmpty()) {
-            container.addView(emptyLabel("No logins saved yet.\nAdd one in Bramble."))
+            container.addView(emptyLabel(getString(R.string.af_empty_no_logins)))
             return
         }
         if (q.isNotEmpty()) {
             val filtered = logins.filter { it.matchesQuery(q) }
-            if (filtered.isEmpty()) container.addView(emptyLabel("No logins match “$query”."))
+            if (filtered.isEmpty()) container.addView(emptyLabel(getString(R.string.af_empty_no_match, query)))
             else filtered.forEach { container.addView(row(it)) }
             return
         }
         if (!showAll && matches.isNotEmpty()) {
-            container.addView(sectionLabel(if (label.isNotEmpty()) "For $label" else "Matches"))
+            container.addView(sectionLabel(if (label.isNotEmpty()) getString(R.string.af_section_for, label) else getString(R.string.af_section_matches)))
             matches.forEach { container.addView(row(it)) }
             val others = logins.filter { o -> matches.none { it.id == o.id } }
             if (others.isNotEmpty()) {
-                container.addView(sectionLabel("All items"))
+                container.addView(sectionLabel(getString(R.string.af_section_all_items)))
                 others.forEach { container.addView(row(it)) }
             }
         } else {
-            val title = if (matches.isEmpty() && label.isNotEmpty()) "No matches for $label" else "Items (${logins.size})"
+            val title = if (matches.isEmpty() && label.isNotEmpty()) getString(R.string.af_section_no_matches, label) else getString(R.string.af_section_items_count, logins.size)
             container.addView(sectionLabel(title))
             logins.forEach { container.addView(row(it)) }
         }
@@ -328,7 +328,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
             setOnClickListener { complete(login) }
         }
         val chip = TextView(this).apply {
-            text = initials(login.displayTitle())
+            text = initials(login.displayTitle(this@AutofillUnlockActivity))
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 14f
             gravity = Gravity.CENTER
@@ -339,7 +339,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
         rowView.addView(chip)
         val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         texts.addView(TextView(this).apply {
-            text = login.displayTitle()
+            text = login.displayTitle(this@AutofillUnlockActivity)
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 16f
             setTypeface(typeface, Typeface.BOLD)

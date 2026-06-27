@@ -35,7 +35,7 @@ object Datasets {
         nowMillis: Long,
         inline: InlinePresentation? = null,
     ): Dataset {
-        val pres = presentation(context, login.displayTitle(), login.username)
+        val pres = presentation(context, login.displayTitle(context), login.username)
         val builder = Dataset.Builder(pres)
         fun put(id: AutofillId, value: String) {
             if (inline != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -53,4 +53,5 @@ object Datasets {
     }
 }
 
-fun AutofillLogin.displayTitle(): String = name.ifEmpty { username.ifEmpty { "(no name)" } }
+fun AutofillLogin.displayTitle(context: Context): String =
+    name.ifEmpty { username.ifEmpty { context.getString(R.string.af_no_name) } }

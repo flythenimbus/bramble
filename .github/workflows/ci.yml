@@ -74,6 +74,13 @@ jobs:
       - name: Biome
         run: pnpm run ci:check
 
+      # Extraction currency + translation completeness across every surface
+      # (Lingui .po, Android strings.xml, iOS .xcstrings, fastlane metadata).
+      # --extract re-runs `lingui extract` first, so a new source string that was
+      # never translated surfaces as a missing entry and fails the build.
+      - name: i18n check
+        run: node scripts/i18n-check.mjs --extract
+
       - name: Test
         run: pnpm run test
 

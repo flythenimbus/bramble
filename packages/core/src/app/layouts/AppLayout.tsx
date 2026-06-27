@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
@@ -12,6 +13,7 @@ export function AppLayout() {
 	const { lock, pendingSyncCount } = useVault();
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
+	const { t } = useLingui();
 
 	// Back prefers real history (so Edit-from-list returns to the list) and falls
 	// back to the route's staticData.back when there's none (a popped-out window
@@ -44,8 +46,8 @@ export function AppLayout() {
 									type="button"
 									onClick={onBack}
 									className="flex items-center justify-center w-9 h-9 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.95] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									aria-label="Go back"
-									title="Go back"
+									aria-label={t`Go back`}
+									title={t`Go back`}
 								>
 									<ArrowLeft className="w-4 h-4" />
 								</button>
@@ -54,7 +56,7 @@ export function AppLayout() {
 								type="button"
 								onClick={() => navigate({ to: "/vault" })}
 								className="flex items-center gap-2.5 rounded-lg active:scale-[0.98] transition-all"
-								aria-label="Go to vault"
+								aria-label={t`Go to vault`}
 							>
 								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
 								<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
@@ -69,9 +71,9 @@ export function AppLayout() {
 								// lingers, the flush failed.
 								<span
 									className="text-[11px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20"
-									title="Vault changes saved by autofill while the popup was closed are syncing to disk"
+									title={t`Vault changes saved by autofill while the popup was closed are syncing to disk`}
 								>
-									{pendingSyncCount} pending sync
+									<Trans>{pendingSyncCount} pending sync</Trans>
 								</span>
 							)}
 							{canPopOut && (
@@ -79,8 +81,8 @@ export function AppLayout() {
 									type="button"
 									onClick={popOut}
 									className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-									aria-label="Open in window"
-									title="Open in window"
+									aria-label={t`Open in window`}
+									title={t`Open in window`}
 								>
 									<ExternalLink className="w-4 h-4" />
 								</button>
@@ -91,8 +93,8 @@ export function AppLayout() {
 									void lock();
 								}}
 								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label="Lock vault"
-								title="Lock vault"
+								aria-label={t`Lock vault`}
+								title={t`Lock vault`}
 							>
 								<Lock className="w-4 h-4" />
 							</button>
@@ -100,7 +102,7 @@ export function AppLayout() {
 								type="button"
 								onClick={() => navigate({ to: "/settings" })}
 								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label="Settings"
+								aria-label={t`Settings`}
 							>
 								<SettingsIcon className="w-4 h-4" />
 							</button>

@@ -1,3 +1,6 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
@@ -36,15 +39,16 @@ export interface SshKeyFormValues {
 
 function SshKeyFields() {
 	const { register } = useFormContext<SshKeyFormValues>();
+	const { t } = useLingui();
 	const [showPassphrase, setShowPassphrase] = useState(false);
 
 	return (
 		<>
-			<TextField label="Name" type="text" {...register("name")} />
-			<TextArea label="Public key" rows={2} className="font-mono" {...register("publicKey")} />
-			<SecretArea label="Private key" rows={6} autoComplete="off" {...register("privateKey")} />
+			<TextField label={t`Name`} type="text" {...register("name")} />
+			<TextArea label={t`Public key`} rows={2} className="font-mono" {...register("publicKey")} />
+			<SecretArea label={t`Private key`} rows={6} autoComplete="off" {...register("privateKey")} />
 			<TextField
-				label="Passphrase (optional)"
+				label={t`Passphrase (optional)`}
 				type={showPassphrase ? "text" : "password"}
 				autoComplete="off"
 				endAdornment={
@@ -52,14 +56,14 @@ function SshKeyFields() {
 						type="button"
 						onClick={() => setShowPassphrase((v) => !v)}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={showPassphrase ? "Hide passphrase" : "Show passphrase"}
+						aria-label={showPassphrase ? t`Hide passphrase` : t`Show passphrase`}
 					>
 						{showPassphrase ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 					</button>
 				}
 				{...register("passphrase")}
 			/>
-			<TextArea label="Notes (optional)" rows={2} {...register("notes")} />
+			<TextArea label={t`Notes (optional)`} rows={2} {...register("notes")} />
 		</>
 	);
 }
@@ -76,6 +80,7 @@ interface KeyBlockProps {
 
 /** Multi-line key display with copy and (for secrets) reveal controls. */
 function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockProps) {
+	const { t } = useLingui();
 	const [revealed, setRevealed] = useState(false);
 	const masked = secret && !revealed;
 	return (
@@ -88,7 +93,7 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 							type="button"
 							onClick={() => setRevealed((v) => !v)}
 							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label={revealed ? "Hide private key" : "Show private key"}
+							aria-label={revealed ? t`Hide private key` : t`Show private key`}
 						>
 							{revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 						</button>
@@ -97,7 +102,7 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 						type="button"
 						onClick={onCopy}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={`Copy ${label.toLowerCase()}`}
+						aria-label={t`Copy ${label.toLowerCase()}`}
 					>
 						{copied === copyName ? (
 							<Check className="w-3.5 h-3.5 text-primary" />
@@ -116,13 +121,14 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 
 function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const key = entry as SshKeyEntry;
+	const { t } = useLingui();
 	const [showPassphrase, setShowPassphrase] = useState(false);
 	const fingerprint = useSshFingerprint(key.publicKey);
 	return (
 		<>
 			{fingerprint && (
 				<DetailField
-					label="Fingerprint"
+					label={t`Fingerprint`}
 					copied={copied}
 					copyName="fingerprint"
 					onCopy={() => copy("fingerprint", fingerprint)}
@@ -133,7 +139,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{key.publicKey && (
 				<KeyBlock
-					label="Public key"
+					label={t`Public key`}
 					value={key.publicKey}
 					copyName="public key"
 					copied={copied}
@@ -142,7 +148,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 			)}
 
 			<KeyBlock
-				label="Private key"
+				label={t`Private key`}
 				value={key.privateKey}
 				copyName="private key"
 				copied={copied}
@@ -152,7 +158,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{key.passphrase && (
 				<DetailField
-					label="Passphrase"
+					label={t`Passphrase`}
 					copied={copied}
 					copyName="passphrase"
 					onCopy={() => copy("passphrase", key.passphrase ?? "")}
@@ -161,7 +167,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 							type="button"
 							onClick={() => setShowPassphrase((v) => !v)}
 							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label={showPassphrase ? "Hide passphrase" : "Show passphrase"}
+							aria-label={showPassphrase ? t`Hide passphrase` : t`Show passphrase`}
 						>
 							{showPassphrase ? (
 								<EyeOff className="w-3.5 h-3.5" />
@@ -179,7 +185,9 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{key.notes && (
 				<div className="space-y-1.5">
-					<p className="text-xs text-muted-foreground">Notes</p>
+					<p className="text-xs text-muted-foreground">
+						<Trans>Notes</Trans>
+					</p>
 					<p className="text-sm whitespace-pre-wrap">{key.notes}</p>
 				</div>
 			)}
@@ -189,8 +197,12 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 export const sshKeyMode: EntryMode = {
 	type: "ssh-key",
-	label: "SSH key",
-	description: "Public / private key pair",
+	get label() {
+		return i18n._(msg`SSH key`);
+	},
+	get description() {
+		return i18n._(msg`Public / private key pair`);
+	},
 	icon: KeyRound,
 
 	emptyForm: () => ({ name: "", publicKey: "", privateKey: "", passphrase: "", notes: "" }),
@@ -228,10 +240,10 @@ export const sshKeyMode: EntryMode = {
 		const key = entry as SshKeyEntry;
 		return {
 			icon: KeyRound,
-			secondary: key.keyType ? `SSH key · ${key.keyType}` : "SSH key",
+			secondary: key.keyType ? i18n._(msg`SSH key · ${key.keyType}`) : i18n._(msg`SSH key`),
 			copyItems: [
-				...(key.publicKey ? [{ label: "public key", value: key.publicKey }] : []),
-				...(key.privateKey ? [{ label: "private key", value: key.privateKey }] : []),
+				...(key.publicKey ? [{ label: i18n._(msg`public key`), value: key.publicKey }] : []),
+				...(key.privateKey ? [{ label: i18n._(msg`private key`), value: key.privateKey }] : []),
 			],
 		};
 	},

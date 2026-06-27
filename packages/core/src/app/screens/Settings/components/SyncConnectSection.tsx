@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,6 +41,7 @@ const addedOn = (ms: number): string =>
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, joinGroup, removeDevice } = useVault();
+	const { t } = useLingui();
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
@@ -123,6 +125,8 @@ export function SyncConnectSection() {
 		logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
 	}, [log]);
 
+	// TODO(i18n): note()/run() labels and ✅ messages below feed the hidden debug log
+	// (its render is commented out), so they're left untranslated for now.
 	const note = (line: string) => setLog((prev) => [...prev, line]);
 	// Status streaming is a panel-lifetime subscription (below); here we just reset the
 	// log to the action's label and surface a thrown failure.
@@ -204,7 +208,7 @@ export function SyncConnectSection() {
 		});
 
 	return (
-		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title="Device sync">
+		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
 			{/* Debug transport status log: hidden for now. Uncomment to surface the live
 			    sync diagnostics (offer sent / answer applied / ice connected / channel open).
 			{log.length > 0 && (
@@ -231,7 +235,11 @@ export function SyncConnectSection() {
 							aria-hidden
 						/>
 						<span className="text-sm font-medium">
-							{paired ? `Synced · ${devices.length} devices` : "Waiting for a device to join…"}
+							{paired ? (
+								<Trans>Synced · {devices.length} devices</Trans>
+							) : (
+								<Trans>Waiting for a device to join…</Trans>
+							)}
 						</span>
 					</div>
 
@@ -240,15 +248,17 @@ export function SyncConnectSection() {
 							<div key={d.publicKey} className="flex items-center justify-between gap-2 px-3 py-2">
 								<div className="min-w-0">
 									<div className="text-sm truncate flex items-center gap-2">
-										{d.label || "Unnamed device"}
+										{d.label || t`Unnamed device`}
 										{d.publicKey === myPub && (
 											<span className="text-[10px] uppercase tracking-wide text-primary/80 border border-primary/40 rounded px-1 py-px">
-												This device
+												<Trans>This device</Trans>
 											</span>
 										)}
 									</div>
 									<div className="text-xs text-muted-foreground font-mono">
-										{fingerprint(d.publicKey)} · added {addedOn(d.addedAt)}
+										<Trans>
+											{fingerprint(d.publicKey)} · added {addedOn(d.addedAt)}
+										</Trans>
 									</div>
 								</div>
 								{d.publicKey !== myPub &&
@@ -259,21 +269,21 @@ export function SyncConnectSection() {
 												onClick={() => void remove(d)}
 												className="text-xs text-red-500 hover:underline"
 											>
-												Remove
+												<Trans>Remove</Trans>
 											</button>
 											<button
 												type="button"
 												onClick={() => setRemovingId(null)}
 												className="text-xs text-muted-foreground hover:underline"
 											>
-												Cancel
+												<Trans>Cancel</Trans>
 											</button>
 										</span>
 									) : (
 										<button
 											type="button"
 											onClick={() => setRemovingId(d.id)}
-											aria-label={`Remove ${d.label || "device"}`}
+											aria-label={t`Remove ${d.label || "device"}`}
 											className="shrink-0 p-1 text-muted-foreground hover:text-red-500 transition-colors"
 										>
 											<Trash2 className="w-4 h-4" />
@@ -285,7 +295,7 @@ export function SyncConnectSection() {
 
 					{!paired && (
 						<p className="text-xs text-muted-foreground">
-							Open Bramble on your other device and scan the code, or paste it there.
+							<Trans>Open Bramble on your other device and scan the code, or paste it there.</Trans>
 						</p>
 					)}
 
@@ -295,7 +305,7 @@ export function SyncConnectSection() {
 							onClick={() => void addDevice()}
 							className={`${btnClass} inline-flex items-center gap-1.5`}
 						>
-							<Plus className="w-3.5 h-3.5" /> Add another device
+							<Plus className="w-3.5 h-3.5" /> <Trans>Add another device</Trans>
 						</button>
 						{confirmDisconnect ? (
 							<span className="inline-flex items-center gap-2">
@@ -304,14 +314,14 @@ export function SyncConnectSection() {
 									onClick={() => void disconnect()}
 									className="px-3 py-1.5 text-xs rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 active:scale-[0.98] transition-all"
 								>
-									Confirm disconnect
+									<Trans>Confirm disconnect</Trans>
 								</button>
 								<button
 									type="button"
 									onClick={() => setConfirmDisconnect(false)}
 									className={btnClass}
 								>
-									Cancel
+									<Trans>Cancel</Trans>
 								</button>
 							</span>
 						) : (
@@ -320,14 +330,16 @@ export function SyncConnectSection() {
 								onClick={() => setConfirmDisconnect(true)}
 								className={`${btnClass} inline-flex items-center gap-1.5 text-muted-foreground`}
 							>
-								<Unplug className="w-3.5 h-3.5" /> Disconnect
+								<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
 							</button>
 						)}
 					</div>
 					{confirmDisconnect && (
 						<p className="text-xs text-muted-foreground">
-							Stops syncing this device and keeps it offline-only. Your entries stay here; your
-							other devices aren't affected.
+							<Trans>
+								Stops syncing this device and keeps it offline-only. Your entries stay here; your
+								other devices aren't affected.
+							</Trans>
 						</p>
 					)}
 				</>
@@ -336,18 +348,18 @@ export function SyncConnectSection() {
 				<>
 					<Row
 						icon={<Wifi className="w-4 h-4 text-primary" />}
-						title="Add a device"
-						subtitle="Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
+						title={t`Add a device`}
+						subtitle={t`Generate a one-time pairing code and listen for a device to join. No vault secrets in the code.`}
 					>
 						<button type="button" onClick={() => void addDevice()} className={btnClass}>
-							Add a device
+							<Trans>Add a device</Trans>
 						</button>
 					</Row>
 
 					<Row
 						icon={<Wifi className="w-4 h-4 text-primary" />}
-						title="Join with a pairing code"
-						subtitle="Paste the code from your other device to sync this one to it. Replaces this profile's vault."
+						title={t`Join with a pairing code`}
+						subtitle={t`Paste the code from your other device to sync this one to it. Replaces this profile's vault.`}
 					>
 						<button
 							type="button"
@@ -359,19 +371,19 @@ export function SyncConnectSection() {
 							}
 							className={btnClass}
 						>
-							Join
+							<Trans>Join</Trans>
 						</button>
 					</Row>
 
 					<div className="ml-12 mt-1 space-y-4">
 						<TextField
-							label="Pairing code"
+							label={t`Pairing code`}
 							value={joinCode}
 							onChange={(e) => setJoinCode(e.target.value)}
 						/>
 						{shell.supportsCameraScan && (
 							<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
-								Scan QR code
+								<Trans>Scan QR code</Trans>
 							</button>
 						)}
 						<div className="space-y-4">
@@ -382,14 +394,14 @@ export function SyncConnectSection() {
 										onClick={() => setJoinMethod("password")}
 										className={toggleClass(joinMethod === "password")}
 									>
-										Master password
+										<Trans>Master password</Trans>
 									</button>
 									<button
 										type="button"
 										onClick={() => setJoinMethod("securityKey")}
 										className={toggleClass(joinMethod === "securityKey")}
 									>
-										Security key
+										<Trans>Security key</Trans>
 									</button>
 								</div>
 							)}
@@ -397,7 +409,7 @@ export function SyncConnectSection() {
 								<div className="space-y-4">
 									<TextField
 										type="password"
-										label="Master password for this device"
+										label={t`Master password for this device`}
 										value={joinPassword}
 										onChange={(e) => {
 											setJoinPassword(e.target.value);
@@ -407,28 +419,32 @@ export function SyncConnectSection() {
 									/>
 									<TextField
 										type="password"
-										label="Confirm master password"
+										label={t`Confirm master password`}
 										value={joinPasswordConfirm}
 										onChange={(e) => setJoinPasswordConfirm(e.target.value)}
 										error={
 											joinPasswordConfirm.length > 0 && joinPassword !== joinPasswordConfirm
-												? "Passwords don't match"
+												? t`Passwords don't match`
 												: undefined
 										}
 									/>
 								</div>
 							) : (
 								<p className="text-xs text-muted-foreground">
-									You'll tap your security key when you press Join. No master password is set on
-									this device.
+									<Trans>
+										You'll tap your security key when you press Join. No master password is set on
+										this device.
+									</Trans>
 								</p>
 							)}
 						</div>
 					</div>
 
 					<p className="ml-12 text-xs text-muted-foreground">
-						Once enrolled, devices sync automatically in the background while unlocked, no button or
-						window needed.
+						<Trans>
+							Once enrolled, devices sync automatically in the background while unlocked, no button
+							or window needed.
+						</Trans>
 					</p>
 				</>
 			)}
@@ -442,18 +458,22 @@ export function SyncConnectSection() {
 				{pairingCode !== null && (
 					<div className="p-5 space-y-4">
 						<div className="flex items-center justify-between">
-							<h2 className="text-base font-medium">Add a device</h2>
+							<h2 className="text-base font-medium">
+								<Trans>Add a device</Trans>
+							</h2>
 							<button
 								type="button"
 								onClick={() => setPairingCode(null)}
-								aria-label="Close"
+								aria-label={t`Close`}
 								className="text-muted-foreground hover:text-foreground transition-colors"
 							>
 								<X className="w-4 h-4" />
 							</button>
 						</div>
 						<p className="text-xs text-muted-foreground">
-							Scan this on your other device, or copy the code below. No vault secrets are in it.
+							<Trans>
+								Scan this on your other device, or copy the code below. No vault secrets are in it.
+							</Trans>
 						</p>
 						<div className="rounded-xl bg-white p-4">
 							<QRCodeSVG value={pairingCode} size={320} marginSize={2} className="h-auto w-full" />
@@ -470,7 +490,7 @@ export function SyncConnectSection() {
 								onClick={() => void navigator.clipboard?.writeText(pairingCode)}
 								className={btnClass}
 							>
-								Copy
+								<Trans>Copy</Trans>
 							</button>
 						</div>
 					</div>
@@ -489,29 +509,33 @@ export function SyncConnectSection() {
 					) : (
 						<ChevronRight className="w-3.5 h-3.5" />
 					)}
-					Advanced
+					<Trans>Advanced</Trans>
 				</button>
 				{advancedOpen && (
 					<div className="mt-3 space-y-5 pl-4 border-l border-border/40">
 						<div className="space-y-1.5">
 							<TextField
-								label="Nostr relay URL"
+								label={t`Nostr relay URL`}
 								value={relayUrl}
 								onChange={(e) => onRelayChange(e.target.value)}
 							/>
 							<p className="text-xs text-muted-foreground">
-								The signaling relay that introduces devices. Defaults to the hosted relay; point it
-								at your own or any public Nostr relay.
+								<Trans>
+									The signaling relay that introduces devices. Defaults to the hosted relay; point
+									it at your own or any public Nostr relay.
+								</Trans>
 							</p>
 						</div>
 						<div className="space-y-1.5">
 							<TextField
-								label="TURN / ICE servers URL"
+								label={t`TURN / ICE servers URL`}
 								value={iceUrl}
 								onChange={(e) => onIceChange(e.target.value)}
 							/>
 							<p className="text-xs text-muted-foreground">
-								An endpoint that returns your own ICE servers as JSON. Defaults to the relay's.
+								<Trans>
+									An endpoint that returns your own ICE servers as JSON. Defaults to the relay's.
+								</Trans>
 							</p>
 						</div>
 						{/* FSA-backed vaults only; no file backing to grant elsewhere (mobile, no-FSA browsers). */}
@@ -519,11 +543,11 @@ export function SyncConnectSection() {
 							<div className="pt-2">
 								<Row
 									icon={<Wifi className="w-4 h-4 text-primary" />}
-									title="Grant file access"
-									subtitle="For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts)."
+									title={t`Grant file access`}
+									subtitle={t`For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts).`}
 								>
 									<button type="button" onClick={() => void grantAccess()} className={btnClass}>
-										Grant access
+										<Trans>Grant access</Trans>
 									</button>
 								</Row>
 							</div>

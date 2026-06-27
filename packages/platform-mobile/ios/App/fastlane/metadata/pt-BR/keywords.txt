@@ -1,0 +1,1 @@
+segurança,TOTP,KeePass,autenticador,credenciais,offline,criptografia,biometria

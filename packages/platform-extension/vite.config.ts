@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { linguiMacroPlugin } from "../../scripts/vite-lingui.mjs";
 
 const root = resolve(__dirname, "src");
 const outDir = resolve(__dirname, "dist");
@@ -11,6 +12,9 @@ export default defineConfig({
 	root,
 	publicDir: resolve(__dirname, "public"),
 	plugins: [
+		// Rewrites <Trans>/t`` macros (English stays inline; i18n:extract pulls it
+		// into catalogs). Must run before react(): see scripts/vite-lingui.mjs.
+		linguiMacroPlugin(),
 		react(),
 		tailwindcss(),
 		{

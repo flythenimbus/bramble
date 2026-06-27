@@ -1,8 +1,10 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
 import { ThemeProvider } from "./hooks/useTheme";
+import { LocaleGate } from "./LocaleGate";
 import { setPendingCreateEntry } from "./pending-create-entry";
 import { type AppRouter, createAppRouter } from "./router";
 
@@ -20,6 +22,10 @@ interface AppProps {
 	// Mobile only: a captured sign-in to save, surfaced as a prefilled add-login form
 	// once the vault is unlocked. Absent on desktop / the extension.
 	pendingLogin?: PendingLogin;
+	// BCP-47 tag the host detected (mobile reads Capacitor Device.getLanguageTag,
+	// which is reliable where WKWebView's navigator.language is clamped to the app
+	// bundle's localizations). Falls back to navigator.language.
+	preferredLocale?: string;
 }
 
 // Feeds the live vault slice to route guards via the router context prop. Since
@@ -57,16 +63,25 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 }
 
 /** Root component: wires theme, vault, pop-out, and router providers around the app. */
-export default function App({ initialPath, initialDraft, pendingLogin }: AppProps = {}) {
+export default function App({
+	initialPath,
+	initialDraft,
+	pendingLogin,
+	preferredLocale,
+}: AppProps = {}) {
 	// One router per tree, seeded once with the handed-over path.
 	const [router] = useState(() => createAppRouter(initialPath));
 	return (
-		<ThemeProvider>
-			<VaultProvider>
-				<PopOutProvider router={router} initialDraft={initialDraft}>
-					<InnerApp router={router} pendingLogin={pendingLogin} />
-				</PopOutProvider>
-			</VaultProvider>
-		</ThemeProvider>
+		<ErrorBoundary>
+			<LocaleGate preferredLocale={preferredLocale}>
+				<ThemeProvider>
+					<VaultProvider>
+						<PopOutProvider router={router} initialDraft={initialDraft}>
+							<InnerApp router={router} pendingLogin={pendingLogin} />
+						</PopOutProvider>
+					</VaultProvider>
+				</ThemeProvider>
+			</LocaleGate>
+		</ErrorBoundary>
 	);
 }

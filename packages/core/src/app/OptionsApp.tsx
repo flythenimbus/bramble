@@ -1,10 +1,13 @@
+import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { ThemeProvider } from "./hooks/useTheme";
+import { LocaleGate } from "./LocaleGate";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
 // Lazy: the import pipeline + parsers load as an on-demand chunk, off the popup's main bundle.
@@ -49,9 +52,11 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 					<div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-4">
 						<Check className="w-9 h-9 text-primary-foreground" />
 					</div>
-					<h1 className="text-2xl mb-2">{done === "created" ? "Vault ready" : "Vault unlocked"}</h1>
+					<h1 className="text-2xl mb-2">
+						{done === "created" ? <Trans>Vault ready</Trans> : <Trans>Vault unlocked</Trans>}
+					</h1>
 					<p className="text-sm text-muted-foreground">
-						You can close this tab and use the {shell.appName} popup.
+						<Trans>You can close this tab and use the {shell.appName} popup.</Trans>
 					</p>
 				</div>
 			</div>
@@ -90,25 +95,32 @@ export default function OptionsApp({
 	onComplete,
 	mobile,
 	screen,
+	preferredLocale,
 }: {
 	onComplete?: () => void;
 	mobile?: boolean;
 	/** Force a screen (single-window hosts pass this); otherwise read from `?screen=`. */
 	screen?: OptionsScreen;
+	/** Host-detected locale tag (mobile passes Capacitor Device); else navigator.language. */
+	preferredLocale?: string;
 } = {}) {
 	// `?screen=import` (from Settings) routes to the import flow instead of setup.
 	const active = screen ?? new URLSearchParams(window.location.search).get("screen");
 	return (
-		<ThemeProvider>
-			<VaultProvider>
-				{active === "import" ? (
-					<Suspense fallback={null}>
-						<ImportShell onClose={onComplete} />
-					</Suspense>
-				) : (
-					<SetupShell onComplete={onComplete} mobile={mobile} />
-				)}
-			</VaultProvider>
-		</ThemeProvider>
+		<ErrorBoundary>
+			<LocaleGate preferredLocale={preferredLocale}>
+				<ThemeProvider>
+					<VaultProvider>
+						{active === "import" ? (
+							<Suspense fallback={null}>
+								<ImportShell onClose={onComplete} />
+							</Suspense>
+						) : (
+							<SetupShell onComplete={onComplete} mobile={mobile} />
+						)}
+					</VaultProvider>
+				</ThemeProvider>
+			</LocaleGate>
+		</ErrorBoundary>
 	);
 }

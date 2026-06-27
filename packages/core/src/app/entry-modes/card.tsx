@@ -1,3 +1,6 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { CreditCard, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
@@ -32,20 +35,21 @@ function cardSubtitle(card: CardEntryData): string {
 
 function CardFields() {
 	const { register } = useFormContext<CardFormValues>();
+	const { t } = useLingui();
 	const [showNumber, setShowNumber] = useState(false);
 	const [showCvv, setShowCvv] = useState(false);
 
 	return (
 		<>
-			<TextField label="Name" type="text" autoComplete="off" {...register("name")} />
+			<TextField label={t`Name`} type="text" autoComplete="off" {...register("name")} />
 			<TextField
-				label="Cardholder name"
+				label={t`Cardholder name`}
 				type="text"
 				autoComplete="off"
 				{...register("cardholderName")}
 			/>
 			<TextField
-				label="Card number"
+				label={t`Card number`}
 				type={showNumber ? "text" : "password"}
 				inputMode="numeric"
 				autoComplete="off"
@@ -55,7 +59,7 @@ function CardFields() {
 						type="button"
 						onClick={() => setShowNumber((v) => !v)}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={showNumber ? "Hide card number" : "Show card number"}
+						aria-label={showNumber ? t`Hide card number` : t`Show card number`}
 					>
 						{showNumber ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 					</button>
@@ -65,7 +69,7 @@ function CardFields() {
 
 			<div className="grid grid-cols-3 gap-3">
 				<TextField
-					label="Month (MM)"
+					label={t`Month (MM)`}
 					type="text"
 					inputMode="numeric"
 					autoComplete="off"
@@ -73,7 +77,7 @@ function CardFields() {
 					{...register("expMonth")}
 				/>
 				<TextField
-					label="Year (YY)"
+					label={t`Year (YY)`}
 					type="text"
 					inputMode="numeric"
 					autoComplete="off"
@@ -81,7 +85,7 @@ function CardFields() {
 					{...register("expYear")}
 				/>
 				<TextField
-					label="CVV"
+					label={t`CVV`}
 					type={showCvv ? "text" : "password"}
 					inputMode="numeric"
 					autoComplete="off"
@@ -91,7 +95,7 @@ function CardFields() {
 							type="button"
 							onClick={() => setShowCvv((v) => !v)}
 							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label={showCvv ? "Hide CVV" : "Show CVV"}
+							aria-label={showCvv ? t`Hide CVV` : t`Show CVV`}
 						>
 							{showCvv ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 						</button>
@@ -100,13 +104,14 @@ function CardFields() {
 				/>
 			</div>
 
-			<TextArea label="Notes (optional)" rows={2} {...register("notes")} />
+			<TextArea label={t`Notes (optional)`} rows={2} {...register("notes")} />
 		</>
 	);
 }
 
 function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const card = entry as CardEntryData & { id: string };
+	const { t } = useLingui();
 	const [showNumber, setShowNumber] = useState(false);
 	const [showCvv, setShowCvv] = useState(false);
 	const expiry = [card.expMonth, card.expYear].filter(Boolean).join(" / ");
@@ -114,7 +119,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	return (
 		<>
 			<DetailField
-				label="Cardholder name"
+				label={t`Cardholder name`}
 				copied={copied}
 				copyName="cardholder name"
 				onCopy={() => copy("cardholder name", card.cardholderName)}
@@ -123,7 +128,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 			</DetailField>
 
 			<DetailField
-				label="Card number"
+				label={t`Card number`}
 				copied={copied}
 				copyName="card number"
 				onCopy={() => copy("card number", card.number)}
@@ -132,7 +137,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 						type="button"
 						onClick={() => setShowNumber((v) => !v)}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={showNumber ? "Hide card number" : "Show card number"}
+						aria-label={showNumber ? t`Hide card number` : t`Show card number`}
 					>
 						{showNumber ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 					</button>
@@ -145,7 +150,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			<div className="grid grid-cols-2 gap-3">
 				<DetailField
-					label="Expires"
+					label={t`Expires`}
 					copied={copied}
 					copyName="expiry"
 					onCopy={() => copy("expiry", expiry)}
@@ -154,7 +159,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				</DetailField>
 
 				<DetailField
-					label="CVV"
+					label={t`CVV`}
 					copied={copied}
 					copyName="CVV"
 					onCopy={() => copy("CVV", card.cvv)}
@@ -163,7 +168,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 							type="button"
 							onClick={() => setShowCvv((v) => !v)}
 							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label={showCvv ? "Hide CVV" : "Show CVV"}
+							aria-label={showCvv ? t`Hide CVV` : t`Show CVV`}
 						>
 							{showCvv ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 						</button>
@@ -177,7 +182,9 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{card.notes && (
 				<div className="space-y-1.5">
-					<p className="text-xs text-muted-foreground">Notes</p>
+					<p className="text-xs text-muted-foreground">
+						<Trans>Notes</Trans>
+					</p>
 					<p className="text-sm whitespace-pre-wrap">{card.notes}</p>
 				</div>
 			)}
@@ -188,8 +195,12 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 /** EntryMode for payment cards. */
 export const cardMode: EntryMode = {
 	type: "card",
-	label: "Payment card",
-	description: "Credit or debit card",
+	get label() {
+		return i18n._(msg`Payment card`);
+	},
+	get description() {
+		return i18n._(msg`Credit or debit card`);
+	},
 	icon: CreditCard,
 
 	emptyForm: () => ({
@@ -239,8 +250,8 @@ export const cardMode: EntryMode = {
 		const card = entry as CardEntryData & { id: string };
 		return {
 			icon: CreditCard,
-			secondary: cardSubtitle(card) || "Payment card",
-			copyItems: [{ label: "card number", value: card.number }],
+			secondary: cardSubtitle(card) || i18n._(msg`Payment card`),
+			copyItems: [{ label: i18n._(msg`card number`), value: card.number }],
 		};
 	},
 

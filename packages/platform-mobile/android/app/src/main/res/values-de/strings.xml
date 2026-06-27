@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="af_unlock_title">Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren</string>
+    <string name="af_unlock_biometrics">Mit Biometrie entsperren</string>
+    <string name="af_master_password">Master-Passwort</string>
+    <string name="af_unlock_vault">Tresor entsperren</string>
+    <string name="af_biometric_prompt_title">Bramble entsperren</string>
+    <string name="af_err_enter_password">Geben Sie Ihr Master-Passwort ein.</string>
+    <string name="af_err_biometrics_changed">Biometrie wurde geändert. Verwenden Sie Ihr Master-Passwort.</string>
+    <string name="af_err_no_password">Dieser Tresor hat kein Master-Passwort.</string>
+    <string name="af_err_incorrect_password">Falsches Master-Passwort</string>
+    <string name="af_err_unlock_failed">Entsperren fehlgeschlagen</string>
+    <string name="af_err_load_logins">Konnten Logins nicht laden.</string>
+    <string name="af_cancel">Abbrechen</string>
+    <string name="af_search_logins">Logins suchen</string>
+    <string name="af_empty_no_logins">Noch keine Logins gespeichert.
+Fügen Sie eines in Bramble hinzu.</string>
+    <string name="af_empty_no_match">Keine Logins entsprechen „%s”.</string>
+    <string name="af_section_for">Für %s</string>
+    <string name="af_section_matches">Treffer</string>
+    <string name="af_section_all_items">Alle Elemente</string>
+    <string name="af_section_no_matches">Keine Treffer für %s</string>
+    <string name="af_section_items_count">Elemente (%d)</string>
+    <string name="af_no_name">(kein Name)</string>
+    <string name="af_use_password">Passwort verwenden</string>
+    <string name="af_err_biometric_prepare">Biometrische Entsperrung konnte nicht vorbereitet werden</string>
+    <string name="af_err_biometric_crypto">Biometrische Verschlüsselung fehlgeschlagen</string>
+    <string name="af_ds_unlock">Entsperren zum automatischem Ausfüllen</string>
+    <string name="af_ds_show_all_logins">Alle Anmeldungen anzeigen</string>
+    <string name="af_ds_search_vault">Tresor durchsuchen</string>
+    <string name="af_ds_show_all">Alle anzeigen</string>
+</resources>

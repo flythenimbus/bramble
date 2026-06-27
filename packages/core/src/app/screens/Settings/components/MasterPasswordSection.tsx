@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertTriangle, Asterisk } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -28,6 +29,7 @@ export function MasterPasswordSection() {
 		setMasterPassword,
 		disableMasterPassword,
 	} = useVault();
+	const { t } = useLingui();
 	const hasSecurityKey = securityKeys.length > 0;
 	// "change" reveals current+new+confirm; "set" reveals new+confirm (re-enable
 	// or first-time on a key-only vault); null = form closed.
@@ -76,7 +78,7 @@ export function MasterPasswordSection() {
 				if (!ok) {
 					setError(
 						"currentPassword",
-						{ message: "Current password is incorrect" },
+						{ message: t`Current password is incorrect` },
 						{ shouldFocus: true },
 					);
 					return;
@@ -126,24 +128,26 @@ export function MasterPasswordSection() {
 		<>
 			<Row
 				icon={<Asterisk className="w-4 h-4 text-primary" />}
-				title="Master password"
+				title={t`Master password`}
 				subtitle={
 					hasPasswordSlot
-						? "Required to unlock your vault."
-						: "Off. You unlock with a security key."
+						? t`Required to unlock your vault.`
+						: t`Off. You unlock with a security key.`
 				}
 			>
 				<Toggle
 					checked={hasPasswordSlot}
 					onChange={onToggle}
 					disabled={hasPasswordSlot && !hasSecurityKey}
-					label="Require master password to unlock"
+					label={t`Require master password to unlock`}
 				/>
 			</Row>
 
 			{hasPasswordSlot && formMode !== "change" && (
 				<div className="ml-12 mt-2 flex items-center justify-between gap-3 text-xs rounded-md border border-border/40 pl-3 pr-1.5 py-1.5">
-					<span className="truncate text-muted-foreground">Change your master password</span>
+					<span className="truncate text-muted-foreground">
+						<Trans>Change your master password</Trans>
+					</span>
 					<button
 						type="button"
 						onClick={() => {
@@ -154,20 +158,20 @@ export function MasterPasswordSection() {
 						}}
 						className="px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 					>
-						Change
+						<Trans>Change</Trans>
 					</button>
 				</div>
 			)}
 
 			{hasPasswordSlot && !hasSecurityKey && (
 				<p className="text-xs text-muted-foreground pl-12">
-					Register a security key below before you can turn off the master password.
+					<Trans>Register a security key below before you can turn off the master password.</Trans>
 				</p>
 			)}
 
 			{pwSuccess && !formMode && (
 				<p className="text-xs text-primary pl-12">
-					{pwSuccess === "changed" ? "Master password updated." : "Master password set."}
+					{pwSuccess === "changed" ? t`Master password updated.` : t`Master password set.`}
 				</p>
 			)}
 
@@ -186,23 +190,23 @@ export function MasterPasswordSection() {
 					)}
 					{formMode === "change" && (
 						<TextField
-							label="Current password"
+							label={t`Current password`}
 							type="password"
 							autoComplete="current-password"
 							autoFocus
 							error={errors.currentPassword?.message}
-							{...register("currentPassword", { required: "Enter your current password" })}
+							{...register("currentPassword", { required: t`Enter your current password` })}
 						/>
 					)}
 					<div>
 						<TextField
-							label="New password"
+							label={t`New password`}
 							type="password"
 							autoComplete="new-password"
 							autoFocus={formMode === "set"}
 							error={errors.newPassword?.message}
 							{...register("newPassword", {
-								required: "Enter a new password",
+								required: t`Enter a new password`,
 								// Only the hard floor (too short) blocks; weakness warns below.
 								validate: masterPasswordHardError,
 							})}
@@ -210,13 +214,13 @@ export function MasterPasswordSection() {
 						<MasterPasswordMeter value={newPasswordValue ?? ""} />
 					</div>
 					<TextField
-						label="Confirm new password"
+						label={t`Confirm new password`}
 						type="password"
 						autoComplete="new-password"
 						error={errors.confirmPassword?.message}
 						{...register("confirmPassword", {
-							required: "Confirm your new password",
-							validate: (value) => value === newPasswordValue || "Passwords don't match",
+							required: t`Confirm your new password`,
+							validate: (value) => value === newPasswordValue || t`Passwords don't match`,
 						})}
 					/>
 					{weakWarning && (
@@ -233,7 +237,7 @@ export function MasterPasswordSection() {
 							disabled={isSubmitting}
 							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
-							Cancel
+							<Trans>Cancel</Trans>
 						</button>
 						<button
 							type="submit"
@@ -241,10 +245,10 @@ export function MasterPasswordSection() {
 							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
 							{isSubmitting
-								? "Saving…"
+								? t`Saving…`
 								: formMode === "change"
-									? "Update password"
-									: "Set password"}
+									? t`Update password`
+									: t`Set password`}
 						</button>
 					</div>
 				</form>
@@ -257,11 +261,15 @@ export function MasterPasswordSection() {
 							<AlertTriangle className="w-5 h-5 text-destructive" />
 						</div>
 						<div>
-							<h2 className="text-base">Disable master password?</h2>
+							<h2 className="text-base">
+								<Trans>Disable master password?</Trans>
+							</h2>
 							<p className="text-sm text-muted-foreground mt-1">
-								You'll unlock this vault with your security key only. If you lose all your security
-								keys, your recovery code is the only way back in. There's no master password to fall
-								back on.
+								<Trans>
+									You'll unlock this vault with your security key only. If you lose all your
+									security keys, your recovery code is the only way back in. There's no master
+									password to fall back on.
+								</Trans>
 							</p>
 						</div>
 					</div>
@@ -273,7 +281,7 @@ export function MasterPasswordSection() {
 							disabled={disabling}
 							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 disabled:opacity-50"
 						>
-							Cancel
+							<Trans>Cancel</Trans>
 						</button>
 						<button
 							type="button"
@@ -281,7 +289,7 @@ export function MasterPasswordSection() {
 							disabled={disabling}
 							className="px-3 py-1.5 text-xs rounded-lg bg-destructive text-white border border-destructive/20 hover:bg-destructive/90 disabled:opacity-50"
 						>
-							{disabling ? "Disabling…" : "Disable master password"}
+							{disabling ? t`Disabling…` : t`Disable master password`}
 						</button>
 					</div>
 				</div>

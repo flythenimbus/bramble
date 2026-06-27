@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2DDF94162081AD593FA9CF2F /* AutoFillProbe.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AB572E26C386476F4199D517 /* AutoFillProbe.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B100000000000000000C0002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000C0001 /* Localizable.xcstrings */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		33BD62871B07DFF7A25F5379 /* AutofillBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6363800275C7C75D7612C3B4 /* AutofillBridge.swift */; };
 		42F8623E6B0F198C0367224B /* BrambleConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */; };
@@ -79,6 +80,7 @@
 		DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.swift; sourceTree = "<group>"; };
 		B100000000000000000B0005 /* vault_crypto.autofill.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.autofill.swift; sourceTree = "<group>"; };
 		FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialProviderViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000C0001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */,
+				B100000000000000000C0001 /* Localizable.xcstrings */,
 				7032D4DE80695ED12D43BB6A /* Info.plist */,
 				3AE14515F7A8E1BEEA894346 /* AutoFillProbe.entitlements */,
 			);
@@ -247,6 +250,11 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
+				"pt-BR",
+				it,
 			);
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
@@ -267,6 +275,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B100000000000000000C0002 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
