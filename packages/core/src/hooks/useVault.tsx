@@ -9,6 +9,7 @@ import {
 	useState,
 } from "react";
 import type { SubdomainMatchMode } from "../adapters/autofill";
+import type { BiometryType } from "../adapters/biometric";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	decodeVaultBlob,
@@ -194,6 +195,8 @@ export interface UseVault {
 	biometricAvailable: boolean;
 	/** A VEK is cached behind the biometric gate on this device. */
 	biometricEnabled: boolean;
+	/** Enrolled modality, for labelling the unlock UI (Face ID vs Touch ID). */
+	biometryType: BiometryType;
 	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
 	enableBiometric(): Promise<void>;
 	/** Forget the device's biometric-cached VEK. */
@@ -220,6 +223,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// `enabled` = a VEK is cached behind it on this device.
 	const [biometricAvailable, setBiometricAvailable] = useState(false);
 	const [biometricEnabled, setBiometricEnabled] = useState(false);
+	const [biometryType, setBiometryType] = useState<BiometryType>("biometric");
 	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -833,12 +837,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const refreshBiometric = useCallback(async () => {
 		if (!biometric) return;
 		try {
-			const [available, enabled] = await Promise.all([
+			const [available, enabled, type] = await Promise.all([
 				biometric.isAvailable(),
 				biometric.isEnabled(),
+				biometric.biometryType?.() ?? Promise.resolve<BiometryType>("biometric"),
 			]);
 			setBiometricAvailable(available);
 			setBiometricEnabled(enabled);
+			setBiometryType(type);
 		} catch (e) {
 			console.error("[vault] biometric state probe failed:", e);
 		}
@@ -938,6 +944,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			biometricSupported: biometric !== undefined,
 			biometricAvailable,
 			biometricEnabled,
+			biometryType,
 			enableBiometric,
 			disableBiometric,
 			unlockWithBiometric,
@@ -979,6 +986,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			biometric,
 			biometricAvailable,
 			biometricEnabled,
+			biometryType,
 			enableBiometric,
 			disableBiometric,
 			unlockWithBiometric,
