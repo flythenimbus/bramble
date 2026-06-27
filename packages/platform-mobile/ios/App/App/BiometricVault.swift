@@ -42,10 +42,15 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		let ok = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
 		var type = "none"
 		if ok {
-			switch context.biometryType {
-			case .faceID: type = "faceId"
-			case .touchID: type = "touchId"
-			default: type = "unknown"
+			// .opticID is iOS 17+; guard it since the deployment target is 15.0.
+			if #available(iOS 17.0, *), context.biometryType == .opticID {
+				type = "opticId"
+			} else {
+				switch context.biometryType {
+				case .faceID: type = "faceId"
+				case .touchID: type = "touchId"
+				default: type = "unknown"
+				}
 			}
 		}
 		call.resolve(["available": ok, "biometryType": type])

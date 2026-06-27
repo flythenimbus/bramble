@@ -1,4 +1,13 @@
-import { Asterisk, ExternalLink, Eye, EyeOff, Fingerprint, KeyRound, Plus } from "lucide-react";
+import {
+	Asterisk,
+	ExternalLink,
+	Eye,
+	EyeOff,
+	Fingerprint,
+	KeyRound,
+	Plus,
+	ScanFace,
+} from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { usePlatform } from "../../../context/PlatformContext";
@@ -22,6 +31,7 @@ export function Auth() {
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
 		biometricEnabled,
+		biometryType,
 		unlockWithBiometric,
 		vaultError,
 	} = useVault();
@@ -119,6 +129,18 @@ export function Auth() {
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
 	const showBiometric = hasVault && biometricEnabled;
+	// Label/icon track the enrolled modality: Face ID gets its own icon, everything
+	// else (Touch ID, generic Android fingerprint) uses the fingerprint icon.
+	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
+	const BiometricIcon = isFaceId ? ScanFace : Fingerprint;
+	const biometricLabel =
+		biometryType === "faceId"
+			? "Unlock with Face ID"
+			: biometryType === "opticId"
+				? "Unlock with Optic ID"
+				: biometryType === "touchId"
+					? "Unlock with Touch ID"
+					: "Unlock with biometrics";
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">
@@ -175,8 +197,8 @@ export function Auth() {
 										disabled={busy}
 										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										<Fingerprint className="w-4 h-4" />
-										{busy ? "Verifying…" : "Unlock with biometrics"}
+										<BiometricIcon className="w-4 h-4" />
+										{busy ? "Verifying…" : biometricLabel}
 									</button>
 								</div>
 							)}

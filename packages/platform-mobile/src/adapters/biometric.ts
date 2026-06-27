@@ -1,5 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
-import type { BiometricUnlock } from "@core/index";
+import type { BiometricUnlock, BiometryType } from "@core/index";
 
 // The native local plugin (ios/App/App/BiometricVault.swift, android .../BiometricVaultPlugin.java)
 // that holds the VEK behind an OS-enforced biometric gate: iOS Keychain item with a
@@ -25,6 +25,14 @@ export const mobileBiometric: BiometricUnlock = {
 			return (await Native.isAvailable()).available;
 		} catch {
 			return false;
+		}
+	},
+	async biometryType(): Promise<BiometryType> {
+		try {
+			const t = (await Native.isAvailable()).biometryType;
+			return t === "faceId" || t === "touchId" || t === "opticId" ? t : "biometric";
+		} catch {
+			return "biometric";
 		}
 	},
 	async isEnabled() {

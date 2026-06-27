@@ -5,9 +5,15 @@
 // untouched. A device holding this cache skips the Argon2 password/recovery KDF; it
 // never replaces those slots, which remain the portable unlock methods. Optional on
 // `Platform` — only mobile supplies it; the extension leaves it undefined.
+/** Best-effort biometric modality for UI copy/icon. Android can't distinguish the
+ * enrolled modality, so it reports "biometric"; iOS maps LAContext.biometryType. */
+export type BiometryType = "faceId" | "touchId" | "opticId" | "biometric";
+
 export interface BiometricUnlock {
 	/** Hardware is present and a biometric is enrolled, so enable/unlock can be offered. */
 	isAvailable(): Promise<boolean>;
+	/** Which modality is enrolled, for labelling the unlock UI. Defaults to "biometric". */
+	biometryType?(): Promise<BiometryType>;
 	/** A VEK is currently cached behind the biometric gate on this device. */
 	isEnabled(): Promise<boolean>;
 	/** Cache the VEK (base64) behind the biometric gate. Call once with the vault unlocked. */

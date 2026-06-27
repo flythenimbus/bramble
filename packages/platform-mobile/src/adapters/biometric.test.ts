@@ -33,6 +33,15 @@ describe("mobileBiometric availability probes swallow errors", () => {
 		expect(await mobileBiometric.isAvailable()).toBe(false);
 	});
 
+	it("biometryType maps the native modality, defaulting unknowns to 'biometric'", async () => {
+		native.isAvailable.mockResolvedValue({ available: true, biometryType: "touchId" });
+		expect(await mobileBiometric.biometryType?.()).toBe("touchId");
+		native.isAvailable.mockResolvedValue({ available: true, biometryType: "unknown" });
+		expect(await mobileBiometric.biometryType?.()).toBe("biometric");
+		native.isAvailable.mockRejectedValue(new Error("absent"));
+		expect(await mobileBiometric.biometryType?.()).toBe("biometric");
+	});
+
 	it("isEnabled reflects whether a secret is cached", async () => {
 		native.hasSecret.mockResolvedValue({ value: true });
 		expect(await mobileBiometric.isEnabled()).toBe(true);
