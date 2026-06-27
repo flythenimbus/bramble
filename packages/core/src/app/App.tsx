@@ -23,6 +23,10 @@ interface AppProps {
 	// Mobile only: a captured sign-in to save, surfaced as a prefilled add-login form
 	// once the vault is unlocked. Absent on desktop / the extension.
 	pendingLogin?: PendingLogin;
+	// BCP-47 tag the host detected (mobile reads Capacitor Device.getLanguageTag,
+	// which is reliable where WKWebView's navigator.language is clamped to the app
+	// bundle's localizations). Falls back to navigator.language.
+	preferredLocale?: string;
 }
 
 // Feeds the live vault slice to route guards via the router context prop. Since
@@ -60,18 +64,25 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 }
 
 /** Root component: wires theme, vault, pop-out, and router providers around the app. */
-export default function App({ initialPath, initialDraft, pendingLogin }: AppProps = {}) {
+export default function App({
+	initialPath,
+	initialDraft,
+	pendingLogin,
+	preferredLocale,
+}: AppProps = {}) {
 	// One router per tree, seeded once with the handed-over path.
 	const [router] = useState(() => createAppRouter(initialPath));
 	// Load the catalog for the detected locale before first paint to avoid an
 	// English flash; fall back to the source locale, which always renders.
 	const [localeReady, setLocaleReady] = useState(i18n.locale === defaultLocale);
 	useEffect(() => {
-		const locale = resolveLocale(typeof navigator !== "undefined" ? navigator.language : undefined);
+		const tag =
+			preferredLocale ?? (typeof navigator !== "undefined" ? navigator.language : undefined);
+		const locale = resolveLocale(tag);
 		activateLocale(locale)
 			.catch(() => activateLocale(defaultLocale))
 			.finally(() => setLocaleReady(true));
-	}, []);
+	}, [preferredLocale]);
 
 	if (!localeReady) return null;
 

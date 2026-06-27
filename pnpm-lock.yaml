@@ -17,10 +17,10 @@ importers:
         version: 0.106.0(zod@4.4.3)
       '@babel/plugin-syntax-jsx':
         specifier: ^8.0.1
-        version: 8.0.1(@babel/core@7.29.7)
+        version: 8.0.1
       '@babel/preset-typescript':
         specifier: ^8.0.1
-        version: 8.0.1(@babel/core@7.29.7)
+        version: 8.0.1
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.5.0
@@ -41,7 +41,7 @@ importers:
         version: 2.0.0
       vite-plugin-babel:
         specifier: ^1.7.3
-        version: 1.7.3(@babel/core@7.29.7)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 1.7.3(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -105,10 +105,10 @@ importers:
     devDependencies:
       '@babel/plugin-syntax-jsx':
         specifier: ^8.0.1
-        version: 8.0.1(@babel/core@7.29.7)
+        version: 8.0.1
       '@babel/preset-typescript':
         specifier: ^8.0.1
-        version: 8.0.1(@babel/core@7.29.7)
+        version: 8.0.1
       '@lingui/babel-plugin-lingui-macro':
         specifier: ^6.4.0
         version: 6.4.0
@@ -120,7 +120,7 @@ importers:
         version: 6.4.0
       '@lingui/vite-plugin':
         specifier: ^6.4.0
-        version: 6.4.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.4.0)(rolldown@1.0.3)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 6.4.0(@lingui/babel-plugin-lingui-macro@6.4.0)(rolldown@1.0.3)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
       '@types/react':
         specifier: ^19.2.15
         version: 19.2.17
@@ -135,7 +135,7 @@ importers:
         version: 5.9.3
       vite-plugin-babel:
         specifier: ^1.7.3
-        version: 1.7.3(@babel/core@7.29.7)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 1.7.3(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
       vitest:
         specifier: ^4.1.7
         version: 4.1.9(@types/node@24.13.2)(happy-dom@20.10.6)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
@@ -215,6 +215,9 @@ importers:
       '@capacitor/core':
         specifier: ^8.4.1
         version: 8.4.1
+      '@capacitor/device':
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@8.4.1)
       '@capacitor/filesystem':
         specifier: ^8.1.2
         version: 8.1.2(@capacitor/core@8.4.1)
@@ -573,6 +576,11 @@ packages:
 
   '@capacitor/core@8.4.1':
     resolution: {integrity: sha512-xqhOGLbTAYeOWK+IDUNSjQJAPapQjRHrIcgk9PYp52or9zFTaaMko31uNi16N6W+CRJ8VrRram6fOYILkBG2Hg==}
+
+  '@capacitor/device@8.0.2':
+    resolution: {integrity: sha512-fIqSXnG0s6bz5A/0xFgSXDkbU+Xl65ti80LhucNvLI4kGhJzcNn6SwWVwpXN9SJTOFWXblXknHNppheP8X1frQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/filesystem@8.1.2':
     resolution: {integrity: sha512-doaaMfGoFR2hWU6aV6u83I+5ZsGyJVq+Gz4r9lMpJzUKMm1eMu0hLnFdV1aXZlU9FlK/RndFrVD8oRZfNOqWgQ==}
@@ -2807,13 +2815,12 @@ snapshots:
       lru-cache: 5.1.1
       semver: 6.3.1
 
-  '@babel/helper-create-class-features-plugin@8.0.1(@babel/core@7.29.7)':
+  '@babel/helper-create-class-features-plugin@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
       '@babel/helper-annotate-as-pure': 8.0.0
       '@babel/helper-member-expression-to-functions': 8.0.0
       '@babel/helper-optimise-call-expression': 8.0.0
-      '@babel/helper-replace-supers': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-replace-supers': 8.0.1
       '@babel/helper-skip-transparent-expression-wrappers': 8.0.0
       '@babel/traverse': 8.0.0
       semver: 7.8.4
@@ -2848,9 +2855,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/helper-module-transforms@8.0.1(@babel/core@7.29.7)':
+  '@babel/helper-module-transforms@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
       '@babel/helper-module-imports': 8.0.0
       '@babel/helper-validator-identifier': 8.0.2
       '@babel/traverse': 8.0.0
@@ -2859,13 +2865,10 @@ snapshots:
     dependencies:
       '@babel/types': 8.0.0
 
-  '@babel/helper-plugin-utils@8.0.1(@babel/core@7.29.7)':
-    dependencies:
-      '@babel/core': 7.29.7
+  '@babel/helper-plugin-utils@8.0.1': {}
 
-  '@babel/helper-replace-supers@8.0.1(@babel/core@7.29.7)':
+  '@babel/helper-replace-supers@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
       '@babel/helper-member-expression-to-functions': 8.0.0
       '@babel/helper-optimise-call-expression': 8.0.0
       '@babel/traverse': 8.0.0
@@ -2900,38 +2903,33 @@ snapshots:
     dependencies:
       '@babel/types': 8.0.0
 
-  '@babel/plugin-syntax-jsx@8.0.1(@babel/core@7.29.7)':
+  '@babel/plugin-syntax-jsx@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-plugin-utils': 8.0.1
 
-  '@babel/plugin-syntax-typescript@8.0.1(@babel/core@7.29.7)':
+  '@babel/plugin-syntax-typescript@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-plugin-utils': 8.0.1
 
-  '@babel/plugin-transform-modules-commonjs@8.0.1(@babel/core@7.29.7)':
+  '@babel/plugin-transform-modules-commonjs@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-module-transforms': 8.0.1(@babel/core@7.29.7)
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-module-transforms': 8.0.1
+      '@babel/helper-plugin-utils': 8.0.1
 
-  '@babel/plugin-transform-typescript@8.0.1(@babel/core@7.29.7)':
+  '@babel/plugin-transform-typescript@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
       '@babel/helper-annotate-as-pure': 8.0.0
-      '@babel/helper-create-class-features-plugin': 8.0.1(@babel/core@7.29.7)
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-create-class-features-plugin': 8.0.1
+      '@babel/helper-plugin-utils': 8.0.1
       '@babel/helper-skip-transparent-expression-wrappers': 8.0.0
-      '@babel/plugin-syntax-typescript': 8.0.1(@babel/core@7.29.7)
+      '@babel/plugin-syntax-typescript': 8.0.1
 
-  '@babel/preset-typescript@8.0.1(@babel/core@7.29.7)':
+  '@babel/preset-typescript@8.0.1':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@7.29.7)
+      '@babel/helper-plugin-utils': 8.0.1
       '@babel/helper-validator-option': 8.0.0
-      '@babel/plugin-transform-modules-commonjs': 8.0.1(@babel/core@7.29.7)
-      '@babel/plugin-transform-typescript': 8.0.1(@babel/core@7.29.7)
+      '@babel/plugin-transform-modules-commonjs': 8.0.1
+      '@babel/plugin-transform-typescript': 8.0.1
 
   '@babel/runtime@7.29.7': {}
 
@@ -3055,6 +3053,10 @@ snapshots:
   '@capacitor/core@8.4.1':
     dependencies:
       tslib: 2.8.1
+
+  '@capacitor/device@8.0.2(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
 
   '@capacitor/filesystem@8.1.2(@capacitor/core@8.4.1)':
     dependencies:
@@ -3515,13 +3517,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@lingui/vite-plugin@6.4.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.4.0)(rolldown@1.0.3)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@lingui/vite-plugin@6.4.0(@lingui/babel-plugin-lingui-macro@6.4.0)(rolldown@1.0.3)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))':
     dependencies:
       '@lingui/cli': 6.4.0
       '@lingui/conf': 6.4.0
       vite: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)
     optionalDependencies:
-      '@babel/core': 7.29.7
       '@lingui/babel-plugin-lingui-macro': 6.4.0
       rolldown: 1.0.3
     transitivePeerDependencies:
@@ -4748,9 +4749,8 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite-plugin-babel@1.7.3(@babel/core@7.29.7)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)):
+  vite-plugin-babel@1.7.3(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)):
     dependencies:
-      '@babel/core': 7.29.7
       vite: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)
 
   vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0):
