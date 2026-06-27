@@ -97,6 +97,10 @@ msgstr "Add"
 msgid "Add a device"
 msgstr "Add a device"
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add a new login"
+msgstr "Add a new login"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Add another device"
 msgstr "Add another device"
@@ -187,6 +191,10 @@ msgid "Cancel"
 msgstr "Cancel"
 
 #: packages/core/src/app/entry-modes/card.tsx
+msgid "card number"
+msgstr "card number"
+
+#: packages/core/src/app/entry-modes/card.tsx
 msgid "Card number"
 msgstr "Card number"
 
@@ -198,6 +206,10 @@ msgstr "Cardholder name"
 #: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
 msgid "Change"
 msgstr "Change"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Change it on the site to keep your account safe."
+msgstr "Change it on the site to keep your account safe."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Change your master password"
@@ -277,6 +289,10 @@ msgstr "Confirm your new password"
 msgid "Content"
 msgstr "Content"
 
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "contents"
+msgstr "contents"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Controls which URLs this entry will offer credentials for."
 msgstr "Controls which URLs this entry will offer credentials for."
@@ -343,6 +359,10 @@ msgstr "Create your vault"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Creating…"
 msgstr "Creating…"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Credit or debit card"
+msgstr "Credit or debit card"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -664,6 +684,10 @@ msgstr "Lock vault"
 msgid "Lock vault after inactivity"
 msgstr "Lock vault after inactivity"
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Login"
+msgstr "Login"
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
@@ -838,6 +862,10 @@ msgid "Passphrase (optional)"
 msgstr "Passphrase (optional)"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "password"
+msgstr "password"
+
+#: packages/core/src/app/entry-modes/login.tsx
 msgid "Password"
 msgstr "Password"
 
@@ -862,6 +890,10 @@ msgstr "Passwords don't match"
 msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 msgstr "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Payment card"
+msgstr "Payment card"
+
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
 msgstr "Pick a master password to protect your vault."
@@ -883,8 +915,20 @@ msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Press Enter / submit the form right after the credentials are filled in."
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "private key"
+msgstr "private key"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Private key"
 msgstr "Private key"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Public / private key pair"
+msgstr "Public / private key pair"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "public key"
+msgstr "public key"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Public key"
@@ -1004,6 +1048,10 @@ msgstr "Scan this on your other device, or copy the code below. No vault secrets
 msgid "Search vault"
 msgstr "Search vault"
 
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Secure note"
+msgstr "Secure note"
+
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Security"
 msgstr "Security"
@@ -1104,9 +1152,22 @@ msgstr "Skip your password on this device with {name}."
 msgid "Sort by name"
 msgstr "Sort by name"
 
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key"
+msgstr "SSH key"
+
+#. placeholder {0}: key.keyType
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key · {0}"
+msgstr "SSH key · {0}"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."
 msgstr "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Store sensitive text"
+msgstr "Store sensitive text"
 
 #: packages/core/src/app/components/ui/master-password-meter.tsx
 msgid "Strength"
@@ -1178,6 +1239,10 @@ msgstr "This file held {0} {noun}, but none matched a supported format."
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
 msgstr "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This password appeared in a known data breach."
+msgstr "This password appeared in a known data breach."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
@@ -1293,6 +1358,10 @@ msgstr "Use light, dark, or match your system"
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"
 msgstr "Use this password anyway"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "username"
+msgstr "username"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Username"

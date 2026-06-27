@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -195,8 +197,12 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 export const sshKeyMode: EntryMode = {
 	type: "ssh-key",
-	label: "SSH key",
-	description: "Public / private key pair",
+	get label() {
+		return i18n._(msg`SSH key`);
+	},
+	get description() {
+		return i18n._(msg`Public / private key pair`);
+	},
 	icon: KeyRound,
 
 	emptyForm: () => ({ name: "", publicKey: "", privateKey: "", passphrase: "", notes: "" }),
@@ -234,10 +240,10 @@ export const sshKeyMode: EntryMode = {
 		const key = entry as SshKeyEntry;
 		return {
 			icon: KeyRound,
-			secondary: key.keyType ? `SSH key · ${key.keyType}` : "SSH key",
+			secondary: key.keyType ? i18n._(msg`SSH key · ${key.keyType}`) : i18n._(msg`SSH key`),
 			copyItems: [
-				...(key.publicKey ? [{ label: "public key", value: key.publicKey }] : []),
-				...(key.privateKey ? [{ label: "private key", value: key.privateKey }] : []),
+				...(key.publicKey ? [{ label: i18n._(msg`public key`), value: key.publicKey }] : []),
+				...(key.privateKey ? [{ label: i18n._(msg`private key`), value: key.privateKey }] : []),
 			],
 		};
 	},

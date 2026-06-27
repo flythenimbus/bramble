@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { FileText } from "lucide-react";
 import { useFormContext } from "react-hook-form";
@@ -43,8 +45,12 @@ function NoteDetail({ entry }: EntryDetailBodyProps) {
 /** EntryMode for secure notes. */
 export const noteMode: EntryMode = {
 	type: "note",
-	label: "Secure note",
-	description: "Store sensitive text",
+	get label() {
+		return i18n._(msg`Secure note`);
+	},
+	get description() {
+		return i18n._(msg`Store sensitive text`);
+	},
 	icon: FileText,
 
 	emptyForm: () => ({ name: "", notes: "" }),
@@ -67,8 +73,8 @@ export const noteMode: EntryMode = {
 		const preview = firstLine(note.notes);
 		return {
 			icon: FileText,
-			secondary: preview || "Secure note",
-			copyItems: note.notes ? [{ label: "contents", value: note.notes }] : [],
+			secondary: preview || i18n._(msg`Secure note`),
+			copyItems: note.notes ? [{ label: i18n._(msg`contents`), value: note.notes }] : [],
 		};
 	},
 

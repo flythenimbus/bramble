@@ -35,6 +35,7 @@
 		"i18n:translate": "node scripts/i18n-translate.mjs",
 		"i18n:compile": "lingui compile --typescript",
 		"i18n:native": "node scripts/i18n-all.mjs",
+		"i18n:check": "node scripts/i18n-check.mjs",
 		"i18n": "pnpm run i18n:extract && pnpm run i18n:translate && pnpm run i18n:compile"
 	},
 	"devDependencies": {

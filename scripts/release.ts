@@ -325,8 +325,11 @@ function gate() {
 		run("pnpm run ci:check");
 		run("pnpm run typecheck");
 		run("pnpm run test");
+		// Never ship with missing translations (po / android / xcstrings / fastlane).
+		// Validates committed catalogs; no --extract so the release tree stays clean.
+		run("pnpm run i18n:check");
 	} catch {
-		fail("lint, typecheck, or tests failed; fix them before releasing");
+		fail("lint, typecheck, tests, or i18n check failed; fix them before releasing");
 	}
 }
 

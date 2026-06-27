@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { passwordStrength } from "check-password-strength";
 import {
@@ -537,8 +539,12 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 export const loginMode: EntryMode = {
 	type: "login",
-	label: "Login",
-	description: "Add a new login",
+	get label() {
+		return i18n._(msg`Login`);
+	},
+	get description() {
+		return i18n._(msg`Add a new login`);
+	},
 	icon: Globe,
 
 	emptyForm: ({ defaultUrl }) => ({
@@ -597,8 +603,8 @@ export const loginMode: EntryMode = {
 	detailAlert: (entry) =>
 		(entry as LoginEntry).breach?.leaked === true
 			? {
-					title: "This password appeared in a known data breach.",
-					body: "Change it on the site to keep your account safe.",
+					title: i18n._(msg`This password appeared in a known data breach.`),
+					body: i18n._(msg`Change it on the site to keep your account safe.`),
 				}
 			: null,
 
@@ -609,8 +615,8 @@ export const loginMode: EntryMode = {
 			initials: login.name.substring(0, 2).toUpperCase(),
 			secondary: login.username,
 			copyItems: [
-				{ label: "username", value: login.username },
-				{ label: "password", value: login.password },
+				{ label: i18n._(msg`username`), value: login.username },
+				{ label: i18n._(msg`password`), value: login.password },
 			],
 			leaked: login.breach?.leaked === true,
 		};

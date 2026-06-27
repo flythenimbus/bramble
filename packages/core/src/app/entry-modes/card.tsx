@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { CreditCard, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
@@ -193,8 +195,12 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 /** EntryMode for payment cards. */
 export const cardMode: EntryMode = {
 	type: "card",
-	label: "Payment card",
-	description: "Credit or debit card",
+	get label() {
+		return i18n._(msg`Payment card`);
+	},
+	get description() {
+		return i18n._(msg`Credit or debit card`);
+	},
 	icon: CreditCard,
 
 	emptyForm: () => ({
@@ -244,8 +250,8 @@ export const cardMode: EntryMode = {
 		const card = entry as CardEntryData & { id: string };
 		return {
 			icon: CreditCard,
-			secondary: cardSubtitle(card) || "Payment card",
-			copyItems: [{ label: "card number", value: card.number }],
+			secondary: cardSubtitle(card) || i18n._(msg`Payment card`),
+			copyItems: [{ label: i18n._(msg`card number`), value: card.number }],
 		};
 	},
 
