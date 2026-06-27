@@ -1,14 +1,18 @@
-// Local, offline translation via Ollama. Two shapes: `translateBatch` for arrays
-// of short UI strings (JSON in/out, chunked + retried), and `translateText` for a
-// single prose blob (store descriptions, release notes).
+// Translation backend. Defaults to local Ollama (offline); if DEEPSEEK_API_KEY is
+// set (e.g. in .env.local) it routes to DeepSeek's OpenAI-compatible API instead.
+// Two shapes: `translateBatch` for arrays of short UI strings (JSON in/out,
+// chunked + retried), and `translateText` for a single prose blob.
 
-const MODEL = process.env.I18N_MODEL ?? "gemma4:e4b-mlx";
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
+const API_BASE = process.env.I18N_API_BASE ?? "https://api.deepseek.com";
 const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+const MODEL = process.env.I18N_MODEL ?? (DEEPSEEK_KEY ? "deepseek-chat" : "gemma4:e4b-mlx");
 // Small models drop/add an item on long arrays; smaller chunks validate far more
 // reliably (a mismatch forces a slow per-string fallback for the whole chunk).
-const CHUNK = Number(process.env.I18N_CHUNK ?? 10);
+// DeepSeek handles bigger batches fine, so widen the chunk there.
+const CHUNK = Number(process.env.I18N_CHUNK ?? (DEEPSEEK_KEY ? 40 : 10));
 
-export const modelInfo = `${MODEL} @ ${OLLAMA_HOST}`;
+export const modelInfo = DEEPSEEK_KEY ? `${MODEL} @ deepseek` : `${MODEL} @ ${OLLAMA_HOST}`;
 
 const GUIDANCE =
 	`Keep the tone concise and trustworthy. Use a consistently FORMAL register ` +
@@ -19,23 +23,30 @@ const GUIDANCE =
 	`KeePass, TOTP).`;
 
 async function chat(system, user) {
-	const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({
-			model: MODEL,
-			stream: false,
-			options: { temperature: 0 },
-			messages: [
-				{ role: "system", content: system },
-				{ role: "user", content: user },
-			],
-		}),
-	});
-	if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
-	const data = await res.json();
+	const messages = [
+		{ role: "system", content: system },
+		{ role: "user", content: user },
+	];
+	let content;
+	if (DEEPSEEK_KEY) {
+		const res = await fetch(`${API_BASE}/chat/completions`, {
+			method: "POST",
+			headers: { "content-type": "application/json", authorization: `Bearer ${DEEPSEEK_KEY}` },
+			body: JSON.stringify({ model: MODEL, temperature: 0, messages }),
+		});
+		if (!res.ok) throw new Error(`DeepSeek ${res.status}: ${await res.text()}`);
+		content = (await res.json()).choices?.[0]?.message?.content ?? "";
+	} else {
+		const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ model: MODEL, stream: false, options: { temperature: 0 }, messages }),
+		});
+		if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
+		content = (await res.json()).message?.content ?? "";
+	}
 	// Some reasoning models wrap a scratchpad in <think>…</think>; drop it.
-	return (data.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "");
+	return content.replace(/<think>[\s\S]*?<\/think>/g, "");
 }
 
 // Placeholders that must survive translation unchanged: {x}, %@, %lld, %s, %1$s, etc.

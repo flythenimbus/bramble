@@ -13,3 +13,7 @@ packages/platform-extension/public/wasm/
 *.age
 *.jks
 *.keystore
+
+# Local env (API keys, never tracked)
+.env.local
+.env*.local
