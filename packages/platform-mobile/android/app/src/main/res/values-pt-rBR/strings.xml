@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="af_unlock_title">Insira sua senha mestra para desbloquear o cofre</string>
+    <string name="af_unlock_biometrics">Desbloquear com biometria</string>
+    <string name="af_master_password">Senha mestra</string>
+    <string name="af_unlock_vault">Desbloquear Cofre</string>
+    <string name="af_biometric_prompt_title">Desbloquear Bramble</string>
+    <string name="af_err_enter_password">Insira sua senha mestra.</string>
+    <string name="af_err_biometrics_changed">Biometria alterada. Utilize sua senha mestra.</string>
+    <string name="af_err_no_password">Este cofre não possui senha mestra.</string>
+    <string name="af_err_incorrect_password">Senha mestra incorreta</string>
+    <string name="af_err_unlock_failed">Desbloqueio falhou</string>
+    <string name="af_err_load_logins">Não foi possível carregar os logins.</string>
+    <string name="af_cancel">Cancelar</string>
+    <string name="af_search_logins">Pesquisar logins</string>
+    <string name="af_empty_no_logins">Nenhum login salvo ainda.
+Adicione um no Bramble.</string>
+    <string name="af_empty_no_match">Nenhum login corresponde a “%s”.</string>
+    <string name="af_section_for">Para %s</string>
+    <string name="af_section_matches">Correspondências</string>
+    <string name="af_section_all_items">Todos os itens</string>
+    <string name="af_section_no_matches">Nenhuma correspondência para %s</string>
+    <string name="af_section_items_count">Itens (%d)</string>
+    <string name="af_no_name">(sem nome)</string>
+    <string name="af_use_password">Usar senha</string>
+    <string name="af_err_biometric_prepare">Não foi possível preparar o desbloqueio biométrico.</string>
+    <string name="af_err_biometric_crypto">Falha na criptografia biométrica.</string>
+    <string name="af_ds_unlock">Desbloquear para preenchimento automático</string>
+    <string name="af_ds_show_all_logins">Mostrar todos os logins</string>
+    <string name="af_ds_search_vault">Pesquisar no seu cofre</string>
+    <string name="af_ds_show_all">Mostrar todos</string>
+</resources>

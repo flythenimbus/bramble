@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="af_unlock_title">Inserisci la password principale per sbloccare il tuo caveau</string>
+    <string name="af_unlock_biometrics">Sblocca con i biometrici</string>
+    <string name="af_master_password">Password principale</string>
+    <string name="af_unlock_vault">Sblocca il caveau</string>
+    <string name="af_biometric_prompt_title">Sblocca Bramble</string>
+    <string name="af_err_enter_password">Inserisci la password principale.</string>
+    <string name="af_err_biometrics_changed">I biometrici sono stati modificati. Utilizza la password principale.</string>
+    <string name="af_err_no_password">Questo caveau non ha una password principale.</string>
+    <string name="af_err_incorrect_password">Password principale errata</string>
+    <string name="af_err_unlock_failed">Sblocco fallito</string>
+    <string name="af_err_load_logins">Non è stato possibile caricare i credenziali.</string>
+    <string name="af_cancel">Annulla</string>
+    <string name="af_search_logins">Cerca credenziali</string>
+    <string name="af_empty_no_logins">Nessun login salvato ancora.
+Aggiungine uno in Bramble.</string>
+    <string name="af_empty_no_match">Nessun login corrisponde a “%s”.</string>
+    <string name="af_section_for">Per %s</string>
+    <string name="af_section_matches">Corrispondenze</string>
+    <string name="af_section_all_items">Tutti gli elementi</string>
+    <string name="af_section_no_matches">Nessuna corrispondenza per "%s"</string>
+    <string name="af_section_items_count">Elementi (%d)</string>
+    <string name="af_no_name">(nessun nome)</string>
+    <string name="af_use_password">Usare la password</string>
+    <string name="af_err_biometric_prepare">Impossibile preparare lo sblocco biometrico</string>
+    <string name="af_err_biometric_crypto">Fallimento della crittografia biometrica</string>
+    <string name="af_ds_unlock">Sblocca per compilazione automatica</string>
+    <string name="af_ds_show_all_logins">Mostra tutti i login</string>
+    <string name="af_ds_search_vault">Cerca nel tuo caveau</string>
+    <string name="af_ds_show_all">Mostra tutto</string>
+</resources>

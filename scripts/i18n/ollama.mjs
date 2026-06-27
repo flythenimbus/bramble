@@ -14,8 +14,9 @@ const GUIDANCE =
 	`Keep the tone concise and trustworthy. Use a consistently FORMAL register ` +
 	`throughout (e.g. "Sie" in German, "usted" in Spanish, "vous" in French, ` +
 	`"Lei" in Italian); never switch to informal address. Preserve placeholders ` +
-	`like {appName} and %s verbatim. Do not translate brand or standard terms ` +
-	`(Bramble, Face ID, Touch ID, Optic ID, AES-256-GCM, KeePass, TOTP).`;
+	`verbatim and in place: {appName}, %s, %d, %1$s and similar. Do not translate ` +
+	`brand or standard terms (Bramble, Face ID, Touch ID, Optic ID, AES-256-GCM, ` +
+	`KeePass, TOTP).`;
 
 async function chat(system, user) {
 	const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
