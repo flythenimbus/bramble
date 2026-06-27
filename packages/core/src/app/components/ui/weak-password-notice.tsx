@@ -1,3 +1,4 @@
+import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
 import { cn } from "./utils";
 
@@ -30,7 +31,7 @@ export function WeakPasswordNotice({ message, accepted, onAccept }: WeakPassword
 				>
 					{accepted && <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />}
 				</span>
-				Use this password anyway
+				<Trans>Use this password anyway</Trans>
 			</label>
 		</div>
 	);

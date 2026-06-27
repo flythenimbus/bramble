@@ -1,3 +1,4 @@
+import { Trans } from "@lingui/react/macro";
 import { masterPasswordStrength } from "../../../util/master-password-strength";
 
 interface MasterPasswordMeterProps {
@@ -14,7 +15,9 @@ export function MasterPasswordMeter({ value }: MasterPasswordMeterProps) {
 	return (
 		<div className="mt-2">
 			<div className="flex items-center justify-between mb-1.5">
-				<span className="text-xs text-muted-foreground">Strength</span>
+				<span className="text-xs text-muted-foreground">
+					<Trans>Strength</Trans>
+				</span>
 				<span className={`text-xs ${textColor}`}>{s.label}</span>
 			</div>
 			<div className="h-1.5 bg-muted rounded-full overflow-hidden">

@@ -1,3 +1,4 @@
+import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
@@ -49,9 +50,11 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 					<div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-4">
 						<Check className="w-9 h-9 text-primary-foreground" />
 					</div>
-					<h1 className="text-2xl mb-2">{done === "created" ? "Vault ready" : "Vault unlocked"}</h1>
+					<h1 className="text-2xl mb-2">
+						{done === "created" ? <Trans>Vault ready</Trans> : <Trans>Vault unlocked</Trans>}
+					</h1>
 					<p className="text-sm text-muted-foreground">
-						You can close this tab and use the {shell.appName} popup.
+						<Trans>You can close this tab and use the {shell.appName} popup.</Trans>
 					</p>
 				</div>
 			</div>

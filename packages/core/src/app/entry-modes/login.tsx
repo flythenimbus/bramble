@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { passwordStrength } from "check-password-strength";
 import {
 	Camera,
@@ -63,6 +64,7 @@ function randomPassword(): string {
 function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const { register, control, watch, setValue, getValues } = useFormContext<LoginFormValues>();
 	const { shell } = usePlatform();
+	const { t } = useLingui();
 	const [showPassword, setShowPassword] = useState(false);
 	const {
 		fields: urlFields,
@@ -109,18 +111,20 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 
 	return (
 		<>
-			<TextField label="Name" type="text" {...register("name")} />
+			<TextField label={t`Name`} type="text" {...register("name")} />
 
 			<div>
 				<div className="flex items-center justify-between mb-2">
-					<span className="block text-sm">Websites</span>
+					<span className="block text-sm">
+						<Trans>Websites</Trans>
+					</span>
 					<button
 						type="button"
 						onClick={() => appendUrl({ value: "" })}
 						className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 					>
 						<Plus className="w-3 h-3" />
-						Add URL
+						<Trans>Add URL</Trans>
 					</button>
 				</div>
 
@@ -130,7 +134,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 							<div key={field.id} className="flex gap-2 items-start">
 								<div className="flex-1">
 									<TextField
-										label="Website URL"
+										label={t`Website URL`}
 										type="url"
 										autoComplete="off"
 										{...register(`urls.${index}.value`)}
@@ -140,7 +144,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 									type="button"
 									onClick={() => removeUrl(index)}
 									className="mt-2 p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
-									aria-label="Remove URL"
+									aria-label={t`Remove URL`}
 								>
 									<X className="w-4 h-4" />
 								</button>
@@ -149,13 +153,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					</div>
 				) : (
 					<p className="text-xs text-muted-foreground">
-						Add the websites this login covers. Leave empty for a credential not tied to a site.
+						<Trans>
+							Add the websites this login covers. Leave empty for a credential not tied to a site.
+						</Trans>
 					</p>
 				)}
 			</div>
 
 			<TextField
-				label="Username or email"
+				label={t`Username or email`}
 				type="text"
 				autoComplete="off"
 				{...register("username")}
@@ -163,7 +169,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 
 			<div>
 				<TextField
-					label="Password"
+					label={t`Password`}
 					type={showPassword ? "text" : "password"}
 					autoComplete="off"
 					endAdornment={
@@ -172,7 +178,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								type="button"
 								onClick={generatePassword}
 								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label="Generate password"
+								aria-label={t`Generate password`}
 							>
 								<RefreshCw className="w-3.5 h-3.5" />
 							</button>
@@ -180,7 +186,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								type="button"
 								onClick={() => setShowPassword(!showPassword)}
 								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label={showPassword ? "Hide password" : "Show password"}
+								aria-label={showPassword ? t`Hide password` : t`Show password`}
 							>
 								{showPassword ? (
 									<EyeOff className="w-3.5 h-3.5" />
@@ -196,13 +202,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				{strength && (
 					<div className="mt-2.5">
 						<div className="flex items-center justify-between mb-1.5">
-							<span className="text-xs text-muted-foreground">Password strength</span>
+							<span className="text-xs text-muted-foreground">
+								<Trans>Password strength</Trans>
+							</span>
 							<span
 								className={`text-xs ${
 									isBreached ? "text-destructive" : strengthTextColor(strength.id)
 								}`}
 							>
-								{isBreached ? "Breached" : strength.value}
+								{isBreached ? t`Breached` : strength.value}
 							</span>
 						</div>
 						<div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -224,13 +232,13 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-primary/50 bg-primary/5 text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
 				>
 					<Sparkles className="w-3.5 h-3.5" />
-					Generate strong password
+					<Trans>Generate strong password</Trans>
 				</button>
 			</div>
 
 			<div>
 				<TextField
-					label="Authenticator key (TOTP)"
+					label={t`Authenticator key (TOTP)`}
 					type={showTotp ? "text" : "password"}
 					autoComplete="off"
 					endAdornment={
@@ -240,8 +248,8 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								onClick={scanTotp}
 								disabled={totpScan === "scanning"}
 								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all disabled:opacity-50"
-								aria-label="Scan QR code from current webpage"
-								title="Scan authenticator QR code from current webpage"
+								aria-label={t`Scan QR code from current webpage`}
+								title={t`Scan authenticator QR code from current webpage`}
 							>
 								{totpScan === "scanning" ? (
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -253,7 +261,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								type="button"
 								onClick={() => setShowTotp((v) => !v)}
 								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label={showTotp ? "Hide authenticator key" : "Show authenticator key"}
+								aria-label={showTotp ? t`Hide authenticator key` : t`Show authenticator key`}
 							>
 								{showTotp ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 							</button>
@@ -267,12 +275,12 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					}`}
 				>
 					{totpScan === "error"
-						? "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
-						: "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."}
+						? t`No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key.`
+						: t`Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key.`}
 				</p>
 			</div>
 
-			<TextArea label="Notes (optional)" rows={3} {...register("notes")} />
+			<TextArea label={t`Notes (optional)`} rows={3} {...register("notes")} />
 
 			<div>
 				<button
@@ -286,30 +294,30 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					) : (
 						<ChevronRight className="w-3.5 h-3.5" />
 					)}
-					Advanced
+					<Trans>Advanced</Trans>
 				</button>
 				{advancedOpen && (
 					<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
 						<ToggleRow
-							title="Enable autofill"
-							subtitle="Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault."
+							title={t`Enable autofill`}
+							subtitle={t`Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault.`}
 							checked={watch("autofillEnabled")}
 							onChange={(v) => setValue("autofillEnabled", v, { shouldDirty: true })}
 						/>
 						<ToggleRow
-							title="Auto-submit after fill"
-							subtitle="Press Enter / submit the form right after the credentials are filled in."
+							title={t`Auto-submit after fill`}
+							subtitle={t`Press Enter / submit the form right after the credentials are filled in.`}
 							checked={watch("autoSubmit")}
 							onChange={(v) => setValue("autoSubmit", v, { shouldDirty: true })}
 						/>
 						<div>
-							<SelectField label="Subdomain match" {...register("subdomainMatch")}>
-								<option value="etld1">eTLD+1 (default, matches all subdomains)</option>
-								<option value="exact">Exact hostname only</option>
-								<option value="subdomain">This domain and its subdomains</option>
+							<SelectField label={t`Subdomain match`} {...register("subdomainMatch")}>
+								<option value="etld1">{t`eTLD+1 (default, matches all subdomains)`}</option>
+								<option value="exact">{t`Exact hostname only`}</option>
+								<option value="subdomain">{t`This domain and its subdomains`}</option>
 							</SelectField>
 							<p className="text-xs text-muted-foreground mt-1.5">
-								Controls which URLs this entry will offer credentials for.
+								<Trans>Controls which URLs this entry will offer credentials for.</Trans>
 							</p>
 						</div>
 					</div>
@@ -361,6 +369,7 @@ function TotpField({
 	copied: string | null;
 	copy: (label: string, value: string) => void;
 }) {
+	const { t } = useLingui();
 	const parsed = useMemo(() => parseTotp(value), [value]);
 	const [now, setNow] = useState(() => Date.now());
 
@@ -372,9 +381,11 @@ function TotpField({
 	if (!parsed) {
 		return (
 			<div className="border-t border-border/40 pt-3 space-y-1.5">
-				<p className="text-sm text-muted-foreground">Verification code (TOTP)</p>
+				<p className="text-sm text-muted-foreground">
+					<Trans>Verification code (TOTP)</Trans>
+				</p>
 				<p className="text-sm text-destructive">
-					This authenticator key is invalid and can't generate codes.
+					<Trans>This authenticator key is invalid and can't generate codes.</Trans>
 				</p>
 			</div>
 		);
@@ -385,7 +396,9 @@ function TotpField({
 
 	return (
 		<div className="border-t border-border/40 pt-3 space-y-2">
-			<p className="text-sm text-muted-foreground">Verification code (TOTP)</p>
+			<p className="text-sm text-muted-foreground">
+				<Trans>Verification code (TOTP)</Trans>
+			</p>
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-baseline gap-3 font-mono text-2xl tracking-wider tabular-nums">
 					{code.length === 6 ? (
@@ -403,7 +416,7 @@ function TotpField({
 						type="button"
 						onClick={() => copy("totp", code)}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label="Copy verification code"
+						aria-label={t`Copy verification code`}
 					>
 						{matched ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
 					</button>
@@ -415,12 +428,16 @@ function TotpField({
 
 /** Ring + number that drains as the current code ages out, turning red in the final few seconds. */
 function CountdownRing({ remaining, period }: { remaining: number; period: number }) {
+	const { t } = useLingui();
 	const radius = 11;
 	const circumference = 2 * Math.PI * radius;
 	const fraction = Math.max(0, Math.min(1, remaining / period));
 	const low = remaining <= 5;
 	return (
-		<div className="relative flex items-center justify-center w-7 h-7" title={`${remaining}s left`}>
+		<div
+			className="relative flex items-center justify-center w-7 h-7"
+			title={t`${remaining}s left`}
+		>
 			<svg width="28" height="28" viewBox="0 0 28 28" className="-rotate-90" aria-hidden="true">
 				<circle cx="14" cy="14" r={radius} fill="none" strokeWidth="2" className="stroke-muted" />
 				<circle
@@ -449,6 +466,7 @@ function CountdownRing({ remaining, period }: { remaining: number; period: numbe
 
 function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const login = entry as LoginEntry;
+	const { t } = useLingui();
 	const [showPassword, setShowPassword] = useState(false);
 
 	return (
@@ -460,7 +478,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					<DetailField
 						// biome-ignore lint/suspicious/noArrayIndexKey: index needed to disambiguate accidentally-duplicate URLs
 						key={`${url}-${i}`}
-						label="Website"
+						label={t`Website`}
 						copied={copied}
 						copyName={copyName}
 						onCopy={() => copy(copyName, url)}
@@ -474,7 +492,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 			})}
 
 			<DetailField
-				label="Username"
+				label={t`Username`}
 				copied={copied}
 				copyName="username"
 				onCopy={() => copy("username", login.username)}
@@ -483,7 +501,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 			</DetailField>
 
 			<DetailField
-				label="Password"
+				label={t`Password`}
 				copied={copied}
 				copyName="password"
 				onCopy={() => copy("password", login.password)}
@@ -492,7 +510,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 						type="button"
 						onClick={() => setShowPassword((v) => !v)}
 						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-						aria-label={showPassword ? "Hide password" : "Show password"}
+						aria-label={showPassword ? t`Hide password` : t`Show password`}
 					>
 						{showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 					</button>
@@ -507,7 +525,9 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{login.notes && (
 				<div className="space-y-1.5">
-					<p className="text-xs text-muted-foreground">Notes</p>
+					<p className="text-xs text-muted-foreground">
+						<Trans>Notes</Trans>
+					</p>
 					<p className="text-sm whitespace-pre-wrap">{login.notes}</p>
 				</div>
 			)}

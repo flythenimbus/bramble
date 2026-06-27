@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { FileText } from "lucide-react";
 import { useFormContext } from "react-hook-form";
 import type { NoteEntryData } from "../../hooks/useVault";
@@ -18,10 +19,11 @@ function firstLine(notes: string | undefined): string {
 
 function NoteFields() {
 	const { register } = useFormContext<NoteFormValues>();
+	const { t } = useLingui();
 	return (
 		<>
-			<TextField label="Title" type="text" {...register("name")} />
-			<TextArea label="Content" rows={8} {...register("notes")} />
+			<TextField label={t`Title`} type="text" {...register("name")} />
+			<TextArea label={t`Content`} rows={8} {...register("notes")} />
 		</>
 	);
 }
@@ -30,7 +32,9 @@ function NoteDetail({ entry }: EntryDetailBodyProps) {
 	const note = entry as NoteEntryData & { id: string };
 	return (
 		<div className="space-y-1.5">
-			<p className="text-xs text-muted-foreground">Content</p>
+			<p className="text-xs text-muted-foreground">
+				<Trans>Content</Trans>
+			</p>
 			<p className="text-sm whitespace-pre-wrap">{note.notes || "-"}</p>
 		</div>
 	);

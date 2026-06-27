@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
@@ -53,20 +54,23 @@ export function customFieldsSearchText(fields: CustomField[] | undefined): strin
 /** Custom-fields editor, shared by every mode's form. Must render inside the host's <FormProvider>. */
 export function CustomFieldsEditor() {
 	const { register, control, watch } = useFormContext();
+	const { t } = useLingui();
 	const [shown, setShown] = useState<Record<string, boolean>>({});
 	const { fields, append, remove } = useFieldArray({ control, name: CUSTOM_FIELDS_NAME });
 
 	return (
 		<div>
 			<div className="flex items-center justify-between mb-2">
-				<span className="block text-sm">Custom fields</span>
+				<span className="block text-sm">
+					<Trans>Custom fields</Trans>
+				</span>
 				<button
 					type="button"
 					onClick={() => append({ key: "", value: "", type: "text" })}
 					className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 				>
 					<Plus className="w-3 h-3" />
-					Add field
+					<Trans>Add field</Trans>
 				</button>
 			</div>
 
@@ -80,28 +84,31 @@ export function CustomFieldsEditor() {
 								<div className="flex gap-2 items-start">
 									<div className="flex-1">
 										<TextField
-											label="Field name"
+											label={t`Field name`}
 											type="text"
 											{...register(`${CUSTOM_FIELDS_NAME}.${index}.key`)}
 										/>
 									</div>
 									<div className="w-32">
-										<SelectField label="Type" {...register(`${CUSTOM_FIELDS_NAME}.${index}.type`)}>
-											<option value="text">Visible</option>
-											<option value="password">Hidden</option>
+										<SelectField
+											label={t`Type`}
+											{...register(`${CUSTOM_FIELDS_NAME}.${index}.type`)}
+										>
+											<option value="text">{t`Visible`}</option>
+											<option value="password">{t`Hidden`}</option>
 										</SelectField>
 									</div>
 									<button
 										type="button"
 										onClick={() => remove(index)}
 										className="mt-2 p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
-										aria-label="Remove field"
+										aria-label={t`Remove field`}
 									>
 										<X className="w-4 h-4" />
 									</button>
 								</div>
 								<TextField
-									label="Value"
+									label={t`Value`}
 									type={type === "password" && !isShown ? "password" : "text"}
 									autoComplete="off"
 									endAdornment={
@@ -110,7 +117,7 @@ export function CustomFieldsEditor() {
 												type="button"
 												onClick={() => setShown((s) => ({ ...s, [field.id]: !isShown }))}
 												className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-												aria-label={isShown ? "Hide value" : "Show value"}
+												aria-label={isShown ? t`Hide value` : t`Show value`}
 											>
 												{isShown ? (
 													<EyeOff className="w-3.5 h-3.5" />
@@ -128,8 +135,10 @@ export function CustomFieldsEditor() {
 				</div>
 			) : (
 				<p className="text-xs text-muted-foreground">
-					Add custom fields to store additional information like security questions, billing postal
-					codes, account numbers, etc.
+					<Trans>
+						Add custom fields to store additional information like security questions, billing
+						postal codes, account numbers, etc.
+					</Trans>
 				</p>
 			)}
 		</div>
@@ -144,6 +153,7 @@ interface CustomFieldsDetailProps {
 
 /** Read-only render of an entry's custom fields in its detail view. */
 export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailProps) {
+	const { t } = useLingui();
 	const [shown, setShown] = useState<Record<number, boolean>>({});
 	return (
 		<>
@@ -164,7 +174,7 @@ export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailP
 									type="button"
 									onClick={() => setShown((s) => ({ ...s, [index]: !isShown }))}
 									className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-									aria-label={isShown ? "Hide value" : "Show value"}
+									aria-label={isShown ? t`Hide value` : t`Show value`}
 								>
 									{isShown ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 								</button>

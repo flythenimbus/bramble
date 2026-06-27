@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { bytesToBase64 } from "../../../../util/bytes";
@@ -15,6 +16,7 @@ export function KdbxUnlock({
 	onOpen: (password: string, keyfileB64?: string) => Promise<void>;
 	onBack: () => void;
 }) {
+	const { t } = useLingui();
 	const [password, setPassword] = useState("");
 	const [keyfile, setKeyfile] = useState<File | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function KdbxUnlock({
 				: undefined;
 			await onOpen(password, keyfileB64);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Couldn't open this database.");
+			setError(err instanceof Error ? err.message : t`Couldn't open this database.`);
 		} finally {
 			setBusy(false);
 		}
@@ -38,13 +40,13 @@ export function KdbxUnlock({
 
 	return (
 		<Shell>
-			<Header subtitle={`Enter the password for your ${providerLabel} database`} />
+			<Header subtitle={t`Enter the password for your ${providerLabel} database`} />
 			<form
 				onSubmit={submit}
 				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
 			>
 				<TextField
-					label="KeePass master password"
+					label={t`KeePass master password`}
 					type="password"
 					autoComplete="off"
 					autoFocus
@@ -53,7 +55,9 @@ export function KdbxUnlock({
 					error={error ?? undefined}
 				/>
 				<label className="flex flex-col gap-3">
-					<span className="text-sm">Key file (optional)</span>
+					<span className="text-sm">
+						<Trans>Key file (optional)</Trans>
+					</span>
 					<input
 						type="file"
 						onChange={(e) => setKeyfile(e.currentTarget.files?.[0] ?? null)}
@@ -68,7 +72,7 @@ export function KdbxUnlock({
 						className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 					>
 						<ArrowLeft className="w-3.5 h-3.5" />
-						Back
+						<Trans>Back</Trans>
 					</button>
 					<button
 						type="submit"
@@ -78,10 +82,10 @@ export function KdbxUnlock({
 						{busy ? (
 							<>
 								<Loader2 className="w-3.5 h-3.5 animate-spin" />
-								Opening…
+								<Trans>Opening…</Trans>
 							</>
 						) : (
-							"Open database"
+							t`Open database`
 						)}
 					</button>
 				</div>

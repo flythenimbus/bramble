@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Check, Copy } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -22,6 +23,7 @@ export function DetailField({
 	onCopy,
 	extraAction,
 }: DetailFieldProps) {
+	const { t } = useLingui();
 	const matched = copyName ? copied === copyName : false;
 	return (
 		<div className="space-y-1.5">
@@ -33,7 +35,7 @@ export function DetailField({
 					type="button"
 					onClick={onCopy}
 					className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-					aria-label={`Copy ${label.toLowerCase()}`}
+					aria-label={t`Copy ${label.toLowerCase()}`}
 				>
 					{matched ? (
 						<Check className="w-3.5 h-3.5 text-primary" />

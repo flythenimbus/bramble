@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { type LucideIcon, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import type { EntryType } from "../../../hooks/useVault";
@@ -35,6 +36,7 @@ export function VaultHome({
 	onEditEntry,
 	onDeleteEntry,
 }: VaultHomeProps) {
+	const { t } = useLingui();
 	const [searchQuery, setSearchQuery] = useState("");
 
 	const query = searchQuery.toLowerCase();
@@ -49,7 +51,7 @@ export function VaultHome({
 			<div className="flex gap-2 mb-5 items-stretch">
 				<div className="flex-1">
 					<TextField
-						label="Search vault"
+						label={t`Search vault`}
 						type="text"
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
@@ -63,7 +65,9 @@ export function VaultHome({
 				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
 					<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
-						<p className="text-xs text-muted-foreground mb-0.5">Total Items</p>
+						<p className="text-xs text-muted-foreground mb-0.5">
+							<Trans>Total Items</Trans>
+						</p>
 						<p className="text-2xl">{items.length}</p>
 					</div>
 				</div>
@@ -71,7 +75,9 @@ export function VaultHome({
 					<div className="absolute inset-0 bg-linear-to-br from-destructive/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<div className="flex items-center gap-1.5 mb-0.5">
-							<p className="text-xs text-muted-foreground">At Risk</p>
+							<p className="text-xs text-muted-foreground">
+								<Trans>At Risk</Trans>
+							</p>
 							<TrendingDown className="w-3 h-3 text-destructive" />
 						</div>
 						<p className="text-2xl text-destructive">{atRisk}</p>
@@ -81,7 +87,9 @@ export function VaultHome({
 					<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
 					<div className="relative">
 						<div className="flex items-center gap-1.5 mb-0.5">
-							<p className="text-xs text-muted-foreground">Strong</p>
+							<p className="text-xs text-muted-foreground">
+								<Trans>Strong</Trans>
+							</p>
 							<TrendingUp className="w-3 h-3 text-primary" />
 						</div>
 						<p className="text-2xl text-primary">{strong}</p>
@@ -91,12 +99,14 @@ export function VaultHome({
 
 			<div className="flex-1 min-h-0 flex flex-col rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 				<div className="shrink-0 px-4 py-3 border-b border-border/50 flex items-center justify-between">
-					<h3 className="text-sm">Items ({filtered.length})</h3>
+					<h3 className="text-sm">
+						<Trans>Items ({filtered.length})</Trans>
+					</h3>
 					<button
 						type="button"
 						className="text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
 					>
-						Sort by name
+						<Trans>Sort by name</Trans>
 					</button>
 				</div>
 				<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
@@ -117,7 +127,7 @@ export function VaultHome({
 						))
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
-							No items found matching your search.
+							<Trans>No items found matching your search.</Trans>
 						</div>
 					)}
 				</div>

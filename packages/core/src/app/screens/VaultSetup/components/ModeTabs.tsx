@@ -1,3 +1,4 @@
+import { Trans } from "@lingui/react/macro";
 import type { VaultSetupMode } from "../types";
 
 interface ModeTabsProps {
@@ -19,10 +20,10 @@ export function ModeTabs({ mode, onChange, disabled, pill }: ModeTabsProps) {
 			}
 		>
 			<Btn active={mode === "create"} disabled={disabled} onClick={() => onChange("create")}>
-				Create new vault
+				<Trans>Create new vault</Trans>
 			</Btn>
 			<Btn active={mode === "open"} disabled={disabled} onClick={() => onChange("open")}>
-				Open existing vault
+				<Trans>Open existing vault</Trans>
 			</Btn>
 		</div>
 	);

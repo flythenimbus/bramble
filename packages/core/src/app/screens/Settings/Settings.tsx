@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Download, Info, Lock, Palette } from "lucide-react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
@@ -15,13 +16,14 @@ export function Settings() {
 	const { themeMode, setThemeMode } = useTheme();
 	const { shell } = usePlatform();
 	const { entries } = useVault();
+	const { t } = useLingui();
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
 			<div className="space-y-4">
 				<GeneralSection />
 
-				<Section icon={<Lock className="w-4 h-4 text-primary" />} title="Security">
+				<Section icon={<Lock className="w-4 h-4 text-primary" />} title={t`Security`}>
 					<MasterPasswordSection />
 					{/* Security keys (WebAuthn) don't work on mobile; biometric unlock takes their slot there. */}
 					{shell.supportsSecurityKeys && <SecurityKeysSection />}
@@ -29,51 +31,55 @@ export function Settings() {
 					<RecoveryCodeSection />
 				</Section>
 
-				<Section icon={<Palette className="w-4 h-4 text-primary" />} title="Appearance">
+				<Section icon={<Palette className="w-4 h-4 text-primary" />} title={t`Appearance`}>
 					<Row
 						icon={<Palette className="w-4 h-4 text-primary" />}
-						title="Theme"
-						subtitle="Use light, dark, or match your system"
+						title={t`Theme`}
+						subtitle={t`Use light, dark, or match your system`}
 					>
 						<div className="w-44">
 							<SelectField
-								label="Mode"
+								label={t`Mode`}
 								value={themeMode}
 								onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
 							>
-								<option value="light">Light</option>
-								<option value="dark">Dark</option>
-								<option value="system">System</option>
+								<option value="light">{t`Light`}</option>
+								<option value="dark">{t`Dark`}</option>
+								<option value="system">{t`System`}</option>
 							</SelectField>
 						</div>
 					</Row>
 				</Section>
 
-				<Section icon={<Download className="w-4 h-4 text-primary" />} title="Data">
+				<Section icon={<Download className="w-4 h-4 text-primary" />} title={t`Data`}>
 					<Row
 						icon={<Download className="w-4 h-4 text-primary" />}
-						title="Import from another manager"
-						subtitle="Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
+						title={t`Import from another manager`}
+						subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass`}
 					>
 						<button
 							type="button"
 							onClick={() => void shell.openSetup("import")}
 							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 						>
-							Import
+							<Trans>Import</Trans>
 						</button>
 					</Row>
 				</Section>
 
 				<SyncConnectSection />
 
-				<Section icon={<Info className="w-4 h-4 text-primary" />} title="About">
+				<Section icon={<Info className="w-4 h-4 text-primary" />} title={t`About`}>
 					<div className="flex items-center justify-between text-sm">
-						<span className="text-muted-foreground">Version</span>
+						<span className="text-muted-foreground">
+							<Trans>Version</Trans>
+						</span>
 						<span>{shell.version}</span>
 					</div>
 					<div className="flex items-center justify-between text-sm">
-						<span className="text-muted-foreground">Total entries</span>
+						<span className="text-muted-foreground">
+							<Trans>Total entries</Trans>
+						</span>
 						<span>{entries.length}</span>
 					</div>
 				</Section>
