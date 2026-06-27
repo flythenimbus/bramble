@@ -14,7 +14,7 @@ const GUIDANCE =
 	`Keep the tone concise and trustworthy. Use a consistently FORMAL register ` +
 	`throughout (e.g. "Sie" in German, "usted" in Spanish, "vous" in French, ` +
 	`"Lei" in Italian); never switch to informal address. Preserve placeholders ` +
-	`verbatim and in place: {appName}, %s, %d, %1$s and similar. Do not translate ` +
+	`verbatim and in place: {appName}, %s, %d, %@, %lld, %1$s and similar. Do not translate ` +
 	`brand or standard terms (Bramble, Face ID, Touch ID, Optic ID, AES-256-GCM, ` +
 	`KeePass, TOTP).`;
 
@@ -38,6 +38,10 @@ async function chat(system, user) {
 	return (data.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "");
 }
 
+// Placeholders that must survive translation unchanged: {x}, %@, %lld, %s, %1$s, etc.
+const PLACEHOLDER = /\{[^}]+\}|%[0-9]*\$?[@a-z]+/gi;
+const placeholders = (s) => (s.match(PLACEHOLDER) ?? []).sort().join(",");
+
 async function batchOnce(language, strings) {
 	const system =
 		`You are a professional software-UI translator localizing a privacy-focused ` +
@@ -49,6 +53,13 @@ async function batchOnce(language, strings) {
 	if (out.length !== strings.length) {
 		throw new Error(`count mismatch: sent ${strings.length}, got ${out.length}`);
 	}
+	// A dropped/mangled placeholder (e.g. %@ -> @) breaks formatting at runtime; reject so
+	// the caller retries, then falls back to per-string.
+	strings.forEach((src, i) => {
+		if (placeholders(src) !== placeholders(out[i])) {
+			throw new Error(`placeholder mismatch in ${JSON.stringify(out[i])}`);
+		}
+	});
 	return out;
 }
 

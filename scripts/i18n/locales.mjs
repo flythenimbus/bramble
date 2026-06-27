@@ -21,5 +21,7 @@ export const repo = (...p) => resolve(ROOT, ...p);
 export const PO_CATALOG = (code) => repo(`packages/core/src/locales/${code}/messages.po`);
 export const FASTLANE_DIR = repo("packages/platform-mobile/ios/App/fastlane/metadata");
 export const ANDROID_RES = repo("packages/platform-mobile/android/app/src/main/res");
-// iOS String Catalog (created once the Swift UI is migrated off hardcoded Text()).
-export const XCSTRINGS = repo("packages/platform-mobile/ios/App/App/Localizable.xcstrings");
+// iOS String Catalog for the autofill extension UI.
+export const XCSTRINGS = repo(
+	"packages/platform-mobile/ios/App/AutoFillProbe/Localizable.xcstrings",
+);

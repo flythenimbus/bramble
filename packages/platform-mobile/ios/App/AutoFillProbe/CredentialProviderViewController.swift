@@ -30,6 +30,10 @@ private struct Slot {
 	let magicVersion: Data
 }
 
+// Localized lookup from the extension's String Catalog (Localizable.xcstrings).
+// Interpolations become format keys (%@, %lld) that the catalog translates.
+private func loc(_ key: String.LocalizationValue) -> String { String(localized: key) }
+
 private func initials(_ s: String) -> String {
 	let words = s.split(whereSeparator: { $0 == " " || $0 == "." })
 	let chars: [Character] =
@@ -136,15 +140,15 @@ private struct CredentialListView: View {
 					VStack(alignment: .leading, spacing: 10) {
 						if matches.isEmpty {
 							// No domain match for this page: show the whole vault.
-							sectionLabel(requestedHost.map { "No matches for \($0)" } ?? "Items (\(all.count))")
+							sectionLabel(requestedHost.map { loc("No matches for \($0)") } ?? loc("Items (\(all.count))"))
 							ForEach(all) { row($0) }
 						} else {
 							// Filter to the page's logins; the rest are one tap away.
-							sectionLabel(requestedHost.map { "For \($0)" } ?? "Matches")
+							sectionLabel(requestedHost.map { loc("For \($0)") } ?? loc("Matches"))
 							ForEach(matches) { row($0) }
 							if !others.isEmpty {
 								if showAll {
-									sectionLabel("All items")
+									sectionLabel(loc("All items"))
 									ForEach(others) { row($0) }
 								} else {
 									Button { showAll = true } label: {
@@ -185,15 +189,18 @@ private final class UnlockModel: ObservableObject {
 	@Published var error: String?
 	let hasBiometric: Bool
 	let biometricLabel: String
+	let biometricSymbol: String
 	let onBiometric: () -> Void
 	let onPassword: (String) -> Void
 	let onCancel: () -> Void
 	init(
-		hasBiometric: Bool, biometricLabel: String, onBiometric: @escaping () -> Void,
+		hasBiometric: Bool, biometricLabel: String, biometricSymbol: String,
+		onBiometric: @escaping () -> Void,
 		onPassword: @escaping (String) -> Void, onCancel: @escaping () -> Void
 	) {
 		self.hasBiometric = hasBiometric
 		self.biometricLabel = biometricLabel
+		self.biometricSymbol = biometricSymbol
 		self.onBiometric = onBiometric
 		self.onPassword = onPassword
 		self.onCancel = onCancel
@@ -234,7 +241,7 @@ private struct UnlockView: View {
 								model.onBiometric()
 							} label: {
 								HStack(spacing: 8) {
-									Image(systemName: biometricSymbol).font(.system(size: 15))
+									Image(systemName: model.biometricSymbol).font(.system(size: 15))
 									Text("Unlock with \(model.biometricLabel)").font(.system(size: 15, weight: .semibold))
 								}
 								.frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -318,12 +325,6 @@ private struct UnlockView: View {
 		}
 	}
 
-	private var biometricSymbol: String {
-		if model.biometricLabel.contains("Face") { return "faceid" }
-		if model.biometricLabel.contains("Touch") { return "touchid" }
-		return "lock"
-	}
-
 	private func submit() {
 		guard !model.busy, !password.isEmpty else { return }
 		model.error = nil
@@ -399,9 +400,11 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	private func showUnlock() {
+		let biometry = biometryInfo()
 		let m = UnlockModel(
 			hasBiometric: vekExists(),
-			biometricLabel: biometryLabel(),
+			biometricLabel: biometry.label,
+			biometricSymbol: biometry.symbol,
 			onBiometric: { [weak self] in self?.unlockWithBiometric() },
 			onPassword: { [weak self] in self?.unlockWithPassword($0) },
 			onCancel: { [weak self] in self?.cancel(.userCanceled) })
@@ -410,22 +413,23 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	// The device's biometry name + the passcode fallback (the cached VEK is gated by
-	// `.userPresence`, so the device passcode always works too). Touch ID devices and
+	// `.userPresence`, so the device passcode always works too). The SF Symbol is derived
+	// here from the biometry type, not from the (localized) label text. Touch ID devices and
 	// devices with no enrolled biometric are covered.
-	private func biometryLabel() -> String {
+	private func biometryInfo() -> (label: String, symbol: String) {
 		let ctx = LAContext()
 		_ = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
 		switch ctx.biometryType {
-		case .faceID: return "Face ID or passcode"
-		case .touchID: return "Touch ID or passcode"
-		default: return "biometrics or passcode"
+		case .faceID: return (String(localized: "Face ID or passcode"), "faceid")
+		case .touchID: return (String(localized: "Touch ID or passcode"), "touchid")
+		default: return (String(localized: "biometrics or passcode"), "lock")
 		}
 	}
 
 	// --- unlock paths (each loads the VEK into the native core, then onUnlocked) ---
 
 	private func unlockWithBiometric() {
-		readVek(reason: "Unlock Bramble") { [weak self] outcome in
+		readVek(reason: String(localized: "Unlock Bramble")) { [weak self] outcome in
 			DispatchQueue.main.async {
 				guard let self = self else { return }
 				switch outcome {
@@ -439,7 +443,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 					}
 				case .missing:
 					self.model?.busy = false
-					self.model?.error = "Enter your master password."
+					self.model?.error = String(localized: "Enter your master password.")
 				case .denied(let msg):
 					self.model?.busy = false
 					self.model?.error = msg.isEmpty ? nil : msg  // empty == user canceled
@@ -451,8 +455,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func unlockWithPassword(_ password: String) {
 		guard let slot = loadSlot() else {
 			model?.busy = false
-			model?.error =
-				"This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry."
+			model?.error = String(
+				localized:
+					"This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry."
+			)
 			return
 		}
 		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -466,7 +472,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 						self?.onUnlocked()
 					} else {
 						self?.model?.busy = false
-						self?.model?.error = "Incorrect master password"
+						self?.model?.error = String(localized: "Incorrect master password")
 					}
 				}
 			} catch {
@@ -496,7 +502,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				showList(matches: matches, all: creds, requestedHost: pendingHosts.first)
 			}
 		} catch {
-			showError("Couldn't load logins", error.localizedDescription)
+			showError(String(localized: "Couldn't load logins"), error.localizedDescription)
 		}
 	}
 
@@ -677,7 +683,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private func showError(_ title: String, _ message: String) {
 		let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-		alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+		alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .default) { [weak self] _ in
 			self?.cancel(.userCanceled)
 		})
 		present(alert, animated: true)
