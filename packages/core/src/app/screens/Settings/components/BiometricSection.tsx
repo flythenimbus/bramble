@@ -1,4 +1,4 @@
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, ScanFace } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Toggle } from "./primitives";
@@ -10,6 +10,7 @@ export function BiometricSection() {
 		biometricSupported,
 		biometricAvailable,
 		biometricEnabled,
+		biometryType,
 		enableBiometric,
 		disableBiometric,
 		refreshBiometric,
@@ -23,6 +24,28 @@ export function BiometricSection() {
 	}, [refreshBiometric]);
 
 	if (!biometricSupported) return null;
+
+	// Track the enrolled modality. Android can't tell face from fingerprint, so it
+	// reports "biometric" and we keep the generic "Face ID or a fingerprint" copy.
+	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
+	const Icon = isFaceId ? ScanFace : Fingerprint;
+	const title =
+		biometryType === "faceId"
+			? "Face ID"
+			: biometryType === "opticId"
+				? "Optic ID"
+				: biometryType === "touchId"
+					? "Touch ID"
+					: "Biometric unlock";
+	// Noun phrase woven into the subtitle copy below ("...with Face ID").
+	const name =
+		biometryType === "faceId"
+			? "Face ID"
+			: biometryType === "opticId"
+				? "Optic ID"
+				: biometryType === "touchId"
+					? "Touch ID"
+					: "Face ID or a fingerprint";
 
 	const onToggle = async (next: boolean) => {
 		setError(null);
@@ -38,18 +61,14 @@ export function BiometricSection() {
 	};
 
 	const subtitle = !biometricAvailable
-		? "Set up Face ID or a fingerprint on this device to use this."
+		? `Set up ${name} on this device to use this.`
 		: biometricEnabled
-			? "This device can unlock with Face ID or a fingerprint."
-			: "Skip your password on this device with Face ID or a fingerprint.";
+			? `This device can unlock with ${name}.`
+			: `Skip your password on this device with ${name}.`;
 
 	return (
 		<>
-			<Row
-				icon={<Fingerprint className="w-4 h-4 text-primary" />}
-				title="Biometric unlock"
-				subtitle={subtitle}
-			>
+			<Row icon={<Icon className="w-4 h-4 text-primary" />} title={title} subtitle={subtitle}>
 				<Toggle
 					checked={biometricEnabled}
 					onChange={(next) => void onToggle(next)}
