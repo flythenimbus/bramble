@@ -20,6 +20,7 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
+		"@lingui/babel-plugin-lingui-macro": "^6.4.0",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/chrome": "^0.0.270",
 		"@types/react": "^19.2.15",

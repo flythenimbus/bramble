@@ -1,0 +1,1 @@
+riempimento automatico,2FA,TOTP,autenticatore,KeePass,crittografia,offline,sicurezza,credenziali,generatore,biometrico,sincronizzazione

@@ -1,0 +1,18 @@
+Bramble ist ein lokal arbeitender Passwort-Manager. Ihre Passwörter befinden sich in einem verschlüsselten Tresor auf Ihrem Gerät und nicht auf einem fremden Server. Es gibt kein Konto zu erstellen und nichts, das nach Hause telefoniert.
+
+Alles Kryptografische läuft in einer Rust-Engine: Argon2id leitet Ihren Schlüssel ab, AES-256-GCM verschlüsselt Ihre Daten, und die Envelope Encryption weist jedem Eintrag seinen eigenen Schlüssel zu. Seitennamen, Benutzernamen und Notizen sind alle verschlüsselt, und Geheimnisse werden nach Gebrauch aus dem Speicher gelöscht.
+
+FUNKTIONEN
+- AutoFill von Passwörtern und Einmalcodes in Apps und Safari, direkt von der Tastatur aus.
+- Entsperren mit Face ID oder Touch ID, Ihrem Masterpasswort oder einem Wiederherstellungscode.
+- Speichern von Logins, Zahlungskarten, sicheren Notizen und SSH-Schlüsseln, jeweils mit eigenen Feldern.
+- Integrierter starker Passwortgenerator.
+- TOTP / 2FA: Fügen Sie eine otpauth URI oder ein Geheimnis hinzu und Bramble generiert die sechsstelligen Codes.
+- Import aus KeePass (KDBX4), Schlüsseldateien sind enthalten.
+- Wiederherstellungscode: Ein druckbarer, hochentropischer Backup, der Ihren Tresor unabhängig von Ihrem Masterpasswort entsperrt.
+- Optionale Breach Checkung unter Verwendung von k-Anonymität, sodass nichts über Ihr Passwort Ihr Gerät verlässt.
+- Automatische Sperre nach Inaktivität.
+- Synchronisierung zwischen Ihren eigenen Geräten Peer-to-Peer. Kein Cloud, kein Relais, das Ihre Daten hält.
+
+DATENSCHUTZ
+Bramble hat kein Konto, kein Abonnement und keine Telemetrie. Ihr Tresor verlässt niemals Ihre Kontrolle, und der Code läuft vollständig auf Ihrem Gerät.

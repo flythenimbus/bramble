@@ -1,0 +1,132 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-06-26 21:06-0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: fr\n"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Cancel"
+msgstr "Annuler"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create new vault"
+msgstr "Créer un nouveau coffre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create your vault"
+msgstr "Créer votre coffre-fort"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Encrypted on your device"
+msgstr "Chiffré sur votre appareil"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your master password to unlock your vault"
+msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
+msgstr "Entrez votre code de récupération pour déverrouiller. Après la connexion, générez-en un nouveau dans les Paramètres."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Hide password"
+msgstr "Masquer le mot de passe"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Master password"
+msgstr "Mot de passe maître"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "New to {appName}?"
+msgstr "Nouveau sur {appName} ?"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Open in window"
+msgstr "Ouvrir dans la fenêtre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Opening…"
+msgstr "Ouverture..."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Please enter your master password"
+msgstr "Veuillez saisir votre mot de passe maître"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Recovery code"
+msgstr "Code de récupération"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Set up a vault to start saving your passwords, cards, and notes."
+msgstr "Configurez un coffre-fort pour commencer à sauvegarder vos mots de passe, cartes et notes."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Show password"
+msgstr "Afficher le mot de passe"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock"
+msgstr "Déverrouiller"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock Vault"
+msgstr "Déverrouiller le coffre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with biometrics"
+msgstr "Déverrouillage biométrique"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Face ID"
+msgstr "Déverrouiller avec Face ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with master password"
+msgstr "Déverrouiller avec le mot de passe maître"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Optic ID"
+msgstr "Déverrouiller avec Optic ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with recovery code"
+msgstr "Déverrouiller avec le code de récupération"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with security key"
+msgstr "Déverrouiller avec la clé de sécurité"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Touch ID"
+msgstr "Déverrouiller avec Touch ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock your vault with your security key"
+msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlocking…"
+msgstr "Déverrouillage..."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Verifying…"
+msgstr "Vérification en cours..."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Waiting for your key…"
+msgstr "En attente de votre clé..."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Welcome to {appName}"
+msgstr "Bienvenue dans {appName}"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your browser may ask for access to your vault file when you unlock."
+msgstr "Votre navigateur peut demander l'accès à votre fichier de coffre lors du déverrouillage."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your vault stays on this device, encrypted with AES-256-GCM. Keep your master password and recovery code somewhere safe."
+msgstr "Votre coffre reste sur cet appareil, chiffré avec AES-256-GCM. Gardez votre mot de passe maître et le code de récupération en lieu sûr."

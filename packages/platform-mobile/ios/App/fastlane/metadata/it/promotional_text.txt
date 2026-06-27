@@ -1,0 +1,1 @@
+Nessun account, nessuna cloud, nessun'azienda che detiene la sua cassaforte. Le sue password rimangono criptate sul suo dispositivo. Inclusi AutoFill, TOTP e l'importazione di KeePass.

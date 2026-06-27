@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	Asterisk,
 	ExternalLink,
@@ -37,6 +38,7 @@ export function Auth() {
 	} = useVault();
 	const { shell } = usePlatform();
 	const { popOut, canPopOut } = usePopOut();
+	const { t } = useLingui();
 	const appName = shell.appName;
 	const onPopOut = canPopOut ? popOut : undefined;
 
@@ -135,12 +137,12 @@ export function Auth() {
 	const BiometricIcon = isFaceId ? ScanFace : Fingerprint;
 	const biometricLabel =
 		biometryType === "faceId"
-			? "Unlock with Face ID"
+			? t`Unlock with Face ID`
 			: biometryType === "opticId"
-				? "Unlock with Optic ID"
+				? t`Unlock with Optic ID`
 				: biometryType === "touchId"
-					? "Unlock with Touch ID"
-					: "Unlock with biometrics";
+					? t`Unlock with Touch ID`
+					: t`Unlock with biometrics`;
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">
@@ -149,8 +151,8 @@ export function Auth() {
 					type="button"
 					onClick={onPopOut}
 					className="absolute top-3 right-3 z-10 p-2 rounded-lg border border-transparent text-muted-foreground hover:bg-primary/10 hover:border-border hover:text-foreground active:scale-[0.95] transition-all"
-					aria-label="Open in window"
-					title="Open in window"
+					aria-label={t`Open in window`}
+					title={t`Open in window`}
 				>
 					<ExternalLink className="w-4 h-4" />
 				</button>
@@ -163,14 +165,14 @@ export function Auth() {
 						</div>
 						<h1 className="text-xl bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
 							{firstRun
-								? `Welcome to ${appName}`
+								? t`Welcome to ${appName}`
 								: showPasswordForm
-									? "Enter your master password to unlock your vault"
-									: "Unlock your vault with your security key"}
+									? t`Enter your master password to unlock your vault`
+									: t`Unlock your vault with your security key`}
 						</h1>
 						{firstRun && (
 							<p className="mt-2 text-sm text-muted-foreground">
-								Set up a vault to start saving your passwords, cards, and notes.
+								<Trans>Set up a vault to start saving your passwords, cards, and notes.</Trans>
 							</p>
 						)}
 					</div>
@@ -183,7 +185,7 @@ export function Auth() {
 							className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Plus className="w-4 h-4" />
-							{busy ? "Opening…" : "Create your vault"}
+							{busy ? t`Opening…` : t`Create your vault`}
 						</button>
 					)}
 
@@ -198,14 +200,14 @@ export function Auth() {
 										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										<BiometricIcon className="w-4 h-4" />
-										{busy ? "Verifying…" : biometricLabel}
+										{busy ? t`Verifying…` : biometricLabel}
 									</button>
 								</div>
 							)}
 							{showPasswordForm && (
 								<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
 									<TextField
-										label="Master password"
+										label={t`Master password`}
 										type={showPassword ? "text" : "password"}
 										autoFocus
 										error={errors.masterPassword?.message}
@@ -214,7 +216,7 @@ export function Auth() {
 												type="button"
 												onClick={() => setShowPassword(!showPassword)}
 												className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-												aria-label={showPassword ? "Hide password" : "Show password"}
+												aria-label={showPassword ? t`Hide password` : t`Show password`}
 											>
 												{showPassword ? (
 													<EyeOff className="w-4 h-4" />
@@ -224,7 +226,7 @@ export function Auth() {
 											</button>
 										}
 										{...register("masterPassword", {
-											required: "Please enter your master password",
+											required: t`Please enter your master password`,
 										})}
 									/>
 
@@ -239,10 +241,10 @@ export function Auth() {
 									>
 										<Asterisk className="w-4 h-4" />
 										{busy
-											? "Unlocking…"
+											? t`Unlocking…`
 											: securityKeyAvailable || showBiometric
-												? "Unlock with master password"
-												: "Unlock Vault"}
+												? t`Unlock with master password`
+												: t`Unlock Vault`}
 									</button>
 								</form>
 							)}
@@ -260,7 +262,7 @@ export function Auth() {
 										}
 									>
 										<KeyRound className="w-4 h-4" />
-										{busy ? "Waiting for your key…" : "Unlock with security key"}
+										{busy ? t`Waiting for your key…` : t`Unlock with security key`}
 									</button>
 								</div>
 							)}
@@ -269,7 +271,7 @@ export function Auth() {
 
 					{couldNotRead && (
 						<p className="mt-3 text-center text-xs text-muted-foreground">
-							Your browser may ask for access to your vault file when you unlock.
+							<Trans>Your browser may ask for access to your vault file when you unlock.</Trans>
 						</p>
 					)}
 
@@ -284,7 +286,7 @@ export function Auth() {
 									}}
 									className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
 								>
-									Unlock with recovery code
+									<Trans>Unlock with recovery code</Trans>
 								</button>
 							) : (
 								<form
@@ -292,8 +294,10 @@ export function Auth() {
 									className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-4 space-y-2"
 								>
 									<p className="text-xs text-muted-foreground">
-										Enter your recovery code to unlock. After signing in, generate a new one in
-										Settings.
+										<Trans>
+											Enter your recovery code to unlock. After signing in, generate a new one in
+											Settings.
+										</Trans>
 									</p>
 									<input
 										type="text"
@@ -304,6 +308,7 @@ export function Auth() {
 										autoCapitalize="characters"
 										autoComplete="off"
 										spellCheck={false}
+										aria-label={t`Recovery code`}
 										disabled={busy}
 										className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
 									/>
@@ -314,7 +319,7 @@ export function Auth() {
 											disabled={busy || !recoveryCode.trim()}
 											className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
 										>
-											{busy ? "Unlocking…" : "Unlock"}
+											{busy ? t`Unlocking…` : t`Unlock`}
 										</button>
 										<button
 											type="button"
@@ -326,7 +331,7 @@ export function Auth() {
 											disabled={busy}
 											className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
 										>
-											Cancel
+											<Trans>Cancel</Trans>
 										</button>
 									</div>
 								</form>
@@ -338,7 +343,9 @@ export function Auth() {
 						<div className="mt-6 text-center space-y-3">
 							<div className="flex items-center gap-4 text-xs text-muted-foreground">
 								<div className="flex-1 h-px bg-border/50"></div>
-								<span>New to {appName}?</span>
+								<span>
+									<Trans>New to {appName}?</Trans>
+								</span>
 								<div className="flex-1 h-px bg-border/50"></div>
 							</div>
 
@@ -348,7 +355,7 @@ export function Auth() {
 								disabled={busy}
 								className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all disabled:opacity-50"
 							>
-								Create new vault
+								<Trans>Create new vault</Trans>
 							</button>
 						</div>
 					)}
@@ -357,10 +364,14 @@ export function Auth() {
 						<div className="flex items-start gap-3">
 							<BrambleGlyph className="w-6 h-6 text-primary shrink-0" />
 							<div>
-								<h4 className="text-xs mb-1">Encrypted on your device</h4>
+								<h4 className="text-xs mb-1">
+									<Trans>Encrypted on your device</Trans>
+								</h4>
 								<p className="text-xs text-muted-foreground leading-relaxed">
-									Your vault stays on this device, encrypted with AES-256-GCM. Keep your master
-									password and recovery code somewhere safe.
+									<Trans>
+										Your vault stays on this device, encrypted with AES-256-GCM. Keep your master
+										password and recovery code somewhere safe.
+									</Trans>
 								</p>
 							</div>
 						</div>

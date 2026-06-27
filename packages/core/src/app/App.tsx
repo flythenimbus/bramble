@@ -1,6 +1,9 @@
+import { i18n } from "@lingui/core";
+import { I18nProvider } from "@lingui/react";
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { activateLocale, defaultLocale, resolveLocale } from "../i18n";
 import { PopOutProvider } from "./hooks/usePopOut";
 import { ThemeProvider } from "./hooks/useTheme";
 import { setPendingCreateEntry } from "./pending-create-entry";
@@ -60,13 +63,27 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 export default function App({ initialPath, initialDraft, pendingLogin }: AppProps = {}) {
 	// One router per tree, seeded once with the handed-over path.
 	const [router] = useState(() => createAppRouter(initialPath));
+	// Load the catalog for the detected locale before first paint to avoid an
+	// English flash; fall back to the source locale, which always renders.
+	const [localeReady, setLocaleReady] = useState(i18n.locale === defaultLocale);
+	useEffect(() => {
+		const locale = resolveLocale(typeof navigator !== "undefined" ? navigator.language : undefined);
+		activateLocale(locale)
+			.catch(() => activateLocale(defaultLocale))
+			.finally(() => setLocaleReady(true));
+	}, []);
+
+	if (!localeReady) return null;
+
 	return (
-		<ThemeProvider>
-			<VaultProvider>
-				<PopOutProvider router={router} initialDraft={initialDraft}>
-					<InnerApp router={router} pendingLogin={pendingLogin} />
-				</PopOutProvider>
-			</VaultProvider>
-		</ThemeProvider>
+		<I18nProvider i18n={i18n}>
+			<ThemeProvider>
+				<VaultProvider>
+					<PopOutProvider router={router} initialDraft={initialDraft}>
+						<InnerApp router={router} pendingLogin={pendingLogin} />
+					</PopOutProvider>
+				</VaultProvider>
+			</ThemeProvider>
+		</I18nProvider>
 	);
 }

@@ -1,0 +1,132 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-06-26 21:06-0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pt-BR\n"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create new vault"
+msgstr "Criar novo cofre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create your vault"
+msgstr "Crie seu cofre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Encrypted on your device"
+msgstr "Criptografado no seu dispositivo"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your master password to unlock your vault"
+msgstr "Insira sua senha mestra para desbloquear o cofre."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
+msgstr "Insira seu código de recuperação para desbloquear. Após o login, gere um novo nas Configurações."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Hide password"
+msgstr "Ocultar senha"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Master password"
+msgstr "Senha Mestra"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "New to {appName}?"
+msgstr "Novo no {appName}?"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Open in window"
+msgstr "Abrir na janela"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Opening…"
+msgstr "Abrindo…"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Please enter your master password"
+msgstr "Por favor, insira sua senha mestra"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Recovery code"
+msgstr "Código de recuperação"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Set up a vault to start saving your passwords, cards, and notes."
+msgstr "Configure um cofre para começar a salvar suas senhas, cartões e notas."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Show password"
+msgstr "Mostrar senha"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock"
+msgstr "Desbloquear"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock Vault"
+msgstr "Desbloquear Cofre"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with biometrics"
+msgstr "Desbloquear com biometria"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Face ID"
+msgstr "Desbloquear com Face ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with master password"
+msgstr "Desbloquear com senha mestra"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Optic ID"
+msgstr "Desbloquear com Optic ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with recovery code"
+msgstr "Desbloquear com código de recuperação"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with security key"
+msgstr "Desbloquear com chave de segurança"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Touch ID"
+msgstr "Desbloquear com Touch ID"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock your vault with your security key"
+msgstr "Desbloqueie seu cofre com a chave de segurança"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlocking…"
+msgstr "Desbloqueando…"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Verifying…"
+msgstr "Verificando…"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Waiting for your key…"
+msgstr "Aguardando sua chave…"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Welcome to {appName}"
+msgstr "Bem-vindo ao {appName}"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your browser may ask for access to your vault file when you unlock."
+msgstr "Seu navegador pode solicitar acesso ao arquivo do cofre ao desbloquear."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your vault stays on this device, encrypted with AES-256-GCM. Keep your master password and recovery code somewhere safe."
+msgstr "Seu cofre permanece neste dispositivo, criptografado com AES-256-GCM. Mantenha sua senha mestra e código de recuperação em um local seguro."
