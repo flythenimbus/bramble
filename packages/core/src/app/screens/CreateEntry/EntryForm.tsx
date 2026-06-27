@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import type { BreachStatus, EntryData, EntryType } from "../../../hooks/useVault";
@@ -42,6 +43,7 @@ export function EntryForm({
 	onBack,
 	onSave,
 }: EntryFormProps) {
+	const { t } = useLingui();
 	const mode = getEntryMode(type);
 	const [busy, setBusy] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -80,8 +82,9 @@ export function EntryForm({
 
 	const Fields = mode.Fields;
 	// Label verbatim so acronyms keep their case (e.g. "SSH key").
-	const heading = `${initialEntry ? "Edit" : "New"} ${mode.label}`;
-	const label = submitLabel ?? `Save ${mode.label}`;
+	const modeLabel = mode.label;
+	const heading = initialEntry ? <Trans>Edit {modeLabel}</Trans> : <Trans>New {modeLabel}</Trans>;
+	const label = submitLabel ?? t`Save ${modeLabel}`;
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-3">
@@ -107,7 +110,7 @@ export function EntryForm({
 								disabled={busy}
 								className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 							>
-								Cancel
+								<Trans>Cancel</Trans>
 							</button>
 							{saveError && (
 								<p className="flex-1 text-xs text-destructive truncate" title={saveError}>
@@ -119,7 +122,7 @@ export function EntryForm({
 								disabled={busy}
 								className="px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 							>
-								{busy ? "Saving…" : label}
+								{busy ? t`Saving…` : label}
 							</button>
 						</div>
 					</div>

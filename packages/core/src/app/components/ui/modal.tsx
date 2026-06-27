@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./utils";
@@ -23,6 +24,7 @@ export function Modal({
 	backdropClassName = "bg-black/50 backdrop-blur-sm",
 	children,
 }: ModalProps) {
+	const { t } = useLingui();
 	useEffect(() => {
 		if (!open || !dismissable) return;
 		const onKey = (e: KeyboardEvent) => {
@@ -49,7 +51,7 @@ export function Modal({
 		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 			<button
 				type="button"
-				aria-label="Close"
+				aria-label={t`Close`}
 				tabIndex={-1}
 				onClick={dismissable ? onClose : undefined}
 				className={cn("absolute inset-0", backdropClassName)}

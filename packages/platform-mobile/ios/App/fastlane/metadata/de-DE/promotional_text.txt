@@ -1,0 +1,1 @@
+Ihr Tresor ist lokal verschlüsselt und wird von keinem Konto oder Unternehmen verwaltet. Enthält AutoFill, TOTP und KeePass Import.

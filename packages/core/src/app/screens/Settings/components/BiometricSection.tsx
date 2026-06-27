@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Fingerprint, ScanFace } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
@@ -15,6 +16,7 @@ export function BiometricSection() {
 		disableBiometric,
 		refreshBiometric,
 	} = useVault();
+	const { t } = useLingui();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -31,21 +33,21 @@ export function BiometricSection() {
 	const Icon = isFaceId ? ScanFace : Fingerprint;
 	const title =
 		biometryType === "faceId"
-			? "Face ID"
+			? t`Face ID`
 			: biometryType === "opticId"
-				? "Optic ID"
+				? t`Optic ID`
 				: biometryType === "touchId"
-					? "Touch ID"
-					: "Biometric unlock";
+					? t`Touch ID`
+					: t`Biometric unlock`;
 	// Noun phrase woven into the subtitle copy below ("...with Face ID").
 	const name =
 		biometryType === "faceId"
-			? "Face ID"
+			? t`Face ID`
 			: biometryType === "opticId"
-				? "Optic ID"
+				? t`Optic ID`
 				: biometryType === "touchId"
-					? "Touch ID"
-					: "Face ID or a fingerprint";
+					? t`Touch ID`
+					: t`Face ID or a fingerprint`;
 
 	const onToggle = async (next: boolean) => {
 		setError(null);
@@ -61,10 +63,10 @@ export function BiometricSection() {
 	};
 
 	const subtitle = !biometricAvailable
-		? `Set up ${name} on this device to use this.`
+		? t`Set up ${name} on this device to use this.`
 		: biometricEnabled
-			? `This device can unlock with ${name}.`
-			: `Skip your password on this device with ${name}.`;
+			? t`This device can unlock with ${name}.`
+			: t`Skip your password on this device with ${name}.`;
 
 	return (
 		<>
@@ -72,7 +74,7 @@ export function BiometricSection() {
 				<Toggle
 					checked={biometricEnabled}
 					onChange={(next) => void onToggle(next)}
-					label="Biometric unlock"
+					label={t`Biometric unlock`}
 					disabled={busy || !biometricAvailable}
 				/>
 			</Row>

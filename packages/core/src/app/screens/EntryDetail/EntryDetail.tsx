@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
@@ -14,6 +15,7 @@ interface EntryDetailProps {
 /** Shared chrome for viewing any entry (banner, header, delete/edit footer); the mode supplies the fields. */
 export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
+	const { t } = useLingui();
 	const [copied, setCopied] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
@@ -82,8 +84,8 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 								type="button"
 								onClick={onEdit}
 								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label="Edit entry"
-								title="Edit"
+								aria-label={t`Edit entry`}
+								title={t`Edit`}
 							>
 								<Pencil className="w-4 h-4" />
 							</button>
@@ -91,8 +93,8 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 								type="button"
 								onClick={() => setConfirmDelete(true)}
 								className="p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all"
-								aria-label="Delete entry"
-								title="Delete"
+								aria-label={t`Delete entry`}
+								title={t`Delete`}
 							>
 								<Trash2 className="w-4 h-4" />
 							</button>
@@ -108,14 +110,16 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 
 				{confirmDelete && (
 					<div className="p-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
-						<p className="flex-1 text-xs text-destructive">Delete this entry permanently?</p>
+						<p className="flex-1 text-xs text-destructive">
+							<Trans>Delete this entry permanently?</Trans>
+						</p>
 						<button
 							type="button"
 							onClick={() => setConfirmDelete(false)}
 							disabled={deleting}
 							className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
-							Cancel
+							<Trans>Cancel</Trans>
 						</button>
 						<button
 							type="button"
@@ -123,7 +127,7 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 							disabled={deleting}
 							className="px-5 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
-							{deleting ? "Deleting…" : "Delete"}
+							{deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
 						</button>
 					</div>
 				)}

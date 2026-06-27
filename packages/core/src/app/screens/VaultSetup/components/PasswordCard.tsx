@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Shield } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
@@ -31,6 +32,7 @@ export function PasswordCard({
 	onSubmit,
 	mobile,
 }: PasswordCardProps) {
+	const { t } = useLingui();
 	const {
 		register,
 		handleSubmit,
@@ -52,18 +54,18 @@ export function PasswordCard({
 					<h3 className={`flex items-center gap-2 ${mobile ? "text-base" : "text-sm"}`}>
 						<Shield className="w-4 h-4 text-primary" />
 						{mobile ? "" : "2. "}
-						{isCreate ? "Master password" : "Your master password"}
+						{isCreate ? <Trans>Master password</Trans> : <Trans>Your master password</Trans>}
 					</h3>
 				</div>
 				<div className="p-5 space-y-4">
 					<div>
 						<TextField
-							label="Master password"
+							label={t`Master password`}
 							type="password"
 							autoComplete={isCreate ? "new-password" : "current-password"}
 							error={errors.masterPassword?.message}
 							{...register("masterPassword", {
-								required: isCreate ? "Choose a master password" : "Enter your master password",
+								required: isCreate ? t`Choose a master password` : t`Enter your master password`,
 								// Only the hard floor (too short) blocks creation; weakness is a
 								// warning below. Unlock skips it entirely: existing vaults may
 								// predate any policy.
@@ -74,13 +76,13 @@ export function PasswordCard({
 					</div>
 					{isCreate && (
 						<TextField
-							label="Confirm master password"
+							label={t`Confirm master password`}
 							type="password"
 							autoComplete="new-password"
 							error={errors.confirmPassword?.message}
 							{...register("confirmPassword", {
-								required: "Re-enter the password",
-								validate: (v) => v === pw || "passwords don't match",
+								required: t`Re-enter the password`,
+								validate: (v) => v === pw || t`passwords don't match`,
 							})}
 						/>
 					)}
@@ -123,16 +125,18 @@ export function PasswordCard({
 }
 
 function SubmitLabel({ mode, busy }: { mode: VaultSetupMode; busy: boolean }) {
-	if (busy) return <>{mode === "create" ? "Creating…" : "Unlocking…"}</>;
-	return <>{mode === "create" ? "Create vault" : "Unlock vault"}</>;
+	if (busy) return <>{mode === "create" ? <Trans>Creating…</Trans> : <Trans>Unlocking…</Trans>}</>;
+	return <>{mode === "create" ? <Trans>Create vault</Trans> : <Trans>Unlock vault</Trans>}</>;
 }
 
 function NoRecoveryWarning() {
 	return (
 		<div className="rounded-md p-3 bg-destructive/5 border border-destructive/30 text-xs text-muted-foreground">
-			<span className="text-destructive">⚠</span> There's no vendor reset. Memorize this password
-			and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't
-			be recovered.
+			<span className="text-destructive">⚠</span>{" "}
+			<Trans>
+				There's no vendor reset. Memorize this password and keep the recovery code you'll get next
+				somewhere safe. If you lose both, your vault can't be recovered.
+			</Trans>
 		</div>
 	);
 }

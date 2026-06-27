@@ -1,0 +1,1 @@
+TOTP,KeePass,sécurité,authentificateur,identifiants,chiffrement,horsligne,biométrique

@@ -25,6 +25,7 @@
 		"@capacitor/app": "^8.1.0",
 		"@capacitor/clipboard": "^8.0.1",
 		"@capacitor/core": "^8.4.1",
+		"@capacitor/device": "^8.0.2",
 		"@capacitor/filesystem": "^8.1.2",
 		"@capacitor/ios": "^8.4.1",
 		"@capacitor/preferences": "^8.0.1",
@@ -35,6 +36,7 @@
 	},
 	"devDependencies": {
 		"@capacitor/cli": "^8.4.1",
+		"@lingui/babel-plugin-lingui-macro": "^6.4.0",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/react": "^19.2.15",
 		"@types/react-dom": "^19.2.3",

@@ -1,9 +1,11 @@
+import { useLingui } from "@lingui/react/macro";
 import { useState } from "react";
 import { TextField } from "../../../components/ui/text-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
 export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<void> }) {
+	const { t } = useLingui();
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -15,7 +17,7 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 		try {
 			await onUnlock(password);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Couldn't unlock the vault.");
+			setError(err instanceof Error ? err.message : t`Couldn't unlock the vault.`);
 		} finally {
 			setBusy(false);
 		}
@@ -23,13 +25,13 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 
 	return (
 		<Shell>
-			<Header subtitle="Unlock your vault to import into it" />
+			<Header subtitle={t`Unlock your vault to import into it`} />
 			<form
 				onSubmit={submit}
 				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
 			>
 				<TextField
-					label="Master password"
+					label={t`Master password`}
 					type="password"
 					autoComplete="current-password"
 					autoFocus
@@ -42,7 +44,7 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 					disabled={busy || !password}
 					className="w-full px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 				>
-					{busy ? "Unlocking…" : "Unlock"}
+					{busy ? t`Unlocking…` : t`Unlock`}
 				</button>
 			</form>
 		</Shell>

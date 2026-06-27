@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { LifeBuoy } from "lucide-react";
 import { useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
@@ -14,6 +15,7 @@ export function RecoveryCodeSection() {
 		verifyWithSecurityKey,
 		generateRecoveryCode,
 	} = useVault();
+	const { t } = useLingui();
 	const [gating, setGating] = useState(false); // showing the password-confirm input
 	const [password, setPassword] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -32,7 +34,7 @@ export function RecoveryCodeSection() {
 		try {
 			const ok = await verifyWithSecurityKey();
 			if (!ok) {
-				setError("Couldn't verify your security key. Try again.");
+				setError(t`Couldn't verify your security key. Try again.`);
 				return;
 			}
 			setFreshCode(await generateRecoveryCode());
@@ -50,7 +52,7 @@ export function RecoveryCodeSection() {
 		try {
 			const ok = await verifyMasterPassword(password);
 			if (!ok) {
-				setError("Incorrect master password");
+				setError(t`Incorrect master password`);
 				return;
 			}
 			setFreshCode(await generateRecoveryCode());
@@ -67,11 +69,11 @@ export function RecoveryCodeSection() {
 		<>
 			<Row
 				icon={<LifeBuoy className="w-4 h-4 text-primary" />}
-				title="Recovery code"
+				title={t`Recovery code`}
 				subtitle={
 					hasRecoveryCode
-						? "A one-time backup code that unlocks your vault if you're locked out."
-						: "No recovery code yet. Generate one as a backup way in."
+						? t`A one-time backup code that unlocks your vault if you're locked out.`
+						: t`No recovery code yet. Generate one as a backup way in.`
 				}
 			>
 				{!gating && (
@@ -81,27 +83,32 @@ export function RecoveryCodeSection() {
 						disabled={busy}
 						className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
 					>
-						{busy && !hasPasswordSlot ? "Tap your key…" : hasRecoveryCode ? "Reset" : "Generate"}
+						{busy && !hasPasswordSlot ? t`Tap your key…` : hasRecoveryCode ? t`Reset` : t`Generate`}
 					</button>
 				)}
 			</Row>
 
 			{hasRecoveryCode && !gating && (
-				<p className="text-xs text-muted-foreground pl-12">Resetting invalidates your old code.</p>
+				<p className="text-xs text-muted-foreground pl-12">
+					<Trans>Resetting invalidates your old code.</Trans>
+				</p>
 			)}
 
 			{gating && (
 				<form className="ml-12 mt-2 space-y-2" onSubmit={confirmWithPassword}>
 					<p className="text-xs text-muted-foreground">
-						Confirm your master password to {hasRecoveryCode ? "reset" : "generate"} the recovery
-						code.
+						{hasRecoveryCode ? (
+							<Trans>Confirm your master password to reset the recovery code.</Trans>
+						) : (
+							<Trans>Confirm your master password to generate the recovery code.</Trans>
+						)}
 					</p>
 					<input
 						type="password"
 						autoFocus
 						value={password}
 						onChange={(e) => setPassword(e.target.value)}
-						placeholder="Master password"
+						placeholder={t`Master password`}
 						disabled={busy}
 						className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
 					/>
@@ -111,7 +118,7 @@ export function RecoveryCodeSection() {
 							disabled={busy || !password}
 							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
 						>
-							{busy ? "Working…" : "Confirm"}
+							{busy ? t`Working…` : t`Confirm`}
 						</button>
 						<button
 							type="button"
@@ -123,7 +130,7 @@ export function RecoveryCodeSection() {
 							disabled={busy}
 							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
 						>
-							Cancel
+							<Trans>Cancel</Trans>
 						</button>
 					</div>
 				</form>
@@ -141,8 +148,8 @@ export function RecoveryCodeSection() {
 					{freshCode && (
 						<RecoveryCodeDisplay
 							code={freshCode}
-							title="Your new recovery code"
-							continueLabel="Done"
+							title={t`Your new recovery code`}
+							continueLabel={t`Done`}
 							onContinue={() => setFreshCode(null)}
 						/>
 					)}

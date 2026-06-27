@@ -1,0 +1,1505 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-06-26 20:57-0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: de\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. placeholder {0}: result.warnings.length - 8
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "…and {0} more"
+msgstr "...und noch {0} weitere"
+
+#. placeholder {0}: fingerprint(d.publicKey)
+#. placeholder {1}: addedOn(d.addedAt)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "{0} · added {1}"
+msgstr "{0} · hinzugefügt am {1}"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "{pendingSyncCount} pending sync"
+msgstr "{pendingSyncCount} wartende Synchronisierungen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "{remaining}s left"
+msgstr "{remaining}s verbleiben"
+
+#. placeholder {0}: result.imported.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "<0>{0}</0> items ready to import"
+msgstr "<0>{0}</0> Elemente bereit zum Import"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "<0>Brave:</0> open <1>brave://flags/#file-system-access-api</1> → set to <2>Enabled</2> → relaunch. Or set <3>brave://settings/shields</3> fingerprinting blocking to <4>Standard</4>."
+msgstr "<0>Brave:</0> Öffnen Sie <1>brave://flags/#file-system-access-api</1> → auf <2>Aktiviert</2> setzen → neu starten. Oder stellen Sie die Fingerabdruckblockierung in <3>brave://settings/shields</3> auf <4>Standard</4>."
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "<0>Chrome / Edge:</0> usually on by default. If not, check <1>chrome://flags/#file-system-access-api</1>."
+msgstr "<0>Chrome / Edge:</0> Ist normalerweise standardmäßig aktiviert. Falls nicht, überprüfen Sie <1>chrome://flags/#file-system-access-api</1>."
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "<0>Firefox / Safari:</0> not supported. Use a Chromium-based browser for sync."
+msgstr "<0>Firefox / Safari:</0> Nicht unterstützt. Verwenden Sie einen auf Chromium basierenden Browser für die Synchronisierung."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "1 hour"
+msgstr "1 Stunde"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "1 minute"
+msgstr "1 Minute"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "1. Vault file location"
+msgstr "Speicherort der Tresordatei"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "15 minutes"
+msgstr "15 Minuten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "2 minutes"
+msgstr "2 Minuten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "30 minutes"
+msgstr "30 Minuten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "30 seconds"
+msgstr "30 Sekunden"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "5 minutes"
+msgstr "5 Minuten"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "A one-time backup code that unlocks your vault if you're locked out."
+msgstr "Ein einmaliger Wiederherstellungscode, der Ihren Tresor entsperrt, falls Sie ausgesperrt sind."
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "About"
+msgstr "Über"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Add"
+msgstr "Hinzufügen"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Add a device"
+msgstr "Ein Gerät hinzufügen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add a new login"
+msgstr "Hinzufügen eines neuen Logins"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Add another device"
+msgstr "Ein weiteres Gerät hinzufügen"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Add custom fields to store additional information like security questions, billing postal codes, account numbers, etc."
+msgstr "Benutzerdefinierte Felder hinzufügen, um zusätzliche Informationen wie Sicherheitsfragen, Rechnungspostleitzahlen, Kontonummern usw. zu speichern."
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Add field"
+msgstr "Feld hinzufügen"
+
+#: packages/core/src/app/components/AddDropdown.tsx
+msgid "Add New"
+msgstr "Neu hinzufügen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
+msgstr "Fügen Sie die Websites hinzu, die diese Anmeldung abdeckt. Lassen Sie das Feld leer, wenn es sich um eine Anmeldeinformation handelt, die nicht an eine Website gebunden ist."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add URL"
+msgstr "URL hinzufügen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Advanced"
+msgstr "Erweitert"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
+msgstr "Ein Endpunkt, der Ihre eigenen ICE-Server als JSON zurückgibt. Standardmäßig wird der des Relais verwendet."
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Appearance"
+msgstr "Erscheinungsbild"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "At Risk"
+msgstr "Risiko besteht"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Authenticator key (TOTP)"
+msgstr "Authentifizierungsschlüssel (TOTP)"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Auto-lock timeout"
+msgstr "Automatische Sperrzeit"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Auto-submit after fill"
+msgstr "Nach dem Ausfüllen automatisch absenden"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Back"
+msgstr "Zurück"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Biometric unlock"
+msgstr "Biometrische Entsperrung"
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
+msgstr "Bramble ist auf einen unerwarteten Fehler gestoßen. Ihr Tresor ist sicher – er bleibt auf diesem Gerät verschlüsselt. Versuchen Sie, die Seite neu zu laden; sollte dies weiterhin passieren, öffnen Sie die Anwendung erneut."
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Breached"
+msgstr "Kompromittiert"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
+msgstr "Einträge von 1Password, Bitwarden, KeePass oder Proton Pass importieren"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Bring your logins, cards and notes over from another manager"
+msgstr "Migrieren Sie Ihre Anmeldedaten, Karten und Notizen von einem anderen Manager"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Browser storage will be used"
+msgstr "Der Browser-Speicher wird verwendet"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "card number"
+msgstr "Kartennummer"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Card number"
+msgstr "Kartennummer"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Cardholder name"
+msgstr "Name des Karteninhabers"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Change"
+msgstr "Ändern"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Change it on the site to keep your account safe."
+msgstr "Ändern Sie dies auf der Website, um Ihr Konto zu sichern."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Change your master password"
+msgstr "Master-Passwort ändern"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Check passwords for breaches"
+msgstr "Passwörter auf Sicherheitslücken prüfen"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Choose a master password"
+msgstr "Wählen Sie ein Master-Passwort"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Choose a vault file"
+msgstr "Wählen Sie eine Tresordatei"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Choose another file"
+msgstr "Andere Datei auswählen"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Choose file"
+msgstr "Datei auswählen"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Choose where to store your encrypted vault and pick a master password."
+msgstr "Wählen Sie den Speicherort für Ihren verschlüsselten Tresor und legen Sie ein Master-Passwort fest."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Clear after"
+msgstr "Löschen nach"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Clipboard auto-clear"
+msgstr "Clipboard automatisch löschen"
+
+#: packages/core/src/app/components/ui/modal.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Close"
+msgstr "Schließen"
+
+#: packages/core/src/app/screens/Import/components/Shell.tsx
+msgid "Close import"
+msgstr "Import schließen"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm"
+msgstr "Bestätigen"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Confirm disconnect"
+msgstr "Trennung bestätigen"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Confirm master password"
+msgstr "Master-Passwort bestätigen"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Confirm new password"
+msgstr "Neues Passwort bestätigen"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm your master password to generate the recovery code."
+msgstr "Bestätigen Sie Ihr Master-Passwort, um den Wiederherstellungscode zu generieren."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm your master password to reset the recovery code."
+msgstr "Bestätigen Sie Ihr Master-Passwort, um den Wiederherstellungscode zurückzusetzen."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Confirm your new password"
+msgstr "Neues Passwort bestätigen"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Content"
+msgstr "Inhalt"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "contents"
+msgstr "Inhalt"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Controls which URLs this entry will offer credentials for."
+msgstr "Steuert die URLs, für die dieser Eintrag Anmeldeinformationen bereitstellt."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Copied"
+msgstr "Kopiert"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Copied {copied}"
+msgstr "Kopiert {copied}"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Copy"
+msgstr "Kopieren"
+
+#. placeholder {0}: item.label
+#. placeholder {0}: label.toLowerCase()
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/entry-modes/DetailField.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Copy {0}"
+msgstr "Kopieren {0}"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Copy verification code"
+msgstr "Verifizierungscode kopieren"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Couldn't open this database."
+msgstr "Die Datenbank konnte nicht geöffnet werden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Couldn't read this file."
+msgstr "Datei konnte nicht gelesen werden."
+
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Couldn't unlock the vault."
+msgstr "Der Tresor konnte nicht entsperrt werden."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Couldn't verify your security key. Try again."
+msgstr "Die Überprüfung Ihres Sicherheitsschlüssels ist fehlgeschlagen. Versuchen Sie es erneut."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Couldn't write to the vault."
+msgstr "Schreiben in den Tresor war nicht möglich."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Create new vault"
+msgstr "Neuen Tresor erstellen"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Create vault"
+msgstr "Tresor erstellen"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create your vault"
+msgstr "Erstellen Sie Ihren Tresor"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Creating…"
+msgstr "Erstellung..."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Credit or debit card"
+msgstr "Kredit- oder Debitkarte"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current password"
+msgstr "Aktuelles Passwort"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current password is incorrect"
+msgstr "Das aktuelle Passwort ist falsch"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Custom fields"
+msgstr "Benutzerdefinierte Felder"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "CVV"
+msgstr "CVV"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Dark"
+msgstr "Dunkelmodus"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Data"
+msgstr "Daten"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete"
+msgstr "Löschen"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete entry"
+msgstr "Eintrag löschen"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete this entry permanently?"
+msgstr "Diesen Eintrag dauerhaft löschen?"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Delete this entry?"
+msgstr "Diesen Eintrag löschen?"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Deleting…"
+msgstr "Lösche..."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device sync"
+msgstr "Geräresynchronisierung"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disable master password"
+msgstr "Master-Passwort deaktivieren"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disable master password?"
+msgstr "Master-Passwort deaktivieren?"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disabling…"
+msgstr "Deaktivierung..."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Disconnect"
+msgstr "Verbindung trennen"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Done"
+msgstr "Fertig"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Download"
+msgstr "Herunterladen"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Edit {modeLabel}"
+msgstr "{modeLabel} bearbeiten"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Edit entry"
+msgstr "Eintrag bearbeiten"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Enable autofill"
+msgstr "Autofill aktivieren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Encrypted on your device"
+msgstr "Auf Ihrem Gerät verschlüsselt"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter a new password"
+msgstr "Geben Sie ein neues Passwort ein"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Enter the password for your {providerLabel} database"
+msgstr "Geben Sie das Passwort für Ihre {providerLabel}-Datenbank ein"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter your current password"
+msgstr "Geben Sie Ihr aktuelles Passwort ein"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Enter your master password"
+msgstr "Geben Sie Ihr Master-Passwort ein"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your master password to unlock your vault"
+msgstr "Geben Sie Ihr Master-Passwort ein, um den Tresor zu entsperren"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Enter your master password to unlock your vault."
+msgstr "Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
+msgstr "Geben Sie Ihren Wiederherstellungscode ein, um zu entsperren. Erstellen Sie nach der Anmeldung einen neuen Code in den Einstellungen."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "eTLD+1 (default, matches all subdomains)"
+msgstr "eTLD+1 (Standard, passt auf alle Subdomains)"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Exact hostname only"
+msgstr "Nur exakter Hostname"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Expires"
+msgstr "Ablaufdatum"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Face ID"
+msgstr "Face ID"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Face ID or a fingerprint"
+msgstr "Face ID oder Fingerabdruck"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Field name"
+msgstr "Feldname"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Files are read on this device only. Nothing is uploaded. Delete the export file once you're done."
+msgstr "Dateien werden nur auf diesem Gerät gelesen. Es wird nichts hochgeladen. Löschen Sie die Exportdatei, sobald Sie fertig sind."
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Fingerprint"
+msgstr "Fingerabdruck"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts)."
+msgstr "Für dateibasierte Tresore benötigt der Hintergrund die Dateiberechtigung zum Synchronisieren, auch wenn die Anwendung geschlossen ist. Erteilen Sie diese hier (oder aktivieren Sie im Browser den dauerhaften Dateizugriff, damit dies nach Neustarts bestehen bleibt)."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "General"
+msgstr "Allgemein"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Generate"
+msgstr "Generieren"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
+msgstr "Erstellen Sie einen einmaligen Kopplungscode und warten Sie auf die Verbindung eines Geräts. Der Code enthält keine Tresorgeheimnisse."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Generate password"
+msgstr "Passwort generieren"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Generate strong password"
+msgstr "Starkes Passwort generieren"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Go back"
+msgstr "Zurück"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Go to vault"
+msgstr "Zum Tresor gehen"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Grant access"
+msgstr "Zugriff gewähren"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Grant file access"
+msgstr "Dateizugriff gewähren"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Hidden"
+msgstr "Verborgen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Hide authenticator key"
+msgstr "Authentifikator-Schlüssel ausblenden"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Hide card number"
+msgstr "Kartennummer ausblenden"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Hide CVV"
+msgstr "CVV ausblenden"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Hide passphrase"
+msgstr "Passphrase ausblenden"
+
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Hide password"
+msgstr "Passwort ausblenden"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Hide private key"
+msgstr "Privaten Schlüssel ausblenden"
+
+#: packages/core/src/app/components/ui/secret-area.tsx
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Hide value"
+msgstr "Wert ausblenden"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "I've saved it, continue"
+msgstr "Gespeichert, fortfahren"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Immediately"
+msgstr "Sofortig"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Import"
+msgstr "Importieren"
+
+#. placeholder {0}: result.imported.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Import {0} items"
+msgstr "Importiere {0} Elemente"
+
+#: packages/core/src/app/screens/Import/components/Header.tsx
+msgid "Import data"
+msgstr "Daten importieren"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Import from another manager"
+msgstr "Von einem anderen Manager importieren"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Imported {imported} items"
+msgstr "{imported} Elemente importiert"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Importing…"
+msgstr "Importiere..."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Incorrect master password"
+msgstr "Falsches Master-Passwort"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "item"
+msgstr "Element"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "items"
+msgstr "Elemente"
+
+#. placeholder {0}: filtered.length
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Items ({0})"
+msgstr "Elemente ({0})"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Join"
+msgstr "Beitreten"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Join with a pairing code"
+msgstr "Mit einem Kopplungscode beitreten"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
+msgstr "Bewahren Sie dies an einem sicheren Ort und offline auf. Jeder mit diesem Code kann Ihren Tresor entsperren, und es ist der einzige Weg zurück, wenn Sie Ihr Master-Passwort vergessen oder Ihre Sicherheitsschlüssel verlieren."
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "KeePass master password"
+msgstr "KeePass Master-Passwort"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Key file (optional)"
+msgstr "Schlüsseldatei (optional)"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Keyboard suggestions"
+msgstr "Tastaturenvorschläge"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Light"
+msgstr "Leuchte"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock the vault and require autofill auth after inactivity"
+msgstr "Tresor sperren und nach Inaktivität die Autoverfüllungsbestätigung erfordern"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Lock vault"
+msgstr "Tresor sperren"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock vault after inactivity"
+msgstr "Tresor nach Inaktivität sperren"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Login"
+msgstr "Login"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Master password"
+msgstr "Master-Passwort"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Master password for this device"
+msgstr "Master-Passwort für dieses Gerät"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Master password set."
+msgstr "Master-Passwort festgelegt."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Master password updated."
+msgstr "Masterpasswort aktualisiert."
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Mode"
+msgstr "Modus"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Month (MM)"
+msgstr "Monat (MM)"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "More options"
+msgstr "Weitere Optionen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Name"
+msgstr "Name"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Name this key (e.g. YubiKey office)"
+msgstr "Benennen Sie diesen Schlüssel (z. B. YubiKey Büro)"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Never"
+msgstr "Nie"
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "New {modeLabel}"
+msgstr "Neuer {modeLabel}"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "New password"
+msgstr "Neues Passwort"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "New to {appName}?"
+msgstr "Neu bei {appName}?"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
+msgstr "Kein Authentifikator-QR-Code auf der Seite gefunden. Stellen Sie sicher, dass er sichtbar ist, und versuchen Sie es erneut oder fügen Sie den Einrichtungsschlüssel ein."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No importable items were found in this database."
+msgstr "Es wurden keine importierbaren Elemente in dieser Datenbank gefunden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No importable items were found in this file."
+msgstr "In dieser Datei wurden keine importierbaren Elemente gefunden."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No items found matching your search."
+msgstr "Es wurden keine Elemente gefunden, die Ihrer Suche entsprechen."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "No recovery code yet. Generate one as a backup way in."
+msgstr "Noch kein Wiederherstellungscode vorhanden. Erstellen Sie einen zur Sicherung."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "No save card on these sites. Remove to start prompting again."
+msgstr "Auf diesen Websites wurde keine Karte gespeichert. Entfernen Sie sie, um die Abfrage erneut zu starten."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "No save card on this site. Remove to start prompting again."
+msgstr "Auf dieser Website wurde keine Karte gespeichert. Entfernen Sie sie, um die Abfrage erneut zu starten."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Nostr relay URL"
+msgstr "Nostr Relay URL"
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Notes"
+msgstr "Anmerkungen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Notes (optional)"
+msgstr "Anmerkungen (optional)"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Off. You unlock with a security key."
+msgstr "Ausgeschaltet. Sie entsperren mit einem Sicherheitsschlüssel."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Offer to save logins"
+msgstr "Angebot zur Speicherung von Anmeldungen"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Once enabled, refresh this page and you can choose a vault file location."
+msgstr "Nach der Aktivierung aktualisieren Sie diese Seite und können den Speicherort für die Tresordatei wählen."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
+msgstr "Nach der Registrierung synchronisieren sich die Geräte automatisch im Hintergrund, solange diese entsperrt sind. Kein Button oder Fenster ist nötig."
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Open {name}"
+msgstr "Öffnen {name}"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Open Bramble on your other device and scan the code, or paste it there."
+msgstr "Öffnen Sie Bramble auf Ihrem anderen Gerät und scannen Sie den Code oder fügen Sie diesen ein."
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Open database"
+msgstr "Datenbank öffnen"
+
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Open existing vault"
+msgstr "Bestehenden Tresor öffnen"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Open existing vault file"
+msgstr "Bestehende Tresordatei öffnen"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Open file"
+msgstr "Datei öffnen"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Open in window"
+msgstr "Im Fenster öffnen"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Open your vault"
+msgstr "Ihren Tresor öffnen"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Opening…"
+msgstr "Öffnen..."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Optic ID"
+msgstr "Optic ID"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing code"
+msgstr "Kopplungscode"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Passphrase"
+msgstr "Passphrase"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Passphrase (optional)"
+msgstr "Passphrase (optional)"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "password"
+msgstr "Passwort"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Password"
+msgstr "Passwort"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Password found in a known data breach"
+msgstr "Passwort wurde in einem bekannten Datenleck gefunden"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Password strength"
+msgstr "Passwortstärke"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "passwords don't match"
+msgstr "Die Passwörter stimmen nicht überein"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Passwords don't match"
+msgstr "Die Passwörter stimmen nicht überein"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
+msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Payment card"
+msgstr "Zahlungskarte"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Pick a master password to protect your vault."
+msgstr "Wählen Sie ein Master-Passwort, um Ihren Tresor zu schützen."
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Pick the vault.db file synced from your other device."
+msgstr "Wählen Sie die von Ihrem anderen Gerät synchronisierte vault.db-Datei."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Please enter your master password"
+msgstr "Bitte geben Sie Ihr Master-Passwort ein"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Point at your existing vault file and enter your master password."
+msgstr "Zeigen Sie auf Ihre bestehende Tresordatei und geben Sie Ihr Master-Passwort ein."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Press Enter / submit the form right after the credentials are filled in."
+msgstr "Drücken Sie Eingabe / senden Sie das Formular ab, nachdem die Anmeldeinformationen eingegeben wurden."
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "private key"
+msgstr "Privater Schlüssel"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Private key"
+msgstr "Privater Schlüssel"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Public / private key pair"
+msgstr "Öffentliches/privates Schlüsselpaar"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "public key"
+msgstr "Öffentlicher Schlüssel"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Public key"
+msgstr "Öffentlicher Schlüssel"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Put it in a Dropbox / iCloud / Syncthing folder for cross-device sync."
+msgstr "Legen Sie es in einen Dropbox / iCloud / Syncthing Ordner für die Geräte-Synchronisierung."
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Re-enter the password"
+msgstr "Geben Sie das Passwort erneut ein"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Reading file…"
+msgstr "Datei wird gelesen..."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Recovery code"
+msgstr "Wiederherstellungscode"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Register"
+msgstr "Registrieren"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Register a security key below before you can turn off the master password."
+msgstr "Registrieren Sie unten einen Sicherheitsschlüssel, bevor das Master-Passwort deaktiviert werden kann."
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Reload"
+msgstr "Neu laden"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Remove"
+msgstr "Entfernen"
+
+#. placeholder {0}: d.label || "device"
+#. placeholder {0}: k.label
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Remove {0}"
+msgstr "Entfernen {0}"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Remove {host} from never-save list"
+msgstr "{host} von der Never-Save-Liste entfernen"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Remove field"
+msgstr "Feld entfernen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Remove URL"
+msgstr "URL entfernen"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Require master password to unlock"
+msgstr "Master-Passwort zur Entsperrung erforderlich"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Required to unlock your vault."
+msgstr "Erforderlich, um Ihren Tresor zu entsperren."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Reset"
+msgstr "Zurücksetzen"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Resetting invalidates your old code."
+msgstr "Das Zurücksetzen ungültigt Ihren alten Code."
+
+#. placeholder {0}: provider.label
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Review what we found in your {0} export"
+msgstr "Überprüfen Sie den {0}-Export."
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Save {modeLabel}"
+msgstr "Speichern von {modeLabel}"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
+msgstr "Speichern Sie es jetzt an einem sicheren Ort offline. Dies ist die einzige Möglichkeit, wieder darauf zuzugreifen, falls Sie Ihr Master-Passwort vergessen und Ihre Sicherheitsschlüssel verlieren – wir können dies nicht für Sie wiederherstellen."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Save your recovery code"
+msgstr "Speichern Sie Ihren Wiederherstellungscode"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Saved to your chosen location (e.g. Dropbox folder)."
+msgstr "Gespeichert an dem von Ihnen gewählten Ort (z. B. Dropbox-Ordner)."
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Saving…"
+msgstr "Speicheren…"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan authenticator QR code from current webpage"
+msgstr "Scannen Sie den Authentifikator-QR-Code von der aktuellen Webseite"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Scan QR code"
+msgstr "Scannen Sie den QR-Code"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan QR code from current webpage"
+msgstr "Scannen Sie den QR-Code von der aktuellen Webseite"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
+msgstr "Scannen Sie den QR-Code auf der 2FA-Seite einer Website oder fügen Sie eine otpauth:// URI oder einen Einrichtungsschlüssel ein."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
+msgstr "Scannen Sie dies auf Ihrem anderen Gerät oder kopieren Sie den Code unten. Es enthält keine Tresor-Geheimnisse."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Search vault"
+msgstr "Tresor durchsuchen"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Secure note"
+msgstr "Sichere Notiz"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Security"
+msgstr "Sicherheit"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Security key"
+msgstr "Sicherheitsschlüssel"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Security keys"
+msgstr "Sicherheitsschlüssel"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
+msgstr "Sendet einen 5-stelligen SHA-1-Präfix jedes gespeicherten Passworts an haveibeenpwned.com (k-Anonymität)"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Set password"
+msgstr "Passwort festlegen"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up {name} on this device to use this."
+msgstr "Richten Sie {name} auf diesem Gerät ein, um dies zu verwenden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Set up a vault"
+msgstr "Tresor einrichten"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Set up a vault to start saving your passwords, cards, and notes."
+msgstr "Richten Sie einen Tresor ein, um Ihre Passwörter, Karten und Notizen zu speichern."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Set up your {0} vault first, then come back to import."
+msgstr "Richten Sie zuerst Ihren {0}-Tresor ein und kehren Sie dann zur Importfunktion zurück."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Set up your vault"
+msgstr "Ihr Tresor einrichten"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+msgstr "Anzeige einer Speicher-/Aktualisierungskarte in der Ecke der Seite bei Anmeldung mit Zugangsdaten, die im Tresor fehlen."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show authenticator key"
+msgstr "Authentifizierungsschlüssel anzeigen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Show card number"
+msgstr "Kartennummer anzeigen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Show CVV"
+msgstr "CVV anzeigen"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Show matching logins above the keyboard for one-tap autofill."
+msgstr "Anzeige passender Zugangsdaten über der Tastatur zum Sofort-Autofill."
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Show passphrase"
+msgstr "Passphrase anzeigen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Show password"
+msgstr "Passwort anzeigen"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Show private key"
+msgstr "Privaten Schlüssel anzeigen"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault."
+msgstr "Anzeige dieses Eintrags im Autofüll-Dropdown. Ist diese Funktion deaktiviert, wird der Eintrag niemals automatisch ausgefüllt, verbleibt jedoch in Ihrem Tresor."
+
+#: packages/core/src/app/components/ui/secret-area.tsx
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Show value"
+msgstr "Wert anzeigen"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Sites you've muted"
+msgstr "Stummschaltete Websites"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Skip your password on this device with {name}."
+msgstr "Überspringen Sie Ihr Passwort auf diesem Gerät mit {name}."
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Something went wrong"
+msgstr "Es ist ein Fehler aufgetreten."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Sort by name"
+msgstr "Nach Name sortieren"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key"
+msgstr "SSH key"
+
+#. placeholder {0}: key.keyType
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key · {0}"
+msgstr "SSH key · {0}"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."
+msgstr "Stoppt die Synchronisierung dieses Geräts und hält es auf Offline-Nutzung. Ihre Einträge bleiben hier; andere Geräte sind nicht betroffen."
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Store sensitive text"
+msgstr "Sensiblen Text speichern"
+
+#: packages/core/src/app/components/ui/master-password-meter.tsx
+msgid "Strength"
+msgstr "Stärke"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Strong"
+msgstr "Stark"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Subdomain match"
+msgstr "Subdomain-Abgleich"
+
+#. placeholder {0}: devices.length
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Synced · {0} devices"
+msgstr "Synchronisiert · {0} Geräte"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "System"
+msgstr "System"
+
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Tap a security key to unlock instead of typing the master password."
+msgstr "Entsperren Sie mit einem Sicherheitsschlüssel, anstatt das Master-Passwort einzugeben."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+msgid "Tap your key…"
+msgstr "Tappen Sie Ihren Schlüssel..."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
+msgstr "Der Signalisierungs-Relay, der Geräte einführt. Standardmäßig auf den gehosteten Relay eingestellt; richten Sie ihn auf Ihren eigenen oder einen öffentlichen Nostr-Relay."
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Theme"
+msgstr "Thema"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "There's no vendor reset. Memorize this password and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be recovered."
+msgstr "Es gibt keinen Reset durch den Anbieter. Merken Sie sich dieses Passwort und bewahren Sie den folgenden Wiederherstellungs-Code sicher auf. Wenn Sie beides verlieren, kann Ihr Tresor nicht wiederhergestellt werden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
+msgstr "Sie befinden sich nun in Ihrem Tresor. Zu Ihrer Sicherheit löschen Sie bitte die gerade importierte Exportdatei, da diese Ihre Passwörter im Klartext enthält."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This authenticator key is invalid and can't generate codes."
+msgstr "Dieser Authentifizierungsschlüssel ist ungültig und kann keine Codes generieren."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "This device"
+msgstr "Dieses Gerät"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "This device can unlock with {name}."
+msgstr "Dieses Gerät kann mit {name} entsperrt werden."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This domain and its subdomains"
+msgstr "Diese Domain und ihre Unterdomänen"
+
+#. placeholder {0}: res.skipped
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "This file held {0} {noun}, but none matched a supported format."
+msgstr "Die Datei enthielt {0} {noun}, jedoch konnte kein unterstütztes Format erkannt werden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
+msgstr "Diese Datei ist zu groß zum Importieren ({sizeMb} MB; maximal {MAX_IMPORT_FILE_MB} MB)."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This password appeared in a known data breach."
+msgstr "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Timeout"
+msgstr "Zeitüberschreitung"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Titanpass recovery code"
+msgstr "Titanpass Wiederherstellungs-Code"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Title"
+msgstr "Titel"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle breach checks"
+msgstr "Überprüfung auf Datenlecks umschalten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle keyboard suggestions"
+msgstr "Tastaturvorschläge umschalten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle offer to save logins"
+msgstr "Angebot zum Speichern von Anmeldedaten umschalten"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Total entries"
+msgstr "Gesamtzahl der Einträge"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Total Items"
+msgstr "Gesamtanzahl der Elemente"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Touch ID"
+msgstr "Touch ID"
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Try again"
+msgstr "Erneut versuchen"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "TURN / ICE servers URL"
+msgstr "TURN/ICE-Server-URL"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Type"
+msgstr "Typ"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Unlock"
+msgstr "Entsperren"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Unlock vault"
+msgstr "Tresor entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock Vault"
+msgstr "Tresor entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with biometrics"
+msgstr "Mit Biometrie entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Face ID"
+msgstr "Mit Face ID entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with master password"
+msgstr "Mit Optic ID entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Optic ID"
+msgstr "Mit Wiederherstellungscode entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with recovery code"
+msgstr "Mit Sicherheitsschlüssel entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with security key"
+msgstr "Mit Touch ID entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Touch ID"
+msgstr "Mit Master-Passwort entsperren"
+
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Unlock your vault to import into it"
+msgstr "Entsperren Sie Ihren Tresor, um zu importieren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock your vault with your security key"
+msgstr "Mit Sicherheitsschlüssel entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Unlocking…"
+msgstr "Entsperren…"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Unnamed device"
+msgstr "Gerät ohne Name"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Update password"
+msgstr "Passwort aktualisieren"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Use light, dark, or match your system"
+msgstr "Verwenden Sie helles, dunkles oder passendes System"
+
+#: packages/core/src/app/components/ui/weak-password-notice.tsx
+msgid "Use this password anyway"
+msgstr "Dennoch dieses Passwort verwenden"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "username"
+msgstr "Benutzername"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Username"
+msgstr "Benutzername"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Username or email"
+msgstr "Benutzername oder E-Mail"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Value"
+msgstr "Wert"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Vault changes saved by autofill while the popup was closed are syncing to disk"
+msgstr "Immer beim Autofill gespeicherte Vault-Änderungen, während das Popup geschlossen war, werden auf die Festplatte synchronisiert"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Vault file selected"
+msgstr "Vault-Datei ausgewählt"
+
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Vault ready"
+msgstr "Vault bereit"
+
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Vault unlocked"
+msgstr "Vault entsperrt"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Verification code (TOTP)"
+msgstr "Verifizierungscode (TOTP)"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Verifying…"
+msgstr "Überprüfung…"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Version"
+msgstr "Version"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Visible"
+msgstr "Sichtbar"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Waiting for a device to join…"
+msgstr "Wartet darauf, dass ein Gerät beitritt…"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Waiting for your key…"
+msgstr "Warte auf Ihren Schlüssel…"
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Want sync? Enable the File System Access API in your browser:"
+msgstr "Möchten Sie synchronisieren? Aktivieren Sie die File System Access API in Ihrem Browser:"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Website"
+msgstr "Website"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Website URL"
+msgstr "Website-URL"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Websites"
+msgstr "Websites"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Welcome to {appName}"
+msgstr "Willkommen bei {appName}"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Wipe copied passwords after"
+msgstr "Löschen von kopierten Passwörtern nach"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Working…"
+msgstr "Wird ausgeführt..."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Year (YY)"
+msgstr "Jahr (JJ)"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "You can close this tab and use the {0} popup."
+msgstr "Sie können diesen Tab schließen und das {0}-Popup verwenden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "You need a vault before you can import into it"
+msgstr "Sie benötigen einen Tresor, bevor Sie etwas hineinimportieren können."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "You won't be able to see this code again."
+msgstr "Sie werden diesen Code nicht wieder sehen."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "You'll tap your security key when you press Join. No master password is set on this device."
+msgstr "Wenn Sie auf „Beitreten“ klicken, tippen Sie Ihren Sicherheitsschlüssel. Es ist kein Master-Passwort auf diesem Gerät festgelegt."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
+msgstr "Sie können diesen Tresor nur mit Ihrem Sicherheitsschlüssel entsperren. Wenn Sie alle Ihre Sicherheitsschlüssel verlieren, ist Ihr Wiederherstellungscode der einzige Weg zurück. Es gibt kein Master-Passwort als Rückfallebene."
+
+#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
+msgid "Your browser blocks the file picker here. Your vault will live in extension storage on this device only, no cross-device sync."
+msgstr "Ihr Browser blockiert hier den Dateiauswahler. Ihr Tresor wird nur im Erweiterungsspeicher auf diesem Gerät gespeichert; es erfolgt keine Geräteübergreifende Synchronisierung."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your browser may ask for access to your vault file when you unlock."
+msgstr "Ihr Browser kann beim Entsperren nach Zugriff auf die Tresordatei fragen."
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Your master password"
+msgstr "Ihr Master-Passwort"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Your new recovery code"
+msgstr "Ihr neuer Wiederherstellungscode"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your vault stays on this device, encrypted with AES-256-GCM. Keep your master password and recovery code somewhere safe."
+msgstr "Ihr Tresor bleibt auf diesem Gerät gespeichert und ist mit AES-256-GCM verschlüsselt. Bewahren Sie Ihr Masterpasswort und den Wiederherstellungscode sicher auf."

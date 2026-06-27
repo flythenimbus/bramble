@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="af_unlock_title">Entrez votre mot de passe maître pour déverrouiller votre coffre-fort</string>
+    <string name="af_unlock_biometrics">Déverrouiller avec la biométrie</string>
+    <string name="af_master_password">Mot de passe maître</string>
+    <string name="af_unlock_vault">Déverrouiller le coffre-fort</string>
+    <string name="af_biometric_prompt_title">Déverrouiller Bramble</string>
+    <string name="af_err_enter_password">Entrez votre mot de passe maître.</string>
+    <string name="af_err_biometrics_changed">La biométrie a changé. Utilisez votre mot de passe maître.</string>
+    <string name="af_err_no_password">Ce coffre-fort n\'a pas de mot de passe maître.</string>
+    <string name="af_err_incorrect_password">Mot de passe maître incorrect</string>
+    <string name="af_err_unlock_failed">Déverrouillage échoué</string>
+    <string name="af_err_load_logins">Impossible de charger les identifiants.</string>
+    <string name="af_cancel">Annuler</string>
+    <string name="af_search_logins">Rechercher des identifiants</string>
+    <string name="af_empty_no_logins">Aucun identifiant enregistré.
+Ajoutez-en un dans Bramble.</string>
+    <string name="af_empty_no_match">Aucun identifiant ne correspond à «%s».</string>
+    <string name="af_section_for">Pour %s</string>
+    <string name="af_section_matches">Correspondances</string>
+    <string name="af_section_all_items">Tous les éléments</string>
+    <string name="af_section_no_matches">Aucune correspondance pour %s</string>
+    <string name="af_section_items_count">Éléments (%d)</string>
+    <string name="af_no_name">(aucun nom)</string>
+    <string name="af_use_password">Utiliser le mot de passe</string>
+    <string name="af_err_biometric_prepare">Impossible de préparer le déverrouillage biométrique</string>
+    <string name="af_err_biometric_crypto">Échec du chiffrement biométrique</string>
+    <string name="af_ds_unlock">Déverrouiller pour préremplir</string>
+    <string name="af_ds_show_all_logins">Afficher tous les identifiants</string>
+    <string name="af_ds_search_vault">Rechercher dans votre coffre-fort</string>
+    <string name="af_ds_show_all">Tout afficher</string>
+</resources>

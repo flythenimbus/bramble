@@ -2,6 +2,40 @@
 <resources>
     <string name="app_name">Bramble</string>
     <string name="title_activity_main">Bramble</string>
-    <string name="package_name">app.bramble.mobile</string>
-    <string name="custom_url_scheme">app.bramble.mobile</string>
+    <string name="package_name" translatable="false">app.bramble.mobile</string>
+    <string name="custom_url_scheme" translatable="false">app.bramble.mobile</string>
+
+    <!-- Autofill unlock + credential list (AutofillUnlockActivity) -->
+    <string name="af_unlock_title">Enter your master password to unlock your vault</string>
+    <string name="af_unlock_biometrics">Unlock with biometrics</string>
+    <string name="af_master_password">Master password</string>
+    <string name="af_unlock_vault">Unlock Vault</string>
+    <string name="af_biometric_prompt_title">Unlock Bramble</string>
+    <string name="af_err_enter_password">Enter your master password.</string>
+    <string name="af_err_biometrics_changed">Biometrics changed. Use your master password.</string>
+    <string name="af_err_no_password">This vault has no master password.</string>
+    <string name="af_err_incorrect_password">Incorrect master password</string>
+    <string name="af_err_unlock_failed">Unlock failed</string>
+    <string name="af_err_load_logins">Couldn\'t load logins.</string>
+    <string name="af_cancel">Cancel</string>
+    <string name="af_search_logins">Search logins</string>
+    <string name="af_empty_no_logins">No logins saved yet.\nAdd one in Bramble.</string>
+    <string name="af_empty_no_match">No logins match “%s”.</string>
+    <string name="af_section_for">For %s</string>
+    <string name="af_section_matches">Matches</string>
+    <string name="af_section_all_items">All items</string>
+    <string name="af_section_no_matches">No matches for %s</string>
+    <string name="af_section_items_count">Items (%d)</string>
+    <string name="af_no_name">(no name)</string>
+
+    <!-- Biometric prompt (BiometricUnlock) -->
+    <string name="af_use_password">Use password</string>
+    <string name="af_err_biometric_prepare">Couldn\'t prepare biometric unlock</string>
+    <string name="af_err_biometric_crypto">Biometric crypto failed</string>
+
+    <!-- Autofill dropdown presentations (BrambleAutofillService) -->
+    <string name="af_ds_unlock">Unlock to autofill</string>
+    <string name="af_ds_show_all_logins">Show all logins</string>
+    <string name="af_ds_search_vault">Search your vault</string>
+    <string name="af_ds_show_all">Show all</string>
 </resources>

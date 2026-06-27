@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import { Clock, Keyboard, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
@@ -18,6 +19,7 @@ export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill, shell } = usePlatform();
 	const { entries } = useVault();
+	const { t } = useLingui();
 
 	// On mobile the auto-lock timeout also governs the autofill provider's keep-unlocked
 	// window; push it whenever the setting changes. No-op where there's no native provider.
@@ -45,30 +47,30 @@ export function GeneralSection() {
 	if (!loaded) return null;
 
 	return (
-		<Section icon={<SlidersHorizontal className="w-4 h-4 text-primary" />} title="General">
+		<Section icon={<SlidersHorizontal className="w-4 h-4 text-primary" />} title={t`General`}>
 			<Row
 				icon={<Clock className="w-4 h-4 text-primary" />}
-				title="Auto-lock timeout"
+				title={t`Auto-lock timeout`}
 				subtitle={
 					autofill.setKeepUnlocked
-						? "Lock the vault and require autofill auth after inactivity"
-						: "Lock vault after inactivity"
+						? t`Lock the vault and require autofill auth after inactivity`
+						: t`Lock vault after inactivity`
 				}
 			>
 				<div className="w-44">
 					<SelectField
-						label="Timeout"
+						label={t`Timeout`}
 						value={String(prefs.autoLockMinutes)}
 						onChange={(e) => void update("autoLockMinutes", Number(e.target.value))}
 					>
 						{/* Mobile (native autofill) extreme: lock right away and require auth on
 						    every fill. The default on mobile. */}
-						{autofill.setKeepUnlocked && <option value="-1">Immediately</option>}
-						<option value="5">5 minutes</option>
-						<option value="15">15 minutes</option>
-						<option value="30">30 minutes</option>
-						<option value="60">1 hour</option>
-						<option value="0">Never</option>
+						{autofill.setKeepUnlocked && <option value="-1">{t`Immediately`}</option>}
+						<option value="5">{t`5 minutes`}</option>
+						<option value="15">{t`15 minutes`}</option>
+						<option value="30">{t`30 minutes`}</option>
+						<option value="60">{t`1 hour`}</option>
+						<option value="0">{t`Never`}</option>
 					</SelectField>
 				</div>
 			</Row>
@@ -80,8 +82,8 @@ export function GeneralSection() {
 			{autofill.setKeepUnlocked && inlineAvailable && (
 				<Row
 					icon={<Keyboard className="w-4 h-4 text-primary" />}
-					title="Keyboard suggestions"
-					subtitle="Show matching logins above the keyboard for one-tap autofill."
+					title={t`Keyboard suggestions`}
+					subtitle={t`Show matching logins above the keyboard for one-tap autofill.`}
 				>
 					<Toggle
 						checked={prefs.autofillQuickType}
@@ -91,26 +93,26 @@ export function GeneralSection() {
 								await autofill.setIndex(toAutofillIndex(entries));
 							})()
 						}
-						label="Toggle keyboard suggestions"
+						label={t`Toggle keyboard suggestions`}
 					/>
 				</Row>
 			)}
 
 			<Row
 				icon={<Timer className="w-4 h-4 text-primary" />}
-				title="Clipboard auto-clear"
-				subtitle="Wipe copied passwords after"
+				title={t`Clipboard auto-clear`}
+				subtitle={t`Wipe copied passwords after`}
 			>
 				<div className="w-44">
 					<SelectField
-						label="Clear after"
+						label={t`Clear after`}
 						value={String(prefs.clipboardClearSeconds)}
 						onChange={(e) => void update("clipboardClearSeconds", Number(e.target.value))}
 					>
-						<option value="30">30 seconds</option>
-						<option value="60">1 minute</option>
-						<option value="120">2 minutes</option>
-						<option value="300">5 minutes</option>
+						<option value="30">{t`30 seconds`}</option>
+						<option value="60">{t`1 minute`}</option>
+						<option value="120">{t`2 minutes`}</option>
+						<option value="300">{t`5 minutes`}</option>
 					</SelectField>
 				</div>
 			</Row>
@@ -119,13 +121,13 @@ export function GeneralSection() {
 			    is explicit about what's sent. */}
 			<Row
 				icon={<ShieldCheck className="w-4 h-4 text-primary" />}
-				title="Check passwords for breaches"
-				subtitle="Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
+				title={t`Check passwords for breaches`}
+				subtitle={t`Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)`}
 			>
 				<Toggle
 					checked={prefs.breachCheckEnabled}
 					onChange={(enabled) => void update("breachCheckEnabled", enabled)}
-					label="Toggle breach checks"
+					label={t`Toggle breach checks`}
 				/>
 			</Row>
 
@@ -133,13 +135,13 @@ export function GeneralSection() {
 			{shell.supportsSaveCapture && (
 				<Row
 					icon={<ShieldCheck className="w-4 h-4 text-primary" />}
-					title="Offer to save logins"
-					subtitle="Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+					title={t`Offer to save logins`}
+					subtitle={t`Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have.`}
 				>
 					<Toggle
 						checked={prefs.offerToSave}
 						onChange={(enabled) => void update("offerToSave", enabled)}
-						label="Toggle offer to save logins"
+						label={t`Toggle offer to save logins`}
 					/>
 				</Row>
 			)}
@@ -147,8 +149,12 @@ export function GeneralSection() {
 			{shell.supportsSaveCapture && prefs.neverSaveSites.length > 0 && (
 				<Row
 					icon={<ShieldCheck className="w-4 h-4 text-primary" />}
-					title="Sites you've muted"
-					subtitle={`No save card on these ${prefs.neverSaveSites.length === 1 ? "site" : "sites"}. Remove to start prompting again.`}
+					title={t`Sites you've muted`}
+					subtitle={
+						prefs.neverSaveSites.length === 1
+							? t`No save card on this site. Remove to start prompting again.`
+							: t`No save card on these sites. Remove to start prompting again.`
+					}
 				>
 					<div className="flex flex-wrap gap-1.5 justify-end max-w-[12rem]">
 						{prefs.neverSaveSites.map((host) => (
@@ -162,7 +168,7 @@ export function GeneralSection() {
 									)
 								}
 								className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
-								title={`Remove ${host} from never-save list`}
+								title={t`Remove ${host} from never-save list`}
 							>
 								{host}
 								<span aria-hidden>×</span>

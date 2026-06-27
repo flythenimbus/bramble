@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, FileText, FolderOpen, HardDrive } from "lucide-react";
 import type { VaultSetupMode } from "../types";
 
@@ -23,7 +24,7 @@ export function FileLocationCard({
 			<div className="px-5 py-3 border-b border-border/50">
 				<h3 className="text-sm flex items-center gap-2">
 					<FolderOpen className="w-4 h-4 text-primary" />
-					1. Vault file location
+					<Trans>1. Vault file location</Trans>
 				</h3>
 			</div>
 			<div className="p-5 space-y-3">
@@ -41,11 +42,12 @@ function Body(props: Omit<FileLocationCardProps, "error">) {
 }
 
 function FilePicked({ busy, onPick }: { busy: boolean; onPick: () => void }) {
+	const { t } = useLingui();
 	return (
 		<Row
 			icon={<Check className="w-4 h-4 text-primary" />}
-			title="Vault file selected"
-			description="Saved to your chosen location (e.g. Dropbox folder)."
+			title={t`Vault file selected`}
+			description={t`Saved to your chosen location (e.g. Dropbox folder).`}
 			action={
 				<button
 					type="button"
@@ -53,7 +55,7 @@ function FilePicked({ busy, onPick }: { busy: boolean; onPick: () => void }) {
 					disabled={busy}
 					className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 transition-all disabled:opacity-50"
 				>
-					Change
+					<Trans>Change</Trans>
 				</button>
 			}
 		/>
@@ -69,15 +71,16 @@ function FileToPick({
 	busy: boolean;
 	onPick: () => void;
 }) {
+	const { t } = useLingui();
 	const isCreate = mode === "create";
 	return (
 		<Row
 			icon={<FileText className="w-4 h-4 text-primary" />}
-			title={isCreate ? "Choose a vault file" : "Open existing vault file"}
+			title={isCreate ? t`Choose a vault file` : t`Open existing vault file`}
 			description={
 				isCreate
-					? "Put it in a Dropbox / iCloud / Syncthing folder for cross-device sync."
-					: "Pick the vault.db file synced from your other device."
+					? t`Put it in a Dropbox / iCloud / Syncthing folder for cross-device sync.`
+					: t`Pick the vault.db file synced from your other device.`
 			}
 			action={
 				<button
@@ -86,7 +89,7 @@ function FileToPick({
 					disabled={busy}
 					className="shrink-0 whitespace-nowrap px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50"
 				>
-					{isCreate ? "Choose file" : "Open file"}
+					{isCreate ? <Trans>Choose file</Trans> : <Trans>Open file</Trans>}
 				</button>
 			}
 		/>
@@ -128,10 +131,14 @@ function BrowserStorageFallback() {
 					<HardDrive className="w-4 h-4 text-muted-foreground" />
 				</div>
 				<div className="min-w-0">
-					<p className="text-sm">Browser storage will be used</p>
+					<p className="text-sm">
+						<Trans>Browser storage will be used</Trans>
+					</p>
 					<p className="text-xs text-muted-foreground mt-0.5">
-						Your browser blocks the file picker here. Your vault will live in extension storage on
-						this device only, no cross-device sync.
+						<Trans>
+							Your browser blocks the file picker here. Your vault will live in extension storage on
+							this device only, no cross-device sync.
+						</Trans>
 					</p>
 				</div>
 			</div>
@@ -144,26 +151,34 @@ function FsaHelp() {
 	return (
 		<div className="rounded-md border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
 			<p className="text-foreground">
-				Want sync? Enable the File System Access API in your browser:
+				<Trans>Want sync? Enable the File System Access API in your browser:</Trans>
 			</p>
 			<ul className="space-y-1 list-disc pl-5">
 				<li>
-					<span className="text-foreground">Brave:</span> open{" "}
-					<Kbd>brave://flags/#file-system-access-api</Kbd> → set to{" "}
-					<span className="text-foreground">Enabled</span> → relaunch. Or set{" "}
-					<Kbd>brave://settings/shields</Kbd> fingerprinting blocking to{" "}
-					<span className="text-foreground">Standard</span>.
+					<Trans>
+						<span className="text-foreground">Brave:</span> open{" "}
+						<Kbd>brave://flags/#file-system-access-api</Kbd> → set to{" "}
+						<span className="text-foreground">Enabled</span> → relaunch. Or set{" "}
+						<Kbd>brave://settings/shields</Kbd> fingerprinting blocking to{" "}
+						<span className="text-foreground">Standard</span>.
+					</Trans>
 				</li>
 				<li>
-					<span className="text-foreground">Chrome / Edge:</span> usually on by default. If not,
-					check <Kbd>chrome://flags/#file-system-access-api</Kbd>.
+					<Trans>
+						<span className="text-foreground">Chrome / Edge:</span> usually on by default. If not,
+						check <Kbd>chrome://flags/#file-system-access-api</Kbd>.
+					</Trans>
 				</li>
 				<li>
-					<span className="text-foreground">Firefox / Safari:</span> not supported. Use a
-					Chromium-based browser for sync.
+					<Trans>
+						<span className="text-foreground">Firefox / Safari:</span> not supported. Use a
+						Chromium-based browser for sync.
+					</Trans>
 				</li>
 			</ul>
-			<p>Once enabled, refresh this page and you can choose a vault file location.</p>
+			<p>
+				<Trans>Once enabled, refresh this page and you can choose a vault file location.</Trans>
+			</p>
 		</div>
 	);
 }

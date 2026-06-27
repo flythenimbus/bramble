@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	AlertTriangle,
 	Check,
@@ -39,6 +40,7 @@ export function EntryRow({
 	onDelete,
 }: EntryRowProps) {
 	const { clipboard } = usePlatform();
+	const { t } = useLingui();
 	const [copyOpen, setCopyOpen] = useState(false);
 	const [moreOpen, setMoreOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -101,7 +103,7 @@ export function EntryRow({
 				type="button"
 				onClick={onSelect}
 				className="flex-1 min-w-0 flex items-center gap-3 text-left rounded-md focus:outline-none cursor-pointer"
-				aria-label={`Open ${name}`}
+				aria-label={t`Open ${name}`}
 			>
 				<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm shrink-0">
 					{initials ? (
@@ -126,10 +128,10 @@ export function EntryRow({
 				{leaked && (
 					<span
 						className="row-start-1 col-start-1 justify-self-end self-center inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 opacity-100 group-hover:opacity-0 focus-within:opacity-0 transition-opacity pointer-events-none"
-						title="Password found in a known data breach"
+						title={t`Password found in a known data breach`}
 					>
 						<AlertTriangle className="w-3 h-3" />
-						Breached
+						<Trans>Breached</Trans>
 					</span>
 				)}
 				<div className="row-start-1 col-start-1 justify-self-end self-center flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -139,8 +141,8 @@ export function EntryRow({
 								type="button"
 								onClick={() => setCopyOpen((o) => !o)}
 								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-								aria-label={copied ? `Copied ${copied}` : "Copy"}
-								title={copied ? `Copied ${copied}` : "Copy"}
+								aria-label={copied ? t`Copied ${copied}` : t`Copy`}
+								title={copied ? t`Copied ${copied}` : t`Copy`}
 							>
 								{copied ? (
 									<Check className="w-3.5 h-3.5 text-primary" />
@@ -156,7 +158,7 @@ export function EntryRow({
 											icon={<Copy className="w-3 h-3 text-muted-foreground" />}
 											onClick={() => copyToClipboard(item.label, item.value)}
 										>
-											Copy {item.label}
+											<Trans>Copy {item.label}</Trans>
 										</MenuItem>
 									))}
 								</div>
@@ -172,7 +174,7 @@ export function EntryRow({
 								setConfirmingDelete(false);
 							}}
 							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-							aria-label="More options"
+							aria-label={t`More options`}
 							aria-expanded={moreOpen}
 						>
 							<MoreVertical className="w-3.5 h-3.5" />
@@ -181,7 +183,9 @@ export function EntryRow({
 							<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
 								{confirmingDelete ? (
 									<div className="p-3 space-y-2">
-										<p className="text-xs text-foreground">Delete this entry?</p>
+										<p className="text-xs text-foreground">
+											<Trans>Delete this entry?</Trans>
+										</p>
 										<div className="flex items-center gap-2">
 											<button
 												type="button"
@@ -189,7 +193,7 @@ export function EntryRow({
 												disabled={deleting}
 												className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
 											>
-												Cancel
+												<Trans>Cancel</Trans>
 											</button>
 											<button
 												type="button"
@@ -197,7 +201,7 @@ export function EntryRow({
 												disabled={deleting}
 												className="flex-1 px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
 											>
-												{deleting ? "Deleting…" : "Delete"}
+												{deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
 											</button>
 										</div>
 									</div>
@@ -207,14 +211,14 @@ export function EntryRow({
 											icon={<Pencil className="w-3 h-3 text-muted-foreground" />}
 											onClick={handleEdit}
 										>
-											Edit
+											<Trans>Edit</Trans>
 										</MenuItem>
 										<MenuItem
 											icon={<Trash2 className="w-3 h-3 text-destructive" />}
 											destructive
 											onClick={() => setConfirmingDelete(true)}
 										>
-											Delete
+											<Trans>Delete</Trans>
 										</MenuItem>
 									</>
 								)}

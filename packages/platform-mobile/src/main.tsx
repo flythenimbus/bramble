@@ -1,4 +1,5 @@
 import { App as CapacitorApp } from "@capacitor/app";
+import { Device } from "@capacitor/device";
 import { PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
 import { App, OptionsApp, type PendingLogin, type Platform, PlatformProvider } from "@core/index";
 import { useEffect, useState } from "react";
@@ -33,6 +34,11 @@ const platform: Platform = {
 // vault) is `OptionsApp`, shown when `shell.openSetup()` fires and dismissed when
 // it completes. The WASM crypto + filesystem are process singletons, so remounting
 // `App` afterwards reflects the now-unlocked vault.
+// Device language tag, resolved once before first render. On iOS WKWebView
+// navigator.language is clamped to the app bundle's localizations, so we read the
+// real device locale from Capacitor Device and hand it to @core's App.
+let deviceLocale: string | undefined;
+
 function Root() {
 	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard.
 	// The last two render OptionsApp and dismiss back to "app" on completion/close.
@@ -66,12 +72,14 @@ function Root() {
 	// Run ongoing roster sync while unlocked + enrolled (started on unlock).
 	useEffect(() => initRosterSync(), []);
 
-	if (view === "app") return <App pendingLogin={pendingLogin ?? undefined} />;
+	if (view === "app")
+		return <App pendingLogin={pendingLogin ?? undefined} preferredLocale={deviceLocale} />;
 	return (
 		<OptionsApp
 			onComplete={() => setView("app")}
 			mobile
 			screen={view === "import" ? "import" : undefined}
+			preferredLocale={deviceLocale}
 		/>
 	);
 }
@@ -87,6 +95,11 @@ void (async () => {
 		await mobileStorage.setMeta(PREF_AUTOLOCK_MINUTES, -1);
 	}
 	await resolveAppVersion();
+	// Best-effort: detect the device locale before render so the UI loads the right
+	// catalog with no English flash. Falls back to navigator.language inside @core.
+	deviceLocale = await Device.getLanguageTag()
+		.then((r) => r.value)
+		.catch(() => undefined);
 	createRoot(root).render(
 		<PlatformProvider platform={platform}>
 			<Root />

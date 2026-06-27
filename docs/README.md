@@ -25,6 +25,7 @@ comments point here instead of repeating it.
 | [firefox-port.md](firefox-port.md) | Firefox MV3 port feasibility and the filesystem-sync gap P2P sync fills |
 | [mobile-port.md](mobile-port.md) | Tauri 2 mobile port feasibility; native autofill + biometric-unlock constraints |
 | [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
+| [i18n.md](i18n.md) | Localization across core/iOS/Android/fastlane: Lingui macros, the LLM translation pipeline, commands, and CI/release gates |
 
 ## Vocabulary
 

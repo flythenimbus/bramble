@@ -1,3 +1,4 @@
+import { Trans } from "@lingui/react/macro";
 import { ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { EntryType } from "../../hooks/useVault";
@@ -35,7 +36,9 @@ export function AddDropdown({ onCreate }: AddDropdownProps) {
 				className="flex items-center gap-2 px-4 py-2 h-full rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
 			>
 				<Plus className="w-4 h-4" />
-				<span className="text-sm">Add New</span>
+				<span className="text-sm">
+					<Trans>Add New</Trans>
+				</span>
 				<ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
 			</button>
 

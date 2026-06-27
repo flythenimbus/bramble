@@ -109,7 +109,7 @@ class BrambleAutofillService : AutofillService() {
                 builder.addDataset(
                     Datasets.fillDataset(
                         this, login, parsed.usernameIds, parsed.passwordIds, parsed.otpIds, now,
-                        inline?.next(login.displayTitle(), login.username),
+                        inline?.next(login.displayTitle(this), login.username),
                     )
                 )
             }
@@ -124,8 +124,8 @@ class BrambleAutofillService : AutofillService() {
     // Locked: one dataset that authenticates before revealing anything.
     @Suppress("DEPRECATION")
     private fun addLockedDataset(builder: FillResponse.Builder, parsed: ParsedStructure, inline: InlineContext?) {
-        val pres = Datasets.presentation(this, "Bramble", "Unlock to autofill")
-        val inlinePres = inline?.next("Bramble", "Unlock to autofill")
+        val pres = Datasets.presentation(this, getString(R.string.app_name), getString(R.string.af_ds_unlock))
+        val inlinePres = inline?.next(getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val dataset = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(dataset, id, pres, inlinePres)
         dataset.setAuthentication(authSender(parsed, showAll = false))
@@ -136,8 +136,8 @@ class BrambleAutofillService : AutofillService() {
     // searchable list. Used in the unlocked dropdown so the user can reach non-matching logins.
     @Suppress("DEPRECATION")
     private fun showAllDataset(parsed: ParsedStructure, inline: InlineContext?): Dataset {
-        val pres = Datasets.presentation(this, "Show all logins", "Search your vault")
-        val inlinePres = inline?.next("Show all", "Search your vault")
+        val pres = Datasets.presentation(this, getString(R.string.af_ds_show_all_logins), getString(R.string.af_ds_search_vault))
+        val inlinePres = inline?.next(getString(R.string.af_ds_show_all), getString(R.string.af_ds_search_vault))
         val builder = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(builder, id, pres, inlinePres)
         builder.setAuthentication(authSender(parsed, showAll = true))

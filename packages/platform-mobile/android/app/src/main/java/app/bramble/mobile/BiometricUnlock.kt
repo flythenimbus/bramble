@@ -65,7 +65,7 @@ object BiometricUnlock {
             onResult(Result.Invalidated)
             return
         } catch (e: Exception) {
-            onResult(Result.Error(e.message ?: "Couldn't prepare biometric unlock"))
+            onResult(Result.Error(e.message ?: activity.getString(R.string.af_err_biometric_prepare)))
             return
         }
 
@@ -76,7 +76,7 @@ object BiometricUnlock {
                     val pt = result.cryptoObject!!.cipher!!.doFinal(Base64.decode(ctB64, Base64.NO_WRAP))
                     onResult(Result.Ok(String(pt, Charsets.UTF_8)))
                 } catch (e: Exception) {
-                    onResult(Result.Error(e.message ?: "Biometric crypto failed"))
+                    onResult(Result.Error(e.message ?: activity.getString(R.string.af_err_biometric_crypto)))
                 }
             }
 
@@ -93,7 +93,7 @@ object BiometricUnlock {
         })
         val info = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
-            .setNegativeButtonText("Use password")
+            .setNegativeButtonText(activity.getString(R.string.af_use_password))
             .setAllowedAuthenticators(AUTHENTICATORS)
             .build()
         prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
