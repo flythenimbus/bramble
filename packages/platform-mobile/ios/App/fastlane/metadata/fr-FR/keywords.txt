@@ -1,1 +1,1 @@
-remplissage automatique,2FA,TOTP,authentificateur,KeePass,chiffrement,hors ligne,sécurité,identifiants,générateur,biométrique,synchronisation
+TOTP,KeePass,sécurité,authentificateur,identifiants,chiffrement,horsligne,biométrique

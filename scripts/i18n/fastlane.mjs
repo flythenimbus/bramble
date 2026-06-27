@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FASTLANE_DIR, LOCALES, SOURCE } from "./locales.mjs";
-import { translateText } from "./ollama.mjs";
+import { fitToLimit, translateText } from "./ollama.mjs";
 
 const SOURCE_DIR = "en-US";
 // Prose files worth translating.
@@ -14,6 +14,8 @@ const PROSE = new Set(["description.txt", "promotional_text.txt", "release_notes
 const VERBATIM = new Set(["name.txt", "privacy_url.txt", "support_url.txt"]);
 // keywords.txt: comma-separated, hard 100-char App Store cap — special handling.
 const KEYWORDS = "keywords.txt";
+// App Store hard character limits; fields over these are rejected at upload.
+const LIMITS = { "keywords.txt": 100, "subtitle.txt": 30, "promotional_text.txt": 170 };
 
 export async function run() {
 	console.log("• iOS fastlane metadata");
@@ -41,6 +43,40 @@ export async function run() {
 		}
 		console.log(`  ${appStore}: ${wrote ? `wrote ${wrote} file(s)` : "up to date"}`);
 	}
+	await fitPass();
+}
+
+// Second AI pass: shorten any field that overruns its App Store cap. Idempotent
+// (only touches files already over the limit), with a deterministic fallback so a
+// field is never left over-length.
+async function fitPass() {
+	console.log("  fitting fields to App Store limits…");
+	for (const { name, appStore } of LOCALES) {
+		for (const [file, limit] of Object.entries(LIMITS)) {
+			const path = join(FASTLANE_DIR, appStore, file);
+			if (!existsSync(path)) continue;
+			const original = readFileSync(path, "utf8").trim();
+			if (original.length <= limit) continue;
+			const kind = file === KEYWORDS ? "keywords" : "text";
+			let fitted = await fitToLimit(name, original, limit, kind);
+			if (fitted.length > limit) fitted = hardTrim(fitted, limit, kind);
+			writeFileSync(path, fitted);
+			console.log(`    ${appStore}/${file}: ${original.length} -> ${fitted.length}`);
+		}
+	}
+}
+
+// Last-resort trim if the model can't get under the cap: drop trailing keywords,
+// or cut prose at a word boundary.
+function hardTrim(text, limit, kind) {
+	if (kind === "keywords") {
+		const parts = text.split(",");
+		while (parts.length > 1 && parts.join(",").length > limit) parts.pop();
+		return parts.join(",").slice(0, limit);
+	}
+	const cut = text.slice(0, limit);
+	const sp = cut.lastIndexOf(" ");
+	return (sp > limit * 0.6 ? cut.slice(0, sp) : cut).trim();
 }
 
 async function translateKeywords(language, csv) {

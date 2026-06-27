@@ -95,3 +95,25 @@ export async function translateText(language, text, extra = "") {
 		`breaks and formatting. ${extra} Output ONLY the translated text, nothing else.`;
 	return (await chat(system, text)).trim();
 }
+
+// Shorten text to at most `limit` characters, intelligently. `kind` is "keywords"
+// (comma-separated; drop least-important terms) or "text" (rephrase tighter).
+// Tries the model a few times, keeping the best under-limit candidate.
+export async function fitToLimit(language, text, limit, kind) {
+	let best = text.trim();
+	for (let i = 0; i < 3 && best.length > limit; i++) {
+		const system =
+			kind === "keywords"
+				? `You are optimizing an App Store keyword list in ${language}. Shorten it to AT ` +
+					`MOST ${limit} characters total (counting commas) by dropping the least valuable ` +
+					`keywords and preferring shorter synonyms. Keep it comma-separated with NO spaces ` +
+					`after commas, keep the highest-value search terms, keep brand/standard terms ` +
+					`(Bramble, TOTP, KeePass). ${GUIDANCE} Output ONLY the keyword list.`
+				: `You are editing App Store copy in ${language}. Rewrite the text so it is AT MOST ` +
+					`${limit} characters while preserving the core meaning and a natural, formal tone. ` +
+					`Be concise; drop secondary clauses if needed. ${GUIDANCE} Output ONLY the rewritten text.`;
+		const out = (await chat(system, best)).trim().replace(kind === "keywords" ? /\s*,\s*/g : / +/g, kind === "keywords" ? "," : " ");
+		if (out && out.length < best.length) best = out;
+	}
+	return best;
+}

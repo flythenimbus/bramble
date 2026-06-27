@@ -1,1 +1,1 @@
-Autofüll,2FA,TOTP,Authenticator,KeePass,Verschlüsselung,Offline,Sicherheit,Logins,Generator,Biometrie,Synchronisierung
+Sicherheit,TOTP,2FA,KeePass,Autofüll,Generator,Offline,Logins,Biometrie
