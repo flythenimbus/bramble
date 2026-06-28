@@ -1,5 +1,6 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Device } from "@capacitor/device";
+import { SplashScreen } from "@capacitor/splash-screen";
 import { PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
 import { App, OptionsApp, type PendingLogin, type Platform, PlatformProvider } from "@core/index";
 import { useEffect, useState } from "react";
@@ -104,5 +105,13 @@ void (async () => {
 		<PlatformProvider platform={platform}>
 			<Root />
 		</PlatformProvider>,
+	);
+	// Hold the native splash (launchAutoHide:false) across the async boot above, then
+	// fade it out after the first frame has painted so the app never shows a blank white
+	// WebView. No-op in the dev browser. Double-rAF ensures the first render is on screen.
+	requestAnimationFrame(() =>
+		requestAnimationFrame(() => {
+			void SplashScreen.hide({ fadeOutDuration: 200 });
+		}),
 	);
 })();
