@@ -74,6 +74,14 @@ snow = { version = "0.9", optional = true }
 # --- Nostr event signing (BIP340 schnorr / secp256k1) for sync signaling ---
 k256 = { version = "0.13", default-features = false, features = ["schnorr", "alloc"], optional = true }
 
+# --- WebAuthn passkey authenticator, provider role (both layers). EC keygen +
+# ECDSA signing (p256), COSE_Key encoding (coset), attestation-object CBOR
+# (ciborium). All pure-Rust and sync, so no async runtime enters the wasm/ffi
+# builds. See docs/passkey-provider.md. ---
+p256 = "0.13"
+coset = "0.3"
+ciborium = "0.2"
+
 # --- KDBX4 import (both layers: import runs in the main app) ---
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }

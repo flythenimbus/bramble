@@ -39,6 +39,35 @@ export interface CustomField {
 	hidden?: boolean;
 }
 
+/**
+ * A WebAuthn passkey (discoverable credential) Bramble hosts for a relying party
+ * in its authenticator role. Stored on the login for the same site; `privateKey`
+ * rides the entry's existing DEK-under-VEK encryption like any other field. This
+ * is the provider direction (other sites sign in with it), the opposite of the
+ * security-key unlock in `vault/webauthn-ceremony.ts`. See docs/passkey-provider.md.
+ */
+export interface PasskeyCredential {
+	/** Base64url random credential id Bramble minted at creation. */
+	credentialId: string;
+	/** Relying-party id, e.g. "github.com". Matched against hostnames. */
+	rpId: string;
+	rpName?: string;
+	/** Base64url `user.id` from the RP. Required for discoverable credentials. */
+	userHandle: string;
+	userName?: string;
+	userDisplayName?: string;
+	/** COSE algorithm identifier; -7 (ES256) by default. */
+	alg: number;
+	/** Base64url COSE_Key public key the RP verifies against. */
+	publicKeyCose: string;
+	/** Base64url PKCS#8 private key. Encrypted at rest with the rest of the entry. */
+	privateKey: string;
+	/** Always 0: synced passkeys must not increment (a regression reads as a clone). */
+	signCount: number;
+	createdAt: number;
+	lastUsedAt?: number;
+}
+
 interface BaseEntryData {
 	name: string;
 	notes?: string;
@@ -60,6 +89,8 @@ export interface LoginEntryData extends BaseEntryData {
 	autofillEnabled?: boolean;
 	autoSubmit?: boolean;
 	subdomainMatch?: SubdomainMatchMode;
+	/** Passkeys Bramble hosts for this site, in its authenticator role. */
+	passkeys?: PasskeyCredential[];
 }
 
 export interface CardEntryData extends BaseEntryData {

@@ -52,22 +52,28 @@ else.
 
 ## Core work (do once, all platforms depend on it)
 
-`core-rust` today has Argon2, AES-GCM, HKDF, ChaCha20, and secp256k1 (`k256`, for Nostr). It has
+`core-rust` today has Argon2, AES-GCM, HKDF, ChaCha20, and secp256k1 (`k256`, for Nostr). It had
 **no P-256, no COSE, no CBOR**, which is exactly what WebAuthn needs.
 
-**Use `passkey-rs` from 1Password** (https://github.com/1Password/passkey-rs). `passkey-authenticator`
-implements CTAP2 `make_credential` / `get_assertion` with **storage and user interaction defined as
-traits**, so we implement `CredentialStore` against the vault and `UserValidationMethod` against our
-biometric prompt. Pure Rust (compiles to wasm and ffi), MIT/Apache. It owns the error-prone parts:
-COSE key encoding, `authenticatorData` assembly, attestation-object CBOR. This matches the
-"library-native, do not hand-roll" rule (`prefer-library-native-routing`). `passkey-types` is usable
-standalone if we want our own orchestration over its encoders.
+**Decision (implemented): `p256` + `coset` + `ciborium`, not the full `passkey-authenticator`.**
+1Password's `passkey-authenticator` (https://github.com/1Password/passkey-rs) was evaluated first, but
+its `Authenticator` is **async** and **CTAP2-transport-shaped**. The entire `core-rust` lib is sync
+(tokio only enters under the iOS-only `webrtc` feature), and the OS hands a credential provider
+WebAuthn-level requests, not CTAP transport, so its state machine is more than we need. Adopting it
+would force an async runtime into the wasm + Android-ffi builds for no benefit. Instead the provider
+crypto uses `p256` (EC keygen + ECDSA), `coset` (COSE_Key encoding), and `ciborium` (attestation
+CBOR): all pure-Rust and sync. The remaining spec-critical byte assembly (authenticatorData layout)
+is small and unit-tested with a real sign-then-verify round-trip.
 
-New exports, mirroring the existing `encrypt_entry` / `decrypt_entry` style (both `#[wasm_bindgen]`
-and `#[uniffi::export]`):
+Implemented in `packages/core-rust/src/passkey.rs`, exported from both layers
+(`#[wasm_bindgen]` + `#[uniffi::export]`) mirroring the `encrypt_entry` style:
 
-- `passkey_make_credential(request_json) -> { credential_id, public_key_cose, private_key, attestation_object }`
-- `passkey_get_assertion(request_json, stored_private_key) -> { authenticator_data, signature, user_handle }`
+- `passkey_make_credential(rp_id, user_verified) -> { credentialId, publicKeyCose, privateKey, attestationObject }`
+- `passkey_get_assertion(rp_id, private_key_b64, client_data_hash_b64, user_verified) -> { authenticatorData, signature }`
+
+The functions are **pure** (no VEK slot): the private key is returned at creation, stored inside the
+entry via the existing DEK-under-VEK path, and handed back in for each assertion, exactly like a
+password transits the boundary today.
 
 **All passkey crypto stays in the Rust core**, not WebCrypto/Swift/Kotlin. One audited
 implementation across three platforms, and it sidesteps the iOS Lockdown-Mode WASM-JIT failure the
@@ -171,8 +177,11 @@ Two things make this the hard surface:
 
 ## Phased route
 
-0. **Core.** `passkey-rs` in `core-rust`, the entry shape, `passkey_make_credential` /
-   `passkey_get_assertion` uniffi + wasm exports, unit tests. Foundation; everything else consumes it.
+0. **Core (DONE).** `p256` + `coset` + `ciborium` in `core-rust/src/passkey.rs`; the `passkeys[]`
+   entry shape in `packages/core`; `passkey_make_credential` / `passkey_get_assertion` exported on
+   **both** the wasm (extension) and uniffi (iOS/Android) layers; sign-then-verify unit tests pass.
+   The wasm export is the extension's crypto path, so the extension is unblocked from here, not
+   waiting on mobile. Foundation; everything else consumes it.
 1. **iOS provider.** Cleanest API, infra exists. Proves the model end-to-end.
 2. **Android provider.** New `CredentialProviderService`, autofill scaffolding to copy.
 3. **Extension provider.** `webAuthenticationProxy` + origin binding + popup ceremony.
@@ -182,8 +191,8 @@ Steps 1 to 3 are independent once step 0 lands; the extension can run in paralle
 
 ## Unknowns to retire early
 
-- Exact `passkey-rs` trait surface for `CredentialStore` / `UserValidationMethod` and whether to use
-  the full `passkey-authenticator` or just `passkey-types`. Resolve in Phase 0.
+- ~~Exact `passkey-rs` trait surface and whether to use `passkey-authenticator` or `passkey-types`.~~
+  RESOLVED in Phase 0: rejected the async CTAP2 authenticator; using sync `p256` + `coset` + `ciborium`.
 - Whether `androidx.credentials:credentials` pulls any Play-Services transitive dependency. Verify
   with a dependency tree before committing the Android dep.
 - `webAuthenticationProxy` conditional-mediation (passkey autofill in the username dropdown) behavior
