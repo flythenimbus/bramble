@@ -351,12 +351,63 @@ function commitTagPush(
 	run(`git push origin ${tag}`);
 }
 
+// Build release notes from the conventional-commit log between the previous tag of
+// the SAME platform and this one. GitHub's --generate-notes is useless here: it
+// lists merged PRs (we commit straight to main, so it finds none) and picks the
+// previous tag from the shared namespace (diffing android against a chromium tag).
+function releaseNotes(tag: string, platform: string): string {
+	const prev = capture(
+		`git describe --tags --abbrev=0 --match '*-${platform}' ${tag}^ 2>/dev/null || true`,
+	);
+	const range = prev ? `${prev}..${tag}` : tag;
+	const subjects = capture(`git log --no-merges --pretty=%s ${range}`)
+		.split("\n")
+		.filter((s) => s && !/^chore\(release\)/.test(s));
+
+	const sections: [string, string][] = [
+		["feat", "### Features"],
+		["fix", "### Bug Fixes"],
+		["perf", "### Performance"],
+		["refactor", "### Refactors"],
+		["docs", "### Documentation"],
+	];
+	const groups = new Map<string, string[]>();
+	const other: string[] = [];
+	for (const s of subjects) {
+		const m = s.match(/^(\w+)(?:\([^)]*\))?!?:\s*(.+)/);
+		const heading = sections.find(([t]) => t === m?.[1])?.[1];
+		if (heading) groups.set(heading, [...(groups.get(heading) ?? []), m?.[2] ?? s]);
+		else other.push(s);
+	}
+
+	let body = "";
+	for (const [, heading] of sections) {
+		const items = groups.get(heading);
+		if (items) body += `${heading}\n\n${items.map((d) => `- ${d}`).join("\n")}\n\n`;
+	}
+	if (other.length) body += `### Other\n\n${other.map((d) => `- ${d}`).join("\n")}\n\n`;
+	if (prev) {
+		const repo = capture("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true");
+		if (repo) body += `**Full Changelog**: https://github.com/${repo}/compare/${prev}...${tag}\n`;
+	}
+	return body.trim() || "_No notable changes._";
+}
+
 // Draft -> upload -> publish, so the `release: published` event fires only once the
 // signed artifacts are attached (CI verifies them on that event).
 function publish(tag: string, title: string, assets: string[]) {
-	run(`gh release create ${tag} --draft --generate-notes --title ${JSON.stringify(title)}`);
-	run(`gh release upload ${tag} ${assets.join(" ")}`);
-	run(`gh release edit ${tag} --draft=false`);
+	const notesDir = mkdtempSync(join(tmpdir(), "bramble-notes-"));
+	const notesFile = join(notesDir, "NOTES.md");
+	writeFileSync(notesFile, releaseNotes(tag, platform));
+	try {
+		run(
+			`gh release create ${tag} --draft --notes-file ${notesFile} --title ${JSON.stringify(title)}`,
+		);
+		run(`gh release upload ${tag} ${assets.join(" ")}`);
+		run(`gh release edit ${tag} --draft=false`);
+	} finally {
+		rmSync(notesDir, { recursive: true, force: true });
+	}
 }
 
 function has(bin: string) {
