@@ -4,7 +4,13 @@
 // its own copy in sync with the Rust source. Result shapes reuse the adapter types
 // so there's a single definition of each.
 
-import type { EncryptedPayload, PasswordSlotBlob, VekEncrypted } from "./adapters/crypto";
+import type {
+	EncryptedPayload,
+	PasskeyAssertion,
+	PasskeyRegistration,
+	PasswordSlotBlob,
+	VekEncrypted,
+} from "./adapters/crypto";
 
 // Each call returns its value either synchronously (the in-process WASM module) or
 // as a promise (the native uniffi plugin, which crosses the Capacitor bridge). The
@@ -75,6 +81,14 @@ export interface VaultCrypto {
 	): Awaitable<string>;
 	encrypt_with_vek(plaintext: string): Awaitable<VekEncrypted>;
 	decrypt_with_vek(iv: string, ciphertext: string): Awaitable<string>;
+
+	passkey_make_credential(rpId: string, userVerified: boolean): Awaitable<PasskeyRegistration>;
+	passkey_get_assertion(
+		rpId: string,
+		privateKeyB64: string,
+		clientDataHashB64: string,
+		userVerified: boolean,
+	): Awaitable<PasskeyAssertion>;
 
 	open_kdbx4(
 		file: Uint8Array,

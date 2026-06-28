@@ -4,6 +4,8 @@ import type {
 	EncryptedPayload,
 	KdbxRawEntry,
 	OpenKdbxInput,
+	PasskeyAssertion,
+	PasskeyRegistration,
 	PasswordSlotBlob,
 	UnwrapPasswordSlotInput,
 	UnwrapWebauthnSlotInput,
@@ -18,6 +20,8 @@ import type {
 	CryptoDecryptOuter,
 	CryptoEncrypt,
 	CryptoEncryptOuter,
+	CryptoPasskeyGet,
+	CryptoPasskeyMake,
 	CryptoUnlockWithVek,
 	CryptoUnwrapPasswordSlot,
 	CryptoUnwrapWebauthnSlot,
@@ -144,4 +148,17 @@ export const extensionCrypto: CryptoAdapter = {
 		send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
 
 	openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
+
+	passkeyMakeCredential: (rpId, userVerified) =>
+		send<PasskeyRegistration>("CRYPTO_PASSKEY_MAKE", {
+			rpId,
+			userVerified,
+		} satisfies CryptoPasskeyMake),
+	passkeyGetAssertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
+		send<PasskeyAssertion>("CRYPTO_PASSKEY_GET", {
+			rpId,
+			privateKeyB64,
+			clientDataHashB64,
+			userVerified,
+		} satisfies CryptoPasskeyGet),
 };

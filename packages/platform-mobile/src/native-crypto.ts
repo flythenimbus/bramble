@@ -5,7 +5,13 @@
 // Byte-array args (magicVersion, KDBX files) cross the bridge as base64.
 
 import { registerPlugin } from "@capacitor/core";
-import type { EncryptedPayload, PasswordSlotBlob, VekEncrypted } from "@core/adapters/crypto";
+import type {
+	EncryptedPayload,
+	PasskeyAssertion,
+	PasskeyRegistration,
+	PasswordSlotBlob,
+	VekEncrypted,
+} from "@core/adapters/crypto";
 import { bytesToBase64 } from "@core/util/bytes";
 import type { VaultCrypto } from "@core/wasm";
 
@@ -70,6 +76,13 @@ interface NativeCryptoPlugin {
 	}): Promise<{ value: string }>;
 	encryptWithVek(o: { plaintext: string }): Promise<VekEncrypted>;
 	decryptWithVek(o: { ivB64: string; ciphertextB64: string }): Promise<{ value: string }>;
+	passkeyMakeCredential(o: { rpId: string; userVerified: boolean }): Promise<PasskeyRegistration>;
+	passkeyGetAssertion(o: {
+		rpId: string;
+		privateKeyB64: string;
+		clientDataHashB64: string;
+		userVerified: boolean;
+	}): Promise<PasskeyAssertion>;
 	openKdbx4(o: {
 		fileB64: string;
 		password: string;
@@ -201,6 +214,11 @@ const nativeModule: VaultCrypto = {
 	encrypt_with_vek: (plaintext) => Native.encryptWithVek({ plaintext }),
 	decrypt_with_vek: async (iv, ciphertext) =>
 		(await Native.decryptWithVek({ ivB64: iv, ciphertextB64: ciphertext })).value,
+
+	passkey_make_credential: (rpId, userVerified) =>
+		Native.passkeyMakeCredential({ rpId, userVerified }),
+	passkey_get_assertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
+		Native.passkeyGetAssertion({ rpId, privateKeyB64, clientDataHashB64, userVerified }),
 
 	open_kdbx4: async (file, password, keyfile) =>
 		(

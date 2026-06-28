@@ -10,6 +10,8 @@ import {
 	CryptoEncryptOuterSchema,
 	CryptoEncryptSchema,
 	CryptoOpenKdbxSchema,
+	CryptoPasskeyGetSchema,
+	CryptoPasskeyMakeSchema,
 	CryptoUnlockWithVekSchema,
 	CryptoUnwrapPasswordSlotSchema,
 	CryptoUnwrapWebauthnSlotSchema,
@@ -172,6 +174,15 @@ function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promi
 			// key/value pairs come back. Unrelated to the vault VEK.
 			const p = CryptoOpenKdbxSchema.parse(payload);
 			return a.openKdbx({ fileB64: p.fileB64, password: p.password, keyfileB64: p.keyfileB64 });
+		}
+
+		case "CRYPTO_PASSKEY_MAKE": {
+			const p = CryptoPasskeyMakeSchema.parse(payload);
+			return a.passkeyMakeCredential(p.rpId, p.userVerified);
+		}
+		case "CRYPTO_PASSKEY_GET": {
+			const p = CryptoPasskeyGetSchema.parse(payload);
+			return a.passkeyGetAssertion(p.rpId, p.privateKeyB64, p.clientDataHashB64, p.userVerified);
 		}
 
 		default:
