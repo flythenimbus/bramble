@@ -18,5 +18,7 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+ system splash: keep the brief pre-WebView screen black to match. -->
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>
