@@ -8,8 +8,12 @@
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
 import { bytesToBase64 } from "@core/util/bytes";
-import { extensionCrypto } from "../crypto";
-import { loadDecryptedEntries, savePlacement } from "./passkey-store";
+import {
+	loadDecryptedEntries,
+	passkeyGetAssertion,
+	passkeyMakeCredential,
+	savePlacement,
+} from "./passkey-store";
 import { on } from "./router";
 import { vaultLocked } from "./session";
 import { type CeremonyFn, handleCreate, handleGet, type PasskeyProxyDeps } from "./webauthn-proxy";
@@ -112,7 +116,7 @@ async function sha256Base64(bytes: Uint8Array): Promise<string> {
 }
 
 const productionDeps: PasskeyProxyDeps = {
-	crypto: extensionCrypto,
+	crypto: { passkeyMakeCredential, passkeyGetAssertion },
 	loadEntries: loadDecryptedEntries,
 	savePlacement,
 	ceremony: cornerCeremony,

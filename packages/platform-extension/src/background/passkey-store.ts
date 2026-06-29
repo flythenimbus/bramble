@@ -5,6 +5,7 @@
 // planPasskeyPlacement). Mirrors corner-prompt's commit path: per-entry encrypt, hlc
 // stamp, re-encrypt the outer payload, write or queue. See docs/passkey-provider.md.
 
+import type { PasskeyAssertion, PasskeyRegistration } from "@core/adapters/crypto";
 import type { Entry, LoginEntryData } from "@core/hooks/useVault";
 import { decodeEntriesPayload } from "@core/sync";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
@@ -20,6 +21,35 @@ import {
 	reencryptOuterWithEntryChange,
 	writeOrQueueVault,
 } from "./vault-io";
+
+// Passkey crypto runs in the offscreen (the WASM core). The background reaches it via
+// sendToOffscreen, NOT the UI-side extensionCrypto adapter (whose chrome.runtime
+// messages don't loop back to the background's own listener). Both ops are pure (no VEK).
+export async function passkeyMakeCredential(
+	rpId: string,
+	userVerified: boolean,
+): Promise<PasskeyRegistration> {
+	const res = await sendToOffscreen({
+		type: "CRYPTO_PASSKEY_MAKE",
+		payload: { rpId, userVerified },
+	});
+	if (!res.ok || !res.data) throw new Error(res.error ?? "passkey mint failed");
+	return res.data as PasskeyRegistration;
+}
+
+export async function passkeyGetAssertion(
+	rpId: string,
+	privateKeyB64: string,
+	clientDataHashB64: string,
+	userVerified: boolean,
+): Promise<PasskeyAssertion> {
+	const res = await sendToOffscreen({
+		type: "CRYPTO_PASSKEY_GET",
+		payload: { rpId, privateKeyB64, clientDataHashB64, userVerified },
+	});
+	if (!res.ok || !res.data) throw new Error(res.error ?? "passkey assertion failed");
+	return res.data as PasskeyAssertion;
+}
 
 /** Decrypt every vault entry, including login `passkeys[]`. Requires the vault unlocked. */
 export async function loadDecryptedEntries(): Promise<Entry[]> {
