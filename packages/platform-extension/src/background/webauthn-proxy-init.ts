@@ -7,8 +7,9 @@
 // ceremony reuses the save-login corner card placement. See docs/passkey-provider.md.
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
+import type { Entry } from "@core/hooks/useVault";
 import { bytesToBase64 } from "@core/util/bytes";
-import { passkeyAttachTarget } from "@core/vault/passkey";
+import { loginsCoveringRpId, passkeyAttachTarget } from "@core/vault/passkey";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -17,13 +18,20 @@ import {
 } from "./passkey-store";
 import { on } from "./router";
 import { vaultLocked } from "./session";
-import { type CeremonyFn, handleCreate, handleGet, type PasskeyProxyDeps } from "./webauthn-proxy";
+import {
+	type CeremonyFn,
+	type CeremonyRequest,
+	handleCreate,
+	handleGet,
+	type PasskeyProxyDeps,
+} from "./webauthn-proxy";
 
 const CEREMONY_TIMEOUT_MS = 120_000;
 const UNLOCK_TIMEOUT_MS = 90_000;
 
-// In-flight passkey ceremonies keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
-const pendingPrompts = new Map<string, (approved: boolean) => void>();
+type PromptReply = { approved: boolean; choice?: string };
+// In-flight passkey cards keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
+const pendingPrompts = new Map<string, (reply: PromptReply) => void>();
 
 async function activeTabId(): Promise<number | undefined> {
 	try {
@@ -76,54 +84,101 @@ async function waitForUnlock(timeoutMs: number): Promise<boolean> {
 	return !vaultLocked();
 }
 
-// Show the save/use-passkey card (same corner placement as save-login) and await the
-// user's choice; if the vault is locked, open the popup and wait for the unlock.
-const cornerCeremony: CeremonyFn = async (req) => {
-	const tabId = await activeTabId();
-	if (tabId === undefined) return { approved: false };
-	const promptId = globalThis.crypto.randomUUID();
-	// For a create, when the vault is already unlocked, surface the existing login this
-	// passkey will attach to so the card can say "Add to your existing X login". When
-	// locked we can't read the vault yet, so the card stays the generic "Save" copy.
-	let existingLoginName: string | undefined;
-	if (req.kind === "create" && !vaultLocked()) {
-		try {
-			// Same username-aware target the placement will use, so the card names the
-			// account it will actually attach to (not just the first domain login).
-			existingLoginName = passkeyAttachTarget(
-				await loadDecryptedEntries(),
-				req.rpId,
-				req.userName,
-			)?.name;
-		} catch {}
-	}
-	const payload: SavePasskeyPrompt = {
+// Show one corner card (same placement as save-login) and await the reply; teardown or
+// timeout counts as declined.
+function showCard(tabId: number, payload: SavePasskeyPrompt): Promise<PromptReply> {
+	return new Promise((resolve) => {
+		pendingPrompts.set(payload.promptId, resolve);
+		chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
+			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
+		});
+		setTimeout(() => {
+			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
+		}, CEREMONY_TIMEOUT_MS);
+	});
+}
+
+function cardPayload(
+	req: CeremonyRequest,
+	extra: Partial<SavePasskeyPrompt> = {},
+): SavePasskeyPrompt {
+	return {
 		kind: "save-passkey",
-		promptId,
+		promptId: globalThis.crypto.randomUUID(),
 		hostname: req.rpId,
 		locked: vaultLocked(),
 		intent: req.kind,
 		rpId: req.rpId,
 		rpName: req.kind === "create" ? req.rpName : undefined,
 		userName: req.kind === "create" ? req.userName : undefined,
-		existingLoginName,
+		...extra,
 	};
-	const approved = await new Promise<boolean>((resolve) => {
-		pendingPrompts.set(promptId, resolve);
-		chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
-			if (pendingPrompts.delete(promptId)) resolve(false);
-		});
-		setTimeout(() => {
-			if (pendingPrompts.delete(promptId)) resolve(false);
-		}, CEREMONY_TIMEOUT_MS);
-	});
-	if (!approved) return { approved: false };
-	if (vaultLocked()) {
-		await openPopupForUnlock();
-		if (!(await waitForUnlock(UNLOCK_TIMEOUT_MS))) return { approved: false };
+}
+
+async function ensureUnlocked(): Promise<boolean> {
+	if (!vaultLocked()) return true;
+	await openPopupForUnlock();
+	return waitForUnlock(UNLOCK_TIMEOUT_MS);
+}
+
+// The ceremony: confirm, unlock if needed, and for a create resolve which login the
+// passkey attaches to (auto when unambiguous; a picker with a "create new" option when
+// several accounts share the domain). Unlocking is the user verification.
+const cornerCeremony: CeremonyFn = async (req) => {
+	const tabId = await activeTabId();
+	if (tabId === undefined) return { approved: false };
+
+	if (req.kind === "get") {
+		if (!(await showCard(tabId, cardPayload(req))).approved) return { approved: false };
+		if (!(await ensureUnlocked())) return { approved: false };
+		return { approved: true, userVerified: true };
 	}
-	// Unlocking the vault (master password / biometric) is the user verification.
-	return { approved: true, userVerified: true };
+
+	// create. When locked we can't read the vault yet, so confirm generically then unlock;
+	// when already unlocked we go straight to the resolved/picker card below.
+	const startedLocked = vaultLocked();
+	if (startedLocked) {
+		if (!(await showCard(tabId, cardPayload(req))).approved) return { approved: false };
+		if (!(await ensureUnlocked())) return { approved: false };
+	}
+
+	let entries: Entry[] = [];
+	try {
+		entries = await loadDecryptedEntries();
+	} catch {}
+
+	const target = passkeyAttachTarget(entries, req.rpId, req.userName);
+	if (target) {
+		// Confident account. The locked path already confirmed; otherwise confirm "Add to X".
+		if (!startedLocked) {
+			if (!(await showCard(tabId, cardPayload(req, { existingLoginName: target.name }))).approved) {
+				return { approved: false };
+			}
+		}
+		return { approved: true, userVerified: true, placement: { entryId: target.id } };
+	}
+
+	const candidates = loginsCoveringRpId(entries, req.rpId);
+	if (candidates.length === 0) {
+		if (!startedLocked && !(await showCard(tabId, cardPayload(req))).approved) {
+			return { approved: false };
+		}
+		return { approved: true, userVerified: true, placement: "new" };
+	}
+
+	// Several accounts on this domain and no clear match: let the user pick one or create new.
+	const reply = await showCard(
+		tabId,
+		cardPayload(req, {
+			candidates: candidates.map((c) => ({ id: c.id, name: c.name, username: c.username })),
+		}),
+	);
+	if (!reply.approved) return { approved: false };
+	return {
+		approved: true,
+		userVerified: true,
+		placement: reply.choice && reply.choice !== "new" ? { entryId: reply.choice } : "new",
+	};
 };
 
 async function sha256Base64(bytes: Uint8Array): Promise<string> {
@@ -142,11 +197,11 @@ const productionDeps: PasskeyProxyDeps = {
 };
 
 on("PASSKEY_PROMPT_RESPONSE", async (message) => {
-	const { promptId, approved } = (message.payload ?? {}) as PasskeyPromptResponse;
+	const { promptId, approved, choice } = (message.payload ?? {}) as PasskeyPromptResponse;
 	const resolve = pendingPrompts.get(promptId);
 	if (resolve) {
 		pendingPrompts.delete(promptId);
-		resolve(!!approved);
+		resolve({ approved: !!approved, choice });
 	}
 	return { ok: true, data: null };
 });

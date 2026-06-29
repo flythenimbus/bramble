@@ -131,9 +131,13 @@ export interface SavePasskeyPrompt extends CornerPromptCommon {
 	rpName?: string;
 	userName?: string;
 	/** create only: name of the existing login this passkey will attach to, when one
-	 * covers the rpId (resolved only when the vault is already unlocked). Drives
-	 * "Add a passkey to your existing X login" vs "Save a new passkey" copy. */
+	 * covers the rpId unambiguously (resolved only when the vault is already unlocked).
+	 * Drives "Add a passkey to your existing X login" vs "Save a new passkey" copy. */
 	existingLoginName?: string;
+	/** create only: when several logins cover the rpId and the account is ambiguous, the
+	 * candidates to choose from. The card shows a radio list plus a "Create a new login"
+	 * option (last); the reply carries the chosen id (or "new"). */
+	candidates?: { id: string; name: string; username: string }[];
 }
 
 export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt | SavePasskeyPrompt;
@@ -142,6 +146,8 @@ export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt | SavePass
 export interface PasskeyPromptResponse {
 	promptId: string;
 	approved: boolean;
+	/** create picker: the chosen login id, or "new" to create a fresh login. */
+	choice?: string;
 }
 
 export type CornerPromptResponseAction =

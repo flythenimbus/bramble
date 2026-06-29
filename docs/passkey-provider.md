@@ -203,8 +203,11 @@ Two things make this the hard surface:
    security-key PRF ceremony, reentrant, via PASSKEY_PROXY_PAUSE/RESUME). **Origin resolved:**
    `requestDetailsJson` carries no origin (W3C options shape) and the events carry no tab, so the
    origin comes from the **active tab** (`chrome.tabs.query({active, lastFocusedWindow})`), which is
-   authoritative since WebAuthn requires a focused top-level context. REMAINING: the item edit/view UI
-   (passkey row below TOTP + view badge), and the multi-credential picker for get.
+   authoritative since WebAuthn requires a focused top-level context. **Multi-account create** is
+   handled: a new passkey attaches to the login matching the request `user.name`; when several
+   domain logins are ambiguous the card shows a **picker** (each candidate + "Create a new login"
+   last). REMAINING: the item edit/view UI (passkey row below TOTP + view badge), and the
+   multi-credential picker for get (sign-in currently uses the first matching passkey).
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
