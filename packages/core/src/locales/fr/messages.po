@@ -347,6 +347,10 @@ msgstr "Impossible de vérifier votre clé de sécurité. Veuillez réessayer."
 msgid "Couldn't write to the vault."
 msgstr "Impossible d'écrire dans le coffre-fort."
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser."
+msgstr ""
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
@@ -1269,6 +1273,10 @@ msgid "Title"
 msgstr "Titre"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle Bramble passkey provider"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle breach checks"
 msgstr "Activer la vérification des fuites"
 
@@ -1366,6 +1374,10 @@ msgstr "Appareil non nommé"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"
 msgstr "Mettre à jour le mot de passe"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Use Bramble for passkeys"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Use light, dark, or match your system"
