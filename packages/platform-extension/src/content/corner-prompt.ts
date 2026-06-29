@@ -207,19 +207,20 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	} else if (payload.kind === "update-login") {
 		body = buildUpdateLoginBody(payload);
 	} else {
-		const label =
-			payload.intent === "create"
-				? payload.locked
-					? "Unlock & Save"
-					: "Save passkey"
-				: payload.locked
-					? "Unlock & Use"
-					: "Use passkey";
+		const verb = payload.intent === "get" ? "Use" : payload.existingLoginName ? "Add" : "Save";
+		const label = payload.locked
+			? `Unlock & ${verb}`
+			: payload.intent === "get"
+				? "Use passkey"
+				: payload.existingLoginName
+					? "Add passkey"
+					: "Save passkey";
 		body = savePasskeyBody({
 			rpId: payload.rpId,
 			rpName: payload.rpName,
 			userName: payload.userName,
 			intent: payload.intent,
+			existingLoginName: payload.existingLoginName,
 			primaryLabel: label,
 		});
 	}
