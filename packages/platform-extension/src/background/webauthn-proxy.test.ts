@@ -19,6 +19,7 @@ function deps(over: Partial<PasskeyProxyDeps> = {}): PasskeyProxyDeps {
 				publicKeyCose: "UEs",
 				privateKey: "U0s",
 				attestationObject: "QVRU",
+				authenticatorData: "QUQ",
 			})),
 			passkeyGetAssertion: vi.fn(async () => ({
 				authenticatorData: "QUQ",
