@@ -30,3 +30,16 @@ export function hexToBytes(hex: string): Uint8Array {
 
 export const hexToBase64 = (hex: string): string => bytesToBase64(hexToBytes(hex));
 export const base64ToHex = (b64: string): string => bytesToHex(base64ToBytes(b64));
+
+// base64url (RFC 4648 §5, unpadded): the WebAuthn wire encoding. The Rust core and
+// storage use STANDARD base64, so these convert at the WebAuthn boundary.
+export const base64ToBase64Url = (b64: string): string =>
+	b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export const base64UrlToBase64 = (b64url: string): string => {
+	const rem = b64url.length % 4;
+	return b64url.replace(/-/g, "+").replace(/_/g, "/") + (rem ? "=".repeat(4 - rem) : "");
+};
+export const bytesToBase64Url = (bytes: Uint8Array): string =>
+	base64ToBase64Url(bytesToBase64(bytes));
+export const base64UrlToBytes = (b64url: string): Uint8Array =>
+	base64ToBytes(base64UrlToBase64(b64url));
