@@ -30,6 +30,28 @@ private struct Slot {
 	let magicVersion: Data
 }
 
+// One stored passkey from the (VEK-encrypted) passkey bundle. All base64 fields are
+// STANDARD base64 (as written by the main app), which is what Data(base64Encoded:) and the
+// Rust core both consume directly. The private key is the only secret. See AutofillBridge.
+private struct Passkey: Decodable {
+	let credentialId: String
+	let rpId: String
+	let userName: String
+	let userHandle: String
+	let privateKey: String
+}
+
+// A passkey sign-in (get) the OS asked us to satisfy, captured so the post-unlock path can
+// finish it. Plain types only (no iOS-17 SDK types) so it can be a stored property on a
+// controller whose deployment target is older. `chosen` is set when the OS already picked a
+// specific credential (from its sheet); otherwise we match by rpId + allow-list.
+private struct PasskeyGet {
+	let rpId: String
+	let clientDataHash: Data
+	let allowed: [String]  // STANDARD-b64 credentialIds; empty = any discoverable
+	let chosen: String?  // STANDARD-b64 credentialId already selected by the OS
+}
+
 // Localized lookup from the extension's String Catalog (Localizable.xcstrings).
 // Interpolations become format keys (%@, %lld) that the catalog translates.
 private func loc(_ key: String.LocalizationValue) -> String { String(localized: key) }
@@ -179,6 +201,56 @@ private struct CredentialListView: View {
 
 	private func row(_ cred: Cred) -> some View {
 		Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
+	}
+}
+
+// --- passkey picker (only when several stored passkeys match one get() request) ---
+
+private struct PasskeyPickerView: View {
+	let choices: [Passkey]
+	let onSelect: (Passkey) -> Void
+	let onCancel: () -> Void
+
+	var body: some View {
+		VStack(spacing: 0) {
+			HStack(spacing: 10) {
+				Glyph(size: 26)
+				Text("Choose a passkey").font(.system(size: 20, weight: .semibold))
+					.foregroundColor(Theme.foreground)
+				Spacer()
+				Button("Cancel", action: onCancel).foregroundColor(Theme.muted)
+			}
+			.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
+			Rectangle().fill(Theme.border).frame(height: 1).opacity(0.6)
+			ScrollView {
+				VStack(alignment: .leading, spacing: 10) {
+					ForEach(choices, id: \.credentialId) { pk in
+						Button { onSelect(pk) } label: {
+							HStack(spacing: 12) {
+								Image(systemName: "person.badge.key.fill").font(.system(size: 18))
+									.foregroundColor(Theme.foreground)
+									.frame(width: 40, height: 40).background(Theme.chip)
+									.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+								VStack(alignment: .leading, spacing: 2) {
+									Text(pk.userName.isEmpty ? pk.rpId : pk.userName)
+										.font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.foreground)
+									Text(pk.rpId).font(.system(size: 14)).foregroundColor(Theme.muted).lineLimit(1)
+								}
+								Spacer(minLength: 0)
+							}
+							.padding(12).background(Theme.card)
+							.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+							.overlay(
+								RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.border, lineWidth: 1))
+						}
+						.buttonStyle(.plain)
+					}
+				}
+				.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 24)
+			}
+		}
+		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.background(Theme.background.ignoresSafeArea())
 	}
 }
 
@@ -345,6 +417,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private var pendingHosts: [String] = []
 	private var pendingRecordId: String?
+	// Set while satisfying a passkey get(); onUnlocked() branches to the assertion path.
+	private var pendingPasskey: PasskeyGet?
 	private var model: UnlockModel?
 
 	// --- entry points: authenticate first ---
@@ -397,6 +471,139 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			return
 		}
 		complete(cred)
+	}
+
+	// --- passkey provider (iOS 17+, provider/authenticator role) ---
+	// The OS owns clientDataJSON and hands us only its hash, so there is no origin to resolve
+	// (unlike the Chromium proxy). We sign authData || clientDataHash with the stored key.
+	// The unified ASCredentialRequest methods below also receive password requests on iOS 17;
+	// non-passkey ones are delegated to the existing password handlers so that path is intact.
+
+	// No-UI fast path. Assert silently only when a keep-unlocked session is live AND the RP
+	// did not demand user verification (a fresh biometric); otherwise ask the OS for UI, which
+	// relaunches into prepareInterfaceToProvideCredential below.
+	@available(iOS 17.0, *)
+	override func provideCredentialWithoutUserInteraction(for credentialRequest: ASCredentialRequest) {
+		guard let req = credentialRequest as? ASPasskeyCredentialRequest,
+			let identity = req.credentialIdentity as? ASPasskeyCredentialIdentity
+		else {
+			if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+				provideCredentialWithoutUserInteraction(for: pwd)
+			} else {
+				cancel(.userInteractionRequired)
+			}
+			return
+		}
+		guard req.userVerificationPreference != .required,
+			let vek = loadSession(), (try? unlockWithVek(vekB64: vek)) != nil
+		else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		saveSession(vek)
+		guard let pk = loadPasskeyBundle().first(where: { $0.credentialId == identity.credentialID.base64EncodedString() })
+		else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		assertPasskey(pk, clientDataHash: req.clientDataHash, userVerified: false)
+	}
+
+	// A specific passkey was chosen from the OS sheet but UI is needed (unlock). Force a fresh
+	// unlock so the assertion is genuinely user-verified, then assert that credential.
+	@available(iOS 17.0, *)
+	override func prepareInterfaceToProvideCredential(for credentialRequest: ASCredentialRequest) {
+		guard let req = credentialRequest as? ASPasskeyCredentialRequest,
+			let identity = req.credentialIdentity as? ASPasskeyCredentialIdentity
+		else {
+			if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+				prepareInterfaceToProvideCredential(for: pwd)
+			} else {
+				cancel(.userInteractionRequired)
+			}
+			return
+		}
+		pendingHosts = []
+		pendingRecordId = nil
+		pendingPasskey = PasskeyGet(
+			rpId: identity.relyingPartyIdentifier, clientDataHash: req.clientDataHash,
+			allowed: [], chosen: identity.credentialID.base64EncodedString())
+		showUnlock()
+	}
+
+	// The user opened Bramble for a passkey sign-in (no specific credential pre-chosen): unlock,
+	// then match by rpId + allow-list and assert (picking when several match).
+	@available(iOS 17.0, *)
+	override func prepareCredentialList(
+		for serviceIdentifiers: [ASCredentialServiceIdentifier],
+		requestParameters: ASPasskeyCredentialRequestParameters
+	) {
+		pendingHosts = []
+		pendingRecordId = nil
+		pendingPasskey = PasskeyGet(
+			rpId: requestParameters.relyingPartyIdentifier,
+			clientDataHash: requestParameters.clientDataHash,
+			allowed: requestParameters.allowedCredentials.map { $0.base64EncodedString() },
+			chosen: nil)
+		showUnlock()
+	}
+
+	// Reached only after a fresh unlock (the passkey UI paths never use the cached session),
+	// so the assertion is always user-verified here.
+	@available(iOS 17.0, *)
+	private func handlePasskeyUnlocked() {
+		guard let req = pendingPasskey else { return }
+		let all = loadPasskeyBundle()
+		let matches =
+			req.chosen.map { id in all.filter { $0.credentialId == id } }
+			?? all.filter { $0.rpId == req.rpId && (req.allowed.isEmpty || req.allowed.contains($0.credentialId)) }
+		if matches.count == 1 {
+			assertPasskey(matches[0], clientDataHash: req.clientDataHash, userVerified: true)
+		} else if matches.isEmpty {
+			showError(
+				String(localized: "No passkey found"),
+				String(localized: "Bramble has no passkey for this site."))
+		} else {
+			host(
+				PasskeyPickerView(
+					choices: matches,
+					onSelect: { [weak self] in self?.assertPasskey($0, clientDataHash: req.clientDataHash, userVerified: true) },
+					onCancel: { [weak self] in self?.cancel(.userCanceled) }))
+		}
+	}
+
+	// Sign authData || clientDataHash with the stored key (native Rust core) and hand the OS a
+	// passkey assertion. The OS-provided clientDataHash is fed back verbatim.
+	@available(iOS 17.0, *)
+	private func assertPasskey(_ pk: Passkey, clientDataHash: Data, userVerified: Bool) {
+		guard let credID = Data(base64Encoded: pk.credentialId),
+			let userHandle = Data(base64Encoded: pk.userHandle),
+			let assertion = try? passkeyGetAssertion(
+				rpId: pk.rpId, privateKeyB64: pk.privateKey,
+				clientDataHashB64: clientDataHash.base64EncodedString(), userVerified: userVerified),
+			let authData = Data(base64Encoded: assertion.authenticatorData),
+			let sig = Data(base64Encoded: assertion.signature)
+		else {
+			cancel(.failed)
+			return
+		}
+		let credential = ASPasskeyAssertionCredential(
+			userHandle: userHandle, relyingParty: pk.rpId, signature: sig,
+			clientDataHash: clientDataHash, authenticatorData: authData, credentialID: credID)
+		extensionContext.completeAssertionRequest(using: credential, completionHandler: nil)
+	}
+
+	// Decrypt the passkey bundle (empty if none / not unlocked). VEK must already be loaded.
+	private func loadPasskeyBundle() -> [Passkey] {
+		guard
+			let data = UserDefaults(suiteName: BrambleVault.appGroup)?.data(
+				forKey: BrambleVault.passkeyBundleKey),
+			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String,
+			let json = try? decryptWithVek(ivB64: iv, ciphertextB64: ct),
+			let creds = try? JSONDecoder().decode([Passkey].self, from: Data(json.utf8))
+		else { return [] }
+		return creds
 	}
 
 	private func showUnlock() {
@@ -488,6 +695,11 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func onUnlocked() {
 		// Start / slide the keep-unlocked window (no-op if the feature is off).
 		if let vek = try? exportVek() { saveSession(vek) }
+		// A passkey get() takes a separate path (the login bundle is irrelevant to it).
+		if pendingPasskey != nil {
+			if #available(iOS 17.0, *) { handlePasskeyUnlocked() } else { cancel(.failed) }
+			return
+		}
 		guard let bundle = loadBundle() else {
 			showList(matches: [], all: [], requestedHost: pendingHosts.first)
 			return
