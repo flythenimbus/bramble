@@ -10,10 +10,11 @@ import "./popout";
 import "./qr";
 import "./sync";
 import "./theme";
+import "./webauthn-proxy-init";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
-import { PREF_AUTOLOCK_MINUTES } from "./prefs";
+import { getPasskeyProviderEnabled, PREF_AUTOLOCK_MINUTES } from "./prefs";
 import { setReady } from "./router";
 import {
 	AUTOLOCK_ALARM,
@@ -23,6 +24,7 @@ import {
 	vaultLocked,
 } from "./session";
 import { maybeStartSync } from "./sync";
+import { initWebauthnProxy } from "./webauthn-proxy-init";
 
 // Gate every handler on both hydrations (session VEK + known hostnames) completing.
 const hydrated = Promise.all([sessionHydration, indexHydration]);
@@ -31,6 +33,13 @@ setReady(hydrated);
 // Resume continuous sync after a service-worker restart if the vault is unlocked.
 void hydrated.then(() => {
 	if (!vaultLocked()) void maybeStartSync();
+});
+
+// Attach the passkey provider proxy if the user has opted in (default off, because
+// attach() intercepts all browser WebAuthn). See docs/passkey-provider.md.
+void getPasskeyProviderEnabled().then((enabled) => {
+	if (enabled)
+		void initWebauthnProxy().catch((e) => console.warn("[titanpass:bg] passkey proxy", e));
 });
 
 chrome.runtime.onInstalled.addListener(() => {
