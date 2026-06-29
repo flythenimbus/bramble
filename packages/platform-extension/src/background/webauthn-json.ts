@@ -16,8 +16,6 @@ import { getDomain } from "tldts";
 export type UserVerification = "required" | "preferred" | "discouraged";
 
 export interface ParsedCreationOptions {
-	/** The requesting page origin (Chrome enriches the options with it). Empty if absent. */
-	origin: string;
 	rpId?: string;
 	rpName?: string;
 	userHandleB64Url: string;
@@ -31,36 +29,28 @@ export interface ParsedCreationOptions {
 }
 
 export interface ParsedRequestOptions {
-	origin: string;
 	rpId?: string;
 	challenge: string;
 	allowCredentialsB64Url: string[];
 	userVerification: UserVerification;
 }
 
-// Chrome's requestDetailsJson is the W3C options object. The page origin is not part
-// of that W3C type, so Chrome carries it alongside; accept it at the root or nested
-// under `publicKey`, and tolerate either shape. (Verify the exact location on a real
-// Chrome build; it is the one field this module cannot pin down offline.)
-function rootAndOptions(json: string): { origin: string; opts: Record<string, unknown> } {
+// Chrome's requestDetailsJson is the W3C options object (no origin: that is not part of
+// the W3C type, and the proxy events carry no tab). The caller supplies the origin from
+// the active tab instead. Tolerate the options at the root or nested under `publicKey`.
+function options(json: string): Record<string, unknown> {
 	const root = JSON.parse(json) as Record<string, unknown>;
-	const opts = (root.publicKey as Record<string, unknown>) ?? root;
-	const origin =
-		(typeof root.origin === "string" && root.origin) ||
-		(typeof opts.origin === "string" && opts.origin) ||
-		"";
-	return { origin, opts };
+	return (root.publicKey as Record<string, unknown>) ?? root;
 }
 
 export function parseCreationOptions(json: string): ParsedCreationOptions {
-	const { origin, opts } = rootAndOptions(json);
+	const opts = options(json);
 	const rp = (opts.rp as { id?: string; name?: string }) ?? {};
 	const user = (opts.user as { id?: string; name?: string; displayName?: string }) ?? {};
 	const params = (opts.pubKeyCredParams as { alg?: number }[]) ?? [];
 	const sel = (opts.authenticatorSelection as { userVerification?: UserVerification }) ?? {};
 	const exclude = (opts.excludeCredentials as { id?: string }[]) ?? [];
 	return {
-		origin,
 		rpId: rp.id,
 		rpName: rp.name,
 		userHandleB64Url: user.id ?? "",
@@ -74,10 +64,9 @@ export function parseCreationOptions(json: string): ParsedCreationOptions {
 }
 
 export function parseRequestOptions(json: string): ParsedRequestOptions {
-	const { origin, opts } = rootAndOptions(json);
+	const opts = options(json);
 	const allow = (opts.allowCredentials as { id?: string }[]) ?? [];
 	return {
-		origin,
 		rpId: opts.rpId as string | undefined,
 		challenge: (opts.challenge as string) ?? "",
 		allowCredentialsB64Url: allow.map((c) => c.id).filter((id): id is string => !!id),

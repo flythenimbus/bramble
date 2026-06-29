@@ -61,7 +61,7 @@ const githubEntries: Entry[] = [
 describe("handleCreate", () => {
 	it("mints, stores, and returns a registration response", async () => {
 		const d = deps();
-		const res = await handleCreate(d, 7, createJson());
+		const res = await handleCreate(d, 7, createJson(), "https://github.com");
 		expect(res.requestId).toBe(7);
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyMakeCredential).toHaveBeenCalledWith("github.com", true);
@@ -74,7 +74,7 @@ describe("handleCreate", () => {
 
 	it("rejects a cross-origin rpId with SecurityError", async () => {
 		const d = deps();
-		const res = await handleCreate(d, 1, createJson({ origin: "https://evil.com" }));
+		const res = await handleCreate(d, 1, createJson(), "https://evil.com");
 		expect(res.error?.name).toBe("SecurityError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
@@ -84,13 +84,14 @@ describe("handleCreate", () => {
 			deps(),
 			1,
 			createJson({ pubKeyCredParams: [{ type: "public-key", alg: -257 }] }),
+			"https://github.com",
 		);
 		expect(res.error?.name).toBe("NotSupportedError");
 	});
 
 	it("maps a declined ceremony to NotAllowedError and mints nothing", async () => {
 		const d = deps({ ceremony: vi.fn(async () => ({ approved: false })) as unknown as CeremonyFn });
-		const res = await handleCreate(d, 1, createJson());
+		const res = await handleCreate(d, 1, createJson(), "https://github.com");
 		expect(res.error?.name).toBe("NotAllowedError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
@@ -115,7 +116,7 @@ describe("handleGet", () => {
 				credentialId: "Q0lE",
 			})) as unknown as CeremonyFn,
 		});
-		const res = await handleGet(d, 9, getJson());
+		const res = await handleGet(d, 9, getJson(), "https://github.com");
 		expect(res.requestId).toBe(9);
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith("github.com", "U0s", "aGFzaA", true);
@@ -126,12 +127,12 @@ describe("handleGet", () => {
 
 	it("returns NotAllowedError when no stored passkey matches", async () => {
 		const d = deps({ loadEntries: vi.fn(async () => []) });
-		const res = await handleGet(d, 1, getJson());
+		const res = await handleGet(d, 1, getJson(), "https://github.com");
 		expect(res.error?.name).toBe("NotAllowedError");
 	});
 
 	it("rejects a cross-origin rpId with SecurityError", async () => {
-		const res = await handleGet(deps(), 1, getJson({ origin: "https://evil.com" }));
+		const res = await handleGet(deps(), 1, getJson(), "https://evil.com");
 		expect(res.error?.name).toBe("SecurityError");
 	});
 });
