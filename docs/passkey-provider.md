@@ -207,8 +207,10 @@ Two things make this the hard surface:
    handled: a new passkey attaches to the login matching the request `user.name`; when several
    domain logins are ambiguous the card shows a **picker** (each candidate + "Create a new login"
    last). **Get picker** done too: when several stored passkeys match the rpId, sign-in shows a
-   chooser (by account) instead of using the first. REMAINING: the item edit/view UI (passkey row
-   below TOTP + view badge).
+   chooser (by account) instead of using the first. **Item UI** done: the login edit form lists
+   passkeys below TOTP with a Remove each (and carries them through save so an edit never drops
+   them), and the read view shows a passkey badge per account. The extension provider is now
+   feature-complete pending device verification.
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
