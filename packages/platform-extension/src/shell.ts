@@ -59,6 +59,13 @@ export const extensionShell: ShellAdapter = {
 	supportsCameraScan: false,
 	supportsSecurityKeys: true,
 	supportsSaveCapture: true,
+	supportsPasskeyProvider: true,
+	async setPasskeyProviderEnabled(enabled: boolean) {
+		await chrome.runtime.sendMessage({
+			type: "PASSKEY_PROVIDER_SET_ENABLED",
+			payload: { enabled },
+		});
+	},
 	async flushPendingCornerCapture() {
 		const res = (await chrome.runtime.sendMessage({ type: "CORNER_FLUSH_HANDOFF" })) as
 			| { ok: boolean; data?: boolean }

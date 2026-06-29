@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { Clock, Keyboard, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
+import { Clock, Keyboard, KeyRound, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
@@ -130,6 +130,28 @@ export function GeneralSection() {
 					label={t`Toggle breach checks`}
 				/>
 			</Row>
+
+			{/* Passkey provider: only on the Chromium extension (chrome.webAuthenticationProxy).
+			    While on, Bramble handles every passkey prompt in the browser, so the subtitle is
+			    explicit. Toggling applies live and persists for next startup. */}
+			{shell.supportsPasskeyProvider && (
+				<Row
+					icon={<KeyRound className="w-4 h-4 text-primary" />}
+					title={t`Use Bramble for passkeys`}
+					subtitle={t`Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser.`}
+				>
+					<Toggle
+						checked={prefs.passkeyProviderEnabled}
+						onChange={(enabled) =>
+							void (async () => {
+								await update("passkeyProviderEnabled", enabled);
+								await shell.setPasskeyProviderEnabled?.(enabled);
+							})()
+						}
+						label={t`Toggle Bramble passkey provider`}
+					/>
+				</Row>
+			)}
 
 			{/* Corner-prompt card; only on platforms with a save-capture surface (not mobile). */}
 			{shell.supportsSaveCapture && (

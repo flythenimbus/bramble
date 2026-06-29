@@ -55,6 +55,9 @@ export const mobileShell: ShellAdapter = {
 	// Android has a native AutofillService save flow (onSaveRequest -> SaveInfo prompt ->
 	// prefilled add-login). iOS has no save surface. See docs/mobile-port.md.
 	supportsSaveCapture: Capacitor.getPlatform() === "android",
+	// Passkey provider is the Chromium webAuthenticationProxy; mobile uses native
+	// credential-provider extensions instead (separate workstream).
+	supportsPasskeyProvider: false,
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
 		// used for sync pairing codes and TOTP otpauth:// QRs. iOS WKWebView can't use

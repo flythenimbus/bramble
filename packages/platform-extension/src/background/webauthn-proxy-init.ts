@@ -116,6 +116,14 @@ on("PASSKEY_PROMPT_RESPONSE", async (message) => {
 	return { ok: true, data: null };
 });
 
+// Settings toggle: attach/detach now. The pref itself is persisted by usePrefs (same
+// chrome.storage.local key the background reads on startup), so this only applies it live.
+on("PASSKEY_PROVIDER_SET_ENABLED", async (message) => {
+	const { enabled } = (message.payload ?? {}) as { enabled?: boolean };
+	await setPasskeyProviderEnabled(!!enabled);
+	return { ok: true, data: null };
+});
+
 let attached = false;
 
 /**
