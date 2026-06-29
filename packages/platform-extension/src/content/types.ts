@@ -71,4 +71,14 @@ export type CornerPromptPayload =
 			locked: boolean;
 			candidates: { id: string; name: string; username: string }[];
 			newPassword: string;
+	  }
+	| {
+			kind: "save-passkey";
+			promptId: string;
+			hostname: string;
+			locked: boolean;
+			intent: "create" | "get";
+			rpId: string;
+			rpName?: string;
+			userName?: string;
 	  };

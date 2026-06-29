@@ -6,10 +6,13 @@ export const PREF_AUTOLOCK_MINUTES = "pref.autoLockMinutes";
 const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
 const PREF_OFFER_TO_SAVE = "pref.offerToSave";
 const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
+export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 
 const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_CLIPBOARD_SECONDS = 30;
 const DEFAULT_OFFER_TO_SAVE = true;
+// Off by default: attaching the proxy intercepts ALL browser WebAuthn (see webauthn-proxy.ts).
+const DEFAULT_PASSKEY_PROVIDER = false;
 
 export async function getAutoLockMinutes(): Promise<number> {
 	try {
@@ -36,6 +39,15 @@ export async function getOfferToSavePref(): Promise<boolean> {
 		if (typeof v === "boolean") return v;
 	} catch {}
 	return DEFAULT_OFFER_TO_SAVE;
+}
+
+export async function getPasskeyProviderEnabled(): Promise<boolean> {
+	try {
+		const r = await chrome.storage.local.get(PREF_PASSKEY_PROVIDER);
+		const v = r[PREF_PASSKEY_PROVIDER];
+		if (typeof v === "boolean") return v;
+	} catch {}
+	return DEFAULT_PASSKEY_PROVIDER;
 }
 
 export async function getNeverSaveSites(): Promise<Set<string>> {

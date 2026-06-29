@@ -1,0 +1,160 @@
+/// <reference types="chrome" />
+
+// Production wiring for the passkey provider: builds the deps the pure handlers in
+// ./webauthn-proxy consume (corner-card ceremony, vault IO, crypto, sha256), registers
+// the PASSKEY_PROMPT_RESPONSE resolver, and attaches the proxy. Split out so
+// ./webauthn-proxy stays import-safe (no chrome at import) and unit-testable. The
+// ceremony reuses the save-login corner card placement. See docs/passkey-provider.md.
+
+import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
+import { bytesToBase64 } from "@core/util/bytes";
+import { extensionCrypto } from "../crypto";
+import { loadDecryptedEntries, savePlacement } from "./passkey-store";
+import { on } from "./router";
+import { vaultLocked } from "./session";
+import { type CeremonyFn, handleCreate, handleGet, type PasskeyProxyDeps } from "./webauthn-proxy";
+
+const CEREMONY_TIMEOUT_MS = 120_000;
+const UNLOCK_TIMEOUT_MS = 90_000;
+
+// In-flight passkey ceremonies keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
+const pendingPrompts = new Map<string, (approved: boolean) => void>();
+
+async function activeTabId(): Promise<number | undefined> {
+	try {
+		const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+		return tab?.id;
+	} catch {
+		return undefined;
+	}
+}
+
+async function openPopupForUnlock(): Promise<void> {
+	try {
+		const openPopup = (chrome.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
+		if (typeof openPopup === "function") {
+			await openPopup.call(chrome.action);
+			return;
+		}
+	} catch {}
+	try {
+		await chrome.windows.create({
+			url: chrome.runtime.getURL("popup.html?detached=1"),
+			type: "popup",
+			focused: true,
+			width: 500,
+			height: 600,
+		});
+	} catch {}
+}
+
+async function waitForUnlock(timeoutMs: number): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (!vaultLocked()) return true;
+		await new Promise((r) => setTimeout(r, 400));
+	}
+	return !vaultLocked();
+}
+
+// Show the save/use-passkey card (same corner placement as save-login) and await the
+// user's choice; if the vault is locked, open the popup and wait for the unlock.
+const cornerCeremony: CeremonyFn = async (req) => {
+	const tabId = await activeTabId();
+	if (tabId === undefined) return { approved: false };
+	const promptId = globalThis.crypto.randomUUID();
+	const payload: SavePasskeyPrompt = {
+		kind: "save-passkey",
+		promptId,
+		hostname: req.rpId,
+		locked: vaultLocked(),
+		intent: req.kind,
+		rpId: req.rpId,
+		rpName: req.kind === "create" ? req.rpName : undefined,
+		userName: req.kind === "create" ? req.userName : undefined,
+	};
+	const approved = await new Promise<boolean>((resolve) => {
+		pendingPrompts.set(promptId, resolve);
+		chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
+			if (pendingPrompts.delete(promptId)) resolve(false);
+		});
+		setTimeout(() => {
+			if (pendingPrompts.delete(promptId)) resolve(false);
+		}, CEREMONY_TIMEOUT_MS);
+	});
+	if (!approved) return { approved: false };
+	if (vaultLocked()) {
+		await openPopupForUnlock();
+		if (!(await waitForUnlock(UNLOCK_TIMEOUT_MS))) return { approved: false };
+	}
+	// Unlocking the vault (master password / biometric) is the user verification.
+	return { approved: true, userVerified: true };
+};
+
+async function sha256Base64(bytes: Uint8Array): Promise<string> {
+	// Copy into a fresh ArrayBuffer-backed view so the type is a plain BufferSource.
+	const digest = await globalThis.crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
+	return bytesToBase64(new Uint8Array(digest));
+}
+
+const productionDeps: PasskeyProxyDeps = {
+	crypto: extensionCrypto,
+	loadEntries: loadDecryptedEntries,
+	savePlacement,
+	ceremony: cornerCeremony,
+	sha256: sha256Base64,
+	now: () => Date.now(),
+};
+
+on("PASSKEY_PROMPT_RESPONSE", async (message) => {
+	const { promptId, approved } = (message.payload ?? {}) as PasskeyPromptResponse;
+	const resolve = pendingPrompts.get(promptId);
+	if (resolve) {
+		pendingPrompts.delete(promptId);
+		resolve(!!approved);
+	}
+	return { ok: true, data: null };
+});
+
+let attached = false;
+
+/**
+ * Attach the proxy and register the create/get/isUvpaa listeners. Gated behind a
+ * Settings pref (default off): attach() intercepts ALL browser WebAuthn, including
+ * Bramble's own security-key unlock, so that interaction must be verified before this
+ * is enabled by default. End-to-end needs a real Chrome.
+ */
+export async function initWebauthnProxy(): Promise<void> {
+	if (attached) return;
+	chrome.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
+		chrome.webAuthenticationProxy.completeIsUvpaaRequest({
+			requestId: req.requestId,
+			isUvpaa: true,
+		});
+	});
+	chrome.webAuthenticationProxy.onCreateRequest.addListener((req) => {
+		void handleCreate(productionDeps, req.requestId, req.requestDetailsJson).then((d) =>
+			chrome.webAuthenticationProxy.completeCreateRequest(d),
+		);
+	});
+	chrome.webAuthenticationProxy.onGetRequest.addListener((req) => {
+		void handleGet(productionDeps, req.requestId, req.requestDetailsJson).then((d) =>
+			chrome.webAuthenticationProxy.completeGetRequest(d),
+		);
+	});
+	const err = await chrome.webAuthenticationProxy.attach();
+	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);
+	attached = true;
+}
+
+export async function detachWebauthnProxy(): Promise<void> {
+	if (!attached) return;
+	await chrome.webAuthenticationProxy.detach();
+	attached = false;
+}
+
+/** Runtime toggle from Settings. */
+export async function setPasskeyProviderEnabled(enabled: boolean): Promise<void> {
+	if (enabled) await initWebauthnProxy();
+	else await detachWebauthnProxy();
+}

@@ -92,7 +92,7 @@ export type FillPayload =
 			customFields?: CustomFieldData[];
 	  };
 
-export type CornerPromptKind = "save-login" | "update-login";
+export type CornerPromptKind = "save-login" | "update-login" | "save-passkey";
 
 interface CornerPromptCommon {
 	/** UUID minted per capture; rides the round-trip on the response so a stale prompt can't commit (id no longer matches the live stash). */
@@ -117,7 +117,28 @@ export interface UpdateLoginPrompt extends CornerPromptCommon {
 	newPassword: string;
 }
 
-export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt;
+/**
+ * In-page prompt to save a passkey the site asked us to create (provider role).
+ * Placed like the save-login card, but request-scoped: the WebAuthn create() call is
+ * blocking on the user's choice, so the reply rides PASSKEY_PROMPT_RESPONSE (resolving
+ * the pending proxy request) rather than the login save stash. See docs/passkey-provider.md.
+ */
+export interface SavePasskeyPrompt extends CornerPromptCommon {
+	kind: "save-passkey";
+	/** Whether this is a create (save) or a get (sign-in) confirmation. */
+	intent: "create" | "get";
+	rpId: string;
+	rpName?: string;
+	userName?: string;
+}
+
+export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt | SavePasskeyPrompt;
+
+/** Reply to a SavePasskeyPrompt; resolves the pending webAuthenticationProxy request. */
+export interface PasskeyPromptResponse {
+	promptId: string;
+	approved: boolean;
+}
 
 export type CornerPromptResponseAction =
 	| "save"

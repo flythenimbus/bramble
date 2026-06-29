@@ -7,10 +7,10 @@
 // assembly are unit-tested; the chrome event/attach wiring stays thin. See
 // docs/passkey-provider.md.
 //
-// STATUS: orchestration + read path implemented and tested. The ceremony UI window and
-// the create-time vault write (`savePlacement`) are injected seams, wired in a later
-// step; initWebauthnProxy is not yet called from background.ts, so the proxy is dormant
-// until a Settings toggle + the ceremony UI land. End-to-end needs a real Chrome.
+// This module stays import-safe (no chrome at import) so it is unit-testable; the
+// chrome wiring (corner-card ceremony, vault IO, attach) lives in ./webauthn-proxy-init,
+// which injects the deps below. The proxy is gated behind a pref (default off) because
+// attach() intercepts all browser WebAuthn. End-to-end needs a real Chrome.
 
 import type { CryptoAdapter } from "@core/adapters/crypto";
 import type { Entry, PasskeyCredential } from "@core/hooks/useVault";
@@ -197,35 +197,4 @@ function toDomException(e: unknown): chrome.webAuthenticationProxy.DOMExceptionD
 	if (e instanceof WebAuthnError) return { name: e.domName, message: e.message };
 	// Unknown failure: NotAllowedError is the spec's catch-all so we never leak internals.
 	return { name: "NotAllowedError", message: e instanceof Error ? e.message : String(e) };
-}
-
-/**
- * Register the proxy event listeners and attach. Thin chrome glue over the tested
- * handlers above. Call once from the background once a Settings toggle enables the
- * provider; detach() when disabled. onIsUvpaa is always true (we can verify via the
- * vault unlock / biometric in the ceremony).
- */
-export async function initWebauthnProxy(deps: PasskeyProxyDeps): Promise<void> {
-	chrome.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
-		chrome.webAuthenticationProxy.completeIsUvpaaRequest({
-			requestId: req.requestId,
-			isUvpaa: true,
-		});
-	});
-	chrome.webAuthenticationProxy.onCreateRequest.addListener((req) => {
-		void handleCreate(deps, req.requestId, req.requestDetailsJson).then((details) =>
-			chrome.webAuthenticationProxy.completeCreateRequest(details),
-		);
-	});
-	chrome.webAuthenticationProxy.onGetRequest.addListener((req) => {
-		void handleGet(deps, req.requestId, req.requestDetailsJson).then((details) =>
-			chrome.webAuthenticationProxy.completeGetRequest(details),
-		);
-	});
-	const err = await chrome.webAuthenticationProxy.attach();
-	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);
-}
-
-export function detachWebauthnProxy(): Promise<string | undefined> {
-	return chrome.webAuthenticationProxy.detach();
 }

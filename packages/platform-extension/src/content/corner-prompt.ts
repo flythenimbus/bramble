@@ -2,6 +2,7 @@
 
 import { cornerStyles } from "./html/corner-styles";
 import { saveLoginBody } from "./html/save-login-body";
+import { savePasskeyBody } from "./html/save-passkey-body";
 import { updateLoginBody } from "./html/update-login-body";
 import { isExtensionAlive, markExtensionDead, onTeardown, safeSendMessage } from "./lifecycle";
 import { html } from "./template";
@@ -82,6 +83,16 @@ function sendCornerResponse(action: string, extra?: Record<string, unknown>): vo
 	});
 }
 
+// Passkey cards reply on their own channel: the create()/get() call is blocking on
+// the background, which resolves the pending proxy request from this message.
+function sendPasskeyResponse(approved: boolean): void {
+	if (!currentPrompt) return;
+	safeSendMessage({
+		type: "PASSKEY_PROMPT_RESPONSE",
+		payload: { promptId: currentPrompt.promptId, approved },
+	});
+}
+
 function closeOverflowMenu(): void {
 	cornerShadow?.querySelector(".tp-menu")?.remove();
 }
@@ -154,6 +165,16 @@ function handleCornerCardClick(e: Event): void {
 		removeCornerPrompt();
 		return;
 	}
+	if (action === "passkey-approve") {
+		sendPasskeyResponse(true);
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "passkey-dismiss") {
+		sendPasskeyResponse(false);
+		removeCornerPrompt();
+		return;
+	}
 	if (action === "dismiss") {
 		sendCornerResponse("dismiss");
 		removeCornerPrompt();
@@ -180,8 +201,28 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	root.style.cssText = "position: fixed; top: 16px; right: 16px; z-index: 2147483647;";
 	// Closed shadow root: keeps the captured credential out of page-readable DOM.
 	const shadow = root.attachShadow({ mode: "closed" });
-	const body =
-		payload.kind === "save-login" ? buildSaveLoginBody(payload) : buildUpdateLoginBody(payload);
+	let body: string;
+	if (payload.kind === "save-login") {
+		body = buildSaveLoginBody(payload);
+	} else if (payload.kind === "update-login") {
+		body = buildUpdateLoginBody(payload);
+	} else {
+		const label =
+			payload.intent === "create"
+				? payload.locked
+					? "Unlock & Save"
+					: "Save passkey"
+				: payload.locked
+					? "Unlock & Use"
+					: "Use passkey";
+		body = savePasskeyBody({
+			rpId: payload.rpId,
+			rpName: payload.rpName,
+			userName: payload.userName,
+			intent: payload.intent,
+			primaryLabel: label,
+		});
+	}
 	shadow.innerHTML = cornerStyles + body;
 	shadow.addEventListener("click", handleCornerCardClick, true);
 
