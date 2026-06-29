@@ -180,14 +180,21 @@ Two things make this the hard surface:
 0. **Core (DONE).** `p256` + `coset` + `ciborium` in `core-rust/src/passkey.rs`; the `passkeys[]`
    entry shape in `packages/core`; `passkey_make_credential` / `passkey_get_assertion` exported on
    **both** the wasm (extension) and uniffi (iOS/Android) layers; sign-then-verify unit tests pass.
-   The wasm export is the extension's crypto path, so the extension is unblocked from here, not
-   waiting on mobile. Foundation; everything else consumes it.
-1. **iOS provider.** Cleanest API, infra exists. Proves the model end-to-end.
-2. **Android provider.** New `CredentialProviderService`, autofill scaffolding to copy.
-3. **Extension provider.** `webAuthenticationProxy` + origin binding + popup ceremony.
-4. **Management UI + settings.** List / delete passkeys, per-platform enable. Sync is free.
+1. **TS binding (DONE).** `passkeyMakeCredential` / `passkeyGetAssertion` through `VaultCrypto` +
+   `CryptoAdapter` + `buildCryptoAdapter`; the extension `CRYPTO_PASSKEY_*` messages + offscreen
+   dispatch; the mobile NativeCrypto JS shim. Pure placement logic (`core/src/vault/passkey.ts`).
+2. **Extension provider (PARTIAL).** DONE + unit-tested: WebAuthn JSON helpers (origin/rpId,
+   clientData, response assembly), the `handleCreate`/`handleGet` orchestration, ambient chrome
+   types, the `webAuthenticationProxy` manifest permission. REMAINING: the ceremony UI window, the
+   create-time vault write (`savePlacement`), a Settings enable toggle, wiring `initWebauthnProxy`
+   into the background, and end-to-end verification on a real Chrome. The proxy is dormant until then.
+3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
+   `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
+4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
+   methods. Needs Android SDK + a device.
+5. **Management UI + settings.** List / delete passkeys, per-platform enable. Sync is free.
 
-Steps 1 to 3 are independent once step 0 lands; the extension can run in parallel with mobile.
+Steps 2 to 4 are independent now that the core + TS binding (0, 1) have landed.
 
 ## Unknowns to retire early
 
