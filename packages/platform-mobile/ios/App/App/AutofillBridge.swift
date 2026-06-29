@@ -39,13 +39,20 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		{
 			defaults?.set(slotJson, forKey: BrambleVault.slotKey)
 		}
+		// Passkey bundle (provider role): a second VEK-encrypted blob the extension decrypts
+		// to assert. Its own key so the login/password path above is untouched.
+		if let pkIv = call.getString("passkeyIv"), let pkCt = call.getString("passkeyCiphertext"),
+			let pkData = try? JSONSerialization.data(withJSONObject: ["iv": pkIv, "ciphertext": pkCt])
+		{
+			defaults?.set(pkData, forKey: BrambleVault.passkeyBundleKey)
+		}
 		// QuickType identity store: populated only when the user opted into keyboard
 		// suggestions (the JS sends identities then). Each carries a domain + username +
 		// recordId, never a password; the extension maps the chosen recordId back to the
 		// decrypted login. An empty/absent list clears the store (opt-out, or a left-over
 		// from an earlier build). Replace wholesale so removed logins don't linger.
 		let store = ASCredentialIdentityStore.shared
-		let identities: [ASPasswordCredentialIdentity] = (call.getArray("identities") ?? []).compactMap {
+		let passwords: [ASPasswordCredentialIdentity] = (call.getArray("identities") ?? []).compactMap {
 			guard let d = $0 as? [String: Any],
 				let service = d["service"] as? String,
 				let user = d["username"] as? String,
@@ -60,9 +67,34 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		// does both in one step. It silently no-ops unless the user has enabled Bramble as an
 		// AutoFill provider, so guard on the store state (and so QuickType only populates once
 		// the provider is actually on).
-		store.getState { state in
-			guard state.isEnabled else { return }
-			store.replaceCredentialIdentities(with: identities) { _, _ in }
+		if #available(iOS 17.0, *) {
+			// Passkey identities (NOT gated on QuickType: the OS can't route a passkey sign-in
+			// to a provider whose credentials it doesn't know). Metadata only; credentialID /
+			// userHandle arrive as STANDARD base64, exactly what ASPasskeyCredentialIdentity
+			// wants as Data. recordIdentifier = credentialId so the extension can look it up.
+			let passkeys: [ASPasskeyCredentialIdentity] = (call.getArray("passkeyIdentities") ?? [])
+				.compactMap {
+					guard let d = $0 as? [String: Any],
+						let rp = d["rpId"] as? String,
+						let cid = d["credentialId"] as? String, let credID = Data(base64Encoded: cid),
+						let uh = d["userHandle"] as? String, let userHandle = Data(base64Encoded: uh)
+					else { return nil }
+					return ASPasskeyCredentialIdentity(
+						relyingPartyIdentifier: rp, userName: (d["userName"] as? String) ?? "",
+						credentialID: credID, userHandle: userHandle, recordIdentifier: cid)
+				}
+			// One replace for BOTH kinds: replaceCredentialIdentities clears the WHOLE store, so
+			// passwords + passkeys must go together or the second call would wipe the first.
+			let all: [ASCredentialIdentity] = passwords + passkeys
+			store.getState { state in
+				guard state.isEnabled else { return }
+				Task { try? await store.replaceCredentialIdentities(all) }
+			}
+		} else {
+			store.getState { state in
+				guard state.isEnabled else { return }
+				store.replaceCredentialIdentities(with: passwords) { _, _ in }
+			}
 		}
 		call.resolve()
 	}
@@ -71,6 +103,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		defaults?.removeObject(forKey: BrambleVault.bundleKey)
 		defaults?.removeObject(forKey: BrambleVault.slotKey)
+		defaults?.removeObject(forKey: BrambleVault.passkeyBundleKey)
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
 	}
 

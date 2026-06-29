@@ -40,6 +40,10 @@
 				<true/>
 				<key>ProvidesOneTimeCodes</key>
 				<true/>
+				<!-- Passkey provider (iOS 17+). The provider methods are availability-gated
+				     in code so the extension still runs on iOS 15/16 for passwords. -->
+				<key>ProvidesPasskeys</key>
+				<true/>
 			</dict>
 		</dict>
 	</dict>

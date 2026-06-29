@@ -34,6 +34,7 @@ function loginIndexEntry(entry: LoginEntry): IndexEntry {
 		autofillEnabled: entry.autofillEnabled,
 		autoSubmit: entry.autoSubmit,
 		subdomainMatch: entry.subdomainMatch,
+		passkeys: entry.passkeys?.length ? entry.passkeys : undefined,
 	};
 }
 

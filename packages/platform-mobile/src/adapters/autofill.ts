@@ -35,15 +35,38 @@ interface QuickTypeIdentity {
 	service: string;
 }
 
+// A passkey identity registered with the OS so it offers Bramble for that site's passkey
+// sign-in. All fields are non-secret metadata (the private key never leaves the encrypted
+// bundle); `credentialId`/`userHandle` are STANDARD base64 (as stored, what the OS wants
+// as Data). Unlike QuickType this is not opt-in: the OS cannot route a passkey get() to a
+// provider whose identities it doesn't know, so registering them is required for passkeys.
+interface PasskeyIdentity {
+	credentialId: string;
+	rpId: string;
+	userName: string;
+	userHandle: string;
+}
+
+// One stored passkey inside the (VEK-encrypted) passkey bundle the extension decrypts to
+// assert. `privateKey` is the only secret; everything is STANDARD base64 (as stored), which
+// the native side and the Rust core both consume verbatim.
+interface StoredPasskey extends PasskeyIdentity {
+	privateKey: string;
+}
+
 interface AutofillBridgePlugin {
 	// `iv`/`ciphertext` are encryptWithVek over the JSON login list (see AutofillEntry).
 	// `identities`, when present and non-empty, populate the OS QuickType bar; an empty
-	// (or omitted) list clears it.
+	// (or omitted) list clears it. `passkeyIv`/`passkeyCiphertext` are encryptWithVek over
+	// the JSON passkey list; `passkeyIdentities` register them with the OS credential store.
 	sync(o: {
 		iv: string;
 		ciphertext: string;
 		slot?: SlotPayload;
 		identities?: QuickTypeIdentity[];
+		passkeyIv?: string;
+		passkeyCiphertext?: string;
+		passkeyIdentities?: PasskeyIdentity[];
 	}): Promise<void>;
 	clear(): Promise<void>;
 	setKeepUnlocked(o: { minutes: number }): Promise<void>;
@@ -83,20 +106,35 @@ export const mobileAutofill: AutofillAdapter = {
 	async setIndex(entries) {
 		if (!isIos) return;
 		const list = [];
+		const passkeys: StoredPasskey[] = [];
 		for (const e of entries) {
-			if (e.type !== "login" || !e.password) continue;
-			list.push({
-				recordId: e.id,
-				name: e.name,
-				username: e.username,
-				password: e.password,
-				services: e.hostnames,
-			});
+			if (e.type !== "login") continue;
+			if (e.password) {
+				list.push({
+					recordId: e.id,
+					name: e.name,
+					username: e.username,
+					password: e.password,
+					services: e.hostnames,
+				});
+			}
+			// A login can hold passkeys even with no password (a passkey-only account).
+			for (const p of e.passkeys ?? []) {
+				passkeys.push({
+					credentialId: p.credentialId,
+					rpId: p.rpId,
+					userName: p.userName ?? "",
+					userHandle: p.userHandle,
+					privateKey: p.privateKey,
+				});
+			}
 		}
 		// Encrypt the whole list under the VEK. The extension can read no entry data
 		// (names, usernames, passwords) until the user authenticates and it can decrypt
 		// this. Nothing about the vault is in the App Group in cleartext.
 		const enc = await mobileCrypto.encryptWithVek(JSON.stringify(list));
+		// Passkeys ride a second VEK-encrypted blob (private keys never at rest in clear).
+		const encPk = await mobileCrypto.encryptWithVek(JSON.stringify(passkeys));
 		// QuickType identities (cleartext usernames + domains) are sent ONLY when the user
 		// opted in; otherwise the list is empty and the bridge clears the OS store.
 		const quickType = (await mobileStorage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE)) === true;
@@ -110,11 +148,22 @@ export const mobileAutofill: AutofillAdapter = {
 						: [],
 				)
 			: [];
+		// Passkey identities are NOT gated on QuickType: the OS can't route a passkey
+		// sign-in to a provider whose credentials it hasn't been told about. Metadata only.
+		const passkeyIdentities: PasskeyIdentity[] = passkeys.map((p) => ({
+			credentialId: p.credentialId,
+			rpId: p.rpId,
+			userName: p.userName,
+			userHandle: p.userHandle,
+		}));
 		await Bridge.sync({
 			iv: enc.iv,
 			ciphertext: enc.ciphertext,
 			slot: await readPasswordSlot(),
 			identities,
+			passkeyIv: encPk.iv,
+			passkeyCiphertext: encPk.ciphertext,
+			passkeyIdentities,
 		});
 	},
 	async clearIndex() {
