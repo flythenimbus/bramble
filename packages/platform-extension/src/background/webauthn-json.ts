@@ -127,6 +127,7 @@ export function registrationResponseJSON(p: {
 	credentialIdStdB64: string;
 	attestationObjectStdB64: string;
 	authenticatorDataStdB64: string;
+	publicKeyStdB64: string;
 	clientDataB64Url: string;
 	transports?: string[];
 }): string {
@@ -142,6 +143,7 @@ export function registrationResponseJSON(p: {
 			authenticatorData: base64ToBase64Url(p.authenticatorDataStdB64),
 			transports: p.transports ?? ["internal", "hybrid"],
 			publicKeyAlgorithm: COSE_ES256,
+			publicKey: base64ToBase64Url(p.publicKeyStdB64),
 		},
 		clientExtensionResults: {},
 	});

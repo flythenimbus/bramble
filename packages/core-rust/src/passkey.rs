@@ -13,6 +13,7 @@ use ciborium::Value;
 use coset::{iana, CborSerializable, CoseKeyBuilder};
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::pkcs8::EncodePublicKey;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
@@ -57,6 +58,9 @@ pub struct PasskeyRegistration {
     /// base64 authenticatorData (also inside the attestation object). The
     /// RegistrationResponseJSON requires it as a sibling field.
     pub authenticator_data: String,
+    /// base64 SPKI DER of the public key. Chrome's webAuthenticationProxy requires
+    /// RegistrationResponseJSON.response.publicKey (the spec marks it optional).
+    pub public_key: String,
 }
 
 /// Result of asserting a passkey. The caller supplies credentialId + userHandle to
@@ -104,7 +108,8 @@ pub fn passkey_make_credential_core(
     user_verified: bool,
 ) -> Result<PasskeyRegistration, CryptoError> {
     let secret = generate_p256()?;
-    let point = secret.public_key().to_encoded_point(false);
+    let public = secret.public_key();
+    let point = public.to_encoded_point(false);
     let x = point
         .x()
         .ok_or_else(|| err("p256: missing x"))?
@@ -153,6 +158,12 @@ pub fn passkey_make_credential_core(
         private_key: B64.encode(secret.to_bytes()),
         attestation_object: B64.encode(&attestation_object),
         authenticator_data: authenticator_data_b64,
+        public_key: B64.encode(
+            public
+                .to_public_key_der()
+                .map_err(|e| err(format!("spki encode: {e}")))?
+                .as_bytes(),
+        ),
     })
 }
 

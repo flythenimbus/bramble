@@ -304,6 +304,7 @@ export async function handleCreate(
 				credentialIdStdB64: reg.credentialId,
 				attestationObjectStdB64: reg.attestationObject,
 				authenticatorDataStdB64: reg.authenticatorData,
+				publicKeyStdB64: reg.publicKey,
 				clientDataB64Url: clientData.b64Url,
 			}),
 		};

@@ -30,6 +30,8 @@ export interface PasskeyRegistration {
 	attestationObject: string;
 	/** authenticatorData, also embedded in the attestation object; the response JSON needs it as a sibling. */
 	authenticatorData: string;
+	/** SPKI DER of the public key (base64); Chrome's proxy requires response.publicKey. */
+	publicKey: string;
 }
 
 /** A passkey assertion: the two parts that require the private key. All base64. */
