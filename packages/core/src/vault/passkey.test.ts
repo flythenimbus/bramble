@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, PasskeyCredential } from "../hooks/useVault";
-import { findPasskeys, planPasskeyPlacement } from "./passkey";
+import { findLoginCoveringRpId, findPasskeys, planPasskeyPlacement } from "./passkey";
 
 function passkey(over: Partial<PasskeyCredential> = {}): PasskeyCredential {
 	return {
@@ -61,6 +61,19 @@ describe("findPasskeys", () => {
 	it("ignores non-login entries and logins without passkeys", () => {
 		const entries: Entry[] = [githubLogin, { id: "n", type: "note", name: "secret" } as Entry];
 		expect(findPasskeys(entries, "github.com")).toHaveLength(0);
+	});
+});
+
+describe("findLoginCoveringRpId", () => {
+	it("returns the login covering the rpId (host or subdomain), else undefined", () => {
+		expect(findLoginCoveringRpId([githubLogin], "github.com")?.name).toBe("GitHub");
+		expect(
+			findLoginCoveringRpId(
+				[{ ...githubLogin, urls: ["https://accounts.github.com"] } as Entry],
+				"github.com",
+			)?.name,
+		).toBe("GitHub");
+		expect(findLoginCoveringRpId([githubLogin], "example.org")).toBeUndefined();
 	});
 });
 

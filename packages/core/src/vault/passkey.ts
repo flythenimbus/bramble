@@ -52,6 +52,17 @@ function loginCoversRpId(urls: string[], rpId: string): boolean {
 	return false;
 }
 
+/** The login entry whose URLs cover `rpId` (its host or a subdomain), if any. */
+export function findLoginCoveringRpId(
+	entries: Entry[],
+	rpId: string,
+): Extract<Entry, { type: "login" }> | undefined {
+	return entries.find(
+		(e): e is Extract<Entry, { type: "login" }> =>
+			e.type === "login" && loginCoversRpId(e.urls, rpId),
+	);
+}
+
 /**
  * How to persist a newly minted passkey: append it to the login that already covers
  * `rpId` (so it rides the existing site credential), or fabricate a standalone login
@@ -68,10 +79,7 @@ export function planPasskeyPlacement(
 	rpName: string | undefined,
 	passkey: PasskeyCredential,
 ): PasskeyPlacement {
-	const host = entries.find(
-		(e): e is Extract<Entry, { type: "login" }> =>
-			e.type === "login" && loginCoversRpId(e.urls, rpId),
-	);
+	const host = findLoginCoveringRpId(entries, rpId);
 	if (host) {
 		return { kind: "attach", entryId: host.id, passkeys: [...(host.passkeys ?? []), passkey] };
 	}

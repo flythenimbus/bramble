@@ -130,6 +130,10 @@ export interface SavePasskeyPrompt extends CornerPromptCommon {
 	rpId: string;
 	rpName?: string;
 	userName?: string;
+	/** create only: name of the existing login this passkey will attach to, when one
+	 * covers the rpId (resolved only when the vault is already unlocked). Drives
+	 * "Add a passkey to your existing X login" vs "Save a new passkey" copy. */
+	existingLoginName?: string;
 }
 
 export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt | SavePasskeyPrompt;

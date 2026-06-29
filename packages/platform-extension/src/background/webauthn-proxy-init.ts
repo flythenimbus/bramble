@@ -8,6 +8,7 @@
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
 import { bytesToBase64 } from "@core/util/bytes";
+import { findLoginCoveringRpId } from "@core/vault/passkey";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -81,6 +82,15 @@ const cornerCeremony: CeremonyFn = async (req) => {
 	const tabId = await activeTabId();
 	if (tabId === undefined) return { approved: false };
 	const promptId = globalThis.crypto.randomUUID();
+	// For a create, when the vault is already unlocked, surface the existing login this
+	// passkey will attach to so the card can say "Add to your existing X login". When
+	// locked we can't read the vault yet, so the card stays the generic "Save" copy.
+	let existingLoginName: string | undefined;
+	if (req.kind === "create" && !vaultLocked()) {
+		try {
+			existingLoginName = findLoginCoveringRpId(await loadDecryptedEntries(), req.rpId)?.name;
+		} catch {}
+	}
 	const payload: SavePasskeyPrompt = {
 		kind: "save-passkey",
 		promptId,
@@ -90,6 +100,7 @@ const cornerCeremony: CeremonyFn = async (req) => {
 		rpId: req.rpId,
 		rpName: req.kind === "create" ? req.rpName : undefined,
 		userName: req.kind === "create" ? req.userName : undefined,
+		existingLoginName,
 	};
 	const approved = await new Promise<boolean>((resolve) => {
 		pendingPrompts.set(promptId, resolve);

@@ -81,4 +81,5 @@ export type CornerPromptPayload =
 			rpId: string;
 			rpName?: string;
 			userName?: string;
+			existingLoginName?: string;
 	  };
