@@ -92,15 +92,19 @@ function resolveRpId(
 	return { rpId, host };
 }
 
-/** Orchestrate navigator.credentials.create(). Returns the details for completeCreateRequest. */
+/**
+ * Orchestrate navigator.credentials.create(). `origin` is the calling page's origin,
+ * resolved by the caller from the active tab (the proxy request carries no origin).
+ */
 export async function handleCreate(
 	deps: PasskeyProxyDeps,
 	requestId: number,
 	requestDetailsJson: string,
+	origin: string,
 ): Promise<chrome.webAuthenticationProxy.CreateResponseDetails> {
 	try {
 		const opts = parseCreationOptions(requestDetailsJson);
-		const { rpId } = resolveRpId(opts.origin, opts.rpId);
+		const { rpId } = resolveRpId(origin, opts.rpId);
 		if (!opts.algs.includes(COSE_ES256)) {
 			throw new WebAuthnError("NotSupportedError", "only ES256 (-7) is supported");
 		}
@@ -110,7 +114,7 @@ export async function handleCreate(
 			rpId,
 			rpName: opts.rpName,
 			userName: opts.userName,
-			origin: opts.origin,
+			origin,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
@@ -132,7 +136,7 @@ export async function handleCreate(
 			planPasskeyPlacement(await deps.loadEntries(), rpId, opts.rpName, credential),
 		);
 
-		const clientData = buildClientData("webauthn.create", opts.challenge, opts.origin);
+		const clientData = buildClientData("webauthn.create", opts.challenge, origin);
 		return {
 			requestId,
 			responseJson: registrationResponseJSON({
@@ -146,17 +150,21 @@ export async function handleCreate(
 	}
 }
 
-/** Orchestrate navigator.credentials.get(). Returns the details for completeGetRequest. */
+/**
+ * Orchestrate navigator.credentials.get(). `origin` is the calling page's origin,
+ * resolved by the caller from the active tab (the proxy request carries no origin).
+ */
 export async function handleGet(
 	deps: PasskeyProxyDeps,
 	requestId: number,
 	requestDetailsJson: string,
+	origin: string,
 ): Promise<chrome.webAuthenticationProxy.GetResponseDetails> {
 	try {
 		const opts = parseRequestOptions(requestDetailsJson);
-		const { rpId } = resolveRpId(opts.origin, opts.rpId);
+		const { rpId } = resolveRpId(origin, opts.rpId);
 
-		const decision = await deps.ceremony({ kind: "get", rpId, origin: opts.origin });
+		const decision = await deps.ceremony({ kind: "get", rpId, origin });
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
 		const allowStd = opts.allowCredentialsB64Url.map(base64UrlToBase64);
@@ -170,7 +178,7 @@ export async function handleGet(
 			matches.find((m) => m.passkey.credentialId === decision.credentialId) ?? matches[0];
 		if (!chosen) throw new WebAuthnError("NotAllowedError", "no matching passkey");
 
-		const clientData = buildClientData("webauthn.get", opts.challenge, opts.origin);
+		const clientData = buildClientData("webauthn.get", opts.challenge, origin);
 		const clientDataHash = await deps.sha256(clientData.bytes);
 		const assertion = await deps.crypto.passkeyGetAssertion(
 			rpId,

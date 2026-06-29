@@ -194,15 +194,17 @@ Two things make this the hard surface:
 1. **TS binding (DONE).** `passkeyMakeCredential` / `passkeyGetAssertion` through `VaultCrypto` +
    `CryptoAdapter` + `buildCryptoAdapter`; the extension `CRYPTO_PASSKEY_*` messages + offscreen
    dispatch; the mobile NativeCrypto JS shim. Pure placement logic (`core/src/vault/passkey.ts`).
-2. **Extension provider (built, pending device verification).** DONE: WebAuthn JSON helpers,
+2. **Extension provider (built, in device testing).** DONE: WebAuthn JSON helpers,
    `handleCreate`/`handleGet` orchestration (unit-tested), ambient chrome types, the
    `webAuthenticationProxy` permission, the save-passkey **corner card** (same placement as
    save-password) for create + get, the create-time vault write (`savePlacement`), the
    **Settings → General toggle** ("Use Bramble for passkeys", gated on `shell.supportsPasskeyProvider`,
    applies live + persists), and **pause-during-own-unlock** (the proxy detaches around Bramble's own
-   security-key PRF ceremony, reentrant, via PASSKEY_PROXY_PAUSE/RESUME). REMAINING: end-to-end
-   verification on a real Chrome (incl. confirming where `origin` sits in `requestDetailsJson`), the
-   item edit/view UI (passkey row below TOTP + view badge), and the multi-credential picker for get.
+   security-key PRF ceremony, reentrant, via PASSKEY_PROXY_PAUSE/RESUME). **Origin resolved:**
+   `requestDetailsJson` carries no origin (W3C options shape) and the events carry no tab, so the
+   origin comes from the **active tab** (`chrome.tabs.query({active, lastFocusedWindow})`), which is
+   authoritative since WebAuthn requires a focused top-level context. REMAINING: the item edit/view UI
+   (passkey row below TOTP + view badge), and the multi-credential picker for get.
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin

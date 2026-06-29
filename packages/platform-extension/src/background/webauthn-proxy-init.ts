@@ -29,6 +29,20 @@ async function activeTabId(): Promise<number | undefined> {
 	}
 }
 
+// The proxy events carry no origin/tab, but WebAuthn requires a focused top-level
+// document, so the active tab in the last-focused window is the requester. This is the
+// authoritative origin for clientData + the rpId check. Null on chrome:// / unreadable tabs.
+async function activeTabOrigin(): Promise<string | null> {
+	try {
+		const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+		if (!tab?.url) return null;
+		const u = new URL(tab.url);
+		return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
+	} catch {
+		return null;
+	}
+}
+
 async function openPopupForUnlock(): Promise<void> {
 	try {
 		const openPopup = (chrome.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
@@ -165,14 +179,28 @@ function registerListeners(): void {
 		});
 	});
 	chrome.webAuthenticationProxy.onCreateRequest.addListener((req) => {
-		void handleCreate(productionDeps, req.requestId, req.requestDetailsJson).then((d) =>
-			chrome.webAuthenticationProxy.completeCreateRequest(d),
-		);
+		void (async () => {
+			const origin = await activeTabOrigin();
+			const details = origin
+				? await handleCreate(productionDeps, req.requestId, req.requestDetailsJson, origin)
+				: {
+						requestId: req.requestId,
+						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
+					};
+			await chrome.webAuthenticationProxy.completeCreateRequest(details);
+		})();
 	});
 	chrome.webAuthenticationProxy.onGetRequest.addListener((req) => {
-		void handleGet(productionDeps, req.requestId, req.requestDetailsJson).then((d) =>
-			chrome.webAuthenticationProxy.completeGetRequest(d),
-		);
+		void (async () => {
+			const origin = await activeTabOrigin();
+			const details = origin
+				? await handleGet(productionDeps, req.requestId, req.requestDetailsJson, origin)
+				: {
+						requestId: req.requestId,
+						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
+					};
+			await chrome.webAuthenticationProxy.completeGetRequest(details);
+		})();
 	});
 }
 

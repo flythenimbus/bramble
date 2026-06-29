@@ -121,7 +121,7 @@ describe("response builders", () => {
 });
 
 describe("option parsing", () => {
-	it("parses creation options and the Chrome-supplied origin (root or nested)", () => {
+	it("parses creation options at the root or nested under publicKey", () => {
 		const opts = {
 			rp: { id: "github.com", name: "GitHub" },
 			user: { id: "dXNlcg", name: "octocat", displayName: "Octo Cat" },
@@ -130,18 +130,14 @@ describe("option parsing", () => {
 			authenticatorSelection: { userVerification: "required" },
 			excludeCredentials: [{ id: "ZXhjbA", type: "public-key" }],
 		};
-		const flat = parseCreationOptions(JSON.stringify({ ...opts, origin: "https://github.com" }));
-		expect(flat.origin).toBe("https://github.com");
+		const flat = parseCreationOptions(JSON.stringify(opts));
 		expect(flat.rpId).toBe("github.com");
 		expect(flat.userHandleB64Url).toBe("dXNlcg");
 		expect(flat.algs).toEqual([-7]);
 		expect(flat.excludeCredentialsB64Url).toEqual(["ZXhjbA"]);
 		expect(flat.userVerification).toBe("required");
 
-		const nested = parseCreationOptions(
-			JSON.stringify({ publicKey: opts, origin: "https://github.com" }),
-		);
-		expect(nested.origin).toBe("https://github.com");
+		const nested = parseCreationOptions(JSON.stringify({ publicKey: opts }));
 		expect(nested.rpId).toBe("github.com");
 	});
 
@@ -151,10 +147,8 @@ describe("option parsing", () => {
 				challenge: "Y2hhbA",
 				rpId: "github.com",
 				allowCredentials: [{ id: "Y3JlZA", type: "public-key" }],
-				origin: "https://github.com",
 			}),
 		);
-		expect(r.origin).toBe("https://github.com");
 		expect(r.rpId).toBe("github.com");
 		expect(r.allowCredentialsB64Url).toEqual(["Y3JlZA"]);
 		expect(r.userVerification).toBe("preferred");
