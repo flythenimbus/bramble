@@ -10,6 +10,17 @@ export function isWebauthnAvailable(): boolean {
 	return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
 }
 
+// A platform may intercept all browser WebAuthn while active (the Chromium extension's
+// passkey provider via chrome.webAuthenticationProxy), which would hijack our own PRF
+// ceremony and fail unlock. The platform installs a pauser that detaches that
+// interception around the navigator.credentials call; the default runs it unchanged.
+// See docs/passkey-provider.md.
+type WebauthnPauser = <T>(run: () => Promise<T>) => Promise<T>;
+let pauseHostInterception: WebauthnPauser = (run) => run();
+export function setWebauthnInterceptionPauser(pauser: WebauthnPauser): void {
+	pauseHostInterception = pauser;
+}
+
 /** A registered credential: its id, the PRF salt, and the derived hmac-secret (KEK material). */
 export interface WebauthnCredential {
 	credentialId: Uint8Array;
@@ -33,7 +44,9 @@ export async function getPrfSecret(
 		userVerification: "preferred",
 		extensions: { prf: { eval: { first: salt as BufferSource } } },
 	} as unknown as PublicKeyCredentialRequestOptions;
-	const credential = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
+	const credential = (await pauseHostInterception(() =>
+		navigator.credentials.get({ publicKey }),
+	)) as PublicKeyCredential | null;
 	if (!credential) throw new Error("Authenticator returned no credential.");
 	const ext = credential.getClientExtensionResults() as {
 		prf?: { results?: { first?: ArrayBuffer } };
@@ -60,23 +73,25 @@ export async function createPrfCredential(label: string): Promise<WebauthnCreden
 	const salt = new Uint8Array(LEN_HMAC_SECRET_SALT);
 	globalThis.crypto.getRandomValues(salt);
 	try {
-		const created = (await navigator.credentials.create({
-			publicKey: {
-				challenge: challenge as BufferSource,
-				rp: { name: "Vault" },
-				user: { id: userId as BufferSource, name: "vault@local", displayName: label || "Vault" },
-				pubKeyCredParams: [
-					{ type: "public-key", alg: -7 }, // ES256
-					{ type: "public-key", alg: -257 }, // RS256
-				],
-				// Non-discoverable: the unlock handle lives in our vault file.
-				authenticatorSelection: { userVerification: "preferred", residentKey: "discouraged" },
-				attestation: "none",
-				extensions: {
-					prf: { eval: { first: salt as BufferSource } },
-				} as unknown as AuthenticationExtensionsClientInputs,
-			},
-		})) as PublicKeyCredential | null;
+		const created = (await pauseHostInterception(() =>
+			navigator.credentials.create({
+				publicKey: {
+					challenge: challenge as BufferSource,
+					rp: { name: "Vault" },
+					user: { id: userId as BufferSource, name: "vault@local", displayName: label || "Vault" },
+					pubKeyCredParams: [
+						{ type: "public-key", alg: -7 }, // ES256
+						{ type: "public-key", alg: -257 }, // RS256
+					],
+					// Non-discoverable: the unlock handle lives in our vault file.
+					authenticatorSelection: { userVerification: "preferred", residentKey: "discouraged" },
+					attestation: "none",
+					extensions: {
+						prf: { eval: { first: salt as BufferSource } },
+					} as unknown as AuthenticationExtensionsClientInputs,
+				},
+			}),
+		)) as PublicKeyCredential | null;
 		if (!created) throw new Error("Authenticator returned no credential.");
 		const credentialId = new Uint8Array(created.rawId);
 		const createdExt = created.getClientExtensionResults() as {

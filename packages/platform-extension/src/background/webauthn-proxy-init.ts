@@ -124,16 +124,40 @@ on("PASSKEY_PROVIDER_SET_ENABLED", async (message) => {
 	return { ok: true, data: null };
 });
 
+// Pause the proxy while Bramble runs its OWN WebAuthn (security-key PRF) ceremony, so
+// attach()'s browser-wide interception doesn't hijack our unlock. The popup/options send
+// PAUSE before navigator.credentials and RESUME after (see webauthn-ceremony pauser).
+// Reentrant: createPrfCredential nests a get() inside create(), so count depth and only
+// detach/reattach at the edges. See docs/passkey-provider.md.
+let pauseDepth = 0;
+let pausedWhileAttached = false;
+
+on("PASSKEY_PROXY_PAUSE", async () => {
+	if (pauseDepth === 0 && attached) {
+		pausedWhileAttached = true;
+		await detachWebauthnProxy();
+	}
+	pauseDepth++;
+	return { ok: true, data: null };
+});
+
+on("PASSKEY_PROXY_RESUME", async () => {
+	if (pauseDepth > 0) pauseDepth--;
+	if (pauseDepth === 0 && pausedWhileAttached) {
+		pausedWhileAttached = false;
+		await initWebauthnProxy();
+	}
+	return { ok: true, data: null };
+});
+
+let listenersRegistered = false;
 let attached = false;
 
-/**
- * Attach the proxy and register the create/get/isUvpaa listeners. Gated behind a
- * Settings pref (default off): attach() intercepts ALL browser WebAuthn, including
- * Bramble's own security-key unlock, so that interaction must be verified before this
- * is enabled by default. End-to-end needs a real Chrome.
- */
-export async function initWebauthnProxy(): Promise<void> {
-	if (attached) return;
+// Register the create/get/isUvpaa listeners exactly once. detach() does not remove
+// them (it only stops events firing), so re-attach must NOT re-add them.
+function registerListeners(): void {
+	if (listenersRegistered) return;
+	listenersRegistered = true;
 	chrome.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
 		chrome.webAuthenticationProxy.completeIsUvpaaRequest({
 			requestId: req.requestId,
@@ -150,6 +174,16 @@ export async function initWebauthnProxy(): Promise<void> {
 			chrome.webAuthenticationProxy.completeGetRequest(d),
 		);
 	});
+}
+
+/**
+ * Attach the proxy (registering listeners once). Gated behind a Settings pref (default
+ * off): attach() intercepts ALL browser WebAuthn, including Bramble's own security-key
+ * unlock, which is why we pause around our own ceremonies. End-to-end needs a real Chrome.
+ */
+export async function initWebauthnProxy(): Promise<void> {
+	registerListeners();
+	if (attached) return;
 	const err = await chrome.webAuthenticationProxy.attach();
 	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);
 	attached = true;
