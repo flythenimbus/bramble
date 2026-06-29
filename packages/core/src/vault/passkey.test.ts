@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, PasskeyCredential } from "../hooks/useVault";
-import { findLoginCoveringRpId, findPasskeys, planPasskeyPlacement } from "./passkey";
+import { findPasskeys, passkeyAttachTarget, planPasskeyPlacement } from "./passkey";
 
 function passkey(over: Partial<PasskeyCredential> = {}): PasskeyCredential {
 	return {
@@ -64,16 +64,38 @@ describe("findPasskeys", () => {
 	});
 });
 
-describe("findLoginCoveringRpId", () => {
-	it("returns the login covering the rpId (host or subdomain), else undefined", () => {
-		expect(findLoginCoveringRpId([githubLogin], "github.com")?.name).toBe("GitHub");
-		expect(
-			findLoginCoveringRpId(
-				[{ ...githubLogin, urls: ["https://accounts.github.com"] } as Entry],
-				"github.com",
-			)?.name,
-		).toBe("GitHub");
-		expect(findLoginCoveringRpId([githubLogin], "example.org")).toBeUndefined();
+describe("passkeyAttachTarget", () => {
+	const gh = (id: string, username: string): Entry =>
+		({
+			id,
+			type: "login",
+			name: `GitHub ${username}`,
+			urls: ["https://github.com"],
+			username,
+			password: "pw",
+		}) as Entry;
+
+	it("returns undefined for a domain with no login (create new)", () => {
+		expect(passkeyAttachTarget([githubLogin], "example.org", "x")).toBeUndefined();
+	});
+
+	it("returns the sole covering login regardless of username", () => {
+		// Single account for the domain: attach even if the RP names it differently.
+		expect(passkeyAttachTarget([githubLogin], "github.com", "someone@else")?.id).toBe("login-1");
+	});
+
+	it("disambiguates multiple domain logins by username", () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => gh(`gh-${i}`, u));
+		expect(passkeyAttachTarget(five, "github.com", "c")?.id).toBe("gh-2");
+		expect(passkeyAttachTarget(five, "github.com", "C")?.id).toBe("gh-2"); // case-insensitive
+	});
+
+	it("returns undefined when several logins match and none/ambiguous (create new, not a guess)", () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => gh(`gh-${i}`, u));
+		expect(passkeyAttachTarget(five, "github.com", "nobody")).toBeUndefined();
+		expect(passkeyAttachTarget(five, "github.com", undefined)).toBeUndefined();
+		const dupes = [gh("x", "dup"), gh("y", "dup")];
+		expect(passkeyAttachTarget(dupes, "github.com", "dup")).toBeUndefined();
 	});
 });
 
