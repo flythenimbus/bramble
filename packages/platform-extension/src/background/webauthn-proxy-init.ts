@@ -8,7 +8,7 @@
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
 import { bytesToBase64 } from "@core/util/bytes";
-import { findLoginCoveringRpId } from "@core/vault/passkey";
+import { passkeyAttachTarget } from "@core/vault/passkey";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -88,7 +88,13 @@ const cornerCeremony: CeremonyFn = async (req) => {
 	let existingLoginName: string | undefined;
 	if (req.kind === "create" && !vaultLocked()) {
 		try {
-			existingLoginName = findLoginCoveringRpId(await loadDecryptedEntries(), req.rpId)?.name;
+			// Same username-aware target the placement will use, so the card names the
+			// account it will actually attach to (not just the first domain login).
+			existingLoginName = passkeyAttachTarget(
+				await loadDecryptedEntries(),
+				req.rpId,
+				req.userName,
+			)?.name;
 		} catch {}
 	}
 	const payload: SavePasskeyPrompt = {

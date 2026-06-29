@@ -52,22 +52,38 @@ function loginCoversRpId(urls: string[], rpId: string): boolean {
 	return false;
 }
 
-/** The login entry whose URLs cover `rpId` (its host or a subdomain), if any. */
-export function findLoginCoveringRpId(
+/**
+ * Which login a passkey for `(rpId, userName)` should attach to, or undefined to create
+ * a new login. A passkey belongs to the specific account named by the request's
+ * `user.name`, so when a domain has several logins we must not just grab the first:
+ *  - no login covers the rpId -> undefined (create new);
+ *  - exactly one does -> that login (the domain's sole account; an RP-vs-stored username
+ *    mismatch is tolerated, the RP just identifies the account differently);
+ *  - several do -> the one whose username matches `userName`; if that is ambiguous
+ *    (zero or more than one match) -> undefined, so we create a new login rather than
+ *    attach to the wrong account. (A user-facing picker for that case is a follow-up.)
+ */
+export function passkeyAttachTarget(
 	entries: Entry[],
 	rpId: string,
+	userName: string | undefined,
 ): Extract<Entry, { type: "login" }> | undefined {
-	return entries.find(
+	const covering = entries.filter(
 		(e): e is Extract<Entry, { type: "login" }> =>
 			e.type === "login" && loginCoversRpId(e.urls, rpId),
 	);
+	if (covering.length <= 1) return covering[0];
+	const uname = userName?.trim().toLowerCase();
+	if (!uname) return undefined;
+	const matches = covering.filter((l) => l.username.trim().toLowerCase() === uname);
+	return matches.length === 1 ? matches[0] : undefined;
 }
 
 /**
- * How to persist a newly minted passkey: append it to the login that already covers
- * `rpId` (so it rides the existing site credential), or fabricate a standalone login
- * to hold it. The caller applies the result through the normal encrypt + write path,
- * so id generation and encryption stay in the mutation layer.
+ * How to persist a newly minted passkey: append it to the matching login (see
+ * passkeyAttachTarget), or fabricate a standalone login to hold it. The caller applies
+ * the result through the normal encrypt + write path, so id generation and encryption
+ * stay in the mutation layer.
  */
 export type PasskeyPlacement =
 	| { kind: "attach"; entryId: string; passkeys: PasskeyCredential[] }
@@ -79,7 +95,7 @@ export function planPasskeyPlacement(
 	rpName: string | undefined,
 	passkey: PasskeyCredential,
 ): PasskeyPlacement {
-	const host = findLoginCoveringRpId(entries, rpId);
+	const host = passkeyAttachTarget(entries, rpId, passkey.userName);
 	if (host) {
 		return { kind: "attach", entryId: host.id, passkeys: [...(host.passkeys ?? []), passkey] };
 	}
