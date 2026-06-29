@@ -171,10 +171,21 @@ Two things make this the hard surface:
   regresses when the same passkey is used on two synced devices, which some RPs flag as a cloned
   authenticator. Our sync makes 0 mandatory.
 - **Attestation = `"none"`.** Standard for password managers. Pick one fixed Bramble AAGUID (use the
-  community AAGUID registry) so RPs can show the Bramble icon.
+  community AAGUID registry) so RPs can show the Bramble icon. NOTE: the strict spec reading zeroes
+  the AAGUID for `none` attestation, and a minority of RPs (e.g. Quarkus-webauthn) reject a non-zero
+  one. We keep a non-zero AAGUID anyway, matching 1Password / Apple / the major RPs (which accept it
+  and use it for attribution); the placeholder in `passkey.rs` must be finalized + registered before
+  launch.
+- **Backup flags BE + BS = 1.** Bramble syncs passkeys across devices, so authenticatorData sets
+  backup-eligible + backed-up (`0x18`); without them RPs treat the credential as single-device and
+  may nag the user to add another. (Set in `passkey.rs`.)
 - **User verification.** Honor `userVerification: "required"` with a real biometric tap *even inside
   a keep-unlocked session*. Do not let the convenience session silently satisfy UV; that is a
   passkey-specific security regression.
+- **Response JSON completeness.** Chrome validates `completeCreateRequest` against the W3C
+  `RegistrationResponseJSON`: it requires `response.authenticatorData` + `response.publicKeyAlgorithm`
+  (and `attestationObject`); `publicKey` is optional. The assertion response needs `clientDataJSON`,
+  `authenticatorData`, `signature`, and `userHandle` (null when absent).
 - **Algorithms.** Support ES256 (COSE -7) at minimum; add Ed25519 (-8) and RS256 (-257) as RP demand
   shows. `passkey-rs` covers the common set.
 
