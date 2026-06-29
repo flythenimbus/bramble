@@ -94,6 +94,17 @@ reuses the hostname index, sync merge, and login UI, and matches the user mental
 login, which now also has a passkey"). The discriminated-union schema accepts the new shape with no
 vault-format change; Zod forward-compat preserves it on round-trip.
 
+## Item UI (edit + view)
+
+Passkeys are managed, not edited: the user never types key material, only removes a credential.
+
+- **Item edit form (login):** render each passkey **below the TOTP field**, one row per credential
+  showing its identity (rpId / userName, created date) and a **Remove** button. No fields are
+  editable; Remove drops it from `passkeys[]` on save. Bramble does not add passkeys from the edit
+  form (they are minted by the provider ceremony), so there is no "add passkey" control here.
+- **Item view (read-only):** show only an indicator that the item **contains a passkey** (a small
+  "Passkey" badge/row), never the credential id, public key, or any key material.
+
 ## Platform integrations
 
 ### iOS (lightest lift, do first)
