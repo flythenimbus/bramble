@@ -26,6 +26,13 @@ function fakeWasm() {
 		decrypt_entry: vi.fn(() => "plain"),
 		encrypt_with_vek: vi.fn(() => ({ iv: "i", ciphertext: "c" })),
 		decrypt_with_vek: vi.fn(() => "plain"),
+		passkey_make_credential: vi.fn(() => ({
+			credentialId: "cid",
+			publicKeyCose: "pk",
+			privateKey: "sk",
+			attestationObject: "att",
+		})),
+		passkey_get_assertion: vi.fn(() => ({ authenticatorData: "ad", signature: "sig" })),
 		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => [
 			{ strings: [] },
 		]),
@@ -74,6 +81,11 @@ describe("buildCryptoAdapter", () => {
 		expect(wasm.decrypt_entry).toHaveBeenCalledWith("c", "i", "wd", "di");
 		await a.decryptWithVek("iv", "ct");
 		expect(wasm.decrypt_with_vek).toHaveBeenCalledWith("iv", "ct");
+
+		await a.passkeyMakeCredential("github.com", true);
+		expect(wasm.passkey_make_credential).toHaveBeenCalledWith("github.com", true);
+		await a.passkeyGetAssertion("github.com", "sk", "hash", false);
+		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", "hash", false);
 	});
 
 	it("decodes base64 inputs for openKdbx", async () => {

@@ -47,6 +47,18 @@ export const CryptoOpenKdbxSchema = z.object({
 	keyfileB64: z.string().optional(),
 });
 
+// Passkey provider (authenticator role). The crypto is pure, so no slot/VEK fields.
+export const CryptoPasskeyMakeSchema = z.object({
+	rpId: z.string(),
+	userVerified: z.boolean(),
+});
+export const CryptoPasskeyGetSchema = z.object({
+	rpId: z.string(),
+	privateKeyB64: z.string(),
+	clientDataHashB64: z.string(),
+	userVerified: z.boolean(),
+});
+
 export type CryptoUnlockWithVek = z.infer<typeof CryptoUnlockWithVekSchema>;
 export type CryptoWrapPasswordSlot = z.infer<typeof CryptoWrapPasswordSlotSchema>;
 export type CryptoUnwrapPasswordSlot = z.infer<typeof CryptoUnwrapPasswordSlotSchema>;
@@ -59,3 +71,5 @@ export type CryptoDecrypt = z.infer<typeof CryptoDecryptSchema>;
 export type CryptoEncryptOuter = z.infer<typeof CryptoEncryptOuterSchema>;
 export type CryptoDecryptOuter = z.infer<typeof CryptoDecryptOuterSchema>;
 export type CryptoOpenKdbx = z.infer<typeof CryptoOpenKdbxSchema>;
+export type CryptoPasskeyMake = z.infer<typeof CryptoPasskeyMakeSchema>;
+export type CryptoPasskeyGet = z.infer<typeof CryptoPasskeyGetSchema>;

@@ -19,6 +19,23 @@ export interface PasswordSlotBlob {
 	wrappedVek: string;
 }
 
+/**
+ * A freshly minted passkey (provider role). `privateKey` is the only secret; the
+ * caller stores it inside the entry. The rest go to the relying party. All base64.
+ */
+export interface PasskeyRegistration {
+	credentialId: string;
+	publicKeyCose: string;
+	privateKey: string;
+	attestationObject: string;
+}
+
+/** A passkey assertion: the two parts that require the private key. All base64. */
+export interface PasskeyAssertion {
+	authenticatorData: string;
+	signature: string;
+}
+
 /** Slot-operation inputs. Bytes ride as base64 to survive chrome.runtime.sendMessage. */
 export interface WrapPasswordSlotInput {
 	password: string;
@@ -99,6 +116,17 @@ export interface CryptoAdapter {
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
 	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
 	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
+
+	// Passkey provider (authenticator role). Pure crypto: mint generates the key,
+	// assert signs with the stored private key. Neither needs the VEK loaded; the
+	// private key is decrypted from its entry separately (decryptEntry) first.
+	passkeyMakeCredential(rpId: string, userVerified: boolean): Promise<PasskeyRegistration>;
+	passkeyGetAssertion(
+		rpId: string,
+		privateKeyB64: string,
+		clientDataHashB64: string,
+		userVerified: boolean,
+	): Promise<PasskeyAssertion>;
 
 	// Rejects with an Error whose message is a stable KDBX_* code (e.g.
 	// KDBX_WRONG_CREDENTIAL) so the UI can branch on it.

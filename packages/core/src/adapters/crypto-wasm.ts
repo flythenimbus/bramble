@@ -129,6 +129,18 @@ export function buildCryptoAdapter(
 			return (await getWasm()).decrypt_with_vek(iv, ciphertext);
 		},
 
+		async passkeyMakeCredential(rpId, userVerified) {
+			return (await getWasm()).passkey_make_credential(rpId, userVerified);
+		},
+		async passkeyGetAssertion(rpId, privateKeyB64, clientDataHashB64, userVerified) {
+			return (await getWasm()).passkey_get_assertion(
+				rpId,
+				privateKeyB64,
+				clientDataHashB64,
+				userVerified,
+			);
+		},
+
 		async openKdbx(i) {
 			const wasm = await getWasm();
 			return wasm.open_kdbx4(
