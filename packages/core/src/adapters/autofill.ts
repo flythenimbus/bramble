@@ -138,6 +138,9 @@ export interface SavePasskeyPrompt extends CornerPromptCommon {
 	 * candidates to choose from. The card shows a radio list plus a "Create a new login"
 	 * option (last); the reply carries the chosen id (or "new"). */
 	candidates?: { id: string; name: string; username: string }[];
+	/** get only: when several stored passkeys match the rpId, the ones to choose between.
+	 * The card shows a radio list; the reply carries the chosen credentialId. */
+	passkeyChoices?: { credentialId: string; label: string }[];
 }
 
 export type CornerPromptPayload = SaveLoginPrompt | UpdateLoginPrompt | SavePasskeyPrompt;

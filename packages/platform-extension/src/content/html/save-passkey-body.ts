@@ -10,6 +10,7 @@ export function savePasskeyBody({
 	intent,
 	existingLoginName,
 	candidates,
+	passkeyChoices,
 	primaryLabel,
 }: {
 	rpId: string;
@@ -18,36 +19,42 @@ export function savePasskeyBody({
 	intent: "create" | "get";
 	existingLoginName?: string;
 	candidates?: { id: string; name: string; username: string }[];
+	passkeyChoices?: { credentialId: string; label: string }[];
 	primaryLabel: string;
 }) {
 	// Avoid "x (x)" when the RP's display name equals its id.
 	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
-	const isPicker = intent === "create" && !!candidates && candidates.length > 0;
-	const title = isPicker
-		? "Add this passkey to…"
-		: intent === "get"
-			? "Use your passkey?"
-			: existingLoginName
-				? "Add a passkey?"
-				: "Save a passkey?";
+	const isCreatePicker = intent === "create" && !!candidates && candidates.length > 0;
+	const isGetPicker = intent === "get" && !!passkeyChoices && passkeyChoices.length > 0;
+	const title = isGetPicker
+		? "Sign in with which passkey?"
+		: isCreatePicker
+			? "Add this passkey to…"
+			: intent === "get"
+				? "Use your passkey?"
+				: existingLoginName
+					? "Add a passkey?"
+					: "Save a passkey?";
 
 	// Nested html escapes the interpolated values; outer array interpolations join the
 	// markup verbatim (a scalar string interpolation would be html-escaped and show as text).
+	// Radios share name="tp-passkey-target"; the content script sends the checked value
+	// back as `choice` (a login id / "new" for create, a credentialId for get).
+	const radio = (value: string, name: string, sub: string | undefined, checked: boolean) =>
+		html`<label class="tp-row" style="cursor:pointer;align-items:flex-start;gap:8px">
+			<input type="radio" name="tp-passkey-target" value="${value}"${checked ? " checked" : ""} style="margin-top:3px" />
+			<div><div>${name}</div>${sub ? [html`<div class="tp-label">${sub}</div>`] : []}</div>
+		</label>`;
 	let middle: string[] = [];
-	if (isPicker) {
-		const radio = (value: string, name: string, sub?: string) =>
-			html`<label class="tp-row" style="cursor:pointer;align-items:flex-start;gap:8px">
-				<input type="radio" name="tp-passkey-target" value="${value}" style="margin-top:3px" />
-				<div><div>${name}</div>${sub ? [html`<div class="tp-label">${sub}</div>`] : []}</div>
-			</label>`;
-		const rows = (candidates ?? []).map((c) => radio(c.id, c.name, c.username));
-		// "Create a new login" is the last option, and the default selection.
-		rows.push(
-			html`<label class="tp-row" style="cursor:pointer;gap:8px">
-				<input type="radio" name="tp-passkey-target" value="new" checked />
-				<div>Create a new login</div>
-			</label>`,
+	if (isGetPicker) {
+		const rows = (passkeyChoices ?? []).map((c, i) =>
+			radio(c.credentialId, c.label, undefined, i === 0),
 		);
+		middle = [html`<div class="tp-choices">${rows}</div>`];
+	} else if (isCreatePicker) {
+		const rows = (candidates ?? []).map((c) => radio(c.id, c.name, c.username, false));
+		// "Create a new login" is the last option, and the default selection.
+		rows.push(radio("new", "Create a new login", undefined, true));
 		middle = [html`<div class="tp-choices">${rows}</div>`];
 	} else {
 		const rows: string[] = [];

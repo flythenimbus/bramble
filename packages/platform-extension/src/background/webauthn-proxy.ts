@@ -58,6 +58,8 @@ export interface CeremonyGetRequest {
 	kind: "get";
 	rpId: string;
 	origin: string;
+	/** allowCredentials ids (STANDARD base64) to narrow matches; empty = any for the rpId. */
+	allowCredentials?: string[];
 }
 export type CeremonyRequest = CeremonyCreateRequest | CeremonyGetRequest;
 
@@ -96,17 +98,54 @@ export interface CeremonyHost {
 	showCard: (opts: {
 		existingLoginName?: string;
 		candidates?: { id: string; name: string; username: string }[];
+		passkeyChoices?: { credentialId: string; label: string }[];
 	}) => Promise<CardReply>;
 	isLocked: () => boolean;
 	ensureUnlocked: () => Promise<boolean>;
 	loadEntries: () => Promise<Entry[]>;
 }
 
-/** get(): confirm, then ensure unlocked. Unlock is the user verification. */
-export async function runGetCeremony(host: CeremonyHost): Promise<CeremonyDecision> {
-	if (!(await host.showCard({})).approved) return { approved: false };
-	if (!(await host.ensureUnlocked())) return { approved: false };
-	return { approved: true, userVerified: true };
+/** Label a passkey for the get picker: its account name, else display name, else generic. */
+function passkeyLabel(p: { userName?: string; userDisplayName?: string }): string {
+	return p.userName?.trim() || p.userDisplayName?.trim() || "Passkey";
+}
+
+/**
+ * get(): confirm + unlock, then pick which stored passkey to sign in with. One match
+ * signs in directly; several (multiple accounts on the site) show a picker. Returns the
+ * chosen credentialId; `undefined` when none match (handleGet maps that to NotAllowedError).
+ */
+export async function runGetCeremony(
+	req: CeremonyGetRequest,
+	host: CeremonyHost,
+): Promise<CeremonyDecision> {
+	const startedLocked = host.isLocked();
+	if (startedLocked) {
+		if (!(await host.showCard({})).approved) return { approved: false };
+		if (!(await host.ensureUnlocked())) return { approved: false };
+	}
+
+	let entries: Entry[] = [];
+	try {
+		entries = await host.loadEntries();
+	} catch {}
+	const matches = findPasskeys(entries, req.rpId, req.allowCredentials);
+
+	if (matches.length <= 1) {
+		// Single (or no) match: if we didn't already confirm on the locked path, confirm now.
+		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
+		return { approved: true, userVerified: true, credentialId: matches[0]?.passkey.credentialId };
+	}
+
+	// Several accounts for this site: let the user choose which passkey to use.
+	const reply = await host.showCard({
+		passkeyChoices: matches.map((m) => ({
+			credentialId: m.passkey.credentialId,
+			label: passkeyLabel(m.passkey),
+		})),
+	});
+	if (!reply.approved) return { approved: false };
+	return { approved: true, userVerified: true, credentialId: reply.choice };
 }
 
 /**
@@ -285,11 +324,17 @@ export async function handleGet(
 	try {
 		const opts = parseRequestOptions(requestDetailsJson);
 		const { rpId } = resolveRpId(origin, opts.rpId);
-
-		const decision = await deps.ceremony({ kind: "get", rpId, origin });
-		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
-
 		const allowStd = opts.allowCredentialsB64Url.map(base64UrlToBase64);
+
+		// The ceremony enumerates matching passkeys (for the picker) and returns the chosen
+		// credentialId, so it needs the same allow-list narrowing handleGet uses below.
+		const decision = await deps.ceremony({
+			kind: "get",
+			rpId,
+			origin,
+			allowCredentials: allowStd.length ? allowStd : undefined,
+		});
+		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 		const allow = decision.credentialId
 			? [decision.credentialId]
 			: allowStd.length
