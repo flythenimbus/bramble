@@ -11,6 +11,15 @@ export interface PopOutHandoff {
 /** Full-tab screens the options page can boot into, via `?screen=`. Default (omitted) is the vault setup flow. */
 export type OptionsScreen = "import";
 
+/** A passkey the provider just stored, for a confirmation toast. */
+export interface PasskeySavedInfo {
+	rpId: string;
+	/** The login the passkey attached to / the new login created for it. */
+	loginName: string;
+	/** True when a new login was created; false when attached to an existing one. */
+	created: boolean;
+}
+
 export interface ShellAdapter {
 	/** Host extension's display name, read from its manifest. Single source of truth for the user-facing brand. */
 	appName: string;
@@ -46,6 +55,8 @@ export interface ShellAdapter {
 	supportsPasskeyProvider: boolean;
 	/** Attach/detach the passkey provider at runtime (extension only; paired with supportsPasskeyProvider). Persisting the pref is the caller's job; this just applies it now. */
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
+	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */
+	onPasskeySaved?(callback: (info: PasskeySavedInfo) => void): () => void;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.

@@ -150,6 +150,10 @@ const productionDeps: PasskeyProxyDeps = {
 	ceremony: cornerCeremony,
 	sha256: sha256Base64,
 	now: () => Date.now(),
+	// Confirm the save in any open extension page (the popup is open during Unlock & Save).
+	onSaved: (info) => {
+		void chrome.runtime.sendMessage({ type: "PASSKEY_SAVED", payload: info }).catch(() => {});
+	},
 };
 
 on("PASSKEY_PROMPT_RESPONSE", async (message) => {

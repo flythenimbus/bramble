@@ -85,6 +85,15 @@ export const extensionShell: ShellAdapter = {
 			payload: { enabled },
 		});
 	},
+	onPasskeySaved(callback) {
+		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {
+			if (msg?.type === "PASSKEY_SAVED" && msg.payload) {
+				callback(msg.payload as Parameters<typeof callback>[0]);
+			}
+		};
+		chrome.runtime.onMessage.addListener(handler);
+		return () => chrome.runtime.onMessage.removeListener(handler);
+	},
 	async flushPendingCornerCapture() {
 		const res = (await chrome.runtime.sendMessage({ type: "CORNER_FLUSH_HANDOFF" })) as
 			| { ok: boolean; data?: boolean }

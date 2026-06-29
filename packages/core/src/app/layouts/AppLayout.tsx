@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { BrambleGlyph } from "../components/BrambleGlyph";
+import { PasskeySavedToast } from "../components/PasskeySavedToast";
 import { usePopOut } from "../hooks/usePopOut";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
@@ -111,6 +112,7 @@ export function AppLayout() {
 				</div>
 			</header>
 			<Outlet />
+			<PasskeySavedToast />
 		</div>
 	);
 }

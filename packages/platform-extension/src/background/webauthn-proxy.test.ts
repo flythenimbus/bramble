@@ -30,6 +30,7 @@ function deps(over: Partial<PasskeyProxyDeps> = {}): PasskeyProxyDeps {
 		ceremony: vi.fn(async () => ({ approved: true, userVerified: true })) as unknown as CeremonyFn,
 		sha256: vi.fn(async () => "aGFzaA"),
 		now: () => 1000,
+		onSaved: vi.fn(),
 		...over,
 	};
 }
@@ -75,6 +76,11 @@ describe("handleCreate", () => {
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyMakeCredential).toHaveBeenCalledWith("github.com", true);
 		expect(d.savePlacement).toHaveBeenCalledTimes(1);
+		expect(d.onSaved).toHaveBeenCalledWith({
+			rpId: "github.com",
+			created: true,
+			loginName: "GitHub",
+		});
 		const r = JSON.parse(res.responseJson as string);
 		expect(r.type).toBe("public-key");
 		expect(r.response.attestationObject).toBeTruthy();

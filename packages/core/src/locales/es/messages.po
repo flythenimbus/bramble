@@ -861,6 +861,16 @@ msgstr "Optic ID"
 msgid "Pairing code"
 msgstr "Código de emparejamiento"
 
+#. placeholder {0}: info.loginName
+#: packages/core/src/app/components/PasskeySavedToast.tsx
+msgid "Passkey added to {0}"
+msgstr ""
+
+#. placeholder {0}: info.loginName
+#: packages/core/src/app/components/PasskeySavedToast.tsx
+msgid "Passkey saved as {0}"
+msgstr ""
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Passphrase"
 msgstr "Frase de contraseña"
