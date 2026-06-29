@@ -194,11 +194,15 @@ Two things make this the hard surface:
 1. **TS binding (DONE).** `passkeyMakeCredential` / `passkeyGetAssertion` through `VaultCrypto` +
    `CryptoAdapter` + `buildCryptoAdapter`; the extension `CRYPTO_PASSKEY_*` messages + offscreen
    dispatch; the mobile NativeCrypto JS shim. Pure placement logic (`core/src/vault/passkey.ts`).
-2. **Extension provider (PARTIAL).** DONE + unit-tested: WebAuthn JSON helpers (origin/rpId,
-   clientData, response assembly), the `handleCreate`/`handleGet` orchestration, ambient chrome
-   types, the `webAuthenticationProxy` manifest permission. REMAINING: the ceremony UI window, the
-   create-time vault write (`savePlacement`), a Settings enable toggle, wiring `initWebauthnProxy`
-   into the background, and end-to-end verification on a real Chrome. The proxy is dormant until then.
+2. **Extension provider (built, pending device verification).** DONE: WebAuthn JSON helpers,
+   `handleCreate`/`handleGet` orchestration (unit-tested), ambient chrome types, the
+   `webAuthenticationProxy` permission, the save-passkey **corner card** (same placement as
+   save-password) for create + get, the create-time vault write (`savePlacement`), the
+   **Settings → General toggle** ("Use Bramble for passkeys", gated on `shell.supportsPasskeyProvider`,
+   applies live + persists), and **pause-during-own-unlock** (the proxy detaches around Bramble's own
+   security-key PRF ceremony, reentrant, via PASSKEY_PROXY_PAUSE/RESUME). REMAINING: end-to-end
+   verification on a real Chrome (incl. confirming where `origin` sits in `requestDetailsJson`), the
+   item edit/view UI (passkey row below TOTP + view badge), and the multi-credential picker for get.
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin

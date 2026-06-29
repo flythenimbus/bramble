@@ -1,8 +1,27 @@
 /// <reference types="chrome" />
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
+import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
 import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
+
+// When the passkey provider proxy is attached it intercepts all browser WebAuthn,
+// which would hijack Bramble's own security-key (PRF) unlock. Pause it around our
+// ceremony by detaching for the duration; best-effort so a messaging hiccup never
+// blocks unlock. Runs in the popup/options context (where the ceremony runs). See
+// docs/passkey-provider.md.
+setWebauthnInterceptionPauser(async (run) => {
+	try {
+		await chrome.runtime.sendMessage({ type: "PASSKEY_PROXY_PAUSE" });
+	} catch {}
+	try {
+		return await run();
+	} finally {
+		try {
+			await chrome.runtime.sendMessage({ type: "PASSKEY_PROXY_RESUME" });
+		} catch {}
+	}
+});
 
 const manifest = chrome.runtime.getManifest();
 
