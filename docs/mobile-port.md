@@ -43,7 +43,8 @@ dated **June 2026** and flagged where they are unverified. Re-verify before acti
   and the offscreen-document indirection collapses (mobile has one webview with a DOM, like
   Firefox's event page, so crypto runs in-process in WASM or in a native plugin).
 - **Scope note (v1).** Bramble does **not** host passkeys for other sites or apps in v1; that
-  credential-provider passkey role is a deferred future feature. v1 mobile autofill fills
+  credential-provider passkey role is a deferred future feature (now planned in
+  `docs/passkey-provider.md`). v1 mobile autofill fills
   **passwords and TOTP** only. This keeps the credential provider simpler (iOS one extension with
   `ProvidesPasswords`; Android just the classic `AutofillService`) and removes passkey
   attestation/assertion code and the Android Credential Manager provider from the initial build.
