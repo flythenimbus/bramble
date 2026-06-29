@@ -35,6 +35,9 @@ type HmacSha256 = Hmac<Sha256>;
 // KDBX4 import compiles into both layers: import runs in the main app, which uses
 // native crypto under Lockdown Mode, so `open_kdbx4` is on the FFI surface too.
 mod kdbx;
+// Passkey authenticator (provider role): mint/assert WebAuthn credentials for other
+// sites. Pure + sync, compiled into both layers. See docs/passkey-provider.md.
+mod passkey;
 // Sync handshake/nostr compile into both layers: device sync must run natively so it
 // works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding.
 #[cfg(any(feature = "wasm", feature = "ffi"))]
@@ -560,6 +563,34 @@ mod wasm_exports {
         let payload = encrypt_with_vek_core(&plaintext)?;
         serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
     }
+
+    /// Mint a passkey (provider role) for `rp_id`. Returns credentialId, COSE public
+    /// key, private key (to store in the entry), and the `none` attestation object.
+    #[wasm_bindgen]
+    pub fn passkey_make_credential(
+        rp_id: String,
+        user_verified: bool,
+    ) -> Result<JsValue, CryptoError> {
+        let reg = crate::passkey::passkey_make_credential_core(&rp_id, user_verified)?;
+        serde_wasm_bindgen::to_value(&reg).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Assert a stored passkey: sign authenticatorData || clientDataHash with its key.
+    #[wasm_bindgen]
+    pub fn passkey_get_assertion(
+        rp_id: String,
+        private_key_b64: String,
+        client_data_hash_b64: String,
+        user_verified: bool,
+    ) -> Result<JsValue, CryptoError> {
+        let a = crate::passkey::passkey_get_assertion_core(
+            &rp_id,
+            &private_key_b64,
+            &client_data_hash_b64,
+            user_verified,
+        )?;
+        serde_wasm_bindgen::to_value(&a).map_err(|e| err(format!("serialize: {e}")))
+    }
 }
 
 // ---- FFI binding layer (uniffi -> Swift + Kotlin) ----
@@ -599,6 +630,31 @@ mod ffi_exports {
     #[uniffi::export]
     pub fn encrypt_with_vek(plaintext: String) -> Result<MasterEncrypted, CryptoError> {
         encrypt_with_vek_core(&plaintext)
+    }
+
+    /// Mint a passkey (provider role) for `rp_id`.
+    #[uniffi::export]
+    pub fn passkey_make_credential(
+        rp_id: String,
+        user_verified: bool,
+    ) -> Result<crate::passkey::PasskeyRegistration, CryptoError> {
+        crate::passkey::passkey_make_credential_core(&rp_id, user_verified)
+    }
+
+    /// Assert a stored passkey: sign authenticatorData || clientDataHash with its key.
+    #[uniffi::export]
+    pub fn passkey_get_assertion(
+        rp_id: String,
+        private_key_b64: String,
+        client_data_hash_b64: String,
+        user_verified: bool,
+    ) -> Result<crate::passkey::PasskeyAssertion, CryptoError> {
+        crate::passkey::passkey_get_assertion_core(
+            &rp_id,
+            &private_key_b64,
+            &client_data_hash_b64,
+            user_verified,
+        )
     }
 }
 

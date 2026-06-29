@@ -16,6 +16,22 @@ const baseEntryFields = {
 	customFields: z.array(customFieldSchema).optional(),
 };
 
+// Mirror of PasskeyCredential. Kept in lockstep with the interface in useVault.
+const passkeyCredentialSchema = z.object({
+	credentialId: z.string(),
+	rpId: z.string(),
+	rpName: z.string().optional(),
+	userHandle: z.string(),
+	userName: z.string().optional(),
+	userDisplayName: z.string().optional(),
+	alg: z.number(),
+	publicKeyCose: z.string(),
+	privateKey: z.string(),
+	signCount: z.number(),
+	createdAt: z.number(),
+	lastUsedAt: z.number().optional(),
+});
+
 /** Runtime validation schema for a decrypted entry, by `type`. */
 export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type", [
 	z.object({
@@ -29,6 +45,7 @@ export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type"
 		autofillEnabled: z.boolean().optional(),
 		autoSubmit: z.boolean().optional(),
 		subdomainMatch: z.enum(["etld1", "exact", "subdomain"]).optional(),
+		passkeys: z.array(passkeyCredentialSchema).optional(),
 	}),
 	z.object({
 		...baseEntryFields,
