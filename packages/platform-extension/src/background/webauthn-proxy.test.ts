@@ -1,6 +1,15 @@
 import type { Entry } from "@core/hooks/useVault";
 import { describe, expect, it, vi } from "vitest";
-import { type CeremonyFn, handleCreate, handleGet, type PasskeyProxyDeps } from "./webauthn-proxy";
+import {
+	type CardReply,
+	type CeremonyFn,
+	type CeremonyHost,
+	handleCreate,
+	handleGet,
+	type PasskeyProxyDeps,
+	runCreateCeremony,
+	runGetCeremony,
+} from "./webauthn-proxy";
 
 function deps(over: Partial<PasskeyProxyDeps> = {}): PasskeyProxyDeps {
 	return {
@@ -164,5 +173,132 @@ describe("handleGet", () => {
 	it("rejects a cross-origin rpId with SecurityError", async () => {
 		const res = await handleGet(deps(), 1, getJson(), "https://evil.com");
 		expect(res.error?.name).toBe("SecurityError");
+	});
+});
+
+describe("runCreateCeremony", () => {
+	const ghLogin = (id: string, username: string): Entry =>
+		({
+			id,
+			type: "login",
+			name: `GitHub ${username}`,
+			urls: ["https://github.com"],
+			username,
+			password: "pw",
+		}) as Entry;
+	const req = { kind: "create" as const, rpId: "github.com", origin: "https://github.com" };
+
+	// A host that records the cards shown and returns scripted replies in order.
+	function host(opts: {
+		locked?: boolean;
+		unlockOk?: boolean;
+		entries?: Entry[];
+		replies?: CardReply[];
+	}) {
+		const cards: { existingLoginName?: string; candidates?: { id: string }[] }[] = [];
+		let i = 0;
+		const h: CeremonyHost = {
+			isLocked: () => opts.locked ?? false,
+			ensureUnlocked: async () => opts.unlockOk ?? true,
+			loadEntries: async () => opts.entries ?? [],
+			showCard: async (o) => {
+				cards.push(o);
+				return opts.replies?.[i++] ?? { approved: true };
+			},
+		};
+		return { h, cards };
+	}
+
+	it("unlocked + no domain login -> one confirm card, placement 'new'", async () => {
+		const { h, cards } = host({ entries: [] });
+		const d = await runCreateCeremony(req, h);
+		expect(d).toMatchObject({ approved: true, placement: "new" });
+		expect(cards).toHaveLength(1);
+		expect(cards[0]).toEqual({}); // generic confirm, no candidates/existingLoginName
+	});
+
+	it("unlocked + single domain login -> 'Add to X' card, attach", async () => {
+		const { h, cards } = host({ entries: [ghLogin("login-1", "octocat")] });
+		const d = await runCreateCeremony({ ...req, userName: "anything" }, h);
+		expect(d).toMatchObject({ approved: true, placement: { entryId: "login-1" } });
+		expect(cards[0]?.existingLoginName).toBe("GitHub octocat");
+	});
+
+	it("unlocked + ambiguous -> picker card; chosen id becomes the target", async () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => ghLogin(`gh-${i}`, u));
+		const { h, cards } = host({
+			entries: five,
+			replies: [{ approved: true, choice: "gh-3" }],
+		});
+		const d = await runCreateCeremony({ ...req, userName: "nomatch" }, h);
+		expect(d).toMatchObject({ approved: true, placement: { entryId: "gh-3" } });
+		expect(cards[0]?.candidates).toHaveLength(5);
+	});
+
+	it("picker 'new' choice -> placement 'new'", async () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => ghLogin(`gh-${i}`, u));
+		const { h } = host({ entries: five, replies: [{ approved: true, choice: "new" }] });
+		expect(await runCreateCeremony({ ...req, userName: "nomatch" }, h)).toMatchObject({
+			placement: "new",
+		});
+	});
+
+	it("locked -> confirm then unlock, no second card for a single account", async () => {
+		const { h, cards } = host({ locked: true, entries: [ghLogin("login-1", "octocat")] });
+		const d = await runCreateCeremony(req, h);
+		expect(d).toMatchObject({ approved: true, placement: { entryId: "login-1" } });
+		expect(cards).toHaveLength(1); // the unlock-confirm only; no "Add to X" re-prompt
+	});
+
+	it("locked + ambiguous -> confirm, unlock, then the picker (two cards)", async () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => ghLogin(`gh-${i}`, u));
+		const { h, cards } = host({
+			locked: true,
+			entries: five,
+			replies: [{ approved: true }, { approved: true, choice: "gh-1" }],
+		});
+		const d = await runCreateCeremony({ ...req, userName: "nomatch" }, h);
+		expect(cards).toHaveLength(2);
+		expect(d).toMatchObject({ placement: { entryId: "gh-1" } });
+	});
+
+	it("declining the first card aborts without unlocking", async () => {
+		const unlock = vi.fn(async () => true);
+		const { h } = host({ locked: true, replies: [{ approved: false }] });
+		h.ensureUnlocked = unlock;
+		expect(await runCreateCeremony(req, h)).toEqual({ approved: false });
+		expect(unlock).not.toHaveBeenCalled();
+	});
+
+	it("failed unlock aborts", async () => {
+		const { h } = host({ locked: true, unlockOk: false });
+		expect(await runCreateCeremony(req, h)).toEqual({ approved: false });
+	});
+
+	it("declining the picker aborts", async () => {
+		const five = ["a", "b", "c", "d", "e"].map((u, i) => ghLogin(`gh-${i}`, u));
+		const { h } = host({ entries: five, replies: [{ approved: false }] });
+		expect(await runCreateCeremony({ ...req, userName: "nomatch" }, h)).toEqual({
+			approved: false,
+		});
+	});
+});
+
+describe("runGetCeremony", () => {
+	const host = (approved: boolean, unlockOk = true): CeremonyHost => ({
+		isLocked: () => false,
+		ensureUnlocked: async () => unlockOk,
+		loadEntries: async () => [],
+		showCard: async () => ({ approved }),
+	});
+
+	it("approve + unlocked -> verified", async () => {
+		expect(await runGetCeremony(host(true))).toEqual({ approved: true, userVerified: true });
+	});
+	it("decline -> aborted", async () => {
+		expect(await runGetCeremony(host(false))).toEqual({ approved: false });
+	});
+	it("failed unlock -> aborted", async () => {
+		expect(await runGetCeremony(host(true, false))).toEqual({ approved: false });
 	});
 });
