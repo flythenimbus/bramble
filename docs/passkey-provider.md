@@ -68,7 +68,9 @@ is small and unit-tested with a real sign-then-verify round-trip.
 Implemented in `packages/core-rust/src/passkey.rs`, exported from both layers
 (`#[wasm_bindgen]` + `#[uniffi::export]`) mirroring the `encrypt_entry` style:
 
-- `passkey_make_credential(rp_id, user_verified) -> { credentialId, publicKeyCose, privateKey, attestationObject }`
+- `passkey_make_credential(rp_id, user_verified) -> { credentialId, publicKeyCose, privateKey, attestationObject, authenticatorData, publicKey }`
+  (`authenticatorData` and `publicKey` (SPKI DER) are returned separately because Chrome's proxy
+  requires them as siblings of `attestationObject` in the response JSON; see Cross-cutting decisions.)
 - `passkey_get_assertion(rp_id, private_key_b64, client_data_hash_b64, user_verified) -> { authenticatorData, signature }`
 
 The functions are **pure** (no VEK slot): the private key is returned at creation, stored inside the
@@ -182,10 +184,14 @@ Two things make this the hard surface:
 - **User verification.** Honor `userVerification: "required"` with a real biometric tap *even inside
   a keep-unlocked session*. Do not let the convenience session silently satisfy UV; that is a
   passkey-specific security regression.
-- **Response JSON completeness.** Chrome validates `completeCreateRequest` against the W3C
-  `RegistrationResponseJSON`: it requires `response.authenticatorData` + `response.publicKeyAlgorithm`
-  (and `attestationObject`); `publicKey` is optional. The assertion response needs `clientDataJSON`,
-  `authenticatorData`, `signature`, and `userHandle` (null when absent).
+- **Response JSON completeness (device-verified against webauthn.io).** Chrome validates
+  `completeCreateRequest` against the W3C `RegistrationResponseJSON` and rejects a partial one with
+  `Invalid responseJson: field missing or invalid: <field>` (which makes `create()` hang, so the RP
+  silently does nothing). The `response` object must include **all** of: `clientDataJSON`,
+  `attestationObject`, `authenticatorData`, `transports`, `publicKeyAlgorithm`, and **`publicKey`**
+  (SPKI DER). Note `publicKey` is marked *optional* in the W3C spec but Chrome's proxy requires it
+  anyway, so the Rust core returns the SPKI alongside the attestation object. The assertion response
+  needs `clientDataJSON`, `authenticatorData`, `signature`, and `userHandle` (null when absent).
 - **Algorithms.** Support ES256 (COSE -7) at minimum; add Ed25519 (-8) and RS256 (-257) as RP demand
   shows. `passkey-rs` covers the common set.
 
@@ -220,8 +226,10 @@ Two things make this the hard surface:
    last). **Get picker** done too: when several stored passkeys match the rpId, sign-in shows a
    chooser (by account) instead of using the first. **Item UI** done: the login edit form lists
    passkeys below TOTP with a Remove each (and carries them through save so an edit never drops
-   them), and the read view shows a passkey badge per account. The extension provider is now
-   feature-complete pending device verification.
+   them), and the read view shows a passkey badge per account. **VERIFIED end-to-end on webauthn.io:**
+   register + authenticate both succeed on a real Chrome (locked and unlocked). Device testing also
+   surfaced the response-field requirements above (origin-from-tab, `authenticatorData`,
+   `publicKeyAlgorithm`, `publicKey`, BE/BS flags) — all now fixed.
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
