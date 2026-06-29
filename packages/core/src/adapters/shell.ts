@@ -42,6 +42,10 @@ export interface ShellAdapter {
 	supportsSecurityKeys: boolean;
 	/** Whether this platform can capture a submitted login and offer to save it (the corner-prompt flow). True on the extension; false on mobile (no save hook wired). Gates the "Offer to save logins" setting. See docs/mobile-port.md. */
 	supportsSaveCapture: boolean;
+	/** Whether this platform can act as a WebAuthn passkey provider for other sites. True on the Chromium extension (chrome.webAuthenticationProxy); false elsewhere. Gates the passkey-provider setting. See docs/passkey-provider.md. */
+	supportsPasskeyProvider: boolean;
+	/** Attach/detach the passkey provider at runtime (extension only; paired with supportsPasskeyProvider). Persisting the pref is the caller's job; this just applies it now. */
+	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.

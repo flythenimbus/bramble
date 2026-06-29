@@ -11,6 +11,9 @@ export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 // Mobile (iOS) only: populate the OS QuickType bar with usernames+domains so logins
 // surface inline in the keyboard. Off by default since it exposes usernames before auth.
 export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
+// Extension only: act as a WebAuthn passkey provider for other sites. Off by default
+// (attaching the proxy intercepts all browser WebAuthn). See docs/passkey-provider.md.
+export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -20,6 +23,7 @@ export const DEFAULT_CLIPBOARD_SECONDS = 30;
 export const DEFAULT_OFFER_TO_SAVE = true;
 export const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 export const DEFAULT_AUTOFILL_QUICKTYPE = false;
+export const DEFAULT_PASSKEY_PROVIDER = false;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -31,6 +35,8 @@ export interface Prefs {
 	neverSaveSites: string[];
 	// iOS QuickType: surface usernames inline in the keyboard (exposes them before auth).
 	autofillQuickType: boolean;
+	// Extension: act as a WebAuthn passkey provider for other sites.
+	passkeyProviderEnabled: boolean;
 }
 
 /** Load and update user preferences via the platform storage adapter. */
@@ -43,19 +49,21 @@ export function usePrefs() {
 		offerToSave: DEFAULT_OFFER_TO_SAVE,
 		neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
 		autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
+		passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
 	});
 	const [loaded, setLoaded] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f] = await Promise.all([
+			const [a, b, c, d, e, f, g] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
 				storage.getMeta<boolean>(PREF_OFFER_TO_SAVE),
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
+				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -65,6 +73,7 @@ export function usePrefs() {
 				offerToSave: typeof d === "boolean" ? d : DEFAULT_OFFER_TO_SAVE,
 				neverSaveSites: Array.isArray(e) ? e : DEFAULT_NEVER_SAVE_SITES,
 				autofillQuickType: typeof f === "boolean" ? f : DEFAULT_AUTOFILL_QUICKTYPE,
+				passkeyProviderEnabled: typeof g === "boolean" ? g : DEFAULT_PASSKEY_PROVIDER,
 			});
 			setLoaded(true);
 		})();
@@ -87,7 +96,9 @@ export function usePrefs() {
 								? PREF_OFFER_TO_SAVE
 								: key === "neverSaveSites"
 									? PREF_NEVER_SAVE_SITES
-									: PREF_AUTOFILL_QUICKTYPE;
+									: key === "autofillQuickType"
+										? PREF_AUTOFILL_QUICKTYPE
+										: PREF_PASSKEY_PROVIDER;
 			await storage.setMeta(metaKey, value);
 		},
 		[storage],
