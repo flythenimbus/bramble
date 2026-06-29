@@ -15,10 +15,13 @@ export function savePasskeyBody({
 	primaryLabel: string;
 }) {
 	const title = intent === "create" ? "Save a passkey?" : "Use your passkey?";
-	const site = rpName ? `${rpName} (${rpId})` : rpId;
-	const account = userName
-		? `<div class="tp-row"><div class="tp-label">Account</div><div>${userName}</div></div>`
-		: "";
+	// Avoid "x (x)" when the RP's display name equals its id.
+	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
+	// Nested html escapes userName; the array interpolation joins markup verbatim
+	// (a scalar string interpolation would be html-escaped and show as text).
+	const accountRow = userName
+		? [html`<div class="tp-row"><div class="tp-label">Account</div><div>${userName}</div></div>`]
+		: [];
 	return html`
 		<div class="tp-head">
 			<div>
@@ -27,7 +30,7 @@ export function savePasskeyBody({
 			</div>
 			<button class="tp-close" data-tp-action="passkey-dismiss" aria-label="Dismiss">×</button>
 		</div>
-		${account}
+		${accountRow}
 		<div class="tp-actions">
 			<button class="tp-btn tp-btn-primary" data-tp-action="passkey-approve">${primaryLabel}</button>
 			<button class="tp-btn" data-tp-action="passkey-dismiss">Not now</button>
