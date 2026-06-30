@@ -20,6 +20,18 @@ class AutofillLogin(
     val hostnames: List<String>,
 )
 
+// One stored passkey (provider role) extracted from a login entry's `passkeys[]`. All base64
+// fields are STANDARD base64 (as stored): credentialId/userHandle/privateKey. privateKey is the
+// only secret; the Rust core signs with it. Mirrors core's PasskeyCredential.
+class StoredPasskey(
+    val entryId: String,
+    val credentialId: String,
+    val rpId: String,
+    val userName: String,
+    val userHandle: String,
+    val privateKey: String,
+)
+
 // Reads and decrypts the real VLT1 vault the webview manages. The service runs in our own
 // package, so there is no iOS-style App Group or pushed bundle: it reads the encrypted
 // blob from Filesystem storage and decrypts it with the shared Rust core once the VEK is
@@ -66,6 +78,51 @@ object VaultReader {
                     hostnames = hostnamesOf(data.optJSONArray("urls")),
                 )
             )
+        }
+        return out
+    }
+
+    /**
+     * Decrypt every login's passkeys (provider role). The caller MUST have loaded the VEK
+     * first, exactly like readLogins. Reads the `passkeys[]` array off each login entry; all
+     * base64 fields stay STANDARD base64 (as stored) - WebauthnJson converts to b64url and the
+     * Rust core consumes them verbatim. Returns every stored passkey; callers filter by rpId.
+     */
+    fun readPasskeys(context: Context): List<StoredPasskey> {
+        val blob = decode(context)
+        if (blob.entriesCiphertext.isEmpty()) return emptyList()
+        val outerJson = decryptWithVek(b64(blob.entriesIv), b64(blob.entriesCiphertext))
+        val entries = JSONObject(outerJson).optJSONArray("entries") ?: JSONArray()
+        val out = ArrayList<StoredPasskey>()
+        for (i in 0 until entries.length()) {
+            val enc = entries.getJSONObject(i)
+            val plaintext = decryptEntry(
+                enc.getString("ciphertext"),
+                enc.getString("iv"),
+                enc.getString("wrappedDek"),
+                enc.getString("dekIv"),
+            )
+            val data = JSONObject(plaintext)
+            if (data.optString("type", "login") != "login") continue
+            val passkeys = data.optJSONArray("passkeys") ?: continue
+            val entryId = enc.getString("id")
+            for (j in 0 until passkeys.length()) {
+                val pk = passkeys.optJSONObject(j) ?: continue
+                val credentialId = pk.optString("credentialId", "")
+                val rpId = pk.optString("rpId", "")
+                val privateKey = pk.optString("privateKey", "")
+                if (credentialId.isEmpty() || rpId.isEmpty() || privateKey.isEmpty()) continue
+                out.add(
+                    StoredPasskey(
+                        entryId = entryId,
+                        credentialId = credentialId,
+                        rpId = rpId,
+                        userName = pk.optString("userName", ""),
+                        userHandle = pk.optString("userHandle", ""),
+                        privateKey = privateKey,
+                    )
+                )
+            }
         }
         return out
     }
