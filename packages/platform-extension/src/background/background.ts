@@ -51,6 +51,12 @@ api.runtime.onStartup.addListener(() => {
 	void ensureOffscreen();
 });
 
+// Firefox stores the vault in storage.local (no File System Access), and that is the
+// only copy, so ask the browser to keep this origin's storage from being evicted under
+// disk pressure. Best-effort and harmless on Chrome, where unlimitedStorage already
+// exempts it. See docs/firefox-port.md "Storage durability".
+void navigator.storage?.persist?.().catch(() => {});
+
 api.alarms.onAlarm.addListener((alarm) => {
 	if (alarm.name === AUTOLOCK_ALARM) {
 		void (async () => {
