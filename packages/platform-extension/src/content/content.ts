@@ -6,6 +6,7 @@
 // user actions back through callbacks.
 
 import { maybeEmitSpaSubmit, onPasswordEnter } from "./capture";
+import { api } from "./content-api";
 import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
 	cardFieldsPresent,
@@ -193,7 +194,7 @@ document.addEventListener(
 	true,
 );
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.type === "AUTOFILL_MATCHES") {
 		handleResult(message.payload as QueryResult | undefined);
 		sendResponse({ ok: true });

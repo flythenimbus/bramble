@@ -1,6 +1,8 @@
 /// <reference types="chrome" />
+
 import type { StorageAdapter } from "@core/adapters/storage";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
+import { api } from "./platform-api";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
 /** Recovery snapshot of the previous on-disk vault bytes, written before truncate so a crash leaves a recoverable backup. */
@@ -67,7 +69,7 @@ async function ensurePermission(handle: FileSystemFileHandle): Promise<void> {
 }
 
 async function hasLocalVault(): Promise<boolean> {
-	const result = await chrome.storage.local.get(VAULT_BLOB_KEY);
+	const result = await api.storage.local.get(VAULT_BLOB_KEY);
 	return typeof result[VAULT_BLOB_KEY] === "string";
 }
 
@@ -81,7 +83,7 @@ async function readExistingBlobBytes(
 			if (file.size === 0) return null;
 			return new Uint8Array(await file.arrayBuffer());
 		}
-		const r = await chrome.storage.local.get(VAULT_BLOB_KEY);
+		const r = await api.storage.local.get(VAULT_BLOB_KEY);
 		const b64 = r[VAULT_BLOB_KEY];
 		if (typeof b64 !== "string" || b64.length === 0) return null;
 		return base64ToBytes(b64);
@@ -95,10 +97,10 @@ async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise
 	const existing = await readExistingBlobBytes(handle);
 	try {
 		if (existing === null) {
-			await chrome.storage.local.remove(VAULT_BLOB_BACKUP_KEY);
+			await api.storage.local.remove(VAULT_BLOB_BACKUP_KEY);
 			return;
 		}
-		await chrome.storage.local.set({ [VAULT_BLOB_BACKUP_KEY]: bytesToBase64(existing) });
+		await api.storage.local.set({ [VAULT_BLOB_BACKUP_KEY]: bytesToBase64(existing) });
 	} catch {
 		// Best-effort: failing the write because the backup failed would block all saves.
 	}
@@ -107,7 +109,7 @@ async function snapshotCurrentBlob(handle: FileSystemFileHandle | null): Promise
 /** File-picker description follows the host brand (manifest.json `name`, same as shell.appName). */
 const VAULT_FILE_TYPES = [
 	{
-		description: `${chrome.runtime.getManifest().name} vault`,
+		description: `${api.runtime.getManifest().name} vault`,
 		accept: { "application/octet-stream": [".db"] },
 	},
 ];
@@ -152,7 +154,7 @@ export const extensionStorage: StorageAdapter = {
 			const file = await handle.getFile();
 			return new Uint8Array(await file.arrayBuffer());
 		}
-		const result = await chrome.storage.local.get(VAULT_BLOB_KEY);
+		const result = await api.storage.local.get(VAULT_BLOB_KEY);
 		const b64 = result[VAULT_BLOB_KEY];
 		if (typeof b64 !== "string") throw new Error("no vault stored");
 		return base64ToBytes(b64);
@@ -170,12 +172,12 @@ export const extensionStorage: StorageAdapter = {
 			await writable.close();
 			return;
 		}
-		await chrome.storage.local.set({ [VAULT_BLOB_KEY]: bytesToBase64(blob) });
+		await api.storage.local.set({ [VAULT_BLOB_KEY]: bytesToBase64(blob) });
 	},
 
 	/** Restore the last pre-write backup over the live vault. Returns false when no backup exists. */
 	async restoreVaultFromBackup() {
-		const r = await chrome.storage.local.get(VAULT_BLOB_BACKUP_KEY);
+		const r = await api.storage.local.get(VAULT_BLOB_BACKUP_KEY);
 		const b64 = r[VAULT_BLOB_BACKUP_KEY];
 		if (typeof b64 !== "string" || b64.length === 0) return false;
 		const bytes = base64ToBytes(b64);
@@ -187,25 +189,25 @@ export const extensionStorage: StorageAdapter = {
 			await writable.write(bytes as BufferSource);
 			await writable.close();
 		} else {
-			await chrome.storage.local.set({ [VAULT_BLOB_KEY]: b64 });
+			await api.storage.local.set({ [VAULT_BLOB_KEY]: b64 });
 		}
 		return true;
 	},
 
 	/** Read a plaintext metadata value from chrome.storage.local. */
 	async getMeta(key) {
-		const result = await chrome.storage.local.get(key);
+		const result = await api.storage.local.get(key);
 		return result[key];
 	},
 
 	/** Write a plaintext metadata value to chrome.storage.local. */
 	async setMeta(key, value) {
-		await chrome.storage.local.set({ [key]: value });
+		await api.storage.local.set({ [key]: value });
 	},
 
 	/** Delete a metadata key from chrome.storage.local. */
 	async removeMeta(key) {
-		await chrome.storage.local.remove(key);
+		await api.storage.local.remove(key);
 	},
 
 	/** True when the background can write the vault directly. chrome.storage.local always can; an FSA file can iff its read/write permission is already granted (createWritable itself needs no gesture, only requestPermission does). Otherwise the background queues for the next popup to flush. */
@@ -217,18 +219,18 @@ export const extensionStorage: StorageAdapter = {
 
 	/** Write through a queued corner-prompt blob (PENDING_BLOB_KEY) and clear it. Returns false when nothing is queued. */
 	async flushPendingVaultBlob() {
-		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
+		const result = await api.storage.session.get(PENDING_BLOB_KEY);
 		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;
 		if (!stash || typeof stash.blobB64 !== "string") return false;
 		const bytes = base64ToBytes(stash.blobB64);
 		await extensionStorage.writeVaultBlob(bytes);
-		await chrome.storage.session.remove(PENDING_BLOB_KEY);
+		await api.storage.session.remove(PENDING_BLOB_KEY);
 		return true;
 	},
 
 	/** Number of entries in the queued corner-prompt blob, or 0 when none is queued. */
 	async getPendingFlushCount() {
-		const result = await chrome.storage.session.get(PENDING_BLOB_KEY);
+		const result = await api.storage.session.get(PENDING_BLOB_KEY);
 		const stash = result[PENDING_BLOB_KEY] as PendingBlobStash | undefined;
 		if (!stash) return 0;
 		return typeof stash.entryCount === "number" ? stash.entryCount : 0;

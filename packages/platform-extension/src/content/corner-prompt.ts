@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "./content-api";
 import { cornerStyles } from "./html/corner-styles";
 import { saveLoginBody } from "./html/save-login-body";
 import { savePasskeyBody } from "./html/save-passkey-body";
@@ -34,7 +35,7 @@ export function queryCornerPrompt(): void {
 	if (!isTopFrame()) return;
 	if (!isExtensionAlive()) return;
 	try {
-		chrome.runtime
+		api.runtime
 			.sendMessage({ type: "CORNER_PROMPT_QUERY" })
 			.then((resp: { ok: boolean; data?: CornerPromptPayload | null } | undefined) => {
 				if (!resp?.ok || !resp.data) return;

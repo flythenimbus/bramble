@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+
 import type {
 	CryptoAdapter,
 	EncryptedPayload,
@@ -30,6 +31,7 @@ import type {
 	CryptoWrapPasswordSlot,
 	CryptoWrapWebauthnSlot,
 } from "./crypto/messages";
+import { api } from "./platform-api";
 
 // Backstop a stalled offscreen round-trip (e.g. a cold-start createDocument that
 // never resolves) so the UI surfaces a retryable error instead of hanging forever.
@@ -46,7 +48,7 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
-	const res = await withTimeout(chrome.runtime.sendMessage({ type, payload }), type);
+	const res = await withTimeout(api.runtime.sendMessage({ type, payload }), type);
 	if (!res?.ok) throw new Error(res?.error ?? `crypto ${type} failed`);
 	return res.data as T;
 }
@@ -84,16 +86,16 @@ export const extensionCrypto: CryptoAdapter = {
 				callback();
 			}
 		};
-		chrome.storage.session.onChanged.addListener(handler);
-		return () => chrome.storage.session.onChanged.removeListener(handler);
+		api.storage.session.onChanged.addListener(handler);
+		return () => api.storage.session.onChanged.removeListener(handler);
 	},
 
 	onExternalChange(callback: () => void) {
 		const handler = (message: { type?: string } | undefined) => {
 			if (message?.type === "VAULT_CHANGED_EXTERNAL") callback();
 		};
-		chrome.runtime.onMessage.addListener(handler);
-		return () => chrome.runtime.onMessage.removeListener(handler);
+		api.runtime.onMessage.addListener(handler);
+		return () => api.runtime.onMessage.removeListener(handler);
 	},
 
 	generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),

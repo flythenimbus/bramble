@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+import { api } from "../platform-api";
 
 // A typed handler registry with a single onMessage dispatcher. Each concern
 // module registers its own handlers; the dispatcher awaits hydration once and
@@ -41,7 +42,7 @@ function resolveHandler(type: string | undefined): MessageHandler | undefined {
 	return undefined;
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.target === "offscreen") return false;
 	const handler = resolveHandler(message?.type as string | undefined);
 	if (!handler) return false;

@@ -8,6 +8,7 @@ import {
 } from "@core/sync";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, type EncryptedEntry, type VaultBlob } from "@core/vault-format";
+import { api } from "../platform-api";
 import { extensionStorage, PENDING_BLOB_KEY } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { witnessStamp } from "./sync-clock";
@@ -27,7 +28,7 @@ export async function writeOrQueueVault(blob: Uint8Array, entryCount: number): P
 		await extensionStorage.writeVaultBlob(blob);
 		return;
 	}
-	await chrome.storage.session.set({
+	await api.storage.session.set({
 		[PENDING_BLOB_KEY]: {
 			blobB64: bytesToBase64(blob),
 			entryCount,
@@ -81,6 +82,6 @@ export async function reencryptOuterWithEntryChange(
 /** Notify any open popup that the vault changed so it can re-decrypt. */
 export async function broadcastVaultChanged(): Promise<void> {
 	try {
-		await chrome.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" });
+		await api.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" });
 	} catch {}
 }

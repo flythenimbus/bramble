@@ -9,6 +9,7 @@ import type {
 } from "@core/adapters/autofill";
 import { type EncryptedEntry, encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { type DedupeOutcome, registrableDomain } from "../dedupe";
+import { api } from "../platform-api";
 import {
 	addLoginEntry,
 	dedupeCapture,
@@ -55,7 +56,7 @@ function captureStashKey(etld1: string): string {
 async function readPendingCapture(etld1: string): Promise<PendingCapture | null> {
 	try {
 		const key = captureStashKey(etld1);
-		const r = await chrome.storage.session.get(key);
+		const r = await api.storage.session.get(key);
 		const v = r[key] as PendingCapture | undefined;
 		return v ?? null;
 	} catch {
@@ -64,11 +65,11 @@ async function readPendingCapture(etld1: string): Promise<PendingCapture | null>
 }
 
 async function writePendingCapture(capture: PendingCapture): Promise<void> {
-	await chrome.storage.session.set({ [captureStashKey(capture.etld1)]: capture });
+	await api.storage.session.set({ [captureStashKey(capture.etld1)]: capture });
 }
 
 async function clearPendingCapture(etld1: string): Promise<void> {
-	await chrome.storage.session.remove(captureStashKey(etld1));
+	await api.storage.session.remove(captureStashKey(etld1));
 }
 
 function buildCornerPayload(
@@ -223,7 +224,7 @@ async function dispatchCornerPromptForCapture(
 	await writePendingCapture(capture);
 	if (tabId !== undefined) {
 		// SPA path: if the page navigated away, the next load's CORNER_PROMPT_QUERY picks up the stash.
-		await chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
+		await api.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
 	}
 	return payload;
 }
@@ -346,20 +347,20 @@ async function cornerPromptResponse(
 				capture,
 				chosenEntryId: response.chosenEntryId,
 			};
-			await chrome.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
+			await api.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
 			try {
 				// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
-				const openPopupFn = (chrome.action as unknown as { openPopup?: () => Promise<void> })
+				const openPopupFn = (api.action as unknown as { openPopup?: () => Promise<void> })
 					.openPopup;
 				if (typeof openPopupFn === "function") {
-					await openPopupFn.call(chrome.action);
+					await openPopupFn.call(api.action);
 				} else {
 					throw new Error("openPopup unavailable");
 				}
 			} catch {
 				try {
-					await chrome.windows.create({
-						url: chrome.runtime.getURL("popup.html?detached=1"),
+					await api.windows.create({
+						url: api.runtime.getURL("popup.html?detached=1"),
 						type: "popup",
 						focused: true,
 						width: 500,
@@ -417,13 +418,13 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 	// Popup signals a post-unlock flush of a parked corner-prompt handoff;
 	// commit here so unlocked and unlock-first flows share one encrypt path.
 	try {
-		const r = await chrome.storage.session.get(CORNER_HANDOFF_KEY);
+		const r = await api.storage.session.get(CORNER_HANDOFF_KEY);
 		const handoff = r[CORNER_HANDOFF_KEY] as CornerHandoff | undefined;
 		if (!handoff) {
 			return { ok: true, data: false };
 		}
 		// Clear first so a racing duplicate flush cannot double-write.
-		await chrome.storage.session.remove(CORNER_HANDOFF_KEY);
+		await api.storage.session.remove(CORNER_HANDOFF_KEY);
 		await hydrateAutofillIndexFromDisk();
 		if (vaultLocked()) {
 			return { ok: false, error: "vault still locked" };

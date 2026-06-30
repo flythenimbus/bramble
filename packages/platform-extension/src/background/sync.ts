@@ -18,6 +18,7 @@ import {
 	type VaultSyncPort,
 } from "@core/sync";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
+import { api } from "../platform-api";
 import {
 	ApplyRemoteMsgSchema,
 	ApplyRosterMsgSchema,
@@ -171,7 +172,7 @@ on("SYNC_APPLY_ROSTER", async (message) => {
 		groupKey: group.groupKey,
 		roster: mergeRosters(group.roster, decodeRoster(rosterJson)),
 	});
-	chrome.runtime
+	api.runtime
 		.sendMessage({ type: "SYNC_EVENT", payload: { kind: "roster" } satisfies SyncEventMsg })
 		.catch(() => {});
 	return { ok: true };

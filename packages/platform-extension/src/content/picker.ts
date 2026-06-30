@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "./content-api";
 import { dropdownItem } from "./html/dropdown-item";
 import { dropdownLocked } from "./html/dropdown-locked";
 import { dropdownStyles } from "./html/dropdown-styles";
@@ -232,7 +233,7 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 
 // --- Iframe renderer (primary); the shadow path above is the COEP fallback. ---
 
-const AUTOFILL_UI_URL = chrome.runtime.getURL("autofill-ui.html");
+const AUTOFILL_UI_URL = api.runtime.getURL("autofill-ui.html");
 const EXT_ORIGIN = new URL(AUTOFILL_UI_URL).origin;
 
 type IframeRender =
