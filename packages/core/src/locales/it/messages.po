@@ -870,10 +870,18 @@ msgstr "Codice di accoppiamento"
 msgid "Passkey added to {0}"
 msgstr "Chiave di accesso aggiunta a {0}"
 
+#: packages/core/src/hooks/usePendingPasskeys.tsx
+msgid "Passkey added to {loginName}"
+msgstr "Chiave di accesso aggiunta a {loginName}"
+
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
 msgid "Passkey saved as {0}"
 msgstr "Chiave di accesso salvata come {0}"
+
+#: packages/core/src/hooks/usePendingPasskeys.tsx
+msgid "Passkey saved as {loginName}"
+msgstr "Chiave di accesso salvata come {loginName}"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Passkeys"
