@@ -52,26 +52,32 @@ function loginCoversRpId(urls: string[], rpId: string): boolean {
 	return false;
 }
 
+export type LoginEntry = Extract<Entry, { type: "login" }>;
+
+/** Every login whose URLs cover `rpId` (its host or a subdomain). */
+export function loginsCoveringRpId(entries: Entry[], rpId: string): LoginEntry[] {
+	return entries.filter(
+		(e): e is LoginEntry => e.type === "login" && loginCoversRpId(e.urls, rpId),
+	);
+}
+
 /**
- * Which login a passkey for `(rpId, userName)` should attach to, or undefined to create
- * a new login. A passkey belongs to the specific account named by the request's
- * `user.name`, so when a domain has several logins we must not just grab the first:
- *  - no login covers the rpId -> undefined (create new);
+ * Which login a passkey for `(rpId, userName)` should attach to, or undefined when it is
+ * ambiguous (the caller then either prompts the user or creates a new login). A passkey
+ * belongs to the specific account named by the request's `user.name`, so when a domain
+ * has several logins we must not just grab the first:
+ *  - no login covers the rpId -> undefined;
  *  - exactly one does -> that login (the domain's sole account; an RP-vs-stored username
  *    mismatch is tolerated, the RP just identifies the account differently);
- *  - several do -> the one whose username matches `userName`; if that is ambiguous
- *    (zero or more than one match) -> undefined, so we create a new login rather than
- *    attach to the wrong account. (A user-facing picker for that case is a follow-up.)
+ *  - several do -> the one whose username matches `userName`; if zero or more than one
+ *    match, undefined (ambiguous).
  */
 export function passkeyAttachTarget(
 	entries: Entry[],
 	rpId: string,
 	userName: string | undefined,
-): Extract<Entry, { type: "login" }> | undefined {
-	const covering = entries.filter(
-		(e): e is Extract<Entry, { type: "login" }> =>
-			e.type === "login" && loginCoversRpId(e.urls, rpId),
-	);
+): LoginEntry | undefined {
+	const covering = loginsCoveringRpId(entries, rpId);
 	if (covering.length <= 1) return covering[0];
 	const uname = userName?.trim().toLowerCase();
 	if (!uname) return undefined;
@@ -80,25 +86,25 @@ export function passkeyAttachTarget(
 }
 
 /**
- * How to persist a newly minted passkey: append it to the matching login (see
- * passkeyAttachTarget), or fabricate a standalone login to hold it. The caller applies
- * the result through the normal encrypt + write path, so id generation and encryption
- * stay in the mutation layer.
+ * How to persist a newly minted passkey: append it to a login (see passkeyAttachTarget),
+ * or fabricate a standalone login to hold it. The caller applies the result through the
+ * normal encrypt + write path, so id generation and encryption stay in the mutation layer.
  */
 export type PasskeyPlacement =
 	| { kind: "attach"; entryId: string; passkeys: PasskeyCredential[] }
 	| { kind: "create"; data: LoginEntryData };
 
-export function planPasskeyPlacement(
-	entries: Entry[],
+/** Attach a passkey to an existing login (returns its new passkeys[]). */
+export function attachPasskeyTo(login: LoginEntry, passkey: PasskeyCredential): PasskeyPlacement {
+	return { kind: "attach", entryId: login.id, passkeys: [...(login.passkeys ?? []), passkey] };
+}
+
+/** A fresh standalone login holding only this passkey. */
+export function newPasskeyLogin(
 	rpId: string,
 	rpName: string | undefined,
 	passkey: PasskeyCredential,
 ): PasskeyPlacement {
-	const host = passkeyAttachTarget(entries, rpId, passkey.userName);
-	if (host) {
-		return { kind: "attach", entryId: host.id, passkeys: [...(host.passkeys ?? []), passkey] };
-	}
 	return {
 		kind: "create",
 		data: {
@@ -110,4 +116,15 @@ export function planPasskeyPlacement(
 			passkeys: [passkey],
 		},
 	};
+}
+
+/** Automatic placement: attach to the unambiguous target, else create a new login. */
+export function planPasskeyPlacement(
+	entries: Entry[],
+	rpId: string,
+	rpName: string | undefined,
+	passkey: PasskeyCredential,
+): PasskeyPlacement {
+	const target = passkeyAttachTarget(entries, rpId, passkey.userName);
+	return target ? attachPasskeyTo(target, passkey) : newPasskeyLogin(rpId, rpName, passkey);
 }

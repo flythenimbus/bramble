@@ -95,6 +95,36 @@ describe("handleCreate", () => {
 		expect(res.error?.name).toBe("NotAllowedError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
+
+	it("attaches to the login the ceremony picked", async () => {
+		const d = deps({
+			loadEntries: vi.fn(async () => githubEntries),
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: true,
+				placement: { entryId: "login-1" },
+			})) as unknown as CeremonyFn,
+		});
+		await handleCreate(d, 1, createJson(), "https://github.com");
+		const plan = (d.savePlacement as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+		expect(plan.kind).toBe("attach");
+		expect(plan.entryId).toBe("login-1");
+		expect(plan.passkeys).toHaveLength(2); // existing + the new one
+	});
+
+	it("creates a new login when the ceremony picks 'new'", async () => {
+		const d = deps({
+			loadEntries: vi.fn(async () => githubEntries),
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: true,
+				placement: "new",
+			})) as unknown as CeremonyFn,
+		});
+		await handleCreate(d, 1, createJson(), "https://github.com");
+		const plan = (d.savePlacement as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+		expect(plan.kind).toBe("create");
+	});
 });
 
 describe("handleGet", () => {

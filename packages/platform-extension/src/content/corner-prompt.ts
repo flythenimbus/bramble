@@ -84,12 +84,19 @@ function sendCornerResponse(action: string, extra?: Record<string, unknown>): vo
 }
 
 // Passkey cards reply on their own channel: the create()/get() call is blocking on
-// the background, which resolves the pending proxy request from this message.
+// the background, which resolves the pending proxy request from this message. On approve,
+// include the picked login id (or "new") when the card is a create picker.
 function sendPasskeyResponse(approved: boolean): void {
 	if (!currentPrompt) return;
+	let choice: string | undefined;
+	if (approved) {
+		choice = cornerShadow?.querySelector<HTMLInputElement>(
+			'input[name="tp-passkey-target"]:checked',
+		)?.value;
+	}
 	safeSendMessage({
 		type: "PASSKEY_PROMPT_RESPONSE",
-		payload: { promptId: currentPrompt.promptId, approved },
+		payload: { promptId: currentPrompt.promptId, approved, ...(choice ? { choice } : {}) },
 	});
 }
 
@@ -221,6 +228,7 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 			userName: payload.userName,
 			intent: payload.intent,
 			existingLoginName: payload.existingLoginName,
+			candidates: payload.candidates,
 			primaryLabel: label,
 		});
 	}

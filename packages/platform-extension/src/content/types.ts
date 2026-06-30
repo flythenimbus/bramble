@@ -82,4 +82,5 @@ export type CornerPromptPayload =
 			rpName?: string;
 			userName?: string;
 			existingLoginName?: string;
+			candidates?: { id: string; name: string; username: string }[];
 	  };

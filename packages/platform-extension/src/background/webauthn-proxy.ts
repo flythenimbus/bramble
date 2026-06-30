@@ -15,7 +15,13 @@
 import type { CryptoAdapter } from "@core/adapters/crypto";
 import type { Entry, PasskeyCredential } from "@core/hooks/useVault";
 import { base64UrlToBase64 } from "@core/util/bytes";
-import { findPasskeys, type PasskeyPlacement, planPasskeyPlacement } from "@core/vault/passkey";
+import {
+	attachPasskeyTo,
+	findPasskeys,
+	newPasskeyLogin,
+	type PasskeyPlacement,
+	planPasskeyPlacement,
+} from "@core/vault/passkey";
 import {
 	authenticationResponseJSON,
 	buildClientData,
@@ -55,15 +61,22 @@ export type CeremonyRequest = CeremonyCreateRequest | CeremonyGetRequest;
 
 /**
  * User-facing ceremony: confirm intent, ensure the vault is unlocked, perform user
- * verification when required, and (for get) let the user pick among matching passkeys.
- * Returns `approved: false` to abort (mapped to NotAllowedError). `credentialId` is the
- * chosen credential (STANDARD base64) for get.
+ * verification when required, and let the user pick (create: which login to attach to,
+ * with "create new" as an option; get: which matching passkey). Returns `approved: false`
+ * to abort (mapped to NotAllowedError).
+ * - `credentialId` (get): the chosen credential, STANDARD base64.
+ * - `placement` (create): "new" to force a fresh login, `{ entryId }` to attach to a
+ *   specific login, or omitted to let automatic placement decide.
  */
-export type CeremonyFn = (
-	req: CeremonyRequest,
-) => Promise<
-	{ approved: false } | { approved: true; userVerified: boolean; credentialId?: string }
->;
+export type CeremonyDecision =
+	| { approved: false }
+	| {
+			approved: true;
+			userVerified: boolean;
+			credentialId?: string;
+			placement?: "new" | { entryId: string };
+	  };
+export type CeremonyFn = (req: CeremonyRequest) => Promise<CeremonyDecision>;
 
 export interface PasskeyProxyDeps {
 	crypto: Pick<CryptoAdapter, "passkeyMakeCredential" | "passkeyGetAssertion">;
@@ -90,6 +103,26 @@ function resolveRpId(
 		throw new WebAuthnError("SecurityError", `rpId ${rpId} is not valid for origin ${origin}`);
 	}
 	return { rpId, host };
+}
+
+/** Apply the ceremony's create placement choice ("new" / a chosen login), else auto. */
+function resolveCreatePlan(
+	decision: Extract<CeremonyDecision, { approved: true }>,
+	entries: Entry[],
+	rpId: string,
+	rpName: string | undefined,
+	credential: PasskeyCredential,
+): PasskeyPlacement {
+	const placement = decision.placement;
+	if (placement === "new") return newPasskeyLogin(rpId, rpName, credential);
+	if (placement) {
+		const target = entries.find(
+			(e): e is Extract<Entry, { type: "login" }> =>
+				e.type === "login" && e.id === placement.entryId,
+		);
+		if (target) return attachPasskeyTo(target, credential);
+	}
+	return planPasskeyPlacement(entries, rpId, rpName, credential);
 }
 
 /**
@@ -132,9 +165,8 @@ export async function handleCreate(
 			signCount: 0,
 			createdAt: deps.now(),
 		};
-		await deps.savePlacement(
-			planPasskeyPlacement(await deps.loadEntries(), rpId, opts.rpName, credential),
-		);
+		const entries = await deps.loadEntries();
+		await deps.savePlacement(resolveCreatePlan(decision, entries, rpId, opts.rpName, credential));
 
 		const clientData = buildClientData("webauthn.create", opts.challenge, origin);
 		return {
