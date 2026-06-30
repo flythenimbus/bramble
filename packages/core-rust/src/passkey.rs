@@ -24,7 +24,13 @@ const CREDENTIAL_ID_LEN: usize = 16;
 // authenticatorData flag bits (WebAuthn L3 6.1).
 const FLAG_UP: u8 = 0x01; // user present
 const FLAG_UV: u8 = 0x04; // user verified
+const FLAG_BE: u8 = 0x08; // backup eligible (multi-device credential)
+const FLAG_BS: u8 = 0x10; // backup state (currently backed up / synced)
 const FLAG_AT: u8 = 0x40; // attested credential data included
+
+// Bramble syncs passkeys across devices (the P2P mesh), so every credential is a
+// multi-device credential that is currently backed up: BE and BS are always set.
+const FLAG_SYNCED: u8 = FLAG_BE | FLAG_BS;
 
 /// Bramble's authenticator AAGUID, advertised in attestedCredentialData so relying
 /// parties can identify the provider. Fixed across all installs.
@@ -127,7 +133,7 @@ pub fn passkey_make_credential_core(
     acd.extend_from_slice(&credential_id);
     acd.extend_from_slice(&cose_bytes);
 
-    let flags = FLAG_UP | FLAG_AT | if user_verified { FLAG_UV } else { 0 };
+    let flags = FLAG_UP | FLAG_AT | FLAG_SYNCED | if user_verified { FLAG_UV } else { 0 };
     let auth_data = authenticator_data(rp_id, flags, Some(&acd));
     let authenticator_data_b64 = B64.encode(&auth_data);
 
@@ -163,7 +169,7 @@ pub fn passkey_get_assertion_core(
         p256::SecretKey::from_slice(&priv_bytes).map_err(|_| err("invalid passkey private key"))?;
     let signing_key = SigningKey::from(&secret);
 
-    let flags = FLAG_UP | if user_verified { FLAG_UV } else { 0 };
+    let flags = FLAG_UP | FLAG_SYNCED | if user_verified { FLAG_UV } else { 0 };
     let auth_data = authenticator_data(rp_id, flags, None);
 
     let mut message = auth_data.clone();
@@ -221,7 +227,7 @@ mod tests {
             Sha256::digest(rp.as_bytes()).as_slice(),
             "rpIdHash"
         );
-        assert_eq!(auth_data[32], FLAG_UP | FLAG_UV, "UP+UV flags");
+        assert_eq!(auth_data[32], FLAG_UP | FLAG_UV | FLAG_SYNCED, "UP+UV+backup flags");
         assert_eq!(&auth_data[33..37], &[0, 0, 0, 0], "signCount must be zero");
 
         let mut message = auth_data.clone();
@@ -243,7 +249,7 @@ mod tests {
                 .unwrap();
 
         let auth_data = B64.decode(&assertion.authenticator_data).unwrap();
-        assert_eq!(auth_data[32], FLAG_UP, "no UV flag when not verified");
+        assert_eq!(auth_data[32], FLAG_UP | FLAG_SYNCED, "UP + backup flags, no UV");
 
         let mut tampered = auth_data.clone();
         tampered.extend_from_slice(&[0x02u8; 32]);
@@ -270,6 +276,7 @@ mod tests {
             _ => panic!("attestationObject must be a CBOR map"),
         };
         assert_eq!(auth_data[32] & FLAG_AT, FLAG_AT, "AT flag set");
+        assert_eq!(auth_data[32] & FLAG_SYNCED, FLAG_SYNCED, "synced (BE|BS) flags set");
         assert_eq!(&auth_data[37..53], &BRAMBLE_AAGUID, "aaguid present");
         let cred_len = u16::from_be_bytes([auth_data[53], auth_data[54]]) as usize;
         assert_eq!(cred_len, CREDENTIAL_ID_LEN);
