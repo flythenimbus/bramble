@@ -48,6 +48,9 @@ pub struct PasskeyRegistration {
     pub private_key: String,
     /// base64 CBOR attestation object (`fmt: "none"`).
     pub attestation_object: String,
+    /// base64 authenticatorData (also inside the attestation object). The
+    /// RegistrationResponseJSON requires it as a sibling field.
+    pub authenticator_data: String,
 }
 
 /// Result of asserting a passkey. The caller supplies credentialId + userHandle to
@@ -126,6 +129,7 @@ pub fn passkey_make_credential_core(
 
     let flags = FLAG_UP | FLAG_AT | if user_verified { FLAG_UV } else { 0 };
     let auth_data = authenticator_data(rp_id, flags, Some(&acd));
+    let authenticator_data_b64 = B64.encode(&auth_data);
 
     // attestationObject: { fmt: "none", attStmt: {}, authData }.
     let attestation = Value::Map(vec![
@@ -142,6 +146,7 @@ pub fn passkey_make_credential_core(
         public_key_cose: B64.encode(&cose_bytes),
         private_key: B64.encode(secret.to_bytes()),
         attestation_object: B64.encode(&attestation_object),
+        authenticator_data: authenticator_data_b64,
     })
 }
 
@@ -268,6 +273,8 @@ mod tests {
         assert_eq!(&auth_data[37..53], &BRAMBLE_AAGUID, "aaguid present");
         let cred_len = u16::from_be_bytes([auth_data[53], auth_data[54]]) as usize;
         assert_eq!(cred_len, CREDENTIAL_ID_LEN);
+        // The standalone authenticatorData field equals the bytes inside the attestation.
+        assert_eq!(B64.decode(&reg.authenticator_data).unwrap(), auth_data);
     }
 
     // Each mint produces a fresh keypair and id.

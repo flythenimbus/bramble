@@ -303,6 +303,7 @@ export async function handleCreate(
 			responseJson: registrationResponseJSON({
 				credentialIdStdB64: reg.credentialId,
 				attestationObjectStdB64: reg.attestationObject,
+				authenticatorDataStdB64: reg.authenticatorData,
 				clientDataB64Url: clientData.b64Url,
 			}),
 		};

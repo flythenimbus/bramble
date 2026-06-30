@@ -28,6 +28,8 @@ export interface PasskeyRegistration {
 	publicKeyCose: string;
 	privateKey: string;
 	attestationObject: string;
+	/** authenticatorData, also embedded in the attestation object; the response JSON needs it as a sibling. */
+	authenticatorData: string;
 }
 
 /** A passkey assertion: the two parts that require the private key. All base64. */

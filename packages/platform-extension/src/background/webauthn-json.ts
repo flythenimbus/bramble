@@ -117,10 +117,16 @@ export function buildClientData(
 	return { json, bytes, b64Url: bytesToBase64Url(bytes) };
 }
 
-/** Build the RegistrationResponseJSON (PublicKeyCredential.toJSON shape) for completeCreateRequest. */
+/**
+ * Build the RegistrationResponseJSON (PublicKeyCredential.toJSON shape) for
+ * completeCreateRequest. Chrome validates against the W3C dictionary, which requires
+ * `authenticatorData` and `publicKeyAlgorithm` alongside attestationObject (publicKey is
+ * optional and omitted).
+ */
 export function registrationResponseJSON(p: {
 	credentialIdStdB64: string;
 	attestationObjectStdB64: string;
+	authenticatorDataStdB64: string;
 	clientDataB64Url: string;
 	transports?: string[];
 }): string {
@@ -133,7 +139,9 @@ export function registrationResponseJSON(p: {
 		response: {
 			clientDataJSON: p.clientDataB64Url,
 			attestationObject: base64ToBase64Url(p.attestationObjectStdB64),
+			authenticatorData: base64ToBase64Url(p.authenticatorDataStdB64),
 			transports: p.transports ?? ["internal", "hybrid"],
+			publicKeyAlgorithm: COSE_ES256,
 		},
 		clientExtensionResults: {},
 	});
