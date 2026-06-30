@@ -33,12 +33,13 @@ const FLAG_AT: u8 = 0x40; // attested credential data included
 // multi-device credential that is currently backed up: BE and BS are always set.
 const FLAG_SYNCED: u8 = FLAG_BE | FLAG_BS;
 
-/// Bramble's authenticator AAGUID, advertised in attestedCredentialData so relying
-/// parties can identify the provider. Fixed across all installs.
-/// PLACEHOLDER: replace with a final value registered in the community AAGUID list
-/// before launch (tracked in docs/passkey-provider.md).
+/// Bramble's authenticator AAGUID (4249c72f-2967-4a74-8ec5-e610036d7be1), advertised in
+/// attestedCredentialData so relying parties + other password managers can identify the
+/// provider. Permanent and fixed across all installs: it is baked into every passkey we create,
+/// so do NOT change it. TODO(passkeys): register it in the community AAGUID list so UIs can show
+/// "Bramble" + icon - see docs/passkey-provider.md ("AAGUID registration").
 const BRAMBLE_AAGUID: [u8; 16] = [
-    0xb7, 0xa3, 0x9c, 0x21, 0x4e, 0x6f, 0x4d, 0x8a, 0x9b, 0x12, 0x5e, 0x7c, 0x3a, 0x1d, 0x88, 0x40,
+    0x42, 0x49, 0xc7, 0x2f, 0x29, 0x67, 0x4a, 0x74, 0x8e, 0xc5, 0xe6, 0x10, 0x03, 0x6d, 0x7b, 0xe1,
 ];
 
 /// Result of minting a passkey. `private_key` is the only secret; the caller stores
