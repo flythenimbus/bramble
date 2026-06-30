@@ -126,6 +126,10 @@ msgid "Add URL"
 msgstr "Aggiungi URL"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
+msgstr ""
+
+#: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Advanced"
 msgstr "Avanzate"
@@ -871,6 +875,10 @@ msgstr ""
 msgid "Passkey saved as {0}"
 msgstr ""
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Passkeys"
+msgstr ""
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Passphrase"
 msgstr "Frase segreta"
@@ -999,6 +1007,10 @@ msgstr "Rimuovere {host} dalla lista di non salvare mai"
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Remove field"
 msgstr "Rimuovi campo"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Remove passkey"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
@@ -1265,6 +1277,10 @@ msgstr "Questo file conteneva {0} {noun}, ma nessuno corrisponde a un formato su
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
 msgstr "Questo file è troppo grande per essere importato ({sizeMb} MB; massimo {MAX_IMPORT_FILE_MB} MB)."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This login has a passkey"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This password appeared in a known data breach."

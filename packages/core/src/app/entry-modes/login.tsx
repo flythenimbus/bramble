@@ -11,6 +11,7 @@ import {
 	Eye,
 	EyeOff,
 	Globe,
+	KeyRound,
 	Loader2,
 	Plus,
 	RefreshCw,
@@ -21,7 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
 import { usePlatform } from "../../context/PlatformContext";
-import type { LoginEntry, LoginEntryData } from "../../hooks/useVault";
+import type { LoginEntry, LoginEntryData, PasskeyCredential } from "../../hooks/useVault";
 import { parseTotp, totpAt } from "../../util/totp";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
@@ -42,6 +43,9 @@ export interface LoginFormValues {
 	autofillEnabled: boolean;
 	autoSubmit: boolean;
 	subdomainMatch: SubdomainMatchMode;
+	/** Hosted passkeys; carried through the form (not edited here, only removed) so a
+	 * save never drops them. Minted by the provider, not added from this form. */
+	passkeys: PasskeyCredential[];
 }
 
 /** Generate a 16-char password by unbiased rejection sampling over the charset. */
@@ -78,6 +82,14 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const [showTotp, setShowTotp] = useState(false);
 	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
 	const [initialPassword] = useState(() => getValues("password"));
+
+	const passkeys = watch("passkeys") ?? [];
+	const removePasskey = (credentialId: string) =>
+		setValue(
+			"passkeys",
+			passkeys.filter((p) => p.credentialId !== credentialId),
+			{ shouldDirty: true },
+		);
 
 	const passwordValue = watch("password");
 	const strength = useMemo(
@@ -281,6 +293,44 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 						: t`Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key.`}
 				</p>
 			</div>
+
+			{passkeys.length > 0 && (
+				<div>
+					<span className="block text-sm mb-2">
+						<Trans>Passkeys</Trans>
+					</span>
+					<div className="space-y-2">
+						{passkeys.map((pk) => (
+							<div
+								key={pk.credentialId}
+								className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border bg-muted/30"
+							>
+								<KeyRound className="w-4 h-4 text-primary shrink-0" />
+								<div className="min-w-0 flex-1">
+									<div className="text-sm truncate">
+										{pk.userName || pk.userDisplayName || pk.rpId}
+									</div>
+									<div className="text-xs text-muted-foreground truncate">
+										{pk.rpId}
+										{pk.createdAt ? ` · ${new Date(pk.createdAt).toLocaleDateString()}` : ""}
+									</div>
+								</div>
+								<button
+									type="button"
+									onClick={() => removePasskey(pk.credentialId)}
+									className="p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
+									aria-label={t`Remove passkey`}
+								>
+									<X className="w-4 h-4" />
+								</button>
+							</div>
+						))}
+					</div>
+					<p className="text-xs text-muted-foreground mt-1.5">
+						<Trans>Added when you create a passkey on a site with Bramble. Remove to delete.</Trans>
+					</p>
+				</div>
+			)}
 
 			<TextArea label={t`Notes (optional)`} rows={3} {...register("notes")} />
 
@@ -525,6 +575,26 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 			{login.totp && <TotpField value={login.totp} copied={copied} copy={copy} />}
 
+			{login.passkeys && login.passkeys.length > 0 && (
+				<div className="space-y-1.5">
+					<p className="text-xs text-muted-foreground">
+						<Trans>Passkeys</Trans>
+					</p>
+					<div className="flex flex-wrap gap-1.5">
+						{login.passkeys.map((pk) => (
+							<span
+								key={pk.credentialId}
+								className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/20"
+								title={t`This login has a passkey`}
+							>
+								<KeyRound className="w-3 h-3" />
+								{pk.userName || pk.userDisplayName || pk.rpId}
+							</span>
+						))}
+					</div>
+				</div>
+			)}
+
 			{login.notes && (
 				<div className="space-y-1.5">
 					<p className="text-xs text-muted-foreground">
@@ -559,6 +629,7 @@ export const loginMode: EntryMode = {
 		autofillEnabled: true,
 		autoSubmit: false,
 		subdomainMatch: "etld1",
+		passkeys: [],
 	}),
 
 	toForm: (entry) => {
@@ -573,6 +644,7 @@ export const loginMode: EntryMode = {
 			autofillEnabled: login.autofillEnabled !== false,
 			autoSubmit: login.autoSubmit === true,
 			subdomainMatch: login.subdomainMatch ?? "etld1",
+			passkeys: login.passkeys ?? [],
 		};
 	},
 
@@ -592,6 +664,8 @@ export const loginMode: EntryMode = {
 			autofillEnabled: v.autofillEnabled ? undefined : false,
 			autoSubmit: v.autoSubmit ? true : undefined,
 			subdomainMatch: v.subdomainMatch === "etld1" ? undefined : v.subdomainMatch,
+			// Carried through untouched (the form only removes); omit when empty.
+			passkeys: v.passkeys?.length ? v.passkeys : undefined,
 		};
 	},
 
