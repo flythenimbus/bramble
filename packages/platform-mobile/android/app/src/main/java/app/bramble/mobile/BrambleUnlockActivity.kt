@@ -65,10 +65,18 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
             override fun handleOnBackPressed() = cancelUnlock()
         })
         onPrepare()
-        // A live keep-unlocked session skips the unlock screen entirely.
-        val session = KeepUnlockedStore.load(this)
+        // A bridged one-shot VEK (e.g. the passkey list->sign handoff) or a live keep-unlocked
+        // session skips the unlock screen entirely.
+        val session = bridgeSessionVek() ?: KeepUnlockedStore.load(this)
         if (session != null) proceedWithVek(session) else showUnlock()
     }
+
+    /**
+     * A VEK to proceed with silently, skipping the unlock screen - e.g. a one-shot handoff from an
+     * earlier step of the same ceremony. Default none (subclasses opt in). Distinct from the
+     * keep-unlocked session so it works regardless of the auto-lock window.
+     */
+    protected open fun bridgeSessionVek(): String? = null
 
     protected fun cancelUnlock() {
         onUnlockCancelled()
