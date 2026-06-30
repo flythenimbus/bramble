@@ -1,6 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
 import { ThemeProvider } from "./hooks/useTheme";
@@ -75,11 +76,13 @@ export default function App({
 		<ErrorBoundary>
 			<LocaleGate preferredLocale={preferredLocale}>
 				<ThemeProvider>
-					<VaultProvider>
-						<PopOutProvider router={router} initialDraft={initialDraft}>
-							<InnerApp router={router} pendingLogin={pendingLogin} />
-						</PopOutProvider>
-					</VaultProvider>
+					<ToastProvider>
+						<VaultProvider>
+							<PopOutProvider router={router} initialDraft={initialDraft}>
+								<InnerApp router={router} pendingLogin={pendingLogin} />
+							</PopOutProvider>
+						</VaultProvider>
+					</ToastProvider>
 				</ThemeProvider>
 			</LocaleGate>
 		</ErrorBoundary>

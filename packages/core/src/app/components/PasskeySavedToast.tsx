@@ -1,45 +1,31 @@
 import { useLingui } from "@lingui/react/macro";
 import { KeyRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePlatform } from "../../context/PlatformContext";
+import { useToast } from "./ui/toast";
 
 /**
- * Transient confirmation when the passkey provider saves a credential (extension only;
- * the background broadcasts the save and the shell forwards it). Mounted in AppLayout so
- * it shows over the main screen, e.g. after an "Unlock & Save" from a site's prompt.
+ * Bridge: turns the extension's passkey-provider "saved" broadcast into a shared toast.
+ * Renders nothing itself; the toast is drawn by ToastProvider's viewport. Mounted in
+ * AppLayout so it's live on the main screen (e.g. after an "Unlock & Save").
  */
 export function PasskeySavedToast() {
 	const { shell } = usePlatform();
+	const { show } = useToast();
 	const { t } = useLingui();
-	const [message, setMessage] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!shell.onPasskeySaved) return;
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const off = shell.onPasskeySaved((info) => {
-			setMessage(
-				info.created
+		return shell.onPasskeySaved((info) => {
+			show({
+				message: info.created
 					? t`Passkey saved as ${info.loginName}`
 					: t`Passkey added to ${info.loginName}`,
-			);
-			clearTimeout(timer);
-			timer = setTimeout(() => setMessage(null), 4000);
+				variant: "success",
+				icon: KeyRound,
+			});
 		});
-		return () => {
-			off();
-			clearTimeout(timer);
-		};
-	}, [shell, t]);
+	}, [shell, show, t]);
 
-	if (!message) return null;
-	return (
-		<div
-			role="status"
-			aria-live="polite"
-			className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 backdrop-blur-xl shadow-lg text-sm"
-		>
-			<KeyRound className="w-4 h-4 shrink-0" />
-			<span>{message}</span>
-		</div>
-	);
+	return null;
 }
