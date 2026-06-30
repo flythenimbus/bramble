@@ -5,7 +5,11 @@
 	"type": "module",
 	"scripts": {
 		"build": "vite build",
+		"build:firefox": "TARGET=firefox vite build",
 		"bundle": "vite build && rm -f bramble.zip && (cd dist && zip -rq ../bramble.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
+		"bundle:firefox": "TARGET=firefox vite build && rm -f bramble-firefox.zip && (cd dist-firefox && zip -rq ../bramble-firefox.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
+		"lint:firefox": "web-ext lint -s dist-firefox",
+		"run:firefox": "web-ext run -s dist-firefox",
 		"dev": "vite build --watch --mode development",
 		"typecheck": "tsc --noEmit",
 		"lint": "echo 'TODO: lint'",
@@ -31,6 +35,7 @@
 		"tw-animate-css": "^1.0.0",
 		"typescript": "^5.5.0",
 		"vite": "^8.0.13",
-		"vitest": "^4.1.7"
+		"vitest": "^4.1.7",
+		"web-ext": "^8.3.0"
 	}
 }
