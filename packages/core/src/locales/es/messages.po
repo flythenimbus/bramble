@@ -127,7 +127,7 @@ msgstr "Añadir URL"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
-msgstr ""
+msgstr "Añadida al crear una clave de acceso en un sitio con Bramble. Elimine para borrarla."
 
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -353,7 +353,7 @@ msgstr "No se pudo escribir en la bóveda."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser."
-msgstr ""
+msgstr "Cree y almacene claves de acceso para otros sitios. Mientras esté activado, Bramble gestiona todas las indicaciones de claves de acceso en este navegador."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
@@ -868,16 +868,16 @@ msgstr "Código de emparejamiento"
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
 msgid "Passkey added to {0}"
-msgstr ""
+msgstr "Clave de acceso añadida a {0}"
 
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
 msgid "Passkey saved as {0}"
-msgstr ""
+msgstr "Clave de acceso guardada como {0}"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Passkeys"
-msgstr ""
+msgstr "Claves de acceso"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Passphrase"
@@ -1010,7 +1010,7 @@ msgstr "Eliminar campo"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove passkey"
-msgstr ""
+msgstr "Eliminar clave de acceso"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
@@ -1280,7 +1280,7 @@ msgstr "Este archivo es demasiado grande para importar ({sizeMb} MB; máximo {MA
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This login has a passkey"
-msgstr ""
+msgstr "Este inicio de sesión tiene una clave de acceso"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This password appeared in a known data breach."
@@ -1300,7 +1300,7 @@ msgstr "Título"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle Bramble passkey provider"
-msgstr ""
+msgstr "Alternar el proveedor de claves de acceso de Bramble"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle breach checks"
@@ -1403,7 +1403,7 @@ msgstr "Actualizar contraseña"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Use Bramble for passkeys"
-msgstr ""
+msgstr "Utilizar Bramble para las claves de acceso"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Use light, dark, or match your system"
