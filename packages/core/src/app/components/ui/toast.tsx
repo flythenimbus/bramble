@@ -60,7 +60,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 	const show = useCallback(
 		(options: ToastOptions) => {
 			const id = nextId.current++;
-			setToasts((list) => [...list, { ...options, id }]);
+			// Squash duplicates: if a toast with the same message + variant is already showing,
+			// don't stack another (e.g. draining N pending passkeys for one site fires N identical
+			// toasts). The functional updater sees the latest list, so a rapid burst dedupes.
+			const variant = options.variant ?? "info";
+			setToasts((list) =>
+				list.some((t) => t.message === options.message && (t.variant ?? "info") === variant)
+					? list
+					: [...list, { ...options, id }],
+			);
+			// Harmless if this id was deduped away (dismiss then filters out nothing).
 			const duration = options.durationMs ?? 4000;
 			if (duration > 0) setTimeout(() => dismiss(id), duration);
 			return id;
