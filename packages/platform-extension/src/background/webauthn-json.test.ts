@@ -79,11 +79,13 @@ describe("response builders", () => {
 		const credId = bytesToBase64(new Uint8Array([255, 255, 255]));
 		const att = bytesToBase64(new Uint8Array([1, 2, 255, 254]));
 		const authData = bytesToBase64(new Uint8Array([9, 8, 7]));
+		const spki = bytesToBase64(new Uint8Array([5, 6, 255]));
 		const r = JSON.parse(
 			registrationResponseJSON({
 				credentialIdStdB64: credId,
 				attestationObjectStdB64: att,
 				authenticatorDataStdB64: authData,
+				publicKeyStdB64: spki,
 				clientDataB64Url: "Y2Q",
 			}),
 		);
@@ -93,6 +95,7 @@ describe("response builders", () => {
 		expect(r.response.attestationObject).toBe(base64ToBase64Url(att));
 		expect(r.response.authenticatorData).toBe(base64ToBase64Url(authData));
 		expect(r.response.publicKeyAlgorithm).toBe(-7); // required by RegistrationResponseJSON
+		expect(r.response.publicKey).toBe(base64ToBase64Url(spki));
 		expect(r.response.clientDataJSON).toBe("Y2Q");
 		expect(r.response.transports).toEqual(["internal", "hybrid"]);
 	});

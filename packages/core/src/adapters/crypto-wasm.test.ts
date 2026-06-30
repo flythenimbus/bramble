@@ -32,6 +32,7 @@ function fakeWasm() {
 			privateKey: "sk",
 			attestationObject: "att",
 			authenticatorData: "ad",
+			publicKey: "spki",
 		})),
 		passkey_get_assertion: vi.fn(() => ({ authenticatorData: "ad", signature: "sig" })),
 		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => [
