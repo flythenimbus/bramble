@@ -52,6 +52,15 @@ private struct PasskeyGet {
 	let chosen: String?  // STANDARD-b64 credentialId already selected by the OS
 }
 
+// A passkey registration (create) the OS asked us to satisfy. The OS supplies the user
+// metadata and the clientDataHash; we mint the keypair after a fresh unlock.
+private struct PasskeyCreate {
+	let rpId: String
+	let userName: String
+	let userHandle: Data
+	let clientDataHash: Data
+}
+
 // Localized lookup from the extension's String Catalog (Localizable.xcstrings).
 // Interpolations become format keys (%@, %lld) that the catalog translates.
 private func loc(_ key: String.LocalizationValue) -> String { String(localized: key) }
@@ -419,6 +428,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private var pendingRecordId: String?
 	// Set while satisfying a passkey get(); onUnlocked() branches to the assertion path.
 	private var pendingPasskey: PasskeyGet?
+	// Set while satisfying a passkey create(); onUnlocked() branches to the registration path.
+	private var pendingPasskeyCreate: PasskeyCreate?
 	private var model: UnlockModel?
 
 	// --- entry points: authenticate first ---
@@ -593,6 +604,76 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		extensionContext.completeAssertionRequest(using: credential, completionHandler: nil)
 	}
 
+	// Registration (create): the site asked us to mint a new passkey. Always force a fresh
+	// unlock (so the credential is genuinely user-verified), then mint + persist.
+	@available(iOS 17.0, *)
+	override func prepareInterface(forPasskeyRegistration registrationRequest: ASCredentialRequest) {
+		guard let req = registrationRequest as? ASPasskeyCredentialRequest,
+			let identity = req.credentialIdentity as? ASPasskeyCredentialIdentity
+		else {
+			cancel(.failed)
+			return
+		}
+		// We only mint ES256; if the RP won't accept it, decline so the OS can try elsewhere.
+		guard req.supportedAlgorithms.contains(.ES256) else {
+			cancel(.failed)
+			return
+		}
+		pendingHosts = []
+		pendingRecordId = nil
+		pendingPasskey = nil
+		pendingPasskeyCreate = PasskeyCreate(
+			rpId: identity.relyingPartyIdentifier, userName: identity.userName,
+			userHandle: identity.userHandle, clientDataHash: req.clientDataHash)
+		showUnlock()
+	}
+
+	// Reached after a fresh unlock: mint the keypair (native core), hand the OS the attestation,
+	// and stash the new credential for the main app to merge into the vault.
+	@available(iOS 17.0, *)
+	private func handlePasskeyCreateUnlocked() {
+		guard let req = pendingPasskeyCreate else { return }
+		guard let reg = try? passkeyMakeCredential(rpId: req.rpId, userVerified: true),
+			let credID = Data(base64Encoded: reg.credentialId),
+			let attestation = Data(base64Encoded: reg.attestationObject)
+		else {
+			cancel(.failed)
+			return
+		}
+		stashPendingPasskey(reg, req: req)
+		let credential = ASPasskeyRegistrationCredential(
+			relyingParty: req.rpId, clientDataHash: req.clientDataHash,
+			credentialID: credID, attestationObject: attestation)
+		extensionContext.completeRegistrationRequest(using: credential, completionHandler: nil)
+	}
+
+	// The extension can't write the vault, so encrypt the new credential under the VEK and
+	// append it to the App Group handoff; the main app drains + persists it on next launch.
+	@available(iOS 17.0, *)
+	private func stashPendingPasskey(_ reg: PasskeyRegistration, req: PasskeyCreate) {
+		// Mirrors core's PasskeyCredential (all base64 fields STANDARD, as elsewhere).
+		let credential: [String: Any] = [
+			"credentialId": reg.credentialId,
+			"rpId": req.rpId,
+			"userHandle": req.userHandle.base64EncodedString(),
+			"userName": req.userName,
+			"alg": -7,
+			"publicKeyCose": reg.publicKeyCose,
+			"privateKey": reg.privateKey,
+			"signCount": 0,
+			"createdAt": Int(Date().timeIntervalSince1970 * 1000),
+		]
+		guard let json = try? JSONSerialization.data(withJSONObject: credential),
+			let plaintext = String(data: json, encoding: .utf8),
+			let enc = try? encryptWithVek(plaintext: plaintext)
+		else { return }
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		var pending =
+			(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
+		pending.append(["iv": enc.iv, "ciphertext": enc.ciphertext])
+		defaults?.set(pending, forKey: BrambleVault.pendingPasskeysKey)
+	}
+
 	// Decrypt the passkey bundle (empty if none / not unlocked). VEK must already be loaded.
 	private func loadPasskeyBundle() -> [Passkey] {
 		guard
@@ -695,9 +776,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func onUnlocked() {
 		// Start / slide the keep-unlocked window (no-op if the feature is off).
 		if let vek = try? exportVek() { saveSession(vek) }
-		// A passkey get() takes a separate path (the login bundle is irrelevant to it).
+		// A passkey get() / create() takes a separate path (the login bundle is irrelevant).
 		if pendingPasskey != nil {
 			if #available(iOS 17.0, *) { handlePasskeyUnlocked() } else { cancel(.failed) }
+			return
+		}
+		if pendingPasskeyCreate != nil {
+			if #available(iOS 17.0, *) { handlePasskeyCreateUnlocked() } else { cancel(.failed) }
 			return
 		}
 		guard let bundle = loadBundle() else {

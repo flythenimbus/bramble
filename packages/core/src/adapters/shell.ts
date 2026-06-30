@@ -1,3 +1,4 @@
+import type { PasskeyCredential } from "../hooks/useVault";
 import type { EntriesPayload, RosterEntry, RosterPayload } from "../sync";
 
 /** State carried from the originating popup into a freshly-opened detached window so the pop-out lands on the same route. */
@@ -57,6 +58,13 @@ export interface ShellAdapter {
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */
 	onPasskeySaved?(callback: (info: PasskeySavedInfo) => void): () => void;
+	/**
+	 * Mobile only: drain passkeys the native credential provider minted during a sign-in
+	 * registration and return them decrypted, so the app can persist them into the vault (the
+	 * sandboxed extension can't write it). Cleared on read; resolves [] when none. Absent where
+	 * there's no native provider. See docs/passkey-provider.md.
+	 */
+	consumePendingPasskeys?(): Promise<PasskeyCredential[]>;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.

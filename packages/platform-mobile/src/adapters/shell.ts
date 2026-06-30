@@ -1,6 +1,7 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
+import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
 import { scanQrNative } from "../qr-scanner";
 import { scanQrCode } from "../scan";
 import {
@@ -56,8 +57,13 @@ export const mobileShell: ShellAdapter = {
 	// prefilled add-login). iOS has no save surface. See docs/mobile-port.md.
 	supportsSaveCapture: Capacitor.getPlatform() === "android",
 	// Passkey provider is the Chromium webAuthenticationProxy; mobile uses native
-	// credential-provider extensions instead (separate workstream).
+	// credential-provider extensions instead. supportsPasskeyProvider gates the extension's
+	// runtime toggle (mobile enables the provider in OS Settings, so it stays false).
 	supportsPasskeyProvider: false,
+	// iOS: the native credential provider mints passkeys during sign-in registration but can't
+	// write the vault, so it hands them off and the app drains them here on launch. (Android's
+	// AutofillService persists via its own path.)
+	consumePendingPasskeys: Capacitor.getPlatform() === "ios" ? drainPendingPasskeys : undefined,
 	async scanQrFromActiveTab() {
 		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
 		// used for sync pairing codes and TOTP otpauth:// QRs. iOS WKWebView can't use
