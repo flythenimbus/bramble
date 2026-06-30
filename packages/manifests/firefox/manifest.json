@@ -5,7 +5,7 @@
 	"description": "Local-first, encrypted password manager. No cloud database.",
 	"browser_specific_settings": {
 		"gecko": {
-			"id": "bramble@bramble.app",
+			"id": "firefox@bramble.app",
 			"strict_min_version": "128.0"
 		}
 	},
