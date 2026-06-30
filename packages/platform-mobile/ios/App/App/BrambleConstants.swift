@@ -25,6 +25,9 @@ enum BrambleVault {
 	static let bundleKey = "autofill.bundle"
 	static let slotKey = "autofill.slot"
 	static let keepUnlockedKey = "autofill.keepUnlockedMinutes"
+	// The VEK-encrypted passkey bundle (provider role); a second blob alongside the logins so
+	// the password-fill path is untouched. The extension decrypts it to assert a passkey.
+	static let passkeyBundleKey = "autofill.passkeys"
 
 	// The app-identifier (team) prefix, e.g. "TEAMID.", read back from the Keychain: an item
 	// added without an explicit access group lands in the first keychain-access-group from the

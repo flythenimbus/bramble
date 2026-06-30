@@ -1,3 +1,5 @@
+import type { PasskeyCredential } from "../hooks/useVault";
+
 export type SubdomainMatchMode = "etld1" | "exact" | "subdomain";
 
 /**
@@ -40,6 +42,13 @@ export interface LoginIndexEntry {
 	autofillEnabled?: boolean;
 	autoSubmit?: boolean;
 	subdomainMatch?: SubdomainMatchMode;
+	/**
+	 * Passkeys this login holds (provider role). Carried so the native mobile credential
+	 * provider can offer + assert them; the extension's passkey provider reads the vault
+	 * directly and ignores this. Like `totp`, it includes a secret (the private key) and
+	 * rides the same in-memory index the password does.
+	 */
+	passkeys?: PasskeyCredential[];
 }
 
 /** A payment card. Not tied to a hostname: offered on any detected payment form, filled only on explicit pick. */
