@@ -59,6 +59,10 @@ dependencies {
     implementation "androidx.biometric:biometric:$androidxBiometricVersion"
     // Inline autofill suggestions (InlinePresentation slices). AndroidX, not a Play API.
     implementation "androidx.autofill:autofill:$androidxAutofillVersion"
+    // Credential Manager provider API for the passkey CredentialProviderService (API 34+).
+    // Pure AndroidX - verified Play-Services-free (only annotation + kotlin-stdlib + coroutines);
+    // the Play backend is the separate credentials-play-services-auth artifact, NOT used.
+    implementation "androidx.credentials:credentials:$androidxCredentialsVersion"
     // JNA backs the uniffi-generated crypto glue; the @aar bundles jnidispatch's native libs.
     implementation "net.java.dev.jna:jna:5.14.0@aar"
     implementation project(':capacitor-android')

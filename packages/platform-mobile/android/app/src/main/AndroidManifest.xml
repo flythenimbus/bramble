@@ -59,6 +59,24 @@
                 android:name="android.autofill"
                 android:resource="@xml/autofill_service" />
         </service>
+
+        <!-- Passkey provider via the Credential Manager (Android 14 / API 34+; the system only
+             binds it there, dormant on older OSes). Same dedicated :autofill process as the
+             classic service so a decrypted VEK never touches the webview session. Passkeys only;
+             passwords stay on BrambleAutofillService. See docs/passkey-provider.md. -->
+        <service
+            android:name=".BrambleCredentialService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:process=":autofill"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.credentials.CredentialProviderService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.credentials.provider"
+                android:resource="@xml/credential_provider" />
+        </service>
     </application>
 
     <!-- Permissions -->
