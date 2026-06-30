@@ -109,19 +109,50 @@ Passkeys are managed, not edited: the user never types key material, only remove
 
 ## Platform integrations
 
-### iOS (lightest lift, do first)
+### iOS (BUILT, pending device verification)
 
-The extension already exists and already decrypts the vault natively via App Group + uniffi. Add to
-`CredentialProviderViewController`:
+The extension already decrypts the vault natively via App Group + uniffi. What was added:
 
-- `prepareInterface(forPasskeyRegistration:)` for create.
-- `provideCredentialWithoutUserInteraction(for:)` and `prepareCredentialList(for:requestParameters:)`
-  for assertion, handling `ASPasskeyCredentialRequest`.
-- Return `ASPasskeyRegistrationCredential` / `ASPasskeyAssertionCredential` via
-  `completeRegistrationRequest` / `completeAssertionRequest`.
-- Register `ASPasskeyCredentialIdentity` alongside passwords in `AutofillBridge.swift`.
-- Add `<key>ProvidesPasskeys</key><true/>` to the extension `Info.plist`. The autofill entitlement
-  already covers both targets. Gate to iOS 17+.
+- **Foundation.** Passkeys flow through the central autofill-index projection
+  (`vault/autofill-index.ts`), so every `setIndex` refresh (load / persist / post-sync unlock)
+  carries them. The mobile adapter writes a *second* VEK-encrypted blob (App Group
+  `autofill.passkeys`) next to the login bundle, plus the non-secret passkey identities.
+  `AutofillBridge` writes that blob and registers `ASPasskeyCredentialIdentity` (iOS 17+,
+  availability-gated) in the **same** `replaceCredentialIdentities` call as the passwords (that
+  call clears the whole store, so they must go together; passkey identities are NOT gated on the
+  QuickType opt-in since the OS can't route a passkey get() to a provider it doesn't know about).
+  `Info.plist` gains `<key>ProvidesPasskeys</key><true/>`.
+- **Assertion (sign-in).** `provideCredentialWithoutUserInteraction(for: ASCredentialRequest)`
+  (silent only when a keep-unlocked session is live AND the RP didn't demand UV; non-passkey
+  requests delegate to the existing password handler), `prepareInterfaceToProvideCredential(for:
+  ASCredentialRequest)`, and `prepareCredentialList(for:requestParameters:)`. The UI paths always
+  force a fresh unlock so the assertion is genuinely user-verified; a picker disambiguates when
+  several stored passkeys match. We sign authData||clientDataHash with the native core and return
+  an `ASPasskeyAssertionCredential`.
+- **Registration (create).** `prepareInterface(forPasskeyRegistration:)` forces a fresh unlock,
+  mints ES256 (`passkeyMakeCredential`), hands back an `ASPasskeyRegistrationCredential`, and
+  stashes the new credential VEK-encrypted in App Group `autofill.pendingPasskeys` — because the
+  sandboxed extension can't write the vault. The main app drains it (`AutofillBridge`
+  .consumePendingPasskeys -> mobile shell.consumePendingPasskeys -> core `usePendingPasskeys`
+  hook) on unlock and persists via `planPasskeyPlacement` (attach to the matching login or create
+  one), re-syncing the bundle. Mirrors Android's `PendingSave` handoff.
+- **Encoding.** Everything stored is STANDARD base64, so Swift maps it with
+  `Data(base64Encoded:)` / `.base64EncodedString()` directly; the OS owns clientDataJSON and gives
+  us only its hash, so there is no origin to resolve (unlike the Chromium proxy).
+- **Deployment target.** Left at 15.0; all passkey code is `@available(iOS 17.0, *)` so the
+  extension still serves passwords on iOS 15/16 (no need to drop those users).
+
+**To build + verify on device:** `pnpm run ffi:build:ios` (regenerates the uniffi Swift bindings —
+which now include `passkeyMakeCredential` / `passkeyGetAssertion` — and the XCFramework), then an
+Xcode build. Enable Bramble under iOS Settings > Passwords > AutoFill. A passkey created in the
+Chromium extension syncs to the iOS vault, so assertion is testable independently of registration.
+
+**Confirm in Xcode (couldn't be checked here, no compiler):** the init labels of
+`ASPasskeyRegistrationCredential` / `ASPasskeyAssertionCredential` / `ASPasskeyCredentialIdentity`,
+`ASPasskeyCredentialRequestParameters.allowedCredentials` / `.userVerificationPreference`,
+`ASCOSEAlgorithmIdentifier.ES256`, the `replaceCredentialIdentities(_:)` async overload, and that
+overriding the unified `ASCredentialRequest` methods doesn't disturb password autofill on iOS 17
+(non-passkey requests are delegated to the legacy handlers; worst case is one extra tap, not a break).
 
 Apple: developer generates the passkey; the request object carries the options.
 (https://developer.apple.com/documentation/authenticationservices/supporting-passkeys)
@@ -230,8 +261,13 @@ Two things make this the hard surface:
    register + authenticate both succeed on a real Chrome (locked and unlocked). Device testing also
    surfaced the response-field requirements above (origin-from-tab, `authenticatorData`,
    `publicKeyAlgorithm`, `publicKey`, BE/BS flags) — all now fixed.
-3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
-   `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
+3. **iOS provider (BUILT, pending device verification).** `ProvidesPasskeys`, the
+   `ASPasskeyCredentialRequest` assertion methods + `prepareInterface(forPasskeyRegistration:)`,
+   `ASPasskeyCredentialIdentity` registration, the VEK-encrypted passkey bundle, and a
+   pending-passkey handoff (extension mints -> App Group -> `usePendingPasskeys` drains into the
+   vault on unlock). All `@available(iOS 17, *)`; deployment target stays 15.0. Swift compiles +
+   device-tests are the user's (no compiler here; it parses clean via `swiftc -parse`). See the
+   iOS section above for the build steps + the Apple API labels to confirm in Xcode.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
    methods. Needs Android SDK + a device.
 5. **Management UI + settings.** List / delete passkeys, per-platform enable. Sync is free.
@@ -246,4 +282,6 @@ Steps 2 to 4 are independent now that the core + TS binding (0, 1) have landed.
   with a dependency tree before committing the Android dep.
 - `webAuthenticationProxy` conditional-mediation (passkey autofill in the username dropdown) behavior
   under the proxy. Treat as a Phase 3 nicety, not a blocker.
-- Current iOS deployment target vs the iOS 17 floor for passkey provider methods.
+- ~~Current iOS deployment target vs the iOS 17 floor for passkey provider methods.~~ RESOLVED:
+  kept the 15.0 target and `@available(iOS 17, *)`-gated all passkey code, so the extension still
+  serves passwords on iOS 15/16 (no users dropped).
