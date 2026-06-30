@@ -127,6 +127,45 @@ object VaultReader {
         return out
     }
 
+    /**
+     * Passkeys the credential provider just minted but the main app hasn't drained into the vault
+     * yet (PendingPasskey file). Lets a freshly-created passkey be used immediately, before the
+     * app reconciles it - the Android analog of the iOS create-time bridge. VEK must be loaded.
+     * Callers merge with readPasskeys (dedup by credentialId).
+     */
+    fun readPendingPasskeys(context: Context): List<StoredPasskey> {
+        val file = File(context.filesDir, PendingPasskey.FILE)
+        if (!file.exists()) return emptyList()
+        val arr = try { JSONArray(file.readText()) } catch (e: Exception) { return emptyList() }
+        val out = ArrayList<StoredPasskey>(arr.length())
+        for (i in 0 until arr.length()) {
+            val e = arr.optJSONObject(i) ?: continue
+            val iv = e.optString("iv")
+            val ct = e.optString("ciphertext")
+            if (iv.isEmpty() || ct.isEmpty()) continue
+            try {
+                val pk = JSONObject(decryptWithVek(iv, ct))
+                val credentialId = pk.optString("credentialId", "")
+                val rpId = pk.optString("rpId", "")
+                val privateKey = pk.optString("privateKey", "")
+                if (credentialId.isEmpty() || rpId.isEmpty() || privateKey.isEmpty()) continue
+                out.add(
+                    StoredPasskey(
+                        entryId = "",
+                        credentialId = credentialId,
+                        rpId = rpId,
+                        userName = pk.optString("userName", ""),
+                        userHandle = pk.optString("userHandle", ""),
+                        privateKey = privateKey,
+                    )
+                )
+            } catch (e: Exception) {
+                // Skip an entry we can't decrypt/parse.
+            }
+        }
+        return out
+    }
+
     private fun hostnamesOf(urls: JSONArray?): List<String> {
         if (urls == null) return emptyList()
         val out = ArrayList<String>(urls.length())
