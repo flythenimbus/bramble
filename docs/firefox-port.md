@@ -2,24 +2,34 @@
 
 Research notes on shipping `packages/platform-extension` (MV3, currently Chrome-only) as a
 Firefox add-on from one codebase. Captures what was verified about Firefox's platform, what in
-the codebase is already portable, and the one hard blocker (filesystem sync).
+the codebase is already portable, and the sync constraint (no FSA on Firefox, so the WebRTC P2P
+channel is the mandatory v1 sync path).
 
 Fast-moving platform facts are dated **mid-2026**; re-verify before acting on them later.
 
 ## Summary
 
 - Porting the runtime is **small**: most Chrome-isms are already feature-detected and degrade
-  without crashing. There are two real code changes (the offscreen document, and the `chrome.*`
-  namespace), plus a per-target manifest and build wiring.
-- The one genuine blocker is **filesystem sync**. Firefox cannot replicate the File System
-  Access (FSA) "store `vault.db` anywhere, autosave silently" model that is the app's serverless
-  sync mechanism. A pure extension can at best auto-push to a Downloads-relative file with manual
-  pull. True parity needs a native-messaging companion. See "Filesystem sync".
+  without crashing. There are two real code changes for the core runtime (the offscreen document,
+  and the `chrome.*` namespace), plus a per-target manifest and build wiring.
+- The **passkey provider** uses `chrome.webAuthenticationProxy`, a Chrome-only API with no Firefox
+  equivalent. It is feasible on Firefox via a content-script transport but is **optional for a first
+  ship**; see "Passkey provider".
+- **P2P sync is mandatory for Firefox v1.** With no FSA, file-anywhere sync is impossible on Firefox
+  (below), so the WebRTC P2P channel (Option 5) is the only cross-device sync Firefox can offer,
+  which makes it a hard v1 dependency rather than an enhancement. The P2P workstream has **landed**
+  on Chrome (roster-auth, merge, enrollment, UI), so the remaining Firefox work is porting its
+  transport from the offscreen document to the event page, not building sync itself.
+- **Filesystem sync cannot port.** Firefox cannot replicate the File System Access (FSA) "store
+  `vault.db` anywhere, autosave silently" model that is the Chrome build's serverless sync
+  mechanism; a pure extension can at best auto-push to a Downloads-relative file with manual pull,
+  and true file parity needs a native-messaging companion. This is why P2P (above) is the Firefox
+  sync path instead. See "Filesystem sync".
 
 ## Chrome API surface in use
 
 Swept from `packages/platform-extension/src` (excluding tests/fixtures). All of the following
-work on Firefox MV3 as-is **except** `chrome.offscreen`:
+work on Firefox MV3 as-is **except** `chrome.offscreen` and `chrome.webAuthenticationProxy`:
 
 | API | Where | Firefox status |
 | --- | --- | --- |
@@ -31,7 +41,8 @@ work on Firefox MV3 as-is **except** `chrome.offscreen`:
 | `commands.onCommand` | background.ts | OK |
 | `idle.onStateChanged` | background.ts | Partial: no `"locked"` state on FF (see below) |
 | `action.openPopup` | corner-prompt.ts | Already has a `windows.create` fallback |
-| `offscreen.*` | offscreen-client.ts | **Absent on Firefox** (the core change) |
+| `offscreen.*` | offscreen-client.ts | **Absent on Firefox** (the core change); also now hosts the WebRTC sync transport |
+| `webAuthenticationProxy.*` | webauthn-proxy.ts, webauthn-proxy-init.ts | **Absent on Firefox** (passkey provider; needs a content-script transport, see "Passkey provider") |
 | `OffscreenCanvas` + `createImageBitmap` | qr.ts | OK (available in the FF event page) |
 | `navigator.clipboard.writeText` | clipboard.ts (popup), offscreen.ts (clear) | OK with `clipboardWrite`; clear-from-background has a caveat (see Risks) |
 
@@ -55,7 +66,8 @@ Note: the code references the `browser`-incompatible `chrome.*` namespace throug
 
 Chrome's MV3 background is a service worker with no DOM, so the code uses an **offscreen
 document** to (a) host the Rust WASM crypto module, (b) hold the live VEK across popup close and
-SW idle-kill, and (c) clear the clipboard. Firefox has no `chrome.offscreen`.
+SW idle-kill, (c) clear the clipboard, and (d) host the WebRTC sync transport (added after this
+doc's first draft; `offscreen.Reason.WEB_RTC`). Firefox has no `chrome.offscreen`.
 
 Firefox does not need one: its MV3 background is an **event page with a DOM document**, so it can
 host WASM and call `navigator.clipboard` directly (Mozilla docs state this explicitly). So the
@@ -74,11 +86,58 @@ Design that works for both from one bundle:
 - The existing VEK re-injection guard stays and is needed on both: Chrome's offscreen can be killed
   and Firefox's event page can be suspended; in both cases the WASM instance resets to locked while
   the VEK rehydrates from `storage.session`.
+- The WebRTC sync transport (`SYNC_*` messages) rides this same offscreen client, and is
+  **required for Firefox v1** (P2P is Firefox's only cross-device sync; see "Filesystem sync"). On
+  Firefox the event page hosts `RTCPeerConnection` directly, so the in-process dispatch path must
+  carry `SYNC_*` as well as crypto. P2P sync has already landed on Chrome, so this is a wiring task
+  (route `SYNC_*` to the event page), not a dependency on sync being built.
 
 Blast radius: six importers (`session.ts`, `clipboard.ts`, `background.ts`, `vault-io.ts`,
 `autofill-index.ts`, `corner-prompt.ts`) and two test/harness references. The test harness mocks
 `chrome.offscreen`, so under vitest the feature-detect always picks the Chrome branch and existing
 assertions stay valid.
+
+## Passkey provider (Chrome-only proxy; Firefox needs a content-script transport)
+
+Bramble is a software WebAuthn authenticator: it creates and stores passkeys in the vault and signs
+assertions with its own P-256 keys (see `docs/passkey-provider.md`). On Chrome this is delivered via
+**`chrome.webAuthenticationProxy`**: the browser routes a page's `navigator.credentials.create/get`
+calls to the extension, which runs the ceremony. Firefox has **no equivalent** to that proxy API, so
+this delivery path does not port. It is **not** a hard blocker, and the feature is **optional for a
+first Firefox ship**.
+
+Three Firefox/WebAuthn facts, to keep the mechanisms straight (verified mid-2026):
+
+1. **WebAuthn client** (`navigator.credentials.create/get`, conditional UI): fully supported on
+   Firefox. This is a user signing into sites with passkeys, not Bramble acting as a provider.
+2. **`webAuthenticationProxy`**: Chrome-only; absent from Firefox's WebExtension API surface. This
+   is the path Bramble currently uses.
+3. **Extension WebAuthn with a custom RP ID** (Firefox 150 / Chrome 122): an extension may call
+   `navigator.credentials.*` and specify an RP ID for any domain in its host permissions. Per MDN
+   this lets the extension *make WebAuthn calls itself*; it does **not** intercept page requests,
+   and it would use the *platform* authenticator rather than Bramble's vault keys. Related, but not
+   the provider path.
+
+How third-party managers (Bitwarden, Proton Pass, ...) provide passkeys in Firefox today, and the
+recommended path here: **content-script interception**. A `world: "MAIN"` content script (FF 128+)
+overrides the page's `navigator.credentials.create/get`, forwards the request to the background,
+runs the ceremony, and returns a synthetic `PublicKeyCredential`. Because Bramble signs with its own
+vault keys, it needs no platform authenticator; only the transport differs from Chrome.
+
+The architecture already supports this split. The **pure ceremony handlers**
+(`background/webauthn-proxy.ts`: `handleCreate`, `handleGet`, the corner-card ceremony) are
+transport-free and reusable; only the **wiring** (`background/webauthn-proxy-init.ts`, which
+attaches the Chrome proxy) is Chrome-specific. The Firefox port keeps the proxy on Chrome (and drops
+the `webAuthenticationProxy` permission from the Firefox manifest) and adds a MAIN-world
+content-script transport that drives the same handlers.
+
+Open items to verify before building this:
+
+- Structured-clone of the returned `PublicKeyCredential` / `ArrayBuffer`s across the MAIN-world
+  boundary (the page expects real `ArrayBuffer`s, not typed-array copies).
+- `world: "MAIN"` content-script timing vs a page that calls `navigator.credentials` early.
+- Conditional UI / `mediation: "conditional"` (passkey autofill) is a larger surface; scope it out
+  of the first pass.
 
 ## Namespace: `chrome.*` vs `browser.*`
 
@@ -93,6 +152,9 @@ everywhere. Use `globalThis.browser ?? chrome` (not a bare `browser`) so vitest 
 `ReferenceError`. `webextension-polyfill` is the heavier alternative; the shim fits better because
 the codebase is already promise-native.
 
+The `chrome.*` sweep now spans ~32 source files (the passkey-provider and sync modules added since
+this doc's first draft), so the shim is the single mechanical change that touches the most files.
+
 ## Manifest deltas (Chrome vs Firefox)
 
 The build already copies `packages/manifests/chromium/manifest.json`. A Firefox manifest is identical
@@ -103,7 +165,7 @@ except:
 | `background` | `{ "service_worker": "background.js", "type": "module" }` | `{ "scripts": ["background.js"], "type": "module" }` (event page) |
 | `browser_specific_settings.gecko` | n/a | `{ "id": "...", "strict_min_version": "128.0" }` required |
 | `minimum_chrome_version` | `"116"` | drop (Chrome-only key) |
-| `permissions` | includes `"offscreen"` | drop `"offscreen"` (FF rejects unknown perms; also keeps `api.offscreen` undefined) |
+| `permissions` | includes `"offscreen"`, `"webAuthenticationProxy"` | drop both `"offscreen"` and `"webAuthenticationProxy"` (FF rejects unknown perms; also keeps `api.offscreen` / `api.webAuthenticationProxy` undefined) |
 | `content_security_policy`, `web_accessible_resources`, `commands`, `host_permissions`, `action`, `icons`, `options_page` | same | same |
 
 Verified Firefox facts behind these choices:
@@ -167,7 +229,7 @@ pick up another device's edits). The user's Dropbox path cannot be targeted prog
    installer, macOS signing/notarization, a native-messaging manifest the user registers, and a new
    security surface. AMO ships only the extension; the host is installed separately. Large, separate
    workstream. This is the mechanism KeePassXC and 1Password use.
-2. **Ship Firefox without file-sync (recommended for v1).** Live vault in `storage.local`; add
+2. **Ship Firefox without file-sync (backup layer; pairs with Option 5).** Live vault in `storage.local`; add
    explicit Export (download `.db`) and Import (file input) for backup and device migration.
    Document that file-anywhere sync is a Chrome/Edge capability Firefox cannot support (a Mozilla
    platform limitation). Smallest effort, honest; Firefox is a single-device tier with manual
@@ -179,17 +241,21 @@ pick up another device's edits). The user's Dropbox path cannot be targeted prog
    sync. Medium effort.
 4. **Defer or re-scope Firefox.** If matching Chrome's sync is a hard requirement and native
    messaging is unacceptable, Firefox may not be worth shipping yet.
-5. **P2P device-to-device sync (no filesystem, no binary).** Move sync off the filesystem
+5. **P2P device-to-device sync (no filesystem, no binary) — mandatory for Firefox v1.** Move sync off the filesystem
    entirely: a WebRTC data channel carries the encrypted vault directly between the user's own
    devices, with a merge engine reconciling edits. Same-network/all-online for v1; signaling via
    a user-chosen Nostr-subset relay; trust anchored on a per-device roster so the relay is an
-   untrusted pipe. Cross-browser (works on Chrome too) and independent of the FSA gap. Full
-   design in [p2p-sync.md](p2p-sync.md).
+   untrusted pipe. Cross-browser (works on Chrome too) and independent of the FSA gap. Designed in
+   [p2p-sync.md](p2p-sync.md); landed on Chrome.
 
-Recommendation: Option 2 for v1 (ships honestly, unblocks the rest of the port), with Option 1
-tracked as a follow-up for users who need Firefox + sync. Avoid Option 3 unless its push-only nature
-is messaged very clearly. Option 5 is the cross-browser sync path being designed and supersedes 1
-and 3 if it lands. The rest of the port is independent of this choice.
+Recommendation (updated): for Firefox, **Option 5 (P2P sync) is the mandatory v1 sync mechanism** —
+with FSA absent it is the only cross-device sync Firefox can offer. The P2P workstream has **landed**
+on Chrome, so the remaining Firefox work is porting its WebRTC transport to the event page rather
+than building sync. Pair it with the **export/import backup from Option 2**, which is non-optional
+regardless because `storage.local` is wiped on uninstall (see "Storage durability").
+Option 1 (native messaging) stays a later follow-up only for users who want file-anywhere parity;
+avoid Option 3. This supersedes the earlier "Option 2 single-device tier" plan: via P2P, Firefox is
+a full multi-device tier. The rest of the port is independent of the sync choice.
 
 ### Storage durability (Firefox, no FSA)
 
@@ -200,8 +266,8 @@ durability properties become load-bearing. Three facts to design around (verifie
   Firefox: bounded by the IndexedDB quota, a slice of ~50% free disk). A typical vault is well
   under 1 MB, but ~10k entries can reach ~5-9 MB and bump the Chrome cap. Fix: declare the
   **`unlimitedStorage`** permission (manifest-only, no API) in **both** manifests, after which
-  storage is disk-bounded. The manifest table above lists `storage.local` but not this
-  permission; add it.
+  storage is disk-bounded. The chromium manifest already declares `unlimitedStorage`; the Firefox
+  manifest must carry it too.
 - **Uninstall clears it.** Unlike an FSA file (which survives), `storage.local` is wiped on
   extension uninstall, and a profile reset loses it too. So on Firefox the vault can vanish with
   no file to fall back on. This makes **export/import backup (Option 2) non-optional**, and is a
@@ -238,3 +304,6 @@ Sources: [`storage.local` (MDN)](https://developer.mozilla.org/en-US/docs/Mozill
 - `host_permissions` install-time grant: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/host_permissions
 - Build a cross-browser extension (`chrome.*` vs `browser.*`): https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Build_a_cross_browser_extension
 - webextension-polyfill: https://github.com/mozilla/webextension-polyfill
+- WebAuthn in web extensions (extension RP ID, FF 150 / Chrome 122): https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Use_the_web_authn_api
+- Web Authentication API (Firefox client support): https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API
+- `chrome.webAuthenticationProxy` (Chrome-only): https://developer.chrome.com/docs/extensions/reference/api/webAuthenticationProxy
