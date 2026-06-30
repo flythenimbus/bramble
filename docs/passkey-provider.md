@@ -134,8 +134,21 @@ The extension already decrypts the vault natively via App Group + uniffi. What w
   stashes the new credential VEK-encrypted in App Group `autofill.pendingPasskeys` — because the
   sandboxed extension can't write the vault. The main app drains it (`AutofillBridge`
   .consumePendingPasskeys -> mobile shell.consumePendingPasskeys -> core `usePendingPasskeys`
-  hook) on unlock and persists via `planPasskeyPlacement` (attach to the matching login or create
-  one), re-syncing the bundle. Mirrors Android's `PendingSave` handoff.
+  hook) and persists via `planPasskeyPlacement` (attach to the matching login or create one),
+  re-syncing the bundle. Mirrors Android's `PendingSave` handoff.
+- **Usable without opening the app.** Two refinements so a freshly-created passkey works
+  immediately and the vault catches up silently: (1) the drain runs on app **foreground**
+  (`visibilitychange`), not only on an unlock transition — returning from a Safari create to an
+  already-unlocked vault has no lock/unlock change to ride; (2) at create-time AutoFillProbe also
+  writes the two derived caches it can reach — appends the passkey to the assertion bundle and
+  registers its `ASPasskeyCredentialIdentity` (`saveCredentialIdentities` = additive upsert) — so
+  sign-in works before the main app reconciles. Both are byte-identical to the main app's
+  `setIndex` rebuild, so the next-unlock reconciliation (drain -> vault -> full
+  `replaceCredentialIdentities`) is idempotent. Why writes still can't happen with the app fully
+  closed: the vault write needs the main app's HLC stamping + single-writer discipline + TS
+  mutation layer; iOS won't run that headlessly for us and the extension can't wake the app, so
+  the durable commit rides the next app open. The residual gap (create, never open the app, then
+  delete it) is narrow and only closable by a native BGTask commit we chose not to build.
 - **Encoding.** Everything stored is STANDARD base64, so Swift maps it with
   `Data(base64Encoded:)` / `.base64EncodedString()` directly; the OS owns clientDataJSON and gives
   us only its hash, so there is no origin to resolve (unlike the Chromium proxy).
