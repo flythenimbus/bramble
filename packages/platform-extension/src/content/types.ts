@@ -83,4 +83,5 @@ export type CornerPromptPayload =
 			userName?: string;
 			existingLoginName?: string;
 			candidates?: { id: string; name: string; username: string }[];
+			passkeyChoices?: { credentialId: string; label: string }[];
 	  };

@@ -291,20 +291,98 @@ describe("runCreateCeremony", () => {
 });
 
 describe("runGetCeremony", () => {
-	const host = (approved: boolean, unlockOk = true): CeremonyHost => ({
-		isLocked: () => false,
-		ensureUnlocked: async () => unlockOk,
-		loadEntries: async () => [],
-		showCard: async () => ({ approved }),
+	const req = { kind: "get" as const, rpId: "github.com", origin: "https://github.com" };
+	const pk = (credentialId: string, username: string): Entry =>
+		({
+			id: `login-${credentialId}`,
+			type: "login",
+			name: "GitHub",
+			urls: ["https://github.com"],
+			username,
+			password: "pw",
+			passkeys: [
+				{
+					credentialId,
+					rpId: "github.com",
+					userHandle: "dXNlcg",
+					userName: username,
+					alg: -7,
+					publicKeyCose: "UEs",
+					privateKey: "U0s",
+					signCount: 0,
+					createdAt: 0,
+				},
+			],
+		}) as Entry;
+
+	function host(opts: {
+		locked?: boolean;
+		unlockOk?: boolean;
+		entries?: Entry[];
+		replies?: CardReply[];
+	}) {
+		const cards: { passkeyChoices?: { credentialId: string; label: string }[] }[] = [];
+		let i = 0;
+		const h: CeremonyHost = {
+			isLocked: () => opts.locked ?? false,
+			ensureUnlocked: async () => opts.unlockOk ?? true,
+			loadEntries: async () => opts.entries ?? [],
+			showCard: async (o) => {
+				cards.push(o);
+				return opts.replies?.[i++] ?? { approved: true };
+			},
+		};
+		return { h, cards };
+	}
+
+	it("single match -> signs in with it, no picker", async () => {
+		const { h, cards } = host({ entries: [pk("AAA", "octocat")] });
+		const d = await runGetCeremony(req, h);
+		expect(d).toMatchObject({ approved: true, userVerified: true, credentialId: "AAA" });
+		expect(cards[0]?.passkeyChoices).toBeUndefined(); // a plain confirm, not a picker
 	});
 
-	it("approve + unlocked -> verified", async () => {
-		expect(await runGetCeremony(host(true))).toEqual({ approved: true, userVerified: true });
+	it("no match -> approved with no credentialId (handleGet maps to NotAllowedError)", async () => {
+		const { h } = host({ entries: [] });
+		expect(await runGetCeremony(req, h)).toEqual({
+			approved: true,
+			userVerified: true,
+			credentialId: undefined,
+		});
 	});
-	it("decline -> aborted", async () => {
-		expect(await runGetCeremony(host(false))).toEqual({ approved: false });
+
+	it("multiple matches -> picker; chosen credentialId returned", async () => {
+		const entries = [pk("AAA", "octocat"), pk("BBB", "octocat2")];
+		const { h, cards } = host({ entries, replies: [{ approved: true, choice: "BBB" }] });
+		const d = await runGetCeremony(req, h);
+		expect(cards[0]?.passkeyChoices?.map((c) => c.label)).toEqual(["octocat", "octocat2"]);
+		expect(d).toMatchObject({ approved: true, credentialId: "BBB" });
 	});
-	it("failed unlock -> aborted", async () => {
-		expect(await runGetCeremony(host(true, false))).toEqual({ approved: false });
+
+	it("declining the picker aborts", async () => {
+		const entries = [pk("AAA", "octocat"), pk("BBB", "octocat2")];
+		const { h } = host({ entries, replies: [{ approved: false }] });
+		expect(await runGetCeremony(req, h)).toEqual({ approved: false });
+	});
+
+	it("locked -> confirm + unlock then picker for multiple", async () => {
+		const entries = [pk("AAA", "octocat"), pk("BBB", "octocat2")];
+		const { h, cards } = host({
+			locked: true,
+			entries,
+			replies: [{ approved: true }, { approved: true, choice: "AAA" }],
+		});
+		const d = await runGetCeremony(req, h);
+		expect(cards).toHaveLength(2);
+		expect(d).toMatchObject({ credentialId: "AAA" });
+	});
+
+	it("decline first card / failed unlock -> aborted", async () => {
+		expect(await runGetCeremony(req, host({ replies: [{ approved: false }] }).h)).toEqual({
+			approved: false,
+		});
+		expect(await runGetCeremony(req, host({ locked: true, unlockOk: false }).h)).toEqual({
+			approved: false,
+		});
 	});
 });

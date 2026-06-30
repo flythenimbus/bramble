@@ -229,6 +229,7 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 			intent: payload.intent,
 			existingLoginName: payload.existingLoginName,
 			candidates: payload.candidates,
+			passkeyChoices: payload.passkeyChoices,
 			primaryLabel: label,
 		});
 	}

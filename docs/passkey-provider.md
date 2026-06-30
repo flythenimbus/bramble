@@ -206,8 +206,9 @@ Two things make this the hard surface:
    authoritative since WebAuthn requires a focused top-level context. **Multi-account create** is
    handled: a new passkey attaches to the login matching the request `user.name`; when several
    domain logins are ambiguous the card shows a **picker** (each candidate + "Create a new login"
-   last). REMAINING: the item edit/view UI (passkey row below TOTP + view badge), and the
-   multi-credential picker for get (sign-in currently uses the first matching passkey).
+   last). **Get picker** done too: when several stored passkeys match the rpId, sign-in shows a
+   chooser (by account) instead of using the first. REMAINING: the item edit/view UI (passkey row
+   below TOTP + view badge).
 3. **iOS provider (TODO).** `ProvidesPasskeys`, the `ASPasskeyCredentialRequest` methods,
    `ASPasskeyCredentialIdentity`, native passkey crypto plugin methods. Needs Xcode + a device.
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin

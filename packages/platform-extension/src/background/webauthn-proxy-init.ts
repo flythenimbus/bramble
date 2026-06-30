@@ -134,7 +134,7 @@ const cornerCeremony: CeremonyFn = async (req) => {
 		loadEntries: loadDecryptedEntries,
 		showCard: (opts) => showCard(tabId, cardPayload(req, opts)),
 	};
-	return req.kind === "create" ? runCreateCeremony(req, host) : runGetCeremony(host);
+	return req.kind === "create" ? runCreateCeremony(req, host) : runGetCeremony(req, host);
 };
 
 async function sha256Base64(bytes: Uint8Array): Promise<string> {
