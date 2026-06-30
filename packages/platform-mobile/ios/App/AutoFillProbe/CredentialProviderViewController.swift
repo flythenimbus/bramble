@@ -640,7 +640,15 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			cancel(.failed)
 			return
 		}
+		// Durable path: hand the credential to the main app to merge into the vault (it owns the
+		// vault + sync). Immediate path: also write the derived caches the extension can reach so
+		// the new passkey is usable for sign-in right away, before the app reconciles - otherwise
+		// the user would have to open Bramble before they could use what they just created. Both
+		// are byte-for-byte what the main app's setIndex rebuild produces, so reconciliation on
+		// next unlock is idempotent. See docs/passkey-provider.md.
 		stashPendingPasskey(reg, req: req)
+		appendToPasskeyBundle(reg, req: req)
+		registerPasskeyIdentity(reg, req: req)
 		let credential = ASPasskeyRegistrationCredential(
 			relyingParty: req.rpId, clientDataHash: req.clientDataHash,
 			credentialID: credID, attestationObject: attestation)
@@ -672,6 +680,55 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
 		pending.append(["iv": enc.iv, "ciphertext": enc.ciphertext])
 		defaults?.set(pending, forKey: BrambleVault.pendingPasskeysKey)
+	}
+
+	// Immediate-use bridge #1: append the new passkey to the (VEK-encrypted) assertion bundle so
+	// a sign-in can find it before the main app reconciles. Same StoredPasskey shape the main app
+	// writes (all STANDARD base64); the main app's next setIndex rebuild reproduces it exactly.
+	@available(iOS 17.0, *)
+	private func appendToPasskeyBundle(_ reg: PasskeyRegistration, req: PasskeyCreate) {
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		var list: [[String: String]] = []
+		if let data = defaults?.data(forKey: BrambleVault.passkeyBundleKey),
+			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String,
+			let json = try? decryptWithVek(ivB64: iv, ciphertextB64: ct),
+			let existing = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [[String: String]]
+		{
+			list = existing
+		}
+		list.append([
+			"credentialId": reg.credentialId,
+			"rpId": req.rpId,
+			"userName": req.userName,
+			"userHandle": req.userHandle.base64EncodedString(),
+			"privateKey": reg.privateKey,
+		])
+		guard let plain = try? JSONSerialization.data(withJSONObject: list),
+			let str = String(data: plain, encoding: .utf8),
+			let enc = try? encryptWithVek(plaintext: str),
+			let blob = try? JSONSerialization.data(withJSONObject: [
+				"iv": enc.iv, "ciphertext": enc.ciphertext,
+			])
+		else { return }
+		defaults?.set(blob, forKey: BrambleVault.passkeyBundleKey)
+	}
+
+	// Immediate-use bridge #2: register the new credential's OS identity so iOS offers Bramble for
+	// this site's sign-in right away. saveCredentialIdentities is an additive UPSERT (we only know
+	// this one credential); the main app's authoritative replaceCredentialIdentities (full set from
+	// the vault) supersedes it on next unlock.
+	@available(iOS 17.0, *)
+	private func registerPasskeyIdentity(_ reg: PasskeyRegistration, req: PasskeyCreate) {
+		guard let credID = Data(base64Encoded: reg.credentialId) else { return }
+		let identity = ASPasskeyCredentialIdentity(
+			relyingPartyIdentifier: req.rpId, userName: req.userName,
+			credentialID: credID, userHandle: req.userHandle, recordIdentifier: reg.credentialId)
+		let store = ASCredentialIdentityStore.shared
+		store.getState { state in
+			guard state.isEnabled else { return }
+			Task { try? await store.saveCredentialIdentities([identity]) }
+		}
 	}
 
 	// Decrypt the passkey bundle (empty if none / not unlocked). VEK must already be loaded.
