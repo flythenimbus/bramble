@@ -216,12 +216,31 @@ Two things make this the hard surface:
 - **`signCount` = 0, always.** The spec permits it and synced passkeys require it: a real counter
   regresses when the same passkey is used on two synced devices, which some RPs flag as a cloned
   authenticator. Our sync makes 0 mandatory.
-- **Attestation = `"none"`.** Standard for password managers. Pick one fixed Bramble AAGUID (use the
-  community AAGUID registry) so RPs can show the Bramble icon. NOTE: the strict spec reading zeroes
-  the AAGUID for `none` attestation, and a minority of RPs (e.g. Quarkus-webauthn) reject a non-zero
-  one. We keep a non-zero AAGUID anyway, matching 1Password / Apple / the major RPs (which accept it
-  and use it for attribution); the placeholder in `passkey.rs` must be finalized + registered before
-  launch.
+- **Attestation = `"none"`.** Standard for password managers. We ship one fixed Bramble AAGUID
+  (**`4249c72f-2967-4a74-8ec5-e610036d7be1`**, in `passkey.rs`) so RPs / other managers can show the
+  Bramble icon. NOTE: the strict spec reading zeroes the AAGUID for `none` attestation, and a minority
+  of RPs (e.g. Quarkus-webauthn) reject a non-zero one; clients also commonly zero it for `none`
+  anyway. We keep a non-zero AAGUID regardless, matching 1Password / Apple / the major RPs (which
+  accept it and use it for attribution). See **AAGUID registration** below.
+
+### AAGUID registration (TODO before public launch)
+
+The value is finalized (`4249c72f-2967-4a74-8ec5-e610036d7be1`, `BRAMBLE_AAGUID` in
+`packages/core-rust/src/passkey.rs`) and must **never change** — it's baked into every passkey we
+create (assertions don't carry it, so existing passkeys keep working regardless). Remaining:
+
+- [ ] **Register it in the community list.** Open a PR to
+  [`passkeydeveloper/passkey-authenticator-aaguids`](https://github.com/passkeydeveloper/passkey-authenticator-aaguids)
+  adding `4249c72f-2967-4a74-8ec5-e610036d7be1` → `{ name: "Bramble", icon_light, icon_dark }`. This
+  is the list OS UIs / managers read to map AAGUID → name + icon. It is **not** FIDO MDS / FIDO
+  certification (those are for certified hardware, cost money, and don't apply to a software provider).
+- [ ] **Produce the two icons** the PR needs: light- and dark-background SVGs, embedded as base64
+  data URIs in the registry entry (per that repo's format).
+- [ ] Optional: note the AAGUID in our own user-facing docs/privacy page for transparency.
+
+Visibility caveat: for the default `attestation: "none"` flow the client usually zeroes the AAGUID
+before the RP sees it, so the registry entry mostly surfaces when an RP requests attestation or in
+local "which provider made this passkey" UIs. Worth doing for attribution, not load-bearing.
 - **Backup flags BE + BS = 1.** Bramble syncs passkeys across devices, so authenticatorData sets
   backup-eligible + backed-up (`0x18`); without them RPs treat the credential as single-device and
   may nag the user to add another. (Set in `passkey.rs`.)
