@@ -1,4 +1,5 @@
-import { useLingui } from "@lingui/react/macro";
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { KeyRound } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useToast } from "../app/components/ui/toast";
@@ -18,11 +19,10 @@ export function usePendingPasskeys(): void {
 	const { shell } = usePlatform();
 	const { entries, addEntry, updateEntry, isLocked, ready } = useVault();
 	const { show } = useToast();
-	const { t } = useLingui();
 	// Read the latest vault + helpers inside the async drain without re-firing on every entries
 	// change, and so the foreground listener always sees current lock/ready state.
-	const latest = useRef({ entries, addEntry, updateEntry, show, t, isLocked, ready });
-	latest.current = { entries, addEntry, updateEntry, show, t, isLocked, ready };
+	const latest = useRef({ entries, addEntry, updateEntry, show, isLocked, ready });
+	latest.current = { entries, addEntry, updateEntry, show, isLocked, ready };
 	const draining = useRef(false);
 
 	const drainNow = useCallback(async () => {
@@ -33,7 +33,7 @@ export function usePendingPasskeys(): void {
 		try {
 			const pending = await drain();
 			for (const pk of pending) {
-				const { entries, addEntry, updateEntry, show, t } = latest.current;
+				const { entries, addEntry, updateEntry, show } = latest.current;
 				try {
 					// Rare: several pending passkeys for the same site land against one snapshot,
 					// so a second could create a duplicate login. Acceptable for a pre-launch batch.
@@ -52,8 +52,8 @@ export function usePendingPasskeys(): void {
 					show({
 						message:
 							placement.kind === "create"
-								? t`Passkey saved as ${loginName}`
-								: t`Passkey added to ${loginName}`,
+								? i18n._(msg`Passkey saved as ${loginName}`)
+								: i18n._(msg`Passkey added to ${loginName}`),
 						variant: "success",
 						icon: KeyRound,
 					});

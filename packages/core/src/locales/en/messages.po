@@ -870,10 +870,18 @@ msgstr "Pairing code"
 msgid "Passkey added to {0}"
 msgstr "Passkey added to {0}"
 
+#: packages/core/src/hooks/usePendingPasskeys.tsx
+msgid "Passkey added to {loginName}"
+msgstr "Passkey added to {loginName}"
+
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
 msgid "Passkey saved as {0}"
 msgstr "Passkey saved as {0}"
+
+#: packages/core/src/hooks/usePendingPasskeys.tsx
+msgid "Passkey saved as {loginName}"
+msgstr "Passkey saved as {loginName}"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Passkeys"
