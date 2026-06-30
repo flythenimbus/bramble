@@ -168,6 +168,8 @@ export interface PasskeyProxyDeps {
 	sha256: (bytes: Uint8Array) => Promise<string>;
 	/** Wall clock; injected for deterministic tests. */
 	now: () => number;
+	/** Fired after a create persists, for a UI confirmation toast. */
+	onSaved?: (info: { rpId: string; loginName: string; created: boolean }) => void;
 }
 
 /** Resolve the effective rpId and reject cross-origin / public-suffix rpIds. */
@@ -245,7 +247,16 @@ export async function handleCreate(
 			createdAt: deps.now(),
 		};
 		const entries = await deps.loadEntries();
-		await deps.savePlacement(resolveCreatePlan(decision, entries, rpId, opts.rpName, credential));
+		const plan = resolveCreatePlan(decision, entries, rpId, opts.rpName, credential);
+		await deps.savePlacement(plan);
+		deps.onSaved?.({
+			rpId,
+			created: plan.kind === "create",
+			loginName:
+				plan.kind === "create"
+					? plan.data.name
+					: (entries.find((e) => e.id === plan.entryId)?.name ?? rpId),
+		});
 
 		const clientData = buildClientData("webauthn.create", opts.challenge, origin);
 		return {
