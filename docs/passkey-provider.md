@@ -313,8 +313,13 @@ Steps 2 to 4 are independent now that the core + TS binding (0, 1) have landed.
 
 - ~~Exact `passkey-rs` trait surface and whether to use `passkey-authenticator` or `passkey-types`.~~
   RESOLVED in Phase 0: rejected the async CTAP2 authenticator; using sync `p256` + `coset` + `ciborium`.
-- Whether `androidx.credentials:credentials` pulls any Play-Services transitive dependency. Verify
-  with a dependency tree before committing the Android dep.
+- ~~Whether `androidx.credentials:credentials` pulls any Play-Services transitive dependency.~~
+  RESOLVED (2026-06-30): `androidx.credentials:credentials:1.3.0` is **Play-Services-free** — its
+  only transitives are `androidx.annotation`, `kotlin-stdlib`, `kotlinx-coroutines-core`; a full
+  `releaseRuntimeClasspath` tree (335 nodes) has zero play-services/gms/firebase. So the Android
+  passkey provider can be pure-AOSP (`CredentialProviderService` on API 34+). The Play backend lives
+  in the separate `credentials-play-services-auth` artifact (the client-side pre-34 backport) — do
+  NOT add it. minSdk is 24, so gate the credential service to API 34+ (the system only binds it there).
 - `webAuthenticationProxy` conditional-mediation (passkey autofill in the username dropdown) behavior
   under the proxy. Treat as a Phase 3 nicety, not a blocker.
 - ~~Current iOS deployment target vs the iOS 17 floor for passkey provider methods.~~ RESOLVED:
