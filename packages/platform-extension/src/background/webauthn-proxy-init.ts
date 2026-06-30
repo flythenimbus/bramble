@@ -207,7 +207,10 @@ let attached = false;
 // Register the create/get/isUvpaa listeners exactly once. detach() does not remove
 // them (it only stops events firing), so re-attach must NOT re-add them.
 function registerListeners(): void {
-	if (listenersRegistered) return;
+	// Firefox has no chrome.webAuthenticationProxy; addListener on an undefined
+	// namespace would throw. The Settings toggle is hidden there (shell
+	// supportsPasskeyProvider), but guard here too in case the pref is set directly.
+	if (listenersRegistered || typeof api.webAuthenticationProxy === "undefined") return;
 	listenersRegistered = true;
 	api.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
 		api.webAuthenticationProxy.completeIsUvpaaRequest({
@@ -269,6 +272,7 @@ function registerListeners(): void {
  * unlock, which is why we pause around our own ceremonies. End-to-end needs a real Chrome.
  */
 export async function initWebauthnProxy(): Promise<void> {
+	if (typeof api.webAuthenticationProxy === "undefined") return; // Firefox: no proxy API
 	registerListeners();
 	if (attached) return;
 	const err = await api.webAuthenticationProxy.attach();

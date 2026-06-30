@@ -93,7 +93,14 @@ export const extensionShell: ShellAdapter = {
 	supportsCameraScan: false,
 	supportsSecurityKeys: true,
 	supportsSaveCapture: true,
-	supportsPasskeyProvider: true,
+	// Chromium declares the webAuthenticationProxy permission; the Firefox manifest does
+	// not (no equivalent API), so the passkey-provider setting is hidden there
+	// (GeneralSection gates on this). Read the manifest rather than probing the namespace:
+	// this runs in the popup/options context where the API object may not be exposed even
+	// on Chromium. A Firefox transport (a MAIN-world content-script override) is a planned
+	// fast-follow, not v1.
+	supportsPasskeyProvider:
+		(manifest.permissions as string[] | undefined)?.includes("webAuthenticationProxy") ?? false,
 	async setPasskeyProviderEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({
 			type: "PASSKEY_PROVIDER_SET_ENABLED",
