@@ -18,8 +18,10 @@ import { base64UrlToBase64 } from "@core/util/bytes";
 import {
 	attachPasskeyTo,
 	findPasskeys,
+	loginsCoveringRpId,
 	newPasskeyLogin,
 	type PasskeyPlacement,
+	passkeyAttachTarget,
 	planPasskeyPlacement,
 } from "@core/vault/passkey";
 import {
@@ -77,6 +79,83 @@ export type CeremonyDecision =
 			placement?: "new" | { entryId: string };
 	  };
 export type CeremonyFn = (req: CeremonyRequest) => Promise<CeremonyDecision>;
+
+/** A shown card's reply: approved, and (for the create picker) the chosen login id or "new". */
+export interface CardReply {
+	approved: boolean;
+	choice?: string;
+}
+
+/**
+ * The platform side a ceremony drives: show a card (the variant is chosen by which fields
+ * are passed), report/await unlock, and read the vault. Injected so the create/get
+ * ceremony flow below is unit-tested without chrome. `webauthn-proxy-init` supplies the
+ * real one (corner card + popup unlock + offscreen decrypt).
+ */
+export interface CeremonyHost {
+	showCard: (opts: {
+		existingLoginName?: string;
+		candidates?: { id: string; name: string; username: string }[];
+	}) => Promise<CardReply>;
+	isLocked: () => boolean;
+	ensureUnlocked: () => Promise<boolean>;
+	loadEntries: () => Promise<Entry[]>;
+}
+
+/** get(): confirm, then ensure unlocked. Unlock is the user verification. */
+export async function runGetCeremony(host: CeremonyHost): Promise<CeremonyDecision> {
+	if (!(await host.showCard({})).approved) return { approved: false };
+	if (!(await host.ensureUnlocked())) return { approved: false };
+	return { approved: true, userVerified: true };
+}
+
+/**
+ * create(): confirm + unlock, then resolve which login the passkey attaches to. When
+ * locked we confirm generically first (the vault can't be read yet); once unlocked we
+ * attach to the unambiguous account, create a new login when the domain has none, or
+ * show a picker (candidates + "create new") when several accounts are ambiguous.
+ */
+export async function runCreateCeremony(
+	req: CeremonyCreateRequest,
+	host: CeremonyHost,
+): Promise<CeremonyDecision> {
+	const startedLocked = host.isLocked();
+	if (startedLocked) {
+		if (!(await host.showCard({})).approved) return { approved: false };
+		if (!(await host.ensureUnlocked())) return { approved: false };
+	}
+
+	let entries: Entry[] = [];
+	try {
+		entries = await host.loadEntries();
+	} catch {}
+
+	const target = passkeyAttachTarget(entries, req.rpId, req.userName);
+	if (target) {
+		// Confident account. The locked path already confirmed; otherwise confirm "Add to X".
+		if (!startedLocked && !(await host.showCard({ existingLoginName: target.name })).approved) {
+			return { approved: false };
+		}
+		return { approved: true, userVerified: true, placement: { entryId: target.id } };
+	}
+
+	const candidates = loginsCoveringRpId(entries, req.rpId);
+	if (candidates.length === 0) {
+		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
+		return { approved: true, userVerified: true, placement: "new" };
+	}
+
+	// Several accounts on this domain and no clear match: let the user pick one or create new.
+	const reply = await host.showCard({
+		candidates: candidates.map((c) => ({ id: c.id, name: c.name, username: c.username })),
+	});
+	if (!reply.approved) return { approved: false };
+	return {
+		approved: true,
+		userVerified: true,
+		placement: reply.choice && reply.choice !== "new" ? { entryId: reply.choice } : "new",
+	};
+}
 
 export interface PasskeyProxyDeps {
 	crypto: Pick<CryptoAdapter, "passkeyMakeCredential" | "passkeyGetAssertion">;

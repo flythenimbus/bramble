@@ -7,9 +7,7 @@
 // ceremony reuses the save-login corner card placement. See docs/passkey-provider.md.
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
-import type { Entry } from "@core/hooks/useVault";
 import { bytesToBase64 } from "@core/util/bytes";
-import { loginsCoveringRpId, passkeyAttachTarget } from "@core/vault/passkey";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -20,10 +18,13 @@ import { on } from "./router";
 import { vaultLocked } from "./session";
 import {
 	type CeremonyFn,
+	type CeremonyHost,
 	type CeremonyRequest,
 	handleCreate,
 	handleGet,
 	type PasskeyProxyDeps,
+	runCreateCeremony,
+	runGetCeremony,
 } from "./webauthn-proxy";
 
 const CEREMONY_TIMEOUT_MS = 120_000;
@@ -121,64 +122,19 @@ async function ensureUnlocked(): Promise<boolean> {
 	return waitForUnlock(UNLOCK_TIMEOUT_MS);
 }
 
-// The ceremony: confirm, unlock if needed, and for a create resolve which login the
-// passkey attaches to (auto when unambiguous; a picker with a "create new" option when
-// several accounts share the domain). Unlocking is the user verification.
+// The ceremony decision logic lives in ./webauthn-proxy (runCreateCeremony/runGetCeremony,
+// unit-tested); here we just supply the chrome-backed host: the corner card, popup unlock,
+// and offscreen vault read.
 const cornerCeremony: CeremonyFn = async (req) => {
 	const tabId = await activeTabId();
 	if (tabId === undefined) return { approved: false };
-
-	if (req.kind === "get") {
-		if (!(await showCard(tabId, cardPayload(req))).approved) return { approved: false };
-		if (!(await ensureUnlocked())) return { approved: false };
-		return { approved: true, userVerified: true };
-	}
-
-	// create. When locked we can't read the vault yet, so confirm generically then unlock;
-	// when already unlocked we go straight to the resolved/picker card below.
-	const startedLocked = vaultLocked();
-	if (startedLocked) {
-		if (!(await showCard(tabId, cardPayload(req))).approved) return { approved: false };
-		if (!(await ensureUnlocked())) return { approved: false };
-	}
-
-	let entries: Entry[] = [];
-	try {
-		entries = await loadDecryptedEntries();
-	} catch {}
-
-	const target = passkeyAttachTarget(entries, req.rpId, req.userName);
-	if (target) {
-		// Confident account. The locked path already confirmed; otherwise confirm "Add to X".
-		if (!startedLocked) {
-			if (!(await showCard(tabId, cardPayload(req, { existingLoginName: target.name }))).approved) {
-				return { approved: false };
-			}
-		}
-		return { approved: true, userVerified: true, placement: { entryId: target.id } };
-	}
-
-	const candidates = loginsCoveringRpId(entries, req.rpId);
-	if (candidates.length === 0) {
-		if (!startedLocked && !(await showCard(tabId, cardPayload(req))).approved) {
-			return { approved: false };
-		}
-		return { approved: true, userVerified: true, placement: "new" };
-	}
-
-	// Several accounts on this domain and no clear match: let the user pick one or create new.
-	const reply = await showCard(
-		tabId,
-		cardPayload(req, {
-			candidates: candidates.map((c) => ({ id: c.id, name: c.name, username: c.username })),
-		}),
-	);
-	if (!reply.approved) return { approved: false };
-	return {
-		approved: true,
-		userVerified: true,
-		placement: reply.choice && reply.choice !== "new" ? { entryId: reply.choice } : "new",
+	const host: CeremonyHost = {
+		isLocked: vaultLocked,
+		ensureUnlocked,
+		loadEntries: loadDecryptedEntries,
+		showCard: (opts) => showCard(tabId, cardPayload(req, opts)),
 	};
+	return req.kind === "create" ? runCreateCeremony(req, host) : runGetCeremony(host);
 };
 
 async function sha256Base64(bytes: Uint8Array): Promise<string> {
