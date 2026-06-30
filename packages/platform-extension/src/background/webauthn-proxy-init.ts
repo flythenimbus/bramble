@@ -223,7 +223,19 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
-			await chrome.webAuthenticationProxy.completeCreateRequest(details);
+			try {
+				await chrome.webAuthenticationProxy.completeCreateRequest(details);
+			} catch (e) {
+				// A malformed responseJson rejects here; error the request so the page's
+				// create() fails fast instead of hanging forever ("nothing happens").
+				console.error("[passkey] completeCreateRequest failed", e);
+				await chrome.webAuthenticationProxy
+					.completeCreateRequest({
+						requestId: req.requestId,
+						error: { name: "UnknownError", message: String(e).slice(0, 200) },
+					})
+					.catch(() => {});
+			}
 		})();
 	});
 	chrome.webAuthenticationProxy.onGetRequest.addListener((req) => {
@@ -235,7 +247,17 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
-			await chrome.webAuthenticationProxy.completeGetRequest(details);
+			try {
+				await chrome.webAuthenticationProxy.completeGetRequest(details);
+			} catch (e) {
+				console.error("[passkey] completeGetRequest failed", e);
+				await chrome.webAuthenticationProxy
+					.completeGetRequest({
+						requestId: req.requestId,
+						error: { name: "UnknownError", message: String(e).slice(0, 200) },
+					})
+					.catch(() => {});
+			}
 		})();
 	});
 }
