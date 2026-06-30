@@ -19,6 +19,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "sync", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "consumePendingPasskeys", returnType: CAPPluginReturnPromise),
 	]
 
 	// Shared identifiers (App Group, Keychain group, keys) live in BrambleVault, compiled
@@ -97,6 +98,17 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 			}
 		}
 		call.resolve()
+	}
+
+	// Drain the passkeys the AutoFill extension minted during sign-in registrations (it can't
+	// write the vault itself). Returns the VEK-encrypted entries and clears them; the app
+	// decrypts and merges them into the vault. See CredentialProviderViewController.stashPending.
+	@objc func consumePendingPasskeys(_ call: CAPPluginCall) {
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		let pending =
+			(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
+		defaults?.removeObject(forKey: BrambleVault.pendingPasskeysKey)
+		call.resolve(["pending": pending])
 	}
 
 	@objc func clear(_ call: CAPPluginCall) {

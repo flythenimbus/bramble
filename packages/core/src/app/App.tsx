@@ -1,5 +1,6 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -36,6 +37,9 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 	const { isLocked, ready, entries } = useVault();
 	const vault = useMemo(() => ({ isLocked, ready, entries }), [isLocked, ready, entries]);
 	const consumed = useRef(false);
+
+	// Mobile: persist passkeys the native provider minted during a sign-in registration.
+	usePendingPasskeys();
 
 	// `vault` is the change trigger, not a body input: dropping it would fire
 	// invalidate only on mount and defeat the reactive guards.
