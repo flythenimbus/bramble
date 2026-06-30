@@ -18,6 +18,7 @@ import {
 	type VaultSyncPort,
 } from "@core/sync";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
+import { setSyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
 import {
 	ApplyRemoteMsgSchema,
@@ -143,31 +144,34 @@ function makeVaultSyncPort(): VaultSyncPort {
 	};
 }
 
-// The offscreen asks for our current payload to send to peers.
-on("SYNC_LOCAL_PAYLOAD", async () => {
-	const { payload } = await readLocalState();
-	return { ok: true, data: encodeEntriesPayload(payload) };
-});
+// The four storage round-trips the roster-sync host needs. Defined as plain
+// functions so they can be both registered on the router (Chrome: the offscreen
+// document messages the background) and handed to the in-process bridge (Firefox:
+// the host runs in this event page). See offscreen-core SyncBridge.
 
-// A peer's payload arrived: merge into the local vault and persist if it changed.
-on("SYNC_APPLY_REMOTE", async (message) => {
-	const { payloadJson } = ApplyRemoteMsgSchema.parse(message.payload);
+/** Our current payload, to send to peers. */
+async function syncLocalPayload(): Promise<string> {
+	const { payload } = await readLocalState();
+	return encodeEntriesPayload(payload);
+}
+
+/** A peer's payload arrived: merge into the local vault. Returns whether it changed. */
+async function syncApplyRemote(payloadJson: string): Promise<boolean> {
 	const remote = decodeEntriesPayload(payloadJson);
 	const { changed } = await applyRemotePayload(makeVaultSyncPort(), remote);
-	return { ok: true, data: changed };
-});
+	return changed;
+}
 
-// The offscreen asks for our roster to gossip alongside entries.
-on("SYNC_LOCAL_ROSTER", async () => {
+/** Our roster, to gossip alongside entries. */
+async function syncLocalRoster(): Promise<string> {
 	const group = await getStoredGroup();
-	return { ok: true, data: group ? encodeRoster(group.roster) : "" };
-});
+	return group ? encodeRoster(group.roster) : "";
+}
 
-// A peer's roster arrived: merge revocations/additions, persist, and nudge the popup.
-on("SYNC_APPLY_ROSTER", async (message) => {
-	const { rosterJson } = ApplyRosterMsgSchema.parse(message.payload);
+/** A peer's roster arrived: merge revocations/additions, persist, and nudge the popup. */
+async function syncApplyRoster(rosterJson: string): Promise<void> {
 	const group = await getStoredGroup();
-	if (!group) return { ok: true };
+	if (!group) return;
 	await storeGroup({
 		groupKey: group.groupKey,
 		roster: mergeRosters(group.roster, decodeRoster(rosterJson)),
@@ -175,5 +179,24 @@ on("SYNC_APPLY_ROSTER", async (message) => {
 	api.runtime
 		.sendMessage({ type: "SYNC_EVENT", payload: { kind: "roster" } satisfies SyncEventMsg })
 		.catch(() => {});
+}
+
+on("SYNC_LOCAL_PAYLOAD", async () => ({ ok: true, data: await syncLocalPayload() }));
+on("SYNC_APPLY_REMOTE", async (message) => ({
+	ok: true,
+	data: await syncApplyRemote(ApplyRemoteMsgSchema.parse(message.payload).payloadJson),
+}));
+on("SYNC_LOCAL_ROSTER", async () => ({ ok: true, data: await syncLocalRoster() }));
+on("SYNC_APPLY_ROSTER", async (message) => {
+	await syncApplyRoster(ApplyRosterMsgSchema.parse(message.payload).rosterJson);
 	return { ok: true };
+});
+
+// Firefox: no offscreen document, so the roster-sync host runs in this event page
+// and calls these directly instead of round-tripping through runtime messaging.
+setSyncBridge({
+	fetchLocalPayload: syncLocalPayload,
+	pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
+	fetchLocalRoster: syncLocalRoster,
+	pushRemoteRoster: syncApplyRoster,
 });
