@@ -1,43 +1,29 @@
 package app.bramble.mobile
 
-import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
-import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillManager
-import android.view.inputmethod.EditorInfo
-import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.RequiresApi
-import androidx.appcompat.app.AppCompatActivity
-import uniffi.vault_crypto.exportVek
-import uniffi.vault_crypto.isLocked
-import uniffi.vault_crypto.lock
-import uniffi.vault_crypto.unlockWithVek
-import uniffi.vault_crypto.unwrapVekPassword
 
-// The autofill unlock screen + searchable credential list. Launched by the service's
-// dataset-level authentication: authenticate FIRST (biometric or master password), then
-// reveal the list. On pick it returns the chosen Dataset, which the framework fills
-// directly. Nothing about the vault is shown before a successful unlock. The Android peer
-// of the iOS CredentialProviderViewController. See docs/mobile-port.md.
+// The autofill unlock + searchable credential list. Launched by the service's dataset-level
+// authentication. The auth-first unlock (biometric / master password) is the shared
+// BrambleUnlockActivity; once the VEK is loaded this reads the logins and renders the
+// searchable list, returning the chosen Dataset which the framework fills directly. The
+// Android peer of the iOS CredentialProviderViewController list. See docs/mobile-port.md.
 @RequiresApi(Build.VERSION_CODES.O)
-class AutofillUnlockActivity : AppCompatActivity() {
+class AutofillUnlockActivity : BrambleUnlockActivity() {
 
     companion object {
         const val EXTRA_USERNAME_IDS = "app.bramble.autofill.USERNAME_IDS"
@@ -54,181 +40,27 @@ class AutofillUnlockActivity : AppCompatActivity() {
     private lateinit var hosts: List<String>
     private var label: String = ""
     private var showAll: Boolean = false
-    private var coreWasLocked: Boolean = true
 
     // Loaded after unlock.
     private var logins: List<AutofillLogin> = emptyList()
     private var matches: List<AutofillLogin> = emptyList()
 
-    private lateinit var root: FrameLayout
-
-    @Suppress("UNCHECKED_CAST")
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onPrepare() {
         usernameIds = parcelableIds(EXTRA_USERNAME_IDS)
         passwordIds = parcelableIds(EXTRA_PASSWORD_IDS)
         otpIds = parcelableIds(EXTRA_OTP_IDS)
         hosts = intent.getStringArrayListExtra(EXTRA_HOSTS) ?: emptyList()
         label = intent.getStringExtra(EXTRA_LABEL) ?: ""
         showAll = intent.getBooleanExtra(EXTRA_SHOW_ALL, false)
-        coreWasLocked = isLocked()
-
-        root = FrameLayout(this).apply {
-            setBackgroundColor(color(R.color.bramble_af_background))
-            fitsSystemWindows = true
-            // This sheet IS the autofill UI: its master-password and search fields must never
-            // be autofill targets for any provider (us or another). Excludes all descendants.
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-        }
-        setContentView(root)
-        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = cancel()
-        })
-
-        // A live keep-unlocked session skips the unlock screen entirely.
-        val session = KeepUnlockedStore.load(this)
-        if (session != null) {
-            proceedWithVek(session)
-        } else {
-            showUnlock()
-        }
     }
 
-    @Suppress("DEPRECATION")
-    private fun parcelableIds(key: String): List<AutofillId> =
-        intent.getParcelableArrayListExtra(key) ?: emptyList()
-
-    // --- unlock screen ---
-
-    private var passwordField: EditText? = null
-    private var errorView: TextView? = null
-    private var busy = false
-
-    private fun showUnlock() {
-        val scroll = ScrollView(this)
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(40), dp(24), dp(24))
-        }
-        col.addView(glyph(64), centered())
-
-        col.addView(TextView(this).apply {
-            text = getString(R.string.af_unlock_title)
-            setTextColor(color(R.color.bramble_af_foreground))
-            textSize = 20f
-            setPadding(0, dp(20), 0, dp(20))
-        })
-
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = roundedFill(color(R.color.bramble_af_card), color(R.color.bramble_af_border))
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-        }
-
-        if (BiometricUnlock.isAvailable(this)) {
-            card.addView(filledButton(getString(R.string.af_unlock_biometrics)) { doBiometric() })
-            card.addView(spacer(dp(14)))
-        }
-
-        val pw = EditText(this).apply {
-            hint = getString(R.string.af_master_password)
-            setHintTextColor(color(R.color.bramble_af_muted))
-            setTextColor(color(R.color.bramble_af_foreground))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            background = roundedFill(color(R.color.bramble_af_input), color(R.color.bramble_af_border))
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnEditorActionListener { _, _, _ -> doPassword(text.toString()); true }
-        }
-        passwordField = pw
-        card.addView(pw)
-        card.addView(spacer(dp(14)))
-
-        errorView = TextView(this).apply {
-            setTextColor(color(R.color.bramble_af_destructive))
-            textSize = 13f
-            visibility = View.GONE
-        }
-        card.addView(errorView)
-
-        card.addView(outlinedButton(getString(R.string.af_unlock_vault)) { doPassword(pw.text.toString()) })
-        col.addView(card)
-        scroll.addView(col)
-        setContent(scroll)
-
-        // Cached biometric present: pop the prompt right away; password is the fallback.
-        if (BiometricUnlock.isAvailable(this)) doBiometric()
-    }
-
-    private fun doBiometric() {
-        if (busy) return
-        setError(null)
-        BiometricUnlock.unlock(this, getString(R.string.af_biometric_prompt_title)) { result ->
-            when (result) {
-                is BiometricUnlock.Result.Ok -> proceedWithVek(result.vekB64)
-                BiometricUnlock.Result.NoSecret -> setError(getString(R.string.af_err_enter_password))
-                BiometricUnlock.Result.Invalidated -> setError(getString(R.string.af_err_biometrics_changed))
-                BiometricUnlock.Result.Cancelled -> { /* stay on the password screen */ }
-                is BiometricUnlock.Result.Error -> setError(result.message)
-            }
-        }
-    }
-
-    // Master-password unlock: Argon2id via the shared core against the vault's password slot.
-    private fun doPassword(password: String) {
-        if (busy || password.isEmpty()) return
-        val slot = try {
-            VaultReader.decode(this).passwordSlot
-        } catch (e: Exception) {
-            null
-        }
-        if (slot == null) {
-            setError(getString(R.string.af_err_no_password))
-            return
-        }
-        busy = true
-        setError(null)
+    // VEK loaded by the base; decrypt the logins off the main thread, then show the list.
+    override fun onVekReady(vekB64: String) {
         Thread {
-            val outcome = try {
-                val ok = unwrapVekPassword(
-                    password,
-                    b64(slot.salt),
-                    b64(slot.slotId),
-                    b64(slot.verifier),
-                    b64(slot.wrapIv),
-                    b64(slot.wrappedVek),
-                    verifierPrefix(),
-                )
-                if (ok) Result.success(exportVek()) else Result.success(null)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                busy = false
-                outcome.onSuccess { vek ->
-                    if (vek != null) proceedWithVek(vek) else setError(getString(R.string.af_err_incorrect_password))
-                }
-                outcome.onFailure { setError(it.message ?: getString(R.string.af_err_unlock_failed)) }
-            }
-        }.start()
-    }
-
-    // VEK in hand: load the core, decrypt the logins (off the main thread), then show the list.
-    private fun proceedWithVek(vekB64: String) {
-        showSpinner()
-        Thread {
-            val loaded = try {
-                unlockWithVek(vekB64)
-                val all = VaultReader.readLogins(this)
-                KeepUnlockedStore.save(this, vekB64)
-                all
-            } catch (e: Exception) {
-                null
-            }
+            val loaded = try { VaultReader.readLogins(this) } catch (e: Exception) { null }
             runOnUiThread {
                 if (loaded == null) {
                     setError(getString(R.string.af_err_load_logins))
-                    if (passwordField == null) showUnlock()
                 } else {
                     logins = loaded
                     matches = loaded.filter { VaultReader.matches(it, hosts) }
@@ -237,6 +69,14 @@ class AutofillUnlockActivity : AppCompatActivity() {
             }
         }.start()
     }
+
+    override fun onUnlockCancelled() {
+        setResult(RESULT_CANCELED)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun parcelableIds(key: String): List<AutofillId> =
+        intent.getParcelableArrayListExtra(key) ?: emptyList()
 
     // --- credential list ---
 
@@ -257,7 +97,7 @@ class AutofillUnlockActivity : AppCompatActivity() {
             setPadding(dp(10), 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        header.addView(textButton(getString(R.string.af_cancel)) { cancel() })
+        header.addView(textButton(getString(R.string.af_cancel)) { cancelUnlock() })
         outer.addView(header)
 
         val search = EditText(this).apply {
@@ -364,42 +204,6 @@ class AutofillUnlockActivity : AppCompatActivity() {
         finishCore()
     }
 
-    private fun cancel() {
-        setResult(RESULT_CANCELED)
-        finishCore()
-    }
-
-    // Don't leak the unlocked core into other processes: relock if we did the unlocking.
-    private fun finishCore() {
-        if (coreWasLocked) {
-            try { lock() } catch (e: Exception) { /* ignore */ }
-        }
-        finish()
-    }
-
-    // --- tiny view helpers (programmatic UI; no XML layouts) ---
-
-    private fun setContent(view: View) {
-        root.removeAllViews()
-        root.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
-    }
-
-    private fun showSpinner() {
-        val box = FrameLayout(this)
-        box.addView(ProgressBar(this).apply { isIndeterminate = true }, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
-        setContent(box)
-    }
-
-    private fun setError(message: String?) {
-        val e = errorView ?: return
-        if (message == null) {
-            e.visibility = View.GONE
-        } else {
-            e.text = message
-            e.visibility = View.VISIBLE
-        }
-    }
-
     private fun sectionLabel(text: String) = TextView(this).apply {
         this.text = text
         setTextColor(color(R.color.bramble_af_muted))
@@ -419,57 +223,6 @@ class AutofillUnlockActivity : AppCompatActivity() {
         setPadding(0, dp(5), 0, dp(5))
         addView(view)
     }
-
-    private fun glyph(sizeDp: Int) = ImageView(this).apply {
-        setImageResource(R.mipmap.ic_launcher)
-        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
-    }
-
-    private fun centered() = LinearLayout.LayoutParams(WRAP, WRAP).apply { gravity = Gravity.CENTER_HORIZONTAL }
-
-    private fun spacer(h: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(MATCH, h) }
-
-    private fun filledButton(label: String, onClick: () -> Unit) = Button(this).apply {
-        text = label
-        isAllCaps = false
-        setTextColor(Color.BLACK)
-        background = roundedFill(color(R.color.bramble_af_foreground), color(R.color.bramble_af_foreground))
-        setOnClickListener { onClick() }
-        layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
-    }
-
-    private fun outlinedButton(label: String, onClick: () -> Unit) = Button(this).apply {
-        text = label
-        isAllCaps = false
-        setTextColor(color(R.color.bramble_af_foreground))
-        background = roundedFill(color(R.color.bramble_af_card), color(R.color.bramble_af_border))
-        setOnClickListener { onClick() }
-        layoutParams = LinearLayout.LayoutParams(MATCH, WRAP)
-    }
-
-    private fun textButton(label: String, onClick: () -> Unit) = Button(this).apply {
-        text = label
-        isAllCaps = false
-        setTextColor(color(R.color.bramble_af_muted))
-        setBackgroundColor(Color.TRANSPARENT)
-        setOnClickListener { onClick() }
-    }
-
-    private fun roundedFill(fill: Int, stroke: Int) = android.graphics.drawable.GradientDrawable().apply {
-        cornerRadius = dp(11).toFloat()
-        setColor(fill)
-        setStroke(dp(1), stroke)
-    }
-
-    private fun color(res: Int) = androidx.core.content.ContextCompat.getColor(this, res)
-
-    private fun dp(value: Int): Int =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
-
-    private fun b64(bytes: ByteArray) = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-
-    private val MATCH get() = ViewGroup.LayoutParams.MATCH_PARENT
-    private val WRAP get() = ViewGroup.LayoutParams.WRAP_CONTENT
 }
 
 private fun AutofillLogin.matchesQuery(q: String): Boolean =
