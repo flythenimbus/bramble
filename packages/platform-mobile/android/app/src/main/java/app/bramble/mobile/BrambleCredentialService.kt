@@ -12,9 +12,11 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.provider.AuthenticationAction
 import androidx.credentials.provider.BeginCreateCredentialRequest
 import androidx.credentials.provider.BeginCreateCredentialResponse
+import androidx.credentials.provider.BeginCreatePublicKeyCredentialRequest
 import androidx.credentials.provider.BeginGetCredentialRequest
 import androidx.credentials.provider.BeginGetCredentialResponse
 import androidx.credentials.provider.BeginGetPublicKeyCredentialOption
+import androidx.credentials.provider.CreateEntry
 import androidx.credentials.provider.CredentialProviderService
 import androidx.credentials.provider.ProviderClearCredentialStateRequest
 
@@ -45,12 +47,9 @@ class BrambleCredentialService : CredentialProviderService() {
         // (the system then renders the picker, and picking one signs).
         val intent = Intent(this, CredentialFulfillActivity::class.java)
             .putExtra(CredentialFulfillActivity.EXTRA_MODE, CredentialFulfillActivity.MODE_GET)
-        var flags = PendingIntent.FLAG_CANCEL_CURRENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, flags)
         callback.onResult(
             BeginGetCredentialResponse(
-                authenticationActions = listOf(AuthenticationAction(getString(R.string.app_name), pendingIntent)),
+                authenticationActions = listOf(AuthenticationAction(getString(R.string.app_name), fulfillPendingIntent(1, intent))),
             ),
         )
     }
@@ -60,8 +59,25 @@ class BrambleCredentialService : CredentialProviderService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginCreateCredentialResponse, CreateCredentialException>,
     ) {
-        // No "save to Bramble" entry yet (step 3 returns a CreateEntry + PendingIntent).
-        callback.onResult(BeginCreateCredentialResponse())
+        if (request !is BeginCreatePublicKeyCredentialRequest || !VaultReader.hasVault(this)) {
+            callback.onResult(BeginCreateCredentialResponse())
+            return
+        }
+        // Offer "Save passkey in Bramble"; the PendingIntent unlocks, mints, and persists.
+        val intent = Intent(this, CredentialFulfillActivity::class.java)
+            .putExtra(CredentialFulfillActivity.EXTRA_MODE, CredentialFulfillActivity.MODE_CREATE)
+        callback.onResult(
+            BeginCreateCredentialResponse(
+                createEntries = listOf(CreateEntry(getString(R.string.app_name), fulfillPendingIntent(2, intent))),
+            ),
+        )
+    }
+
+    // Mutable PendingIntent into the fulfill Activity (the framework attaches the request extras).
+    private fun fulfillPendingIntent(requestCode: Int, intent: Intent): PendingIntent {
+        var flags = PendingIntent.FLAG_CANCEL_CURRENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
+        return PendingIntent.getActivity(this, requestCode, intent, flags)
     }
 
     override fun onClearCredentialStateRequest(

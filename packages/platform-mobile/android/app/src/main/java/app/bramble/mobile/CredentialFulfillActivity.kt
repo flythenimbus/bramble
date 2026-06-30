@@ -7,9 +7,13 @@ import android.os.Build
 import android.util.Base64
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.credentials.CreatePublicKeyCredentialRequest
+import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
+import androidx.credentials.exceptions.CreateCredentialCancellationException
+import androidx.credentials.exceptions.CreateCredentialUnknownException
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.provider.BeginGetCredentialResponse
@@ -19,6 +23,7 @@ import androidx.credentials.provider.PendingIntentHandler
 import androidx.credentials.provider.PublicKeyCredentialEntry
 import org.json.JSONObject
 import uniffi.vault_crypto.passkeyGetAssertion
+import uniffi.vault_crypto.passkeyMakeCredential
 
 // Fulfills a Credential Manager passkey GET, launched by BrambleCredentialService via a
 // PendingIntent. Two modes after the shared unlock (BrambleUnlockActivity):
@@ -35,6 +40,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         const val EXTRA_MODE = "app.bramble.credential.MODE"
         const val MODE_GET = "get"
         const val MODE_ASSERT = "assert"
+        const val MODE_CREATE = "create"
         const val EXTRA_CREDENTIAL_ID = "app.bramble.credential.CREDENTIAL_ID" // STANDARD base64
         private const val TAG = "BrambleCredential"
 
@@ -62,14 +68,22 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         Thread {
             val resultIntent = Intent()
             val ok = try {
-                if (mode == MODE_ASSERT) fillAssertion(resultIntent) else fillEntryList(resultIntent)
+                when (mode) {
+                    MODE_ASSERT -> fillAssertion(resultIntent)
+                    MODE_CREATE -> fillCreate(resultIntent)
+                    else -> fillEntryList(resultIntent)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "credential $mode failed", e)
                 false
             }
             runOnUiThread {
                 if (!ok) {
-                    PendingIntentHandler.setGetCredentialException(resultIntent, GetCredentialUnknownException())
+                    if (mode == MODE_CREATE) {
+                        PendingIntentHandler.setCreateCredentialException(resultIntent, CreateCredentialUnknownException())
+                    } else {
+                        PendingIntentHandler.setGetCredentialException(resultIntent, GetCredentialUnknownException())
+                    }
                 }
                 setResult(RESULT_OK, resultIntent)
                 finishCore()
@@ -79,7 +93,11 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
 
     override fun onUnlockCancelled() {
         val resultIntent = Intent()
-        PendingIntentHandler.setGetCredentialException(resultIntent, GetCredentialCancellationException())
+        if (mode == MODE_CREATE) {
+            PendingIntentHandler.setCreateCredentialException(resultIntent, CreateCredentialCancellationException())
+        } else {
+            PendingIntentHandler.setGetCredentialException(resultIntent, GetCredentialCancellationException())
+        }
         setResult(RESULT_OK, resultIntent)
     }
 
@@ -93,7 +111,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             runCatching { JSONObject(it.requestJson).optString("rpId").ifEmpty { null } }.getOrNull()
         }.toSet()
         val option = options.first()
-        var code = 1
+        var code = 100 // keep clear of the service's get(1)/create(2) action request codes
         val entries = VaultReader.readPasskeys(this)
             .filter { it.rpId in rpIds }
             .map { pk ->
@@ -133,6 +151,52 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         PendingIntentHandler.setGetCredentialResponse(resultIntent, GetCredentialResponse(PublicKeyCredential(json)))
         return true
     }
+
+    // Unlock -> mint a new ES256 passkey, return its attestation, and stash the credential for the
+    // main app to persist into the vault (the sandboxed provider can't write it - PendingPasskey).
+    private fun fillCreate(resultIntent: Intent): Boolean {
+        val request = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent) ?: return false
+        val createReq = request.callingRequest as? CreatePublicKeyCredentialRequest ?: return false
+        val opts = JSONObject(createReq.requestJson)
+        val rpId = opts.optJSONObject("rp")?.optString("id").orEmpty()
+        val user = opts.optJSONObject("user")
+        val challenge = opts.optString("challenge")
+        if (rpId.isEmpty() || user == null || challenge.isEmpty()) return false
+        // ES256 (-7) only; decline otherwise so the OS can try another provider.
+        val algs = opts.optJSONArray("pubKeyCredParams")
+        val supportsEs256 = algs != null && (0 until algs.length()).any { algs.optJSONObject(it)?.optInt("alg") == -7 }
+        if (!supportsEs256) return false
+        val origin = originOf(request.callingAppInfo) ?: return false
+
+        val reg = passkeyMakeCredential(rpId, true)
+        val clientDataJson = WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
+        val json = WebauthnJson.registrationResponseJson(
+            reg.credentialId, reg.attestationObject, reg.authenticatorData, reg.publicKey, clientDataJson,
+        )
+        // user.id is base64url in the request; we store userHandle as STANDARD base64 like the rest.
+        val userHandleStd = user.optString("id").takeIf { it.isNotEmpty() }?.let { WebauthnJson.urlToStd(it) }.orEmpty()
+        PendingPasskey.write(this, pendingCredentialJson(reg, rpId, userHandleStd, user.optString("name", "")))
+        PendingIntentHandler.setCreateCredentialResponse(resultIntent, CreatePublicKeyCredentialResponse(json))
+        return true
+    }
+
+    // The PasskeyCredential the main app will persist (mirrors core's; base64 stays STANDARD).
+    private fun pendingCredentialJson(
+        reg: uniffi.vault_crypto.PasskeyRegistration,
+        rpId: String,
+        userHandleStd: String,
+        userName: String,
+    ): String = JSONObject().apply {
+        put("credentialId", reg.credentialId)
+        put("rpId", rpId)
+        put("userHandle", userHandleStd)
+        put("userName", userName)
+        put("alg", -7)
+        put("publicKeyCose", reg.publicKeyCose)
+        put("privateKey", reg.privateKey)
+        put("signCount", 0)
+        put("createdAt", System.currentTimeMillis())
+    }.toString()
 
     // The web origin bound into clientDataJSON. Browser callers carry the real origin but reading
     // it needs a privileged-browser allowlist (we bundle a local copy to stay Play-free); app
