@@ -109,7 +109,7 @@ Passkeys are managed, not edited: the user never types key material, only remove
 
 ## Platform integrations
 
-### iOS (BUILT, pending device verification)
+### iOS (DONE — device-verified: register + sign-in on webauthn.io)
 
 The extension already decrypts the vault natively via App Group + uniffi. What was added:
 
@@ -274,13 +274,16 @@ Two things make this the hard surface:
    register + authenticate both succeed on a real Chrome (locked and unlocked). Device testing also
    surfaced the response-field requirements above (origin-from-tab, `authenticatorData`,
    `publicKeyAlgorithm`, `publicKey`, BE/BS flags) — all now fixed.
-3. **iOS provider (BUILT, pending device verification).** `ProvidesPasskeys`, the
+3. **iOS provider (DONE — device-verified).** `ProvidesPasskeys`, the
    `ASPasskeyCredentialRequest` assertion methods + `prepareInterface(forPasskeyRegistration:)`,
    `ASPasskeyCredentialIdentity` registration, the VEK-encrypted passkey bundle, and a
    pending-passkey handoff (extension mints -> App Group -> `usePendingPasskeys` drains into the
-   vault on unlock). All `@available(iOS 17, *)`; deployment target stays 15.0. Swift compiles +
-   device-tests are the user's (no compiler here; it parses clean via `swiftc -parse`). See the
-   iOS section above for the build steps + the Apple API labels to confirm in Xcode.
+   vault), plus the create-time immediate-use bridge. All `@available(iOS 17, *)`; deployment
+   target stays 15.0. **Verified on a device**: register + sign-in on webauthn.io both succeed,
+   and the freshly-created passkey is usable without opening the main app (fix #2). Build via the
+   TestFlight lane (`ios:beta`, which runs `ffi:build:ios` + `cap sync`). One fix found in
+   verification: a lingui macro in a `.ts` file (`usePendingPasskeys`) shipped untransformed and
+   hung the mobile splash — macro-using files must be `.tsx` (commit 2fb0fbf0).
 4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
    methods. Needs Android SDK + a device.
 5. **Management UI + settings.** List / delete passkeys, per-platform enable. Sync is free.
