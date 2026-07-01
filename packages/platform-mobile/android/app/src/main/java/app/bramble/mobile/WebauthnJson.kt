@@ -1,6 +1,7 @@
 package app.bramble.mobile
 
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 
@@ -15,6 +16,10 @@ object WebauthnJson {
     /** STANDARD base64 (Rust/stored) -> base64url no-pad, via the raw bytes. */
     fun stdToUrl(stdB64: String): String =
         Base64.encodeToString(Base64.decode(stdB64, Base64.DEFAULT), URL_FLAGS)
+
+    /** base64url (request JSON, e.g. user.id) -> STANDARD base64, the form we store. */
+    fun urlToStd(urlB64: String): String =
+        Base64.encodeToString(Base64.decode(urlB64, Base64.URL_SAFE), Base64.NO_WRAP)
 
     private fun bytesToUrl(bytes: ByteArray): String = Base64.encodeToString(bytes, URL_FLAGS)
 
@@ -55,6 +60,38 @@ object WebauthnJson {
                 "userHandle",
                 userHandleStdB64?.takeIf { it.isNotEmpty() }?.let { stdToUrl(it) } ?: JSONObject.NULL,
             )
+        }
+        return JSONObject().apply {
+            put("id", id)
+            put("rawId", id)
+            put("type", "public-key")
+            put("authenticatorAttachment", "platform")
+            put("response", response)
+            put("clientExtensionResults", JSONObject())
+        }.toString()
+    }
+
+    /**
+     * RegistrationResponseJSON for a create(). credentialId/attestationObject/authenticatorData/
+     * publicKey are STANDARD base64 (converted to b64url); publicKey is the SPKI DER. Includes the
+     * full field set (publicKey + publicKeyAlgorithm + authenticatorData) that strict RPs / Chrome
+     * require, matching the extension. Wrap in CreatePublicKeyCredentialResponse(...).
+     */
+    fun registrationResponseJson(
+        credentialIdStdB64: String,
+        attestationObjectStdB64: String,
+        authenticatorDataStdB64: String,
+        publicKeyStdB64: String,
+        clientDataJson: String,
+    ): String {
+        val id = stdToUrl(credentialIdStdB64)
+        val response = JSONObject().apply {
+            put("clientDataJSON", bytesToUrl(clientDataJson.toByteArray(Charsets.UTF_8)))
+            put("attestationObject", stdToUrl(attestationObjectStdB64))
+            put("authenticatorData", stdToUrl(authenticatorDataStdB64))
+            put("publicKeyAlgorithm", -7)
+            put("publicKey", stdToUrl(publicKeyStdB64))
+            put("transports", JSONArray(listOf("internal", "hybrid")))
         }
         return JSONObject().apply {
             put("id", id)
