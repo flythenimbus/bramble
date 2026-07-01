@@ -96,15 +96,8 @@ export async function sendToOffscreen(message: Record<string, unknown>): Promise
 	return deliver(message);
 }
 
-// Firefox: the background event page can read prefers-color-scheme itself (no
-// offscreen document to do it). On the Chrome service worker `window` is undefined,
-// so this is inert there and the offscreen document reports instead.
-if (!useOffscreenDoc && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-	const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
-	const report = () =>
-		void api.runtime
-			.sendMessage({ type: "THEME_ICON_SET", payload: { dark: colorScheme.matches } })
-			.catch(() => {});
-	report();
-	colorScheme.addEventListener("change", report);
-}
+// Firefox swaps the toolbar icon declaratively via manifest action.theme_icons (it
+// follows the real toolbar theme, which prefers-color-scheme in the event page does
+// not reliably track). No JS reporter here: calling action.setIcon would override
+// theme_icons. Chrome has no theme_icons, so its offscreen document reports the scheme
+// (see offscreen.ts) and theme.ts calls setIcon.

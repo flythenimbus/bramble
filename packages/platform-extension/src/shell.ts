@@ -38,9 +38,13 @@ export const extensionShell: ShellAdapter = {
 		// tab on options.html with ?screen= instead.
 		if (screen) {
 			await api.tabs.create({ url: api.runtime.getURL(`options.html?screen=${screen}`) });
-			return;
+		} else {
+			await api.runtime.openOptionsPage();
 		}
-		await api.runtime.openOptionsPage();
+		// Close the popup so it doesn't linger behind the setup tab. Chrome closes it on
+		// blur; Firefox keeps it open. No-op in the options page (browsers block
+		// window.close on a tab the script didn't open).
+		window.close();
 	},
 	hasFilePicker() {
 		if (typeof window === "undefined") return false;
@@ -91,7 +95,11 @@ export const extensionShell: ShellAdapter = {
 	supportsPopOut: true,
 	// Extension QR scan captures the active tab, not a camera; no camera-scan UI.
 	supportsCameraScan: false,
-	supportsSecurityKeys: true,
+	// navigator.credentials.create for the security-key unlock runs in the popup/options
+	// page. On Firefox that origin is moz-extension://<uuid>, which WebAuthn rejects as an
+	// RP ("The operation is insecure"); Chromium's chrome-extension:// origin is accepted.
+	// Gate on the origin scheme. A content-script transport is a possible fast-follow.
+	supportsSecurityKeys: typeof location === "undefined" || location.protocol !== "moz-extension:",
 	supportsSaveCapture: true,
 	// Chromium declares the webAuthenticationProxy permission; the Firefox manifest does
 	// not (no equivalent API), so the passkey-provider setting is hidden there
