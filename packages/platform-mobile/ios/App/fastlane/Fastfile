@@ -88,9 +88,16 @@ platform :ios do
     shots = Dir.glob(File.join(__dir__, "screenshots", "**", "*.{png,PNG,jpg,JPG,jpeg,JPEG}"))
     has_shots = !shots.empty?
     UI.message(
-      has_shots ? "Found #{shots.count} screenshot(s); will overwrite the App Store set" \
+      has_shots ? "Found #{shots.count} screenshot(s); syncing the App Store set to match" \
                 : "No screenshots in screenshots/; skipping screenshots"
     )
+    # sync_screenshots reconciles App Store Connect against the local set (adds
+    # missing, deletes extras) instead of overwrite_screenshots' delete-then-reupload.
+    # overwrite only clears once at the start, so deliver's flaky upload/poll retries
+    # (Apple 500s on "waiting for screenshots to appear") re-upload shots that already
+    # landed and pile up duplicates; sync removes those on the next run. Still beta, so
+    # it needs the env gate as well. See fastlane#16924 / #22193.
+    ENV["FASTLANE_ENABLE_BETA_DELIVER_SYNC_SCREENSHOTS"] = "true" if has_shots
     upload_to_app_store(
       api_key: asc_api_key,
       app_identifier: BUNDLE_ID,
@@ -98,7 +105,7 @@ platform :ios do
       skip_binary_upload: true,
       skip_metadata: false,
       skip_screenshots: !has_shots,
-      overwrite_screenshots: has_shots,
+      sync_screenshots: has_shots,
       force: true,                          # skip the HTML preview confirmation
       precheck_include_in_app_purchases: false,
       run_precheck_before_submit: false,
