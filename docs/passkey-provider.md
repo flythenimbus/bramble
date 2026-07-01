@@ -170,7 +170,31 @@ overriding the unified `ASCredentialRequest` methods doesn't disturb password au
 Apple: developer generates the passkey; the request object carries the options.
 (https://developer.apple.com/documentation/authenticationservices/supporting-passkeys)
 
-### Android (medium lift)
+### Android (BUILT, compile-verified; pending device verification)
+
+What landed (`BrambleCredentialService` + `CredentialFulfillActivity`, both `:autofill` process,
+all gated API 34+): the provider registers via the manifest + capabilities XML
+(`TYPE_PUBLIC_KEY_CREDENTIAL`); `onBeginGetCredentialRequest` offers an unlock `AuthenticationAction`
+(the vault is encrypted, so passkeys can't be enumerated while locked); after unlock the activity
+lists matching passkeys as `PublicKeyCredentialEntry` items (system renders the picker) and on pick
+signs (`passkeyGetAssertion` -> `WebauthnJson.authenticationResponseJson`);
+`onBeginCreateCredentialRequest` offers a "Save passkey in Bramble" `CreateEntry` whose fulfill
+mints ES256 (`passkeyMakeCredential` -> `registrationResponseJson`) and stashes the credential
+VEK-encrypted via `PendingPasskey` for the app to persist (the core `usePendingPasskeys` drain reads
+the Android file too now). The auth-first unlock is the shared `BrambleUnlockActivity` (extracted
+from `AutofillUnlockActivity`, which is unchanged behaviourally). `VaultReader.readPasskeys` reads
+the real vault directly (same app -> no iOS-style bundle). Verified with
+`./gradlew :app:compileDebugKotlin` + `:app:testDebugUnitTest`. Remaining: `pnpm ffi:build:android`
+(NDK) for the runtime `.so` + the regenerated Kotlin bindings, an API 34+ device, and the **origin**
+work below.
+
+**Origin (device-iteration TODO, same flavor as iOS `clientDataHash`):** browser callers carry the
+real web origin but reading it needs `CallingAppInfo.getOrigin(privilegedAllowlist)` with a
+browser allowlist. `res/raw/privileged_browsers.json` is currently empty, so browsers fall back to
+an `apk-key-hash` origin and the RP rejects it; populate it (a local copy of the Google-hosted
+allowlist - a static JSON, not a Play dependency) to make browser sign-in/registration verify.
+
+The original plan (still accurate):
 
 Add a **new** framework `android.service.credentials.CredentialProviderService` (API 34+) as a
 sibling to the autofill service. **Confirmed pure AOSP, no Google Play Services**
@@ -303,8 +327,14 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
    TestFlight lane (`ios:beta`, which runs `ffi:build:ios` + `cap sync`). One fix found in
    verification: a lingui macro in a `.ts` file (`usePendingPasskeys`) shipped untransformed and
    hung the mobile splash — macro-using files must be `.tsx` (commit 2fb0fbf0).
-4. **Android provider (TODO).** `CredentialProviderService` + `androidx.credentials`, native plugin
-   methods. Needs Android SDK + a device.
+4. **Android provider (BUILT, compile-verified; pending device verification).**
+   `BrambleCredentialService` (`onBeginGet` unlock-action + `onBeginCreate` save-entry) +
+   `CredentialFulfillActivity` (MODE_GET list / MODE_ASSERT sign / MODE_CREATE mint), the shared
+   `BrambleUnlockActivity`, `VaultReader.readPasskeys`, `WebauthnJson` (auth + registration JSON),
+   and the `PendingPasskey` create handoff (drained by the existing core `usePendingPasskeys`). Pure
+   AOSP, API 34+. `compileDebugKotlin` + `testDebugUnitTest` pass. Needs `ffi:build:android` (NDK) +
+   an API 34+ device; the browser **origin allowlist** (res/raw/privileged_browsers.json) is the
+   one device-iteration TODO. See the Android section above.
 5. **Management UI + settings.** List / delete passkeys, per-platform enable. Sync is free.
 
 Steps 2 to 4 are independent now that the core + TS binding (0, 1) have landed.
