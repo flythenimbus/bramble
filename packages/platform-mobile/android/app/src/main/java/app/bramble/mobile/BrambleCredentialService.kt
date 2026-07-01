@@ -1,5 +1,7 @@
 package app.bramble.mobile
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Build
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
@@ -7,10 +9,12 @@ import androidx.annotation.RequiresApi
 import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.provider.AuthenticationAction
 import androidx.credentials.provider.BeginCreateCredentialRequest
 import androidx.credentials.provider.BeginCreateCredentialResponse
 import androidx.credentials.provider.BeginGetCredentialRequest
 import androidx.credentials.provider.BeginGetCredentialResponse
+import androidx.credentials.provider.BeginGetPublicKeyCredentialOption
 import androidx.credentials.provider.CredentialProviderService
 import androidx.credentials.provider.ProviderClearCredentialStateRequest
 
@@ -31,8 +35,24 @@ class BrambleCredentialService : CredentialProviderService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginGetCredentialResponse, GetCredentialException>,
     ) {
-        // No passkey entries yet (step 2 reads the vault + returns PublicKeyCredentialEntry list).
-        callback.onResult(BeginGetCredentialResponse())
+        val wantsPasskey = request.beginGetCredentialOptions.any { it is BeginGetPublicKeyCredentialOption }
+        if (!wantsPasskey || !VaultReader.hasVault(this)) {
+            callback.onResult(BeginGetCredentialResponse())
+            return
+        }
+        // Locked: the vault is encrypted, so we can't enumerate passkeys here. Offer one unlock
+        // action; after unlock CredentialFulfillActivity returns the matching passkeys as entries
+        // (the system then renders the picker, and picking one signs).
+        val intent = Intent(this, CredentialFulfillActivity::class.java)
+            .putExtra(CredentialFulfillActivity.EXTRA_MODE, CredentialFulfillActivity.MODE_GET)
+        var flags = PendingIntent.FLAG_CANCEL_CURRENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, flags)
+        callback.onResult(
+            BeginGetCredentialResponse(
+                authenticationActions = listOf(AuthenticationAction(getString(R.string.app_name), pendingIntent)),
+            ),
+        )
     }
 
     override fun onBeginCreateCredentialRequest(

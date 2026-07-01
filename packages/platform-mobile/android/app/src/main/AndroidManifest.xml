@@ -60,6 +60,17 @@
                 android:resource="@xml/autofill_service" />
         </service>
 
+        <!-- Unlock + sign for the passkey provider. Same :autofill process as the credential
+             service; only its PendingIntents launch it. Reuses the autofill unlock theme. -->
+        <activity
+            android:name=".CredentialFulfillActivity"
+            android:exported="false"
+            android:process=":autofill"
+            android:theme="@style/BrambleAutofillTheme"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
         <!-- Passkey provider via the Credential Manager (Android 14 / API 34+; the system only
              binds it there, dormant on older OSes). Same dedicated :autofill process as the
              classic service so a decrypted VEK never touches the webview session. Passkeys only;
