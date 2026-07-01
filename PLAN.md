@@ -366,7 +366,7 @@ decrypt_with_vek(iv_b64, ciphertext_b64) -> Result<String, JsError>
 ```
 
 Built via `pnpm run wasm:build` → `wasm-pack build --target web --out-dir
-../platform-extension/public/wasm`. Vite copies the result into `dist/wasm/`
+../platform-extension/public/wasm`. Vite copies the result into `dist-chromium/wasm/`
 at build time. Loaded via `chrome.runtime.getURL` from the offscreen document
 through `wasm-loader.ts`.
 

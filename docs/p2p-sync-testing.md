@@ -19,12 +19,12 @@ document, and WebRTC connects them over loopback.
 2. **Build and load the extension as two devices:**
 
    ```sh
-   pnpm run build                  # outputs dist/
+   pnpm run build                  # outputs dist-chromium/
    ```
 
    Use two separate Chromium profiles, or two Chromium browsers (e.g. Chrome +
    Vivaldi). In each: `chrome://extensions` -> Developer mode -> **Load unpacked**
-   -> select `dist/`. Each install is a device with its own vault.
+   -> select `dist-chromium/`. Each install is a device with its own vault.
 
    The dev UI is **Settings -> Device sync (dev)**.
 

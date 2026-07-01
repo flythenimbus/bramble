@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-chromium/
 dist-firefox/
 web-ext-artifacts/
 bramble*.zip

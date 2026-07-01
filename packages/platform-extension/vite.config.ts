@@ -11,7 +11,7 @@ const root = resolve(__dirname, "src");
 // manifest (event-page background, no offscreen/webAuthenticationProxy). Default is
 // the Chromium build into dist. The two outputs never clobber each other.
 const target = process.env.TARGET === "firefox" ? "firefox" : "chromium";
-const outDir = resolve(__dirname, target === "firefox" ? "dist-firefox" : "dist");
+const outDir = resolve(__dirname, target === "firefox" ? "dist-firefox" : "dist-chromium");
 const manifestSrc = resolve(__dirname, `../manifests/${target}/manifest.json`);
 
 export default defineConfig({

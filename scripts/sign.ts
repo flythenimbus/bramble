@@ -1,5 +1,5 @@
 // Sign the built extension into a .crx for Chrome Web Store verified upload.
-// Usage: pnpm run sign [path/to/dist] [--optional]   (dist defaults to platform-extension)
+// Usage: pnpm run sign [path/to/dist] [--optional]   (defaults to platform-extension/dist-chromium)
 //
 // Decrypts the RSA signing key (age, unlocked by your YubiKey: PIN + touch),
 // packs the unpacked extension into a signed .crx, then wipes the plaintext key.
@@ -19,7 +19,7 @@ import crx3 from "crx3";
 const argv = process.argv.slice(2);
 const optional = argv.includes("--optional");
 const distArg = argv.find((a) => !a.startsWith("--"));
-const DIST = resolve(distArg ?? "packages/platform-extension/dist");
+const DIST = resolve(distArg ?? "packages/platform-extension/dist-chromium");
 const OUT = resolve("packages/platform-extension/bramble.crx");
 const KEY_AGE =
 	process.env.CWS_KEY_AGE ?? join(process.env.HOME ?? "", ".config/bramble/cws-signing-key.age");
