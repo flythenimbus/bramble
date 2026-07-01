@@ -112,7 +112,10 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         }.toSet()
         val option = options.first()
         var code = 100 // keep clear of the service's get(1)/create(2) action request codes
-        val entries = VaultReader.readPasskeys(this)
+        // Vault + not-yet-drained pending passkeys, so a freshly-created one is usable immediately.
+        val all = (VaultReader.readPasskeys(this) + VaultReader.readPendingPasskeys(this))
+            .distinctBy { it.credentialId }
+        val entries = all
             .filter { it.rpId in rpIds }
             .map { pk ->
                 PublicKeyCredentialEntry.Builder(
@@ -135,7 +138,8 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         val option = request.credentialOptions.filterIsInstance<GetPublicKeyCredentialOption>().firstOrNull()
             ?: return false
         val id = credentialId ?: return false
-        val pk = VaultReader.readPasskeys(this).firstOrNull { it.credentialId == id } ?: return false
+        val pk = (VaultReader.readPasskeys(this) + VaultReader.readPendingPasskeys(this))
+            .firstOrNull { it.credentialId == id } ?: return false
         val challenge = JSONObject(option.requestJson).optString("challenge")
         if (challenge.isEmpty()) return false
         // Browser callers (Chrome) compute clientDataJSON themselves and pass only its hash; we
