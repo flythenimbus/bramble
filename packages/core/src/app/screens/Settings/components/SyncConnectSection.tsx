@@ -139,6 +139,22 @@ export function SyncConnectSection() {
 		}
 	};
 
+	// WebRTC probe for THIS page context, surfaced in the UI because the Firefox background
+	// console is hard to reach. The FF extension background has no RTCPeerConnection; a tab
+	// context (options page / an injected frame) does. Actually constructs one (not just a
+	// typeof check) so we see the real error if it throws. Runs once on mount.
+	const [rtcProbe] = useState(() => {
+		if (typeof RTCPeerConnection === "undefined") return "undefined";
+		try {
+			const pc = new RTCPeerConnection();
+			pc.close();
+			return "works";
+		} catch (e) {
+			return `error: ${(e as Error).message}`;
+		}
+	});
+	const ctxPath = typeof location !== "undefined" ? location.pathname : "?";
+
 	const devices = group ? activeDevices(group.roster) : [];
 	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
 	const inGroup = group != null;
@@ -209,6 +225,9 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
+			<div className="rounded-lg border border-border bg-background/50 p-2 text-xs font-mono text-muted-foreground break-words">
+				diag · RTCPeerConnection: {rtcProbe} · {ctxPath}
+			</div>
 			{/* Live transport status log (offer sent / answer applied / ice connected /
 			    channel open) — surfaces enrollment + sync diagnostics in the dev panel. */}
 			{log.length > 0 && (
