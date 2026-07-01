@@ -1,0 +1,10 @@
+{
+	"extDescription": {
+		"message": "Gestor de contraseñas cifrado y local. Sin base de datos en la nube.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Bloquear Bramble",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	}
+}

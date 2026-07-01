@@ -4,42 +4,45 @@ A password manager that keeps your secrets on your own devices. No account, no s
 
 Bramble runs where you do:
 
-- **Browser extension** for Chromium browsers (Chrome, Edge, Brave, Arc, and friends). Install it and you're up and running in a minute.
+- **Browser extension** for Chromium browsers (Brave, Vivaldim Chrome, Arc, and friends). Install it and you're up and running in a minute.
 - **iOS app** with system AutoFill, Face ID / Touch ID unlock, and passkeys.
 - **Android app** with a native autofill service, biometric unlock, and passkeys.
 
 The same encrypted vault and the same Rust crypto core sit behind all three, and your devices can sync to each other directly, peer-to-peer, with no cloud in the middle.
 
-[**Get the extension from the Chrome Web Store.**](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
+**Get Bramble:**
+
+- Chromium: [Chrome Web Store](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
+- Android: [Releases](https://github.com/flythenimbus/bramble/releases)
 
 ## What it does
 
-Your passwords are encrypted on your device and written to a single vault file, wherever you choose to put it. On desktop, drop it in a Dropbox or Google Drive folder and it syncs across your machines; on mobile it lives on the device's own encrypted storage. Bramble never sees that folder or that file's contents, it just reads and writes one encrypted blob. Prefer to keep the cloud out of it entirely? Bramble's own peer-to-peer sync mirrors the vault straight between your devices.
+Your passwords are encrypted on your device and written to a single vault file, wherever you choose to put it. On desktop, drop it in a Dropbox or Google Drive folder and it syncs across your machines; on mobile it lives on the device's own encrypted storage. Bramble never sees that folder or that file's contents, it just reads and writes one encrypted file. Prefer to keep the cloud out of it entirely? Bramble's own peer-to-peer sync mirrors the vault straight between your devices.
 
 Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Your master password never touches the JavaScript heap.
 
 ## On your phone
 
-The mobile apps are native iOS and Android builds, not a website in a wrapper. They reuse Bramble's Rust crypto core and vault format, and add the pieces that only make sense on a phone:
+The mobile apps reuse Bramble's Rust crypto core and vault format, with native OS autofill on top:
 
-- **System AutoFill.** Bramble registers as a credential provider, so your logins and one-time codes show up right in the keyboard and in the OS autofill bar, across apps and browsers. On iOS it's the AutoFill Credential Provider; on Android it's a native autofill service.
-- **Passkeys.** Create and sign in with passkeys, with Bramble acting as your own authenticator for sites and apps that support them. Passkeys are stored as ordinary vault entries, so they sync between your devices with everything else.
-- **Biometric unlock.** Unlock with Face ID, Touch ID, or Android biometrics, gated by the OS keystore, or fall back to your master password or recovery code. (Hardware security-key unlock is desktop-only; the mobile platforms don't expose the WebAuthn PRF path to roaming keys, so biometrics take its place.)
+- **System AutoFill.** Bramble registers as a native OS credential provider, so your logins and one-time codes show up in the keyboard and autofill bar across apps and browsers.
+- **Passkeys.** Create and sign in with passkeys, stored as ordinary vault entries so they sync between your devices with everything else.
+- **Biometric unlock.** Unlock with Face ID, Touch ID, or Android biometrics gated by the OS keystore, or fall back to your master password or recovery code.
 - **On-device storage.** The vault lives on the native filesystem, encrypted at rest, not in a webview database the OS might evict.
-- **Peer-to-peer sync.** Pair a phone with your other devices and the vault syncs directly between them. No relay holds your data.
+- **Peer-to-peer sync.** Pair a phone with your other devices and the vault syncs directly between them, with no relay holding your data.
 
 The iOS and Android apps are versioned and released independently of the extension.
 
 ## Features
 
-- **🔒 Local-first, always.** One encrypted file on disk, in a location you pick.
+- **Local-first, always.** One encrypted file on disk, in a location you pick.
 - **No shortcuts on crypto.** Argon2id for your key, AES-256-GCM for the data, envelope encryption so every entry has its own key. Secrets get wiped from memory after use.
 - **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable thing on disk is the file header.
-- **🎯 Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown; on mobile it's the OS autofill bar across apps and browsers.
-- **🔑 Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
+- **Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown; on mobile it's the OS autofill bar across apps and browsers.
+- **Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - **Built-in password generator.** Strong passwords on tap.
-- **Unlock your way.** Master password, a hardware key, biometrics, or a recovery code. Register a YubiKey, Touch ID, or Windows Hello on desktop and unlock with a tap via the WebAuthn PRF extension; use Face ID, Touch ID, or Android biometrics on mobile. The hardware key never hands over its secret. Use any of these alongside your master password, or turn the password off and make one of them your only way in.
+- **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF on desktop), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
 - **TOTP / 2FA codes.** Paste an `otpauth://` URI or bare secret and Bramble generates the six-digit codes.
 - **Peer-to-peer sync.** Mirror your vault directly between your own devices over an end-to-end encrypted connection. No cloud, no relay holding your data.
