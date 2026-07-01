@@ -83,6 +83,55 @@ object KeepUnlockedStore {
             .apply()
     }
 
+    // --- one-shot credential-ceremony VEK handoff (MODE_GET unlock -> MODE_ASSERT sign) ---
+    // The Credential Manager passkey GET is two activities: the first unlocks to LIST passkeys,
+    // the second unlocks to SIGN the picked one. To avoid asking twice, the first hands the VEK to
+    // the second through this short-lived, Keystore-wrapped slot - INDEPENDENT of the keep-unlocked
+    // window, so it bridges even with "Immediately" auto-lock - cleared once the sign hop consumes
+    // it. Same hardware key + unlocked-device gating as the session above; just a tight fixed TTL.
+    private const val CEREMONY_CT = "ceremony.ct"
+    private const val CEREMONY_IV = "ceremony.iv"
+    private const val CEREMONY_AT = "ceremony.at"
+    private const val CEREMONY_TTL_MS = 120_000L
+
+    fun saveCeremony(context: Context, vekB64: String) {
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, sessionKey())
+            val ct = cipher.doFinal(vekB64.toByteArray(Charsets.UTF_8))
+            prefs(context).edit()
+                .putString(CEREMONY_CT, Base64.encodeToString(ct, Base64.NO_WRAP))
+                .putString(CEREMONY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                .putLong(CEREMONY_AT, System.currentTimeMillis())
+                .apply()
+        } catch (e: Exception) {
+            clearCeremony(context)
+        }
+    }
+
+    fun loadCeremony(context: Context): String? {
+        val p = prefs(context)
+        val ctB64 = p.getString(CEREMONY_CT, null) ?: return null
+        val ivB64 = p.getString(CEREMONY_IV, null) ?: return null
+        if (System.currentTimeMillis() - p.getLong(CEREMONY_AT, 0L) > CEREMONY_TTL_MS) {
+            clearCeremony(context)
+            return null
+        }
+        return try {
+            val key = loadSessionKey() ?: return null
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, Base64.decode(ivB64, Base64.NO_WRAP)))
+            String(cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP)), Charsets.UTF_8)
+        } catch (e: Exception) {
+            clearCeremony(context)
+            null
+        }
+    }
+
+    fun clearCeremony(context: Context) {
+        prefs(context).edit().remove(CEREMONY_CT).remove(CEREMONY_IV).remove(CEREMONY_AT).apply()
+    }
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(BrambleAutofill.SESSION_PREFS, Context.MODE_PRIVATE)
 

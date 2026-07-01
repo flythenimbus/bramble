@@ -64,7 +64,17 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         credentialId = intent.getStringExtra(EXTRA_CREDENTIAL_ID)
     }
 
+    // The sign hop reuses the list hop's unlock via the one-shot ceremony handoff, so the user
+    // authenticates only once for the whole get() (no double-auth, even with "Immediately" lock).
+    override fun bridgeSessionVek(): String? =
+        if (mode == MODE_ASSERT) KeepUnlockedStore.loadCeremony(this) else null
+
     override fun onVekReady(vekB64: String) {
+        // List hop hands its VEK to the sign hop; the sign hop consumes (clears) it.
+        when (mode) {
+            MODE_GET -> KeepUnlockedStore.saveCeremony(this, vekB64)
+            MODE_ASSERT -> KeepUnlockedStore.clearCeremony(this)
+        }
         Thread {
             val resultIntent = Intent()
             val ok = try {
