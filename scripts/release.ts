@@ -89,7 +89,7 @@ function releaseExtension(target: string, version: string) {
 
 	try {
 		run("pnpm run wasm:build");
-		run("pnpm --filter @vault/platform-extension run bundle");
+		run("pnpm --filter @vault/platform-extension run bundle:chromium");
 		run("pnpm run sign");
 	} catch {
 		fail(`build or signing failed; run \`git checkout ${manifest}\` to undo the bump`);

@@ -6,8 +6,10 @@
 	"packageManager": "pnpm@10.33.0",
 	"scripts": {
 		"prepare": "git config core.hooksPath .githooks",
-		"build": "pnpm --filter @vault/platform-extension run build",
-		"bundle": "pnpm --filter @vault/platform-extension run bundle && node scripts/sign.ts --optional",
+		"build": "pnpm --filter @vault/platform-extension run build:chromium",
+		"build:firefox": "pnpm --filter @vault/platform-extension run build:firefox",
+		"bundle": "pnpm --filter @vault/platform-extension run bundle:chromium && node scripts/sign.ts --optional",
+		"bundle:firefox": "pnpm --filter @vault/platform-extension run bundle:firefox",
 		"dev": "pnpm --filter @vault/platform-extension run dev",
 		"wasm:build": "cd packages/core-rust && wasm-pack build --target web --out-dir ../platform-extension/public/wasm",
 		"wasm:build:mobile": "cd packages/core-rust && wasm-pack build --target web --out-dir ../platform-mobile/public/wasm",
