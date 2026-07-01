@@ -86,16 +86,41 @@ Design that works for both from one bundle:
 - The existing VEK re-injection guard stays and is needed on both: Chrome's offscreen can be killed
   and Firefox's event page can be suspended; in both cases the WASM instance resets to locked while
   the VEK rehydrates from `storage.session`.
-- The WebRTC sync transport (`SYNC_*` messages) rides this same offscreen client, and is
-  **required for Firefox v1** (P2P is Firefox's only cross-device sync; see "Filesystem sync"). On
-  Firefox the event page hosts `RTCPeerConnection` directly, so the in-process dispatch path must
-  carry `SYNC_*` as well as crypto. P2P sync has already landed on Chrome, so this is a wiring task
-  (route `SYNC_*` to the event page), not a dependency on sync being built.
+- The crypto path (WASM) works in the Firefox event page in-process, verified on-device.
+- **The WebRTC sync transport does NOT** (corrected mid-2026, device-tested). `RTCPeerConnection`
+  is **undefined in the Firefox extension background** (event page or persistent page) — a
+  documented Firefox limitation: WebRTC works only in a real tab or a frame inside a tab, not the
+  background (bug 1278100). `WebSocket` (relay signaling) *does* work in the background, so
+  enrollment gets as far as "relay connected / peer found" and then throws
+  `RTCPeerConnection is not defined` at `new RTCPeerConnection` (webrtc-peer.ts). This invalidates
+  the earlier "event page hosts RTCPeerConnection directly" assumption. Firefox P2P therefore needs
+  a different transport home; see "Firefox P2P transport" below.
 
 Blast radius: six importers (`session.ts`, `clipboard.ts`, `background.ts`, `vault-io.ts`,
 `autofill-index.ts`, `corner-prompt.ts`) and two test/harness references. The test harness mocks
 `chrome.offscreen`, so under vitest the feature-detect always picks the Chrome branch and existing
 assertions stay valid.
+
+## Firefox P2P transport (open — blocks headless FF sync)
+
+`RTCPeerConnection` is unavailable in the Firefox background (above), so the WebRTC data channel
+cannot run there. Options, most to least headless:
+
+1. **Relay-forward channel (recommended).** Carry the Noise-encrypted payload over the existing
+   signaling relay (`WebSocket`, which *does* work in the background) instead of a WebRTC data
+   channel. The relay already sees only ciphertext, so the trust model is unchanged; the Noise
+   handshake, enrollment, and roster+entries merge all stay. Needs a relay-backed `channel.ts`
+   selected on Firefox. **Only option that preserves headless background sync.** Slower; bounded by
+   relay message size/rate.
+2. **WebRTC in a tab-context page.** Run the transport in an extension page loaded in a real tab
+   (the options/Settings page, or a `web_accessible_resource` iframe injected into a page by a
+   content script), where `RTCPeerConnection` exists. Direct P2P like Chrome, but sync runs only
+   while that page/tab is open (not headless), and an injected iframe dies on navigation.
+3. **Native WebRTC (webrtc-rs) via native messaging.** Heavy: a separate native host + installer,
+   like the iOS approach. Overkill for a browser extension.
+
+Recommendation: option 1 (relay-forward) — the only headless-preserving path, reusing the whole
+transport-free engine, at the cost of a new channel backing + relay-bandwidth limits.
 
 ## Passkey provider (Chrome-only proxy; Firefox needs a content-script transport)
 
