@@ -1,1 +1,1 @@
-Bramble for iOS: a local-first password manager with AutoFill, Face ID and Touch ID unlock, TOTP codes, and KeePass import. No account, no cloud.
+Bramble for iOS: a local-first password manager with AutoFill, passkeys, Face ID and Touch ID unlock, TOTP codes, and KeePass import. No account, no cloud.

@@ -1,1 +1,1 @@
-Sem conta, sem nuvem, nenhuma empresa detém seu cofre. Suas senhas permanecem criptografadas em seu dispositivo. Importação de AutoFill, TOTP e KeePass incluída.
+Sem conta, sem nuvem, sem empresa guardando seu cofre. Suas senhas permanecem criptografadas no dispositivo. Passkeys, AutoFill, TOTP e importação do KeePass incluídos.

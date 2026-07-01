@@ -1,1 +1,1 @@
-Bramble per iOS: un gestore di password basato sul dispositivo con sblocco tramite AutoFill, Face ID e Touch ID, codici TOTP e importazione da KeePass. Nessun account, nessun cloud.
+Bramble per iOS: un gestore di password con archiviazione locale prioritaria, che include AutoFill, passkeys, sblocco tramite Face ID e Touch ID, codici TOTP e importazione da KeePass. Nessun account, nessun cloud.

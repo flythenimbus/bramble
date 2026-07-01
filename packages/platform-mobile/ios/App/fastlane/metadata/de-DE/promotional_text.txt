@@ -1,1 +1,1 @@
-Ihr Tresor ist lokal verschlüsselt und wird von keinem Konto oder Unternehmen verwaltet. Enthält AutoFill, TOTP und KeePass Import.
+Ihr Tresor ist lokal gespeichert und bleibt verschlüsselt auf Ihrem Gerät – keine Cloud oder Konto nötig. Unterstützt Passkeys, AutoFill, TOTP und KeePass-Import.

@@ -1,1 +1,1 @@
-TOTP,KeePass,sécurité,authentificateur,identifiants,chiffrement,horsligne,biométrique
+passkeys,identifiants,motdepasse,sécurité,2FA,TOTP,KeePass,offline,chiffrement,biométrique
