@@ -1,16 +1,17 @@
 Bramble es un gestor de contraseñas con enfoque local. Sus contraseñas residen en una bóveda cifrada en su dispositivo, no en el servidor de otra persona. No hay cuenta que crear y nada que envíe información a terceros.
 
-Todo lo criptográfico se ejecuta en un núcleo Rust: Argon2id deriva su clave, AES-256-GCM cifra sus datos y el cifrado envolvente le otorga una clave propia a cada entrada. Los nombres de sitios web, los nombres de usuario y las notas están todos cifrados, y los secretos se eliminan de la memoria después de su uso.
+Todo lo criptográfico se ejecuta en un núcleo Rust: Argon2id deriva su clave, AES-256-GCM cifra sus datos y el cifrado envolvente le da una clave propia a cada entrada. Los nombres de sitios web, los nombres de usuario y las notas están todos cifrados, y los secretos se eliminan de la memoria después de su uso.
 
 CARACTERÍSTICAS
-- Relleno automático de contraseñas y códigos de un solo uso en aplicaciones y Safari, directamente desde el teclado.
-- Desbloqueo con Face ID o Touch ID, su contraseña maestra o un código de recuperación.
+- Autocompletado de contraseñas y códigos de un solo uso en aplicaciones y Safari, directamente desde el teclado.
+- Passkeys: cree e inicie sesión con passkeys, utilizando Bramble como su propio autenticador, para sitios web y aplicaciones que lo soporten.
+- Desbloquee con Face ID o Touch ID, su contraseña maestra o un código de recuperación.
 - Almacene inicios de sesión, tarjetas de pago, notas seguras y claves SSH, cada uno con sus propios campos.
 - Generador de contraseñas robusto incorporado.
 - TOTP / 2FA: añada una URI otpauth o un secreto y Bramble generará los códigos de seis dígitos.
 - Importación desde KeePass (KDBX4), archivos clave incluidos.
 - Código de recuperación: una copia de seguridad imprimible y de alta entropía que desbloquea su bóveda independientemente de su contraseña maestra.
-- Verificación opcional de vulneraciones utilizando k-anonimidad, por lo que nada sobre su contraseña abandona su dispositivo.
+- Verificación opcional de vulneraciones utilizando k-anonimidad, para que nada sobre su contraseña salga de su dispositivo.
 - Bloqueo automático después de la inactividad.
 - Sincronización entre sus propios dispositivos de forma peer-to-peer. Sin nube, sin intermediario reteniendo sus datos.
 

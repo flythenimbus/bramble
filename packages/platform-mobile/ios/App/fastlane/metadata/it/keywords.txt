@@ -1,1 +1,1 @@
-TOTP,KeePass,sicurezza,credenziali,autenticatore,offline,biometria
+passkeys,autofill,2FA,TOTP,KeePass,crittografia,sicurezza,login,biometria,offline,generatore,sync

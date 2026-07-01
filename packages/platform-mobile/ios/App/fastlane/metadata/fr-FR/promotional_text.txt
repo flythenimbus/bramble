@@ -1,1 +1,1 @@
-Vos mots de passe restent chiffrés sur votre appareil. Aucun cloud ou entreprise ne détient votre coffre-fort. Importation AutoFill, TOTP et KeePass incluse.
+Votre coffre est sous votre contrôle. Vos mots de passe restent chiffrés sur l'appareil. Passkeys, AutoFill, TOTP et importation de KeePass inclus.

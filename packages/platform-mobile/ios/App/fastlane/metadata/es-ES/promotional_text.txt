@@ -1,1 +1,1 @@
-Sin cuenta, sin nube, ninguna empresa posee su bóveda. Sus contraseñas permanecen cifradas en su dispositivo. Incluye AutoFill, TOTP e importación de KeePass.
+Sin cuenta, sin nube, ninguna empresa posee su bóveda. Sus contraseñas permanecen cifradas en su dispositivo. Incluye Passkeys, AutoFill, TOTP e importación de KeePass.

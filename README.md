@@ -1,32 +1,52 @@
 # Bramble
 
-A password manager that lives in your browser and keeps your secrets on your own machine. No account, no server holding your vault, no company to get breached and leak everything. You hold the file, you hold the password, and that's it.
+A password manager that keeps your secrets on your own devices. No account, no server holding your vault, no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
 
-Bramble is a Chromium extension (Chrome, Edge, Brave, Arc, and friends). Install it and you're up and running in a minute.
+Bramble runs where you do:
 
-[**Get it from the Chrome Web Store.**](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
+- **Browser extension** for Chromium browsers (Chrome, Edge, Brave, Arc, and friends). Install it and you're up and running in a minute.
+- **iOS app** with system AutoFill, Face ID / Touch ID unlock, and passkeys.
+- **Android app** with a native autofill service, biometric unlock, and passkeys.
+
+The same encrypted vault and the same Rust crypto core sit behind all three, and your devices can sync to each other directly, peer-to-peer, with no cloud in the middle.
+
+[**Get the extension from the Chrome Web Store.**](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
 
 ## What it does
 
-Your passwords are encrypted on your device and written to a single vault file, wherever you choose to put it. Drop it in a Dropbox or Google Drive folder and it syncs across your machines. Bramble never sees that folder, it just reads and writes one encrypted blob.
+Your passwords are encrypted on your device and written to a single vault file, wherever you choose to put it. On desktop, drop it in a Dropbox or Google Drive folder and it syncs across your machines; on mobile it lives on the device's own encrypted storage. Bramble never sees that folder or that file's contents, it just reads and writes one encrypted blob. Prefer to keep the cloud out of it entirely? Bramble's own peer-to-peer sync mirrors the vault straight between your devices.
 
-Everything cryptographic happens inside a Rust module compiled to WebAssembly. Your master password never touches the JavaScript heap.
+Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Your master password never touches the JavaScript heap.
+
+## On your phone
+
+The mobile apps are native iOS and Android builds, not a website in a wrapper. They reuse Bramble's Rust crypto core and vault format, and add the pieces that only make sense on a phone:
+
+- **System AutoFill.** Bramble registers as a credential provider, so your logins and one-time codes show up right in the keyboard and in the OS autofill bar, across apps and browsers. On iOS it's the AutoFill Credential Provider; on Android it's a native autofill service.
+- **Passkeys.** Create and sign in with passkeys, with Bramble acting as your own authenticator for sites and apps that support them. Passkeys are stored as ordinary vault entries, so they sync between your devices with everything else.
+- **Biometric unlock.** Unlock with Face ID, Touch ID, or Android biometrics, gated by the OS keystore, or fall back to your master password or recovery code. (Hardware security-key unlock is desktop-only; the mobile platforms don't expose the WebAuthn PRF path to roaming keys, so biometrics take its place.)
+- **On-device storage.** The vault lives on the native filesystem, encrypted at rest, not in a webview database the OS might evict.
+- **Peer-to-peer sync.** Pair a phone with your other devices and the vault syncs directly between them. No relay holds your data.
+
+The iOS and Android apps are versioned and released independently of the extension.
 
 ## Features
 
 - **🔒 Local-first, always.** One encrypted file on disk, in a location you pick.
 - **No shortcuts on crypto.** Argon2id for your key, AES-256-GCM for the data, envelope encryption so every entry has its own key. Secrets get wiped from memory after use.
 - **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable thing on disk is the file header.
-- **🎯 Domain-smart autofill.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs.
+- **🎯 Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown; on mobile it's the OS autofill bar across apps and browsers.
+- **🔑 Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - **Built-in password generator.** Strong passwords on tap.
-- **🔑 Unlock with a hardware key.** Register a YubiKey, Touch ID, or Windows Hello and unlock with a tap via the WebAuthn PRF extension. The key never hands over its secret. Use it alongside your master password, or turn the password off and make the key your only way in.
+- **Unlock your way.** Master password, a hardware key, biometrics, or a recovery code. Register a YubiKey, Touch ID, or Windows Hello on desktop and unlock with a tap via the WebAuthn PRF extension; use Face ID, Touch ID, or Android biometrics on mobile. The hardware key never hands over its secret. Use any of these alongside your master password, or turn the password off and make one of them your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
 - **TOTP / 2FA codes.** Paste an `otpauth://` URI or bare secret and Bramble generates the six-digit codes.
+- **Peer-to-peer sync.** Mirror your vault directly between your own devices over an end-to-end encrypted connection. No cloud, no relay holding your data.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine.
-- **Auto-lock.** Locks after 15 minutes idle by default (configurable).
+- **Auto-lock.** Locks after idle time by default (configurable).
 - **Import from KeePass.** Bring your KDBX4 database over, key files included.
-- **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, or your recovery code can each unlock the same vault.
+- **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, biometrics, or your recovery code can each unlock the same vault.
 
 ## Why this beats the cloud managers
 
@@ -43,7 +63,7 @@ The tradeoff is real and worth being honest about: there's no "I forgot my passw
 
 ## How the encryption works
 
-Bramble uses LUKS-style key slots and envelope encryption. There's one random **Vault Key (VEK)** that actually protects your data. Each way of unlocking (master password, security key, or recovery code) derives its own **Key-Encryption Key (KEK)** that unwraps a copy of that same Vault Key, so adding or revoking an unlock method never re-encrypts a single entry. The Vault Key then unwraps a fresh per-entry key for every item, and that key decrypts the entry itself. Everything is AES-256-GCM, all of it inside the Rust/WASM module.
+Bramble uses LUKS-style key slots and envelope encryption. There's one random **Vault Key (VEK)** that actually protects your data. Each way of unlocking (master password, security key, biometrics, or recovery code) derives its own **Key-Encryption Key (KEK)** that unwraps a copy of that same Vault Key, so adding or revoking an unlock method never re-encrypts a single entry. The Vault Key then unwraps a fresh per-entry key for every item, and that key decrypts the entry itself. Everything is AES-256-GCM, all of it inside the same Rust core (compiled to WebAssembly in the browser, a native library on mobile).
 
 ```mermaid
 flowchart TD
@@ -69,33 +89,33 @@ flowchart TD
     DEK -->|"AES-256-GCM decrypt"| DATA["Entry data<br/>(passwords, notes, cards, keys)"]
 ```
 
-Your master password never leaves the WASM module, and the KEK and decrypted keys are wiped from memory after use. On disk, only the file header is readable, everything else is ciphertext.
+Your master password never leaves the crypto core, and the KEK and decrypted keys are wiped from memory after use. On disk, only the file header is readable, everything else is ciphertext.
 
 ## How it stacks up against KeePass
 
 If you love KeePass, you'll feel at home: your encrypted database, your control, no cloud middleman. Bramble even imports your KDBX4 files. Where it's different:
 
-- **🌐 It lives in your browser.** No separate desktop app, no plugin talking to a local program. Install the extension and you're done.
-- **Autofill just works.** Domain matching and an on-page dropdown, built in rather than bolted on.
+- **🌐 It meets you where you are.** A browser extension and native iOS and Android apps, all on one vault. No separate desktop app or plugin talking to a local program, and no fiddling to get autofill working on your phone.
+- **Autofill just works.** Domain matching and an on-page dropdown in the browser, plus system autofill and passkeys on mobile, built in rather than bolted on.
 - **One opinionated, modern build** instead of a sprawl of plugins and forks. Argon2id and AES-256-GCM out of the box.
 - **Modern UI.** KeePass looks like it escaped from 2003 (no disrespect). Bramble is clean and fast, with dark mode and a layout that won't make you wince.
 
-The KeePass philosophy with a browser-native coat of paint and autofill that works smoothly.
+The KeePass philosophy with a browser-native and mobile-native coat of paint and autofill that works smoothly.
 
 ## AI usage disclosure
 
-Parts of Bramble were written with AI assistance (Claude Opus 4.7), but every line was directed, reviewed, and shaped by a software engineer with over a decade of experience, the security-critical pieces especially. The AI was a fast typist, not the architect. The codebase is heavily tested, automated and manual, because for security software "it seems to work" isn't good enough.
+Parts of Bramble were written with AI assistance (Claude Opus), but every line was directed, reviewed, and shaped by a software engineer with over a decade of experience, the security-critical pieces especially. The AI was a fast typist, not the architect. The codebase is heavily tested, automated and manual, because for security software "it seems to work" isn't good enough.
 
 ## What's coming next
 
-- **Passkey storage.** Bramble will create, store, and serve passkeys, acting as your own WebAuthn authenticator.
 - **Smarter autofill.** More form-detection coverage and fixes for the weird checkout and login pages that like to break things.
+- **Firefox and Safari.** Extension support beyond Chromium.
 
-Further out for v2: Firefox and Safari, mobile, file attachments, and iframe/shadow-DOM autofill.
+Further out: file attachments and iframe/shadow-DOM autofill.
 
 ## Status
 
-Early days, but the core is real and working. v1 targets Chromium browsers (MV3). Firefox is on the roadmap. Found a bug or have an idea? Open an issue.
+The core is real and working. The Chromium extension is publicly released, and native iOS and Android apps ship the same vault with system autofill, passkeys, and biometric unlock. Firefox is on the roadmap. Found a bug or have an idea? Open an issue.
 
 ## Contributing
 

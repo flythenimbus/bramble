@@ -1,1 +1,1 @@
-autofill,2FA,TOTP,authenticator,KeePass,encryption,offline,security,logins,generator,biometric,sync
+passkeys,autofill,2FA,TOTP,KeePass,encryption,offline,security,logins,generator,biometric,sync

@@ -1,9 +1,10 @@
-Bramble ist ein lokal arbeitender Passwort-Manager. Ihre Passwörter befinden sich in einem verschlüsselten Tresor auf Ihrem Gerät und nicht auf einem fremden Server. Es gibt kein Konto zu erstellen und nichts, das nach Hause telefoniert.
+Bramble ist ein lokal zuerst arbeitender Passwortmanager. Ihre Passwörter befinden sich in einem verschlüsselten Tresor auf Ihrem Gerät und nicht auf einem fremden Server. Es gibt kein Konto zu erstellen und nichts, das nach Hause telefoniert.
 
-Alles Kryptografische läuft in einer Rust-Engine: Argon2id leitet Ihren Schlüssel ab, AES-256-GCM verschlüsselt Ihre Daten, und die Envelope Encryption weist jedem Eintrag seinen eigenen Schlüssel zu. Seitennamen, Benutzernamen und Notizen sind alle verschlüsselt, und Geheimnisse werden nach Gebrauch aus dem Speicher gelöscht.
+Alles Kryptografische läuft in einer Rust-Kernkomponente: Argon2id leitet Ihren Schlüssel ab, AES-256-GCM verschlüsselt Ihre Daten, und die Envelope Encryption weist jedem Eintrag seinen eigenen Schlüssel zu. Seitennamen, Benutzernamen und Notizen sind alle verschlüsselt, und Geheimnisse werden nach Gebrauch aus dem Speicher gelöscht.
 
 FUNKTIONEN
-- AutoFill von Passwörtern und Einmalcodes in Apps und Safari, direkt von der Tastatur aus.
+- Automatische Ausfüllung von Passwörtern und Einmalcodes in Apps und Safari, direkt von der Tastatur aus.
+- Passkeys: Erstellen und Anmelden mit Passkeys, wobei Bramble Ihr eigener Authenticator für unterstützte Websites und Apps ist.
 - Entsperren mit Face ID oder Touch ID, Ihrem Masterpasswort oder einem Wiederherstellungscode.
 - Speichern von Logins, Zahlungskarten, sicheren Notizen und SSH-Schlüsseln, jeweils mit eigenen Feldern.
 - Integrierter starker Passwortgenerator.

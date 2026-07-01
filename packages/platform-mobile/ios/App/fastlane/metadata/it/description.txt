@@ -1,18 +1,19 @@
-Bramble è un password manager con archiviazione locale. Le sue password risiedono in una vault crittografata sul suo dispositivo, non su un server di qualcun altro. Non esiste alcun account da creare e nessun dato che viene inviato al cloud.
+Bramble è un gestore di password local-first. Le sue password risiedono in una vault crittografata sul suo dispositivo, non su un server altrui. Non esiste alcun account da creare e nulla che invii informazioni al cloud.
 
-Tutte le operazioni crittografiche sono eseguite in un core Rust: Argon2id deriva la sua chiave, AES-256-GCM crittografa i suoi dati e l'crittografia a involucro assegna una chiave specifica ad ogni voce. I nomi dei siti web, gli username e le note sono tutti crittografati e i segreti vengono eliminati dalla memoria dopo l'uso.
+Tutto ciò che è criptografico funziona con un core Rust: Argon2id deriva la sua chiave, AES-256-GCM crittografa i suoi dati e l'crittografia a involucro assegna una chiave a ogni voce. I nomi dei siti web, gli username e le note sono tutti crittografati, e i segreti vengono cancellati dalla memoria dopo l'uso.
 
 CARATTERISTICHE
 - Riempimento automatico di password e codici usa e getta nelle app e in Safari, direttamente dalla tastiera.
-- Sblocco con Face ID o Touch ID, la sua password principale o un codice di recupero.
-- Archiviazione di login, carte di pagamento, note sicure e chiavi SSH, ognuna con i propri campi.
+- Passkeys: crei e accedi con passkeys, utilizzando Bramble come autenticatore personale per i siti e le app che li supportano.
+- Sblocca con Face ID o Touch ID, la sua password principale o un codice di recupero.
+- Archivia login, carte di pagamento, note sicure e chiavi SSH, ognuno con i propri campi.
 - Generatore di password robusto integrato.
 - TOTP / 2FA: aggiunga un URI otpauth o un segreto e Bramble genererà i codici a sei cifre.
 - Importazione da KeePass (KDBX4), inclusi i file chiave.
 - Codice di recupero: un backup stampabile ad alta entropia che sblocca la sua vault indipendentemente dalla password principale.
-- Controllo delle violazioni opzionale utilizzando k-anonymity, in modo che nulla sulla sua password lasci il suo dispositivo.
+- Controllo delle violazioni opzionale utilizzando k-anonimato, in modo che nulla sulla sua password lasci il suo dispositivo.
 - Blocco automatico dopo l'inattività.
 - Sincronizzazione tra i suoi dispositivi peer-to-peer. Nessun cloud, nessun intermediario che detiene i suoi dati.
 
 PRIVATA
-Bramble non ha account, né abbonamento, né telemetria. La sua vault non lascia mai il suo controllo e il codice viene eseguito interamente sul suo dispositivo.
+Bramble non ha account, né abbonamento, né telemetria. La sua vault non lascia mai il suo controllo e il codice funziona interamente sul suo dispositivo.

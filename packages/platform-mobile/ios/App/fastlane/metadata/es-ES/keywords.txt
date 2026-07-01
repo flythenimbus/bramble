@@ -1,1 +1,1 @@
-KeePass,TOTP,seguridad,contraseñas,autenticador,generador,sinconexion,biometrico
+seguridad,clavesdeacceso,passkeys,TOTP,KeePass,cifrado,biometría,sinconexion

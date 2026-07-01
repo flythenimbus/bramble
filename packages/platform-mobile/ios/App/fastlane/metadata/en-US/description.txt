@@ -4,6 +4,7 @@ Everything cryptographic runs in a Rust core: Argon2id derives your key, AES-256
 
 FEATURES
 - AutoFill passwords and one-time codes into apps and Safari, right from the keyboard.
+- Passkeys: create and sign in with passkeys, with Bramble as your own authenticator, for sites and apps that support them.
 - Unlock with Face ID or Touch ID, your master password, or a recovery code.
 - Store logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - Built-in strong password generator.
