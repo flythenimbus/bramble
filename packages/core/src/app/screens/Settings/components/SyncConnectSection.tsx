@@ -155,12 +155,16 @@ export function SyncConnectSection() {
 	});
 	const ctxPath = typeof location !== "undefined" ? location.pathname : "?";
 
-	// The Firefox WebRTC host runs in a content-script iframe (the popup/background can't do
-	// WebRTC); it writes its RTCPeerConnection probe here on each page load. Read it back so
-	// the popup shows whether that context works. Empty until a web page has loaded once.
-	const [rtcFrame, setRtcFrame] = useState("(open a web page first)");
+	// Firefox WebRTC context probes: the content script writes RTCPeerConnection results for
+	// the candidate web-page contexts (isolated world / page main world) plus the extension
+	// iframe, on each page load. Read them back so the popup can show which context works.
+	// Empty until a web page has loaded once.
+	const [rtcDiag, setRtcDiag] = useState<Record<string, string>>({});
 	useEffect(() => {
-		void storage.getMeta<string>("diag.rtcFrame").then((v) => v && setRtcFrame(v));
+		const keys = ["diag.rtcContent", "diag.rtcMain", "diag.rtcFrame"];
+		void Promise.all(keys.map((k) => storage.getMeta<string>(k))).then((vals) =>
+			setRtcDiag(Object.fromEntries(keys.map((k, i) => [k, vals[i] ?? "(none yet)"]))),
+		);
 	}, [storage]);
 
 	const devices = group ? activeDevices(group.roster) : [];
@@ -235,9 +239,11 @@ export function SyncConnectSection() {
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
 			<div className="rounded-lg border border-border bg-background/50 p-2 text-xs font-mono text-muted-foreground break-words space-y-0.5">
 				<div>
-					diag · popup RTCPeerConnection: {rtcProbe} · {ctxPath}
+					RTC · popup: {rtcProbe} · {ctxPath}
 				</div>
-				<div>diag · iframe RTCPeerConnection: {rtcFrame}</div>
+				<div>RTC · content-script: {rtcDiag["diag.rtcContent"] ?? "(none yet)"}</div>
+				<div>RTC · page-main: {rtcDiag["diag.rtcMain"] ?? "(none yet)"}</div>
+				<div>RTC · ext-iframe: {rtcDiag["diag.rtcFrame"] ?? "(none yet)"}</div>
 			</div>
 			{/* Live transport status log (offer sent / answer applied / ice connected /
 			    channel open) — surfaces enrollment + sync diagnostics in the dev panel. */}
