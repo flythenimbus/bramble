@@ -138,11 +138,24 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         val pk = VaultReader.readPasskeys(this).firstOrNull { it.credentialId == id } ?: return false
         val challenge = JSONObject(option.requestJson).optString("challenge")
         if (challenge.isEmpty()) return false
-        val origin = originOf(request.callingAppInfo) ?: return false
-        val clientDataJson = WebauthnJson.clientDataJson("webauthn.get", challenge, origin)
-        val clientDataHashStdB64 = Base64.encodeToString(
-            WebauthnJson.sha256(clientDataJson.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP,
-        )
+        // Browser callers (Chrome) compute clientDataJSON themselves and pass only its hash; we
+        // MUST sign THAT (the browser substitutes its own clientDataJSON into the response, so ours
+        // is a placeholder). Only app callers make us build clientDataJSON, from an apk-key-hash
+        // origin. (Signing a self-built clientDataJSON for a browser caller was the bug: its hash
+        // didn't match the browser's clientDataJSON, so the RP rejected with NotAllowedError.)
+        val browserHash = option.clientDataHash
+        val clientDataJson: String
+        val clientDataHashStdB64: String
+        if (browserHash != null) {
+            clientDataJson = "{}"
+            clientDataHashStdB64 = Base64.encodeToString(browserHash, Base64.NO_WRAP)
+        } else {
+            val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
+            clientDataJson = WebauthnJson.clientDataJson("webauthn.get", challenge, origin)
+            clientDataHashStdB64 = Base64.encodeToString(
+                WebauthnJson.sha256(clientDataJson.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP,
+            )
+        }
         // userVerified=true: the unlock just performed (biometric / master password) is a UV.
         val assertion = passkeyGetAssertion(pk.rpId, pk.privateKey, clientDataHashStdB64, true)
         val json = WebauthnJson.authenticationResponseJson(
@@ -166,10 +179,16 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         val algs = opts.optJSONArray("pubKeyCredParams")
         val supportsEs256 = algs != null && (0 until algs.length()).any { algs.optJSONObject(it)?.optInt("alg") == -7 }
         if (!supportsEs256) return false
-        val origin = originOf(request.callingAppInfo) ?: return false
 
         val reg = passkeyMakeCredential(rpId, true)
-        val clientDataJson = WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
+        // Same clientDataJSON rule as the assertion: the browser owns it (placeholder here), app
+        // callers get an apk-key-hash origin. "none" attestation doesn't sign it regardless.
+        val clientDataJson = if (createReq.clientDataHash != null) {
+            "{}"
+        } else {
+            val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
+            WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
+        }
         val json = WebauthnJson.registrationResponseJson(
             reg.credentialId, reg.attestationObject, reg.authenticatorData, reg.publicKey, clientDataJson,
         )
@@ -198,23 +217,9 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         put("createdAt", System.currentTimeMillis())
     }.toString()
 
-    // The web origin bound into clientDataJSON. Browser callers carry the real origin but reading
-    // it needs a privileged-browser allowlist (we bundle a local copy to stay Play-free); app
-    // callers fall back to an apk-key-hash origin.
-    // TODO(passkeys): populate res/raw/privileged_browsers.json with the real browser fingerprints
-    // (until then browsers fall to apk-key-hash and the RP rejects the origin) - the Android analog
-    // of the iOS clientDataHash work; verify on device. See docs/passkey-provider.md.
-    private fun originOf(info: CallingAppInfo): String? {
-        val fromBrowser = try {
-            val allow = resources.openRawResource(R.raw.privileged_browsers).bufferedReader().use { it.readText() }
-            info.getOrigin(allow)
-        } catch (e: Exception) {
-            Log.w(TAG, "origin: caller not in the privileged-browser allowlist; using apk-key-hash", e)
-            null
-        }
-        return fromBrowser ?: apkKeyHashOrigin(info)
-    }
-
+    // clientDataJSON origin for an APP caller (no browser-provided clientDataHash): the standard
+    // android:apk-key-hash:<base64url sha256(signing cert)>. Browser callers never reach this
+    // (they pass clientDataHash, which we sign directly - no allowlist needed).
     private fun apkKeyHashOrigin(info: CallingAppInfo): String? {
         return try {
             val cert = info.signingInfo.apkContentsSigners.firstOrNull()?.toByteArray() ?: return null
