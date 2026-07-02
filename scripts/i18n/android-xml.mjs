@@ -33,14 +33,19 @@ const unescapeXml = (s) =>
 		.replace(/\\"/g, '"')
 		.replace(/&lt;/g, "<")
 		.replace(/&gt;/g, ">")
-		.replace(/&amp;/g, "&");
+		.replace(/&amp;/g, "&")
+		.replace(/\\\\/g, "\\");
 
+// Escape the backslash first so the Android backslash-escapes we add for ' and "
+// (and any literal backslash in the value) can't combine into a broken sequence.
 const escapeXml = (s) =>
 	s
+		.replace(/\\/g, "\\\\")
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
-		.replace(/'/g, "\\'");
+		.replace(/'/g, "\\'")
+		.replace(/"/g, '\\"');
 
 const existingNames = (xml) => new Set([...xml.matchAll(/<string\s+name="([^"]+)"/g)].map((m) => m[1]));
 
