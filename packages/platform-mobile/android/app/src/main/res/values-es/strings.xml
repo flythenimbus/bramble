@@ -19,7 +19,7 @@ Añada uno en Bramble.</string>
     <string name="af_section_for">Para %s</string>
     <string name="af_section_matches">Coincidencias</string>
     <string name="af_section_all_items">Todos los elementos</string>
-    <string name="af_section_no_matches">No hay coincidencias para "%s".</string>
+    <string name="af_section_no_matches">No hay coincidencias para \"%s\".</string>
     <string name="af_section_items_count">Elementos (%d)</string>
     <string name="af_no_name">(sin nombre)</string>
     <string name="af_use_password">Usar contraseña</string>
