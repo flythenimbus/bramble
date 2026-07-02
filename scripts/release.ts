@@ -26,7 +26,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const HOME = process.env.HOME ?? "";
 
@@ -107,13 +107,23 @@ function releaseExtension(target: string, version: string) {
 	const zipAsset = join(stage, `bramble_${target}_${version}.zip`);
 	copyFileSync(crx, crxAsset);
 	copyFileSync(zip, zipAsset);
+	// SHA256SUMS over the GitHub-hosted .crx/.zip (integrity for direct/unpacked
+	// installs; the Chrome Web Store re-signs, so store bytes won't match). Mirrors
+	// the android branch.
+	const sumsAsset = join(stage, "SHA256SUMS");
+	writeFileSync(
+		sumsAsset,
+		[crxAsset, zipAsset]
+			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
+			.join(""),
+	);
 	try {
-		publish(tag, title, [crxAsset, zipAsset]);
+		publish(tag, title, [crxAsset, zipAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(
-		`\nreleased ${tag}: signed bramble_${target}_${version}.crx attached to the release.`,
+		`\nreleased ${tag}: signed bramble_${target}_${version}.crx + SHA256SUMS attached to the release.`,
 	);
 }
 
