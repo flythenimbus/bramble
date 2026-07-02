@@ -30,6 +30,7 @@
 		"release": "node scripts/release.ts",
 		"bump:mobile": "node scripts/bump-mobile.ts",
 		"sign": "node scripts/sign.ts",
+		"sign:firefox": "node scripts/sign-firefox.ts",
 		"tag:delete": "f(){ [ -z \"$1\" ] && { echo 'usage: pnpm run tag:delete <tag>'; exit 1; }; git tag -d \"$1\"; git push origin --delete \"$1\"; }; f",
 		"test": "pnpm run wasm:test && pnpm -r run test",
 		"typecheck": "pnpm -r run typecheck",
@@ -51,6 +52,7 @@
 		"@types/node": "^24.0.0",
 		"crx3": "^2.0.0",
 		"vite-plugin-babel": "^1.7.3",
+		"web-ext": "^8.10.0",
 		"ws": "^8.18.0"
 	},
 	"pnpm": {

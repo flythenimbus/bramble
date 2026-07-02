@@ -3,16 +3,19 @@
 //
 // Usage:
 //   pnpm run release chromium <version>   e.g. pnpm run release chromium 1.0.0
+//   pnpm run release firefox  <version>   e.g. pnpm run release firefox  1.0.0
 //   pnpm run release android  <version>   e.g. pnpm run release android  1.1.0
 //   pnpm run release ios      <version>   e.g. pnpm run release ios      1.1.0
 //   pnpm run release ios      <version> --ipa   dry run: build the signed IPA to ~/Desktop,
 //                                               no upload, no tag (test the pipeline first)
 //
-// Tags as <version>-<platform> (e.g. 1.0.0-chromium, 1.1.0-android, 1.1.0-ios). chromium +
-// android publish a GitHub release; publishing fires .github/workflows/release.yml, which only
-// verifies the artifact made it onto the release (CI never builds or signs). ios has no GitHub
-// release: the binary goes to TestFlight via fastlane, and you submit for App Store review
-// manually in App Store Connect. Signing setup lives in docs/release-signing.md.
+// Tags as <version>-<platform> (e.g. 1.0.0-chromium, 1.0.0-firefox, 1.1.0-android, 1.1.0-ios).
+// chromium/firefox/android publish a GitHub release; publishing fires
+// .github/workflows/release.yml, which only verifies the artifact made it onto the release (CI
+// never builds or signs). chromium packs a locally-signed .crx; firefox uploads to AMO and
+// attaches the Mozilla-signed .xpi it returns. ios has no GitHub release: the binary goes to
+// TestFlight via fastlane, and you submit for App Store review manually in App Store Connect.
+// Signing setup lives in docs/release-signing.md.
 
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -47,6 +50,7 @@ if (!version) fail(`missing version. usage: pnpm run release ${platform} <versio
 
 if (platform === "android") releaseAndroid(version);
 else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
+else if (platform === "firefox") releaseFirefox(version);
 else releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
@@ -124,6 +128,102 @@ function releaseExtension(target: string, version: string) {
 	}
 	console.log(
 		`\nreleased ${tag}: signed bramble_${target}_${version}.crx + SHA256SUMS attached to the release.`,
+	);
+}
+
+// ----- firefox: GitHub-released, Mozilla-signed .xpi + SHA256SUMS -----
+
+function releaseFirefox(version: string) {
+	const MANIFEST = "packages/manifests/firefox/manifest.json";
+	const DIST = "packages/platform-extension";
+	const XPI = `${DIST}/bramble-firefox.xpi`;
+	const ZIP = `${DIST}/bramble-firefox.zip`;
+
+	// Firefox manifest versions follow the same 1-4 dotted-int rule as Chrome.
+	const PART = /^(0|[1-9]\d{0,4})$/;
+	const parts = version.split(".");
+	if (parts.length > 4 || parts.some((p) => !PART.test(p) || Number(p) > 65535))
+		fail(`invalid version "${version}". want 1-4 ints, each 0-65535 (e.g. 1.0.0)`);
+
+	const tag = `${version}-firefox`;
+	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
+	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+
+	// Signing prereqs, checked before the slow gate + build so a missing credential fails fast.
+	// Mozilla holds the signing key; we hold AMO API credentials (age+YubiKey encrypted, or
+	// AMO_API_KEY/AMO_API_SECRET in the env). sign-firefox.ts does the actual decrypt + upload.
+	// AMO refuses to re-sign a version, so retrying a failed release means bumping the version.
+	const haveEnvCreds = !!(process.env.AMO_API_KEY && process.env.AMO_API_SECRET);
+	const credsAge =
+		process.env.AMO_CREDENTIALS_AGE ?? join(HOME, ".config/bramble/amo-api-credentials.age");
+	if (!haveEnvCreds) {
+		if (!existsSync(credsAge))
+			fail(
+				`no AMO credentials: set AMO_API_KEY + AMO_API_SECRET, or provide ${credsAge} (override AMO_CREDENTIALS_AGE). See docs/release-signing.md.`,
+			);
+		for (const bin of ["age", "age-plugin-yubikey"])
+			if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	}
+
+	gate();
+
+	const before = readFileSync(MANIFEST, "utf8");
+	let replaced = 0;
+	const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
+		replaced++;
+		return `${p1}${version}${p2}`;
+	});
+	if (replaced !== 1)
+		fail(`expected exactly one "version" field in ${MANIFEST}, found ${replaced}`);
+
+	const branch = capture("git rev-parse --abbrev-ref HEAD");
+	const bumped = after !== before;
+	if (bumped) writeFileSync(MANIFEST, after);
+
+	try {
+		run("pnpm run wasm:build");
+		run("pnpm --filter @vault/platform-extension run bundle:firefox");
+		// AMO's addons-linter, run BEFORE signing. Signing uploads to AMO and consumes the
+		// version (AMO won't re-sign it), so catching a validation error here costs nothing:
+		// nothing was uploaded, so you fix it and retry the SAME version.
+		run("pnpm --filter @vault/platform-extension run lint:firefox");
+	} catch {
+		fail(
+			`build or addons-linter validation failed (nothing uploaded); run \`git checkout ${MANIFEST}\` to undo the bump`,
+		);
+	}
+
+	try {
+		run("pnpm run sign:firefox");
+	} catch {
+		fail(`signing failed; run \`git checkout ${MANIFEST}\` to undo the bump`);
+	}
+
+	if (!existsSync(ZIP) || !existsSync(XPI))
+		fail("expected bramble-firefox.zip and a Mozilla-signed bramble-firefox.xpi");
+
+	commitTagPush(bumped, MANIFEST, `chore(release): firefox ${version}`, tag, branch);
+
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+	const xpiAsset = join(stage, `bramble_firefox_${version}.xpi`);
+	const zipAsset = join(stage, `bramble_firefox_${version}.zip`);
+	copyFileSync(XPI, xpiAsset);
+	copyFileSync(ZIP, zipAsset);
+	// SHA256SUMS over the signed .xpi + the unpacked .zip, mirroring the chromium/android branches.
+	const sumsAsset = join(stage, "SHA256SUMS");
+	writeFileSync(
+		sumsAsset,
+		[xpiAsset, zipAsset]
+			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
+			.join(""),
+	);
+	try {
+		publish(tag, `Firefox Extension ${version}`, [xpiAsset, zipAsset, sumsAsset]);
+	} finally {
+		rmSync(stage, { recursive: true, force: true });
+	}
+	console.log(
+		`\nreleased ${tag}: Mozilla-signed bramble_firefox_${version}.xpi + SHA256SUMS attached to the release.`,
 	);
 }
 

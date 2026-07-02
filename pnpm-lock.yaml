@@ -42,6 +42,9 @@ importers:
       vite-plugin-babel:
         specifier: ^1.7.3
         version: 1.7.3(@babel/core@7.29.7)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0))
+      web-ext:
+        specifier: ^8.10.0
+        version: 8.10.0
       ws:
         specifier: ^8.21.0
         version: 8.21.0

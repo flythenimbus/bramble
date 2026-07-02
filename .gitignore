@@ -4,6 +4,8 @@ dist-chromium/
 dist-firefox/
 web-ext-artifacts/
 bramble*.zip
+bramble*.crx
+bramble*.xpi
 *.log
 .DS_Store
 

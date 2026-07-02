@@ -5,7 +5,7 @@ name: Verify release
 # NOT build or sign; they only confirm a publish carried the real signed artifact,
 # so a release can't silently go out without it. Triggered on publish (not the tag
 # push), by which point the assets are attached. One job runs per platform, keyed
-# off the tag suffix (<version>-chromium / <version>-android).
+# off the tag suffix (<version>-chromium / <version>-firefox / <version>-android).
 on:
   release:
     types: [published]
@@ -31,6 +31,28 @@ jobs:
           magic="$(head -c 4 "$crx")"
           [ "$magic" = "Cr24" ] || { echo "::error::$crx is not a CRX3 (magic: $magic)"; exit 1; }
           echo "ok: $crx is a signed CRX3"
+
+  verify-signed-xpi:
+    if: endsWith(github.event.release.tag_name, '-firefox')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert a Mozilla-signed XPI + matching SHA256SUMS are attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.xpi' --pattern '*.zip' --pattern 'SHA256SUMS' --dir .
+          xpi="$(ls *.xpi 2>/dev/null | head -1)"
+          [ -n "$xpi" ] || { echo "::error::no .xpi asset on release $TAG"; exit 1; }
+          [ -f SHA256SUMS ] || { echo "::error::no SHA256SUMS on release $TAG"; exit 1; }
+          # A Mozilla-signed XPI is a ZIP carrying the AMO signature block under META-INF;
+          # an unsigned/self-packed .xpi would lack it. This is what makes it installable.
+          unzip -l "$xpi" | grep -q 'META-INF/mozilla.rsa' \
+            || { echo "::error::$xpi is not Mozilla-signed (no META-INF/mozilla.rsa)"; exit 1; }
+          sha256sum -c SHA256SUMS
+          echo "ok: $xpi is Mozilla-signed and matches SHA256SUMS"
 
   verify-android-apk:
     if: endsWith(github.event.release.tag_name, '-android')
