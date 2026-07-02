@@ -27,20 +27,21 @@ function parseStrings(xml) {
 	return out;
 }
 
+// Android string escapes (\n \t \' \" \\) -> the literal chars, plus XML entities.
 const unescapeXml = (s) =>
 	s
-		.replace(/\\'/g, "'")
-		.replace(/\\"/g, '"')
 		.replace(/&lt;/g, "<")
 		.replace(/&gt;/g, ">")
 		.replace(/&amp;/g, "&")
-		.replace(/\\\\/g, "\\");
+		.replace(/\\([nt'"\\])/g, (_, c) => ({ n: "\n", t: "\t" })[c] ?? c);
 
-// Escape the backslash first so the Android backslash-escapes we add for ' and "
-// (and any literal backslash in the value) can't combine into a broken sequence.
+// Inverse of unescapeXml. Escape the backslash first so the escapes we add next
+// (\n \t \' \") can't combine with a literal backslash into a broken sequence.
 const escapeXml = (s) =>
 	s
 		.replace(/\\/g, "\\\\")
+		.replace(/\n/g, "\\n")
+		.replace(/\t/g, "\\t")
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
