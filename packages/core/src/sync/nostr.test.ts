@@ -30,6 +30,19 @@ describe("room id", () => {
 		expect(await deriveRoomId(k1)).not.toBe(await deriveRoomId(k2));
 		expect(await deriveRoomId(k1)).toMatch(/^[0-9a-f]{64}$/);
 	});
+
+	it("rotates per epoch: deterministic within, distinct across, and vs unrotated", async () => {
+		const k = new Uint8Array(32).fill(7);
+		expect(await deriveRoomId(k, "bramble/sync", 100)).toBe(
+			await deriveRoomId(k, "bramble/sync", 100),
+		);
+		expect(await deriveRoomId(k, "bramble/sync", 100)).not.toBe(
+			await deriveRoomId(k, "bramble/sync", 101),
+		);
+		expect(await deriveRoomId(k, "bramble/sync", 100)).not.toBe(
+			await deriveRoomId(k, "bramble/sync"),
+		);
+	});
 });
 
 describe("signal payload crypto", () => {

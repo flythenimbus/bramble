@@ -28,6 +28,8 @@ export interface MeshSessionOptions {
 	iceUrl?: string;
 	wasm: NostrWasm;
 	report: (status: string) => void;
+	/** Rotate the room per epoch (ongoing sync); off for the brief enrollment room. */
+	epochRooms?: boolean;
 	/** Handle one authenticated peer (run the handshake + the role's phase). */
 	onPeer: (peer: PeerSession) => Promise<void>;
 	/** Caller cleanup beyond the mesh, e.g. a re-broadcast timer. Run once on stop(). */
@@ -48,6 +50,7 @@ export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSe
 		roomLabel: opts.roomLabel,
 		signer: await makeNostr(opts.wasm),
 		iceServers,
+		epochRooms: opts.epochRooms,
 		onStatus: opts.report,
 		onPeer: (peer) => void opts.onPeer(peer).catch((e) => opts.report(`peer error: ${String(e)}`)),
 	});

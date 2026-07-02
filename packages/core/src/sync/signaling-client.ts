@@ -19,6 +19,8 @@ export interface SocketLike {
 export interface SignalingClient {
 	/** Publish a signed event to the room. Buffered until the socket is open. */
 	publish(event: NostrEvent): void;
+	/** Replace the room subscription (epoch rollover); reuses the subId so the relay swaps it. */
+	resubscribe(rooms: string | string[]): void;
 	close(): void;
 }
 
@@ -31,7 +33,7 @@ let subCounter = 0;
  */
 export function connectSignaling(
 	socket: SocketLike,
-	room: string,
+	rooms: string | string[],
 	onEvent: (event: NostrEvent) => void,
 	onOpen?: () => void,
 ): SignalingClient {
@@ -43,11 +45,13 @@ export function connectSignaling(
 		if (open) socket.send(frame);
 		else pending.push(frame);
 	};
+	const subscribe = (r: string | string[]) =>
+		sendRaw(JSON.stringify(["REQ", subId, signalFilter(r)]));
 
 	socket.onopen = () => {
 		open = true;
 		onOpen?.();
-		socket.send(JSON.stringify(["REQ", subId, signalFilter(room)]));
+		subscribe(rooms);
 		for (const frame of pending) socket.send(frame);
 		pending.length = 0;
 	};
@@ -66,6 +70,7 @@ export function connectSignaling(
 
 	return {
 		publish: (event) => sendRaw(JSON.stringify(["EVENT", event])),
+		resubscribe: subscribe,
 		close: () => {
 			try {
 				socket.send(JSON.stringify(["CLOSE", subId]));

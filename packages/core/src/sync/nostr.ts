@@ -78,10 +78,15 @@ export function computeEventId(e: Omit<NostrEvent, "id" | "sig">): Promise<strin
 	return sha256Hex(new TextEncoder().encode(serializeForId(e)));
 }
 
-/** Room id = HMAC-SHA256(k_room, label), hex, where k_room is an HKDF subkey of the
- * group key. Unguessable without the group key. Distinct labels give distinct rooms
- * so enrollment and ongoing sync don't collide. */
-export async function deriveRoomId(groupKey: Uint8Array, label = ROOM_LABEL): Promise<string> {
+/** Room id = HMAC-SHA256(k_room, label[:epoch]), hex, where k_room is an HKDF subkey of
+ * the group key. Unguessable without the group key. Distinct labels give distinct rooms so
+ * enrollment and ongoing sync don't collide. Passing an epoch rotates the room over time so
+ * a relay can't link a group's activity across epochs (see docs/firefox-port.md). */
+export async function deriveRoomId(
+	groupKey: Uint8Array,
+	label = ROOM_LABEL,
+	epoch?: number,
+): Promise<string> {
 	const macKey = await deriveSubkey(groupKey, ROOM_KDF_INFO);
 	const key = await crypto.subtle.importKey(
 		"raw",
@@ -90,7 +95,8 @@ export async function deriveRoomId(groupKey: Uint8Array, label = ROOM_LABEL): Pr
 		false,
 		["sign"],
 	);
-	const mac = await crypto.subtle.sign("HMAC", key, buf(new TextEncoder().encode(label)));
+	const message = epoch === undefined ? label : `${label}:${epoch}`;
+	const mac = await crypto.subtle.sign("HMAC", key, buf(new TextEncoder().encode(message)));
 	return bytesToHex(new Uint8Array(mac));
 }
 
@@ -149,7 +155,8 @@ export async function verifyEvent(verifier: NostrVerifier, e: NostrEvent): Promi
 	return verifier.verify(e.pubkey, e.id, e.sig);
 }
 
-/** The REQ filter that subscribes to a room's signaling events. */
-export function signalFilter(room: string): NostrFilter {
-	return { kinds: [EPHEMERAL_KIND], [`#${ROOM_TAG}`]: [room] };
+/** The REQ filter that subscribes to one or more rooms' signaling events (the relay
+ * matches a multi-value tag filter, so current+previous epoch rooms ride one REQ). */
+export function signalFilter(rooms: string | string[]): NostrFilter {
+	return { kinds: [EPHEMERAL_KIND], [`#${ROOM_TAG}`]: Array.isArray(rooms) ? rooms : [rooms] };
 }
