@@ -1012,6 +1012,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// device passcode; run off the main thread since it blocks while the prompt is up.
 	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
 		DispatchQueue.global(qos: .userInitiated).async {
+			let ctx = LAContext()
+			ctx.localizedReason = reason
 			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
 				kSecAttrService as String: BrambleVault.biometricService,
@@ -1019,7 +1021,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
-				kSecUseOperationPrompt as String: reason,
+				kSecUseAuthenticationContext as String: ctx,
 			]
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
