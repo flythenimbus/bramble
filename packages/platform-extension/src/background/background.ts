@@ -24,7 +24,7 @@ import {
 	sessionHydration,
 	vaultLocked,
 } from "./session";
-import { maybeStartSync } from "./sync";
+import { maybeStartSync, SYNC_KEEPALIVE_ALARM } from "./sync";
 import { initWebauthnProxy } from "./webauthn-proxy-init";
 
 // Gate every handler on both hydrations (session VEK + known hostnames) completing.
@@ -67,6 +67,12 @@ api.alarms.onAlarm.addListener((alarm) => {
 	}
 	if (alarm.name === CLIPBOARD_ALARM) {
 		void runClipboardClear();
+		return;
+	}
+	if (alarm.name === SYNC_KEEPALIVE_ALARM) {
+		// Firefox keep-alive: the fire already woke the event page (which re-runs the
+		// resume-on-startup above); re-ensure sync in case it wasn't a cold start.
+		if (!vaultLocked()) void maybeStartSync();
 		return;
 	}
 });

@@ -78,11 +78,26 @@ on("SYNC_ENROLL_JOIN", withDeviceKey);
 
 // --- ongoing sync (background-driven) ---
 
-/** Start the offscreen roster-sync host if this device is enrolled. Caller ensures unlocked. */
+// Firefox has no persistent offscreen document; its background event page suspends when
+// idle, which kills the relay-forward receive loop (the relay stores nothing, so a peer's
+// broadcasts are lost while we're suspended). A repeating alarm wakes the event page so the
+// background re-runs and reconnects, catching up on peers' changes. Chrome runs sync in the
+// offscreen document (persistent), so it doesn't need this. See docs/firefox-port.md.
+export const SYNC_KEEPALIVE_ALARM = "sync-keepalive";
+const syncHostSuspends = typeof api.offscreen === "undefined";
+// Guards against re-starting an already-running session within one event-page/SW lifetime
+// (top-level resume, unlock, and the keepalive alarm can all fire in one lifetime). A fresh
+// lifetime (after a suspend) resets it, so a woken event page reconnects.
+let syncRunning = false;
+
+/** Start the roster-sync host if this device is enrolled. Caller ensures unlocked. */
 export async function maybeStartSync(): Promise<void> {
 	const group = await getStoredGroup();
 	const kp = await getStoredKeypair();
 	if (!group || !kp) return;
+	if (syncRunning) return;
+	syncRunning = true;
+	if (syncHostSuspends) api.alarms.create(SYNC_KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
 	const payload: RosterSyncMsg = {
 		relayUrl: await getStoredRelay(),
 		iceUrl: await getStoredIceUrl(),
@@ -95,6 +110,8 @@ export async function maybeStartSync(): Promise<void> {
 }
 
 export async function stopSync(): Promise<void> {
+	syncRunning = false;
+	if (syncHostSuspends) await api.alarms.clear(SYNC_KEEPALIVE_ALARM);
 	await sendToOffscreen({ type: "SYNC_DISCONNECT" }).catch(() => {});
 }
 
