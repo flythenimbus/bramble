@@ -12,9 +12,11 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
 - Porting the runtime is **small**: most Chrome-isms are already feature-detected and degrade
   without crashing. There are two real code changes for the core runtime (the offscreen document,
   and the `chrome.*` namespace), plus a per-target manifest and build wiring.
-- The **passkey provider** uses `chrome.webAuthenticationProxy`, a Chrome-only API with no Firefox
-  equivalent. It is feasible on Firefox via a content-script transport but is **optional for a first
-  ship**; see "Passkey provider".
+- **Two WebAuthn features are gated off on Firefox** (no broken UI; both fast-follows): the **passkey
+  provider** (`chrome.webAuthenticationProxy` is Chrome-only — Firefox needs a MAIN-world
+  content-script transport) and **security-key unlock** (the `moz-extension://` origin can't be a
+  WebAuthn RP, and Firefox lacks PRF over external keys regardless). See "Passkey provider",
+  "Security-key … unlock", and "Status".
 - **P2P sync is mandatory for Firefox v1, and works via a relay-forward fallback.** With no FSA,
   file-anywhere sync is impossible on Firefox, so P2P is the only cross-device sync it can offer. But
   Firefox has no `RTCPeerConnection` in any reachable context (WebRTC off by default in hardened
@@ -27,6 +29,40 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
   mechanism; a pure extension can at best auto-push to a Downloads-relative file with manual pull,
   and true file parity needs a native-messaging companion. This is why P2P (above) is the Firefox
   sync path instead. See "Filesystem sync".
+
+## Status (2026-07)
+
+Branch `feat/firefox` (rebased on main). Everything below is built + unit-tested + both targets build
+clean (`web-ext lint` 0 errors); the *runtime* behaviour still wants an on-device pass.
+
+**Built:**
+
+- Runtime port — the `api` shim (`chrome.*` → `globalThis.browser ?? chrome`), the offscreen →
+  event-page crypto host seam, the Firefox manifest, `TARGET` build wiring, `_locales` /
+  `default_locale` i18n parity.
+- **P2P sync via relay-forward** — the one mandatory-for-v1 piece. Negotiated per pair (a `hello`
+  `caps.rtc` flag picks WebRTC vs relay), runs headless in the FF background; Chrome↔Chrome stays
+  direct WebRTC. Hardening: FF keep-alive alarm (event-page suspension), handshake timeout,
+  stale-peer reaper, epoch-rotating sync room, payload padding. Initial + ongoing sync device-tested
+  Chrome↔Firefox. See "Firefox P2P transport".
+- UI/behaviour — popup closes after opening setup, the FSA "vault file location" step is hidden (no
+  picker), dark-mode toolbar icon via manifest `theme_icons`, storage durability (`unlimitedStorage`
+  + `navigator.storage.persist()`).
+
+**Gated off on Firefox (no broken UI; deferred fast-follows):** the passkey provider and security-key
+unlock — see their sections below for exactly what each needs.
+
+**Remaining before a Firefox ship:**
+
+- On-device verification: idle sync catch-up (~30-60s), the epoch rollover (only fires at an hour
+  boundary — logic is unit-tested, not yet crossed live), autofill on a real page.
+- **Clipboard auto-clear from the FF background** — flagged, unverified: `navigator.clipboard.
+  writeText("")` may be rejected from an unfocused background page, and the usual `<textarea>` +
+  `execCommand` fallback also needs a focused document the background lacks. May need a rethink
+  (clear from the popup, or on next popup open). See "Risks / open items".
+- Export/import backup — the uninstall-wipe safety net (`storage.local` is the only copy on FF).
+- AMO submission is a separate workstream (real `gecko.id`, `data_collection_permissions`,
+  reproducible-build docs, privacy policy, signing the `.xpi`).
 
 ## Chrome API surface in use
 
@@ -242,6 +278,59 @@ Open items to verify before building this:
 - `world: "MAIN"` content-script timing vs a page that calls `navigator.credentials` early.
 - Conditional UI / `mediation: "conditional"` (passkey autofill) is a larger surface; scope it out
   of the first pass.
+
+**Current state (gated off):** the Firefox manifest omits the `webAuthenticationProxy` permission,
+`registerListeners()` / `initWebauthnProxy()` (`background/webauthn-proxy-init.ts`) are guarded by
+`typeof api.webAuthenticationProxy`, and `shell.supportsPasskeyProvider` (derived from the manifest
+permission) hides the Settings toggle. Nothing throws; the feature is simply absent on Firefox.
+
+**What Firefox needs specifically** (to enable it — a fast-follow; ~85% of the code is reused):
+
+1. A `world: "MAIN"` content script (FF 128+) — or a `web_accessible_resource` script injected into
+   the page's main world — that overrides `navigator.credentials.create` and `.get`, capturing the
+   page's options + `location.origin`.
+2. A bridge: main-world script → content-script isolated world (`window.postMessage`) → background
+   (the page can't `runtime.sendMessage` the background directly).
+3. New background handlers (`WEBAUTHN_CREATE` / `WEBAUTHN_GET`) that call the **existing** pure
+   handlers `handleCreate` / `handleGet` (`background/webauthn-proxy.ts`) with `origin` = the page
+   (not `activeTabOrigin`, which is the Chrome-proxy way to recover the origin).
+4. Return a **synthetic `PublicKeyCredential`** to the page, rebuilding real `ArrayBuffer`s across the
+   world boundary (structured clone yields typed-array copies; the page's WebAuthn glue expects
+   `ArrayBuffer`). This is the main gotcha.
+5. Manifest: register the main-world script under `content_scripts` (`world: "MAIN"`) and/or
+   `web_accessible_resources`.
+6. Scope `mediation: "conditional"` (passkey autofill) out of the first pass — larger surface.
+
+Only items 1-5 are new (the delivery). The ceremony + signing (`webauthn-proxy.ts`
+`handleCreate`/`handleGet`/corner-card, the vault P-256 keys) is transport-free and reused verbatim.
+
+## Security-key / platform-authenticator unlock (Firefox: disabled)
+
+Distinct from the passkey *provider* above: this is Bramble's **own vault unlock** via a WebAuthn
+credential (the PRF / hmac-secret extension derives a key that wraps the VEK). On Firefox it is
+**disabled** — `shell.supportsSecurityKeys` is false on `moz-extension://`, so the Settings section
+hides — because registering throws **"The operation is insecure"**: the default rpID is the
+`moz-extension://` origin, which Firefox rejects as a WebAuthn RP.
+
+What it would take, and why it stays deferred (verified 2026-07):
+
+- **The rpID error is fixable (Firefox 150+).** An extension can specify an explicit `rp.id` for any
+  domain in its `host_permissions` (`<all_urls>` covers any), so `rp.id: "bramble.app"` on Firefox is
+  accepted. Keep Chrome's *implicit* rpID (the extension origin) unchanged — changing it invalidates
+  every already-registered Chrome user's key.
+- **The real blocker is PRF over external keys.** Firefox supports the PRF extension for **platform**
+  authenticators (Touch ID / Windows Hello, ~FF 135/139) but **not for external hardware keys
+  (YubiKeys)** — that's still Chrome-only. So even with the rpID fixed, only platform-authenticator
+  unlock would work on Firefox; YubiKey unlock can't until Firefox ships external-key PRF.
+- **No need to unify keys across browsers.** The VEK is already unified across devices via P2P sync,
+  and the multi-slot design lets each device/browser register its own unlock (YubiKey slot on Chrome,
+  Touch-ID slot on Firefox, master password everywhere) — all wrapping the same synced VEK. A shared
+  rpID would need a breaking re-registration migration for existing Chrome users *and* still wouldn't
+  give YubiKey roaming (Firefox PRF gap), so it isn't worth it.
+- **Dead ends:** WebHID / WebUSB (raw CTAP2 would bypass the rpID) — Firefox implements neither.
+
+Plan if revisited: enable on FF 150+ as **platform-authenticator** PRF unlock (explicit `bramble.app`
+rpID, version-gated, Chrome untouched), leaving YubiKey unlock Chrome-only pending Firefox.
 
 ## Namespace: `chrome.*` vs `browser.*`
 
