@@ -16,7 +16,13 @@ import {
 } from "..";
 import { type Channel, makeChannel } from "./channel";
 import type { SignerPair } from "./nostr-signer";
-import { chunkMessage, type DataFrame, makeReassembler } from "./relay-channel";
+import {
+	chunkMessage,
+	type DataFrame,
+	makeReassembler,
+	padMessage,
+	unpadMessage,
+} from "./relay-channel";
 import { createPeer, type Peer, type PeerSignal } from "./webrtc-peer";
 
 export interface PeerSession {
@@ -273,12 +279,13 @@ class Mesh {
 		let msgId = 0;
 		const { channel, push } = makeChannel((data) => {
 			const id = msgId++;
-			for (const frame of chunkMessage(id, data)) {
+			// Pad to a size bucket before chunking so the relay can't read the true length.
+			for (const frame of chunkMessage(id, padMessage(data))) {
 				void this.publish({ kind: "data", to: remote, ...frame });
 			}
 		});
 		const entry = {
-			receive: makeReassembler(push),
+			receive: makeReassembler((padded) => push(unpadMessage(padded))),
 			close: () => {
 				this.relayPeers.delete(remote);
 			},

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chunkMessage, MAX_CHUNK, makeReassembler } from "./relay-channel";
+import {
+	chunkMessage,
+	MAX_CHUNK,
+	makeReassembler,
+	padMessage,
+	unpadMessage,
+} from "./relay-channel";
 
 describe("relay-channel chunking", () => {
 	it("emits one frame for a small message", () => {
@@ -60,5 +66,30 @@ describe("relay-channel reassembly", () => {
 		push(a1);
 		push(b1);
 		expect(new Set(got)).toEqual(new Set([a, b]));
+	});
+});
+
+describe("relay-channel padding", () => {
+	it("round-trips arbitrary messages", () => {
+		for (const s of ["", "hi", "z".repeat(1000), `${"a".repeat(50000)}\n\t"quoted"`]) {
+			expect(unpadMessage(padMessage(s))).toBe(s);
+		}
+	});
+
+	it("buckets similar lengths to the same padded total", () => {
+		expect(padMessage("x".repeat(100)).length).toBe(padMessage("x".repeat(120)).length);
+	});
+
+	it("never pads below the input length", () => {
+		const s = "y".repeat(777);
+		expect(padMessage(s).length).toBeGreaterThanOrEqual(s.length);
+	});
+
+	it("survives a chunk round-trip through the transport", () => {
+		const data = "m".repeat(MAX_CHUNK * 2 + 500);
+		const got: string[] = [];
+		const push = makeReassembler((padded) => got.push(unpadMessage(padded)));
+		for (const f of chunkMessage(0, padMessage(data))) push(f);
+		expect(got).toEqual([data]);
 	});
 });

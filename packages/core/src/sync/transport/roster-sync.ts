@@ -33,6 +33,19 @@ export type RosterSyncWasm = NostrWasm & RosterHandshakeWasm;
 type Report = (status: string) => void;
 
 const REBROADCAST_MS = 4000;
+// The relay is best-effort live fan-out (ephemeral, no store), so a frame dropped mid
+// handshake would hang recv() forever. Bound the handshake; on timeout we abandon this
+// attempt and the periodic resume (Firefox keep-alive / a peer's re-announce) retries.
+// The post-handshake receive loop is intentionally unbounded (it idles between changes).
+const HANDSHAKE_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+	});
+	return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
 
 export interface RosterSyncOptions {
 	relayUrl: string;
@@ -124,17 +137,28 @@ async function syncPeer(
 	const { wasm, devicePrivB64: priv, devicePubB64: pub } = opts;
 
 	channel.send(pub);
-	const peerPub = await channel.recv();
-	if (!inRoster(opts.roster, peerPub)) {
-		opts.report(`⚠ ${peerPub.slice(0, 8)} not in roster — ignoring`);
+	let peerPub: string;
+	let sess: { sessionId: number };
+	try {
+		peerPub = await withTimeout(channel.recv(), HANDSHAKE_TIMEOUT_MS, "roster-auth");
+		if (!inRoster(opts.roster, peerPub)) {
+			opts.report(`⚠ ${peerPub.slice(0, 8)} not in roster — ignoring`);
+			peer.close();
+			return;
+		}
+		sess = await withTimeout(
+			pub < peerPub
+				? runInitiator(wasm, channel, () => wasm.handshake_start_initiator(priv, peerPub))
+				: runResponder(wasm, channel, () => wasm.handshake_start_responder(priv, peerPub)),
+			HANDSHAKE_TIMEOUT_MS,
+			"handshake",
+		);
+	} catch (e) {
+		// A stalled/failed handshake: abandon this attempt cleanly instead of hanging.
+		opts.report(`handshake failed: ${(e as Error).message}`);
 		peer.close();
 		return;
 	}
-
-	const sess =
-		pub < peerPub
-			? await runInitiator(wasm, channel, () => wasm.handshake_start_initiator(priv, peerPub))
-			: await runResponder(wasm, channel, () => wasm.handshake_start_responder(priv, peerPub));
 	peers.set(peerPub, { channel, sessionId: sess.sessionId });
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
