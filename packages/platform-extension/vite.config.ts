@@ -47,7 +47,6 @@ export default defineConfig({
 				popup: resolve(root, "popup.html"),
 				options: resolve(root, "options.html"),
 				offscreen: resolve(root, "offscreen.html"),
-				"sync-frame": resolve(root, "sync-frame.html"),
 				"autofill-ui": resolve(root, "autofill-ui.html"),
 				background: resolve(root, "background/background.ts"),
 				"content-script": resolve(root, "content/content.ts"),

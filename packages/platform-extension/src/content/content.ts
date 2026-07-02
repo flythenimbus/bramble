@@ -20,7 +20,6 @@ import { getPageFields, invalidatePageFields } from "./field-model";
 import { fillCard, fillCustomFields, fillForm, fillOtp, submitFromField } from "./fill";
 import { onTeardown, safeSendMessage } from "./lifecycle";
 import { picker } from "./picker";
-import { ensureSyncFrame } from "./sync-frame-host";
 import type { CornerPromptPayload, FillPayload, QueryResult } from "./types";
 
 let mutationObserver: MutationObserver | null = null;
@@ -249,7 +248,6 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 /** Runs initial queries and wires up the focus/input/mousedown/scroll listeners that drive the dropdown. */
 function bootstrap(): void {
-	ensureSyncFrame(); // Firefox only: host the WebRTC sync transport (no-op on Chrome)
 	queryAutofill();
 	queryCornerPrompt();
 
