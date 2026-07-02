@@ -2,7 +2,8 @@
 	"manifest_version": 3,
 	"name": "Bramble",
 	"version": "1.2.1",
-	"description": "Local-first, encrypted password manager. No cloud database.",
+	"default_locale": "en",
+	"description": "__MSG_extDescription__",
 	"browser_specific_settings": {
 		"gecko": {
 			"id": "firefox@bramble.app",
@@ -44,7 +45,7 @@
 	],
 	"commands": {
 		"lock-vault": {
-			"description": "Lock Bramble"
+			"description": "__MSG_cmdLockVault__"
 		}
 	},
 	"content_security_policy": {
