@@ -2,7 +2,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
-import { type EntryData, useVault } from "../../hooks/useVault";
+import { type EntryData, useVaultActions } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
 import { getEntryMode } from "../entry-modes";
 import { usePopOut } from "../hooks/usePopOut";
@@ -16,7 +16,7 @@ export function CreateEntryRoute() {
 	// Normalise the route param against the registry so an unknown value falls
 	// back to a real mode rather than rendering a broken form.
 	const entryType = getEntryMode(type).type;
-	const { addEntry } = useVault();
+	const { addEntry } = useVaultActions();
 	const { shell } = usePlatform();
 	const { prefs } = usePrefs();
 	const { registerDraftGetter, takeInitialDraft } = usePopOut();

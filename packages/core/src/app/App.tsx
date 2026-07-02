@@ -1,6 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
+import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -82,9 +83,11 @@ export default function App({
 				<ThemeProvider>
 					<ToastProvider>
 						<VaultProvider>
-							<PopOutProvider router={router} initialDraft={initialDraft}>
-								<InnerApp router={router} pendingLogin={pendingLogin} />
-							</PopOutProvider>
+							<PrefsProvider>
+								<PopOutProvider router={router} initialDraft={initialDraft}>
+									<InnerApp router={router} pendingLogin={pendingLogin} />
+								</PopOutProvider>
+							</PrefsProvider>
 						</VaultProvider>
 					</ToastProvider>
 				</ThemeProvider>

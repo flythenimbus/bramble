@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { usePlatform } from "../context/PlatformContext";
 
 // Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
@@ -39,18 +47,32 @@ export interface Prefs {
 	passkeyProviderEnabled: boolean;
 }
 
-/** Load and update user preferences via the platform storage adapter. */
-export function usePrefs() {
+const DEFAULT_PREFS: Prefs = {
+	autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
+	breachCheckEnabled: DEFAULT_BREACH_CHECK,
+	clipboardClearSeconds: DEFAULT_CLIPBOARD_SECONDS,
+	offerToSave: DEFAULT_OFFER_TO_SAVE,
+	neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
+	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
+	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
+};
+
+export interface UsePrefs {
+	prefs: Prefs;
+	loaded: boolean;
+	update<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<void>;
+}
+
+const PrefsContext = createContext<UsePrefs | null>(null);
+
+/**
+ * Load user preferences once and share them across the tree. Previously usePrefs was a
+ * plain hook, so every caller kept its own copy: N loads on mount and a Settings update()
+ * never reached the routes holding a stale snapshot. A single provider fixes both.
+ */
+export function PrefsProvider({ children }: { children: ReactNode }) {
 	const { storage } = usePlatform();
-	const [prefs, setPrefs] = useState<Prefs>({
-		autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
-		breachCheckEnabled: DEFAULT_BREACH_CHECK,
-		clipboardClearSeconds: DEFAULT_CLIPBOARD_SECONDS,
-		offerToSave: DEFAULT_OFFER_TO_SAVE,
-		neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
-		autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
-		passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
-	});
+	const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 	const [loaded, setLoaded] = useState(false);
 
 	useEffect(() => {
@@ -104,5 +126,14 @@ export function usePrefs() {
 		[storage],
 	);
 
-	return { prefs, loaded, update };
+	const value = useMemo<UsePrefs>(() => ({ prefs, loaded, update }), [prefs, loaded, update]);
+
+	return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
+}
+
+/** Read shared user preferences. Must be called inside a PrefsProvider. */
+export function usePrefs(): UsePrefs {
+	const ctx = useContext(PrefsContext);
+	if (!ctx) throw new Error("usePrefs called outside PrefsProvider");
+	return ctx;
 }
