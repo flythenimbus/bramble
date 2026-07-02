@@ -1,0 +1,10 @@
+{
+	"extDescription": {
+		"message": "Local-first, encrypted password manager. No cloud database.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Lock Bramble",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	}
+}

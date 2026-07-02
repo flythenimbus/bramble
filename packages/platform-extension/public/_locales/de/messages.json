@@ -1,0 +1,10 @@
+{
+	"extDescription": {
+		"message": "Lokal zuerst, verschlüsselter Passwortmanager. Keine Cloud-Datenbank.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Bramble sperren",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	}
+}

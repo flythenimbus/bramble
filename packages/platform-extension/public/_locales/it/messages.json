@@ -1,0 +1,10 @@
+{
+	"extDescription": {
+		"message": "Gestore di password crittografato e basato sul dispositivo. Nessun database cloud.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Blocca Bramble",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	}
+}

@@ -20,6 +20,9 @@ export const repo = (...p) => resolve(ROOT, ...p);
 // Per-surface source locations.
 export const PO_CATALOG = (code) => repo(`packages/core/src/locales/${code}/messages.po`);
 export const FASTLANE_DIR = repo("packages/platform-mobile/ios/App/fastlane/metadata");
+// Chrome extension _locales dir (bundled from public/). Chrome locale codes use
+// underscores (pt_BR), unlike the App Store's hyphens.
+export const CHROME_LOCALES_DIR = repo("packages/platform-extension/public/_locales");
 export const ANDROID_RES = repo("packages/platform-mobile/android/app/src/main/res");
 // iOS String Catalog for the autofill extension UI.
 export const XCSTRINGS = repo(

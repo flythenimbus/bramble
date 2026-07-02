@@ -1,0 +1,10 @@
+{
+	"extDescription": {
+		"message": "Gerenciador de senhas criptografado e local. Sem banco de dados na nuvem.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Bloquear Bramble",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	}
+}
