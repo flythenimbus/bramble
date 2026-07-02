@@ -4,7 +4,7 @@ A password manager that keeps your secrets on your own devices. No account, no s
 
 Bramble runs where you do:
 
-- **Browser extension** for Chromium browsers (Brave, Vivaldim Chrome, Arc, and friends). Install it and you're up and running in a minute.
+- **Browser extension** for Chromium browsers (Brave, Vivaldi, Chrome, Arc, and friends). Install it and you're up and running in a minute.
 - **iOS app** with system AutoFill, Face ID / Touch ID unlock, and passkeys.
 - **Android app** with a native autofill service, biometric unlock, and passkeys.
 
@@ -38,9 +38,10 @@ The iOS and Android apps are versioned and released independently of the extensi
 - **Local-first, always.** One encrypted file on disk, in a location you pick.
 - **No shortcuts on crypto.** Argon2id for your key, AES-256-GCM for the data, envelope encryption so every entry has its own key. Secrets get wiped from memory after use.
 - **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable thing on disk is the file header.
-- **Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown; on mobile it's the OS autofill bar across apps and browsers.
+- **Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown that reaches forms inside iframes and shadow DOM; on mobile it's the OS autofill bar across apps and browsers.
 - **Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
+- **File attachments.** Attach files to an entry — documents, key files, recovery kits — encrypted in the vault alongside everything else.
 - **Built-in password generator.** Strong passwords on tap.
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF on desktop), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
@@ -113,8 +114,6 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 
 - **Smarter autofill.** More form-detection coverage and fixes for the weird checkout and login pages that like to break things.
 - **Firefox and Safari.** Extension support beyond Chromium.
-
-Further out: file attachments and iframe/shadow-DOM autofill.
 
 ## Status
 
