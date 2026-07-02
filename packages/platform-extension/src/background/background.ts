@@ -12,10 +12,11 @@ import "./qr";
 import "./sync";
 import "./theme";
 import "./webauthn-proxy-init";
+import "./webauthn-content-transport";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
-import { getPasskeyProviderEnabled, PREF_AUTOLOCK_MINUTES } from "./prefs";
+import { PREF_AUTOLOCK_MINUTES } from "./prefs";
 import { setReady } from "./router";
 import {
 	AUTOLOCK_ALARM,
@@ -25,6 +26,7 @@ import {
 	vaultLocked,
 } from "./session";
 import { maybeStartSync, SYNC_KEEPALIVE_ALARM } from "./sync";
+import { isProviderEnabled, loadProviderEnabled } from "./webauthn-provider";
 import { initWebauthnProxy } from "./webauthn-proxy-init";
 
 // Gate every handler on both hydrations (session VEK + known hostnames) completing.
@@ -36,10 +38,12 @@ void hydrated.then(() => {
 	if (!vaultLocked()) void maybeStartSync();
 });
 
-// Attach the passkey provider proxy if the user has opted in (default off, because
-// attach() intercepts all browser WebAuthn). See docs/passkey-provider.md.
-void getPasskeyProviderEnabled().then((enabled) => {
-	if (enabled)
+// Load the passkey-provider opt-in into the in-memory flag (default off). On Chrome the
+// flag also drives attach() of the webAuthenticationProxy; on Firefox the flag alone gates
+// the MAIN-world content transport (which is always injected and passes through when off).
+// See docs/passkey-provider.md and docs/firefox-port.md.
+void loadProviderEnabled().then(() => {
+	if (isProviderEnabled())
 		void initWebauthnProxy().catch((e) => console.warn("[titanpass:bg] passkey proxy", e));
 });
 

@@ -131,9 +131,9 @@ export function GeneralSection() {
 				/>
 			</Row>
 
-			{/* Passkey provider: only on the Chromium extension (chrome.webAuthenticationProxy).
-			    While on, Bramble handles every passkey prompt in the browser, so the subtitle is
-			    explicit. Toggling applies live and persists for next startup. */}
+			{/* Passkey provider: extension only (Chromium via webAuthenticationProxy, Firefox via
+			    a MAIN-world content-script override). While on, Bramble handles passkey prompts,
+			    so the subtitle is explicit. Toggling applies live and persists for next startup. */}
 			{shell.supportsPasskeyProvider && (
 				<Row
 					icon={<KeyRound className="w-4 h-4 text-primary" />}

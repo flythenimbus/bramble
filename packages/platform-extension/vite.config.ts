@@ -50,6 +50,16 @@ export default defineConfig({
 				"autofill-ui": resolve(root, "autofill-ui.html"),
 				background: resolve(root, "background/background.ts"),
 				"content-script": resolve(root, "content/content.ts"),
+				// Firefox-only passkey-provider transport (Chrome uses webAuthenticationProxy):
+				// the MAIN-world override + its isolated-world relay. Each must bundle flat (no
+				// chunk imports) since content scripts load as classic scripts; keep them import-
+				// light. See docs/firefox-port.md.
+				...(target === "firefox"
+					? {
+							"webauthn-inpage": resolve(root, "content/webauthn-inpage.ts"),
+							"webauthn-bridge": resolve(root, "content/webauthn-bridge.ts"),
+						}
+					: {}),
 			},
 			output: {
 				entryFileNames: "[name].js",
