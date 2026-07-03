@@ -18,8 +18,11 @@ interface PasswordCardProps {
 	canSubmit: boolean;
 	submitError: string | null;
 	onSubmit: (values: VaultSetupFormValues) => Promise<void>;
-	/** Mobile: the file-location step is hidden, so drop the section number + enlarge heading. */
+	/** Compact/mobile presentation: column footer, full-width button, larger heading. */
 	mobile?: boolean;
+	/** Show the "2." step number — only when the file-location step is also shown. It is
+	 * hidden on mobile and on browsers without a file picker (e.g. Firefox). */
+	numbered?: boolean;
 }
 
 /** Master-password form card for vault setup, gating weak passwords on create only. */
@@ -31,6 +34,7 @@ export function PasswordCard({
 	submitError,
 	onSubmit,
 	mobile,
+	numbered,
 }: PasswordCardProps) {
 	const { t } = useLingui();
 	const {
@@ -53,7 +57,7 @@ export function PasswordCard({
 				<div className="px-5 py-3 border-b border-border/50">
 					<h3 className={`flex items-center gap-2 ${mobile ? "text-base" : "text-sm"}`}>
 						<Shield className="w-4 h-4 text-primary" />
-						{mobile ? "" : "2. "}
+						{numbered ? "2. " : ""}
 						{isCreate ? <Trans>Master password</Trans> : <Trans>Your master password</Trans>}
 					</h3>
 				</div>

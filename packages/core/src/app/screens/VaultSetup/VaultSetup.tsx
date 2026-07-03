@@ -75,7 +75,7 @@ export function VaultSetup({
 			<div className="w-full max-w-xl">
 				<SetupHeader mode={mode} mobile={mobile} />
 				<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} pill={mobile} />
-				{!mobile && (
+				{!mobile && hasPicker && (
 					<FileLocationCard
 						hasPicker={hasPicker}
 						hasFile={hasFile}
@@ -93,6 +93,7 @@ export function VaultSetup({
 					submitError={submitError}
 					onSubmit={handleSubmit}
 					mobile={mobile}
+					numbered={!mobile && hasPicker}
 				/>
 			</div>
 		</div>
