@@ -178,7 +178,8 @@ export interface SecurityKeyMeta {
 
 const SECURITY_KEY_LABELS_PREF = "pref.securityKeyLabels";
 
-export interface UseVault {
+/** Reactive vault state. A change here re-renders components that read it. */
+export interface VaultState {
 	hasVault: boolean;
 	isLocked: boolean;
 	/** Vault has at least one webauthn slot (gates the "Use security key" button). */
@@ -197,6 +198,18 @@ export interface UseVault {
 	pendingSyncCount: number;
 	/** A vault exists on disk but its blob couldn't be read/decoded; null when readable. */
 	vaultError: string | null;
+	/** Platform exposes a device-local biometric gate (mobile). Gates the biometric UI entirely. */
+	biometricSupported: boolean;
+	/** Biometric hardware is present and enrolled, so enabling can be offered. */
+	biometricAvailable: boolean;
+	/** A VEK is cached behind the biometric gate on this device. */
+	biometricEnabled: boolean;
+	/** Enrolled modality, for labelling the unlock UI (Face ID vs Touch ID). */
+	biometryType: BiometryType;
+}
+
+/** Vault actions. Referentially stable for the provider's lifetime. */
+export interface VaultActions {
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
@@ -220,14 +233,6 @@ export interface UseVault {
 	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
 	unlockWithRecoveryCode(code: string): Promise<void>;
-	/** Platform exposes a device-local biometric gate (mobile). Gates the biometric UI entirely. */
-	biometricSupported: boolean;
-	/** Biometric hardware is present and enrolled, so enabling can be offered. */
-	biometricAvailable: boolean;
-	/** A VEK is cached behind the biometric gate on this device. */
-	biometricEnabled: boolean;
-	/** Enrolled modality, for labelling the unlock UI (Face ID vs Touch ID). */
-	biometryType: BiometryType;
 	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
 	enableBiometric(): Promise<void>;
 	/** Forget the device's biometric-cached VEK. */
@@ -244,7 +249,13 @@ export interface UseVault {
 	removeDevice(deviceId: string): Promise<void>;
 }
 
-const VaultContext = createContext<UseVault | null>(null);
+/** The full vault API: reactive state plus actions. */
+export interface UseVault extends VaultState, VaultActions {}
+
+// State and actions ride separate contexts so a pure-action consumer (useVaultActions)
+// never re-renders on a state change, and the state value carries only state deps.
+const VaultStateContext = createContext<VaultState | null>(null);
+const VaultActionsContext = createContext<VaultActions | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
 	const { storage, crypto, autofill, shell, biometric } = usePlatform();
@@ -268,6 +279,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [securityKeyLabels, setSecurityKeyLabels] = useState<
 		Record<string, { label: string; addedAt: number }>
 	>({});
+
+	// Latest render's reactive state, mirrored to a ref so action callbacks can read
+	// current entries / labels / lock state without listing them as deps. That keeps every
+	// action referentially stable (its own context, never re-firing pure-action subscribers).
+	// Assigned during render: idempotent, the blessed idiom for a latest-value ref.
+	const latestRef = useRef({ entries, securityKeyLabels, isLocked });
+	latestRef.current = { entries, securityKeyLabels, isLocked };
 
 	// Sync metadata kept alongside (not on) the user-facing Entry: per-entry HLC
 	// stamps and the deletion graveyard. Held in refs because mutations thread
@@ -610,13 +628,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const newBlob = addWebauthnSlot(blob, slot);
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 
-			const labels = { ...securityKeyLabels };
+			const labels = { ...latestRef.current.securityKeyLabels };
 			labels[slotIdB64] = { label: label.trim() || "Security key", addedAt: Date.now() };
 			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
 
 			await refreshSlotMetadata();
 		},
-		[crypto, readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata],
+		[crypto, readDecodedBlob, storage, refreshSlotMetadata],
 	);
 
 	/** Remove a security-key slot and its stored label. */
@@ -626,12 +644,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const { blob } = await readDecodedBlob();
 			const newBlob = removeWebauthnSlot(blob, base64ToBytes(slotIdB64));
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
-			const labels = { ...securityKeyLabels };
+			const labels = { ...latestRef.current.securityKeyLabels };
 			delete labels[slotIdB64];
 			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
 			await refreshSlotMetadata();
 		},
-		[readDecodedBlob, storage, securityKeyLabels, refreshSlotMetadata],
+		[readDecodedBlob, storage, refreshSlotMetadata],
 	);
 
 	/** Prompt the user to pick a vault file to create or open. */
@@ -680,14 +698,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, storage, autofill, readDecodedBlob, ensureClock],
 	);
 
-	// Snapshot the current entry state (React state + the stamp/tombstone refs).
+	// Snapshot the current entry state (latest entries + the stamp/tombstone refs).
+	// Reads entries from latestRef so the callback stays stable across entry changes.
 	const snapshotEntries = useCallback(
 		(): VaultEntries => ({
-			entries,
+			entries: latestRef.current.entries,
 			stamps: stampsRef.current,
 			tombstones: tombstonesRef.current,
 		}),
-		[entries],
+		[],
 	);
 
 	// Commit a mutation's next state. Only ever runs after a successful persist,
@@ -888,10 +907,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
 	const enableBiometric = useCallback(async () => {
 		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
-		if (isLocked) throw new Error("Unlock the vault before enabling biometric unlock.");
+		if (latestRef.current.isLocked)
+			throw new Error("Unlock the vault before enabling biometric unlock.");
 		await enableBiometricUnlock(crypto, biometric);
 		setBiometricEnabled(true);
-	}, [biometric, crypto, isLocked]);
+	}, [biometric, crypto]);
 
 	/** Forget the device's biometric-cached VEK. */
 	const disableBiometric = useCallback(async () => {
@@ -941,7 +961,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[webauthnSlots, securityKeyLabels],
 	);
 
-	const value = useMemo<UseVault>(
+	const state = useMemo<VaultState>(
 		() => ({
 			hasVault,
 			isLocked,
@@ -954,35 +974,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasPasswordSlot,
 			hasRecoveryCode,
 			securityKeys,
-			unlock,
-			lock,
-			pickVaultFile,
-			createVault,
-			addEntry,
-			importEntries,
-			updateEntry,
-			deleteEntry,
-			verifyMasterPassword,
-			verifyWithSecurityKey,
-			changeMasterPassword,
-			setMasterPassword,
-			disableMasterPassword,
-			unlockWithSecurityKey,
-			registerSecurityKey,
-			revokeSecurityKey,
-			generateRecoveryCode,
-			unlockWithRecoveryCode,
 			biometricSupported: biometric !== undefined,
 			biometricAvailable,
 			biometricEnabled,
 			biometryType,
-			enableBiometric,
-			disableBiometric,
-			unlockWithBiometric,
-			refreshBiometric,
-			inviteDevice,
-			joinGroup,
-			removeDevice,
 		}),
 		[
 			hasVault,
@@ -996,6 +991,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasPasswordSlot,
 			hasRecoveryCode,
 			securityKeys,
+			biometric,
+			biometricAvailable,
+			biometricEnabled,
+			biometryType,
+		],
+	);
+
+	// Every action is referentially stable (state reads route through latestRef), so this
+	// memo builds once: the actions value never changes and useVaultActions never re-renders.
+	const actions = useMemo<VaultActions>(
+		() => ({
 			unlock,
 			lock,
 			pickVaultFile,
@@ -1014,10 +1020,33 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			revokeSecurityKey,
 			generateRecoveryCode,
 			unlockWithRecoveryCode,
-			biometric,
-			biometricAvailable,
-			biometricEnabled,
-			biometryType,
+			enableBiometric,
+			disableBiometric,
+			unlockWithBiometric,
+			refreshBiometric,
+			inviteDevice,
+			joinGroup,
+			removeDevice,
+		}),
+		[
+			unlock,
+			lock,
+			pickVaultFile,
+			createVault,
+			addEntry,
+			importEntries,
+			updateEntry,
+			deleteEntry,
+			verifyMasterPassword,
+			verifyWithSecurityKey,
+			changeMasterPassword,
+			setMasterPassword,
+			disableMasterPassword,
+			unlockWithSecurityKey,
+			registerSecurityKey,
+			revokeSecurityKey,
+			generateRecoveryCode,
+			unlockWithRecoveryCode,
 			enableBiometric,
 			disableBiometric,
 			unlockWithBiometric,
@@ -1028,14 +1057,36 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		],
 	);
 
-	return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
+	return (
+		<VaultActionsContext.Provider value={actions}>
+			<VaultStateContext.Provider value={state}>{children}</VaultStateContext.Provider>
+		</VaultActionsContext.Provider>
+	);
 }
 
-/** Access the vault API. Must be called inside a VaultProvider. */
-export function useVault(): UseVault {
-	const ctx = useContext(VaultContext);
-	if (!ctx) throw new Error("useVault called outside VaultProvider");
+/** Access the reactive vault state (entries, lock status, slot + biometric flags). */
+export function useVaultState(): VaultState {
+	const ctx = useContext(VaultStateContext);
+	if (!ctx) throw new Error("useVaultState called outside VaultProvider");
 	return ctx;
+}
+
+/**
+ * Access the vault actions. Stable for the provider's lifetime, so a component that reads
+ * only actions (not state) via this hook won't re-render when vault state changes.
+ */
+export function useVaultActions(): VaultActions {
+	const ctx = useContext(VaultActionsContext);
+	if (!ctx) throw new Error("useVaultActions called outside VaultProvider");
+	return ctx;
+}
+
+/**
+ * Access the full vault API (state + actions). Prefer useVaultState / useVaultActions when
+ * a component needs only one half. Must be called inside a VaultProvider.
+ */
+export function useVault(): UseVault {
+	return { ...useVaultState(), ...useVaultActions() };
 }
 
 export type { EncryptedEntry };

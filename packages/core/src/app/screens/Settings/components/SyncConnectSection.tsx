@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
-import { useVault } from "../../../../hooks/useVault";
+import { useVaultActions } from "../../../../hooks/useVault";
 import { activeDevices, type RosterEntry, type RosterPayload } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
@@ -40,7 +40,7 @@ const addedOn = (ms: number): string =>
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
-	const { inviteDevice, joinGroup, removeDevice } = useVault();
+	const { inviteDevice, joinGroup, removeDevice } = useVaultActions();
 	const { t } = useLingui();
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
