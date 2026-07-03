@@ -48,23 +48,28 @@ async function activeTabId(): Promise<number | undefined> {
 	}
 }
 
-async function openPopupForUnlock(): Promise<void> {
+/** Open the unlock UI. Returns the detached window's id so it can be closed once unlocked
+ *  (so it doesn't cover the page's corner prompt); undefined when the browser-action popup
+ *  was used instead (it dismisses on its own). */
+async function openPopupForUnlock(): Promise<number | undefined> {
 	try {
 		const openPopup = (api.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
 		if (typeof openPopup === "function") {
 			await openPopup.call(api.action);
-			return;
+			return undefined;
 		}
 	} catch {}
 	try {
-		await api.windows.create({
+		const win = await api.windows.create({
 			url: api.runtime.getURL("popup.html?detached=1"),
 			type: "popup",
 			focused: true,
 			width: 500,
 			height: 600,
 		});
+		return win?.id;
 	} catch {}
+	return undefined;
 }
 
 async function waitForUnlock(timeoutMs: number): Promise<boolean> {
@@ -109,8 +114,14 @@ function cardPayload(
 
 async function ensureUnlocked(): Promise<boolean> {
 	if (!vaultLocked()) return true;
-	await openPopupForUnlock();
-	return waitForUnlock(UNLOCK_TIMEOUT_MS);
+	const unlockWindowId = await openPopupForUnlock();
+	const ok = await waitForUnlock(UNLOCK_TIMEOUT_MS);
+	// Close the unlock window once we're in, so it doesn't sit on top of the page's corner
+	// prompt (the passkey picker / confirmation that runs next).
+	if (ok && unlockWindowId !== undefined) {
+		await api.windows.remove(unlockWindowId).catch(() => {});
+	}
+	return ok;
 }
 
 /**
