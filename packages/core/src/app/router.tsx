@@ -14,6 +14,7 @@ import { EntryDetailRoute } from "./routes/EntryDetailRoute";
 import { EntryEditRoute } from "./routes/EntryEditRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
+import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
 
 // Slice of vault state route guards read; injected via RouterProvider context.
 // Stays `undefined` until React fills it, so guards treat missing vault as
@@ -54,6 +55,10 @@ const appLayoutRoute = createRoute({
 const vaultHomeRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/vault",
+	// Search/filter/sort live in the route so they survive navigating to a detail
+	// view and back. Zod-validated (all fields optional); VaultHomeRoute merges in
+	// the defaults for any absent/dropped param.
+	validateSearch: vaultSearchSchema,
 	component: VaultHomeRoute,
 });
 

@@ -58,7 +58,7 @@ const note = (name: string): EntryData => ({ type: "note", name });
 // that round-trips through the real encode/decode, so the persist primitive is
 // exercised end to end. The clock is a real HybridClock with a frozen wall time,
 // so stamps differ only by their monotonic counter.
-function harness() {
+function harness(now: () => number = () => 1000) {
 	let disk = emptyVaultBytes();
 	let writes = 0;
 	const indexCalls: unknown[][] = [];
@@ -87,7 +87,7 @@ function harness() {
 		},
 	};
 	const readDecodedBlob = async () => ({ blob: decodeVaultBlob(disk) });
-	const c = new HybridClock("device-a", () => 1000);
+	const c = new HybridClock("device-a", now);
 	const mutations = createEntryMutations({
 		crypto,
 		storage,
@@ -139,6 +139,62 @@ describe("createEntryMutations", () => {
 		const secondStamp = afterUpd.stamps.get(id)!;
 		expect(afterUpd.entries[0]!.name).toBe("a2");
 		expect(compareHlc(secondStamp, firstStamp)).toBe(1);
+	});
+
+	it("add stamps createdAt and updatedAt from the clock", async () => {
+		const h = harness();
+		const next = await h.mutations.add(empty(), login("a"));
+		const e = next.entries[0]!;
+		expect(e.createdAt).toBe(1000);
+		expect(e.updatedAt).toBe(1000);
+		expect(e.lastUsedAt).toBeUndefined();
+	});
+
+	it("update keeps createdAt, bumps updatedAt, and preserves lastUsedAt", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+		const afterUse = await h.mutations.touch(afterAdd, id);
+		expect(afterUse.entries[0]!.lastUsedAt).toBe(1000);
+		t = 5000;
+		const afterUpd = await h.mutations.update(afterUse, id, login("a2"));
+		const e = afterUpd.entries[0]!;
+		expect(e.createdAt).toBe(1000); // original create time kept
+		expect(e.updatedAt).toBe(5000); // bumped by the edit
+		expect(e.lastUsedAt).toBe(1000); // a use survives an edit
+	});
+
+	it("touch bumps lastUsedAt without changing updatedAt", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+		t = 200_000; // well past the coalesce window
+		const afterUse = await h.mutations.touch(afterAdd, id);
+		expect(afterUse.entries[0]!.lastUsedAt).toBe(200_000);
+		expect(afterUse.entries[0]!.updatedAt).toBe(1000); // a use is not an edit
+	});
+
+	it("touch coalesces repeat uses within the window into one write", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+		const afterUse1 = await h.mutations.touch(afterAdd, id);
+		const writesAfterUse1 = h.writes();
+		t = 31_000; // 30s later, inside the 60s window
+		const afterUse2 = await h.mutations.touch(afterUse1, id);
+		expect(afterUse2).toBe(afterUse1); // no new state
+		expect(h.writes()).toBe(writesAfterUse1); // no new write
+	});
+
+	it("touch no-ops for an unknown id", async () => {
+		const h = harness();
+		const state = empty();
+		const same = await h.mutations.touch(state, "nope");
+		expect(same).toBe(state);
+		expect(h.writes()).toBe(0);
 	});
 
 	it("rejects invalid entry data before writing", async () => {

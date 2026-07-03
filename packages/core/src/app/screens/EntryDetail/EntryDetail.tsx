@@ -10,10 +10,12 @@ interface EntryDetailProps {
 	entry: Entry;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
+	/** Called after a successful field copy, to record the entry as recently used. */
+	onUse?: () => void;
 }
 
 /** Shared chrome for viewing any entry (banner, header, delete/edit footer); the mode supplies the fields. */
-export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
+export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
 	const [copied, setCopied] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function EntryDetail({ entry, onEdit, onDelete }: EntryDetailProps) {
 		try {
 			await clipboard.copy(value);
 			setCopied(label);
+			onUse?.();
 		} catch {
 			// Clipboard write can fail when the document isn't focused. Best-effort.
 		}

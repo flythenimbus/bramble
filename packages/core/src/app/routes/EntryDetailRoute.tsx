@@ -11,7 +11,7 @@ const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export function EntryDetailRoute() {
 	const navigate = useNavigate();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId" });
-	const { entries, updateEntry, deleteEntry } = useVault();
+	const { entries, updateEntry, deleteEntry, touchEntry } = useVault();
 	const { prefs, loaded: prefsLoaded } = usePrefs();
 	const entry = entries.find((e) => e.id === entryId);
 	const refreshAttemptedRef = useRef<string | null>(null);
@@ -49,6 +49,7 @@ export function EntryDetailRoute() {
 					await deleteEntry(entryId);
 					navigate({ to: "/vault" });
 				}}
+				onUse={() => void touchEntry(entryId)}
 			/>
 		</div>
 	);
