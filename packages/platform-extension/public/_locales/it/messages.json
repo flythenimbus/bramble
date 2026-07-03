@@ -6,5 +6,133 @@
 	"cmdLockVault": {
 		"message": "Blocca Bramble",
 		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	},
+	"notNow": {
+		"message": "Non ora",
+		"description": "Dismiss button on the save / passkey corner prompt."
+	},
+	"toggleShow": {
+		"message": "Mostra",
+		"description": "Reveal the captured password in the save-login card."
+	},
+	"toggleHide": {
+		"message": "Nascondi",
+		"description": "Hide the revealed password in the save-login card."
+	},
+	"menuNeverForSite": {
+		"message": "Mai per questo sito",
+		"description": "Overflow-menu action: stop offering to save logins on this site."
+	},
+	"fieldUsername": {
+		"message": "Nome utente",
+		"description": "Field label in the save-login card."
+	},
+	"fieldPassword": {
+		"message": "Password",
+		"description": "Field label in the save-login card."
+	},
+	"fieldAccount": {
+		"message": "Account",
+		"description": "Field label showing the account name in the update / passkey card."
+	},
+	"saveNewLogin": {
+		"message": "Salva nuovo accesso",
+		"description": "Title of the card offering to save a newly captured login."
+	},
+	"actionSave": {
+		"message": "Salva",
+		"description": "Primary button: save the captured login."
+	},
+	"actionUnlockAndSave": {
+		"message": "Sblocca e salva",
+		"description": "Primary button when the vault is locked: unlock, then save."
+	},
+	"updateExistingTitle": {
+		"message": "Aggiornare un accesso esistente?",
+		"description": "Card title when several saved logins could be updated."
+	},
+	"updateSavedTitle": {
+		"message": "Aggiornare l’accesso salvato?",
+		"description": "Card title when one saved login could be updated."
+	},
+	"actionUpdate": {
+		"message": "Aggiornare",
+		"description": "Primary button: update the saved login with the new password."
+	},
+	"actionUnlockAndUpdate": {
+		"message": "Sblocca e aggiorna",
+		"description": "Primary button when the vault is locked: unlock, then update."
+	},
+	"saveAsNew": {
+		"message": "Salva come nuovo",
+		"description": "Secondary button: save as a separate login instead of updating."
+	},
+	"saveAsNewHint": {
+		"message": "Salva come un login separato invece di aggiornarlo",
+		"description": "Tooltip for the 'Save as new' button."
+	},
+	"passkeySignInWhich": {
+		"message": "Con quale chiave di accesso effettuare il login?",
+		"description": "Passkey card title when the site offers a choice of passkeys."
+	},
+	"passkeyUseTitle": {
+		"message": "Usare la sua chiave di accesso?",
+		"description": "Passkey card title when signing in with a single passkey."
+	},
+	"passkeyAddToTitle": {
+		"message": "Aggiungi questa chiave di accesso a…",
+		"description": "Passkey card title: choose which saved login to attach a new passkey to."
+	},
+	"passkeyAddTitle": {
+		"message": "Aggiungere una chiave di accesso?",
+		"description": "Passkey card title when adding a passkey to an existing login."
+	},
+	"passkeySaveTitle": {
+		"message": "Salvare una chiave di accesso?",
+		"description": "Passkey card title when saving a brand-new passkey."
+	},
+	"passkeyUnlockUseNote": {
+		"message": "Sblocchi Bramble per utilizzare le sue chiavi di accesso per questo sito.",
+		"description": "Explains the locked passkey sign-in prompt."
+	},
+	"passkeyUnlockSaveNote": {
+		"message": "Sblocchi Bramble per salvare una chiave di accesso per questo sito.",
+		"description": "Explains the locked passkey save prompt."
+	},
+	"passkeyAddsTo": {
+		"message": "Aggiunge a",
+		"description": "Label showing which login a new passkey will be attached to."
+	},
+	"passkeyCreateNewLogin": {
+		"message": "Crea un nuovo accesso",
+		"description": "Option to attach the passkey to a brand-new login instead of an existing one."
+	},
+	"passkeyUse": {
+		"message": "Utilizza la chiave di accesso",
+		"description": "Primary button: sign in with the passkey."
+	},
+	"passkeyAdd": {
+		"message": "Aggiungi chiave di accesso",
+		"description": "Primary button: attach the passkey to a login."
+	},
+	"passkeySave": {
+		"message": "Salva chiave di accesso",
+		"description": "Primary button: save the new passkey."
+	},
+	"passkeyUnlockUse": {
+		"message": "Sblocca e utilizza",
+		"description": "Primary button when locked: unlock, then sign in with the passkey."
+	},
+	"passkeyUnlockAdd": {
+		"message": "Sblocca e aggiungi",
+		"description": "Primary button when locked: unlock, then attach the passkey."
+	},
+	"vaultLocked": {
+		"message": "Vault bloccato",
+		"description": "Autofill dropdown row shown when the vault is locked."
+	},
+	"vaultLockedUnlockHint": {
+		"message": "Cliccare per sbloccare nella finestra",
+		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
 	}
 }

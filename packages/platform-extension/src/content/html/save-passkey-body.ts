@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { html } from "../template";
 
 // Right chevron (lucide chevron-right): each row is click-to-act, so it cues "pick me".
@@ -62,24 +63,21 @@ export function savePasskeyBody({
 	const hasList = isGetList || isCreatePicker;
 	const title = isGetList
 		? passkeyChoices.length > 1
-			? "Sign in with which passkey?"
-			: "Use your passkey?"
+			? t("passkeySignInWhich")
+			: t("passkeyUseTitle")
 		: isCreatePicker
-			? "Add this passkey to…"
+			? t("passkeyAddToTitle")
 			: intent === "get"
-				? "Use your passkey?"
+				? t("passkeyUseTitle")
 				: existingLoginName
-					? "Add a passkey?"
-					: "Save a passkey?";
+					? t("passkeyAddTitle")
+					: t("passkeySaveTitle");
 
 	// Nested html escapes interpolated values; array interpolations join markup verbatim.
 	let middle: string[] = [];
 	if (locked) {
 		// Locked: the vault can't be read yet, so say what unlocking is for before the popup.
-		const note =
-			intent === "get"
-				? "Unlock Bramble to use your passkeys for this site."
-				: "Unlock Bramble to save a passkey for this site.";
+		const note = intent === "get" ? t("passkeyUnlockUseNote") : t("passkeyUnlockSaveNote");
 		middle = [html`<div class="tp-note">${note}</div>`];
 	} else if (isGetList) {
 		middle = [
@@ -87,18 +85,18 @@ export function savePasskeyBody({
 		];
 	} else if (isCreatePicker) {
 		const rows = (candidates ?? []).map((c) => choiceRow(c.id, c.name, c.username || undefined));
-		rows.push(choiceRow("new", "Create a new login", undefined));
+		rows.push(choiceRow("new", t("passkeyCreateNewLogin"), undefined));
 		middle = [html`<div class="tp-choices">${rows}</div>`];
 	} else {
 		const rows: string[] = [];
 		if (existingLoginName) {
 			rows.push(
-				html`<div class="tp-row"><div class="tp-label">Adds to</div><div>${existingLoginName}</div></div>`,
+				html`<div class="tp-row"><div class="tp-label">${t("passkeyAddsTo")}</div><div>${existingLoginName}</div></div>`,
 			);
 		}
 		if (userName) {
 			rows.push(
-				html`<div class="tp-row"><div class="tp-label">Account</div><div>${userName}</div></div>`,
+				html`<div class="tp-row"><div class="tp-label">${t("fieldAccount")}</div><div>${userName}</div></div>`,
 			);
 		}
 		middle = rows;
@@ -111,7 +109,7 @@ export function savePasskeyBody({
 		: [
 				html`<div class="tp-actions">
 			<button class="tp-btn tp-btn-primary" data-tp-action="passkey-approve">${primaryLabel}</button>
-			<button class="tp-btn" data-tp-action="passkey-dismiss">Not now</button>
+			<button class="tp-btn" data-tp-action="passkey-dismiss">${t("notNow")}</button>
 		</div>`,
 			];
 
