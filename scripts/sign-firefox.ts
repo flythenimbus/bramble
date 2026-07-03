@@ -27,7 +27,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import webExt from "web-ext";
 
 const argv = process.argv.slice(2);
@@ -108,12 +108,14 @@ try {
 		fail(`AMO signing failed: ${(e as Error).message}`);
 	}
 
-	const signed =
-		result.downloadedFiles?.find((f) => f.endsWith(".xpi")) ??
-		readdirSync(artifacts)
-			.filter((f) => f.endsWith(".xpi"))
-			.map((f) => join(artifacts, f))[0];
-	if (!signed || !existsSync(signed)) fail("web-ext produced no signed .xpi");
+	// web-ext 8.x returns downloadedFiles as bare basenames saved into artifactsDir, not full
+	// paths, so resolve them against it (an absolute path from another version is passed through);
+	// fall back to scanning the dir directly.
+	const signed = [...(result.downloadedFiles ?? []), ...readdirSync(artifacts)]
+		.filter((f) => f.endsWith(".xpi"))
+		.map((f) => (isAbsolute(f) ? f : join(artifacts, f)))
+		.find((f) => existsSync(f));
+	if (!signed) fail("web-ext produced no signed .xpi");
 	copyFileSync(signed, OUT);
 	console.log(`\nsigned ${OUT}\nattach it to the GitHub release (Mozilla-signed, ${channel}).`);
 } finally {
