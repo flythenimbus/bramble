@@ -1,5 +1,8 @@
 import { html } from "../template";
 
+// Right chevron (lucide chevron-right): each row is click-to-act, so it cues "pick me".
+const chevron = `<svg class="tp-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`;
+
 /** Two initials for the avatar: first letters of the first two words, else the first two
  *  characters. Splits on spaces and the usual username separators. */
 function initialsOf(label: string): string {
@@ -14,22 +17,23 @@ function initialsOf(label: string): string {
 	return two.toUpperCase() || "?";
 }
 
-/** One selectable account row: an initials avatar + a primary label (+ optional sub). The
- *  hidden radio drives selection; the content script reads the checked value as `choice`. */
-function choiceRow(value: string, primary: string, sub: string | undefined, checked: boolean) {
-	return html`<label class="tp-choice">
-		<input type="radio" name="tp-passkey-target" value="${value}"${checked ? " checked" : ""} />
+/** One account row. The whole row is a button: clicking it picks that account and acts
+ *  immediately (sign in / attach), so there are no separate confirm buttons. `value` is the
+ *  credentialId (get) or the login id / "new" (create); the content script reads it as `choice`. */
+function choiceRow(value: string, primary: string, sub: string | undefined) {
+	return html`<button type="button" class="tp-choice" data-tp-action="passkey-pick" data-tp-value="${value}">
 		<span class="tp-avatar">${initialsOf(primary)}</span>
 		<span class="tp-choice-text">
 			<span class="tp-choice-primary">${primary}</span>
 			${sub ? [html`<span class="tp-choice-sub">${sub}</span>`] : []}
 		</span>
-	</label>`;
+		${[chevron]}
+	</button>`;
 }
 
-/** The passkey provider corner card: confirm creating/using a passkey, or pick which
- * account when several passkeys/logins share the domain. Every stored passkey is shown
- * with an avatar + its account name so the user knows exactly who they're signing in as. */
+/** The passkey provider corner card: pick which account to sign in with / attach a new
+ * passkey to (each row acts on click), or confirm a single save. Every stored passkey is
+ * shown with an avatar + its account name so the user knows exactly who they're acting as. */
 export function savePasskeyBody({
 	rpId,
 	rpName,
@@ -53,6 +57,7 @@ export function savePasskeyBody({
 	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
 	const isCreatePicker = intent === "create" && !!candidates && candidates.length > 0;
 	const isGetList = intent === "get" && !!passkeyChoices && passkeyChoices.length > 0;
+	const hasList = isGetList || isCreatePicker;
 	const title = isGetList
 		? passkeyChoices.length > 1
 			? "Sign in with which passkey?"
@@ -68,17 +73,12 @@ export function savePasskeyBody({
 	// Nested html escapes interpolated values; array interpolations join markup verbatim.
 	let middle: string[] = [];
 	if (isGetList) {
-		// Every matching passkey, first preselected. One row still shows who you'll sign in as.
-		const rows = passkeyChoices.map((c, i) =>
-			choiceRow(c.credentialId, c.label, undefined, i === 0),
-		);
-		middle = [html`<div class="tp-choices">${rows}</div>`];
+		middle = [
+			html`<div class="tp-choices">${passkeyChoices.map((c) => choiceRow(c.credentialId, c.label, undefined))}</div>`,
+		];
 	} else if (isCreatePicker) {
-		const rows = (candidates ?? []).map((c) =>
-			choiceRow(c.id, c.name, c.username || undefined, false),
-		);
-		// "Create a new login" is the last option, and the default selection.
-		rows.push(choiceRow("new", "Create a new login", undefined, true));
+		const rows = (candidates ?? []).map((c) => choiceRow(c.id, c.name, c.username || undefined));
+		rows.push(choiceRow("new", "Create a new login", undefined));
 		middle = [html`<div class="tp-choices">${rows}</div>`];
 	} else {
 		const rows: string[] = [];
@@ -95,6 +95,17 @@ export function savePasskeyBody({
 		middle = rows;
 	}
 
+	// A pickable list acts on row click, so it needs no confirm buttons (dismiss via the ×).
+	// A single confirm (locked prompt, or a save with no ambiguity) keeps the button row.
+	const actions = hasList
+		? []
+		: [
+				html`<div class="tp-actions">
+			<button class="tp-btn tp-btn-primary" data-tp-action="passkey-approve">${primaryLabel}</button>
+			<button class="tp-btn" data-tp-action="passkey-dismiss">Not now</button>
+		</div>`,
+			];
+
 	return html`
 		<div class="tp-head">
 			<div class="tp-head-main">
@@ -107,9 +118,6 @@ export function savePasskeyBody({
 			<button class="tp-close" data-tp-action="passkey-dismiss" aria-label="Dismiss">×</button>
 		</div>
 		${middle}
-		<div class="tp-actions">
-			<button class="tp-btn tp-btn-primary" data-tp-action="passkey-approve">${primaryLabel}</button>
-			<button class="tp-btn" data-tp-action="passkey-dismiss">Not now</button>
-		</div>
+		${actions}
 	`;
 }
