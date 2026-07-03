@@ -14,8 +14,7 @@ import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 
-// A use within this window of the last one reuses the stored lastUsedAt, so a
-// burst of copies is a single write instead of one per keystroke of activity.
+// Coalesce a burst of uses into one write.
 const USE_COALESCE_MS = 60_000;
 
 /**
@@ -44,11 +43,7 @@ export interface EntryMutations {
 	importMany(current: VaultEntries, items: EntryData[]): Promise<VaultEntries>;
 	update(current: VaultEntries, id: string, data: EntryData): Promise<VaultEntries>;
 	remove(current: VaultEntries, id: string): Promise<VaultEntries>;
-	/**
-	 * Record a use (copy/fill): bumps only `lastUsedAt`, never `updatedAt`. Bumps
-	 * the sync stamp so it propagates, but coalesces uses within USE_COALESCE_MS to
-	 * a single write. No-ops (returns `current`) for an unknown or coalesced id.
-	 */
+	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/** Decrypt the on-disk entries payload (empty for a fresh vault). */
 	readEntriesPayload(): Promise<EntriesPayload>;
@@ -121,8 +116,8 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		add: async (current, data) => {
 			const valid = validate(data);
 			const c = await clock();
+			// hlc.wall is physical ms, so it doubles as the timestamp.
 			const hlc = c.send();
-			// The stamp's wall is physical ms, so it doubles as the create/update time.
 			const entry: Entry = {
 				id: globalThis.crypto.randomUUID(),
 				...valid,
@@ -139,7 +134,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		},
 
 		// One encrypt-and-write for the whole batch (not N), so a large import is a
-		// single disk write. Preserves source timestamps when the import carries them.
+		// single disk write.
 		importMany: async (current, items) => {
 			const valid = items.map(validate);
 			const c = await clock();
@@ -172,10 +167,9 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 					? {
 							id,
 							...valid,
-							// Keep the original create time; backfill to now for a legacy entry.
+							// Preserve create time (backfill legacy) and last-used across the edit.
 							createdAt: prev?.createdAt ?? valid.createdAt ?? hlc.wall,
 							updatedAt: hlc.wall,
-							// The form never carries lastUsedAt; preserve the stored value.
 							lastUsedAt: valid.lastUsedAt ?? prev?.lastUsedAt,
 						}
 					: e,

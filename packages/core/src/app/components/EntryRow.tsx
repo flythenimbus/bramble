@@ -27,6 +27,8 @@ interface EntryRowProps {
 	onDelete: () => Promise<void>;
 	/** Called after a successful quick-copy, to record the entry as recently used. */
 	onUse?: () => void;
+	/** Tint the row when it matches the current site (surfaced at the top of the list). */
+	highlighted?: boolean;
 }
 
 /** Type-agnostic vault-list row; type-specific projection is computed by the entry mode and passed in. */
@@ -41,6 +43,7 @@ export function EntryRow({
 	onEdit,
 	onDelete,
 	onUse,
+	highlighted,
 }: EntryRowProps) {
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
@@ -102,7 +105,13 @@ export function EntryRow({
 	};
 
 	return (
-		<div className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/30">
+		<div
+			className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/30 ${
+				highlighted
+					? "border-primary/40 bg-primary/5"
+					: "border-border/50 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent"
+			}`}
+		>
 			<button
 				type="button"
 				onClick={onSelect}

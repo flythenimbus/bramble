@@ -18,7 +18,6 @@ export interface VaultListItem {
 	copyItems: { label: string; value: string }[];
 	// Lowercased text the search box matches against.
 	searchText: string;
-	// Lifecycle timestamps (epoch ms) that drive the recency sorts.
 	createdAt?: number;
 	updatedAt?: number;
 	lastUsedAt?: number;
@@ -28,6 +27,8 @@ interface VaultHomeProps {
 	items: VaultListItem[];
 	search: VaultSearch;
 	onSearchChange: (patch: Partial<VaultSearch>) => void;
+	/** Ids matching the current site; floated to the top and tinted. */
+	matchedIds?: ReadonlySet<string>;
 	onCreate: (type: EntryType) => void;
 	onSelectEntry: (id: string) => void;
 	onEditEntry: (id: string) => void;
@@ -40,13 +41,14 @@ export function VaultHome({
 	items,
 	search,
 	onSearchChange,
+	matchedIds,
 	onCreate,
 	onSelectEntry,
 	onEditEntry,
 	onDeleteEntry,
 	onUseEntry,
 }: VaultHomeProps) {
-	const filtered = filterAndSortEntries(items, search);
+	const filtered = filterAndSortEntries(items, search, matchedIds);
 
 	// "At Risk" / "Strong" are password-health stats, so they count logins only.
 	const atRisk = items.filter((item) => item.leaked).length;
@@ -117,6 +119,7 @@ export function VaultHome({
 								onEdit={() => onEditEntry(item.id)}
 								onDelete={() => onDeleteEntry(item.id)}
 								onUse={() => onUseEntry(item.id)}
+								highlighted={matchedIds?.has(item.id)}
 							/>
 						))
 					) : (

@@ -43,6 +43,10 @@ export const mobileShell: ShellAdapter = {
 	async getCurrentTabOrigin() {
 		return null;
 	},
+	// No browser tab on mobile, so nothing is a current-site match.
+	async matchCurrentTab() {
+		return [];
+	},
 	async popOut() {},
 	async consumeHandoff() {
 		return null;

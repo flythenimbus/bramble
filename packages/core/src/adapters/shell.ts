@@ -1,5 +1,13 @@
 import type { PasskeyCredential } from "../hooks/useVault";
 import type { EntriesPayload, RosterEntry, RosterPayload } from "../sync";
+import type { SubdomainMatchMode } from "./autofill";
+
+/** Minimal login shape for current-tab matching: id + the fields the hostname policy reads. */
+export interface CurrentTabLogin {
+	id: string;
+	urls: string[];
+	subdomainMatch?: SubdomainMatchMode;
+}
 
 /** State carried from the originating popup into a freshly-opened detached window so the pop-out lands on the same route. */
 export interface PopOutHandoff {
@@ -38,6 +46,12 @@ export interface ShellAdapter {
 	 * Null for chrome://, about:, non-http(s) pages, or when the tab can't be read.
 	 */
 	getCurrentTabOrigin(): Promise<string | null>;
+	/**
+	 * Ids of `logins` matching the active tab under each login's subdomain policy,
+	 * to surface current-site matches at the top of the list. The platform owns the
+	 * eTLD+1 matching. Empty when there's no current site (mobile, chrome://).
+	 */
+	matchCurrentTab(logins: CurrentTabLogin[]): Promise<string[]>;
 	/** Open the current UI in a detached window so it doesn't dismiss on focus loss, closing the originating popup. `handoff` resumes the route + draft. */
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	/** Read (and clear) the handoff stashed by a preceding popOut(). Null when there's nothing to restore. Called once during boot. */

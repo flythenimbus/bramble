@@ -1,6 +1,8 @@
 /// <reference types="chrome" />
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
+import { extractHostname } from "@core/vault/autofill-index";
 import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
+import { hostnameMatches } from "./dedupe";
 import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
@@ -55,6 +57,17 @@ export const extensionShell: ShellAdapter = {
 		} catch {
 			return null;
 		}
+	},
+	async matchCurrentTab(logins) {
+		const origin = await this.getCurrentTabOrigin();
+		if (!origin) return [];
+		const host = new URL(origin).hostname;
+		return logins
+			.filter((l) => {
+				const hostnames = l.urls.map(extractHostname).filter((h) => h.length > 0);
+				return hostnameMatches({ hostnames, subdomainMatch: l.subdomainMatch }, host);
+			})
+			.map((l) => l.id);
 	},
 	async popOut(handoff?: PopOutHandoff) {
 		// Background SW owns window creation (so the content script can request it
