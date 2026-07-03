@@ -30,6 +30,26 @@ export default defineConfig({
 				copyFileSync(manifestSrc, resolve(outDir, "manifest.json"));
 			},
 		},
+		{
+			// Content scripts load as classic scripts, and Firefox shares ONE isolated-world
+			// global across all of an extension's content scripts in a document, so bare
+			// top-level declarations collide between files — e.g. the autofill script's
+			// minified `t` (a regex) clobbering the passkey bridge's `t` (isReq), which then
+			// throws "t is not a function". Wrap each content script (and the MAIN-world
+			// in-page override, which shares the page realm) in an IIFE so nothing leaks. The
+			// module entries (popup/options/offscreen/autofill-ui/background) load as ES
+			// modules with their own scope, so they're left untouched.
+			name: "iife-content-scripts",
+			renderChunk(code, chunk) {
+				const CONTENT_SCRIPTS = new Set([
+					"content-script.js",
+					"webauthn-inpage.js",
+					"webauthn-bridge.js",
+				]);
+				if (!CONTENT_SCRIPTS.has(chunk.fileName)) return null;
+				return { code: `(function(){\n${code}\n})();\n`, map: null };
+			},
+		},
 	],
 	resolve: {
 		alias: {
