@@ -72,6 +72,12 @@ interface BaseEntryData {
 	name: string;
 	notes?: string;
 	customFields?: CustomField[];
+	/** Epoch ms the entry was created; backfilled on next edit for legacy entries. */
+	createdAt?: number;
+	/** Epoch ms of the last edit (not bumped by a use). */
+	updatedAt?: number;
+	/** Epoch ms of the last use (copy/fill); absent until first used. */
+	lastUsedAt?: number;
 }
 
 /**
@@ -219,6 +225,8 @@ export interface VaultActions {
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
+	/** Record a use (copy/fill): bumps only the entry's `lastUsedAt`. */
+	touchEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
 	/** Prove possession of a registered key (a tap) without changing lock state. */
 	verifyWithSecurityKey(): Promise<boolean>;
@@ -735,6 +743,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (id: string) => commitEntries(await mutations.remove(snapshotEntries(), id)),
 		[mutations, snapshotEntries, commitEntries],
 	);
+	const touchEntry = useCallback(
+		async (id: string) => commitEntries(await mutations.touch(snapshotEntries(), id)),
+		[mutations, snapshotEntries, commitEntries],
+	);
 
 	/** Check a password against the slot verifier without unlocking. */
 	const verifyMasterPassword = useCallback(
@@ -1010,6 +1022,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			importEntries,
 			updateEntry,
 			deleteEntry,
+			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,
 			changeMasterPassword,
@@ -1037,6 +1050,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			importEntries,
 			updateEntry,
 			deleteEntry,
+			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,
 			changeMasterPassword,

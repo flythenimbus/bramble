@@ -134,6 +134,10 @@ msgstr "Aggiunto quando si crea una chiave di accesso su un sito con Bramble. Ri
 msgid "Advanced"
 msgstr "Avanzate"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "All"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un endpoint che restituisce i propri server ICE in formato JSON. Predefinito sul relay."
@@ -209,6 +213,10 @@ msgstr "Numero della carta"
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Cardholder name"
 msgstr "Nome del titolare della carta"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Cards"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
@@ -528,6 +536,10 @@ msgstr "Nome del campo"
 msgid "Files are read on this device only. Nothing is uploaded. Delete the export file once you're done."
 msgstr "I file vengono letti solo su questo dispositivo. Nulla viene caricato. Elimini il file di esportazione una volta terminato."
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Filter by type"
+msgstr ""
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Fingerprint"
 msgstr "Impronta digitale"
@@ -680,6 +692,10 @@ msgstr "File chiave (opzionale)"
 msgid "Keyboard suggestions"
 msgstr "Suggerimenti per la tastiera"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Keys"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Light"
 msgstr "Luce"
@@ -699,6 +715,10 @@ msgstr "Blocca la cassaforte dopo l'inattività"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
 msgstr "Accesso"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Logins"
+msgstr ""
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -739,9 +759,17 @@ msgstr "Altre opzioni"
 msgid "Name"
 msgstr "Nome"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Name A-Z"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Name this key (e.g. YubiKey office)"
 msgstr "Assegna un nome a questa chiave (es. ufficio YubiKey)"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Name Z-A"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Never"
@@ -794,6 +822,7 @@ msgstr "URL del relay Nostr"
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Notes"
 msgstr "Note"
 
@@ -980,6 +1009,18 @@ msgstr "Reinserire la password"
 msgid "Reading file…"
 msgstr "Lettura del file..."
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently added"
+msgstr ""
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently updated"
+msgstr ""
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently used"
+msgstr ""
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Recovery code"
@@ -1086,7 +1127,7 @@ msgstr "Scansiona il QR sulla pagina di 2FA di un sito, oppure incolla un URI ot
 msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
 msgstr "Scansioni questo sul suo altro dispositivo o copi il codice qui sotto. Non ci sono segreti del vault al suo interno."
 
-#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Search vault"
 msgstr "Cerca nel vault"
 
@@ -1194,9 +1235,13 @@ msgstr "Salta la password su questo dispositivo con {name}."
 msgid "Something went wrong"
 msgstr "Si è verificato un errore"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Sort"
+msgstr ""
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
-msgid "Sort by name"
-msgstr "Ordina per nome"
+#~ msgid "Sort by name"
+#~ msgstr "Ordina per nome"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
@@ -1545,6 +1590,10 @@ msgstr "La sua password principale"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"
 msgstr "Il suo nuovo codice di recupero"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Your vault is empty. Add your first item."
+msgstr ""
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your vault stays on this device, encrypted with AES-256-GCM. Keep your master password and recovery code somewhere safe."

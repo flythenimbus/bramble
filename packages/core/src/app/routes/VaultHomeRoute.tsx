@@ -1,15 +1,24 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { getEntryMode } from "../entry-modes";
 import { customFieldsCopyItems, customFieldsSearchText } from "../entry-modes/custom-fields";
 import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
+import { DEFAULT_SEARCH, type VaultSearch } from "../screens/VaultHome/vault-search";
 
 /** Vault list route: projects entries into rows via their entry-mode descriptors. */
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
-	const { entries, deleteEntry } = useVault();
+	// Route validates search params to an all-optional shape; fill the defaults in
+	// per field (a `.catch`ed param can be present-but-undefined, so `??` not spread).
+	const raw = useSearch({ from: "/_app/vault" });
+	const search: VaultSearch = {
+		q: raw.q ?? DEFAULT_SEARCH.q,
+		type: raw.type ?? DEFAULT_SEARCH.type,
+		sort: raw.sort ?? DEFAULT_SEARCH.sort,
+	};
+	const { entries, deleteEntry, touchEntry } = useVault();
 	const { prefs } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
 	const showBreaches = prefs.breachCheckEnabled;
@@ -34,18 +43,29 @@ export function VaultHomeRoute() {
 					copyItems: [...view.copyItems, ...customFieldsCopyItems(entry.customFields)],
 					searchText:
 						`${mode.searchText(entry)} ${customFieldsSearchText(entry.customFields)}`.toLowerCase(),
+					createdAt: entry.createdAt,
+					updatedAt: entry.updatedAt,
+					lastUsedAt: entry.lastUsedAt,
 				};
 			}),
 		[entries, showBreaches],
 	);
 
+	// Search/filter/sort live in the route's search params; patch them in place
+	// (replace, so typing doesn't stack history entries).
+	const onSearchChange = (patch: Partial<VaultSearch>) =>
+		navigate({ to: "/vault", search: (prev) => ({ ...prev, ...patch }), replace: true });
+
 	return (
 		<VaultHome
 			items={items}
+			search={search}
+			onSearchChange={onSearchChange}
 			onCreate={(type) => navigate({ to: "/vault/new/$type", params: { type } })}
 			onSelectEntry={(entryId) => navigate({ to: "/vault/$entryId", params: { entryId } })}
 			onEditEntry={(entryId) => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
 			onDeleteEntry={deleteEntry}
+			onUseEntry={(entryId) => void touchEntry(entryId)}
 		/>
 	);
 }

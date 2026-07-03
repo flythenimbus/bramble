@@ -25,6 +25,8 @@ interface EntryRowProps {
 	onSelect: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
+	/** Called after a successful quick-copy, to record the entry as recently used. */
+	onUse?: () => void;
 }
 
 /** Type-agnostic vault-list row; type-specific projection is computed by the entry mode and passed in. */
@@ -38,6 +40,7 @@ export function EntryRow({
 	onSelect,
 	onEdit,
 	onDelete,
+	onUse,
 }: EntryRowProps) {
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
@@ -76,6 +79,7 @@ export function EntryRow({
 			await clipboard.copy(value);
 			setCopied(label);
 			setCopyOpen(false);
+			onUse?.();
 		} catch {
 			// Best-effort: clipboard write can fail if unfocused or permission revoked.
 		}

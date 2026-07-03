@@ -14,6 +14,10 @@ import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 
+// A use within this window of the last one reuses the stored lastUsedAt, so a
+// burst of copies is a single write instead of one per keystroke of activity.
+const USE_COALESCE_MS = 60_000;
+
 /**
  * The in-memory entry state of a vault: the decrypted entries plus the sync
  * bookkeeping that must travel with them for merges to converge. `stamps` maps
@@ -40,6 +44,12 @@ export interface EntryMutations {
 	importMany(current: VaultEntries, items: EntryData[]): Promise<VaultEntries>;
 	update(current: VaultEntries, id: string, data: EntryData): Promise<VaultEntries>;
 	remove(current: VaultEntries, id: string): Promise<VaultEntries>;
+	/**
+	 * Record a use (copy/fill): bumps only `lastUsedAt`, never `updatedAt`. Bumps
+	 * the sync stamp so it propagates, but coalesces uses within USE_COALESCE_MS to
+	 * a single write. No-ops (returns `current`) for an unknown or coalesced id.
+	 */
+	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/** Decrypt the on-disk entries payload (empty for a fresh vault). */
 	readEntriesPayload(): Promise<EntriesPayload>;
 	/**
@@ -111,9 +121,16 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		add: async (current, data) => {
 			const valid = validate(data);
 			const c = await clock();
-			const entry: Entry = { id: globalThis.crypto.randomUUID(), ...valid };
+			const hlc = c.send();
+			// The stamp's wall is physical ms, so it doubles as the create/update time.
+			const entry: Entry = {
+				id: globalThis.crypto.randomUUID(),
+				...valid,
+				createdAt: valid.createdAt ?? hlc.wall,
+				updatedAt: hlc.wall,
+			};
 			const stamps = new Map(current.stamps);
-			stamps.set(entry.id, c.send());
+			stamps.set(entry.id, hlc);
 			return persist({
 				entries: [...current.entries, entry],
 				stamps,
@@ -122,16 +139,22 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		},
 
 		// One encrypt-and-write for the whole batch (not N), so a large import is a
-		// single disk write.
+		// single disk write. Preserves source timestamps when the import carries them.
 		importMany: async (current, items) => {
 			const valid = items.map(validate);
 			const c = await clock();
-			const withIds: Entry[] = valid.map((data) => ({
-				id: globalThis.crypto.randomUUID(),
-				...data,
-			}));
 			const stamps = new Map(current.stamps);
-			for (const e of withIds) stamps.set(e.id, c.send());
+			const withIds: Entry[] = valid.map((data) => {
+				const hlc = c.send();
+				const id = globalThis.crypto.randomUUID();
+				stamps.set(id, hlc);
+				return {
+					id,
+					...data,
+					createdAt: data.createdAt ?? hlc.wall,
+					updatedAt: data.updatedAt ?? hlc.wall,
+				};
+			});
 			return persist({
 				entries: [...current.entries, ...withIds],
 				stamps,
@@ -142,9 +165,39 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		update: async (current, id, data) => {
 			const valid = validate(data);
 			const c = await clock();
-			const entries = current.entries.map((e) => (e.id === id ? { id, ...valid } : e));
+			const hlc = c.send();
+			const prev = current.entries.find((e) => e.id === id);
+			const entries = current.entries.map((e) =>
+				e.id === id
+					? {
+							id,
+							...valid,
+							// Keep the original create time; backfill to now for a legacy entry.
+							createdAt: prev?.createdAt ?? valid.createdAt ?? hlc.wall,
+							updatedAt: hlc.wall,
+							// The form never carries lastUsedAt; preserve the stored value.
+							lastUsedAt: valid.lastUsedAt ?? prev?.lastUsedAt,
+						}
+					: e,
+			);
 			const stamps = new Map(current.stamps);
-			stamps.set(id, c.send());
+			stamps.set(id, hlc);
+			return persist({ entries, stamps, tombstones: current.tombstones });
+		},
+
+		touch: async (current, id) => {
+			const prev = current.entries.find((e) => e.id === id);
+			if (!prev) return current;
+			const c = await clock();
+			const hlc = c.send();
+			if (prev.lastUsedAt !== undefined && hlc.wall - prev.lastUsedAt < USE_COALESCE_MS) {
+				return current;
+			}
+			const entries = current.entries.map((e) =>
+				e.id === id ? { ...e, lastUsedAt: hlc.wall } : e,
+			);
+			const stamps = new Map(current.stamps);
+			stamps.set(id, hlc);
 			return persist({ entries, stamps, tombstones: current.tombstones });
 		},
 

@@ -14,6 +14,12 @@ const baseEntryFields = {
 	name: z.string(),
 	notes: z.string().optional(),
 	customFields: z.array(customFieldSchema).optional(),
+	// Epoch-ms lifecycle timestamps. Optional so pre-timestamp entries still
+	// validate; the mutation layer backfills createdAt on the next edit.
+	createdAt: z.number().optional(),
+	updatedAt: z.number().optional(),
+	// Bumped on use (copy/fill), not edit; absent until first used.
+	lastUsedAt: z.number().optional(),
 };
 
 // Mirror of PasskeyCredential. Kept in lockstep with the interface in useVault.

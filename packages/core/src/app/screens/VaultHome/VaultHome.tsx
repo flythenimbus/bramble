@@ -1,10 +1,10 @@
-import { Trans, useLingui } from "@lingui/react/macro";
-import { type LucideIcon, Search, TrendingDown, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { Trans } from "@lingui/react/macro";
+import { type LucideIcon, TrendingDown, TrendingUp } from "lucide-react";
 import type { EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
-import { TextField } from "../../components/ui/text-field";
+import { VaultSearchBar } from "./VaultSearchBar";
+import { filterAndSortEntries, type VaultSearch } from "./vault-search";
 
 /** List-ready projection of an entry: shared id/name plus mode-contributed display fields. */
 export interface VaultListItem {
@@ -18,29 +18,35 @@ export interface VaultListItem {
 	copyItems: { label: string; value: string }[];
 	// Lowercased text the search box matches against.
 	searchText: string;
+	// Lifecycle timestamps (epoch ms) that drive the recency sorts.
+	createdAt?: number;
+	updatedAt?: number;
+	lastUsedAt?: number;
 }
 
 interface VaultHomeProps {
 	items: VaultListItem[];
+	search: VaultSearch;
+	onSearchChange: (patch: Partial<VaultSearch>) => void;
 	onCreate: (type: EntryType) => void;
 	onSelectEntry: (id: string) => void;
 	onEditEntry: (id: string) => void;
 	onDeleteEntry: (id: string) => Promise<void>;
+	onUseEntry: (id: string) => void;
 }
 
 /** Vault list screen with search, password-health stats, and the entry rows. */
 export function VaultHome({
 	items,
+	search,
+	onSearchChange,
 	onCreate,
 	onSelectEntry,
 	onEditEntry,
 	onDeleteEntry,
+	onUseEntry,
 }: VaultHomeProps) {
-	const { t } = useLingui();
-	const [searchQuery, setSearchQuery] = useState("");
-
-	const query = searchQuery.toLowerCase();
-	const filtered = items.filter((item) => item.searchText.includes(query));
+	const filtered = filterAndSortEntries(items, search);
 
 	// "At Risk" / "Strong" are password-health stats, so they count logins only.
 	const atRisk = items.filter((item) => item.leaked).length;
@@ -48,18 +54,11 @@ export function VaultHome({
 
 	return (
 		<main className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto px-4 py-5">
-			<div className="flex gap-2 mb-5 items-stretch">
-				<div className="flex-1">
-					<TextField
-						label={t`Search vault`}
-						type="text"
-						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
-						startAdornment={<Search className="w-4 h-4" />}
-					/>
-				</div>
-				<AddDropdown onCreate={onCreate} />
-			</div>
+			<VaultSearchBar
+				search={search}
+				onChange={onSearchChange}
+				trailing={<AddDropdown onCreate={onCreate} />}
+			/>
 
 			<div className="grid grid-cols-3 gap-3 mb-5">
 				<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
@@ -98,16 +97,10 @@ export function VaultHome({
 			</div>
 
 			<div className="flex-1 min-h-0 flex flex-col rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-				<div className="shrink-0 px-4 py-3 border-b border-border/50 flex items-center justify-between">
+				<div className="shrink-0 px-4 py-3 border-b border-border/50">
 					<h3 className="text-sm">
 						<Trans>Items ({filtered.length})</Trans>
 					</h3>
-					<button
-						type="button"
-						className="text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
-					>
-						<Trans>Sort by name</Trans>
-					</button>
 				</div>
 				<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
 					{filtered.length > 0 ? (
@@ -123,11 +116,16 @@ export function VaultHome({
 								onSelect={() => onSelectEntry(item.id)}
 								onEdit={() => onEditEntry(item.id)}
 								onDelete={() => onDeleteEntry(item.id)}
+								onUse={() => onUseEntry(item.id)}
 							/>
 						))
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
-							<Trans>No items found matching your search.</Trans>
+							{items.length === 0 ? (
+								<Trans>Your vault is empty. Add your first item.</Trans>
+							) : (
+								<Trans>No items found matching your search.</Trans>
+							)}
 						</div>
 					)}
 				</div>
