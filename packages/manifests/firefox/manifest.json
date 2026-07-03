@@ -1,0 +1,55 @@
+{
+	"manifest_version": 3,
+	"name": "Bramble",
+	"version": "1.2.1",
+	"description": "Local-first, encrypted password manager. No cloud database.",
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "bramble@bramble.app",
+			"strict_min_version": "128.0"
+		}
+	},
+	"action": {
+		"default_popup": "popup.html",
+		"default_title": "Bramble",
+		"default_icon": {
+			"16": "icons/icon-16.png",
+			"32": "icons/icon-32.png"
+		}
+	},
+	"icons": {
+		"16": "icons/icon-16.png",
+		"32": "icons/icon-32.png",
+		"48": "icons/icon-48.png",
+		"128": "icons/icon-128.png"
+	},
+	"options_page": "options.html",
+	"background": {
+		"scripts": ["background.js"],
+		"type": "module"
+	},
+	"permissions": ["storage", "unlimitedStorage", "alarms", "idle", "clipboardWrite"],
+	"host_permissions": ["<all_urls>"],
+	"content_scripts": [
+		{
+			"matches": ["<all_urls>"],
+			"js": ["content-script.js"],
+			"all_frames": true,
+			"run_at": "document_idle"
+		}
+	],
+	"commands": {
+		"lock-vault": {
+			"description": "Lock Bramble"
+		}
+	},
+	"content_security_policy": {
+		"extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+	},
+	"web_accessible_resources": [
+		{
+			"resources": ["autofill-ui.html", "autofill-ui.js"],
+			"matches": ["<all_urls>"]
+		}
+	]
+}

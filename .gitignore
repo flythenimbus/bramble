@@ -1,5 +1,8 @@
 node_modules/
 dist/
+dist-firefox/
+web-ext-artifacts/
+bramble*.zip
 *.log
 .DS_Store
 
