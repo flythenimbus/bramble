@@ -12,8 +12,8 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
 - Porting the runtime is **small**: most Chrome-isms are already feature-detected and degrade
   without crashing. There are two real code changes for the core runtime (the offscreen document,
   and the `chrome.*` namespace), plus a per-target manifest and build wiring.
-- **The passkey provider now works on Firefox** via a MAIN-world content-script transport (built +
-  unit-tested; on-device pass pending). `chrome.webAuthenticationProxy` is Chrome-only, so Firefox
+- **The passkey provider now works on Firefox** via a MAIN-world content-script transport (built,
+  unit-tested, and device-verified on webauthn.io). `chrome.webAuthenticationProxy` is Chrome-only, so Firefox
   overrides `navigator.credentials.create/get` in the page's own world and drives the same
   transport-free ceremony handlers Chrome uses. **Security-key unlock stays gated off** (the
   `moz-extension://` origin can't be a WebAuthn RP, and Firefox lacks PRF over external keys
@@ -33,8 +33,11 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
 
 ## Status (2026-07)
 
-Branch `feat/firefox` (rebased on main). Everything below is built + unit-tested + both targets build
-clean (`web-ext lint` 0 errors); the *runtime* behaviour still wants an on-device pass.
+Branch `feat/firefox` is a clean fast-forward onto `main` (34 commits ahead, 0 behind), so it merges
+without conflicts. Full gate green: 581 JS tests (core / mobile / extension), 35 Rust/WASM `cargo`
+tests, `biome` clean across 310 files, both targets build, `web-ext lint` 0 errors. Core flows are
+device-tested on Firefox (unlock, sync, passkey provider); the one feature still to build and the
+on-device checks not yet crossed live are under "Remaining" below.
 
 **Built:**
 
@@ -50,25 +53,45 @@ clean (`web-ext lint` 0 errors); the *runtime* behaviour still wants an on-devic
   picker), dark-mode toolbar icon via manifest `theme_icons`, storage durability (`unlimitedStorage`
   + `navigator.storage.persist()`).
 
+- **On-page UI localization.** The corner-prompt cards (save / update / passkey), the autofill
+  dropdown, and the WAR iframe now translate via the native `_locales` catalog +
+  `browser.i18n.getMessage` (de / es / fr / it / pt-BR), closing the gap where only the React
+  popup/options were localized (those use Lingui). Content scripts must stay one flat file, so
+  `getMessage` is the fit: synchronous, no chunk, keyed off the same browser locale `LocaleGate`
+  resolves for the app. Shared with Chromium (same source + `_locales`), so both targets localize;
+  English text is byte-identical to before. Adding a string: put it in `_locales/en/messages.json`,
+  then run `scripts/i18n/chrome-manifest.mjs` (incremental, merges missing keys per locale).
+
 - **Passkey provider (MAIN-world content-script transport)** — a `world: "MAIN"` in-page override of
   `navigator.credentials.create/get` + an isolated-world relay + background `WEBAUTHN_CREATE/GET`
   handlers, all driving the same `handleCreate`/`handleGet` ceremony handlers Chrome's proxy uses.
   The origin comes from the browser-set message `sender` (authoritative, per-frame), so it's cleaner
   than Chrome's active-tab guess. Codec round-trip + existing ceremony unit tests pass; both targets
-  build clean. On-device webauthn.io pass still pending.
+  build clean; **device-verified on webauthn.io** (register + authenticate, locked and unlocked). The
+  corner card was polished alongside: Bramble glyph, per-account rows that authenticate on click, a
+  locked-state explainer line, and the unlock window auto-closes after a locked unlock so it doesn't
+  cover the picker.
 
 **Gated off on Firefox (no broken UI; deferred fast-follow):** security-key unlock — see its section
 below for what it needs.
 
 **Remaining before a Firefox ship:**
 
-- On-device verification: idle sync catch-up (~30-60s), the epoch rollover (only fires at an hour
-  boundary — logic is unit-tested, not yet crossed live), autofill on a real page.
-- **Clipboard auto-clear from the FF background** — flagged, unverified: `navigator.clipboard.
+- **Export / import backup (the one feature still to build; Phase 5b).** `storage.local` is the only
+  copy on Firefox and is wiped on uninstall or profile reset, so a user-driven backup path is
+  non-optional. Build a user-facing **export** (serialize the vault and save the `.db` blob via the
+  `downloads` API) and **import** (a file input that re-loads it), reusing the serialize/parse that
+  already wraps `readVaultBlob`/`writeVaultBlob` in `storage.ts`. Chrome's `.db` save flow is
+  FSA-only (`showSaveFilePicker`), so this is net-new UI, shared by both targets once built. P2P sync
+  gives partial redundancy (the vault also lives on peers), but is not a substitute for a local
+  backup file. See "Storage durability".
+- **On-device checks not yet crossed live.** Idle sync catch-up (~30-60s), the epoch rollover (fires
+  only at an hour boundary; logic is unit-tested), and autofill on a real page. Passkey provider and
+  initial + ongoing sync are already device-verified.
+- **Clipboard auto-clear from the FF background** (flagged, unverified). `navigator.clipboard.
   writeText("")` may be rejected from an unfocused background page, and the usual `<textarea>` +
   `execCommand` fallback also needs a focused document the background lacks. May need a rethink
   (clear from the popup, or on next popup open). See "Risks / open items".
-- Export/import backup — the uninstall-wipe safety net (`storage.local` is the only copy on FF).
 - AMO submission is a separate workstream (real `gecko.id`, `data_collection_permissions`,
   reproducible-build docs, privacy policy, signing the `.xpi`).
 
@@ -245,15 +268,15 @@ mitigations above shrink correlation; they don't zero it. **Self-hosting stays t
 and the relay URL is already user-configurable** (Settings → Advanced), so "use your own / a `.onion`
 relay" is a real lever, not a promise.
 
-## Passkey provider (Chrome proxy; Firefox MAIN-world transport, built)
+## Passkey provider (Chrome proxy; Firefox MAIN-world transport, device-verified)
 
 Bramble is a software WebAuthn authenticator: it creates and stores passkeys in the vault and signs
 assertions with its own P-256 keys (see `docs/passkey-provider.md`). On Chrome this is delivered via
 **`chrome.webAuthenticationProxy`**: the browser routes a page's `navigator.credentials.create/get`
 calls to the extension, which runs the ceremony. Firefox has **no equivalent** to that proxy API, so
 the delivery is a **MAIN-world content-script transport** instead. Both deliveries drive the same
-transport-free ceremony handlers; only the wiring differs. **Built + unit-tested; on-device pass
-pending.**
+transport-free ceremony handlers; only the wiring differs. **Built, unit-tested, and device-verified
+on Firefox against webauthn.io.**
 
 Three Firefox/WebAuthn facts, to keep the mechanisms straight (verified mid-2026):
 
@@ -308,9 +331,9 @@ differs from Chrome.
 **Scoped out of v1:** `mediation: "conditional"` (passkey autofill in the field dropdown) passes
 through to native.
 
-**Remaining:** an on-device webauthn.io pass on a real Firefox (register + authenticate, locked and
-unlocked); a cross-device check that a passkey created on Firefox signs in on Chrome/iOS via sync and
-vice-versa (the core bytes are identical, so it should just work).
+**Verified on device:** a webauthn.io pass on real Firefox (register + authenticate, locked and
+unlocked). **Still unverified:** a cross-device check that a passkey created on Firefox signs in on
+Chrome/iOS via sync and vice-versa (the core bytes are identical, so it should just work).
 
 ## Security-key / platform-authenticator unlock (Firefox: disabled)
 
@@ -468,18 +491,19 @@ durability properties become load-bearing. Three facts to design around (verifie
   Firefox: bounded by the IndexedDB quota, a slice of ~50% free disk). A typical vault is well
   under 1 MB, but ~10k entries can reach ~5-9 MB and bump the Chrome cap. Fix: declare the
   **`unlimitedStorage`** permission (manifest-only, no API) in **both** manifests, after which
-  storage is disk-bounded. The chromium manifest already declares `unlimitedStorage`; the Firefox
-  manifest must carry it too.
+  storage is disk-bounded. Both manifests now declare `unlimitedStorage`.
 - **Uninstall clears it.** Unlike an FSA file (which survives), `storage.local` is wiped on
   extension uninstall, and a profile reset loses it too. So on Firefox the vault can vanish with
   no file to fall back on. This makes **export/import backup (Option 2) non-optional**, and is a
   second reason to want **P2P sync (Option 5)**: with sync the vault also lives on peer devices,
-  giving redundancy against this failure mode.
+  giving redundancy against this failure mode. The backup itself is the one Firefox feature still
+  unbuilt (Phase 5b; see "Status").
 - **Eviction under disk pressure.** Firefox's Quota Manager can evict an origin's storage when
   the global limit is hit; only **persistent** buckets are exempt. `unlimitedStorage` lifts the
-  quota cap but does not clearly mark the bucket persistent. Smoke-test whether extension storage
-  is treated as persistent, and if not, call `navigator.storage.persist()` to request it. Silent
-  eviction of the only copy is the failure most worth ruling out for a password manager.
+  quota cap but does not clearly mark the bucket persistent. Bramble now calls
+  `navigator.storage.persist()` on init/unlock to request a persistent bucket; confirming Firefox
+  honors it is part of the remaining on-device pass. Silent eviction of the only copy is the failure
+  most worth ruling out for a password manager.
 
 Sources: [`storage.local` (MDN)](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage/local),
 [`chrome.storage`](https://developer.chrome.com/docs/extensions/reference/api/storage),
