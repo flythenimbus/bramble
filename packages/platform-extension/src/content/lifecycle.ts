@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+import { api } from "./content-api";
 
 // Extension-context lifecycle. A content script is orphaned when its extension
 // is reloaded/updated; the first failed access tears everything down. Modules
@@ -19,7 +20,7 @@ function runTeardown(): void {
 /** False once the extension context is invalidated (orphaned content script); tears us down on first detection. */
 export function isExtensionAlive(): boolean {
 	if (!extensionAlive) return false;
-	if (!chrome.runtime?.id) {
+	if (!api.runtime?.id) {
 		extensionAlive = false;
 		runTeardown();
 		return false;
@@ -37,7 +38,7 @@ export function markExtensionDead(): void {
 export function safeSendMessage(message: unknown): void {
 	if (!isExtensionAlive()) return;
 	try {
-		chrome.runtime.sendMessage(message);
+		api.runtime.sendMessage(message);
 	} catch {
 		extensionAlive = false;
 		runTeardown();

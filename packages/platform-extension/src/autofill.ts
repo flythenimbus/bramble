@@ -1,13 +1,15 @@
 /// <reference types="chrome" />
+
 import type {
 	AutofillAdapter,
 	FillPayload,
 	IndexEntry,
 	QueryResult,
 } from "@core/adapters/autofill";
+import { api } from "./platform-api";
 
 async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
-	const res = await chrome.runtime.sendMessage({ type, payload });
+	const res = await api.runtime.sendMessage({ type, payload });
 	if (!res?.ok) throw new Error(res?.error ?? `autofill ${type} failed`);
 	return res.data as T;
 }

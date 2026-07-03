@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "../platform-api";
 import { type MessageEnvelope, on } from "./router";
 
 /** Decode a single QR code from a PNG data URL via OffscreenCanvas (no DOM); null if none found. */
@@ -20,12 +21,12 @@ async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
 
 async function captureQrScan(): Promise<MessageEnvelope> {
 	// Filter to normal windows so a detached pop-out resolves the real browsing tab.
-	const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+	const win = await api.windows.getLastFocused({ windowTypes: ["normal"] });
 	if (win?.id === undefined) {
 		return { ok: false, error: "No browser window to capture" };
 	}
 	// PNG, not JPEG: lossless pixels decode QR far more reliably.
-	const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
+	const dataUrl = await api.tabs.captureVisibleTab(win.id, { format: "png" });
 	const decoded = await decodeQrDataUrl(dataUrl);
 	return { ok: true, data: decoded };
 }

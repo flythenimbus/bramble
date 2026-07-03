@@ -8,6 +8,7 @@
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
 import { bytesToBase64 } from "@core/util/bytes";
+import { api } from "../platform-api";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -36,7 +37,7 @@ const pendingPrompts = new Map<string, (reply: PromptReply) => void>();
 
 async function activeTabId(): Promise<number | undefined> {
 	try {
-		const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
 		return tab?.id;
 	} catch {
 		return undefined;
@@ -48,7 +49,7 @@ async function activeTabId(): Promise<number | undefined> {
 // authoritative origin for clientData + the rpId check. Null on chrome:// / unreadable tabs.
 async function activeTabOrigin(): Promise<string | null> {
 	try {
-		const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
 		if (!tab?.url) return null;
 		const u = new URL(tab.url);
 		return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
@@ -59,15 +60,15 @@ async function activeTabOrigin(): Promise<string | null> {
 
 async function openPopupForUnlock(): Promise<void> {
 	try {
-		const openPopup = (chrome.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
+		const openPopup = (api.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
 		if (typeof openPopup === "function") {
-			await openPopup.call(chrome.action);
+			await openPopup.call(api.action);
 			return;
 		}
 	} catch {}
 	try {
-		await chrome.windows.create({
-			url: chrome.runtime.getURL("popup.html?detached=1"),
+		await api.windows.create({
+			url: api.runtime.getURL("popup.html?detached=1"),
 			type: "popup",
 			focused: true,
 			width: 500,
@@ -90,7 +91,7 @@ async function waitForUnlock(timeoutMs: number): Promise<boolean> {
 function showCard(tabId: number, payload: SavePasskeyPrompt): Promise<PromptReply> {
 	return new Promise((resolve) => {
 		pendingPrompts.set(payload.promptId, resolve);
-		chrome.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
+		api.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
 			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
 		});
 		setTimeout(() => {
@@ -152,7 +153,7 @@ const productionDeps: PasskeyProxyDeps = {
 	now: () => Date.now(),
 	// Confirm the save in any open extension page (the popup is open during Unlock & Save).
 	onSaved: (info) => {
-		void chrome.runtime.sendMessage({ type: "PASSKEY_SAVED", payload: info }).catch(() => {});
+		void api.runtime.sendMessage({ type: "PASSKEY_SAVED", payload: info }).catch(() => {});
 	},
 };
 
@@ -208,13 +209,13 @@ let attached = false;
 function registerListeners(): void {
 	if (listenersRegistered) return;
 	listenersRegistered = true;
-	chrome.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
-		chrome.webAuthenticationProxy.completeIsUvpaaRequest({
+	api.webAuthenticationProxy.onIsUvpaaRequest.addListener((req) => {
+		api.webAuthenticationProxy.completeIsUvpaaRequest({
 			requestId: req.requestId,
 			isUvpaa: true,
 		});
 	});
-	chrome.webAuthenticationProxy.onCreateRequest.addListener((req) => {
+	api.webAuthenticationProxy.onCreateRequest.addListener((req) => {
 		void (async () => {
 			const origin = await activeTabOrigin();
 			const details = origin
@@ -224,12 +225,12 @@ function registerListeners(): void {
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
 			try {
-				await chrome.webAuthenticationProxy.completeCreateRequest(details);
+				await api.webAuthenticationProxy.completeCreateRequest(details);
 			} catch (e) {
 				// A malformed responseJson rejects here; error the request so the page's
 				// create() fails fast instead of hanging forever ("nothing happens").
 				console.error("[passkey] completeCreateRequest failed", e);
-				await chrome.webAuthenticationProxy
+				await api.webAuthenticationProxy
 					.completeCreateRequest({
 						requestId: req.requestId,
 						error: { name: "UnknownError", message: String(e).slice(0, 200) },
@@ -238,7 +239,7 @@ function registerListeners(): void {
 			}
 		})();
 	});
-	chrome.webAuthenticationProxy.onGetRequest.addListener((req) => {
+	api.webAuthenticationProxy.onGetRequest.addListener((req) => {
 		void (async () => {
 			const origin = await activeTabOrigin();
 			const details = origin
@@ -248,10 +249,10 @@ function registerListeners(): void {
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
 			try {
-				await chrome.webAuthenticationProxy.completeGetRequest(details);
+				await api.webAuthenticationProxy.completeGetRequest(details);
 			} catch (e) {
 				console.error("[passkey] completeGetRequest failed", e);
-				await chrome.webAuthenticationProxy
+				await api.webAuthenticationProxy
 					.completeGetRequest({
 						requestId: req.requestId,
 						error: { name: "UnknownError", message: String(e).slice(0, 200) },
@@ -270,14 +271,14 @@ function registerListeners(): void {
 export async function initWebauthnProxy(): Promise<void> {
 	registerListeners();
 	if (attached) return;
-	const err = await chrome.webAuthenticationProxy.attach();
+	const err = await api.webAuthenticationProxy.attach();
 	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);
 	attached = true;
 }
 
 export async function detachWebauthnProxy(): Promise<void> {
 	if (!attached) return;
-	await chrome.webAuthenticationProxy.detach();
+	await api.webAuthenticationProxy.detach();
 	attached = false;
 }
 

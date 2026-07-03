@@ -1,8 +1,9 @@
 /// <reference types="chrome" />
 
+import type { VaultCrypto } from "@core/wasm";
 // The VaultCrypto surface is declared once in @core/wasm; this loader only owns the
 // extension-specific instantiation (loading the bundle via chrome.runtime.getURL).
-import type { VaultCrypto } from "@core/wasm";
+import { api } from "./platform-api";
 
 export type { VaultCrypto };
 
@@ -15,7 +16,7 @@ export function loadWasm(): Promise<VaultCrypto> {
 		const wasmModule = await import(
 			/* @vite-ignore */ chrome.runtime.getURL("wasm/vault_crypto.js")
 		);
-		await wasmModule.default(chrome.runtime.getURL("wasm/vault_crypto_bg.wasm"));
+		await wasmModule.default(api.runtime.getURL("wasm/vault_crypto_bg.wasm"));
 		return wasmModule as unknown as VaultCrypto;
 	})();
 	return cached;

@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "../platform-api";
 import { clearIndex } from "./autofill-index";
 import { CAPTURE_KEY_PREFIX, CORNER_HANDOFF_KEY } from "./corner-prompt";
 import { markOffscreenKey, sendToOffscreen } from "./offscreen-client";
@@ -31,10 +32,10 @@ export function vaultLocked(): boolean {
 // previous build. Awaited (with the index hydration) before any handler runs.
 export const sessionHydration = (async () => {
 	try {
-		const r = await chrome.storage.session.get([VEK_KEY]);
+		const r = await api.storage.session.get([VEK_KEY]);
 		const cached = r[VEK_KEY];
 		if (typeof cached === "string") cachedVek = cached;
-		await chrome.storage.session.remove([LEGACY_AUTOFILL_INDEX_KEY]).catch(() => {});
+		await api.storage.session.remove([LEGACY_AUTOFILL_INDEX_KEY]).catch(() => {});
 	} catch (e) {
 		console.warn("[titanpass:bg] session hydration failed", e);
 	}
@@ -43,7 +44,7 @@ export const sessionHydration = (async () => {
 async function persistVek(): Promise<void> {
 	if (cachedVek === null) return;
 	try {
-		await chrome.storage.session.set({ [VEK_KEY]: cachedVek });
+		await api.storage.session.set({ [VEK_KEY]: cachedVek });
 	} catch (e) {
 		console.warn("[titanpass:bg] persistVek failed", e);
 	}
@@ -53,10 +54,10 @@ export async function scheduleAutoLock(): Promise<void> {
 	const minutes = await getAutoLockMinutes();
 	// 0 or absent means never auto-lock.
 	if (minutes <= 0) {
-		void chrome.alarms.clear(AUTOLOCK_ALARM);
+		void api.alarms.clear(AUTOLOCK_ALARM);
 		return;
 	}
-	void chrome.alarms.create(AUTOLOCK_ALARM, { delayInMinutes: minutes });
+	void api.alarms.create(AUTOLOCK_ALARM, { delayInMinutes: minutes });
 }
 
 async function exportAndCacheVek(): Promise<void> {
@@ -79,15 +80,15 @@ export async function clearSession(): Promise<void> {
 	markOffscreenKey(false);
 	void stopSync();
 	try {
-		const all = await chrome.storage.session.get(null);
+		const all = await api.storage.session.get(null);
 		const toRemove: string[] = [VEK_KEY, POPOUT_HANDOFF_KEY, CORNER_HANDOFF_KEY];
 		for (const key of Object.keys(all)) {
 			if (key.startsWith(CAPTURE_KEY_PREFIX)) toRemove.push(key);
 		}
 		// PENDING_BLOB_KEY is ciphertext, so it is intentionally not wiped here.
-		await chrome.storage.session.remove(toRemove);
+		await api.storage.session.remove(toRemove);
 	} catch {}
-	void chrome.alarms.clear(AUTOLOCK_ALARM);
+	void api.alarms.clear(AUTOLOCK_ALARM);
 }
 
 /**

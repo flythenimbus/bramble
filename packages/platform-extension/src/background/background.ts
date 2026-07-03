@@ -5,6 +5,7 @@
 // idle, prefs). Each concern module registers its own message handlers; the
 // router (./background/router) owns the single onMessage dispatcher.
 
+import { api } from "../platform-api";
 import "./corner-prompt";
 import "./popout";
 import "./qr";
@@ -42,15 +43,15 @@ void getPasskeyProviderEnabled().then((enabled) => {
 		void initWebauthnProxy().catch((e) => console.warn("[titanpass:bg] passkey proxy", e));
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(() => {
 	void ensureOffscreen();
 });
 
-chrome.runtime.onStartup.addListener(() => {
+api.runtime.onStartup.addListener(() => {
 	void ensureOffscreen();
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+api.alarms.onAlarm.addListener((alarm) => {
 	if (alarm.name === AUTOLOCK_ALARM) {
 		void (async () => {
 			await clearSession();
@@ -65,7 +66,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // Manual lock via the user-bound `lock-vault` shortcut (declared without a default chord).
-chrome.commands?.onCommand.addListener((command) => {
+api.commands?.onCommand.addListener((command) => {
 	if (command !== "lock-vault") return;
 	void (async () => {
 		await clearSession();
@@ -75,7 +76,7 @@ chrome.commands?.onCommand.addListener((command) => {
 
 // Lock immediately on OS screen-lock. Only `locked` is acted on; `idle` would
 // also fire on long reads/videos and is left to the sliding alarm.
-chrome.idle?.onStateChanged.addListener((state) => {
+api.idle?.onStateChanged.addListener((state) => {
 	if (state !== "locked") return;
 	// Already torn down: avoid needlessly spinning up the offscreen document.
 	if (vaultLocked()) return;
@@ -86,7 +87,7 @@ chrome.idle?.onStateChanged.addListener((state) => {
 });
 
 // Reschedule the auto-lock alarm live when the timeout pref changes (if unlocked).
-chrome.storage.onChanged.addListener((changes, area) => {
+api.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
 	if (changes[PREF_AUTOLOCK_MINUTES] && !vaultLocked()) {
 		void scheduleAutoLock();

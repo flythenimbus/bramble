@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "../platform-api";
 import { sendToOffscreen } from "./offscreen-client";
 import { getClipboardSeconds } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
@@ -8,7 +9,7 @@ export const CLIPBOARD_ALARM = "vault:clipboard-clear";
 
 async function scheduleClipboardClear(): Promise<void> {
 	const seconds = await getClipboardSeconds();
-	void chrome.alarms.create(CLIPBOARD_ALARM, { delayInMinutes: seconds / 60 });
+	void api.alarms.create(CLIPBOARD_ALARM, { delayInMinutes: seconds / 60 });
 }
 
 /** Wipe the clipboard via the offscreen document (fired by the clear alarm). */

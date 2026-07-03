@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { api } from "../platform-api";
 import { getVek } from "./session";
 
 const OFFSCREEN_URL = "offscreen.html";
@@ -20,15 +21,15 @@ let creating: Promise<void> | null = null;
 
 /** Create the offscreen crypto document if absent; a fresh one starts locked. */
 export async function ensureOffscreen(): Promise<void> {
-	if (await chrome.offscreen.hasDocument?.()) return;
+	if (await api.offscreen.hasDocument?.()) return;
 	if (!creating) {
-		creating = chrome.offscreen
+		creating = api.offscreen
 			.createDocument({
 				url: OFFSCREEN_URL,
 				reasons: [
-					chrome.offscreen.Reason.WORKERS,
-					chrome.offscreen.Reason.CLIPBOARD,
-					chrome.offscreen.Reason.WEB_RTC,
+					api.offscreen.Reason.WORKERS,
+					api.offscreen.Reason.CLIPBOARD,
+					api.offscreen.Reason.WEB_RTC,
 				],
 				justification:
 					"Hosts the Vault WASM crypto module, clears the clipboard after a copy, and runs the WebRTC sync transport.",
@@ -66,7 +67,7 @@ export async function sendToOffscreen(
 	const cachedVek = getVek();
 	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {
 		offscreenHasKey = true;
-		await chrome.runtime
+		await api.runtime
 			.sendMessage({
 				target: "offscreen",
 				type: "CRYPTO_UNLOCK_WITH_VEK",
@@ -76,7 +77,7 @@ export async function sendToOffscreen(
 				offscreenHasKey = false;
 			});
 	}
-	const response = (await chrome.runtime.sendMessage({ ...message, target: "offscreen" })) as
+	const response = (await api.runtime.sendMessage({ ...message, target: "offscreen" })) as
 		| { ok: boolean; data?: unknown; error?: string }
 		| undefined;
 	return response ?? { ok: false, error: "no response from offscreen" };

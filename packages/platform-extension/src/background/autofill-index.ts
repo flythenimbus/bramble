@@ -16,6 +16,7 @@ import {
 	hostnameMatches,
 	registrableDomain,
 } from "../dedupe";
+import { api } from "../platform-api";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
 import { scheduleAutoLock, vaultLocked } from "./session";
@@ -33,7 +34,7 @@ const knownHostnames = new Set<string>();
 // restarts. Awaited (with the session hydration) before any handler runs.
 export const indexHydration = (async () => {
 	try {
-		const r = await chrome.storage.local.get([HOSTNAMES_KEY]);
+		const r = await api.storage.local.get([HOSTNAMES_KEY]);
 		const hostnames = r[HOSTNAMES_KEY];
 		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
 	} catch (e) {
@@ -44,7 +45,7 @@ export const indexHydration = (async () => {
 /** Persist the hostname registry so the locked-state hint survives SW restarts. */
 async function persistKnownHostnames(): Promise<void> {
 	try {
-		await chrome.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) });
+		await api.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) });
 	} catch (e) {
 		console.warn("[titanpass:bg] persistKnownHostnames failed", e);
 	}
@@ -168,7 +169,7 @@ function fetchFill(entryId: string): FillPayload {
 }
 
 // Extension pages send the extension origin; content scripts send the page origin.
-const EXTENSION_ORIGIN = new URL(chrome.runtime.getURL("")).origin;
+const EXTENSION_ORIGIN = new URL(api.runtime.getURL("")).origin;
 
 /** Verified page hostname for a content-script sender, or "" when none can be derived. */
 function senderHostname(sender: chrome.runtime.MessageSender): string {
@@ -350,7 +351,7 @@ async function autofillQuery(
 	// Sliding session: any autofill activity extends the timer.
 	if (!result.locked) await scheduleAutoLock();
 	if (tabId !== undefined) {
-		await chrome.tabs
+		await api.tabs
 			.sendMessage(tabId, { type: "AUTOFILL_MATCHES", payload: result })
 			.catch(() => {});
 	}
@@ -372,7 +373,7 @@ async function autofillSelect(
 	await scheduleAutoLock();
 	if (sender.tab?.id) {
 		// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
-		await chrome.tabs.sendMessage(sender.tab.id, {
+		await api.tabs.sendMessage(sender.tab.id, {
 			type: "AUTOFILL_FILL",
 			payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
 		});

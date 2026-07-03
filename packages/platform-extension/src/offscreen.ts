@@ -20,6 +20,7 @@ import {
 	CryptoWrapPasswordSlotSchema,
 	CryptoWrapWebauthnSlotSchema,
 } from "./crypto/messages";
+import { api } from "./platform-api";
 import {
 	type ApplyRemoteMsg,
 	EnrollInviteMsgSchema,
@@ -39,12 +40,12 @@ let syncSession: MeshSession | null = null;
 /** Broadcast a dev-sync status line; the Settings panel listens for SYNC_STATUS. */
 function reportSyncStatus(status: string): void {
 	const payload: SyncStatusMsg = { status };
-	void chrome.runtime.sendMessage({ type: "SYNC_STATUS", payload }).catch(() => {});
+	void api.runtime.sendMessage({ type: "SYNC_STATUS", payload }).catch(() => {});
 }
 
 /** Broadcast a structured enrollment event to the popup. */
 function broadcastSyncEvent(payload: SyncEventMsg): void {
-	void chrome.runtime.sendMessage({ type: "SYNC_EVENT", payload }).catch(() => {});
+	void api.runtime.sendMessage({ type: "SYNC_EVENT", payload }).catch(() => {});
 }
 
 // Offscreen document: holds the WASM crypto module in a context that survives
@@ -208,14 +209,14 @@ async function clearClipboard(): Promise<boolean> {
 // this offscreen document can, and it stays alive to catch later changes.
 const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
 function reportColorScheme(): void {
-	void chrome.runtime
+	void api.runtime
 		.sendMessage({ type: "THEME_ICON_SET", payload: { dark: colorScheme.matches } })
 		.catch(() => {});
 }
 reportColorScheme();
 colorScheme.addEventListener("change", reportColorScheme);
 
-chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
+api.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
 	if (message?.target !== "offscreen") return false;
 
 	void (async () => {
@@ -244,7 +245,7 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 					report: reportSyncStatus,
 					// Local read + merge + write happen in the background (it has storage).
 					fetchLocalPayload: async () => {
-						const r = await chrome.runtime.sendMessage({ type: "SYNC_LOCAL_PAYLOAD" });
+						const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_PAYLOAD" });
 						if (!r?.ok || typeof r.data !== "string") {
 							throw new Error(r?.error ?? "local payload unavailable");
 						}
@@ -252,14 +253,14 @@ chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendRe
 					},
 					pushRemotePayload: async (payloadJson: string) => {
 						const payload: ApplyRemoteMsg = { payloadJson };
-						await chrome.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
+						await api.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
 					},
 					fetchLocalRoster: async () => {
-						const r = await chrome.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER" });
+						const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER" });
 						return r?.ok && typeof r.data === "string" ? r.data : "";
 					},
 					pushRemoteRoster: async (rosterJson: string) => {
-						await chrome.runtime.sendMessage({
+						await api.runtime.sendMessage({
 							type: "SYNC_APPLY_ROSTER",
 							payload: { rosterJson },
 						});
