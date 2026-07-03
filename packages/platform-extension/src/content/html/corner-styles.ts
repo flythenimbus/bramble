@@ -145,6 +145,12 @@ export const cornerStyles = html`
 				font-size: 12px;
 				margin-top: 4px;
 			}
+			.tp-note {
+				color: rgba(235, 235, 245, 0.75);
+				font-size: 13px;
+				line-height: 1.45;
+				margin: 2px 0 6px;
+			}
 			.tp-close {
 				background: transparent;
 				border: 0;
