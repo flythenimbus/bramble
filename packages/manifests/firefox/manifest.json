@@ -52,7 +52,7 @@
 	},
 	"web_accessible_resources": [
 		{
-			"resources": ["autofill-ui.html", "autofill-ui.js"],
+			"resources": ["autofill-ui.html", "autofill-ui.js", "sync-frame.html", "sync-frame.js"],
 			"matches": ["<all_urls>"]
 		}
 	]

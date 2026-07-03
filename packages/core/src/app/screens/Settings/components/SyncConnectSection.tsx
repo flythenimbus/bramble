@@ -155,6 +155,14 @@ export function SyncConnectSection() {
 	});
 	const ctxPath = typeof location !== "undefined" ? location.pathname : "?";
 
+	// The Firefox WebRTC host runs in a content-script iframe (the popup/background can't do
+	// WebRTC); it writes its RTCPeerConnection probe here on each page load. Read it back so
+	// the popup shows whether that context works. Empty until a web page has loaded once.
+	const [rtcFrame, setRtcFrame] = useState("(open a web page first)");
+	useEffect(() => {
+		void storage.getMeta<string>("diag.rtcFrame").then((v) => v && setRtcFrame(v));
+	}, [storage]);
+
 	const devices = group ? activeDevices(group.roster) : [];
 	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
 	const inGroup = group != null;
@@ -225,8 +233,11 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
-			<div className="rounded-lg border border-border bg-background/50 p-2 text-xs font-mono text-muted-foreground break-words">
-				diag · RTCPeerConnection: {rtcProbe} · {ctxPath}
+			<div className="rounded-lg border border-border bg-background/50 p-2 text-xs font-mono text-muted-foreground break-words space-y-0.5">
+				<div>
+					diag · popup RTCPeerConnection: {rtcProbe} · {ctxPath}
+				</div>
+				<div>diag · iframe RTCPeerConnection: {rtcFrame}</div>
 			</div>
 			{/* Live transport status log (offer sent / answer applied / ice connected /
 			    channel open) — surfaces enrollment + sync diagnostics in the dev panel. */}
