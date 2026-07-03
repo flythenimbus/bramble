@@ -160,9 +160,9 @@ describe("createEntryMutations", () => {
 		t = 5000;
 		const afterUpd = await h.mutations.update(afterUse, id, login("a2"));
 		const e = afterUpd.entries[0]!;
-		expect(e.createdAt).toBe(1000); // original create time kept
-		expect(e.updatedAt).toBe(5000); // bumped by the edit
-		expect(e.lastUsedAt).toBe(1000); // a use survives an edit
+		expect(e.createdAt).toBe(1000);
+		expect(e.updatedAt).toBe(5000);
+		expect(e.lastUsedAt).toBe(1000);
 	});
 
 	it("touch bumps lastUsedAt without changing updatedAt", async () => {
@@ -173,7 +173,7 @@ describe("createEntryMutations", () => {
 		t = 200_000; // well past the coalesce window
 		const afterUse = await h.mutations.touch(afterAdd, id);
 		expect(afterUse.entries[0]!.lastUsedAt).toBe(200_000);
-		expect(afterUse.entries[0]!.updatedAt).toBe(1000); // a use is not an edit
+		expect(afterUse.entries[0]!.updatedAt).toBe(1000);
 	});
 
 	it("touch coalesces repeat uses within the window into one write", async () => {
@@ -185,8 +185,8 @@ describe("createEntryMutations", () => {
 		const writesAfterUse1 = h.writes();
 		t = 31_000; // 30s later, inside the 60s window
 		const afterUse2 = await h.mutations.touch(afterUse1, id);
-		expect(afterUse2).toBe(afterUse1); // no new state
-		expect(h.writes()).toBe(writesAfterUse1); // no new write
+		expect(afterUse2).toBe(afterUse1);
+		expect(h.writes()).toBe(writesAfterUse1);
 	});
 
 	it("touch no-ops for an unknown id", async () => {

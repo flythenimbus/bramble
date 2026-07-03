@@ -71,7 +71,6 @@ export function VaultSearchBar({ search, onChange, trailing }: VaultSearchBarPro
 					})}
 				</fieldset>
 
-				{/* Compact pill-height sort control, inline with the filter chips. */}
 				<div className="relative shrink-0">
 					<ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
 					<select

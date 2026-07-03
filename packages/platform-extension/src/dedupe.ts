@@ -1,4 +1,4 @@
-import type { IndexEntry, LoginIndexEntry } from "@core/adapters/autofill";
+import type { IndexEntry, LoginIndexEntry, SubdomainMatchMode } from "@core/adapters/autofill";
 import { getDomain } from "tldts";
 
 /** eTLD+1 of a hostname; falls back to the raw input for IPs / unknown TLDs. */
@@ -6,8 +6,14 @@ export function registrableDomain(hostname: string): string {
 	return getDomain(hostname) ?? hostname;
 }
 
+/** Just the fields the hostname policy reads; any LoginIndexEntry satisfies it. */
+export interface HostnameMatchable {
+	hostnames: string[];
+	subdomainMatch?: SubdomainMatchMode;
+}
+
 /** Whether a login entry matches a page host under its subdomainMatch policy (default eTLD+1). */
-export function hostnameMatches(entry: LoginIndexEntry, pageHostname: string): boolean {
+export function hostnameMatches(entry: HostnameMatchable, pageHostname: string): boolean {
 	const pageHost = pageHostname.toLowerCase();
 	const policy = entry.subdomainMatch ?? "etld1";
 	for (const raw of entry.hostnames) {

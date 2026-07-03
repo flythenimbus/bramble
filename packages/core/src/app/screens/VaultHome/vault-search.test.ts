@@ -10,6 +10,7 @@ import {
 
 function item(over: Partial<SearchableEntry> & { name: string }): SearchableEntry {
 	return {
+		id: over.name,
 		type: "login",
 		searchText: over.name.toLowerCase(),
 		...over,
@@ -76,6 +77,40 @@ describe("filterAndSortEntries", () => {
 		const before = items.map((i) => i.name);
 		filterAndSortEntries(items, search({ sort: "name-asc" }));
 		expect(items.map((i) => i.name)).toEqual(before);
+	});
+
+	it("floats current-site matches to the top, sorted within each group", () => {
+		const items = [
+			item({ name: "Zeta" }),
+			item({ name: "Alpha" }),
+			item({ name: "GitHub" }),
+			item({ name: "Beta" }),
+		];
+		const matched = new Set(["GitHub", "Zeta"]);
+		expect(
+			filterAndSortEntries(items, search({ sort: "name-asc" }), matched).map((i) => i.name),
+		).toEqual(["GitHub", "Zeta", "Alpha", "Beta"]);
+	});
+
+	it("boosts matches within an active search query", () => {
+		const items = [
+			item({ name: "GitHub", searchText: "github octocat" }),
+			item({ name: "GitLab", searchText: "gitlab" }),
+			item({ name: "Gitea", searchText: "gitea" }),
+		];
+		const matched = new Set(["Gitea"]);
+		expect(
+			filterAndSortEntries(items, search({ q: "git", sort: "name-asc" }), matched).map(
+				(i) => i.name,
+			),
+		).toEqual(["Gitea", "GitHub", "GitLab"]);
+	});
+
+	it("ignores an empty matchedIds set", () => {
+		const items = [item({ name: "B" }), item({ name: "A" })];
+		expect(
+			filterAndSortEntries(items, search({ sort: "name-asc" }), new Set()).map((i) => i.name),
+		).toEqual(["A", "B"]);
 	});
 });
 

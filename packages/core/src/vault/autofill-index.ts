@@ -6,7 +6,8 @@
 import type { IndexEntry } from "../adapters/autofill";
 import type { CardEntry, CustomField, Entry, LoginEntry } from "../hooks/useVault";
 
-function extractHostname(url: string): string {
+/** Hostname of a URL; the raw string for a bare hostname stored without a scheme. */
+export function extractHostname(url: string): string {
 	try {
 		return new URL(url).hostname;
 	} catch {

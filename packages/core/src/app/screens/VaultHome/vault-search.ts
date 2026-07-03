@@ -1,6 +1,4 @@
-// Pure filter + sort for the vault list: multi-token substring match, a type
-// filter, and name/recency sorts. Kept free of React/UI so it is the test
-// surface; VaultHome renders whatever this returns.
+// Pure filter + sort for the vault list; the test surface behind VaultHome.
 
 import { z } from "zod";
 import type { EntryType } from "../../../hooks/useVault";
@@ -27,12 +25,8 @@ export interface VaultSearch {
 
 export const DEFAULT_SEARCH: VaultSearch = { q: "", type: "all", sort: "name-asc" };
 
-/**
- * Route search-param validator. Every field is optional and `.catch`es to
- * undefined, so an unknown/garbage param is dropped (never throws) and the
- * route falls back to DEFAULT_SEARCH. All-optional output also keeps `search`
- * optional for the many `navigate({ to: "/vault" })` call sites.
- */
+// Route search-param validator. All-optional (`.catch` drops garbage) so bad
+// params fall back to DEFAULT_SEARCH and `navigate({ to: "/vault" })` needs no search.
 export const vaultSearchSchema = z.object({
 	q: z.string().optional().catch(undefined),
 	type: z.enum(TYPE_FILTERS).optional().catch(undefined),
@@ -41,6 +35,7 @@ export const vaultSearchSchema = z.object({
 
 /** The fields the search reads. A `VaultListItem` satisfies this. */
 export interface SearchableEntry {
+	id: string;
 	name: string;
 	type: EntryType;
 	/** Pre-lowercased haystack (name, username, urls, custom fields, ...). */
@@ -77,18 +72,19 @@ const COMPARATORS: Record<SortKey, (a: SearchableEntry, b: SearchableEntry) => n
 	"recent-updated": byRecent("updatedAt"),
 };
 
-/**
- * Filter by type, then require every query token to appear (substring, order-
- * independent), then sort. Pure: the input array is not mutated.
- */
+/** Filter by type + all query tokens, then sort; `matchedIds` float to the top. Pure. */
 export function filterAndSortEntries<T extends SearchableEntry>(
 	items: T[],
 	search: VaultSearch,
+	matchedIds?: ReadonlySet<string>,
 ): T[] {
 	const tokens = queryTokens(search.q);
 	const filtered = items.filter((item) => {
 		if (search.type !== "all" && item.type !== search.type) return false;
 		return tokens.every((tok) => item.searchText.includes(tok));
 	});
-	return filtered.sort(COMPARATORS[search.sort]);
+	const cmp = COMPARATORS[search.sort];
+	if (!matchedIds?.size) return filtered.sort(cmp);
+	const rank = (i: SearchableEntry) => (matchedIds.has(i.id) ? 0 : 1);
+	return filtered.sort((a, b) => rank(a) - rank(b) || cmp(a, b));
 }
