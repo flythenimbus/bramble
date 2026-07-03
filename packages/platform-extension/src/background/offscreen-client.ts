@@ -1,26 +1,34 @@
 /// <reference types="chrome" />
 
+import { type HostResponse, handleHostMessage } from "../offscreen-core";
 import { api } from "../platform-api";
 import { getVek } from "./session";
 
 const OFFSCREEN_URL = "offscreen.html";
 
-// Whether the offscreen crypto document currently holds the VEK. Reset when a
-// fresh document is created (it starts locked) and on lock.
+// Chrome's MV3 background is a service worker with no DOM, so the crypto + sync host
+// runs in a separate offscreen document reached via runtime messaging. Firefox has
+// no chrome.offscreen; its background is an event page with a DOM, so the same host
+// (./offscreen-core) runs in-process here instead.
+const useOffscreenDoc = typeof api.offscreen !== "undefined";
+
+// Whether the host currently holds the VEK. Reset when a fresh offscreen document is
+// created (Chrome) or when the event page was suspended and relocked (Firefox).
 let offscreenHasKey = false;
 
-/** Mark whether the offscreen document holds the VEK (set by the unlock/lock flows). */
+/** Mark whether the host holds the VEK (set by the unlock/lock flows). */
 export function markOffscreenKey(present: boolean): void {
 	offscreenHasKey = present;
 }
 
-// A single in-flight createDocument, so concurrent callers (e.g. the mount probe
-// and the first crypto op) don't both call createDocument and race the
-// "Only a single offscreen document may be created" error.
+// A single in-flight createDocument, so concurrent callers (e.g. the mount probe and
+// the first crypto op) don't both call createDocument and race the "Only a single
+// offscreen document may be created" error.
 let creating: Promise<void> | null = null;
 
-/** Create the offscreen crypto document if absent; a fresh one starts locked. */
+/** Create the offscreen crypto document if absent (Chrome only); no-op on Firefox. */
 export async function ensureOffscreen(): Promise<void> {
+	if (!useOffscreenDoc) return;
 	if (await api.offscreen.hasDocument?.()) return;
 	if (!creating) {
 		creating = api.offscreen
@@ -48,14 +56,25 @@ export async function ensureOffscreen(): Promise<void> {
 	await creating;
 }
 
+// Deliver one message to the host: the offscreen document on Chrome (via runtime
+// messaging), in-process on Firefox.
+async function deliver(message: Record<string, unknown>): Promise<HostResponse> {
+	if (useOffscreenDoc) {
+		const response = (await api.runtime.sendMessage({ ...message, target: "offscreen" })) as
+			| HostResponse
+			| undefined;
+		return response ?? { ok: false, error: "no response from offscreen" };
+	}
+	return handleHostMessage(message.type as string, message.payload);
+}
+
 /**
- * Forward a message to the offscreen crypto document, re-injecting the cached
- * VEK first if the offscreen was killed and recreated. Skips injection for the
- * unlock/VEK messages themselves (would infinite-loop) and clipboard ops.
+ * Forward a message to the crypto/sync host, re-injecting the cached VEK first if the
+ * host was reset and the WASM relocked (Chrome: the offscreen can be killed; Firefox:
+ * the event page can be suspended). Skips injection for the unlock/VEK messages
+ * themselves (would infinite-loop), clipboard ops, and sync ops.
  */
-export async function sendToOffscreen(
-	message: Record<string, unknown>,
-): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+export async function sendToOffscreen(message: Record<string, unknown>): Promise<HostResponse> {
 	await ensureOffscreen();
 	const type = message.type as string | undefined;
 	const skipKeyInjection =
@@ -67,18 +86,25 @@ export async function sendToOffscreen(
 	const cachedVek = getVek();
 	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {
 		offscreenHasKey = true;
-		await api.runtime
-			.sendMessage({
-				target: "offscreen",
-				type: "CRYPTO_UNLOCK_WITH_VEK",
-				payload: { vekB64: cachedVek },
-			})
-			.catch(() => {
-				offscreenHasKey = false;
-			});
+		await deliver({
+			type: "CRYPTO_UNLOCK_WITH_VEK",
+			payload: { vekB64: cachedVek },
+		}).catch(() => {
+			offscreenHasKey = false;
+		});
 	}
-	const response = (await api.runtime.sendMessage({ ...message, target: "offscreen" })) as
-		| { ok: boolean; data?: unknown; error?: string }
-		| undefined;
-	return response ?? { ok: false, error: "no response from offscreen" };
+	return deliver(message);
+}
+
+// Firefox: the background event page can read prefers-color-scheme itself (no
+// offscreen document to do it). On the Chrome service worker `window` is undefined,
+// so this is inert there and the offscreen document reports instead.
+if (!useOffscreenDoc && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+	const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+	const report = () =>
+		void api.runtime
+			.sendMessage({ type: "THEME_ICON_SET", payload: { dark: colorScheme.matches } })
+			.catch(() => {});
+	report();
+	colorScheme.addEventListener("change", report);
 }
