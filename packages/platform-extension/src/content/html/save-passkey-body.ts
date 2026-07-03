@@ -1,12 +1,35 @@
 import { html } from "../template";
 
-// Passkey glyph (lucide "key-round"), so the card reads as a passkey at a glance. Static
-// markup injected verbatim (via an array interpolation) — no user data, nothing to escape.
-const passkeyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`;
+/** Two initials for the avatar: first letters of the first two words, else the first two
+ *  characters. Splits on spaces and the usual username separators. */
+function initialsOf(label: string): string {
+	const parts = label
+		.trim()
+		.split(/[\s._@+-]+/)
+		.filter(Boolean);
+	const two =
+		parts.length >= 2
+			? (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")
+			: (parts[0] ?? label).slice(0, 2);
+	return two.toUpperCase() || "?";
+}
+
+/** One selectable account row: an initials avatar + a primary label (+ optional sub). The
+ *  hidden radio drives selection; the content script reads the checked value as `choice`. */
+function choiceRow(value: string, primary: string, sub: string | undefined, checked: boolean) {
+	return html`<label class="tp-choice">
+		<input type="radio" name="tp-passkey-target" value="${value}"${checked ? " checked" : ""} />
+		<span class="tp-avatar">${initialsOf(primary)}</span>
+		<span class="tp-choice-text">
+			<span class="tp-choice-primary">${primary}</span>
+			${sub ? [html`<span class="tp-choice-sub">${sub}</span>`] : []}
+		</span>
+	</label>`;
+}
 
 /** The passkey provider corner card: confirm creating/using a passkey, or pick which
- * login a new passkey attaches to (radios + "Create a new login" last) when several
- * accounts share the domain. */
+ * account when several passkeys/logins share the domain. Every stored passkey is shown
+ * with an avatar + its account name so the user knows exactly who they're signing in as. */
 export function savePasskeyBody({
 	rpId,
 	rpName,
@@ -29,9 +52,11 @@ export function savePasskeyBody({
 	// Avoid "x (x)" when the RP's display name equals its id.
 	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
 	const isCreatePicker = intent === "create" && !!candidates && candidates.length > 0;
-	const isGetPicker = intent === "get" && !!passkeyChoices && passkeyChoices.length > 0;
-	const title = isGetPicker
-		? "Sign in with which passkey?"
+	const isGetList = intent === "get" && !!passkeyChoices && passkeyChoices.length > 0;
+	const title = isGetList
+		? passkeyChoices.length > 1
+			? "Sign in with which passkey?"
+			: "Use your passkey?"
 		: isCreatePicker
 			? "Add this passkey to…"
 			: intent === "get"
@@ -40,25 +65,20 @@ export function savePasskeyBody({
 					? "Add a passkey?"
 					: "Save a passkey?";
 
-	// Nested html escapes the interpolated values; outer array interpolations join the
-	// markup verbatim (a scalar string interpolation would be html-escaped and show as text).
-	// Radios share name="tp-passkey-target"; the content script sends the checked value
-	// back as `choice` (a login id / "new" for create, a credentialId for get).
-	const radio = (value: string, name: string, sub: string | undefined, checked: boolean) =>
-		html`<label class="tp-row" style="cursor:pointer;align-items:flex-start;gap:8px">
-			<input type="radio" name="tp-passkey-target" value="${value}"${checked ? " checked" : ""} style="margin-top:3px" />
-			<div><div>${name}</div>${sub ? [html`<div class="tp-label">${sub}</div>`] : []}</div>
-		</label>`;
+	// Nested html escapes interpolated values; array interpolations join markup verbatim.
 	let middle: string[] = [];
-	if (isGetPicker) {
-		const rows = (passkeyChoices ?? []).map((c, i) =>
-			radio(c.credentialId, c.label, undefined, i === 0),
+	if (isGetList) {
+		// Every matching passkey, first preselected. One row still shows who you'll sign in as.
+		const rows = passkeyChoices.map((c, i) =>
+			choiceRow(c.credentialId, c.label, undefined, i === 0),
 		);
 		middle = [html`<div class="tp-choices">${rows}</div>`];
 	} else if (isCreatePicker) {
-		const rows = (candidates ?? []).map((c) => radio(c.id, c.name, c.username, false));
+		const rows = (candidates ?? []).map((c) =>
+			choiceRow(c.id, c.name, c.username || undefined, false),
+		);
 		// "Create a new login" is the last option, and the default selection.
-		rows.push(radio("new", "Create a new login", undefined, true));
+		rows.push(choiceRow("new", "Create a new login", undefined, true));
 		middle = [html`<div class="tp-choices">${rows}</div>`];
 	} else {
 		const rows: string[] = [];
@@ -78,7 +98,7 @@ export function savePasskeyBody({
 	return html`
 		<div class="tp-head">
 			<div class="tp-head-main">
-				<div class="tp-icon">${[passkeyIcon]}</div>
+				<div class="tp-icon"><span class="tp-glyph"></span></div>
 				<div>
 					<div class="tp-title">${title}</div>
 					<div class="tp-host">${site}</div>

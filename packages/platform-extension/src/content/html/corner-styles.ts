@@ -1,9 +1,10 @@
 import { html } from "../template";
+import { brambleGlyphDataUrl } from "./bramble-glyph-data";
 
 export const cornerStyles = html`
 		<style>
 			:host {
-				background: rgba(28, 28, 30, 0.96);
+				background: linear-gradient(120deg, rgba(44, 44, 48, 0.9), rgba(14, 14, 16, 0.9));
 				-webkit-backdrop-filter: saturate(180%) blur(20px);
 				backdrop-filter: saturate(180%) blur(20px);
 				border: 1px solid rgba(255, 255, 255, 0.08);
@@ -51,9 +52,88 @@ export const cornerStyles = html`
 				justify-content: center;
 				color: #fff;
 			}
-			.tp-icon svg {
-				width: 20px;
-				height: 20px;
+			.tp-glyph {
+				width: 22px;
+				height: 22px;
+				background: currentColor;
+				-webkit-mask: url(${[brambleGlyphDataUrl]}) center / contain no-repeat;
+				mask: url(${[brambleGlyphDataUrl]}) center / contain no-repeat;
+			}
+			.tp-choices {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				margin-bottom: 4px;
+			}
+			.tp-choice {
+				position: relative;
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				padding: 10px 12px;
+				background: rgba(255, 255, 255, 0.04);
+				border: 1px solid rgba(255, 255, 255, 0.08);
+				border-radius: 10px;
+				cursor: pointer;
+				transition:
+					background 0.1s ease,
+					border-color 0.1s ease;
+			}
+			.tp-choice:hover {
+				background: rgba(255, 255, 255, 0.07);
+			}
+			.tp-choice input {
+				position: absolute;
+				opacity: 0;
+				width: 0;
+				height: 0;
+				pointer-events: none;
+			}
+			.tp-choice:has(input:checked) {
+				border-color: rgba(255, 255, 255, 0.5);
+				background: rgba(255, 255, 255, 0.09);
+			}
+			.tp-choice:has(input:checked)::after {
+				content: "✓";
+				margin-left: auto;
+				padding-left: 8px;
+				font-size: 13px;
+				color: #fff;
+			}
+			.tp-avatar {
+				flex-shrink: 0;
+				width: 34px;
+				height: 34px;
+				border-radius: 50%;
+				background: rgba(255, 255, 255, 0.1);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 12px;
+				font-weight: 600;
+				letter-spacing: 0.3px;
+				color: #fff;
+			}
+			.tp-choice-text {
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+			}
+			.tp-choice-primary {
+				font-size: 13px;
+				font-weight: 500;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+			.tp-choice-sub {
+				font-size: 12px;
+				color: rgba(235, 235, 245, 0.55);
+				margin-top: 1px;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
 			.tp-title {
 				font-weight: 600;
