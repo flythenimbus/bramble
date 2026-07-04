@@ -2,7 +2,7 @@
 
 Three independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
 **Chrome extension** (Chrome Web Store verified uploads) below, the **Firefox extension**
-([GitHub-released signed XPI](#firefox-github-released-signed-xpi)), and the **Android app**
+([listed on addons.mozilla.org](#firefox-listed-on-addonsmozillaorg)), and the **Android app**
 ([GitHub-released APK](#android-github-released-apk)) at the end.
 
 ## Chrome Web Store verified uploads
@@ -96,13 +96,14 @@ age -r age1yubikey1NEW -o ~/.config/bramble/cws-signing-key.age /tmp/cws.pem
 rm -P /tmp/cws.pem
 ```
 
-## Firefox (GitHub-released signed XPI)
+## Firefox (listed on addons.mozilla.org)
 
-The Firefox add-on is self-distributed from GitHub Releases (not listed on addons.mozilla.org),
-so it ships as a **Mozilla-signed `.xpi`** on the **unlisted** channel: we upload the built
-extension to AMO, Mozilla's automated signer returns a signed `.xpi`, and we attach that to the
-release. Firefox only installs Mozilla-signed add-ons, so the AMO signature is what makes the
-`.xpi` installable; updates are matched by the add-on id (`firefox@bramble.app`).
+The Firefox add-on ships **listed on addons.mozilla.org** (the public store): we submit the built
+extension to AMO on the **listed** channel, a reviewer approves it, and AMO signs + hosts the
+`.xpi`. Users install and auto-update from the store; updates are matched by the add-on id
+(`firefox@bramble.app`). The GitHub release carries only the **source `.zip` + `SHA256SUMS`** for
+transparency, not a signed build. (`--channel unlisted` still signs a self-distributed `.xpi`
+locally if ever needed.)
 
 Unlike CWS and Android, **Mozilla holds the signing key**, so there is no local key to protect.
 What we protect is the **AMO API secret**, the credential that lets us upload as us. It rides the
@@ -129,8 +130,10 @@ age -r age1yubikey1XXXX -o ~/.config/bramble/amo-api-credentials.age /tmp/amo.js
 rm -P /tmp/amo.json
 ```
 
-Nothing to register anywhere: Mozilla signs on upload. The add-on id is already set in
-`packages/manifests/firefox/manifest.json` (`browser_specific_settings.gecko.id`).
+The add-on id is already set in `packages/manifests/firefox/manifest.json`
+(`browser_specific_settings.gecko.id`). Listing copy is localized under
+`packages/platform-extension/store/firefox/` and pushed with `pnpm run metadata:firefox`;
+screenshots + category are set once in the AMO Developer Hub.
 
 ### Each release
 
@@ -140,17 +143,18 @@ pnpm run release firefox 1.0.0        # prompts for a YubiKey touch to decrypt t
 
 It runs lint + tests, bumps the firefox `manifest.json` version, builds WASM, bundles
 `dist-firefox`, validates it with the addons-linter (the same check AMO runs) **before**
-signing so a validation error fails for free, then uploads to AMO and waits for the signed
-`.xpi` (`web-ext sign --channel unlisted`), tags `1.0.0-firefox`, pushes, and publishes a
-GitHub release with
-`bramble_firefox_1.0.0.xpi`, the unpacked `.zip`, and `SHA256SUMS`. The credentials are decrypted
-to a temp file and wiped; they never touch the repo. CI verifies a Mozilla-signed `.xpi` plus a
-matching `SHA256SUMS` are attached; it never builds or signs.
+submitting so a validation error fails for free, then **submits it to AMO on the listed channel**
+(`web-ext sign --channel listed`, with a source archive attached for review; see
+`docs/amo-source-build.md`), tags `1.0.0-firefox`, pushes, and publishes a GitHub release with the
+source `bramble_firefox_1.0.0.zip` + `SHA256SUMS`. Nothing is downloaded: AMO signs and publishes
+the `.xpi` itself once a reviewer approves it (track it in the Developer Hub). The credentials are
+decrypted to a temp file and wiped; they never touch the repo. CI verifies the source `.zip` +
+`SHA256SUMS` on the release; it never builds or signs.
 
-**AMO won't re-sign a version.** If a release fails after the version bump, retry with the next
-version (e.g. `1.0.1`); AMO rejects a re-upload of `1.0.0`. Env overrides: `AMO_API_KEY` /
-`AMO_API_SECRET` (skip the age file, e.g. in CI), `AMO_CREDENTIALS_AGE` (encrypted-credentials
-path).
+**AMO version numbers are unique across channels**, and a listed version must be **higher** than
+any previously signed version. If a submission fails after the bump, retry with the next version
+(e.g. `1.0.1`). Env overrides: `AMO_API_KEY` / `AMO_API_SECRET` (skip the age file, e.g. in CI),
+`AMO_CREDENTIALS_AGE` (encrypted-credentials path).
 
 ### Building without releasing
 
