@@ -221,18 +221,25 @@ this reason.)
 ### Rules
 
 - **Entry vs entry:** for a given `id`, the greatest HLC wins; the whole losing entry is
-  discarded (see history setting below).
+  **discarded** (see "Conflict loser" below). The loser is not kept anywhere.
 - **Entry vs tombstone:** compare the entry's HLC against any tombstone for the same id; the
   greater wins. A delete is a stamped tombstone, never a silent removal, so a stale copy on
   another device cannot resurrect it. An edit stamped *after* a delete correctly undeletes.
 - **Slots:** union by `slotId`; revocation is a slot tombstone. All slots wrap the same VEK, so
   union is valid, and `OpaqueSlot` round-trip preserves slot kinds a device does not understand.
 
-### Conflict loser: setting
+### Conflict loser
 
-When two devices edit the same entry, the losing whole-entry version is **dropped by default**
-(simplest). A user setting, when enabled, instead stashes the losing **sealed** version in the
-entry's history list, recovering the lost value without ever decrypting it to merge.
+When two devices edit the same entry, the losing whole-entry version is **dropped**. This is
+the current behaviour, full stop: `mergeReplicas` keeps only the max-HLC record per id and the
+older one is overwritten, and the entry shape (`{id, wrappedDek, dekIv, ciphertext, iv, hlc}`)
+has no slot to stash a prior version. Nothing is kept in the background and nothing is surfaced
+to the user.
+
+**Planned (not built):** a setting that instead stashes the losing **sealed** version in an
+entry history list, recovering the lost value without ever decrypting it to merge, plus a UI
+that surfaces the conflict rather than resolving it silently. Both require adding a versions
+field to the entry payload; see "Deferred / known limitations".
 
 ## Deferred / known limitations (v1)
 
@@ -250,6 +257,11 @@ entry's history list, recovering the lost value without ever decrypting it to me
   Mobile compounds this: the OS suspends backgrounded apps and there's no FCM wake (no Google
   Play), so mobile is realistically "syncs when you open it."
 - **Field-level merge is deferred** (see above).
+- **Conflict history + surfacing is deferred.** Today a same-entry conflict silently drops the
+  losing version (see "Conflict loser"). Keeping the sealed loser in an entry history list and
+  showing the conflict to the user are both unbuilt; they need a versions field on the entry
+  payload. Deletes are the one exception already covered: tombstones mean a delete is never
+  silently lost or resurrected.
 
 ## Device management & revocation
 
