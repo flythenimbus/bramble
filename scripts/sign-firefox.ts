@@ -46,6 +46,9 @@ const CREDS_AGE =
 // programmatic cmd.sign() does not, so an unset value throws "Invalid AMO API base URL: undefined".
 // Production AMO (v5) for both channels; override AMO_BASE_URL only for a staging instance.
 const AMO_BASE_URL = process.env.AMO_BASE_URL ?? "https://addons.mozilla.org/api/v5/";
+// Listed versions require a license; this is AMO's builtin slug for GPLv3 (they have no
+// "or-later" builtin). Override AMO_LICENSE with another AMO slug if the project relicenses.
+const AMO_LICENSE = process.env.AMO_LICENSE ?? "GPL-3.0-only";
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
@@ -99,10 +102,14 @@ try {
 	// Archive the working tree: `git stash create` captures the release's uncommitted version bump,
 	// so the source matches what built dist-firefox. docs/amo-source-build.md ships inside it.
 	let sourceArchive: string | undefined;
+	let metadataFile: string | undefined;
 	if (channel === "listed") {
 		sourceArchive = join(tmp, "bramble-source.zip");
 		const worktree = execFileSync("git", ["stash", "create"]).toString().trim();
 		execFileSync("git", ["archive", "--format=zip", "-o", sourceArchive, worktree || "HEAD"]);
+		// AMO rejects a listed version with no license; pass the slug via the version metadata.
+		metadataFile = join(tmp, "amo-metadata.json");
+		writeFileSync(metadataFile, JSON.stringify({ version: { license: AMO_LICENSE } }));
 	}
 	let result: { downloadedFiles?: string[] };
 	try {
@@ -119,6 +126,8 @@ try {
 			approvalTimeout: channel === "listed" ? 0 : undefined,
 			// Reviewers rebuild from this and diff against the upload; unlisted needs no source.
 			uploadSourceCode: sourceArchive,
+			// Listed versions require a license slug (see AMO_LICENSE); unlisted passes undefined.
+			amoMetadata: metadataFile,
 		});
 	} catch (e) {
 		fail(`AMO signing failed: ${(e as Error).message}`);
