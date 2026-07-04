@@ -240,6 +240,7 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 			candidates: payload.candidates,
 			passkeyChoices: payload.passkeyChoices,
 			primaryLabel: label,
+			locked: payload.locked,
 		});
 	}
 	shadow.innerHTML = cornerStyles + body;

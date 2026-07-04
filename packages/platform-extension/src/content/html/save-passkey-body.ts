@@ -43,6 +43,7 @@ export function savePasskeyBody({
 	candidates,
 	passkeyChoices,
 	primaryLabel,
+	locked,
 }: {
 	rpId: string;
 	rpName?: string;
@@ -52,6 +53,7 @@ export function savePasskeyBody({
 	candidates?: { id: string; name: string; username: string }[];
 	passkeyChoices?: { credentialId: string; label: string }[];
 	primaryLabel: string;
+	locked?: boolean;
 }) {
 	// Avoid "x (x)" when the RP's display name equals its id.
 	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
@@ -72,7 +74,14 @@ export function savePasskeyBody({
 
 	// Nested html escapes interpolated values; array interpolations join markup verbatim.
 	let middle: string[] = [];
-	if (isGetList) {
+	if (locked) {
+		// Locked: the vault can't be read yet, so say what unlocking is for before the popup.
+		const note =
+			intent === "get"
+				? "Unlock Bramble to use your passkeys for this site."
+				: "Unlock Bramble to save a passkey for this site.";
+		middle = [html`<div class="tp-note">${note}</div>`];
+	} else if (isGetList) {
 		middle = [
 			html`<div class="tp-choices">${passkeyChoices.map((c) => choiceRow(c.credentialId, c.label, undefined))}</div>`,
 		];
