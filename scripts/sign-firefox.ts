@@ -49,6 +49,8 @@ const AMO_BASE_URL = process.env.AMO_BASE_URL ?? "https://addons.mozilla.org/api
 // Listed versions require a license; this is AMO's builtin slug for GPLv3 (they have no
 // "or-later" builtin). Override AMO_LICENSE with another AMO slug if the project relicenses.
 const AMO_LICENSE = process.env.AMO_LICENSE ?? "GPL-3.0-only";
+// Listed add-ons also require a category (AMO Firefox extension slug). Override via AMO_CATEGORY.
+const AMO_CATEGORY = process.env.AMO_CATEGORY ?? "privacy-security";
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
@@ -107,9 +109,13 @@ try {
 		sourceArchive = join(tmp, "bramble-source.zip");
 		const worktree = execFileSync("git", ["stash", "create"]).toString().trim();
 		execFileSync("git", ["archive", "--format=zip", "-o", sourceArchive, worktree || "HEAD"]);
-		// AMO rejects a listed version with no license; pass the slug via the version metadata.
+		// Listed submissions require a license (version-level) + a category (add-on-level); AMO
+		// rejects the submission without them. categories is a flat slug array in the v5 API.
 		metadataFile = join(tmp, "amo-metadata.json");
-		writeFileSync(metadataFile, JSON.stringify({ version: { license: AMO_LICENSE } }));
+		writeFileSync(
+			metadataFile,
+			JSON.stringify({ categories: [AMO_CATEGORY], version: { license: AMO_LICENSE } }),
+		);
 	}
 	let result: { downloadedFiles?: string[] };
 	try {
