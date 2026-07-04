@@ -16,6 +16,36 @@ export interface DataFrame {
 	chunk: string;
 }
 
+// --- size padding ---
+// The relay sees each frame's (encrypted) length, which would leak roughly how big the
+// vault is / how many entries it holds. Pad messages into coarse buckets so the length
+// reveals only a range. NIP-44-style: bucket to a step that grows with size, so overhead
+// is bounded (~12.5% for large payloads) rather than doubling. Padding is transport-local
+// — applied before chunking, stripped after reassembly — so the crypto layer is unaware.
+
+const LEN_HEADER = 8; // hex chars encoding the real (unpadded) data length
+
+/** NIP-44 calc_padded_len: round up to a size-dependent bucket. */
+function paddedLen(len: number): number {
+	if (len <= 32) return 32;
+	const nextPower = 1 << (Math.floor(Math.log2(len - 1)) + 1);
+	const step = nextPower <= 256 ? 32 : nextPower / 8;
+	return step * (Math.floor((len - 1) / step) + 1);
+}
+
+/** Prefix the real length, then pad with filler to the next bucket. */
+export function padMessage(data: string): string {
+	const header = data.length.toString(16).padStart(LEN_HEADER, "0");
+	const total = paddedLen(LEN_HEADER + data.length);
+	return header + data + "0".repeat(total - LEN_HEADER - data.length);
+}
+
+/** Recover the original message by slicing to the length in the header. */
+export function unpadMessage(padded: string): string {
+	const len = Number.parseInt(padded.slice(0, LEN_HEADER), 16);
+	return padded.slice(LEN_HEADER, LEN_HEADER + len);
+}
+
 /** Split one Channel message into ordered frames (always at least one). */
 export function chunkMessage(msgId: number, data: string): DataFrame[] {
 	const total = Math.max(1, Math.ceil(data.length / MAX_CHUNK));
