@@ -1,1 +1,1 @@
-Gestionnaire de mots de passe chiffré, axé sur le local. Aucun stockage centralisé dans le cloud pour vos secrets.
+Application locale avant tout, gestionnaire de mots de passe chiffré. Aucun cloud central ne conserve vos secrets.

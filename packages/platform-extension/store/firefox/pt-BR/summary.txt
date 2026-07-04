@@ -1,1 +1,1 @@
-Gerenciador de senhas criptografado e com foco local. Nenhum segredo é armazenado em nuvem centralizada.
+Gerenciador de senhas criptografado e focado no armazenamento local. Nenhuma nuvem central armazena seus segredos.
