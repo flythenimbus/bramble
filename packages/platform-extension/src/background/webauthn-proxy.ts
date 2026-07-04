@@ -131,13 +131,20 @@ export async function runGetCeremony(
 	} catch {}
 	const matches = findPasskeys(entries, req.rpId, req.allowCredentials);
 
-	if (matches.length <= 1) {
-		// Single (or no) match: if we didn't already confirm on the locked path, confirm now.
+	// No stored passkey for this site: confirm generically if we didn't already (locked
+	// path), then let handleGet map the absent credentialId to NotAllowedError.
+	if (matches.length === 0) {
 		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
+		return { approved: true, userVerified: true, credentialId: undefined };
+	}
+
+	// The locked path already confirmed via the unlock card, so a single match just proceeds.
+	if (startedLocked && matches.length === 1) {
 		return { approved: true, userVerified: true, credentialId: matches[0]?.passkey.credentialId };
 	}
 
-	// Several accounts for this site: let the user choose which passkey to use.
+	// Otherwise always show which account(s): one so the user sees who they're signing in as,
+	// several so they can choose. A one-item list preselects it; reply.choice is the pick.
 	const reply = await host.showCard({
 		passkeyChoices: matches.map((m) => ({
 			credentialId: m.passkey.credentialId,
@@ -145,7 +152,11 @@ export async function runGetCeremony(
 		})),
 	});
 	if (!reply.approved) return { approved: false };
-	return { approved: true, userVerified: true, credentialId: reply.choice };
+	return {
+		approved: true,
+		userVerified: true,
+		credentialId: reply.choice ?? matches[0]?.passkey.credentialId,
+	};
 }
 
 /**

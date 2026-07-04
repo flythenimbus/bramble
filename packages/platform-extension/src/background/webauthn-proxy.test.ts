@@ -337,11 +337,11 @@ describe("runGetCeremony", () => {
 		return { h, cards };
 	}
 
-	it("single match -> signs in with it, no picker", async () => {
+	it("single match -> shows the one account so the user knows who, signs in with it", async () => {
 		const { h, cards } = host({ entries: [pk("AAA", "octocat")] });
 		const d = await runGetCeremony(req, h);
 		expect(d).toMatchObject({ approved: true, userVerified: true, credentialId: "AAA" });
-		expect(cards[0]?.passkeyChoices).toBeUndefined(); // a plain confirm, not a picker
+		expect(cards[0]?.passkeyChoices?.map((c) => c.label)).toEqual(["octocat"]); // account shown
 	});
 
 	it("no match -> approved with no credentialId (handleGet maps to NotAllowedError)", async () => {
