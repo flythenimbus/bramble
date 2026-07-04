@@ -92,7 +92,17 @@ async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<voi
 interface AuthedPeer {
 	channel: Channel;
 	sessionId: number;
+	/** Wall-clock of the last received envelope; drives stale reaping. */
+	lastSeen: number;
+	/** Reap: stop the receive loop and tear down the transport. */
+	close: () => void;
 }
+
+// Relay-forward has no connection-liveness signal, so a peer that went away (e.g. a
+// Firefox device that suspended and restarted with a fresh identity) would linger in the
+// map and be broadcast to forever. Healthy peers re-broadcast every REBROADCAST_MS, so
+// treat one silent for several ticks as gone.
+const STALE_MS = 5 * REBROADCAST_MS;
 
 export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSession> {
 	const peers = new Map<string, AuthedPeer>();
@@ -107,10 +117,14 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 		onPeer: (peer) => syncPeer(opts, peer, peers),
 		onStop: () => {
 			if (timer) clearInterval(timer);
+			for (const peer of peers.values()) peer.close();
 			peers.clear();
 		},
 	});
-	timer = setInterval(() => void broadcast(opts, peers), REBROADCAST_MS);
+	timer = setInterval(() => {
+		reapStale(opts, peers);
+		void broadcast(opts, peers);
+	}, REBROADCAST_MS);
 	opts.report("syncing — listening for peers…");
 	return session;
 }
@@ -125,6 +139,21 @@ async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>
 	const payload = await localEnvelope(opts);
 	for (const { channel, sessionId } of peers.values()) {
 		channel.send(await opts.wasm.handshake_encrypt(sessionId, payload));
+	}
+}
+
+/** Drop peers that have gone silent past STALE_MS (see AuthedPeer). Exported for tests. */
+export function reapStale(
+	opts: Pick<RosterSyncOptions, "report">,
+	peers: Map<string, AuthedPeer>,
+	now: number = Date.now(),
+): void {
+	for (const [pub, peer] of peers) {
+		if (now - peer.lastSeen > STALE_MS) {
+			opts.report(`peer ${pub.slice(0, 8)} idle — dropping`);
+			peer.close();
+			peers.delete(pub);
+		}
 	}
 }
 
@@ -159,12 +188,29 @@ async function syncPeer(
 		peer.close();
 		return;
 	}
-	peers.set(peerPub, { channel, sessionId: sess.sessionId });
+	let wakeAbort: (() => void) | null = null;
+	const aborted = new Promise<null>((resolve) => {
+		wakeAbort = () => resolve(null);
+	});
+	const entry: AuthedPeer = {
+		channel,
+		sessionId: sess.sessionId,
+		lastSeen: Date.now(),
+		close: () => {
+			wakeAbort?.();
+			peer.close();
+		},
+	};
+	peers.set(peerPub, entry);
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
 	channel.send(await wasm.handshake_encrypt(sess.sessionId, await localEnvelope(opts)));
 	for (;;) {
-		const ct = await channel.recv();
+		// Race the (unbounded) receive against reaping, so a dropped peer's loop exits
+		// instead of leaking a pending recv() forever (relay channels have no close event).
+		const ct = await Promise.race([channel.recv(), aborted]);
+		if (ct === null) break;
+		entry.lastSeen = Date.now();
 		await applyEnvelope(opts, await wasm.handshake_decrypt(sess.sessionId, ct));
 	}
 }
