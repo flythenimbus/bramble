@@ -5,6 +5,7 @@ import { cornerStyles } from "./html/corner-styles";
 import { saveLoginBody } from "./html/save-login-body";
 import { savePasskeyBody } from "./html/save-passkey-body";
 import { updateLoginBody } from "./html/update-login-body";
+import { t } from "./i18n";
 import { isExtensionAlive, markExtensionDead, onTeardown, safeSendMessage } from "./lifecycle";
 import { html } from "./template";
 import type { CornerPromptPayload } from "./types";
@@ -49,7 +50,7 @@ export function queryCornerPrompt(): void {
 
 /** Renders the "Save New Login" card body. */
 function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login" }>): string {
-	const primaryLabel = p.locked ? "Unlock & Save" : "Save";
+	const primaryLabel = t(p.locked ? "actionUnlockAndSave" : "actionSave");
 	const primaryAction = p.locked ? "save-unlock-first" : "save";
 	const { username, password, hostname } = p;
 	return saveLoginBody({
@@ -63,10 +64,10 @@ function buildSaveLoginBody(p: Extract<CornerPromptPayload, { kind: "save-login"
 
 /** Renders the "Update login" card body; "Save as new" keeps existing entries instead of rotating. */
 function buildUpdateLoginBody(p: Extract<CornerPromptPayload, { kind: "update-login" }>): string {
-	const primaryLabel = p.locked ? "Unlock & Update" : "Update";
+	const primaryLabel = t(p.locked ? "actionUnlockAndUpdate" : "actionUpdate");
 	const primaryAction = p.locked ? "save-unlock-first" : "update";
 	// >1 candidate: ask which entry to update; exactly 1: confirm the rotation.
-	const title = p.candidates.length > 1 ? "Update an existing login?" : "Update saved login?";
+	const title = t(p.candidates.length > 1 ? "updateExistingTitle" : "updateSavedTitle");
 	return updateLoginBody({
 		title,
 		hostname: p.hostname,
@@ -124,7 +125,7 @@ function handleCornerCardClick(e: Event): void {
 		const pw = cornerShadow.querySelector<HTMLInputElement>("#tp-password");
 		if (!pw) return;
 		pw.type = pw.type === "password" ? "text" : "password";
-		actionEl.textContent = pw.type === "password" ? "Show" : "Hide";
+		actionEl.textContent = t(pw.type === "password" ? "toggleShow" : "toggleHide");
 		return;
 	}
 	if (action === "toggle-menu") {
@@ -135,7 +136,7 @@ function handleCornerCardClick(e: Event): void {
 		}
 		const menu = document.createElement("div");
 		menu.className = "tp-menu";
-		menu.innerHTML = html`<button data-tp-action="never">Never for this site</button>`;
+		menu.innerHTML = html`<button data-tp-action="never">${t("menuNeverForSite")}</button>`;
 		const actions = cornerShadow.querySelector(".tp-actions");
 		(actions ?? cornerShadow).appendChild(menu);
 		return;
@@ -223,14 +224,11 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	} else if (payload.kind === "update-login") {
 		body = buildUpdateLoginBody(payload);
 	} else {
-		const verb = payload.intent === "get" ? "Use" : payload.existingLoginName ? "Add" : "Save";
-		const label = payload.locked
-			? `Unlock & ${verb}`
-			: payload.intent === "get"
-				? "Use passkey"
-				: payload.existingLoginName
-					? "Add passkey"
-					: "Save passkey";
+		let label: string;
+		if (payload.intent === "get") label = t(payload.locked ? "passkeyUnlockUse" : "passkeyUse");
+		else if (payload.existingLoginName)
+			label = t(payload.locked ? "passkeyUnlockAdd" : "passkeyAdd");
+		else label = t(payload.locked ? "actionUnlockAndSave" : "passkeySave");
 		body = savePasskeyBody({
 			rpId: payload.rpId,
 			rpName: payload.rpName,

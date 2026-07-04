@@ -154,13 +154,22 @@ function matchRow(m: MatchSummary): string {
 	`;
 }
 
+// Extension i18n: browser locale with en default_locale fallback. Kept inline (not a
+// shared import) so this WAR iframe bundle stays flat. See content/i18n.ts for the
+// content-script twin.
+type I18n = { getMessage(key: string): string };
+function t(key: string): string {
+	const g = globalThis as { browser?: { i18n: I18n }; chrome?: { i18n: I18n } };
+	return (g.browser ?? g.chrome)?.i18n.getMessage(key) ?? key;
+}
+
 function lockedRow(): string {
 	return html`
 		<div class="tp-item tp-locked" data-tp-popout="1">
 			<div class="tp-avatar tp-avatar-locked">🔒</div>
 			<div class="tp-text">
-				<span class="tp-name">Vault locked</span>
-				<span class="tp-user">Click to unlock in a window</span>
+				<span class="tp-name">${t("vaultLocked")}</span>
+				<span class="tp-user">${t("vaultLockedUnlockHint")}</span>
 			</div>
 		</div>
 	`;

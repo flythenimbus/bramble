@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { html } from "../template";
 
 type Candidate = { id: string; name: string; username: string };
@@ -17,7 +18,7 @@ export function updateLoginBody({
 }) {
 	let candidatesBody = html`
 		<div class="tp-row">
-			<div class="tp-label">Account</div>
+			<div class="tp-label">${t("fieldAccount")}</div>
 			<div>${candidates[0]?.name ?? ""} <span style="color: rgba(235,235,245,0.55)">(${candidates[0]?.username ?? ""})</span></div>
 			<input type="hidden" name="tp-update-target" value="${candidates[0]?.id ?? ""}" />
 		</div>
@@ -52,7 +53,7 @@ export function updateLoginBody({
 		${candidatesBody}
 		<div class="tp-actions">
 			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
-			<button class="tp-btn" data-tp-action="save-new" title="Save as a separate login instead of updating">Save as new</button>
+			<button class="tp-btn" data-tp-action="save-new" title="${t("saveAsNewHint")}">${t("saveAsNew")}</button>
 			<button class="tp-overflow" data-tp-action="toggle-menu" aria-label="More">⋯</button>
 		</div>
 	`;

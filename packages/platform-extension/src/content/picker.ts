@@ -216,7 +216,7 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 		positionDropdown(field);
 		return;
 	}
-	const root = mountDropdown(field, dropdownLocked);
+	const root = mountDropdown(field, dropdownLocked());
 	openDropdownKind = "locked";
 
 	// mousedown beats the field's blur; otherwise the row never gets the click.

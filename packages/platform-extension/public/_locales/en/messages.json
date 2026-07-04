@@ -6,5 +6,133 @@
 	"cmdLockVault": {
 		"message": "Lock Bramble",
 		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	},
+	"notNow": {
+		"message": "Not now",
+		"description": "Dismiss button on the save / passkey corner prompt."
+	},
+	"toggleShow": {
+		"message": "Show",
+		"description": "Reveal the captured password in the save-login card."
+	},
+	"toggleHide": {
+		"message": "Hide",
+		"description": "Hide the revealed password in the save-login card."
+	},
+	"menuNeverForSite": {
+		"message": "Never for this site",
+		"description": "Overflow-menu action: stop offering to save logins on this site."
+	},
+	"fieldUsername": {
+		"message": "Username",
+		"description": "Field label in the save-login card."
+	},
+	"fieldPassword": {
+		"message": "Password",
+		"description": "Field label in the save-login card."
+	},
+	"fieldAccount": {
+		"message": "Account",
+		"description": "Field label showing the account name in the update / passkey card."
+	},
+	"saveNewLogin": {
+		"message": "Save New Login",
+		"description": "Title of the card offering to save a newly captured login."
+	},
+	"actionSave": {
+		"message": "Save",
+		"description": "Primary button: save the captured login."
+	},
+	"actionUnlockAndSave": {
+		"message": "Unlock & Save",
+		"description": "Primary button when the vault is locked: unlock, then save."
+	},
+	"updateExistingTitle": {
+		"message": "Update an existing login?",
+		"description": "Card title when several saved logins could be updated."
+	},
+	"updateSavedTitle": {
+		"message": "Update saved login?",
+		"description": "Card title when one saved login could be updated."
+	},
+	"actionUpdate": {
+		"message": "Update",
+		"description": "Primary button: update the saved login with the new password."
+	},
+	"actionUnlockAndUpdate": {
+		"message": "Unlock & Update",
+		"description": "Primary button when the vault is locked: unlock, then update."
+	},
+	"saveAsNew": {
+		"message": "Save as new",
+		"description": "Secondary button: save as a separate login instead of updating."
+	},
+	"saveAsNewHint": {
+		"message": "Save as a separate login instead of updating",
+		"description": "Tooltip for the 'Save as new' button."
+	},
+	"passkeySignInWhich": {
+		"message": "Sign in with which passkey?",
+		"description": "Passkey card title when the site offers a choice of passkeys."
+	},
+	"passkeyUseTitle": {
+		"message": "Use your passkey?",
+		"description": "Passkey card title when signing in with a single passkey."
+	},
+	"passkeyAddToTitle": {
+		"message": "Add this passkey to…",
+		"description": "Passkey card title: choose which saved login to attach a new passkey to."
+	},
+	"passkeyAddTitle": {
+		"message": "Add a passkey?",
+		"description": "Passkey card title when adding a passkey to an existing login."
+	},
+	"passkeySaveTitle": {
+		"message": "Save a passkey?",
+		"description": "Passkey card title when saving a brand-new passkey."
+	},
+	"passkeyUnlockUseNote": {
+		"message": "Unlock Bramble to use your passkeys for this site.",
+		"description": "Explains the locked passkey sign-in prompt."
+	},
+	"passkeyUnlockSaveNote": {
+		"message": "Unlock Bramble to save a passkey for this site.",
+		"description": "Explains the locked passkey save prompt."
+	},
+	"passkeyAddsTo": {
+		"message": "Adds to",
+		"description": "Label showing which login a new passkey will be attached to."
+	},
+	"passkeyCreateNewLogin": {
+		"message": "Create a new login",
+		"description": "Option to attach the passkey to a brand-new login instead of an existing one."
+	},
+	"passkeyUse": {
+		"message": "Use passkey",
+		"description": "Primary button: sign in with the passkey."
+	},
+	"passkeyAdd": {
+		"message": "Add passkey",
+		"description": "Primary button: attach the passkey to a login."
+	},
+	"passkeySave": {
+		"message": "Save passkey",
+		"description": "Primary button: save the new passkey."
+	},
+	"passkeyUnlockUse": {
+		"message": "Unlock & Use",
+		"description": "Primary button when locked: unlock, then sign in with the passkey."
+	},
+	"passkeyUnlockAdd": {
+		"message": "Unlock & Add",
+		"description": "Primary button when locked: unlock, then attach the passkey."
+	},
+	"vaultLocked": {
+		"message": "Vault locked",
+		"description": "Autofill dropdown row shown when the vault is locked."
+	},
+	"vaultLockedUnlockHint": {
+		"message": "Click to unlock in a window",
+		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
 	}
 }
