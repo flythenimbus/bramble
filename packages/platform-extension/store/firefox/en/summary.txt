@@ -1,0 +1,1 @@
+Local-first, encrypted password manager. No central cloud storing your secrets.
