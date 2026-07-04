@@ -114,6 +114,7 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 		roomLabel: "bramble/sync",
 		wasm: opts.wasm,
 		report: opts.report,
+		epochRooms: true, // rotate the (long-lived, high-traffic) sync room per epoch
 		onPeer: (peer) => syncPeer(opts, peer, peers),
 		onStop: () => {
 			if (timer) clearInterval(timer);

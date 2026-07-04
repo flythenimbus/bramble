@@ -42,6 +42,9 @@ export interface MeshOptions {
 	iceServers?: RTCIceServer[];
 	onStatus: (status: string) => void;
 	onPeer: (session: PeerSession) => void;
+	/** Rotate the room per epoch (subscribe current+previous) so a relay can't link the
+	 *  group's activity across epochs. Off (stable room) for the brief enrollment room. */
+	epochRooms?: boolean;
 }
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -80,6 +83,12 @@ function webrtcAvailable(): boolean {
 // network, so anything past this is a reachability failure, not slowness.
 const CONNECT_TIMEOUT_MS = 10_000;
 
+// Rotate the sync room hourly so a relay can't link a group's activity across epochs;
+// subscribe to current + previous so a clock skew or a boundary crossing still meets.
+const EPOCH_MS = 60 * 60 * 1000;
+const ROLL_CHECK_MS = 60 * 1000;
+const epochNow = (): number => Math.floor(Date.now() / EPOCH_MS);
+
 class Mesh {
 	private readonly peers = new Map<string, Peer>();
 	private readonly relayPeers = new Map<
@@ -89,13 +98,29 @@ class Mesh {
 	private readonly known = new Set<string>();
 	private socket!: WebSocket;
 	private client!: SignalingClient;
+	private epoch = 0;
+	private rooms: string[] = [];
+	private publishRoom = "";
+	private rollTimer: ReturnType<typeof setInterval> | undefined;
 
-	constructor(
-		private readonly opts: MeshOptions,
-		private readonly room: string,
-	) {}
+	constructor(private readonly opts: MeshOptions) {}
 
-	start(): void {
+	// Resolve the room(s) for now: current+previous epoch when rotating, else the stable
+	// room. Publishes go to publishRoom; we subscribe to `rooms` (previous covers skew).
+	private async roll(): Promise<void> {
+		const { groupKey, roomLabel, epochRooms } = this.opts;
+		if (epochRooms) {
+			this.epoch = epochNow();
+			this.publishRoom = await deriveRoomId(groupKey, roomLabel, this.epoch);
+			this.rooms = [this.publishRoom, await deriveRoomId(groupKey, roomLabel, this.epoch - 1)];
+		} else {
+			this.publishRoom = await deriveRoomId(groupKey, roomLabel);
+			this.rooms = [this.publishRoom];
+		}
+	}
+
+	async start(): Promise<void> {
+		await this.roll();
 		const url = this.opts.relayUrl;
 		const host = relayHost(url);
 		this.socket = new WebSocket(url);
@@ -132,7 +157,7 @@ class Mesh {
 		};
 		this.client = connectSignaling(
 			this.socket as unknown as SocketLike,
-			this.room,
+			this.rooms,
 			(ev) => this.onEvent(ev),
 			() => {
 				opened = true;
@@ -141,9 +166,22 @@ class Mesh {
 			},
 		);
 		this.sendHello();
+		if (this.opts.epochRooms) {
+			this.rollTimer = setInterval(() => void this.maybeRoll(), ROLL_CHECK_MS);
+		}
+	}
+
+	// On an epoch boundary re-derive the room set, re-subscribe (same subId → the relay
+	// swaps the filter), and re-announce so peers rediscover us in the new room.
+	private async maybeRoll(): Promise<void> {
+		if (!this.opts.epochRooms || epochNow() === this.epoch) return;
+		await this.roll();
+		this.client.resubscribe(this.rooms);
+		this.sendHello();
 	}
 
 	stop(): void {
+		if (this.rollTimer) clearInterval(this.rollTimer);
 		for (const peer of this.peers.values()) peer.close();
 		for (const relay of this.relayPeers.values()) relay.close();
 		this.client?.close();
@@ -152,7 +190,12 @@ class Mesh {
 	private async publish(obj: unknown): Promise<void> {
 		try {
 			const content = await encryptSignal(this.opts.groupKey, JSON.stringify(obj));
-			const event = await buildSignalEvent(this.opts.signer.signer, this.room, content, nowSec());
+			const event = await buildSignalEvent(
+				this.opts.signer.signer,
+				this.publishRoom,
+				content,
+				nowSec(),
+			);
 			this.client.publish(event);
 		} catch (e) {
 			// Callers fire-and-forget this; surface failures (e.g. a native sign error)
@@ -300,7 +343,7 @@ export type { Mesh };
 
 /** Join the group's relay room and start discovering + connecting to peers. */
 export async function joinMesh(opts: MeshOptions): Promise<Mesh> {
-	const mesh = new Mesh(opts, await deriveRoomId(opts.groupKey, opts.roomLabel));
-	mesh.start();
+	const mesh = new Mesh(opts);
+	await mesh.start();
 	return mesh;
 }
