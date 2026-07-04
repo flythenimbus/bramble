@@ -156,8 +156,11 @@ establish a WebRTC data channel (symmetric NAT, no TURN, corporate firewall).
 - **Reliability / ordering.** A WebRTC data channel is reliable + ordered; the relay is best-effort
   live fan-out of *ephemeral* events (stores nothing — see "Filesystem sync"), so both peers must be
   online and a dropped frame isn't retransmitted. Order holds on the happy path (`WebSocket` is
-  ordered, both connected), but add light **sequencing + a handshake timeout/retry** so a lost frame
-  can't wedge the Noise handshake.
+  ordered, both connected). **Implemented:** a **handshake timeout** (roster-sync) so a frame dropped
+  mid-handshake abandons cleanly instead of hanging, and a **stale-peer reaper** (the connectionless
+  relay transport has no close signal, so a departed peer is dropped after several silent gossip
+  ticks). **Residual:** no per-frame retransmit on the post-handshake data path — a lost gossip frame
+  is recovered by the next 4s re-broadcast rather than resent.
 - **Both-online only** — same as the current WebRTC model. Async catch-up would need a
   store-and-forward mailbox (ciphertext at rest on the relay), which we deliberately avoid.
 
@@ -174,14 +177,14 @@ What the relay can observe, and the mitigations:
   (`nostr-signer.ts`), content is group-key-encrypted, and events use **ephemeral kinds
   (20000-29999)** so the relay stores nothing (`nostr-relay/cf-worker`). No cross-session author
   linkage, nothing at rest.
-- **Room-id linkage → rotate per epoch.** `deriveRoomId(groupKey, label)` is deterministic forever,
-  so the relay sees one stable room per group for all time. Derive it per epoch
-  (`deriveRoomId(groupKey, label, floor(now/epoch))`), with devices subscribing to the current +
-  previous epoch for clock skew. Highest-value metadata win; purely app-side (Nostr tag filtering
-  already supports it).
-- **Message size → vault size → pad payloads.** Borrow NIP-44's length-padding (pad plaintext into
-  power-of-two-ish buckets) for relay-forward frames so chunk counts / sizes don't reveal roughly how
-  many entries the vault holds.
+- **Room-id linkage → rotate per epoch (implemented).** The sync room is derived per hourly epoch
+  (`deriveRoomId(groupKey, label, epoch)`); the mesh publishes to the current epoch and subscribes to
+  current+previous (one multi-value tag filter, with a minute-granularity rollover), so the relay
+  can't link a group's sync activity across epochs. Gated to the sync room via the `epochRooms` flag;
+  enrollment stays on a stable, clock-skew-independent room.
+- **Message size → vault size → pad payloads (implemented).** Relay-forward frames are padded into
+  NIP-44-style size buckets (`relay-channel.ts` `padMessage`/`unpadMessage`) before chunking and
+  stripped after reassembly, so chunk counts / sizes reveal only a coarse range, not the entry count.
 - **IP address — not fixable in Nostr.** The relay terminates the socket, so it sees the client IP
   regardless of code. Two answers, both outside the protocol: **self-host** the relay (operator =
   you), or point at a **Tor `.onion` relay**. Tor only helps the `WebSocket`/relay-forward path (it's
