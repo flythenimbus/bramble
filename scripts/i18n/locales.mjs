@@ -24,6 +24,8 @@ export const FASTLANE_DIR = repo("packages/platform-mobile/ios/App/fastlane/meta
 // underscores (pt_BR), unlike the App Store's hyphens.
 export const CHROME_LOCALES_DIR = repo("packages/platform-extension/public/_locales");
 export const ANDROID_RES = repo("packages/platform-mobile/android/app/src/main/res");
+// Web store listings (Chrome Web Store + AMO). <store>/<code>/*.txt; en is the source.
+export const STORE_DIR = repo("packages/platform-extension/store");
 // iOS String Catalog for the autofill extension UI.
 export const XCSTRINGS = repo(
 	"packages/platform-mobile/ios/App/AutoFillProbe/Localizable.xcstrings",
