@@ -66,39 +66,39 @@ export const cornerStyles = html`
 				margin-bottom: 4px;
 			}
 			.tp-choice {
-				position: relative;
 				display: flex;
 				align-items: center;
 				gap: 12px;
+				width: 100%;
 				padding: 10px 12px;
 				background: rgba(255, 255, 255, 0.04);
 				border: 1px solid rgba(255, 255, 255, 0.08);
 				border-radius: 10px;
+				color: inherit;
+				font: inherit;
+				text-align: left;
 				cursor: pointer;
 				transition:
 					background 0.1s ease,
-					border-color 0.1s ease;
+					border-color 0.1s ease,
+					transform 0.05s ease;
 			}
 			.tp-choice:hover {
-				background: rgba(255, 255, 255, 0.07);
+				background: rgba(255, 255, 255, 0.08);
+				border-color: rgba(255, 255, 255, 0.2);
 			}
-			.tp-choice input {
-				position: absolute;
-				opacity: 0;
-				width: 0;
-				height: 0;
-				pointer-events: none;
+			.tp-choice:active {
+				transform: scale(0.99);
 			}
-			.tp-choice:has(input:checked) {
-				border-color: rgba(255, 255, 255, 0.5);
-				background: rgba(255, 255, 255, 0.09);
-			}
-			.tp-choice:has(input:checked)::after {
-				content: "✓";
+			.tp-chevron {
+				width: 18px;
+				height: 18px;
 				margin-left: auto;
-				padding-left: 8px;
-				font-size: 13px;
-				color: #fff;
+				flex-shrink: 0;
+				color: rgba(235, 235, 245, 0.4);
+			}
+			.tp-choice:hover .tp-chevron {
+				color: rgba(235, 235, 245, 0.75);
 			}
 			.tp-avatar {
 				flex-shrink: 0;

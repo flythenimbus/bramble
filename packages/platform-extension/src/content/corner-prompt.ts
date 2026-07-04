@@ -87,10 +87,12 @@ function sendCornerResponse(action: string, extra?: Record<string, unknown>): vo
 // Passkey cards reply on their own channel: the create()/get() call is blocking on
 // the background, which resolves the pending proxy request from this message. On approve,
 // include the picked login id (or "new") when the card is a create picker.
-function sendPasskeyResponse(approved: boolean): void {
+function sendPasskeyResponse(approved: boolean, explicitChoice?: string): void {
 	if (!currentPrompt) return;
-	let choice: string | undefined;
-	if (approved) {
+	// The row-click flow passes the picked value directly; the button flow (no list) reads a
+	// checked radio if present (there is none when there's nothing to choose).
+	let choice = explicitChoice;
+	if (approved && choice === undefined) {
 		choice = cornerShadow?.querySelector<HTMLInputElement>(
 			'input[name="tp-passkey-target"]:checked',
 		)?.value;
@@ -170,6 +172,12 @@ function handleCornerCardClick(e: Event): void {
 			'input[name="tp-update-target"]:checked',
 		);
 		sendCornerResponse("save-unlock-first", radio ? { chosenEntryId: radio.value } : undefined);
+		removeCornerPrompt();
+		return;
+	}
+	if (action === "passkey-pick") {
+		// Clicking an account row acts immediately (sign in / attach) with that choice.
+		sendPasskeyResponse(true, actionEl.dataset.tpValue);
 		removeCornerPrompt();
 		return;
 	}
