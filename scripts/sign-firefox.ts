@@ -7,9 +7,10 @@
 // Firefox differs from Chrome: Mozilla holds the signing key, so there is no local key to pack a
 // .crx with. What we hold are AMO API credentials (a JWT issuer + secret from addons.mozilla.org).
 // The secret is encrypted at rest with age + a YubiKey (the same scheme as the CWS/Android keys).
-// Listed uploads enter review (approvalTimeout: 0, so we submit without waiting and AMO signs on
-// approval); unlisted uploads are auto-signed and the .xpi downloaded. Either way it is a network
-// round-trip and AMO refuses to reuse a version, so it runs only at release time, never on `bundle`.
+// Listed uploads enter review (approvalTimeout: 0, so we submit without waiting; AMO signs on
+// approval) and carry a source archive for the reviewer (docs/amo-source-build.md); unlisted uploads
+// are auto-signed and the .xpi downloaded. Either way it is a network round-trip and AMO refuses to
+// reuse a version, so it runs only at release time, never on `bundle`.
 //
 // Credentials resolve from the env first (AMO_API_KEY + AMO_API_SECRET, for CI / one-off),
 // else an age-encrypted JSON at ~/.config/bramble/amo-api-credentials.age (override
@@ -94,6 +95,15 @@ try {
 	// web-ext uploads dist-firefox to AMO, waits for automated signing, and downloads the signed
 	// .xpi into `artifacts`. The extension id (browser_specific_settings.gecko.id) must be set.
 	const artifacts = join(tmp, "artifacts");
+	// AMO review needs the buildable source for a listed add-on (Bramble is bundled + ships WASM).
+	// Archive the working tree: `git stash create` captures the release's uncommitted version bump,
+	// so the source matches what built dist-firefox. docs/amo-source-build.md ships inside it.
+	let sourceArchive: string | undefined;
+	if (channel === "listed") {
+		sourceArchive = join(tmp, "bramble-source.zip");
+		const worktree = execFileSync("git", ["stash", "create"]).toString().trim();
+		execFileSync("git", ["archive", "--format=zip", "-o", sourceArchive, worktree || "HEAD"]);
+	}
 	let result: { downloadedFiles?: string[] };
 	try {
 		// cmd.sign throws on failure (it never calls process.exit itself), so the catch handles it.
@@ -107,6 +117,8 @@ try {
 			// Listed versions are signed only after human review; submit and return instead of
 			// blocking for an approval that can take days.
 			approvalTimeout: channel === "listed" ? 0 : undefined,
+			// Reviewers rebuild from this and diff against the upload; unlisted needs no source.
+			uploadSourceCode: sourceArchive,
 		});
 	} catch (e) {
 		fail(`AMO signing failed: ${(e as Error).message}`);
