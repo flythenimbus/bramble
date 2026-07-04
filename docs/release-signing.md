@@ -1,7 +1,8 @@
 # Release signing
 
-Two independent signing setups, both reusing the same age + YubiKey at-rest scheme: the
-**extension** (Chrome Web Store verified uploads) below, and the **Android app**
+Three independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
+**Chrome extension** (Chrome Web Store verified uploads) below, the **Firefox extension**
+([GitHub-released signed XPI](#firefox-github-released-signed-xpi)), and the **Android app**
 ([GitHub-released APK](#android-github-released-apk)) at the end.
 
 ## Chrome Web Store verified uploads
@@ -93,6 +94,92 @@ age -d cws-signing-key.backup.age > /tmp/cws.pem        # passphrase
 age-plugin-yubikey --generate                            # new YubiKey recipient
 age -r age1yubikey1NEW -o ~/.config/bramble/cws-signing-key.age /tmp/cws.pem
 rm -P /tmp/cws.pem
+```
+
+## Firefox (GitHub-released signed XPI)
+
+The Firefox add-on is self-distributed from GitHub Releases (not listed on addons.mozilla.org),
+so it ships as a **Mozilla-signed `.xpi`** on the **unlisted** channel: we upload the built
+extension to AMO, Mozilla's automated signer returns a signed `.xpi`, and we attach that to the
+release. Firefox only installs Mozilla-signed add-ons, so the AMO signature is what makes the
+`.xpi` installable; updates are matched by the add-on id (`firefox@bramble.app`).
+
+Unlike CWS and Android, **Mozilla holds the signing key**, so there is no local key to protect.
+What we protect is the **AMO API secret**, the credential that lets us upload as us. It rides the
+same age + YubiKey at-rest scheme. Losing it is low-stakes: AMO API keys can be regenerated at
+will (they don't change the signature or the add-on id), so no user-facing rotation is involved.
+
+### One-time setup
+
+Needs the YubiKey plugged in. Reuse your existing `age1yubikey1…` recipient.
+
+```sh
+# 1. Create an AMO API credential at
+#    https://addons.mozilla.org/developers/addon/api/key/ ("Generate new credentials").
+#    You get a JWT issuer (user:XXXXXXXX:XX) and a secret (shown ONCE). Put them in a JSON file.
+cat > /tmp/amo.json <<'JSON'
+{ "apiKey": "user:XXXXXXXX:XX", "apiSecret": "PASTE_THE_SECRET" }
+JSON
+
+# 2. Day-to-day copy: encrypt to the YubiKey recipient (PIN + touch to use).
+mkdir -p ~/.config/bramble
+age -r age1yubikey1XXXX -o ~/.config/bramble/amo-api-credentials.age /tmp/amo.json
+
+# 3. Destroy the plaintext credentials.
+rm -P /tmp/amo.json
+```
+
+Nothing to register anywhere: Mozilla signs on upload. The add-on id is already set in
+`packages/manifests/firefox/manifest.json` (`browser_specific_settings.gecko.id`).
+
+### Each release
+
+```sh
+pnpm run release firefox 1.0.0        # prompts for a YubiKey touch to decrypt the AMO secret
+```
+
+It runs lint + tests, bumps the firefox `manifest.json` version, builds WASM, bundles
+`dist-firefox`, validates it with the addons-linter (the same check AMO runs) **before**
+signing so a validation error fails for free, then uploads to AMO and waits for the signed
+`.xpi` (`web-ext sign --channel unlisted`), tags `1.0.0-firefox`, pushes, and publishes a
+GitHub release with
+`bramble_firefox_1.0.0.xpi`, the unpacked `.zip`, and `SHA256SUMS`. The credentials are decrypted
+to a temp file and wiped; they never touch the repo. CI verifies a Mozilla-signed `.xpi` plus a
+matching `SHA256SUMS` are attached; it never builds or signs.
+
+**AMO won't re-sign a version.** If a release fails after the version bump, retry with the next
+version (e.g. `1.0.1`); AMO rejects a re-upload of `1.0.0`. Env overrides: `AMO_API_KEY` /
+`AMO_API_SECRET` (skip the age file, e.g. in CI), `AMO_CREDENTIALS_AGE` (encrypted-credentials
+path).
+
+### Building without releasing
+
+There is no cheap dry run: `web-ext sign` always uploads to AMO and consumes the version. The
+release already runs the addons-linter for you before signing, so a validation error stops it for
+free; to iterate faster on your own, run `pnpm run bundle:firefox` (build + zip `dist-firefox`, no
+signing) and `pnpm run lint:firefox` (the same addons-linter AMO does) directly. Sign only when
+actually cutting a release.
+
+### Verifying (what users run)
+
+The `.xpi` on the release is Mozilla-signed, and Firefox refuses to install anything else, so
+installation is itself the signature check. For download integrity, match it against the
+release's `SHA256SUMS`:
+
+```sh
+sha256sum -c SHA256SUMS      # from a dir holding the downloaded .xpi + SHA256SUMS
+```
+
+### If the YubiKey is lost
+
+The AMO secret is only a credential, not a signing key, so the simplest fix is to generate a
+fresh one at AMO and re-encrypt it. If you kept an offline backup, re-wrap that instead:
+
+```sh
+age -d amo-api-credentials.backup.age > /tmp/amo.json    # passphrase (if you made a backup)
+age-plugin-yubikey --generate                            # new YubiKey recipient
+age -r age1yubikey1NEW -o ~/.config/bramble/amo-api-credentials.age /tmp/amo.json
+rm -P /tmp/amo.json
 ```
 
 ## Android (GitHub-released APK)
