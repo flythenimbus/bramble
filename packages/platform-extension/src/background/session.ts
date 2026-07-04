@@ -106,8 +106,11 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				await persistVek();
 			}
 			await scheduleAutoLock();
-		} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT") {
-			// Only count as an unlock if the verifier matched.
+		} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
+			// Password or security-key unlock. Only count it if the verifier matched;
+			// both slot kinds return true iff the VEK was recovered, so cache it the
+			// same way (else a security-key unlock leaves cachedVek null and the
+			// background reports the vault as locked: autofill, route restore, passkeys).
 			if (response.data === true) {
 				markOffscreenKey(true);
 				await scheduleAutoLock();
