@@ -16,6 +16,7 @@ import {
 } from "..";
 import { type Channel, makeChannel } from "./channel";
 import type { SignerPair } from "./nostr-signer";
+import { chunkMessage, type DataFrame, makeReassembler } from "./relay-channel";
 import { createPeer, type Peer, type PeerSignal } from "./webrtc-peer";
 
 export interface PeerSession {
@@ -46,6 +47,27 @@ const relayHost = (url: string): string => {
 		return url;
 	}
 };
+
+// WebRTC availability in THIS runtime context: absent in the Firefox extension background
+// (and disabled browser-wide in hardened Firefoxes), present in the Chrome offscreen
+// document and mobile webviews. Cached. A data-channel peer is only attempted when both
+// sides advertise it (hello caps); otherwise we relay-forward. See docs/firefox-port.md.
+let webrtcCache: boolean | null = null;
+function webrtcAvailable(): boolean {
+	if (webrtcCache !== null) return webrtcCache;
+	try {
+		if (typeof RTCPeerConnection === "undefined") {
+			webrtcCache = false;
+		} else {
+			const probe = new RTCPeerConnection();
+			probe.close();
+			webrtcCache = true;
+		}
+	} catch {
+		webrtcCache = false;
+	}
+	return webrtcCache;
+}
 // A connect that never reaches the relay (firewall/VPN/no network access, or a
 // loopback URL that only resolves on the inviter's machine) should say so instead
 // of stalling silently; the relay handshake is a sub-second affair on any reachable
@@ -54,6 +76,10 @@ const CONNECT_TIMEOUT_MS = 10_000;
 
 class Mesh {
 	private readonly peers = new Map<string, Peer>();
+	private readonly relayPeers = new Map<
+		string,
+		{ receive: (f: DataFrame) => void; close: () => void }
+	>();
 	private readonly known = new Set<string>();
 	private socket!: WebSocket;
 	private client!: SignalingClient;
@@ -108,11 +134,12 @@ class Mesh {
 				this.opts.onStatus(`relay connected (${host})`);
 			},
 		);
-		void this.publish({ kind: "hello" });
+		this.sendHello();
 	}
 
 	stop(): void {
 		for (const peer of this.peers.values()) peer.close();
+		for (const relay of this.relayPeers.values()) relay.close();
 		this.client?.close();
 	}
 
@@ -128,6 +155,10 @@ class Mesh {
 		}
 	}
 
+	private sendHello(): void {
+		void this.publish({ kind: "hello", rtc: webrtcAvailable() });
+	}
+
 	private onEvent(ev: NostrEvent): void {
 		void this.handleEvent(ev);
 	}
@@ -140,34 +171,54 @@ class Mesh {
 			this.opts.onStatus(`ignored bad-signature event from ${short(ev.pubkey)}`);
 			return;
 		}
-		let payload: { kind?: string; to?: string; sdp?: string; candidate?: RTCIceCandidateInit };
+		let payload: {
+			kind?: string;
+			to?: string;
+			rtc?: boolean;
+			sdp?: string;
+			candidate?: RTCIceCandidateInit;
+			msgId?: number;
+			idx?: number;
+			total?: number;
+			chunk?: string;
+		};
 		try {
 			payload = JSON.parse(await decryptSignal(this.opts.groupKey, ev.content));
 		} catch {
 			return; // not encrypted under our group key
 		}
-		if (payload.kind === "hello") return this.discover(ev.pubkey);
+		if (payload.kind === "hello") return this.discover(ev.pubkey, payload.rtc === true);
 		if (payload.to && payload.to !== this.opts.signer.pubkeyHex) return;
+		if (payload.kind === "data") return this.routeData(ev.pubkey, payload as DataFrame);
 		await this.routeSignal(ev.pubkey, payload as PeerSignal);
 	}
 
 	// Deterministic role: lower pubkey offers. Re-announce once per new peer so a
 	// late joiner still learns us over the store-nothing relay.
-	private discover(remote: string): void {
+	private discover(remote: string, remoteRtc: boolean): void {
 		if (this.known.has(remote)) return;
 		this.known.add(remote);
-		void this.publish({ kind: "hello" });
-		if (this.opts.signer.pubkeyHex < remote) {
-			this.opts.onStatus(`peer ${short(remote)} found — initiating`);
-			try {
-				this.makePeer(remote, true);
-			} catch (e) {
-				// RTCPeerConnection / createDataChannel throwing here is otherwise swallowed
-				// by the void-ed event handler and looks identical to a stuck "initiating".
-				this.opts.onStatus(`peer setup failed: ${(e as Error).message}`);
+		this.sendHello();
+		const initiator = this.opts.signer.pubkeyHex < remote;
+		// WebRTC only when both sides have it; otherwise relay-forward (Firefox, WebRTC
+		// disabled, or a data channel that won't connect). See docs/firefox-port.md.
+		if (webrtcAvailable() && remoteRtc) {
+			if (initiator) {
+				this.opts.onStatus(`peer ${short(remote)} found — initiating (webrtc)`);
+				try {
+					this.makePeer(remote, true);
+				} catch (e) {
+					// RTCPeerConnection / createDataChannel throwing here is otherwise swallowed
+					// by the void-ed event handler and looks identical to a stuck "initiating".
+					this.opts.onStatus(`peer setup failed: ${(e as Error).message}`);
+				}
+			} else {
+				this.opts.onStatus(`peer ${short(remote)} found — awaiting offer (webrtc)`);
 			}
 		} else {
-			this.opts.onStatus(`peer ${short(remote)} found — awaiting offer`);
+			// No offer/answer: both sides open a relay channel now; role picks the Noise seat.
+			this.opts.onStatus(`peer ${short(remote)} found — relay transport`);
+			this.ensureRelayPeer(remote, initiator);
 		}
 	}
 
@@ -204,6 +255,37 @@ class Mesh {
 		});
 		this.peers.set(remote, peer);
 		return peer;
+	}
+
+	// Relay-forward: a peer we can't (or won't) reach over WebRTC. The Channel rides the
+	// relay as chunked, group-key-encrypted "data" events; the relay only sees ciphertext.
+	// Idempotent + lazy so it works whichever arrives first, a peer's hello or its data.
+	private routeData(remote: string, frame: DataFrame): void {
+		this.ensureRelayPeer(remote, this.opts.signer.pubkeyHex < remote).receive(frame);
+	}
+
+	private ensureRelayPeer(
+		remote: string,
+		initiator: boolean,
+	): { receive: (f: DataFrame) => void; close: () => void } {
+		const existing = this.relayPeers.get(remote);
+		if (existing) return existing;
+		let msgId = 0;
+		const { channel, push } = makeChannel((data) => {
+			const id = msgId++;
+			for (const frame of chunkMessage(id, data)) {
+				void this.publish({ kind: "data", to: remote, ...frame });
+			}
+		});
+		const entry = {
+			receive: makeReassembler(push),
+			close: () => {
+				this.relayPeers.delete(remote);
+			},
+		};
+		this.relayPeers.set(remote, entry);
+		this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: entry.close });
+		return entry;
 	}
 }
 
