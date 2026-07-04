@@ -15,11 +15,13 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
 - The **passkey provider** uses `chrome.webAuthenticationProxy`, a Chrome-only API with no Firefox
   equivalent. It is feasible on Firefox via a content-script transport but is **optional for a first
   ship**; see "Passkey provider".
-- **P2P sync is mandatory for Firefox v1.** With no FSA, file-anywhere sync is impossible on Firefox
-  (below), so the WebRTC P2P channel (Option 5) is the only cross-device sync Firefox can offer,
-  which makes it a hard v1 dependency rather than an enhancement. The P2P workstream has **landed**
-  on Chrome (roster-auth, merge, enrollment, UI), so the remaining Firefox work is porting its
-  transport from the offscreen document to the event page, not building sync itself.
+- **P2P sync is mandatory for Firefox v1, and works via a relay-forward fallback.** With no FSA,
+  file-anywhere sync is impossible on Firefox, so P2P is the only cross-device sync it can offer. But
+  Firefox has no `RTCPeerConnection` in any reachable context (WebRTC off by default in hardened
+  builds; the background lacks it regardless), so the Noise-encrypted frames ride the signaling
+  relay's `WebSocket` instead of a data channel — headless in the FF background, negotiated per pair.
+  Chrome↔Chrome stays direct-WebRTC; the relay only ever sees ciphertext. See "Firefox P2P
+  transport".
 - **Filesystem sync cannot port.** Firefox cannot replicate the File System Access (FSA) "store
   `vault.db` anywhere, autosave silently" model that is the Chrome build's serverless sync
   mechanism; a pure extension can at best auto-push to a Downloads-relative file with manual pull,
@@ -101,26 +103,100 @@ Blast radius: six importers (`session.ts`, `clipboard.ts`, `background.ts`, `vau
 `chrome.offscreen`, so under vitest the feature-detect always picks the Chrome branch and existing
 assertions stay valid.
 
-## Firefox P2P transport (open — blocks headless FF sync)
+## Firefox P2P transport: relay-forward fallback (decided)
 
-`RTCPeerConnection` is unavailable in the Firefox background (above), so the WebRTC data channel
-cannot run there. Options, most to least headless:
+**Finding (device-verified).** `RTCPeerConnection` is `undefined` in *every* Firefox context the
+extension can reach — the background/event page, the popup, the content-script isolated world, the
+page's MAIN world, and a `web_accessible_resource` iframe. In the tested profile that's because
+WebRTC is disabled browser-wide (`media.peerconnection.enabled = false` — the default in LibreWolf /
+Mullvad Browser / arkenfox and most privacy-hardened Firefoxes), which an extension cannot override.
+And even where WebRTC is *enabled*, the extension **background** has no `RTCPeerConnection` (Firefox
+bug 1278100); the only contexts that would (a real tab / a frame inside a web tab) can't host
+headless background sync and die on navigation. So there is no viable WebRTC path on Firefox — the
+earlier "content-script iframe" idea (former option a) is a dead end too.
 
-1. **Relay-forward channel (recommended).** Carry the Noise-encrypted payload over the existing
-   signaling relay (`WebSocket`, which *does* work in the background) instead of a WebRTC data
-   channel. The relay already sees only ciphertext, so the trust model is unchanged; the Noise
-   handshake, enrollment, and roster+entries merge all stay. Needs a relay-backed `channel.ts`
-   selected on Firefox. **Only option that preserves headless background sync.** Slower; bounded by
-   relay message size/rate.
-2. **WebRTC in a tab-context page.** Run the transport in an extension page loaded in a real tab
-   (the options/Settings page, or a `web_accessible_resource` iframe injected into a page by a
-   content script), where `RTCPeerConnection` exists. Direct P2P like Chrome, but sync runs only
-   while that page/tab is open (not headless), and an injected iframe dies on navigation.
-3. **Native WebRTC (webrtc-rs) via native messaging.** Heavy: a separate native host + installer,
-   like the iOS approach. Overkill for a browser extension.
+**Decision: relay-forward as a negotiated WebRTC fallback.** Carry the same Noise-encrypted frames
+that ride the WebRTC data channel over the existing signaling relay (`WebSocket`) instead. This is
+clean because the transport is already abstracted behind a two-method `Channel`
+(`sync/transport/channel.ts`: `send(string)` / `recv(): Promise<string>`) — the Noise handshake,
+enrollment, roster+entries merge, and CRDT all talk to `Channel`, never to `RTCPeerConnection`. A
+relay-backed `Channel` is a drop-in second implementation; everything above it is unchanged.
 
-Recommendation: option 1 (relay-forward) — the only headless-preserving path, reusing the whole
-transport-free engine, at the cost of a new channel backing + relay-bandwidth limits.
+Crucially, relay-forward needs only `WebSocket` + WASM, both of which **work in the Firefox
+background event page** (verified: signaling already reaches "relay connected" there, and crypto is
+device-verified there). So the Firefox sync path runs **headless in the background** — no offscreen
+document, no content-script iframe, no page context. The whole "which Firefox context has WebRTC"
+problem disappears.
+
+**Architecture (per-pair, negotiated):**
+
+- **Chrome ↔ Chrome:** WebRTC direct (offscreen document), unchanged. The vault never touches the
+  relay — the relay only carries signaling.
+- **Any pair where a peer can't do WebRTC** (Firefox, WebRTC disabled, or NAT/firewall blocks the
+  data channel): **relay-forward** — the relay carries Noise ciphertext.
+- **Negotiation:** peers advertise a capability flag in the `hello` discovery event (`caps.rtc`).
+  Both advertise `rtc:true` → WebRTC data channel; otherwise → relay channel. So a Chrome device and
+  a Firefox device sync via relay-forward automatically.
+
+This is cross-browser, not just a Firefox patch: it also rescues Chrome↔Chrome pairs that can't
+establish a WebRTC data channel (symmetric NAT, no TURN, corporate firewall).
+
+**Work (contained, in `@core/sync/transport`):**
+
+1. `RelayChannel` implementing `Channel` over relay events, with **transparent chunking** — the
+   relay caps messages at 64 KiB (`MAX_MSG_BYTES`), so `send` splits large frames into
+   `{msgId, idx, total, chunk}` events and the receiver reassembles before delivering. The only
+   genuinely new logic; unit-test it.
+2. `caps.rtc` in the `hello` payload + per-pair transport selection in `mesh` / `peer-session`.
+3. Wire `RelayChannel` in at the point that currently builds the WebRTC peer; remove the throwaway
+   `sync-frame` iframe + `diag.rtc*` probes (they explored the now-dead WebRTC-context path).
+
+**Caveats:**
+
+- **Reliability / ordering.** A WebRTC data channel is reliable + ordered; the relay is best-effort
+  live fan-out of *ephemeral* events (stores nothing — see "Filesystem sync"), so both peers must be
+  online and a dropped frame isn't retransmitted. Order holds on the happy path (`WebSocket` is
+  ordered, both connected), but add light **sequencing + a handshake timeout/retry** so a lost frame
+  can't wedge the Noise handshake.
+- **Both-online only** — same as the current WebRTC model. Async catch-up would need a
+  store-and-forward mailbox (ciphertext at rest on the relay), which we deliberately avoid.
+
+### Privacy / metadata (relay-forward)
+
+Relay-forward moves the vault ciphertext through the relay on every sync (vs direct WebRTC, where
+it's peer-to-peer and often never touches the relay). Content stays sealed — the relay only ever
+sees Noise ciphertext and cannot decrypt (session keys come from the device roster, never the relay)
+— but it's a **metadata step-down**, so it's worth hardening.
+
+What the relay can observe, and the mitigations:
+
+- **Already good (current signaling):** the event author is a **fresh ephemeral key per session**
+  (`nostr-signer.ts`), content is group-key-encrypted, and events use **ephemeral kinds
+  (20000-29999)** so the relay stores nothing (`nostr-relay/cf-worker`). No cross-session author
+  linkage, nothing at rest.
+- **Room-id linkage → rotate per epoch.** `deriveRoomId(groupKey, label)` is deterministic forever,
+  so the relay sees one stable room per group for all time. Derive it per epoch
+  (`deriveRoomId(groupKey, label, floor(now/epoch))`), with devices subscribing to the current +
+  previous epoch for clock skew. Highest-value metadata win; purely app-side (Nostr tag filtering
+  already supports it).
+- **Message size → vault size → pad payloads.** Borrow NIP-44's length-padding (pad plaintext into
+  power-of-two-ish buckets) for relay-forward frames so chunk counts / sizes don't reveal roughly how
+  many entries the vault holds.
+- **IP address — not fixable in Nostr.** The relay terminates the socket, so it sees the client IP
+  regardless of code. Two answers, both outside the protocol: **self-host** the relay (operator =
+  you), or point at a **Tor `.onion` relay**. Tor only helps the `WebSocket`/relay-forward path (it's
+  TCP-only; WebRTC's UDP can't traverse it) — which lines up, since relay-forward is exactly the
+  fallback and the Tor-running crowd is the WebRTC-off crowd. Caveat: a browser extension can't
+  provide Tor; it needs Tor Browser, an OS SOCKS proxy, or (Firefox-only) the `proxy` API routing
+  just the relay socket through a local `tor`. And a Cloudflare Worker can't be an onion service, so
+  onion ⇒ self-host the node relay (`nostr-relay/node`).
+- **NIP-42 (relay AUTH) — access control, not privacy.** It binds identity to the relay (the wrong
+  tool for anonymity) but is the right tool to lock a self-hosted relay to your own devices.
+
+The honest floor: a relay you connect to *directly* always learns IP + timing + a routing token. The
+mitigations above shrink correlation; they don't zero it. **Self-hosting stays the strongest posture,
+and the relay URL is already user-configurable** (Settings → Advanced), so "use your own / a `.onion`
+relay" is a real lever, not a promise.
 
 ## Passkey provider (Chrome-only proxy; Firefox needs a content-script transport)
 
