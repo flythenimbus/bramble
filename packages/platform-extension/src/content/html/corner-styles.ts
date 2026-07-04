@@ -33,6 +33,28 @@ export const cornerStyles = html`
 				gap: 12px;
 				margin-bottom: 18px;
 			}
+			.tp-head-main {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				min-width: 0;
+			}
+			.tp-icon {
+				flex-shrink: 0;
+				width: 38px;
+				height: 38px;
+				border-radius: 11px;
+				background: rgba(255, 255, 255, 0.08);
+				border: 1px solid rgba(255, 255, 255, 0.08);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: #fff;
+			}
+			.tp-icon svg {
+				width: 20px;
+				height: 20px;
+			}
 			.tp-title {
 				font-weight: 600;
 				font-size: 16px;

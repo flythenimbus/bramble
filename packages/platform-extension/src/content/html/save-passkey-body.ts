@@ -1,5 +1,9 @@
 import { html } from "../template";
 
+// Passkey glyph (lucide "key-round"), so the card reads as a passkey at a glance. Static
+// markup injected verbatim (via an array interpolation) — no user data, nothing to escape.
+const passkeyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`;
+
 /** The passkey provider corner card: confirm creating/using a passkey, or pick which
  * login a new passkey attaches to (radios + "Create a new login" last) when several
  * accounts share the domain. */
@@ -73,9 +77,12 @@ export function savePasskeyBody({
 
 	return html`
 		<div class="tp-head">
-			<div>
-				<div class="tp-title">${title}</div>
-				<div class="tp-host">${site}</div>
+			<div class="tp-head-main">
+				<div class="tp-icon">${[passkeyIcon]}</div>
+				<div>
+					<div class="tp-title">${title}</div>
+					<div class="tp-host">${site}</div>
+				</div>
 			</div>
 			<button class="tp-close" data-tp-action="passkey-dismiss" aria-label="Dismiss">×</button>
 		</div>
