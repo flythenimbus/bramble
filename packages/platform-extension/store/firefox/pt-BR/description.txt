@@ -1,0 +1,42 @@
+Bramble é um gerenciador de senhas que reside no seu navegador e mantém seus segredos na sua própria máquina. Sem conta, sem servidor guardando o seu cofre, nenhuma empresa para ser violada e vazar tudo. Você detém o cofre, você detém a senha, e pronto.
+
+Funciona em Firefox, LibreWolf, Waterfox, Zen e outros navegadores Firefox. Instale e estará funcionando em cerca de um minuto.
+
+O QUE ELE FAZ
+
+Suas senhas são criptografadas no seu dispositivo e armazenadas no armazenamento da própria extensão do navegador, na sua máquina. Não há conta nem servidor guardando o seu cofre. Configure uma vez e você já terá preenchimento automático de logins, salvamento de novos dados e geração de senhas imediatamente.
+
+Tem mais de um dispositivo? Emparelhe-os e Bramble mantém o seu cofre sincronizado entre eles através de um canal criptografado ponta a ponta. O relé que introduz seus dispositivos vê apenas texto cifrado e não armazena nada, para que seus segredos nunca cheguem em nenhum servidor.
+
+CARACTERÍSTICAS
+
+- Prioridade local, sempre. Seu cofre criptografado permanece no seu dispositivo, no armazenamento do navegador. Sem conta, sem cópia de servidor.
+- Sincronização multi-dispositivo. Seus dispositivos permanecem sincronizados através de um canal criptografado ponta a ponta; o relé que os conecta vê apenas texto cifrado e não armazena nada.
+- Criptografia séria. Argon2id para sua chave, AES-256-GCM para dados, criptografia de envelope para que cada entrada tenha sua própria chave. Segredos são apagados da memória após o uso.
+- Tudo criptografado. Nomes dos sites, nomes de usuário, notas, tudo.
+- Preenchimento automático inteligente por domínio. www.example.com, ca.accounts.example.com e example.com correspondem a um único login. Uma entrada, vários URLs.
+- Mais do que logins. Logins, cartões de pagamento, notas seguras e chaves SSH, cada um com seus próprios campos.
+- Gerador de senhas integrado.
+- Códigos de recuperação. Cada cofre recebe um código de recuperação seguro na configuração: um backup imprimível que o desbloqueia independentemente da sua senha mestra.
+- Códigos TOTP / 2FA. Cole um URI otpauth:// ou um segredo e Bramble gera os códigos.
+- Verificação opcional de violação. Pesquisa Have I Been Pwned usando k-anonimidade, para que nada sobre a sua senha saia da sua máquina. Desativado por padrão.
+- Bloqueio automático após 15 minutos de inatividade (configurável).
+- Importação do KeePass, Bitwarden, Proton Pass e 1Password.
+
+POR QUE PRIORIDADE LOCAL
+
+Os gerenciadores baseados em nuvem mantêm os cofres de todos em seus servidores, o que constitui um alvo gigante. Quando um é violado, não é apenas um cofre que vaza, mas milhões de uma vez, frequentemente divulgados meses depois.
+
+Bramble inverte isso:
+- Nenhum servidor para ser violado. Seu cofre nunca sai do seu controle.
+- Sem conta, sem assinatura, sem telemetria. Nada para se inscrever.
+- Seus dispositivos, seus dados. Sincronize-os em seus próprios dispositivos ou mantenha-os em uma única máquina, offline. Nada é jamais estacionado no servidor de outra pessoa.
+- Nada para confiar senão o código. O código é open source e roda inteiramente no seu dispositivo.
+
+COMO FUNCIONA A CRIPTOGRAFIA
+
+Bramble usa slots de chave estilo LUKS e criptografia de envelope. Uma Chave de Cofre aleatória protege seus dados. Cada método de desbloqueio (senha mestra, código de recuperação) deriva sua própria Chave-de-Criptografia que desempacota uma cópia dessa mesma Chave de Cofre, para que adicionar ou revogar um método de desbloqueio nunca recriptografa uma única entrada. A Chave de Cofre então desempacota uma chave por entrada fresca para cada item. Tudo é AES-256-GCM.
+
+VINDOS DO KEEPASS?
+
+Você se sentirá em casa: seu cofre criptografado, seu controle, sem intermediário na nuvem, e Bramble importa seus arquivos KDBX4. As diferenças: ele reside no seu navegador (sem aplicativo desktop separado ou ponte de plugin), o preenchimento automático é integrado com correspondência de domínio e um menu suspenso na página, e ele chega em uma construção moderna com Argon2id e AES-256-GCM em vez de uma proliferação de plugins. UI limpa, modo escuro incluído.

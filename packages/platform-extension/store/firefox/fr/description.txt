@@ -1,0 +1,42 @@
+Bramble est un gestionnaire de mots de passe qui réside dans votre navigateur et garde vos secrets sur votre propre machine. Pas de compte, pas de serveur contenant votre coffre-fort, pas d'entreprise susceptible d'être piratée pour tout divulguer. Vous détenez le coffre-fort, vous détenez le mot de passe, c'est tout.
+
+Fonctionne avec Firefox, LibreWolf, Waterfox, Zen et d'autres navigateurs basés sur Firefox. Installez-le et vous êtes opérationnel en une minute environ.
+
+CE QUE CELA FAIT
+
+Vos mots de passe sont chiffrés sur votre appareil et stockés dans le stockage propre à l'extension du navigateur, sur votre machine. Il n'y a ni compte ni serveur contenant votre coffre-fort. Configurez une fois et vous bénéficiez immédiatement de l'autocomplétion des connexions, de la sauvegarde des nouvelles entrées et de la génération de mots de passe.
+
+Vous avez plusieurs appareils ? Appairez-les et Bramble maintient la synchronisation de votre coffre-fort entre eux via un canal chiffré de bout en bout. Le relais qui introduit vos appareils ne voit jamais que du texte chiffré et ne stocke rien, donc vos secrets n'atterrissent jamais sur le serveur de quiconque.
+
+CARACTÉRISTIQUES
+
+- Local d'abord, toujours. Votre coffre-fort chiffré reste sur votre appareil, dans le stockage du navigateur. Pas de compte, pas de copie sur un serveur.
+- Synchronisation multi-appareils. Vos appareils restent synchronisés via un canal chiffré de bout en bout ; le relais qui les connecte ne voit jamais que du texte chiffré et ne stocke rien.
+- Cryptographie sérieuse. Argon2id pour votre clé, AES-256-GCM pour les données, chiffrement par enveloppe afin que chaque entrée ait sa propre clé. Les secrets sont effacés de la mémoire après utilisation.
+- Tout est chiffré. Noms de sites, noms d'utilisateur, notes, tout cela.
+- Autocomplétion intelligente des domaines. www.example.com, ca.accounts.example.com et example.com correspondent à une seule connexion. Une entrée, plusieurs URL.
+- Plus que les connexions. Connexions, cartes de paiement, notes sécurisées et clés SSH, chacune avec ses propres champs.
+- Générateur de mots de passe intégré.
+- Codes de récupération. Chaque coffre-fort reçoit un code de récupération sécurisé lors de la configuration : une sauvegarde imprimable qui le déverrouille indépendamment de votre mot de passe maître.
+- Codes TOTP / 2FA. Collez une URI otpauth:// ou un secret et Bramble génère les codes.
+- Vérification des fuites optionnelle. Recherche Have I Been Pwned utilisant la k-anonymité, donc rien sur votre mot de passe ne quitte votre machine. Désactivé par défaut.
+- Verrouillage automatique après 15 minutes d'inactivité (configurable).
+- Importation depuis KeePass, Bitwarden, Proton Pass et 1Password.
+
+POURQUOI LOCAL D'ABORD
+
+Les gestionnaires basés sur le cloud conservent les coffres-forts de tous leurs serveurs, ce qui constitue une cible gigantesque. Lorsqu'un d'entre eux est piraté, ce n'est pas un seul coffre-fort qui fuit mais des millions à la fois, souvent divulgués des mois plus tard.
+
+Bramble inverse cette tendance :
+- Pas de serveur à pirater. Votre coffre-fort ne quitte jamais votre contrôle.
+- Pas de compte, pas d'abonnement, pas de télémétrie. Rien pour s'inscrire.
+- Vos appareils, vos données. Synchronisez-les sur vos propres appareils ou gardez-les sur une seule machine, hors ligne. Rien n'est jamais déposé sur le serveur de quelqu'un d'autre.
+- Rien à faire confiance sauf le code. Le code est open source et s'exécute entièrement sur votre appareil.
+
+COMMENT FONCTIONNE LE CHIFFREMENT
+
+Bramble utilise des emplacements de clés de style LUKS et un chiffrement par enveloppe. Une Clé de Coffre-fort aléatoire protège vos données. Chaque méthode de déverrouillage (mot de passe maître, code de récupération) dérive sa propre Clé de Chiffrement de Clé qui déroule une copie de cette même Clé de Coffre-fort, de sorte qu'ajouter ou révoquer une méthode de déverrouillage ne nécessite jamais de rechiffrer une seule entrée. La Clé de Coffre-fort déroule ensuite une clé par entrée fraîche pour chaque élément. Tout est AES-256-GCM.
+
+VENANT DE KEEPASS ?
+
+Vous vous sentirez chez vous : votre coffre-fort chiffré, votre contrôle, pas d'intermédiaire cloud, et Bramble importe vos fichiers KDBX4. Les différences : il réside dans votre navigateur (pas d'application de bureau séparée ou de pont plugin), l'autocomplétion est intégrée avec une correspondance des domaines et un menu déroulant sur la page, et il est livré en une seule construction moderne avec Argon2id et AES-256-GCM plutôt qu'une prolifération de plugins. Interface épurée, mode sombre inclus.

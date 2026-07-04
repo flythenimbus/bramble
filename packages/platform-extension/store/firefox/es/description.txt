@@ -1,0 +1,37 @@
+Bramble es un gestor de contraseñas que reside en su navegador y mantiene sus secretos en su propia máquina. Sin cuenta, sin servidor albergando su bóveda, sin ninguna empresa que pueda ser vulnerada y filtrar todo. Usted posee la bóveda, usted posee la contraseña, y eso es todo.
+
+Funciona en Firefox, LibreWolf, Waterfox, Zen y otros navegadores basados en Firefox. Instálelo y estará funcionando en aproximadamente un minuto.
+
+QUÉ HACE
+Sus contraseñas están cifradas en su dispositivo y almacenadas en el almacenamiento de la propia extensión del navegador, en su máquina. No hay cuenta ni servidor albergando su bóveda. Configúrelo una vez y podrá rellenar automáticamente los inicios de sesión, guardar nuevos y generar contraseñas de inmediato.
+
+¿Tiene más de un dispositivo? Empárelos y Bramble mantendrá su bóveda sincronizada entre ellos a través de un canal cifrado de extremo a extremo. El intermediario que conecta sus dispositivos solo ve cifrado y no almacena nada, por lo que sus secretos nunca llegan a ningún servidor.
+
+CARACTERÍSTICAS
+- Prioridad local, siempre. Su bóveda cifrada permanece en su dispositivo, en el almacenamiento del navegador. Sin cuenta, sin copia de servidor.
+- Sincronización multi-dispositivo. Sus dispositivos se mantienen sincronizados a través de un canal cifrado de extremo a extremo; el intermediario que los conecta solo ve cifrado y no almacena nada.
+- Criptografía seria. Argon2id para su clave, AES-256-GCM para los datos, cifrado de sobrecifrado para que cada entrada tenga su propia clave. Los secretos se eliminan de la memoria después de su uso.
+- Todo cifrado. Nombres de sitios, nombres de usuario, notas, todo está cifrado.
+- Relleno automático inteligente por dominio. www.ejemplo.com, ca.cuentas.ejemplo.com y ejemplo.com coinciden con un solo inicio de sesión. Una entrada, varias URL.
+- Más que inicios de sesión. Inicios de sesión, tarjetas de pago, notas seguras y claves SSH, cada uno con sus propios campos.
+- Generador de contraseñas incorporado.
+- Códigos de recuperación. Cada bóveda recibe un código de recuperación seguro al configurarla: una copia de seguridad imprimible que la desbloquea independientemente de su contraseña maestra.
+- Códigos TOTP / 2FA. Pegue una URI otpauth:// o un secreto y Bramble generará los códigos.
+- Comprobación opcional de vulneraciones. Búsqueda Have I Been Pwned utilizando k-anonimidad, por lo que nada sobre su contraseña sale de su máquina. Desactivado por defecto.
+- Bloqueo automático después de 15 minutos de inactividad (configurable).
+- Importación desde KeePass, Bitwarden, Proton Pass y 1Password.
+
+POR QUÉ PRIORIDAD LOCAL
+Los gestores en la nube mantienen las bóvedas de todos en sus servidores, lo que constituye un objetivo gigantesco. Cuando uno es vulnerado, no es una bóveda la que se filtra, sino millones a la vez, a menudo revelados meses después.
+
+Bramble invierte esto:
+- Sin servidor que sea vulnerable. Su bóveda nunca sale de su control.
+- Sin cuenta, sin suscripción, sin telemetría. Nada para registrarse.
+- Sus dispositivos, sus datos. Sincronícelos en sus propios dispositivos o manténgalos en una sola máquina, desconectados. Nunca se almacenan en el servidor de otra persona.
+- Nada que necesite confiar sino el código. El código es de código abierto y funciona completamente en su dispositivo.
+
+CÓMO FUNCIONA EL CIFRADO
+Bramble utiliza ranuras de clave al estilo LUKS y cifrado de sobrecifrado. Una Clave de Bóveda aleatoria protege sus datos. Cada método de desbloqueo (contraseña maestra, código de recuperación) deriva su propia Clave-de-Cifrado que desenrolla una copia de esa misma Clave de Bóveda, por lo que añadir o revocar un método de desbloqueo nunca vuelve a cifrar una sola entrada. La Clave de Bóveda luego desenrolla una clave fresca por cada entrada para cada elemento. Todo es AES-256-GCM.
+
+¿VIENDE DESDE KEEPASS?
+Se sentirá como en casa: su bóveda cifrada, su control, sin intermediario en la nube y Bramble importa sus archivos KDBX4. Las diferencias son: reside en su navegador (sin aplicación de escritorio separada ni puente de plugin), el relleno automático está incorporado con coincidencia de dominio y un menú desplegable en la página, y se entrega una construcción moderna con Argon2id y AES-256-GCM en lugar de una proliferación de plugins. Interfaz limpia, modo oscuro incluido.

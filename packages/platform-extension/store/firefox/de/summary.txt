@@ -1,0 +1,1 @@
+Lokal zuerst, verschlüsselter Passwortmanager. Keine zentrale Cloud speichert Ihre Geheimnisse.

@@ -1,0 +1,1 @@
+Gestor de contraseñas cifrado con enfoque local. No almacena sus secretos en la nube centralizada.
