@@ -92,8 +92,9 @@ below for what it needs.
   writeText("")` may be rejected from an unfocused background page, and the usual `<textarea>` +
   `execCommand` fallback also needs a focused document the background lacks. May need a rethink
   (clear from the popup, or on next popup open). See "Risks / open items".
-- AMO submission is a separate workstream (real `gecko.id`, `data_collection_permissions`,
-  reproducible-build docs, privacy policy, signing the `.xpi`).
+- AMO listed submission: the release pipeline + source-code submission + reproducible-build docs
+  are wired (`docs/amo-source-build.md`); what remains is dashboard-only and one-time (screenshots,
+  category, `data_collection_permissions`, privacy-policy URL) plus AMO's manual review.
 
 ## Chrome API surface in use
 
@@ -414,15 +415,20 @@ Verified Firefox facts behind these choices:
   `web-ext lint` / `run` / `build` / `sign`. Add `dist-firefox/` and `web-ext-artifacts/` to
   `.gitignore`.
 
-## AMO submission notes (if distributing on addons.mozilla.org)
+## AMO submission notes (listed on addons.mozilla.org)
 
-- Set `gecko.id` and `strict_min_version`.
-- Privacy policy URL is required for a password manager; reuse `website/` and include the HIBP
-  breach-check disclosure already written for the Chrome listing.
-- AMO requires source for bundled JS and WASM. Document the reproducible build (`pnpm install`,
-  `pnpm run wasm:build`, `TARGET=firefox pnpm run build:firefox`); `rust-toolchain.toml` already pins
-  the Rust toolchain for `packages/core-rust`.
-- Sign via `web-ext sign` or AMO web upload to produce the `.xpi`.
+Firefox ships **listed** (public store), not self-distributed. `pnpm run release firefox <ver>`
+submits the listed version and attaches the source archive; AMO reviews, signs, and hosts the
+`.xpi`. See `docs/release-signing.md` and `docs/amo-source-build.md`.
+
+- `gecko.id` (`firefox@bramble.app`) and `strict_min_version` are set in the manifest.
+- **Source submission is wired:** `sign-firefox.ts` attaches a `git archive` of the source for
+  review; `docs/amo-source-build.md` is the reviewer build recipe (`rust-toolchain.toml` pins Rust).
+- Listing copy is localized under `packages/platform-extension/store/firefox/` and pushed via
+  `pnpm run metadata:firefox`; the name + short description come from the package `_locales`.
+- Still dashboard-only (one-time): screenshots, a category, a privacy-policy URL (required for a
+  password manager; reuse the Chrome listing's HIBP disclosure), and `data_collection_permissions`.
+- A first listed version gets **manual review** (WASM + a password manager get a careful look).
 
 ## Filesystem sync (the hard constraint)
 
