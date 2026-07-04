@@ -131,12 +131,11 @@ function releaseExtension(target: string, version: string) {
 	);
 }
 
-// ----- firefox: GitHub-released, Mozilla-signed .xpi + SHA256SUMS -----
+// ----- firefox: submitted listed to AMO; GitHub release carries the source .zip + SHA256SUMS -----
 
 function releaseFirefox(version: string) {
 	const MANIFEST = "packages/manifests/firefox/manifest.json";
 	const DIST = "packages/platform-extension";
-	const XPI = `${DIST}/bramble-firefox.xpi`;
 	const ZIP = `${DIST}/bramble-firefox.zip`;
 
 	// Firefox manifest versions follow the same 1-4 dotted-int rule as Chrome.
@@ -149,10 +148,11 @@ function releaseFirefox(version: string) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
-	// Signing prereqs, checked before the slow gate + build so a missing credential fails fast.
+	// AMO prereqs, checked before the slow gate + build so a missing credential fails fast.
 	// Mozilla holds the signing key; we hold AMO API credentials (age+YubiKey encrypted, or
-	// AMO_API_KEY/AMO_API_SECRET in the env). sign-firefox.ts does the actual decrypt + upload.
-	// AMO refuses to re-sign a version, so retrying a failed release means bumping the version.
+	// AMO_API_KEY/AMO_API_SECRET in the env). sign-firefox.ts submits the listed version.
+	// AMO version numbers are unique across channels and a listed one must be higher than any
+	// previously signed version, so retrying a consumed version means bumping.
 	const haveEnvCreds = !!(process.env.AMO_API_KEY && process.env.AMO_API_SECRET);
 	const credsAge =
 		process.env.AMO_CREDENTIALS_AGE ?? join(HOME, ".config/bramble/amo-api-credentials.age");
@@ -199,31 +199,29 @@ function releaseFirefox(version: string) {
 		fail(`signing failed; run \`git checkout ${MANIFEST}\` to undo the bump`);
 	}
 
-	if (!existsSync(ZIP) || !existsSync(XPI))
-		fail("expected bramble-firefox.zip and a Mozilla-signed bramble-firefox.xpi");
+	if (!existsSync(ZIP)) fail(`expected ${ZIP} from bundle:firefox`);
 
 	commitTagPush(bumped, MANIFEST, `chore(release): firefox ${version}`, tag, branch);
 
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
-	const xpiAsset = join(stage, `bramble_firefox_${version}.xpi`);
 	const zipAsset = join(stage, `bramble_firefox_${version}.zip`);
-	copyFileSync(XPI, xpiAsset);
 	copyFileSync(ZIP, zipAsset);
-	// SHA256SUMS over the signed .xpi + the unpacked .zip, mirroring the chromium/android branches.
+	// The signed .xpi lives on AMO (listed, after review); the GitHub release carries the source
+	// bundle + its checksum for transparency. SHA256SUMS over the .zip, like the other branches.
 	const sumsAsset = join(stage, "SHA256SUMS");
 	writeFileSync(
 		sumsAsset,
-		[xpiAsset, zipAsset]
+		[zipAsset]
 			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
 			.join(""),
 	);
 	try {
-		publish(tag, `Firefox Extension ${version}`, [xpiAsset, zipAsset, sumsAsset]);
+		publish(tag, `Firefox Extension ${version}`, [zipAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(
-		`\nreleased ${tag}: Mozilla-signed bramble_firefox_${version}.xpi + SHA256SUMS attached to the release.`,
+		`\nreleased ${tag}: submitted ${version} to AMO (listed, in review); source bramble_firefox_${version}.zip + SHA256SUMS on the GitHub release.`,
 	);
 }
 

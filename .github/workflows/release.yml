@@ -32,27 +32,27 @@ jobs:
           [ "$magic" = "Cr24" ] || { echo "::error::$crx is not a CRX3 (magic: $magic)"; exit 1; }
           echo "ok: $crx is a signed CRX3"
 
-  verify-signed-xpi:
+  verify-firefox-source:
     if: endsWith(github.event.release.tag_name, '-firefox')
     runs-on: ubuntu-latest
     steps:
-      - name: Assert a Mozilla-signed XPI + matching SHA256SUMS are attached
+      - name: Assert the source .zip + matching SHA256SUMS are attached
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
+          # Firefox ships listed on AMO, which hosts the Mozilla-signed .xpi after review; the
+          # GitHub release carries the source bundle + checksum, not a signed artifact.
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern '*.xpi' --pattern '*.zip' --pattern 'SHA256SUMS' --dir .
-          xpi="$(ls *.xpi 2>/dev/null | head -1)"
-          [ -n "$xpi" ] || { echo "::error::no .xpi asset on release $TAG"; exit 1; }
+            --pattern '*.zip' --pattern 'SHA256SUMS' --dir .
+          zip="$(ls *.zip 2>/dev/null | head -1)"
+          [ -n "$zip" ] || { echo "::error::no .zip asset on release $TAG"; exit 1; }
           [ -f SHA256SUMS ] || { echo "::error::no SHA256SUMS on release $TAG"; exit 1; }
-          # A Mozilla-signed XPI is a ZIP carrying the AMO signature block under META-INF;
-          # an unsigned/self-packed .xpi would lack it. This is what makes it installable.
-          unzip -l "$xpi" | grep -q 'META-INF/mozilla.rsa' \
-            || { echo "::error::$xpi is not Mozilla-signed (no META-INF/mozilla.rsa)"; exit 1; }
+          unzip -l "$zip" | grep -q 'manifest.json' \
+            || { echo "::error::$zip is not an extension bundle (no manifest.json)"; exit 1; }
           sha256sum -c SHA256SUMS
-          echo "ok: $xpi is Mozilla-signed and matches SHA256SUMS"
+          echo "ok: $zip matches SHA256SUMS"
 
   verify-android-apk:
     if: endsWith(github.event.release.tag_name, '-android')

@@ -1,14 +1,15 @@
-// Sign the built Firefox extension into a Mozilla-signed .xpi for GitHub-hosted
-// self-distribution (AMO "unlisted" channel). Usage:
-//   node scripts/sign-firefox.ts [path/to/dist] [--channel unlisted|listed]
-//   (defaults to packages/platform-extension/dist-firefox, channel unlisted)
+// Submit the built Firefox extension to addons.mozilla.org. Default channel is "listed" (the
+// public store): AMO reviews it, then signs + publishes, so nothing is downloaded here. Pass
+// --channel unlisted to sign immediately for self-distribution and write bramble-firefox.xpi. Usage:
+//   node scripts/sign-firefox.ts [path/to/dist] [--channel listed|unlisted]
+//   (defaults to packages/platform-extension/dist-firefox, channel listed)
 //
-// Firefox signing differs from Chrome: Mozilla holds the signing key, so there is no local
-// key to pack a .crx with. What we hold are AMO API credentials (a JWT issuer + secret from
-// addons.mozilla.org). The secret is encrypted at rest with age + a YubiKey (the same scheme
-// as the CWS/Android keys); we decrypt it, hand it to web-ext, and Mozilla returns the signed
-// .xpi. Unlike local .crx signing this is a network round-trip and AMO refuses to re-sign a
-// version, so it runs only at release time, never on `bundle`.
+// Firefox differs from Chrome: Mozilla holds the signing key, so there is no local key to pack a
+// .crx with. What we hold are AMO API credentials (a JWT issuer + secret from addons.mozilla.org).
+// The secret is encrypted at rest with age + a YubiKey (the same scheme as the CWS/Android keys).
+// Listed uploads enter review (approvalTimeout: 0, so we submit without waiting and AMO signs on
+// approval); unlisted uploads are auto-signed and the .xpi downloaded. Either way it is a network
+// round-trip and AMO refuses to reuse a version, so it runs only at release time, never on `bundle`.
 //
 // Credentials resolve from the env first (AMO_API_KEY + AMO_API_SECRET, for CI / one-off),
 // else an age-encrypted JSON at ~/.config/bramble/amo-api-credentials.age (override
@@ -32,7 +33,7 @@ import webExt from "web-ext";
 
 const argv = process.argv.slice(2);
 const channelIdx = argv.indexOf("--channel");
-const channel = channelIdx >= 0 ? argv[channelIdx + 1] : "unlisted";
+const channel = channelIdx >= 0 ? argv[channelIdx + 1] : "listed";
 // The lone positional is the dist dir (skip the value following --channel).
 const distArg = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--channel");
 const DIST = resolve(distArg ?? "packages/platform-extension/dist-firefox");
@@ -103,21 +104,32 @@ try {
 			apiSecret,
 			channel,
 			amoBaseUrl: AMO_BASE_URL,
+			// Listed versions are signed only after human review; submit and return instead of
+			// blocking for an approval that can take days.
+			approvalTimeout: channel === "listed" ? 0 : undefined,
 		});
 	} catch (e) {
 		fail(`AMO signing failed: ${(e as Error).message}`);
 	}
 
-	// web-ext 8.x returns downloadedFiles as bare basenames saved into artifactsDir, not full
-	// paths, so resolve them against it (an absolute path from another version is passed through);
-	// fall back to scanning the dir directly.
-	const signed = [...(result.downloadedFiles ?? []), ...readdirSync(artifacts)]
-		.filter((f) => f.endsWith(".xpi"))
-		.map((f) => (isAbsolute(f) ? f : join(artifacts, f)))
-		.find((f) => existsSync(f));
-	if (!signed) fail("web-ext produced no signed .xpi");
-	copyFileSync(signed, OUT);
-	console.log(`\nsigned ${OUT}\nattach it to the GitHub release (Mozilla-signed, ${channel}).`);
+	if (channel === "listed") {
+		// Nothing to download: AMO signs + publishes a listed version only after review.
+		const version = JSON.parse(readFileSync(join(DIST, "manifest.json"), "utf8")).version;
+		console.log(
+			`\nsubmitted ${version} to AMO for listed review. AMO signs and publishes it on approval; track it in the Developer Hub.`,
+		);
+	} else {
+		// Unlisted self-distribution: web-ext auto-signs and downloads the .xpi. web-ext 8.x returns
+		// downloadedFiles as bare basenames saved into artifactsDir, not full paths, so resolve them
+		// against it (an absolute path from another version is passed through); else scan the dir.
+		const signed = [...(result.downloadedFiles ?? []), ...readdirSync(artifacts)]
+			.filter((f) => f.endsWith(".xpi"))
+			.map((f) => (isAbsolute(f) ? f : join(artifacts, f)))
+			.find((f) => existsSync(f));
+		if (!signed) fail("web-ext produced no signed .xpi");
+		copyFileSync(signed, OUT);
+		console.log(`\nsigned ${OUT}\nattach it to the GitHub release (Mozilla-signed, unlisted).`);
+	}
 } finally {
 	rmSync(tmp, { recursive: true, force: true });
 }
