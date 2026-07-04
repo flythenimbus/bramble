@@ -40,6 +40,10 @@ const OUT = resolve("packages/platform-extension/bramble-firefox.xpi");
 const HOME = process.env.HOME ?? "";
 const CREDS_AGE =
 	process.env.AMO_CREDENTIALS_AGE ?? join(HOME, ".config/bramble/amo-api-credentials.age");
+// web-ext 8.x requires the AMO API base URL explicitly: its CLI defaults `--amo-base-url`, but the
+// programmatic cmd.sign() does not, so an unset value throws "Invalid AMO API base URL: undefined".
+// Production AMO (v5) for both channels; override AMO_BASE_URL only for a staging instance.
+const AMO_BASE_URL = process.env.AMO_BASE_URL ?? "https://addons.mozilla.org/api/v5/";
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
@@ -98,6 +102,7 @@ try {
 			apiKey,
 			apiSecret,
 			channel,
+			amoBaseUrl: AMO_BASE_URL,
 		});
 	} catch (e) {
 		fail(`AMO signing failed: ${(e as Error).message}`);
