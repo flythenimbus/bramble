@@ -101,14 +101,15 @@ export const extensionShell: ShellAdapter = {
 	// Gate on the origin scheme. A content-script transport is a possible fast-follow.
 	supportsSecurityKeys: typeof location === "undefined" || location.protocol !== "moz-extension:",
 	supportsSaveCapture: true,
-	// Chromium declares the webAuthenticationProxy permission; the Firefox manifest does
-	// not (no equivalent API), so the passkey-provider setting is hidden there
-	// (GeneralSection gates on this). Read the manifest rather than probing the namespace:
-	// this runs in the popup/options context where the API object may not be exposed even
-	// on Chromium. A Firefox transport (a MAIN-world content-script override) is a planned
-	// fast-follow, not v1.
+	// Chromium delivers the passkey provider via the webAuthenticationProxy permission;
+	// Firefox has no such API and delivers it via a MAIN-world content-script override
+	// instead (docs/firefox-port.md), so enable the setting on both. Read the manifest
+	// permission rather than probing the namespace (this runs in the popup/options context
+	// where the API object may be absent even on Chromium); on Firefox key off the
+	// moz-extension origin, where the content transport ships.
 	supportsPasskeyProvider:
-		(manifest.permissions as string[] | undefined)?.includes("webAuthenticationProxy") ?? false,
+		((manifest.permissions as string[] | undefined)?.includes("webAuthenticationProxy") ?? false) ||
+		(typeof location !== "undefined" && location.protocol === "moz-extension:"),
 	async setPasskeyProviderEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({
 			type: "PASSKEY_PROVIDER_SET_ENABLED",

@@ -12,11 +12,12 @@ Fast-moving platform facts are dated **mid-2026**; re-verify before acting on th
 - Porting the runtime is **small**: most Chrome-isms are already feature-detected and degrade
   without crashing. There are two real code changes for the core runtime (the offscreen document,
   and the `chrome.*` namespace), plus a per-target manifest and build wiring.
-- **Two WebAuthn features are gated off on Firefox** (no broken UI; both fast-follows): the **passkey
-  provider** (`chrome.webAuthenticationProxy` is Chrome-only — Firefox needs a MAIN-world
-  content-script transport) and **security-key unlock** (the `moz-extension://` origin can't be a
-  WebAuthn RP, and Firefox lacks PRF over external keys regardless). See "Passkey provider",
-  "Security-key … unlock", and "Status".
+- **The passkey provider now works on Firefox** via a MAIN-world content-script transport (built +
+  unit-tested; on-device pass pending). `chrome.webAuthenticationProxy` is Chrome-only, so Firefox
+  overrides `navigator.credentials.create/get` in the page's own world and drives the same
+  transport-free ceremony handlers Chrome uses. **Security-key unlock stays gated off** (the
+  `moz-extension://` origin can't be a WebAuthn RP, and Firefox lacks PRF over external keys
+  regardless). See "Passkey provider", "Security-key … unlock", and "Status".
 - **P2P sync is mandatory for Firefox v1, and works via a relay-forward fallback.** With no FSA,
   file-anywhere sync is impossible on Firefox, so P2P is the only cross-device sync it can offer. But
   Firefox has no `RTCPeerConnection` in any reachable context (WebRTC off by default in hardened
@@ -49,8 +50,15 @@ clean (`web-ext lint` 0 errors); the *runtime* behaviour still wants an on-devic
   picker), dark-mode toolbar icon via manifest `theme_icons`, storage durability (`unlimitedStorage`
   + `navigator.storage.persist()`).
 
-**Gated off on Firefox (no broken UI; deferred fast-follows):** the passkey provider and security-key
-unlock — see their sections below for exactly what each needs.
+- **Passkey provider (MAIN-world content-script transport)** — a `world: "MAIN"` in-page override of
+  `navigator.credentials.create/get` + an isolated-world relay + background `WEBAUTHN_CREATE/GET`
+  handlers, all driving the same `handleCreate`/`handleGet` ceremony handlers Chrome's proxy uses.
+  The origin comes from the browser-set message `sender` (authoritative, per-frame), so it's cleaner
+  than Chrome's active-tab guess. Codec round-trip + existing ceremony unit tests pass; both targets
+  build clean. On-device webauthn.io pass still pending.
+
+**Gated off on Firefox (no broken UI; deferred fast-follow):** security-key unlock — see its section
+below for what it needs.
 
 **Remaining before a Firefox ship:**
 
@@ -80,7 +88,7 @@ work on Firefox MV3 as-is **except** `chrome.offscreen` and `chrome.webAuthentic
 | `idle.onStateChanged` | background.ts | Partial: no `"locked"` state on FF (see below) |
 | `action.openPopup` | corner-prompt.ts | Already has a `windows.create` fallback |
 | `offscreen.*` | offscreen-client.ts | **Absent on Firefox** (the core change); also now hosts the WebRTC sync transport |
-| `webAuthenticationProxy.*` | webauthn-proxy.ts, webauthn-proxy-init.ts | **Absent on Firefox** (passkey provider; needs a content-script transport, see "Passkey provider") |
+| `webAuthenticationProxy.*` | webauthn-proxy-init.ts | **Absent on Firefox** (passkey provider); Firefox uses a MAIN-world content-script transport instead, see "Passkey provider" |
 | `OffscreenCanvas` + `createImageBitmap` | qr.ts | OK (available in the FF event page) |
 | `navigator.clipboard.writeText` | clipboard.ts (popup), offscreen.ts (clear) | OK with `clipboardWrite`; clear-from-background has a caveat (see Risks) |
 
@@ -237,14 +245,15 @@ mitigations above shrink correlation; they don't zero it. **Self-hosting stays t
 and the relay URL is already user-configurable** (Settings → Advanced), so "use your own / a `.onion`
 relay" is a real lever, not a promise.
 
-## Passkey provider (Chrome-only proxy; Firefox needs a content-script transport)
+## Passkey provider (Chrome proxy; Firefox MAIN-world transport, built)
 
 Bramble is a software WebAuthn authenticator: it creates and stores passkeys in the vault and signs
 assertions with its own P-256 keys (see `docs/passkey-provider.md`). On Chrome this is delivered via
 **`chrome.webAuthenticationProxy`**: the browser routes a page's `navigator.credentials.create/get`
 calls to the extension, which runs the ceremony. Firefox has **no equivalent** to that proxy API, so
-this delivery path does not port. It is **not** a hard blocker, and the feature is **optional for a
-first Firefox ship**.
+the delivery is a **MAIN-world content-script transport** instead. Both deliveries drive the same
+transport-free ceremony handlers; only the wiring differs. **Built + unit-tested; on-device pass
+pending.**
 
 Three Firefox/WebAuthn facts, to keep the mechanisms straight (verified mid-2026):
 
@@ -258,51 +267,50 @@ Three Firefox/WebAuthn facts, to keep the mechanisms straight (verified mid-2026
    and it would use the *platform* authenticator rather than Bramble's vault keys. Related, but not
    the provider path.
 
-How third-party managers (Bitwarden, Proton Pass, ...) provide passkeys in Firefox today, and the
-recommended path here: **content-script interception**. A `world: "MAIN"` content script (FF 128+)
-overrides the page's `navigator.credentials.create/get`, forwards the request to the background,
-runs the ceremony, and returns a synthetic `PublicKeyCredential`. Because Bramble signs with its own
-vault keys, it needs no platform authenticator; only the transport differs from Chrome.
+This is how third-party managers (Bitwarden, Proton Pass, ...) provide passkeys in Firefox today.
+Because Bramble signs with its own vault keys, it needs no platform authenticator; only the transport
+differs from Chrome.
 
-The architecture already supports this split. The **pure ceremony handlers**
-(`background/webauthn-proxy.ts`: `handleCreate`, `handleGet`, the corner-card ceremony) are
-transport-free and reusable; only the **wiring** (`background/webauthn-proxy-init.ts`, which
-attaches the Chrome proxy) is Chrome-specific. The Firefox port keeps the proxy on Chrome (and drops
-the `webAuthenticationProxy` permission from the Firefox manifest) and adds a MAIN-world
-content-script transport that drives the same handlers.
+**Architecture (built).** The pieces split cleanly by trust and world:
 
-Open items to verify before building this:
+1. **MAIN-world override** (`content/webauthn-inpage.ts`, `world: "MAIN"`, `run_at: document_start`,
+   Firefox-only). Patches `navigator.credentials.create/get` in the page's own realm before page
+   scripts run. Serializes the live options to the base64url JSON the handlers already read
+   (`content/webauthn-inpage-codec.ts`), forwards via `window.postMessage`, and rebuilds a synthetic
+   `PublicKeyCredential` from the reply.
+2. **Isolated-world relay** (`content/webauthn-bridge.ts`, `document_start`). The MAIN world can't
+   reach extension APIs, so this bridges `window.postMessage` ↔ `runtime.sendMessage`. A separate
+   `document_start` script (not the `document_idle` autofill content script) so it's listening before
+   a page that calls WebAuthn early.
+3. **Background handlers** (`background/webauthn-content-transport.ts`, registered only when
+   `api.webAuthenticationProxy` is undefined) call the **same** `handleCreate`/`handleGet`
+   (`background/webauthn-proxy.ts`) Chrome's proxy uses.
+4. **Shared wiring** (`background/webauthn-provider.ts`) holds the corner-card ceremony, vault IO,
+   crypto deps, and the enabled flag; `webauthn-proxy-init.ts` is now Chrome-proxy-only.
 
-- Structured-clone of the returned `PublicKeyCredential` / `ArrayBuffer`s across the MAIN-world
-  boundary (the page expects real `ArrayBuffer`s, not typed-array copies).
-- `world: "MAIN"` content-script timing vs a page that calls `navigator.credentials` early.
-- Conditional UI / `mediation: "conditional"` (passkey autofill) is a larger surface; scope it out
-  of the first pass.
+**Resolved gotchas** (the doc's earlier open items):
 
-**Current state (gated off):** the Firefox manifest omits the `webAuthenticationProxy` permission,
-`registerListeners()` / `initWebauthnProxy()` (`background/webauthn-proxy-init.ts`) are guarded by
-`typeof api.webAuthenticationProxy`, and `shell.supportsPasskeyProvider` (derived from the manifest
-permission) hides the Settings toggle. Nothing throws; the feature is simply absent on Firefox.
+- **`ArrayBuffer`s across the world boundary.** Neutralized by transporting base64url **strings**
+  over `postMessage`, never buffers; the codec materializes fresh `ArrayBuffer`s in the page realm,
+  so there are no typed-array copies. The synthetic credential also `setPrototypeOf`s to the real
+  `PublicKeyCredential` / response prototypes so RP-library `instanceof` checks pass.
+- **Origin (the phishing-resistance line).** Comes from the browser-set message `sender`
+  (`sender.origin ?? sender.url`), per-frame and unforgeable by the page. This is **cleaner than
+  Chrome**, which has to guess the requester from the active tab. The MAIN-world script is not a
+  trust boundary; a page can at most craft a request for its own origin.
+- **Timing.** Both content scripts run at `document_start`; a wedged bridge falls back to the native
+  authenticator so a page's WebAuthn never hangs or breaks.
+- **Disabled / passthrough.** The override is always injected, so when the provider is off (or the
+  origin is one we won't serve, e.g. a cross-origin child frame) the background replies `passthrough`
+  and the shim calls the captured native method. Firefox therefore has **no all-or-nothing
+  interception** and **no pause-around-own-unlock** dance that the Chrome proxy needs.
 
-**What Firefox needs specifically** (to enable it — a fast-follow; ~85% of the code is reused):
+**Scoped out of v1:** `mediation: "conditional"` (passkey autofill in the field dropdown) passes
+through to native.
 
-1. A `world: "MAIN"` content script (FF 128+) — or a `web_accessible_resource` script injected into
-   the page's main world — that overrides `navigator.credentials.create` and `.get`, capturing the
-   page's options + `location.origin`.
-2. A bridge: main-world script → content-script isolated world (`window.postMessage`) → background
-   (the page can't `runtime.sendMessage` the background directly).
-3. New background handlers (`WEBAUTHN_CREATE` / `WEBAUTHN_GET`) that call the **existing** pure
-   handlers `handleCreate` / `handleGet` (`background/webauthn-proxy.ts`) with `origin` = the page
-   (not `activeTabOrigin`, which is the Chrome-proxy way to recover the origin).
-4. Return a **synthetic `PublicKeyCredential`** to the page, rebuilding real `ArrayBuffer`s across the
-   world boundary (structured clone yields typed-array copies; the page's WebAuthn glue expects
-   `ArrayBuffer`). This is the main gotcha.
-5. Manifest: register the main-world script under `content_scripts` (`world: "MAIN"`) and/or
-   `web_accessible_resources`.
-6. Scope `mediation: "conditional"` (passkey autofill) out of the first pass — larger surface.
-
-Only items 1-5 are new (the delivery). The ceremony + signing (`webauthn-proxy.ts`
-`handleCreate`/`handleGet`/corner-card, the vault P-256 keys) is transport-free and reused verbatim.
+**Remaining:** an on-device webauthn.io pass on a real Firefox (register + authenticate, locked and
+unlocked); a cross-device check that a passkey created on Firefox signs in on Chrome/iOS via sync and
+vice-versa (the core bytes are identical, so it should just work).
 
 ## Security-key / platform-authenticator unlock (Firefox: disabled)
 
@@ -359,6 +367,7 @@ except:
 | `browser_specific_settings.gecko` | n/a | `{ "id": "...", "strict_min_version": "128.0" }` required |
 | `minimum_chrome_version` | `"116"` | drop (Chrome-only key) |
 | `permissions` | includes `"offscreen"`, `"webAuthenticationProxy"` | drop both `"offscreen"` and `"webAuthenticationProxy"` (FF rejects unknown perms; also keeps `api.offscreen` / `api.webAuthenticationProxy` undefined) |
+| `content_scripts` | one entry (`content-script.js`) | plus two Firefox-only entries at `document_start` for the passkey transport: `webauthn-inpage.js` (`world: "MAIN"`) and `webauthn-bridge.js` (isolated). See "Passkey provider" |
 | `content_security_policy`, `web_accessible_resources`, `commands`, `host_permissions`, `action`, `icons`, `options_page` | same | same |
 
 Verified Firefox facts behind these choices:

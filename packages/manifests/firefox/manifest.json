@@ -41,6 +41,19 @@
 			"js": ["content-script.js"],
 			"all_frames": true,
 			"run_at": "document_idle"
+		},
+		{
+			"matches": ["<all_urls>"],
+			"js": ["webauthn-inpage.js"],
+			"world": "MAIN",
+			"all_frames": true,
+			"run_at": "document_start"
+		},
+		{
+			"matches": ["<all_urls>"],
+			"js": ["webauthn-bridge.js"],
+			"all_frames": true,
+			"run_at": "document_start"
 		}
 	],
 	"commands": {
