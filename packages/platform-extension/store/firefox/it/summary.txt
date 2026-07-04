@@ -1,1 +1,1 @@
-Gestore di password crittografato con priorità locale. Nessun cloud centrale per archiviare i vostri segreti.
+Locale-first, gestore di password crittografato. Nessun cloud centrale che conserva i tuoi segreti.

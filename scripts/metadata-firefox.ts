@@ -4,9 +4,8 @@
 // package _locales (see chrome-manifest.mjs); this is the long detailed description
 // (and optionally a richer summary), which is not a manifest field.
 //
-//   node scripts/metadata-firefox.ts             # dry run: print what would be sent
-//   node scripts/metadata-firefox.ts --push      # PATCH the live AMO listing
-//   (AMO_PUSH=1 also enables the push, for `pnpm metadata:firefox` without `--`.)
+//   node scripts/metadata-firefox.ts             # PATCH the live AMO listing
+//   node scripts/metadata-firefox.ts --dry-run   # print what would be sent, send nothing
 //
 // Auth reuses the signing credentials: AMO_API_KEY + AMO_API_SECRET in the env, or the
 // age-encrypted ~/.config/bramble/amo-api-credentials.age (override AMO_CREDENTIALS_AGE)
@@ -18,7 +17,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const PUSH = process.argv.includes("--push") || process.env.AMO_PUSH === "1";
+const DRY_RUN = process.argv.includes("--dry-run");
 const STORE = resolve("packages/platform-extension/store/firefox");
 const MANIFEST = resolve("packages/manifests/firefox/manifest.json");
 // Override AMO_BASE_URL for a staging instance; strip a trailing slash for URL joins.
@@ -84,8 +83,8 @@ for (const field of fields) {
 		.join("  ");
 	console.log(`  ${field}: ${locs}`);
 }
-if (!PUSH) {
-	console.log("\ndry run — re-run with --push (or AMO_PUSH=1) to PATCH the live listing.");
+if (DRY_RUN) {
+	console.log("\ndry run — omit --dry-run to PATCH the live listing.");
 	process.exit(0);
 }
 
