@@ -13,14 +13,14 @@ The same encrypted vault and the same Rust crypto core sit behind all three, and
 **Get Bramble:**
 
 - Chromium: [Chrome Web Store](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
-- Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/firefox/addon/bramble/)
+- Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/firefox/addon/bramble/) (pending approval - get from [Releases](https://github.com/flythenimbus/bramble/releases))
 - Android: [Releases](https://github.com/flythenimbus/bramble/releases)
 
 ## What it does
 
-Your passwords are encrypted on your device and written to a single vault file, wherever you choose to put it. On desktop, drop it in a Dropbox or Google Drive folder and it syncs across your machines; on mobile it lives on the device's own encrypted storage. Bramble never sees that folder or that file's contents, it just reads and writes one encrypted file. Prefer to keep the cloud out of it entirely? Bramble's own peer-to-peer sync mirrors the vault straight between your devices.
+Your passwords are encrypted on your own device and stay there: in the browser's private extension storage on desktop, and in app-private encrypted storage on mobile. There's no server holding your vault and no account to sign up for. To use the same vault on more than one device, Bramble syncs it **directly between your devices, peer-to-peer**, end-to-end encrypted, with no cloud in the middle. Want a copy in your own hands? Export an encrypted backup file any time.
 
-Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Your master password never touches the JavaScript heap.
+Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Key derivation, encryption, and decryption all run in that core, and derived keys are wiped from memory after use.
 
 ## On your phone
 
@@ -36,13 +36,13 @@ The iOS and Android apps are versioned and released independently of the extensi
 
 ## Features
 
-- **Local-first, always.** One encrypted file on disk, in a location you pick.
+- **Local-first, always.** Your vault is encrypted and stored on your own device — the browser's private storage on desktop, app-private storage on mobile — never on a server.
 - **No shortcuts on crypto.** Argon2id for your key, AES-256-GCM for the data, envelope encryption so every entry has its own key. Secrets get wiped from memory after use.
-- **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable thing on disk is the file header.
+- **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable part of the stored vault is its header.
 - **Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown that reaches forms inside iframes and shadow DOM; on mobile it's the OS autofill bar across apps and browsers.
 - **Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
-- **File attachments.** Attach files to an entry — documents, key files, recovery kits — encrypted in the vault alongside everything else.
+- **Encrypted backups.** Export your whole vault to an encrypted `.bramble` file whenever you want a copy in your own hands. It still needs your master password to open.
 - **Built-in password generator.** Strong passwords on tap.
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF on desktop), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
@@ -61,10 +61,10 @@ Bramble flips that around:
 
 - **No server to breach.** Your vault never leaves your control. No central pile of data for anyone to go after.
 - **No account, no subscription, no telemetry.** Nothing to sign up for, nothing phoning home.
-- **You own the file.** Back it up, sync it, or keep it off the internet entirely. Your call.
+- **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like — your call.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data."
 
-The tradeoff is real and worth being honest about: there's no "I forgot my password" button on a server somewhere. But you're not without a safety net: every vault gets a recovery code, and you can register a hardware key as another way in. Save the recovery code and back up your vault file. Lose *all* of them (password, key, and recovery code) and the vault is gone, because nobody else holds a copy.
+The tradeoff is real and worth being honest about: there's no "I forgot my password" button on a server somewhere. But you're not without a safety net: every vault gets a recovery code, and you can register a hardware key as another way in. Save the recovery code, keep a second device synced, and export a backup now and then. Lose *all* of your ways in (password, key, and recovery code) and the vault is gone, because nobody else holds a copy.
 
 ## How the encryption works
 
@@ -82,7 +82,7 @@ flowchart TD
     SK -->|"HKDF-SHA256"| KEK
     RC -->|"Argon2id"| KEK
 
-    subgraph slots["Key slots (on disk)"]
+    subgraph slots["Key slots (in the vault)"]
         S["wrapped Vault Key<br/>per slot"]
     end
 
@@ -94,7 +94,7 @@ flowchart TD
     DEK -->|"AES-256-GCM decrypt"| DATA["Entry data<br/>(passwords, notes, cards, keys)"]
 ```
 
-Your master password never leaves the crypto core, and the KEK and decrypted keys are wiped from memory after use. On disk, only the file header is readable, everything else is ciphertext.
+Your master password is only ever used to derive keys inside the crypto core, and the KEK and decrypted keys are wiped from memory after use. In storage, only the vault header is readable; everything else is ciphertext.
 
 ## How it stacks up against KeePass
 
