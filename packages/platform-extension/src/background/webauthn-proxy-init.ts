@@ -7,7 +7,7 @@
 // shared with the Firefox content-script transport. See docs/passkey-provider.md.
 
 import { api } from "../platform-api";
-import { on } from "./router";
+import { on, whenReady } from "./router";
 import { productionDeps, setProviderApplyHook } from "./webauthn-provider";
 import { handleCreate, handleGet } from "./webauthn-proxy";
 
@@ -72,6 +72,10 @@ function registerListeners(): void {
 	});
 	api.webAuthenticationProxy.onCreateRequest.addListener((req) => {
 		void (async () => {
+			// These listeners bypass the message router, so await hydration ourselves: on a
+			// fresh SW wake the session VEK is restored asynchronously, and reading lock state
+			// before it lands would wrongly prompt to unlock an already-unlocked vault.
+			await whenReady();
 			const origin = await activeTabOrigin();
 			const details = origin
 				? await handleCreate(productionDeps, req.requestId, req.requestDetailsJson, origin)
@@ -96,6 +100,7 @@ function registerListeners(): void {
 	});
 	api.webAuthenticationProxy.onGetRequest.addListener((req) => {
 		void (async () => {
+			await whenReady(); // as in onCreateRequest: don't read lock state before hydration
 			const origin = await activeTabOrigin();
 			const details = origin
 				? await handleGet(productionDeps, req.requestId, req.requestDetailsJson, origin)
