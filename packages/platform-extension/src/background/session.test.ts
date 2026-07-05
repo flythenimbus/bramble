@@ -41,6 +41,38 @@ describe("CRYPTO_ session state sync", () => {
 		expect(bg.state.offscreenCalls.map((m) => m.type)).not.toContain("CRYPTO_EXPORT_VEK");
 	});
 
+	it("CRYPTO_UNWRAP_WEBAUTHN_SLOT (verifier match) unlocks by exporting the VEK", async () => {
+		// Regression: the webauthn slot had no branch in cryptoHandler, so a security-key
+		// unlock never cached the VEK and the background reported the vault locked.
+		const bg = await loadBackground({
+			offscreen: (msg) => {
+				if (msg.type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") return { ok: true, data: true };
+				if (msg.type === "CRYPTO_EXPORT_VEK") return { ok: true, data: "VEK_EXPORTED" };
+				return { ok: true, data: null };
+			},
+		});
+		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_WEBAUTHN_SLOT" });
+		expect(resp).toEqual({ ok: true, data: true });
+		// Cached the exported VEK, exactly like a password unlock.
+		expect(bg.state.session[VEK_KEY]).toBe("VEK_EXPORTED");
+		expect(bg.state.alarms[AUTOLOCK]).toBeDefined();
+		expect(bg.state.offscreenCalls.map((m) => m.type)).toContain("CRYPTO_EXPORT_VEK");
+	});
+
+	it("CRYPTO_UNWRAP_WEBAUTHN_SLOT (verifier miss) does not unlock", async () => {
+		const bg = await loadBackground({
+			offscreen: (msg) =>
+				msg.type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT"
+					? { ok: true, data: false }
+					: { ok: true, data: null },
+		});
+		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_WEBAUTHN_SLOT" });
+		expect(resp).toEqual({ ok: true, data: false });
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+		expect(bg.state.alarms[AUTOLOCK]).toBeUndefined();
+		expect(bg.state.offscreenCalls.map((m) => m.type)).not.toContain("CRYPTO_EXPORT_VEK");
+	});
+
 	it("CRYPTO_UNLOCK_WITH_VEK caches the supplied VEK (rotation rollback)", async () => {
 		const bg = await loadBackground();
 		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "ROLLED_BACK" } });
