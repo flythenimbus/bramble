@@ -23,6 +23,13 @@ export interface StorageAdapter {
 	// createWritable needs a user gesture the background lacks), so for FSA the
 	// background stashes bytes in chrome.storage.session for the next popup to flush.
 	canWriteFromBackground(): Promise<boolean>;
+	// True iff the background can call readVaultBlob without prompting. Local storage
+	// always can; an FSA file can iff its permission is already granted (a
+	// queryPermission check, no gesture). The background must NOT call readVaultBlob
+	// when this is false: readVaultBlob would fall through to requestPermission, which
+	// needs a gesture the background lacks and throws. Callers route through a gesture
+	// (the popup) instead. See docs/storage.md.
+	canReadFromBackground(): Promise<boolean>;
 	// Flush any pending blob to disk and clear the stash. Returns true iff a flush
 	// happened. Safe on every popup mount/unlock: a no-op when the queue is empty.
 	flushPendingVaultBlob(): Promise<boolean>;

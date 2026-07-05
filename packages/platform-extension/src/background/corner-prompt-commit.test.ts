@@ -18,6 +18,7 @@ vi.mock("../storage", () => ({
 		readVaultBlob: async () => new Uint8Array([1, 2, 3]),
 		writeVaultBlob: async () => {},
 		canWriteFromBackground: async () => true,
+		canReadFromBackground: async () => true,
 		getMeta: async () => undefined,
 		setMeta: async () => {},
 	},

@@ -217,6 +217,13 @@ export const extensionStorage: StorageAdapter = {
 		return (await handle.queryPermission({ mode: "readwrite" })) === "granted";
 	},
 
+	/** True when the background can read the vault directly. chrome.storage.local always can; an FSA file can iff its permission is already granted (queryPermission, no gesture). When false the background must route through a gesture rather than call readVaultBlob (which would requestPermission and throw). */
+	async canReadFromBackground() {
+		const handle = await getHandle();
+		if (handle === null) return true;
+		return (await handle.queryPermission({ mode: "readwrite" })) === "granted";
+	},
+
 	/** Write through a queued corner-prompt blob (PENDING_BLOB_KEY) and clear it. Returns false when nothing is queued. */
 	async flushPendingVaultBlob() {
 		const result = await api.storage.session.get(PENDING_BLOB_KEY);

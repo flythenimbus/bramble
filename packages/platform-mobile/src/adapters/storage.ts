@@ -64,6 +64,9 @@ export const mobileStorage: StorageAdapter = {
 	async canWriteFromBackground() {
 		return true;
 	},
+	async canReadFromBackground() {
+		return true;
+	},
 	async flushPendingVaultBlob() {
 		return false;
 	},

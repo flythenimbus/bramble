@@ -16,7 +16,23 @@ import { witnessStamp } from "./sync-clock";
 // Re-exported so existing background importers keep their import site.
 export { base64ToBytes, bytesToBase64 };
 
+/**
+ * Thrown by a background vault read when the FSA file's permission is not granted.
+ * The background must not `requestPermission` (it needs a gesture and throws a raw
+ * "permission denied for vault file"); callers catch this and route through a gesture
+ * (the popup) to grant access instead. See docs/storage.md.
+ */
+export class VaultAccessError extends Error {
+	constructor() {
+		super("vault file access not granted to the background");
+		this.name = "VaultAccessError";
+	}
+}
+
 export async function readAndDecodeVault(): Promise<VaultBlob> {
+	// Guard before readVaultBlob so an ungranted FSA file yields a typed, catchable
+	// error rather than readVaultBlob calling requestPermission from the background.
+	if (!(await extensionStorage.canReadFromBackground())) throw new VaultAccessError();
 	const bytes = await extensionStorage.readVaultBlob();
 	return decodeVaultBlob(bytes);
 }
