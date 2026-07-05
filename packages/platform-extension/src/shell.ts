@@ -50,12 +50,11 @@ export const extensionShell: ShellAdapter = {
 		// window.close on a tab the script didn't open).
 		window.close();
 	},
+	// The vault lives in chrome.storage.local now, not a picked file, so setup never picks a
+	// file (this drives the no-picker setup path). The export flow feature-detects
+	// showSaveFilePicker on its own when it needs to write a file.
 	hasFilePicker() {
-		if (typeof window === "undefined") return false;
-		return (
-			typeof window.showSaveFilePicker === "function" &&
-			typeof window.showOpenFilePicker === "function"
-		);
+		return false;
 	},
 	async getCurrentTabOrigin() {
 		try {
