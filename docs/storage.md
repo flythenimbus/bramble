@@ -76,9 +76,26 @@ read-only legacy support and can be deleted once no file-backed installs remain.
 
 ## Durability
 
-`chrome.storage.local` is durable for the profile but can be evicted if the user
-clears "cookies and site data." The background calls `navigator.storage.persist()`
-to request exemption from eviction under disk pressure (and on Chrome
-`unlimitedStorage` already exempts it). The real backstops against loss are **P2P
-sync** (other devices hold a copy) and **export** (a `.bramble` backup the user
-saves): the vault is not pinned to one browser profile.
+Extension `storage.local` is treated separately from website data, so **"clear
+cookies and site data" does not wipe the vault** on either browser (Chrome:
+"extension storage is not cleared when a user clears browsing data"; Firefox:
+"data saved using the storage.local API is correctly persisted in these
+scenarios"). What actually clears it is uninstalling the extension, an explicit
+"clear this extension's data", or deleting the browser profile.
+
+The remaining risk is automatic **eviction under disk pressure**, and it differs by
+browser:
+
+- **Chrome:** `chrome.storage.local` is its own store (not the quota-managed origin
+  storage). The `unlimitedStorage` permission (declared in the manifest) exempts it
+  from quota *and* eviction, so `navigator.storage.persist()` is effectively a no-op
+  here.
+- **Firefox:** `storage.local` is IndexedDB-backed and quota-managed, so eviction can
+  apply — except eviction "skips over origins that have been granted data persistence
+  by using `navigator.storage.persist()`". That call (in `background.ts`) is what
+  earns its keep on Firefox; `unlimitedStorage` also lifts the quota.
+
+`persist()` only prevents *silent* eviction; it never blocks a user who deliberately
+clears data (the browser asks first). The real backstops against loss are **P2P sync**
+(other devices hold a copy) and **export** (a `.bramble` backup the user saves): the
+vault is not pinned to one browser profile.
