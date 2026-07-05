@@ -60,19 +60,13 @@ Once both are enrolled, sync runs **automatically in the background while unlock
 Reconnecting devices authenticate by their roster keys (Noise KK) with **no pairing
 code** — enrollment is one-time.
 
-## File-backed (FSA) vaults and permission
+## Storage backend and headless writes
 
-A vault stored as a file (the Chrome FSA "drop vault.db in a synced folder" path)
-needs file permission for the **background** to read/write while the popup is
-closed. `requestPermission` needs a user gesture, so:
-
-- Enrolling / joining / unlocking grants access for the session (within the click).
-- For it to survive a browser restart, enable **persistent file access** for the
-  extension in the browser's File System settings, or use **Settings -> Device sync
-  -> Grant file access**.
-- Without the grant, the background queues writes and applies them on the next popup
-  open. The `chrome.storage.local` backend needs no permission and syncs fully
-  headless.
+The vault lives in `chrome.storage.local` (see [storage.md](storage.md)), which the
+background reads and writes with no gesture and no permission, so enrollment, join, and
+ongoing merge all persist fully headless — nothing to grant, nothing queued. (The old
+file-backed/FSA path, which needed a per-file permission gesture, has been retired; a
+pre-existing file vault migrates to local storage on its first unlock.)
 
 ## Engine-only check (no relay, no transport)
 

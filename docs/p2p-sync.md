@@ -1,10 +1,12 @@
 # P2P sync: cross-device, cross-browser vault sync
 
 Design for syncing one user's own vault across their own devices without a vault server,
-without a binary to install, and without operating trusted infrastructure. This is the
-cross-browser answer to the filesystem-sync gap in [firefox-port.md](firefox-port.md): the
-Chrome FSA "drop `vault.db` in a synced folder" trick has no Firefox equivalent, so sync
-moves from the filesystem to a direct device-to-device channel.
+without a binary to install, and without operating trusted infrastructure. With the vault
+now in `chrome.storage.local` on every platform (see [storage.md](storage.md)) there is no
+shared file to sync at all, so sync is a direct device-to-device channel. (Historically a
+Chrome-only "drop `vault.db` in a synced folder" File System Access trick existed and had no
+Firefox equivalent — the filesystem-sync gap noted in [firefox-port.md](firefox-port.md);
+P2P replaces it everywhere.)
 
 "P2P" here means *personal*: only the user's own devices, only their own vault. There is no
 community network, DHT, or shared swarm.
@@ -28,14 +30,13 @@ Deliberately narrow, to keep the first version shippable:
 ## Architecture: one merge engine, pluggable transports
 
 The merge engine is transport-independent and is the reusable core. Whatever moves bytes
-between devices (the Chrome FSA file today, the WebRTC channel here, a future native file
-bridge) feeds the same merge:
+between devices (the WebRTC channel here, a future native bridge) feeds the same merge:
 
 - **Transport** moves an encrypted vault between devices.
 - **Merge engine** reconciles two vault states into one, deterministically.
 
 Everything below the merge engine is swappable. This doc specifies the WebRTC transport and
-the merge engine; the existing FSA path stays as another transport.
+the merge engine.
 
 ## The shared-VEK model
 
@@ -346,10 +347,10 @@ device management). Notes on how it maps to code:
   runs `roster-sync` continuously; the merge runs in the background via `vault-io`
   (`SYNC_LOCAL_PAYLOAD` / `SYNC_APPLY_REMOTE`). Re-broadcast is periodic (~4s) +
   on-connect; an instant on-change nudge is a follow-up.
-- **FSA reality:** the background can read/write a file-backed vault only when its
-  permission is already granted (`createWritable` needs no gesture, only
-  `requestPermission` does), so `canWriteFromBackground` checks `queryPermission`;
-  otherwise writes queue for the next popup. `chrome.storage.local` is fully headless.
+- **Fully headless writes:** the vault lives in `chrome.storage.local` (see
+  [storage.md](storage.md)), which the background reads and writes with no gesture and no
+  permission, so headless merge just writes through. `canReadFromBackground` /
+  `canWriteFromBackground` are always true (the earlier FSA write-queue is gone).
 - **Deferred:** VEK-never-in-JS hardening (the VEK is currently a transient JS string
   during enrollment + session caching, no worse than the existing session cache);
   instant on-change nudge; VEK rotation; async (offline store-and-forward mailbox);

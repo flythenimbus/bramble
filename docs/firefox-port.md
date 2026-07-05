@@ -1,5 +1,12 @@
 # Firefox port: feasibility findings
 
+> **Superseded on storage:** this doc frames Firefox's lack of File System Access as *the*
+> sync gap, because Chrome then stored the vault in a real FSA file. Chrome has since moved
+> to `chrome.storage.local` too (see [storage.md](storage.md)), so **both browsers now use
+> the sandbox backend and neither has a synced file** — the FSA discussion below is
+> historical. The conclusion is unchanged and stronger: WebRTC P2P is the sync path
+> everywhere.
+
 Research notes on shipping `packages/platform-extension` (MV3, currently Chrome-only) as a
 Firefox add-on from one codebase. Captures what was verified about Firefox's platform, what in
 the codebase is already portable, and the sync constraint (no FSA on Firefox, so the WebRTC P2P

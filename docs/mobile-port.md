@@ -356,7 +356,7 @@ work.
 
 | Adapter / concern | Extension uses | Capacitor mobile replacement |
 |---|---|---|
-| `storage` (vault blob + metadata) | FSA + `chrome.storage.local` | `@capacitor/filesystem` writes the VLT1 blob to the app-private data dir (`Directory.Data`/`Library`); small secrets (wrapping key) in a Keychain/Keystore-backed secure-storage plugin. **Not IndexedDB** (eviction) and **not `@capacitor/preferences`** (plaintext). VLT1 format is unchanged. |
+| `storage` (vault blob + metadata) | `chrome.storage.local` | `@capacitor/filesystem` writes the VLT1 blob to the app-private data dir (`Directory.Data`/`Library`); small secrets (wrapping key) in a Keychain/Keystore-backed secure-storage plugin. **Not IndexedDB** (eviction) and **not `@capacitor/preferences`** (plaintext). VLT1 format is unchanged. |
 | `crypto` host transport | `chrome.runtime.sendMessage` to offscreen | In-process WASM call, or a custom Capacitor plugin calling uniffi-bound Rust (iOS plugin calls run off the main thread by default). |
 | VEK session cache | `chrome.storage.session` | In-webview memory while unlocked + lock-on-background; optionally held in native plugin state. Drop the pending-blob stash (the filesystem plugin can always write). |
 | `clipboard` | `chrome.alarms` + offscreen clear | `@capacitor/clipboard` (mobile is plain-text only) plus our own auto-clear timer (no Capacitor plugin provides a timeout, and none exposes Android `EXTRA_IS_SENSITIVE`, so a tiny custom plugin may be wanted for the sensitive flag). |
