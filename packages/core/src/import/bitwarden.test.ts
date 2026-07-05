@@ -93,4 +93,19 @@ describe("parseBitwarden", () => {
 		expect(() => parseBitwarden("{}")).toThrow();
 		expect(() => parseBitwarden("not json")).toThrow();
 	});
+
+	it("gives a specific error for an encrypted (password-protected) export", () => {
+		// The password-protected format: no `items`, an opaque `data` blob, `encrypted: true`.
+		const enc = json({ encrypted: true, passwordProtected: true, salt: "x", data: "2.abc|def" });
+		expect(() => parseBitwarden(enc)).toThrow(/encrypted \(password-protected\)/i);
+		// passwordProtected alone (some exports omit `encrypted`) is caught too.
+		expect(() => parseBitwarden(json({ passwordProtected: true, data: "x" }))).toThrow(
+			/encrypted/i,
+		);
+	});
+
+	it("does not misfire on an unencrypted export (encrypted: false)", () => {
+		const res = parseBitwarden(json({ encrypted: false, items: [{ type: 2, name: "n" }] }));
+		expect(res.imported).toHaveLength(1);
+	});
 });
