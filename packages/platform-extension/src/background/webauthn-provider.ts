@@ -14,6 +14,7 @@
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
 import { bytesToBase64 } from "@core/util/bytes";
 import { api } from "../platform-api";
+import { extensionStorage } from "../storage";
 import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
@@ -72,13 +73,21 @@ async function openPopupForUnlock(): Promise<number | undefined> {
 	return undefined;
 }
 
-async function waitForUnlock(timeoutMs: number): Promise<boolean> {
+// "Accessible" means the background can actually read the vault: unlocked (VEK cached)
+// AND the FSA file's permission granted (or a storage.local backend). A read attempted
+// before both hold throws VaultAccessError, so the ceremony must wait for both — not
+// just for the unlock — before loadEntries.
+async function vaultAccessible(): Promise<boolean> {
+	return !vaultLocked() && (await extensionStorage.canReadFromBackground());
+}
+
+async function waitForVaultAccess(timeoutMs: number): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		if (!vaultLocked()) return true;
+		if (await vaultAccessible()) return true;
 		await new Promise((r) => setTimeout(r, 400));
 	}
-	return !vaultLocked();
+	return vaultAccessible();
 }
 
 // Show one corner card (same placement as save-login) and await the reply; teardown or
@@ -112,10 +121,14 @@ function cardPayload(
 	};
 }
 
-async function ensureUnlocked(): Promise<boolean> {
-	if (!vaultLocked()) return true;
+// Open the popup so a user gesture can unlock and/or (re)grant FSA file access, then wait
+// until the background can read the vault. Covers a locked vault and an unlocked one whose
+// FSA permission has lapsed (e.g. after a browser restart) — both leave the background
+// unable to read until a gesture re-grants access.
+async function ensureVaultAccess(): Promise<boolean> {
+	if (await vaultAccessible()) return true;
 	const unlockWindowId = await openPopupForUnlock();
-	const ok = await waitForUnlock(UNLOCK_TIMEOUT_MS);
+	const ok = await waitForVaultAccess(UNLOCK_TIMEOUT_MS);
 	// Close the unlock window once we're in, so it doesn't sit on top of the page's corner
 	// prompt (the passkey picker / confirmation that runs next).
 	if (ok && unlockWindowId !== undefined) {
@@ -133,9 +146,14 @@ export function cornerCeremonyForTab(explicitTabId?: number): CeremonyFn {
 	return async (req) => {
 		const tabId = explicitTabId ?? (await activeTabId());
 		if (tabId === undefined) return { approved: false };
+		// Snapshot inaccessibility up front so the ceremony's locked-branch UX (confirm card
+		// then unlock) also fires for an unlocked vault whose FSA permission has lapsed — the
+		// case the plain vaultLocked() check missed, which surfaced as the raw
+		// "permission denied for vault file" mid-ceremony.
+		const startedInaccessible = !(await vaultAccessible());
 		const host: CeremonyHost = {
-			isLocked: vaultLocked,
-			ensureUnlocked,
+			isLocked: () => startedInaccessible,
+			ensureUnlocked: ensureVaultAccess,
 			loadEntries: loadDecryptedEntries,
 			showCard: (opts) => showCard(tabId, cardPayload(req, opts)),
 		};
