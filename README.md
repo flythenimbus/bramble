@@ -16,6 +16,13 @@ The same encrypted vault and the same Rust crypto core sit behind all three, and
 - Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/firefox/addon/bramble/) (pending approval - get from [Releases](https://github.com/flythenimbus/bramble/releases))
 - Android: [Releases](https://github.com/flythenimbus/bramble/releases)
 
+## Screenshots
+
+| <img src="docs/screenshots/main.png" width="260" alt="Your vault"><br>**Your vault** | <img src="docs/screenshots/autofill.png" width="260" alt="Autofill on a page"><br>**Autofill on a page** | <img src="docs/screenshots/login-edit.png" width="260" alt="Editing an entry"><br>**Editing an entry** |
+|:--:|:--:|:--:|
+| <img src="docs/screenshots/settings-general.png" width="260" alt="Settings"><br>**Settings** | <img src="docs/screenshots/settings-appearance.png" width="260" alt="Dark mode"><br>**Dark mode** | <img src="docs/screenshots/settings-sync.png" width="260" alt="Device sync"><br>**Device sync** |
+| <img src="docs/screenshots/login-save.png" width="260" alt="Save a login"><br>**Save a login** | <img src="docs/screenshots/passkey-save.png" width="260" alt="Create a passkey"><br>**Create a passkey** | <img src="docs/screenshots/passkey-use.png" width="260" alt="Sign in with a passkey"><br>**Sign in with a passkey** |
+
 ## What it does
 
 Your passwords are encrypted on your own device and stay there: in the browser's private extension storage on desktop, and in app-private encrypted storage on mobile. There's no server holding your vault and no account to sign up for. To use the same vault on more than one device, Bramble syncs it **directly between your devices, peer-to-peer**, end-to-end encrypted, with no cloud in the middle. Want a copy in your own hands? Export an encrypted backup file any time.
