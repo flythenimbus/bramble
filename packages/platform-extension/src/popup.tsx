@@ -40,6 +40,14 @@ async function boot() {
 			initialPath = handoff.path;
 			initialDraft = handoff.draft;
 		}
+	} else {
+		// Normal popup: resume the route from the last close, but only when the session is
+		// still unlocked. If locked, boot to "/" so the unlock screen shows (the route
+		// guards would bounce a restored deep route there anyway).
+		if (!(await extensionCrypto.isLocked())) {
+			const stored = await extensionShell.restoreRoute?.();
+			if (stored) initialPath = stored;
+		}
 	}
 
 	createRoot(root).render(

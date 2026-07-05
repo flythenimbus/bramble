@@ -56,6 +56,15 @@ export interface ShellAdapter {
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	/** Read (and clear) the handoff stashed by a preceding popOut(). Null when there's nothing to restore. Called once during boot. */
 	consumeHandoff(): Promise<PopOutHandoff | null>;
+	/**
+	 * Persist the current route so a normal (non-detached) popup resumes where it was after
+	 * being closed and reopened while the session is still unlocked. Fire-and-forget; only
+	 * the path is stored (never a form draft, which can hold a plaintext password). Absent
+	 * where the UI context is long-lived (mobile), which never loses its route.
+	 */
+	persistRoute?(path: string): void;
+	/** Read the route stashed by persistRoute (null when none). Called once at boot; the caller restores it only when the vault is unlocked. */
+	restoreRoute?(): Promise<string | null>;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
 	/** Whether this platform can detach the UI into a standalone window. False on single-window hosts (mobile), which hides the pop-out affordance. */
