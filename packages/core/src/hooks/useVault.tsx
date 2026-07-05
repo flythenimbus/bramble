@@ -221,6 +221,8 @@ export interface VaultActions {
 	pickVaultFile(mode: "create" | "open"): Promise<void>;
 	/** Creates the vault and returns its initial plaintext recovery code (shown once). */
 	createVault(password: string): Promise<string>;
+	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
+	exportVault(): Promise<void>;
 	addEntry(data: EntryData): Promise<void>;
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
@@ -695,6 +697,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
 	);
 
+	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1
+	 * blob, so it is safe at rest and still needs the master password to open). */
+	const exportVault = useCallback(async () => {
+		if (!shell.exportBytes) throw new Error("Export isn't available here.");
+		const bytes = await storage.readVaultBlob();
+		const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+		await shell.exportBytes(`bramble-vault-${stamp}.bramble`, bytes, "application/octet-stream");
+	}, [shell, storage]);
+
 	/** Re-encrypt all entries with their stamps plus the tombstone list, and write
 	 * a new blob; the slot list is unchanged. Stamps come from the caller so a
 	 * full rewrite does not re-stamp unchanged entries. */
@@ -1018,6 +1029,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			lock,
 			pickVaultFile,
 			createVault,
+			exportVault,
 			addEntry,
 			importEntries,
 			updateEntry,
@@ -1046,6 +1058,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			lock,
 			pickVaultFile,
 			createVault,
+			exportVault,
 			addEntry,
 			importEntries,
 			updateEntry,

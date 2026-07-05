@@ -520,6 +520,14 @@ msgstr "Solo nombre de host exacto"
 msgid "Expires"
 msgstr "Caduca"
 
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Export"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Export a backup"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Face ID"
 msgstr "Face ID"
@@ -1089,6 +1097,10 @@ msgstr "Revise lo que encontramos en la exportación de {0}"
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Save {modeLabel}"
 msgstr "Guardar {modeLabel}"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
+msgstr ""
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."

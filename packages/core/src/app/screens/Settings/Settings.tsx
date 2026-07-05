@@ -15,7 +15,7 @@ import { SyncConnectSection } from "./components/SyncConnectSection";
 export function Settings() {
 	const { themeMode, setThemeMode } = useTheme();
 	const { shell } = usePlatform();
-	const { entries } = useVault();
+	const { entries, exportVault } = useVault();
 	const { t } = useLingui();
 
 	return (
@@ -65,6 +65,21 @@ export function Settings() {
 							<Trans>Import</Trans>
 						</button>
 					</Row>
+					{shell.exportBytes && (
+						<Row
+							icon={<Download className="w-4 h-4 text-primary" />}
+							title={t`Export a backup`}
+							subtitle={t`Save an encrypted .bramble copy of your vault. It still needs your master password to open.`}
+						>
+							<button
+								type="button"
+								onClick={() => void exportVault().catch(() => {})}
+								className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+							>
+								<Trans>Export</Trans>
+							</button>
+						</Row>
+					)}
 				</Section>
 
 				<SyncConnectSection />

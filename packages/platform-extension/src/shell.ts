@@ -51,10 +51,25 @@ export const extensionShell: ShellAdapter = {
 		window.close();
 	},
 	// The vault lives in chrome.storage.local now, not a picked file, so setup never picks a
-	// file (this drives the no-picker setup path). The export flow feature-detects
-	// showSaveFilePicker on its own when it needs to write a file.
+	// file (this drives the no-picker setup path).
 	hasFilePicker() {
 		return false;
+	},
+	// Export a vault backup as a plain download (goes to the browser's download folder). A
+	// one-shot write, not a persisted handle, so it has none of the FSA re-permission cost.
+	async exportBytes(suggestedName: string, bytes: Uint8Array, mimeType: string) {
+		const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+		const url = URL.createObjectURL(blob);
+		try {
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = suggestedName;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+		} finally {
+			URL.revokeObjectURL(url);
+		}
 	},
 	async getCurrentTabOrigin() {
 		try {
