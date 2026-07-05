@@ -22,6 +22,33 @@ let dismissCb: (() => void) | null = null;
 // Anchor field shared by both renderers (the page input the picker sits under).
 let anchorField: HTMLInputElement | null = null;
 
+// The field whose native autocomplete we overrode while taking it over, plus its original
+// value, so we can put it back when we let go.
+let suppressedField: HTMLInputElement | null = null;
+let suppressedAutocomplete: string | null = null;
+
+// Route every anchorField change through here so the browser's native autofill is
+// suppressed on exactly the field Bramble is handling and restored the moment we release
+// it - otherwise the native dropdown renders on top of ours. The MutationObserver watches
+// childList/subtree only (not attributes), so this write never invalidates the field-model
+// cache or re-triggers detection. Best-effort: autocomplete="off" reliably suppresses
+// Firefox and generic Chrome autofill; Chrome's own password UI on a recognized login
+// field may persist.
+function setAnchorField(field: HTMLInputElement | null): void {
+	anchorField = field;
+	if (suppressedField && suppressedField !== field) {
+		if (suppressedAutocomplete === null) suppressedField.removeAttribute("autocomplete");
+		else suppressedField.setAttribute("autocomplete", suppressedAutocomplete);
+		suppressedField = null;
+		suppressedAutocomplete = null;
+	}
+	if (field && field !== suppressedField) {
+		suppressedField = field;
+		suppressedAutocomplete = field.getAttribute("autocomplete");
+		field.setAttribute("autocomplete", "off");
+	}
+}
+
 function matchesKey(matches: MatchSummary[]): string {
 	let out = "";
 	for (const m of matches) out += `${m.id}\0`;
@@ -141,7 +168,7 @@ function removeDropdown(): void {
 		dropdownEl.remove();
 		dropdownEl = null;
 	}
-	anchorField = null;
+	setAnchorField(null);
 	openMatchesKey = "";
 	openDropdownKind = null;
 }
@@ -153,7 +180,7 @@ function positionDropdown(field: HTMLInputElement): void {
 
 function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	removeDropdown();
-	anchorField = field;
+	setAnchorField(field);
 
 	const root = document.createElement("div");
 	root.id = DROPDOWN_ID;
@@ -256,7 +283,7 @@ function hideIframe(): void {
 	if (iframeHostEl) iframeHostEl.style.display = "none";
 	iframeMatchesKey = "";
 	iframeHasHighlight = false;
-	anchorField = null;
+	setAnchorField(null);
 }
 
 /** Tear the iframe host down entirely (extension teardown / COEP fallback). */
@@ -274,7 +301,7 @@ function destroyIframeHost(): void {
 	pendingRender = null;
 	iframeMatchesKey = "";
 	iframeHasHighlight = false;
-	anchorField = null;
+	setAnchorField(null);
 }
 
 /** Create the iframe host (closed-shadow wrapper around the extension-origin iframe), or un-hide it if it exists. */
@@ -339,7 +366,7 @@ function armReadinessTimeout(): void {
 function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 	ensureIframeHost();
 	if (!iframeHostEl) return;
-	anchorField = field;
+	setAnchorField(field);
 	positionHostElement(iframeHostEl, field);
 	startPositionTracking();
 	// Skip a redundant re-post when the same content is already showing here.
