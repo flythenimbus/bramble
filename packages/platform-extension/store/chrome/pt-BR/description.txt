@@ -1,0 +1,47 @@
+Bramble é um gerenciador de senhas que reside no seu navegador e mantém seus segredos no seu próprio dispositivo. Sem conta, sem servidor armazenando seu cofre, sem empresa que possa ser invadida e vazar tudo. Você detém o cofre, você detém a senha, e é isso.
+
+Funciona no Chrome, Edge, Brave, Arc e outros navegadores baseados em Chromium. Instale-o e estará funcionando em cerca de um minuto.
+
+O QUE ELE FAZ
+
+Suas senhas são criptografadas no seu dispositivo e mantidas no armazenamento privado do próprio navegador. Não há conta nem servidor armazenando seu cofre. Configure uma vez e você estará preenchendo logins automaticamente, salvando novos e gerando senhas imediatamente.
+
+Possui mais de um dispositivo? Emparelhe-os e o Bramble sincroniza seu cofre diretamente entre eles, com criptografia de ponta a ponta. O relé que apresenta seus dispositivos vê apenas texto cifrado e não armazena nada, portanto seus segredos nunca chegam ao servidor de ninguém. Deseja uma cópia em suas próprias mãos? Exporte um arquivo de backup criptografado a qualquer momento.
+
+RECURSOS
+
+- Local primeiro, sempre. Seu cofre criptografado permanece no seu dispositivo, no armazenamento privado do navegador. Sem conta, sem cópia no servidor.
+- Sincronização entre dispositivos. Seus dispositivos permanecem sincronizados por um canal ponto a ponto com criptografia de ponta a ponta; o relé que os conecta vê apenas texto cifrado e não armazena nada.
+- Criptografia robusta. Argon2id para sua chave, AES-256-GCM para dados, criptografia envelope para que cada entrada tenha sua própria chave. Segredos apagados da memória após o uso.
+- Tudo criptografado. Nomes de sites, nomes de usuário, notas, tudo.
+- Preenchimento automático inteligente por domínio. www.exemplo.com, conta.exemplo.com e exemplo.com correspondem a um único login. Uma entrada, vários URLs.
+- Chaves de acesso. O Bramble é seu próprio autenticador de chaves de acesso: crie e faça login com chaves de acesso, armazenadas em seu cofre e criptografadas como todo o resto.
+- Mais que logins. Logins, cartões de pagamento, notas seguras e chaves SSH, cada um com seus próprios campos.
+- Gerador de senhas integrado.
+- Desbloqueio por chave de hardware. Registre um YubiKey, Touch ID ou Windows Hello e desbloqueie com um toque via WebAuthn PRF. Use-o junto com sua senha mestra ou torne-o sua única forma de acesso.
+- Backups criptografados. Exporte todo o seu cofre para um arquivo criptografado a qualquer momento, para uma cópia offline que você mantém. Ele ainda precisa da sua senha mestra para abrir.
+- Códigos de recuperação. Cada cofre recebe um código de recuperação seguro na configuração: um backup imprimível que o desbloqueia independentemente da sua senha mestra.
+- Códigos TOTP / 2FA. Cole um URI otpauth:// ou segredo e o Bramble gera os códigos.
+- Verificação opcional de violações. Consulta ao Have I Been Pwned usando k-anonimato, para que nada sobre sua senha saia do seu dispositivo. Desativado por padrão.
+- Bloqueio automático após 15 minutos de inatividade (configurável).
+- Importação do KeePass, Bitwarden, Proton Pass e 1Password.
+
+POR QUE LOCAL PRIMEIRO
+
+Os gerenciadores em nuvem mantêm os cofres de todos em seus servidores, o que é um alvo gigantesco. Quando um é violado, não é um cofre que vaza, mas milhões de uma vez, frequentemente divulgados meses depois.
+
+O Bramble inverte isso:
+- Nenhum servidor para violar. Seu cofre nunca sai do seu controle.
+- Sem conta, sem assinatura, sem telemetria. Nada para se inscrever.
+- Seus dados, seus dispositivos. Sincronize entre seus próprios dispositivos, mantenha em uma máquina ou exporte um backup criptografado que você detém. Nada jamais é armazenado no servidor de outra pessoa.
+- Nada para confiar além do código. O código é de código aberto e é executado inteiramente no seu dispositivo.
+
+COMO FUNCIONA A CRIPTOGRAFIA
+
+O Bramble usa slots de chave no estilo LUKS e criptografia envelope. Uma Chave de Cofre aleatória protege seus dados. Cada método de desbloqueio (senha mestra, chave de segurança, código de recuperação) deriva sua própria Chave de Criptografia de Chave que desembrulha uma cópia dessa mesma Chave de Cofre, portanto, adicionar ou revogar um método de desbloqueio nunca recriptografa uma única entrada. A Chave de Cofre então desembrulha uma nova chave por entrada para cada item. Tudo é AES-256-GCM.
+
+VINDO DO KEEPASS?
+
+Você se sentirá em casa: seu cofre criptografado, seu controle, sem intermediário na nuvem, e o Bramble importa seus arquivos KDBX4. As diferenças: ele reside no seu navegador (sem aplicativo de desktop separado ou ponte de plugin), o preenchimento automático é integrado com correspondência de domínio e um menu suspenso na página, e ele oferece uma versão moderna com Argon2id e AES-256-GCM, em vez de uma variedade de plugins. Interface limpa, modo escuro incluído.
+
+Leia a política de privacidade completa vinculada nesta página.

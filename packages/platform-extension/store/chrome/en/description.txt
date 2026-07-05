@@ -1,0 +1,47 @@
+Bramble is a password manager that lives in your browser and keeps your secrets on your own machine. No account, no server holding your vault, no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
+
+Works in Chrome, Edge, Brave, Arc, and other Chromium browsers. Install it and you're running in about a minute.
+
+WHAT IT DOES
+
+Your passwords are encrypted on your device and kept in the browser's own private storage. There's no account and no server holding your vault. Set up once and you're autofilling logins, saving new ones, and generating passwords right away.
+
+Got more than one device? Pair them and Bramble syncs your vault directly between them, end-to-end encrypted. The relay that introduces your devices only ever sees ciphertext and stores nothing, so your secrets never land on anyone's server. Want a copy in your own hands? Export an encrypted backup file any time.
+
+FEATURES
+
+- Local-first, always. Your encrypted vault stays on your device, in the browser's private storage. No account, no server copy.
+- Multi-device sync. Your devices stay in sync over an end-to-end encrypted, peer-to-peer channel; the relay that connects them only ever sees ciphertext and stores nothing.
+- Serious crypto. Argon2id for your key, AES-256-GCM for data, envelope encryption so every entry has its own key. Secrets wiped from memory after use.
+- Everything encrypted. Site names, usernames, notes, all of it.
+- Domain-smart autofill. www.example.com, ca.accounts.example.com, and example.com all match one login. One entry, several URLs.
+- Passkeys. Bramble is your own passkey authenticator: create and sign in with passkeys, stored in your vault and encrypted like everything else.
+- More than logins. Logins, payment cards, secure notes, and SSH keys, each with their own fields.
+- Built-in password generator.
+- Hardware-key unlock. Register a YubiKey, Touch ID, or Windows Hello and unlock with a tap via WebAuthn PRF. Use it alongside your master password, or make it your only way in.
+- Encrypted backups. Export your whole vault to an encrypted file any time, for an offline copy you keep. It still needs your master password to open.
+- Recovery codes. Every vault gets a secure recovery code at setup: a printable backup that unlocks it independently of your master password.
+- TOTP / 2FA codes. Paste an otpauth:// URI or secret and Bramble generates the codes.
+- Optional breach checking. Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine. Off by default.
+- Auto-lock after 15 minutes idle (configurable).
+- Import from KeePass, Bitwarden, Proton Pass and 1Password.
+
+WHY LOCAL-FIRST
+
+Cloud managers keep everyone's vaults on their servers, which is one giant target. When one is breached, it isn't one vault that leaks but millions at once, often disclosed months later.
+
+Bramble flips that around:
+- No server to breach. Your vault never leaves your control.
+- No account, no subscription, no telemetry. Nothing to sign up for.
+- Your data, your devices. Sync it across your own devices, keep it on one machine, or export an encrypted backup you hold. Nothing is ever parked on someone else's server.
+- Nothing to trust but the code. The code is open source and runs entirely on your device.
+
+HOW THE ENCRYPTION WORKS
+
+Bramble uses LUKS-style key slots and envelope encryption. One random Vault Key protects your data. Each unlock method (master password, security key, recovery code) derives its own Key-Encryption Key that unwraps a copy of that same Vault Key, so adding or revoking an unlock method never re-encrypts a single entry. The Vault Key then unwraps a fresh per-entry key for every item. Everything is AES-256-GCM.
+
+COMING FROM KEEPASS?
+
+You'll feel at home: your encrypted vault, your control, no cloud middleman, and Bramble imports your KDBX4 files. The differences: it lives in your browser (no separate desktop app or plugin bridge), autofill is built in with domain matching and an on-page dropdown, and it ships one modern build with Argon2id and AES-256-GCM rather than a sprawl of plugins. Clean UI, dark mode included.
+
+Read the full privacy policy linked on this page.
