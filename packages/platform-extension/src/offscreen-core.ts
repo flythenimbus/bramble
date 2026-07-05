@@ -241,7 +241,28 @@ export async function clearClipboard(): Promise<boolean> {
 }
 
 /**
- * Handle one host message (clipboard / sync / crypto) and return the host response.
+ * Decode a single QR code from a PNG data URL via OffscreenCanvas; null if none found.
+ * Lives in the host (offscreen document on Chrome, event page on Firefox) rather than
+ * the background: jsqr loads via a lazy `import()`, which is reliable in a real document
+ * but not from an idle MV3 service worker that has been suspended and restarted.
+ */
+async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
+	// jsqr is large and only the QR-scan path needs it; keep it lazy so it stays out of
+	// the host bundle that re-parses on every cold wake.
+	const { default: jsQR } = await import("jsqr");
+	const blob = await (await fetch(dataUrl)).blob();
+	const bitmap = await createImageBitmap(blob);
+	const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return null;
+	ctx.drawImage(bitmap, 0, 0);
+	bitmap.close();
+	const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	return jsQR(data, width, height)?.data ?? null;
+}
+
+/**
+ * Handle one host message (clipboard / sync / crypto / QR) and return the host response.
  * Sync messages use the registered SyncBridge for their storage round-trips. Never
  * throws — failures come back as `{ ok: false, error }`.
  */
@@ -250,6 +271,11 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 	try {
 		if (type === "CLIPBOARD_CLEAR") {
 			return { ok: true, data: await clearClipboard() };
+		}
+		if (type === "QR_DECODE") {
+			const dataUrl = (payload as { dataUrl?: unknown } | null)?.dataUrl;
+			if (typeof dataUrl !== "string") throw new Error("QR_DECODE requires a dataUrl");
+			return { ok: true, data: await decodeQrDataUrl(dataUrl) };
 		}
 		if (type === "SYNC_DISCONNECT") {
 			enrollSession?.stop();

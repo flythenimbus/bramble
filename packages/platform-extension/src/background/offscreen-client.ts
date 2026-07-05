@@ -82,6 +82,7 @@ export async function sendToOffscreen(message: Record<string, unknown>): Promise
 		type === "CRYPTO_UNLOCK_WITH_VEK" ||
 		type === "CRYPTO_GENERATE_VEK" ||
 		type === "CLIPBOARD_CLEAR" ||
+		type === "QR_DECODE" ||
 		type?.startsWith("SYNC_") === true;
 	const cachedVek = getVek();
 	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {

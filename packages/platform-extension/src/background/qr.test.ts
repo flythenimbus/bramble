@@ -13,31 +13,32 @@ describe("CAPTURE_QR_SCAN", () => {
 		expect(bg.chrome.tabs.captureVisibleTab).not.toHaveBeenCalled();
 	});
 
-	it("captures the visible tab as PNG and returns the decoded QR (null when none)", async () => {
-		const bg = await loadBackground({ lastFocusedWindow: { id: 7 } });
-		// Minimal OffscreenCanvas / image pipeline so jsQR runs on a blank frame.
-		vi.stubGlobal("fetch", async () => ({ blob: async () => ({}) }));
-		vi.stubGlobal("createImageBitmap", async () => ({ width: 2, height: 2, close: () => {} }));
-		vi.stubGlobal(
-			"OffscreenCanvas",
-			class {
-				width: number;
-				height: number;
-				constructor(w: number, h: number) {
-					this.width = w;
-					this.height = h;
-				}
-				getContext() {
-					return {
-						drawImage: () => {},
-						getImageData: () => ({ data: new Uint8ClampedArray(2 * 2 * 4), width: 2, height: 2 }),
-					};
-				}
-			},
-		);
+	it("captures the visible tab as PNG and forwards the frame to the offscreen decoder", async () => {
+		// Decode now runs in the offscreen host (jsqr's lazy import is unreliable in the SW),
+		// so the background just captures and forwards QR_DECODE; the offscreen returns the result.
+		const bg = await loadBackground({
+			lastFocusedWindow: { id: 7 },
+			offscreen: (msg) =>
+				msg.type === "QR_DECODE"
+					? { ok: true, data: "otpauth://totp/x" }
+					: { ok: false, error: `unhandled ${msg.type}` },
+		});
+		const { resp } = await bg.send({ type: "CAPTURE_QR_SCAN" });
+		expect(resp).toEqual({ ok: true, data: "otpauth://totp/x" });
+		expect(bg.chrome.tabs.captureVisibleTab).toHaveBeenCalledWith(7, { format: "png" });
+		// The captured PNG data URL is what gets handed to the decoder.
+		const decodeCall = bg.state.offscreenCalls.find((m) => m.type === "QR_DECODE");
+		expect(decodeCall?.payload).toMatchObject({ dataUrl: expect.any(String) });
+	});
+
+	it("returns null data when the offscreen finds no QR code", async () => {
+		const bg = await loadBackground({
+			lastFocusedWindow: { id: 7 },
+			offscreen: (msg) =>
+				msg.type === "QR_DECODE" ? { ok: true, data: null } : { ok: false, error: "x" },
+		});
 		const { resp } = await bg.send({ type: "CAPTURE_QR_SCAN" });
 		expect(resp).toEqual({ ok: true, data: null });
-		expect(bg.chrome.tabs.captureVisibleTab).toHaveBeenCalledWith(7, { format: "png" });
 	});
 
 	it("wraps a capture failure as an error envelope", async () => {
