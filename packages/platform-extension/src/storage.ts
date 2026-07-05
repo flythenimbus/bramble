@@ -3,6 +3,7 @@
 import type { StorageAdapter } from "@core/adapters/storage";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { api } from "./platform-api";
+import { clearLegacyHandle, getLegacyHandle } from "./storage-legacy";
 
 const VAULT_BLOB_KEY = "vault-blob-b64";
 /** Recovery snapshot of the previous vault bytes, written before every overwrite so a crash mid-write leaves a recoverable copy. */
@@ -15,46 +16,9 @@ const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
 // chrome.storage.local: the extension's own sandbox, which needs no gesture, survives SW
 // restarts, and is readable/writable headless. An existing file-backed vault is migrated
 // into local storage on the first unlock (a real click, so the one-time file read is
-// permitted); the original file is left on disk as the user's own backup. This block is
-// read-only legacy support and can be deleted once no file-backed installs remain.
-const IDB_NAME = "vault-storage";
-const IDB_STORE = "handles";
-const HANDLE_KEY = "vault-file";
-
-async function openIdb(): Promise<IDBDatabase> {
-	return new Promise((resolve, reject) => {
-		const req = indexedDB.open(IDB_NAME, 1);
-		req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
-		req.onsuccess = () => resolve(req.result);
-		req.onerror = () => reject(req.error);
-	});
-}
-
-async function getLegacyHandle(): Promise<FileSystemFileHandle | null> {
-	try {
-		const db = await openIdb();
-		return await new Promise((resolve, reject) => {
-			const tx = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(HANDLE_KEY);
-			tx.onsuccess = () => resolve((tx.result as FileSystemFileHandle | undefined) ?? null);
-			tx.onerror = () => reject(tx.error);
-		});
-	} catch {
-		return null;
-	}
-}
-
-async function clearLegacyHandle(): Promise<void> {
-	try {
-		const db = await openIdb();
-		await new Promise<void>((resolve, reject) => {
-			const tx = db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE).delete(HANDLE_KEY);
-			tx.onsuccess = () => resolve();
-			tx.onerror = () => reject(tx.error);
-		});
-	} catch {
-		// Best-effort: a stale handle is harmless once a local vault exists (local wins below).
-	}
-}
+// permitted); the original file is left on disk as the user's own backup. The IndexedDB
+// handle glue lives in ./storage-legacy; this whole path can be deleted once no file-backed
+// installs remain.
 
 /**
  * Copy a legacy file-backed vault into local storage. MUST run inside a user gesture (the
