@@ -1,10 +1,10 @@
-Bramble è un gestore di password che vive nel tuo browser e conserva i tuoi segreti sul tuo dispositivo. Nessun account, nessun server che custodisce il tuo caveau, nessuna azienda da violare per far trapelare tutto. Tu possiedi il caveau, tu possiedi la password, e basta.
+Bramble è un gestore di password che vive nel tuo browser e conserva i tuoi segreti sul tuo dispositivo. Nessun account, nessun server che custodisce il tuo caveau, nessuna azienda da violare per far trapelare tutto. Tu tieni il caveau, tu tieni la password, e basta.
 
-Funziona in Firefox, LibreWolf, Waterfox, Zen e altri browser Firefox. Installalo e sarai operativo in circa un minuto.
+Funziona in Firefox, LibreWolf, Waterfox, Zen e altri browser Firefox. Installalo e in circa un minuto è operativo.
 
 COSA FA
 
-Le tue password vengono crittografate sul tuo dispositivo e archiviate nell'archivio delle estensioni del browser, sul tuo computer. Non c'è account né server che custodisce il tuo caveau. Imposta una volta e inizierai subito a compilare automaticamente gli accessi, salvarne di nuovi e generare password.
+Le tue password vengono crittografate sul tuo dispositivo e archiviate nell'archivio delle estensioni del browser, sulla tua macchina. Non c'è account né server che custodisce il tuo caveau. Imposta una volta e inizi subito a compilare automaticamente gli accessi, salvarne di nuovi e generare password.
 
 Hai più di un dispositivo? Abbinali e Bramble mantiene il tuo caveau sincronizzato tra di essi tramite un canale crittografato end-to-end. Il relay che introduce i tuoi dispositivi vede solo testo cifrato e non memorizza nulla, quindi i tuoi segreti non finiscono mai su alcun server.
 
@@ -17,26 +17,27 @@ CARATTERISTICHE
 - Compilazione automatica intelligente per dominio. www.example.com, ca.accounts.example.com ed example.com corrispondono tutti a un unico accesso. Una voce, più URL.
 - Più che accessi. Accessi, carte di pagamento, note sicure e chiavi SSH, ciascuno con i propri campi.
 - Generatore di password integrato.
+- Backup crittografati. Esporta l'intero caveau in un file crittografato in qualsiasi momento, per una copia offline che conservi. Necessita comunque della tua password principale per aprirlo.
 - Codici di recupero. Ogni caveau riceve un codice di recupero sicuro durante la configurazione: un backup stampabile che lo sblocca indipendentemente dalla tua password principale.
 - Codici TOTP / 2FA. Incolla un URI otpauth:// o un segreto e Bramble genera i codici.
-- Controllo opzionale delle violazioni. Ricerca Have I Been Pwned utilizzando k-anonymity, in modo che nulla sulla tua password lasci il tuo dispositivo. Disattivato per impostazione predefinita.
+- Controllo opzionale delle violazioni. Ricerca Have I Been Pwned utilizzando k-anonymity, in modo che nulla sulla tua password lasci la tua macchina. Disattivato per impostazione predefinita.
 - Blocco automatico dopo 15 minuti di inattività (configurabile).
 - Importazione da KeePass, Bitwarden, Proton Pass e 1Password.
 
 PERCHÉ LOCALE PER PRIMO
 
-I gestori cloud conservano i caveau di tutti sui loro server, che rappresentano un unico grande bersaglio. Quando uno viene violato, non è un singolo caveau a trapelare, ma milioni contemporaneamente, spesso divulgati mesi dopo.
+I gestori cloud conservano i caveau di tutti sui propri server, che rappresentano un unico grande bersaglio. Quando uno viene violato, non è un singolo caveau a trapelare, ma milioni contemporaneamente, spesso divulgati mesi dopo.
 
-Bramble inverte la situazione:
+Bramble inverte questa logica:
 - Nessun server da violare. Il tuo caveau non lascia mai il tuo controllo.
 - Nessun account, nessun abbonamento, nessuna telemetria. Niente a cui iscriversi.
-- I tuoi dispositivi, i tuoi dati. Sincronizzalo tra i tuoi dispositivi o tienilo su un solo computer, offline. Niente viene mai parcheggiato sul server di qualcun altro.
-- Niente da fidarsi se non il codice. Il codice è open source e viene eseguito interamente sul tuo dispositivo.
+- I tuoi dispositivi, i tuoi dati. Sincronizzalo tra i tuoi dispositivi, conservalo su una macchina offline o esporta un backup crittografato che tieni tu. Niente viene mai parcheggiato sul server di qualcun altro.
+- Niente da fidarsi se non del codice. Il codice è open source e viene eseguito interamente sul tuo dispositivo.
 
 COME FUNZIONA LA CRITTOGRAFIA
 
-Bramble utilizza slot di chiave in stile LUKS e crittografia a busta. Una chiave del caveau casuale protegge i tuoi dati. Ogni metodo di sblocco (password principale, codice di recupero) deriva la propria chiave di crittografia della chiave che sblocca una copia della stessa chiave del caveau, quindi aggiungere o revocare un metodo di sblocco non richiede mai di ricrittografare una singola voce. La chiave del caveau sblocca quindi una nuova chiave per ogni elemento. Tutto è AES-256-GCM.
+Bramble utilizza slot di chiave in stile LUKS e crittografia a busta. Una chiave del caveau casuale protegge i tuoi dati. Ogni metodo di sblocco (password principale, codice di recupero) deriva la propria chiave di crittografia della chiave che apre una copia della stessa chiave del caveau, quindi aggiungere o revocare un metodo di sblocco non richiede mai di ricrittografare una singola voce. La chiave del caveau apre quindi una nuova chiave per ogni voce per ogni elemento. Tutto è AES-256-GCM.
 
 PROVENIENZA DA KEEPASS?
 
-Ti sentirai a casa: il tuo caveau crittografato, il tuo controllo, nessun intermediario cloud, e Bramble importa i tuoi file KDBX4. Le differenze: vive nel tuo browser (nessuna app desktop separata o bridge di plugin), la compilazione automatica è integrata con corrispondenza del dominio e un menu a discesa sulla pagina, e fornisce una build moderna con Argon2id e AES-256-GCM anziché una miriade di plugin. Interfaccia pulita, modalità scura inclusa.
+Ti sentirai a casa: il tuo caveau crittografato, il tuo controllo, nessun intermediario cloud, e Bramble importa i tuoi file KDBX4. Le differenze: vive nel tuo browser (nessuna app desktop separata o bridge di plugin), la compilazione automatica è integrata con corrispondenza del dominio e un menu a discesa sulla pagina, e fornisce una build moderna con Argon2id e AES-256-GCM invece di una miriade di plugin. Interfaccia pulita, modalità scura inclusa.

@@ -17,6 +17,7 @@ FEATURES
 - Domain-smart autofill. www.example.com, ca.accounts.example.com, and example.com all match one login. One entry, several URLs.
 - More than logins. Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - Built-in password generator.
+- Encrypted backups. Export your whole vault to an encrypted file any time, for an offline copy you keep. It still needs your master password to open.
 - Recovery codes. Every vault gets a secure recovery code at setup: a printable backup that unlocks it independently of your master password.
 - TOTP / 2FA codes. Paste an otpauth:// URI or secret and Bramble generates the codes.
 - Optional breach checking. Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine. Off by default.
@@ -30,7 +31,7 @@ Cloud managers keep everyone's vaults on their servers, which is one giant targe
 Bramble flips that around:
 - No server to breach. Your vault never leaves your control.
 - No account, no subscription, no telemetry. Nothing to sign up for.
-- Your devices, your data. Sync it across your own devices, or keep it on one machine, offline. Nothing is ever parked on someone else's server.
+- Your devices, your data. Sync it across your own devices, keep it on one machine offline, or export an encrypted backup you hold. Nothing is ever parked on someone else's server.
 - Nothing to trust but the code. The code is open source and runs entirely on your device.
 
 HOW THE ENCRYPTION WORKS
