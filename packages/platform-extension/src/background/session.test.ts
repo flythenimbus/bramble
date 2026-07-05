@@ -92,8 +92,6 @@ describe("CRYPTO_ session state sync", () => {
 				"capture.pending.example.com": { hostname: "example.com" },
 				"cornerPrompt.handoff": { intent: "save" },
 				"popout.handoff": { draft: 1 },
-				// Ciphertext: intentionally preserved across lock.
-				"vault.pendingFlush": { blobB64: "x" },
 			},
 		});
 		await bg.send({ type: "CRYPTO_GENERATE_VEK" }); // ensure alarm exists
@@ -105,8 +103,6 @@ describe("CRYPTO_ session state sync", () => {
 		expect(bg.state.session["cornerPrompt.handoff"]).toBeUndefined();
 		expect(bg.state.session["popout.handoff"]).toBeUndefined();
 		expect(bg.state.alarms[AUTOLOCK]).toBeUndefined();
-		// PENDING_BLOB_KEY is ciphertext and must survive a lock.
-		expect(bg.state.session["vault.pendingFlush"]).toBeDefined();
 	});
 });
 

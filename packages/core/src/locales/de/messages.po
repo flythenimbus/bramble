@@ -24,10 +24,6 @@ msgstr "...und noch {0} weitere"
 msgid "{0} · added {1}"
 msgstr "{0} · hinzugefügt am {1}"
 
-#: packages/core/src/app/layouts/AppLayout.tsx
-msgid "{pendingSyncCount} pending sync"
-msgstr "{pendingSyncCount} wartende Synchronisierungen"
-
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining}s verbleiben"
@@ -37,18 +33,6 @@ msgstr "{remaining}s verbleiben"
 msgid "<0>{0}</0> items ready to import"
 msgstr "<0>{0}</0> Elemente bereit zum Import"
 
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "<0>Brave:</0> open <1>brave://flags/#file-system-access-api</1> → set to <2>Enabled</2> → relaunch. Or set <3>brave://settings/shields</3> fingerprinting blocking to <4>Standard</4>."
-msgstr "<0>Brave:</0> Öffnen Sie <1>brave://flags/#file-system-access-api</1> → auf <2>Aktiviert</2> setzen → neu starten. Oder stellen Sie die Fingerabdruckblockierung in <3>brave://settings/shields</3> auf <4>Standard</4>."
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "<0>Chrome / Edge:</0> usually on by default. If not, check <1>chrome://flags/#file-system-access-api</1>."
-msgstr "<0>Chrome / Edge:</0> Ist normalerweise standardmäßig aktiviert. Falls nicht, überprüfen Sie <1>chrome://flags/#file-system-access-api</1>."
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "<0>Firefox / Safari:</0> not supported. Use a Chromium-based browser for sync."
-msgstr "<0>Firefox / Safari:</0> Nicht unterstützt. Verwenden Sie einen auf Chromium basierenden Browser für die Synchronisierung."
-
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "1 hour"
 msgstr "1 Stunde"
@@ -56,10 +40,6 @@ msgstr "1 Stunde"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "1 minute"
 msgstr "1 Minute"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "1. Vault file location"
-msgstr "Speicherort der Tresordatei"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "15 minutes"
@@ -187,10 +167,6 @@ msgstr "Einträge von 1Password, Bitwarden, KeePass oder Proton Pass importieren
 msgid "Bring your logins, cards and notes over from another manager"
 msgstr "Migrieren Sie Ihre Anmeldedaten, Karten und Notizen von einem anderen Manager"
 
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Browser storage will be used"
-msgstr "Der Browser-Speicher wird verwendet"
-
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
@@ -219,7 +195,6 @@ msgid "Cards"
 msgstr "Karten"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
 msgid "Change"
 msgstr "Ändern"
 
@@ -239,17 +214,9 @@ msgstr "Passwörter auf Sicherheitslücken prüfen"
 msgid "Choose a master password"
 msgstr "Wählen Sie ein Master-Passwort"
 
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Choose a vault file"
-msgstr "Wählen Sie eine Tresordatei"
-
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Choose another file"
 msgstr "Andere Datei auswählen"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Choose file"
-msgstr "Datei auswählen"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Choose where to store your encrypted vault and pick a master password."
@@ -522,11 +489,11 @@ msgstr "Ablaufdatum"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Export"
-msgstr ""
+msgstr "Exportieren"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Export a backup"
-msgstr ""
+msgstr "Ein Backup exportieren"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Face ID"
@@ -551,10 +518,6 @@ msgstr "Nach Typ filtern"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Fingerprint"
 msgstr "Fingerabdruck"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts)."
-msgstr "Für dateibasierte Tresore benötigt der Hintergrund die Dateiberechtigung zum Synchronisieren, auch wenn die Anwendung geschlossen ist. Erteilen Sie diese hier (oder aktivieren Sie im Browser den dauerhaften Dateizugriff, damit dies nach Neustarts bestehen bleibt)."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "General"
@@ -583,14 +546,6 @@ msgstr "Zurück"
 #: packages/core/src/app/layouts/AppLayout.tsx
 msgid "Go to vault"
 msgstr "Zum Tresor gehen"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Grant access"
-msgstr "Zugriff gewähren"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Grant file access"
-msgstr "Dateizugriff gewähren"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
@@ -848,10 +803,6 @@ msgstr "Ausgeschaltet. Sie entsperren mit einem Sicherheitsschlüssel."
 msgid "Offer to save logins"
 msgstr "Angebot zur Speicherung von Anmeldungen"
 
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Once enabled, refresh this page and you can choose a vault file location."
-msgstr "Nach der Aktivierung aktualisieren Sie diese Seite und können den Speicherort für die Tresordatei wählen."
-
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
 msgstr "Nach der Registrierung synchronisieren sich die Geräte automatisch im Hintergrund, solange diese entsperrt sind. Kein Button oder Fenster ist nötig."
@@ -871,14 +822,6 @@ msgstr "Datenbank öffnen"
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Open existing vault"
 msgstr "Bestehenden Tresor öffnen"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Open existing vault file"
-msgstr "Bestehende Tresordatei öffnen"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Open file"
-msgstr "Datei öffnen"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -969,10 +912,6 @@ msgstr "Zahlungskarte"
 msgid "Pick a master password to protect your vault."
 msgstr "Wählen Sie ein Master-Passwort, um Ihren Tresor zu schützen."
 
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Pick the vault.db file synced from your other device."
-msgstr "Wählen Sie die von Ihrem anderen Gerät synchronisierte vault.db-Datei."
-
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Please enter your master password"
 msgstr "Bitte geben Sie Ihr Master-Passwort ein"
@@ -1004,10 +943,6 @@ msgstr "Öffentlicher Schlüssel"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Public key"
 msgstr "Öffentlicher Schlüssel"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Put it in a Dropbox / iCloud / Syncthing folder for cross-device sync."
-msgstr "Legen Sie es in einen Dropbox / iCloud / Syncthing Ordner für die Geräte-Synchronisierung."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Re-enter the password"
@@ -1100,7 +1035,7 @@ msgstr "Speichern von {modeLabel}"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
-msgstr ""
+msgstr "Speichern Sie eine verschlüsselte .bramble-Kopie Ihres Tresors. Zum Öffnen ist weiterhin Ihr Master-Passwort erforderlich."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
@@ -1109,10 +1044,6 @@ msgstr "Speichern Sie es jetzt an einem sicheren Ort offline. Dies ist die einzi
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
 msgstr "Speichern Sie Ihren Wiederherstellungscode"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Saved to your chosen location (e.g. Dropbox folder)."
-msgstr "Gespeichert an dem von Ihnen gewählten Ort (z. B. Dropbox-Ordner)."
 
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
@@ -1250,10 +1181,6 @@ msgstr "Es ist ein Fehler aufgetreten."
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Sort"
 msgstr "Sortieren"
-
-#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
-#~ msgid "Sort by name"
-#~ msgstr "Nach Name sortieren"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
@@ -1494,14 +1421,6 @@ msgstr "Benutzername oder E-Mail"
 msgid "Value"
 msgstr "Wert"
 
-#: packages/core/src/app/layouts/AppLayout.tsx
-msgid "Vault changes saved by autofill while the popup was closed are syncing to disk"
-msgstr "Immer beim Autofill gespeicherte Vault-Änderungen, während das Popup geschlossen war, werden auf die Festplatte synchronisiert"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Vault file selected"
-msgstr "Vault-Datei ausgewählt"
-
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault ready"
 msgstr "Vault bereit"
@@ -1533,10 +1452,6 @@ msgstr "Wartet darauf, dass ein Gerät beitritt…"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Waiting for your key…"
 msgstr "Warte auf Ihren Schlüssel…"
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Want sync? Enable the File System Access API in your browser:"
-msgstr "Möchten Sie synchronisieren? Aktivieren Sie die File System Access API in Ihrem Browser:"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Website"
@@ -1586,10 +1501,6 @@ msgstr "Wenn Sie auf „Beitreten“ klicken, tippen Sie Ihren Sicherheitsschlü
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
 msgstr "Sie können diesen Tresor nur mit Ihrem Sicherheitsschlüssel entsperren. Wenn Sie alle Ihre Sicherheitsschlüssel verlieren, ist Ihr Wiederherstellungscode der einzige Weg zurück. Es gibt kein Master-Passwort als Rückfallebene."
-
-#: packages/core/src/app/screens/VaultSetup/components/FileLocationCard.tsx
-msgid "Your browser blocks the file picker here. Your vault will live in extension storage on this device only, no cross-device sync."
-msgstr "Ihr Browser blockiert hier den Dateiauswahler. Ihr Tresor wird nur im Erweiterungsspeicher auf diesem Gerät gespeichert; es erfolgt keine Geräteübergreifende Synchronisierung."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."

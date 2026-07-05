@@ -72,7 +72,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// join. The code carries no vault secrets (groupKey + our pubkey + PSK + relay).
 	const inviteDevice = useCallback(
 		async (relayUrl: string, iceUrl?: string): Promise<string> => {
-			await storage.requestVaultAccess(); // grant FSA permission within this click gesture
 			// Persist + propagate (via the pairing code) both relays so a joiner adopts them.
 			await storage.setMeta("sync.relay", relayUrl);
 			await storage.setMeta("sync.iceUrl", iceUrl ?? "");
@@ -149,7 +148,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			// unlock without a second tap.
 			const cred =
 				method.kind === "securityKey" ? await createPrfCredential(method.label ?? "") : undefined;
-			await storage.requestVaultAccess(); // grant FSA permission (no-op on local storage)
 			// Build our roster entry up front so we can hand it to the inviter in the ack.
 			const ownPub = await shell.syncDevicePublicKey();
 			const clock = await ensureClock();

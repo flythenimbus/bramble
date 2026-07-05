@@ -6,26 +6,23 @@ import { useVault, useVaultActions, useVaultState, VaultProvider } from "./useVa
 
 afterEach(cleanup);
 
-// A platform whose vault handle starts absent, then appears once a file is picked. That
-// lets us flip a piece of reactive state (hasVault) through a real action (pickVaultFile)
-// without needing crypto/decrypt, so we can observe which consumers re-render.
+// A platform that flips a piece of reactive state through a real action (lock, which resets
+// entries + isLocked) without needing crypto/decrypt, so we can observe which consumers
+// re-render.
 function makePlatform() {
-	let handle = false;
 	const storage = {
-		hasVaultHandle: vi.fn(async () => handle),
-		selectVaultFile: vi.fn(async () => {
-			handle = true;
-		}),
+		hasVaultHandle: vi.fn(async () => false),
 	};
 	const crypto = {
 		isLocked: vi.fn(async () => true),
+		lock: vi.fn(async () => {}),
 		onExternalLock: vi.fn(() => () => {}),
 		onExternalChange: vi.fn(() => () => {}),
 	};
 	const platform = {
 		storage,
 		crypto,
-		autofill: {},
+		autofill: { clearIndex: vi.fn(async () => {}) },
 		shell: {},
 		clipboard: {},
 	} as unknown as Platform;
@@ -48,7 +45,7 @@ function renderSplit() {
 		actionRenders.n++;
 		const a = useVaultActions();
 		capturedActions = a;
-		pick = () => a.pickVaultFile("open");
+		pick = () => a.lock();
 		return null;
 	}
 
@@ -79,7 +76,7 @@ describe("useVault state/actions split", () => {
 		const stateAfterMount = h.stateRenders.n;
 		const actionsAfterMount = h.actionRenders.n;
 
-		// pickVaultFile flips hasVault (reactive state) via a real action.
+		// lock flips reactive state (entries + isLocked) via a real action.
 		await act(async () => {
 			await h.pick();
 		});

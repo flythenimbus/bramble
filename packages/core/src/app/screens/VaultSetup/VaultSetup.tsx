@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { FileLocationCard } from "./components/FileLocationCard";
 import { ModeTabs } from "./components/ModeTabs";
 import { PasswordCard } from "./components/PasswordCard";
 import { SetupHeader } from "./components/SetupHeader";
@@ -9,29 +8,18 @@ import type { VaultSetupFormValues, VaultSetupMode } from "./types";
 export type { VaultSetupMode } from "./types";
 
 interface VaultSetupProps {
-	hasPicker: boolean;
-	hasFile: boolean;
 	mode: VaultSetupMode;
 	onModeChange: (mode: VaultSetupMode) => void;
-	onChooseFile: () => Promise<void>;
 	onCreate: (password: string) => Promise<void>;
 	onUnlock: (password: string) => Promise<void>;
-	/** Mobile: storage is app-managed, so hide the file-location step and use the compact presentation. */
+	/** Compact presentation for the single-window mobile host. */
 	mobile?: boolean;
 }
 
-export function VaultSetup({
-	hasPicker,
-	hasFile,
-	mode,
-	onModeChange,
-	onChooseFile,
-	onCreate,
-	onUnlock,
-	mobile,
-}: VaultSetupProps) {
+/** Vault setup: pick create vs open, then set/enter the master password. The vault lives in
+ * the platform's own storage, so there is no file-location step. */
+export function VaultSetup({ mode, onModeChange, onCreate, onUnlock, mobile }: VaultSetupProps) {
 	const [busy, setBusy] = useState(false);
-	const [fileError, setFileError] = useState<string | null>(null);
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const form = useForm<VaultSetupFormValues>({
 		defaultValues: { masterPassword: "", confirmPassword: "" },
@@ -50,21 +38,8 @@ export function VaultSetup({
 		}
 	};
 
-	const handlePick = async () => {
-		setFileError(null);
-		setBusy(true);
-		try {
-			await onChooseFile();
-		} catch (e) {
-			setFileError((e as Error).message);
-		} finally {
-			setBusy(false);
-		}
-	};
-
 	const handleModeChange = (next: VaultSetupMode) => {
 		if (next === mode) return;
-		setFileError(null);
 		setSubmitError(null);
 		form.reset({ masterPassword: "", confirmPassword: "" });
 		onModeChange(next);
@@ -75,25 +50,13 @@ export function VaultSetup({
 			<div className="w-full max-w-xl">
 				<SetupHeader mode={mode} mobile={mobile} />
 				<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} pill={mobile} />
-				{!mobile && hasPicker && (
-					<FileLocationCard
-						hasPicker={hasPicker}
-						hasFile={hasFile}
-						mode={mode}
-						busy={busy}
-						onPick={handlePick}
-						error={fileError}
-					/>
-				)}
 				<PasswordCard
 					mode={mode}
 					form={form}
 					busy={busy}
-					canSubmit={!hasPicker || hasFile}
 					submitError={submitError}
 					onSubmit={handleSubmit}
 					mobile={mobile}
-					numbered={!mobile && hasPicker}
 				/>
 			</div>
 		</div>

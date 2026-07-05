@@ -13,12 +13,9 @@ import {
 // via observable outcomes (a re-query reflects the change + a vault-changed
 // broadcast fires).
 vi.mock("../storage", () => ({
-	PENDING_BLOB_KEY: "vault.pendingFlush",
 	extensionStorage: {
 		readVaultBlob: async () => new Uint8Array([1, 2, 3]),
 		writeVaultBlob: async () => {},
-		canWriteFromBackground: async () => true,
-		canReadFromBackground: async () => true,
 		getMeta: async () => undefined,
 		setMeta: async () => {},
 	},

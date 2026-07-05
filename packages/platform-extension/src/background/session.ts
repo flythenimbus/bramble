@@ -85,7 +85,6 @@ export async function clearSession(): Promise<void> {
 		for (const key of Object.keys(all)) {
 			if (key.startsWith(CAPTURE_KEY_PREFIX)) toRemove.push(key);
 		}
-		// PENDING_BLOB_KEY is ciphertext, so it is intentionally not wiped here.
 		await api.storage.session.remove(toRemove);
 	} catch {}
 	void api.alarms.clear(AUTOLOCK_ALARM);

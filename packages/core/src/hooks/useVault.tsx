@@ -200,8 +200,6 @@ export interface VaultState {
 	ready: boolean;
 	entries: Entry[];
 	error: string | null;
-	/** Vault changes queued to disk but not yet flushed. 0 for the chrome.storage backend. */
-	pendingSyncCount: number;
 	/** A vault exists on disk but its blob couldn't be read/decoded; null when readable. */
 	vaultError: string | null;
 	/** Platform exposes a device-local biometric gate (mobile). Gates the biometric UI entirely. */
@@ -218,7 +216,6 @@ export interface VaultState {
 export interface VaultActions {
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
-	pickVaultFile(mode: "create" | "open"): Promise<void>;
 	/** Creates the vault and returns its initial plaintext recovery code (shown once). */
 	createVault(password: string): Promise<string>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
@@ -279,7 +276,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
-	const [pendingSyncCount, setPendingSyncCount] = useState(0);
 	const [webauthnSlots, setWebauthnSlots] = useState<WebauthnSlot[]>([]);
 	const [hasPasswordSlot, setHasPasswordSlot] = useState(false);
 	const [hasRecoveryCode, setHasRecoveryCode] = useState(false);
@@ -314,14 +310,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			clockRef.current = makeClock(id);
 		}
 		return clockRef.current;
-	}, [storage]);
-
-	const refreshPendingSyncCount = useCallback(async () => {
-		try {
-			setPendingSyncCount(await storage.getPendingFlushCount());
-		} catch {
-			setPendingSyncCount(0);
-		}
 	}, [storage]);
 
 	/** Read+decode the vault, falling back to the backup snapshot on decode failure. */
@@ -367,10 +355,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Decrypt all entries and push the autofill index. */
 	const loadEntries = useCallback(async () => {
-		// Flush before the read so the decoded blob reflects any background-queued
-		// corner-prompt write (FSA backend only).
-		await storage.flushPendingVaultBlob().catch(() => {});
-		await refreshPendingSyncCount();
 		const { blob } = await readDecodedBlob();
 		if (blob.entriesCiphertext.length === 0) {
 			stampsRef.current = new Map();
@@ -416,7 +400,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		);
 		setEntries(decrypted);
 		await autofill.setIndex(toAutofillIndex(decrypted));
-	}, [readDecodedBlob, crypto, autofill, storage, refreshPendingSyncCount, ensureClock]);
+	}, [readDecodedBlob, crypto, autofill, ensureClock]);
 
 	// On mount: detect an existing vault handle and whether crypto is already
 	// unlocked (popup reopened mid-session).
@@ -660,16 +644,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await refreshSlotMetadata();
 		},
 		[readDecodedBlob, storage, refreshSlotMetadata],
-	);
-
-	/** Prompt the user to pick a vault file to create or open. */
-	const pickVaultFile = useCallback(
-		async (mode: "create" | "open") => {
-			setError(null);
-			await storage.selectVaultFile(mode);
-			setHasVault(await storage.hasVaultHandle());
-		},
-		[storage],
 	);
 
 	/** Create a new vault with a password slot and an initial recovery slot. */
@@ -991,7 +965,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			entries,
 			error,
-			pendingSyncCount,
 			vaultError,
 			hasWebauthnSlot,
 			hasPasswordSlot,
@@ -1008,7 +981,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			entries,
 			error,
-			pendingSyncCount,
 			vaultError,
 			hasWebauthnSlot,
 			hasPasswordSlot,
@@ -1027,7 +999,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		() => ({
 			unlock,
 			lock,
-			pickVaultFile,
 			createVault,
 			exportVault,
 			addEntry,
@@ -1056,7 +1027,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[
 			unlock,
 			lock,
-			pickVaultFile,
 			createVault,
 			exportVault,
 			addEntry,
