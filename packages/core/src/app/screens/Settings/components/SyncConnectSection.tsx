@@ -184,11 +184,6 @@ export function SyncConnectSection() {
 			if (code) setJoinCode(code);
 			else note("no code scanned");
 		});
-	const grantAccess = () =>
-		run("granting file access…", async () => {
-			await storage.requestVaultAccess();
-			note("file access granted ✅");
-		});
 	const remove = async (d: RosterEntry) => {
 		setRemovingId(null);
 		try {
@@ -537,20 +532,6 @@ export function SyncConnectSection() {
 								</Trans>
 							</p>
 						</div>
-						{/* FSA-backed vaults only; no file backing to grant elsewhere (mobile, no-FSA browsers). */}
-						{shell.hasFilePicker() && (
-							<div className="pt-2">
-								<Row
-									icon={<Wifi className="w-4 h-4 text-primary" />}
-									title={t`Grant file access`}
-									subtitle={t`For file-backed vaults, the background needs file permission to sync while closed. Grant it here (or enable persistent file access in your browser so it survives restarts).`}
-								>
-									<button type="button" onClick={() => void grantAccess()} className={btnClass}>
-										<Trans>Grant access</Trans>
-									</button>
-								</Row>
-							</div>
-						)}
 					</div>
 				)}
 			</div>

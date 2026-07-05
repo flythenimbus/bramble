@@ -39,8 +39,6 @@ export interface ShellAdapter {
 	 * No argument is the vault setup flow; pass a `screen` to land on another flow such as "import".
 	 */
 	openSetup(screen?: OptionsScreen): Promise<void>;
-	/** Whether this context can show a native file picker. False on the extension (the vault lives in chrome.storage.local, so setup never picks a file). */
-	hasFilePicker(): boolean;
 	/**
 	 * Save bytes to a file the user keeps, for the vault export / backup flow. Extension: a
 	 * download. Absent where there is no save mechanism, which hides the export affordance.

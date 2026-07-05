@@ -26,7 +26,7 @@ import {
 	broadcastVaultChanged,
 	readAndDecodeVault,
 	reencryptOuterWithEntryChange,
-	writeOrQueueVault,
+	writeVault,
 } from "./vault-io";
 
 // Session stash for an in-flight capture, keyed one per eTLD+1.
@@ -138,7 +138,7 @@ async function commitCornerSave(
 		entriesIv: outer.entriesIv,
 		entriesCiphertext: outer.entriesCiphertext,
 	};
-	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
+	await writeVault(encodeVaultBlob(newBlob));
 
 	const username = editedUsername ?? capture.username;
 	await addLoginEntry({
@@ -198,7 +198,7 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 		entriesIv: outer.entriesIv,
 		entriesCiphertext: outer.entriesCiphertext,
 	};
-	await writeOrQueueVault(encodeVaultBlob(newBlob), outer.entryCount);
+	await writeVault(encodeVaultBlob(newBlob));
 	updateLoginCredentials(chosenEntryId, capture.username, capture.password);
 	await broadcastVaultChanged();
 }

@@ -9,48 +9,20 @@ import {
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, type EncryptedEntry, type VaultBlob } from "@core/vault-format";
 import { api } from "../platform-api";
-import { extensionStorage, PENDING_BLOB_KEY } from "../storage";
+import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { witnessStamp } from "./sync-clock";
 
 // Re-exported so existing background importers keep their import site.
 export { base64ToBytes, bytesToBase64 };
 
-/**
- * Thrown by a background vault read when the FSA file's permission is not granted.
- * The background must not `requestPermission` (it needs a gesture and throws a raw
- * "permission denied for vault file"); callers catch this and route through a gesture
- * (the popup) to grant access instead. See docs/storage.md.
- */
-export class VaultAccessError extends Error {
-	constructor() {
-		super("vault file access not granted to the background");
-		this.name = "VaultAccessError";
-	}
-}
-
 export async function readAndDecodeVault(): Promise<VaultBlob> {
-	// Guard before readVaultBlob so an ungranted FSA file yields a typed, catchable
-	// error rather than readVaultBlob calling requestPermission from the background.
-	if (!(await extensionStorage.canReadFromBackground())) throw new VaultAccessError();
-	const bytes = await extensionStorage.readVaultBlob();
-	return decodeVaultBlob(bytes);
+	return decodeVaultBlob(await extensionStorage.readVaultBlob());
 }
 
-/** chrome.storage.local writes directly; FSA queues the blob for the next popup to flush. */
-export async function writeOrQueueVault(blob: Uint8Array, entryCount: number): Promise<void> {
-	const canWrite = await extensionStorage.canWriteFromBackground();
-	if (canWrite) {
-		await extensionStorage.writeVaultBlob(blob);
-		return;
-	}
-	await api.storage.session.set({
-		[PENDING_BLOB_KEY]: {
-			blobB64: bytesToBase64(blob),
-			entryCount,
-			queuedAt: Date.now(),
-		},
-	});
+/** Persist the vault blob. chrome.storage.local is always writable headless, so the write always goes straight through. */
+export async function writeVault(blob: Uint8Array): Promise<void> {
+	await extensionStorage.writeVaultBlob(blob);
 }
 
 /** Decrypt, mutate, re-encrypt the outer entry list via offscreen so plaintext never leaves it. */

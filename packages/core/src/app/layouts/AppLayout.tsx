@@ -1,4 +1,4 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { useLingui } from "@lingui/react/macro";
 import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
@@ -11,7 +11,7 @@ import { usePopOut } from "../hooks/usePopOut";
 export function AppLayout() {
 	const router = useRouter();
 	const navigate = useNavigate();
-	const { lock, pendingSyncCount } = useVault();
+	const { lock } = useVault();
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
 	const { t } = useLingui();
@@ -66,17 +66,6 @@ export function AppLayout() {
 							</button>
 						</div>
 						<div className="flex items-center gap-1.5">
-							{pendingSyncCount > 0 && (
-								// On-disk file is behind the in-memory view (FSA saves from the
-								// corner prompt). Should clear within a second of mount; if it
-								// lingers, the flush failed.
-								<span
-									className="text-[11px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20"
-									title={t`Vault changes saved by autofill while the popup was closed are syncing to disk`}
-								>
-									<Trans>{pendingSyncCount} pending sync</Trans>
-								</span>
-							)}
 							{canPopOut && (
 								<button
 									type="button"

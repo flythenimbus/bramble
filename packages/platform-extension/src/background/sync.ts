@@ -43,7 +43,7 @@ import {
 	broadcastVaultChanged,
 	bytesToBase64,
 	readAndDecodeVault,
-	writeOrQueueVault,
+	writeVault,
 } from "./vault-io";
 
 // --- enrollment (forwarded to the offscreen) ---
@@ -155,7 +155,7 @@ function makeVaultSyncPort(): VaultSyncPort {
 				entriesIv: base64ToBytes(iv),
 				entriesCiphertext: base64ToBytes(ciphertext),
 			});
-			await writeOrQueueVault(newBlob, merged.entries.length);
+			await writeVault(newBlob);
 			await broadcastVaultChanged();
 		},
 	};

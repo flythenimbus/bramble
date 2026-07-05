@@ -15,14 +15,10 @@ interface PasswordCardProps {
 	mode: VaultSetupMode;
 	form: UseFormReturn<VaultSetupFormValues>;
 	busy: boolean;
-	canSubmit: boolean;
 	submitError: string | null;
 	onSubmit: (values: VaultSetupFormValues) => Promise<void>;
 	/** Compact/mobile presentation: column footer, full-width button, larger heading. */
 	mobile?: boolean;
-	/** Show the "2." step number — only when the file-location step is also shown. It is
-	 * hidden on mobile and on browsers without a file picker (e.g. Firefox). */
-	numbered?: boolean;
 }
 
 /** Master-password form card for vault setup, gating weak passwords on create only. */
@@ -30,11 +26,9 @@ export function PasswordCard({
 	mode,
 	form,
 	busy,
-	canSubmit,
 	submitError,
 	onSubmit,
 	mobile,
-	numbered,
 }: PasswordCardProps) {
 	const { t } = useLingui();
 	const {
@@ -57,7 +51,6 @@ export function PasswordCard({
 				<div className="px-5 py-3 border-b border-border/50">
 					<h3 className={`flex items-center gap-2 ${mobile ? "text-base" : "text-sm"}`}>
 						<Shield className="w-4 h-4 text-primary" />
-						{numbered ? "2. " : ""}
 						{isCreate ? <Trans>Master password</Trans> : <Trans>Your master password</Trans>}
 					</h3>
 				</div>
@@ -115,7 +108,7 @@ export function PasswordCard({
 					)}
 					<button
 						type="submit"
-						disabled={busy || !canSubmit || blockedByWeak}
+						disabled={busy || blockedByWeak}
 						className={`rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
 							mobile ? "w-full px-5 py-3 text-base" : "px-5 py-2 text-sm"
 						}`}

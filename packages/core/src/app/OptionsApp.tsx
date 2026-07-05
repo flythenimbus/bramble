@@ -20,13 +20,11 @@ const ImportShell = lazy(() =>
 // the terminal done screen is shown as before.
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
-	const { hasVault, pickVaultFile, createVault, unlock } = useVault();
+	const { createVault, unlock } = useVault();
 	const [mode, setMode] = useState<VaultSetupMode>("create");
-	const [hasFile, setHasFile] = useState(hasVault);
 	const [done, setDone] = useState<null | "created" | "opened">(null);
 	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
-	const hasPicker = shell.hasFilePicker();
 
 	if (recoveryCode) {
 		return (
@@ -66,18 +64,8 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	return (
 		<VaultSetup
 			mobile={mobile}
-			hasPicker={hasPicker}
-			hasFile={hasFile}
 			mode={mode}
-			onModeChange={(next) => {
-				setMode(next);
-				// Switching modes needs a re-pick (save-dialog for new vs open-dialog for existing).
-				setHasFile(false);
-			}}
-			onChooseFile={async () => {
-				await pickVaultFile(mode);
-				setHasFile(true);
-			}}
+			onModeChange={setMode}
 			onCreate={async (password) => {
 				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password));

@@ -24,11 +24,6 @@ export const mobileStorage: StorageAdapter = {
 	async hasVaultHandle() {
 		return fileExists(VAULT_FILE);
 	},
-	// No native file picker: the vault is app-managed. "create" is satisfied by the
-	// first writeVaultBlob; "open" is a no-op when the managed file already exists.
-	async selectVaultFile() {},
-	async requestVaultAccess() {},
-
 	async readVaultBlob() {
 		const r = await Filesystem.readFile({ path: VAULT_FILE, directory: DIR });
 		return base64ToBytes(r.data as string);
@@ -58,19 +53,5 @@ export const mobileStorage: StorageAdapter = {
 	},
 	async removeMeta(key: string): Promise<void> {
 		await Preferences.remove({ key: `meta:${key}` });
-	},
-
-	// Single foreground context for the POC: no background writer, no stash.
-	async canWriteFromBackground() {
-		return true;
-	},
-	async canReadFromBackground() {
-		return true;
-	},
-	async flushPendingVaultBlob() {
-		return false;
-	},
-	async getPendingFlushCount() {
-		return 0;
 	},
 };

@@ -7,12 +7,6 @@ import { api } from "./platform-api";
 const VAULT_BLOB_KEY = "vault-blob-b64";
 /** Recovery snapshot of the previous vault bytes, written before every overwrite so a crash mid-write leaves a recoverable copy. */
 const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
-/**
- * Legacy corner-prompt write queue. Retained as a no-op flush target: with the
- * chrome.storage.local backend the background always writes directly, so nothing is ever
- * queued. Kept so existing importers (vault-io) resolve.
- */
-export const PENDING_BLOB_KEY = "vault.pendingFlush";
 
 // --- Legacy File System Access migration ---
 // Pre-migration vaults lived in a real file (an FSA handle in IndexedDB), which required a
@@ -107,12 +101,6 @@ export const extensionStorage: StorageAdapter = {
 		return (await getLegacyHandle()) !== null;
 	},
 
-	/** No-op: the vault lives in chrome.storage.local, so there is no file to pick. Kept for the adapter contract. */
-	async selectVaultFile() {},
-
-	/** No-op: chrome.storage.local needs no permission grant. Kept for the adapter contract. */
-	async requestVaultAccess() {},
-
 	/** Read the vault bytes from chrome.storage.local, migrating a legacy file-backed vault on first read (inside the unlock gesture). Throws when no vault is stored. */
 	async readVaultBlob() {
 		const local = await localVaultBytes();
@@ -151,23 +139,5 @@ export const extensionStorage: StorageAdapter = {
 	/** Delete a metadata key from chrome.storage.local. */
 	async removeMeta(key) {
 		await api.storage.local.remove(key);
-	},
-
-	// chrome.storage.local is always readable/writable headless: no gesture, survives SW
-	// restarts. So the background never needs to queue or route through the popup.
-	async canWriteFromBackground() {
-		return true;
-	},
-	async canReadFromBackground() {
-		return true;
-	},
-
-	// The pending-blob queue is dead with the local backend (writes always go through
-	// directly), so these are no-ops kept for the adapter contract and the popup-mount call.
-	async flushPendingVaultBlob() {
-		return false;
-	},
-	async getPendingFlushCount() {
-		return 0;
 	},
 };

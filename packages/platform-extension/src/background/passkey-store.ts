@@ -19,7 +19,7 @@ import {
 	bytesToBase64,
 	readAndDecodeVault,
 	reencryptOuterWithEntryChange,
-	writeOrQueueVault,
+	writeVault,
 } from "./vault-io";
 
 // Passkey crypto runs in the offscreen (the WASM core). The background reaches it via
@@ -97,7 +97,7 @@ async function writeBlob(
 		entriesIv: outer.entriesIv,
 		entriesCiphertext: outer.entriesCiphertext,
 	};
-	await writeOrQueueVault(encodeVaultBlob(blob), outer.entryCount);
+	await writeVault(encodeVaultBlob(blob));
 }
 
 function hostname(u: string): string {

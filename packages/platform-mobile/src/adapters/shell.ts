@@ -37,9 +37,6 @@ export const mobileShell: ShellAdapter = {
 		if (!openSetupHandler) throw new Error("setup view not mounted");
 		openSetupHandler(screen);
 	},
-	hasFilePicker() {
-		return false;
-	},
 	async getCurrentTabOrigin() {
 		return null;
 	},
