@@ -1,68 +1,84 @@
 # Storage and persistence
 
-Where the vault bytes live, how writes survive a crash, and how the background
-service worker commits a write it cannot make directly. Code:
-`packages/platform-extension/src/storage.ts`.
+Where the vault bytes live, how writes survive a crash, and how a legacy
+file-backed vault is migrated. Code: `packages/platform-extension/src/storage.ts`.
 
-## Two backends
+## One backend: chrome.storage.local
 
-A vault is backed by one of:
+The vault (the VLT1 binary blob, base64-encoded under `vault-blob-b64`) lives in
+**`chrome.storage.local`** — the extension's own sandboxed storage. This is the
+same backend mobile uses. It needs no user gesture, it survives service-worker
+restarts, and the background can read and write it headlessly. `unlimitedStorage`
+lifts the quota, so vault size is not a concern.
 
-- **File System Access (FSA)**: a real file the user picked, with the handle
-  stored in IndexedDB. Preferred. Reading and `createWritable()` need only that the
-  handle's read-write permission is already `granted` (not a fresh gesture); only
-  `requestPermission()` needs a gesture. So the background CAN write the file
-  headlessly once permission is granted. `requestVaultAccess()` secures that grant
-  inside a user gesture (unlock / enroll / the "Grant file access" affordance).
-- **chrome.storage.local**: the fallback when the platform blocks the file picker
-  (for example Brave Shields). No gesture constraint, so the background can write
-  through directly.
+The **format is location-independent**: the exact same VLT1 bytes were previously
+written to a File System Access file; only *where* they are stored changed. See
+`vault-format.md` for the layout.
 
-`pickerSupported()` gates picking a *new* file (it needs `window` plus the picker
-APIs). It deliberately does not gate reading the stored handle: IndexedDB is
-reachable from the service worker, so the SW can fetch an existing FSA handle even
-though it cannot pick a new file. `canWriteFromBackground()` returns true for the
-chrome.storage.local backend, and for an FSA vault whose read-write permission is
-already `granted` (a `queryPermission` check). That distinction drives both the
-corner-prompt commit and the headless P2P-sync write paths: a granted FSA vault
-(or local storage) is written through directly; otherwise the write is stashed
-(below).
+### Why not a real file (File System Access)
+
+Earlier builds stored the vault in a real file the user picked, via the File
+System Access API (an `FileSystemFileHandle` persisted in IndexedDB). That gave
+users a portable file but cost them a permission that only `requestPermission`
+can (re)grant, and `requestPermission` requires a **user gesture (transient
+activation)**. Under MV3 the background service worker is killed after ~30s idle,
+and the granted permission lapses with it. Reopening the popup then hit
+`requestPermission` with no activation, the vault read threw
+`SecurityError: User activation is required`, and the UI fell back to the unlock
+screen — indistinguishable from an auto-lock, even though nothing had locked.
+`chrome.storage.local` has none of this: it is inside the origin's sandbox, so no
+per-file permission exists to lapse.
+
+The "I want a real file" use case is served two other ways instead: **P2P sync**
+(the vault is replicated across the user's own devices) and an **export** to a
+`.bramble` file on demand, rather than a file that must stay attached and
+re-permissioned forever.
 
 ## Crash recovery via a backup key
 
-Every write snapshots the current on-disk bytes into a backup key
-(`vault-blob-backup-b64`) **before** truncating the target.
-
-The danger is FSA: `createWritable()` truncates immediately, so a crash between
-truncate and `close()` would otherwise leave a partial, unreadable file with no
-second copy. The pre-write snapshot gives a known-good fallback, restored by
-`restoreVaultFromBackup`. Because chrome.storage.local writes are atomic, the
-backup key always holds either a complete previous blob or nothing, never a
+Every write snapshots the current vault bytes into a backup key
+(`vault-blob-backup-b64`) **before** overwriting the live blob, so an interrupted
+write leaves a recoverable previous copy (`restoreVaultFromBackup`, run when
+`readVaultBlob` no longer decodes). `chrome.storage.local` writes are atomic, so
+the backup key always holds either a complete previous blob or nothing, never a
 partial one.
 
 Two deliberate asymmetries:
 
-- On vault creation (nothing on disk yet) the snapshot step clears any stale
+- On vault creation (nothing stored yet) the snapshot step clears any stale
   backup, so a pre-creation snapshot cannot later be restored over a freshly
   created vault.
 - `restoreVaultFromBackup` skips the snapshot step, since overwriting the backup
-  with the (likely corrupt) live file would discard the only good copy.
+  with the (likely corrupt) live blob would discard the only good copy.
 
 Snapshotting is best-effort: if it fails, the write still proceeds, because
 failing a save just because a backup could not be taken would leave the user
 unable to save at all.
 
-## Pending-blob stashing (FSA + background)
+## Legacy File System Access migration
 
-When the background needs to commit a write (a corner-prompt save, or a P2P-sync
-merge) to an FSA vault whose permission is **not** granted, it cannot reach disk.
-So it encrypts the new outer blob via the offscreen document, base64-encodes the
-full vault bytes, and stashes them under `PENDING_BLOB_KEY` in
-`chrome.storage.session`.
+An install that predates this change still has its vault in a real file, with the
+handle in IndexedDB and nothing in `chrome.storage.local`. Migration is lazy and
+gesture-safe:
 
-The next popup or options mount calls `flushPendingVaultBlob`, which writes the
-stashed bytes through (snapshotting first, since it is replacing whatever is on
-disk) and clears the key. `getPendingFlushCount` lets the UI surface that a
-pending save is waiting. The stash is in-memory (wiped on browser restart), but
-the bytes are ciphertext, so surviving a vault lock is fine. Granting file access
-(above) avoids the stash entirely, which is what makes fully headless sync work.
+- `hasVaultHandle()` reports a vault exists if either a local blob **or** a legacy
+  handle is present, so the unlock screen shows normally.
+- On the **first unlock** — a real click, so the one-time file read is permitted —
+  `readVaultBlob` finds no local blob, reads the legacy file, writes those bytes
+  into `chrome.storage.local`, and drops the IndexedDB handle. Every read after
+  that is local and gesture-free.
+- Local storage is written before the handle is dropped, so a crash mid-migration
+  simply re-migrates next time. The **original file is never modified or deleted**
+  — it remains on disk as the user's own backup.
+
+This block (`getLegacyHandle` / `migrateLegacyVault` / `clearLegacyHandle`) is
+read-only legacy support and can be deleted once no file-backed installs remain.
+
+## Durability
+
+`chrome.storage.local` is durable for the profile but can be evicted if the user
+clears "cookies and site data." The background calls `navigator.storage.persist()`
+to request exemption from eviction under disk pressure (and on Chrome
+`unlimitedStorage` already exempts it). The real backstops against loss are **P2P
+sync** (other devices hold a copy) and **export** (a `.bramble` backup the user
+saves): the vault is not pinned to one browser profile.

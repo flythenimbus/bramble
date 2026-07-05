@@ -104,8 +104,8 @@ primary button becomes "Unlock & save" and the response action becomes
 `save-unlock-first`, which routes through the popup unlock flow. The capture is
 stashed per registrable domain in `chrome.storage.session`; if the page navigates
 away before the prompt is shown, the next page picks the stash back up. The
-commit itself goes through the background, which writes directly when it can or
-queues a pending blob when the vault is FSA-backed (see [storage.md](storage.md)).
+commit itself goes through the background, which writes directly to
+`chrome.storage.local` (headless, no gesture; see [storage.md](storage.md)).
 
 ## UI isolation: extension-origin iframe and closed shadow DOM
 

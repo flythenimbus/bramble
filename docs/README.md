@@ -17,7 +17,7 @@ comments point here instead of repeating it.
 | [vault-format.md](vault-format.md) | The VLT1 v2 on-disk binary layout and TLV slots |
 | [autofill.md](autofill.md) | Index, matching, the fetch-on-pick fill model, corner prompt, password generation |
 | [field-detection.md](field-detection.md) | Page field detection heuristics and fixtures |
-| [storage.md](storage.md) | FSA vs chrome.storage, crash recovery, pending-blob stashing, background writes |
+| [storage.md](storage.md) | The chrome.storage.local vault backend, crash recovery, legacy FSA migration, durability |
 | [kdbx-import.md](kdbx-import.md) | KDBX4 import internals |
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |
 | [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
