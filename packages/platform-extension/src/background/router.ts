@@ -32,6 +32,16 @@ export function setReady(promise: Promise<unknown>): void {
 	ready = promise;
 }
 
+/**
+ * The hydration promise the dispatcher gates on. Entry points that bypass the message
+ * router - notably the chrome.webAuthenticationProxy listeners - must await this too, or
+ * they can read the session VEK before it has re-hydrated on a fresh SW wake and wrongly
+ * treat an unlocked vault as locked.
+ */
+export function whenReady(): Promise<unknown> {
+	return ready;
+}
+
 function resolveHandler(type: string | undefined): MessageHandler | undefined {
 	if (type === undefined) return undefined;
 	const exact = messageHandlers.get(type);
