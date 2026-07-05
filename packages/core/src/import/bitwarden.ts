@@ -44,6 +44,11 @@ const exportSchema = z.object({ items: z.array(itemSchema) });
 type BwField = z.infer<typeof fieldSchema>;
 
 const FORMAT_ERROR = "This doesn't look like a Bitwarden JSON export.";
+// An encrypted / "Password protected" export carries `encrypted: true` (unencrypted ones
+// carry `encrypted: false`) and its entries live in an opaque `data` blob, not an `items`
+// array - so it would otherwise trip FORMAT_ERROR and look like "not Bitwarden".
+const ENCRYPTED_ERROR =
+	'This is an encrypted (password-protected) Bitwarden export. Re-export from Bitwarden as a plain .json with "Password protected" turned off, then import that file.';
 
 /** Map Bitwarden custom fields. Drops type 3 (linked refs); type 1 is hidden. */
 function mapFields(fields: BwField[] | null | undefined): RawField[] {
@@ -60,6 +65,12 @@ export function parseBitwarden(raw: string | Uint8Array): ImportResult {
 		json = JSON.parse(asText(raw));
 	} catch {
 		throw new Error(FORMAT_ERROR);
+	}
+	// Catch a password-protected export before the generic format check, so the user gets a
+	// fixable message instead of "not Bitwarden".
+	if (json !== null && typeof json === "object") {
+		const o = json as Record<string, unknown>;
+		if (o.encrypted === true || o.passwordProtected === true) throw new Error(ENCRYPTED_ERROR);
 	}
 	const parsed = exportSchema.safeParse(json);
 	if (!parsed.success) throw new Error(FORMAT_ERROR);
