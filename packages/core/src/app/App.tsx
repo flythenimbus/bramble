@@ -1,5 +1,6 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePlatform } from "../context/PlatformContext";
 import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
@@ -36,11 +37,26 @@ interface AppProps {
 // change to re-run active beforeLoad guards (bouncing to unlock on auto-lock, etc).
 function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: PendingLogin }) {
 	const { isLocked, ready, entries } = useVault();
+	const { shell } = usePlatform();
 	const vault = useMemo(() => ({ isLocked, ready, entries }), [isLocked, ready, entries]);
 	const consumed = useRef(false);
 
 	// Mobile: persist passkeys the native provider minted during a sign-in registration.
 	usePendingPasskeys();
+
+	// Stash the current route so a closed-then-reopened popup resumes it (restore in the
+	// platform boot, gated on an unlocked session). Skip the detached window (it has its own
+	// pop-out handoff) and the "/" unlock/redirect route, so a lock never clobbers the last
+	// real route with the unlock screen.
+	useEffect(() => {
+		if (!shell.persistRoute || shell.isDetached()) return;
+		const persist = () => {
+			const href = router.state.location.href;
+			if (href && href !== "/") shell.persistRoute?.(href);
+		};
+		persist();
+		return router.subscribe("onResolved", persist);
+	}, [router, shell]);
 
 	// `vault` is the change trigger, not a body input: dropping it would fire
 	// invalidate only on mount and defeat the reactive guards.

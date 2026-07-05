@@ -8,6 +8,10 @@ import { api } from "./platform-api";
 import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
+// Where the normal popup stashes its current route so a close+reopen (session still
+// unlocked) resumes where it was. chrome.storage.session clears on browser restart, so a
+// stale route never outlives the session that could unlock into it.
+const POPUP_ROUTE_KEY = "popup.route";
 
 // When the passkey provider proxy is attached it intercepts all browser WebAuthn,
 // which would hijack Bramble's own security-key (PRF) unlock. Pause it around our
@@ -87,6 +91,20 @@ export const extensionShell: ShellAdapter = {
 			| { ok: boolean; data?: PopOutHandoff | null }
 			| undefined;
 		return res?.data ?? null;
+	},
+	persistRoute(path: string) {
+		// Direct session-storage write from the popup context (no gesture, no background
+		// round-trip); best-effort, so a transient failure never blocks navigation.
+		void api.storage.session.set({ [POPUP_ROUTE_KEY]: path }).catch(() => {});
+	},
+	async restoreRoute() {
+		try {
+			const r = await api.storage.session.get(POPUP_ROUTE_KEY);
+			const path = r[POPUP_ROUTE_KEY];
+			return typeof path === "string" ? path : null;
+		} catch {
+			return null;
+		}
 	},
 	isDetached() {
 		if (typeof window === "undefined") return false;
