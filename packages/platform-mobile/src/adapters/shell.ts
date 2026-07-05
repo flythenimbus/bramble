@@ -1,6 +1,7 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
+import { armFilePickGrace } from "../auto-lock";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
 import { scanQrNative } from "../qr-scanner";
 import { scanQrCode } from "../scan";
@@ -75,6 +76,9 @@ export const mobileShell: ShellAdapter = {
 	async flushPendingCornerCapture() {
 		return false;
 	},
+	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
+	// would fire and drop the in-progress import. See ./auto-lock.ts.
+	notifyFilePickerOpening: armFilePickGrace,
 
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
 	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.

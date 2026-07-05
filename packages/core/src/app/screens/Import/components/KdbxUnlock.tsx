@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { usePlatform } from "../../../../context/PlatformContext";
 import { bytesToBase64 } from "../../../../util/bytes";
 import { TextField } from "../../../components/ui/text-field";
 import { Header } from "./Header";
@@ -17,6 +18,7 @@ export function KdbxUnlock({
 	onBack: () => void;
 }) {
 	const { t } = useLingui();
+	const { shell } = usePlatform();
 	const [password, setPassword] = useState("");
 	const [keyfile, setKeyfile] = useState<File | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,8 @@ export function KdbxUnlock({
 					</span>
 					<input
 						type="file"
+						// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
+						onClick={() => shell.notifyFilePickerOpening?.()}
 						onChange={(e) => setKeyfile(e.currentTarget.files?.[0] ?? null)}
 						className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background/50 file:px-3 file:py-1.5 file:text-sm hover:file:bg-background/80"
 					/>

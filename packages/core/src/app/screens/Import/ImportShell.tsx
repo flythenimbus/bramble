@@ -265,6 +265,8 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							type="file"
 							accept={p.accept}
 							className="hidden"
+							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
+							onClick={() => shell.notifyFilePickerOpening?.()}
 							onChange={(e) => {
 								// Reset value after handling so re-picking the same file fires onChange again.
 								const input = e.currentTarget;
