@@ -86,9 +86,12 @@ async function waitForUnlock(timeoutMs: number): Promise<boolean> {
 function showCard(tabId: number, payload: SavePasskeyPrompt): Promise<PromptReply> {
 	return new Promise((resolve) => {
 		pendingPrompts.set(payload.promptId, resolve);
-		api.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {
-			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
-		});
+		// Top frame only (where the corner card renders), matching the save-login prompt.
+		api.tabs
+			.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }, { frameId: 0 })
+			.catch(() => {
+				if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
+			});
 		setTimeout(() => {
 			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
 		}, CEREMONY_TIMEOUT_MS);

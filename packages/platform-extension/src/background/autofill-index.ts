@@ -350,9 +350,15 @@ async function autofillQuery(
 	const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
 	// Sliding session: any autofill activity extends the timer.
 	if (!result.locked) await scheduleAutoLock();
-	if (tabId !== undefined) {
+	// Reply only to the frame that queried; never broadcast the match list to sibling
+	// frames (a page can host a co-resident cross-origin iframe running this same script).
+	if (tabId !== undefined && sender.frameId !== undefined) {
 		await api.tabs
-			.sendMessage(tabId, { type: "AUTOFILL_MATCHES", payload: result })
+			.sendMessage(
+				tabId,
+				{ type: "AUTOFILL_MATCHES", payload: result },
+				{ frameId: sender.frameId },
+			)
 			.catch(() => {});
 	}
 	return { ok: true };
@@ -371,12 +377,16 @@ async function autofillSelect(
 	authorizeFill(entryId, senderHostname(sender));
 	const fill = fetchFill(entryId);
 	await scheduleAutoLock();
-	if (sender.tab?.id) {
+	// Deliver the decrypted secret ONLY to the frame that requested (and was authorized
+	// for) this pick. Broadcasting to the tab would hand the credential/card to every
+	// frame, including a co-resident cross-origin iframe. Fail closed if no frame id.
+	if (sender.tab?.id !== undefined && sender.frameId !== undefined) {
 		// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
-		await api.tabs.sendMessage(sender.tab.id, {
-			type: "AUTOFILL_FILL",
-			payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly },
-		});
+		await api.tabs.sendMessage(
+			sender.tab.id,
+			{ type: "AUTOFILL_FILL", payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly } },
+			{ frameId: sender.frameId },
+		);
 	}
 	return { ok: true };
 }
