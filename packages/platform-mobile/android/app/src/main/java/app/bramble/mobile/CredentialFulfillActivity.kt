@@ -152,15 +152,17 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             .firstOrNull { it.credentialId == id } ?: return false
         val challenge = JSONObject(option.requestJson).optString("challenge")
         if (challenge.isEmpty()) return false
-        // Browser callers (Chrome) compute clientDataJSON themselves and pass only its hash; we
-        // MUST sign THAT (the browser substitutes its own clientDataJSON into the response, so ours
-        // is a placeholder). Only app callers make us build clientDataJSON, from an apk-key-hash
-        // origin. (Signing a self-built clientDataJSON for a browser caller was the bug: its hash
-        // didn't match the browser's clientDataJSON, so the RP rejected with NotAllowedError.)
+        // A browser computes clientDataJSON itself and passes only its hash, which we sign
+        // verbatim -- but ONLY when the caller is a verified privileged browser (package + signing
+        // cert allow-listed AND it set the request origin, so getOrigin returns non-null). The
+        // supplied hash is otherwise attacker-controllable: a malicious app could hand us a hash
+        // over {origin: https://github.com} and get the victim's github passkey to sign it. For
+        // any other caller we ignore the supplied hash and build clientDataJSON ourselves from the
+        // caller's apk-key-hash origin, binding the assertion to the actual caller.
         val browserHash = option.clientDataHash
         val clientDataJson: String
         val clientDataHashStdB64: String
-        if (browserHash != null) {
+        if (browserHash != null && trustedBrowserOrigin(request.callingAppInfo) != null) {
             clientDataJson = "{}"
             clientDataHashStdB64 = Base64.encodeToString(browserHash, Base64.NO_WRAP)
         } else {
@@ -195,14 +197,16 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         if (!supportsEs256) return false
 
         val reg = passkeyMakeCredential(rpId, true)
-        // Same clientDataJSON rule as the assertion: the browser owns it (placeholder here), app
-        // callers get an apk-key-hash origin. "none" attestation doesn't sign it regardless.
-        val clientDataJson = if (createReq.clientDataHash != null) {
-            "{}"
-        } else {
-            val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
-            WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
-        }
+        // Same trust rule as the assertion: only a verified privileged browser's clientDataHash is
+        // honoured (placeholder clientDataJSON here); every other caller gets a clientDataJSON we
+        // build from its apk-key-hash origin. "none" attestation doesn't sign it regardless.
+        val clientDataJson =
+            if (createReq.clientDataHash != null && trustedBrowserOrigin(request.callingAppInfo) != null) {
+                "{}"
+            } else {
+                val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
+                WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
+            }
         val json = WebauthnJson.registrationResponseJson(
             reg.credentialId, reg.attestationObject, reg.authenticatorData, reg.publicKey, clientDataJson,
         )
@@ -231,9 +235,21 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         put("createdAt", System.currentTimeMillis())
     }.toString()
 
-    // clientDataJSON origin for an APP caller (no browser-provided clientDataHash): the standard
-    // android:apk-key-hash:<base64url sha256(signing cert)>. Browser callers never reach this
-    // (they pass clientDataHash, which we sign directly - no allowlist needed).
+    // The caller's web origin IFF it is an allow-listed privileged browser that set the request
+    // origin; null for any other caller. getOrigin returns the browser-set origin only when the
+    // caller's package + signing cert match the allow-list, and throws when a non-allow-listed
+    // caller sets an origin (treated here as untrusted). This gates trusting a caller-supplied
+    // clientDataHash. See TrustedBrowsers.
+    private fun trustedBrowserOrigin(info: CallingAppInfo): String? =
+        try {
+            info.getOrigin(TrustedBrowsers.allowlistJson())
+        } catch (e: Exception) {
+            null
+        }
+
+    // clientDataJSON origin for a caller we build the JSON for (anything but a verified privileged
+    // browser): the standard android:apk-key-hash:<base64url sha256(signing cert)>, which binds the
+    // assertion to the actual caller so a spoofed clientDataHash cannot be reused for another origin.
     private fun apkKeyHashOrigin(info: CallingAppInfo): String? {
         return try {
             val cert = info.signingInfo.apkContentsSigners.firstOrNull()?.toByteArray() ?: return null
