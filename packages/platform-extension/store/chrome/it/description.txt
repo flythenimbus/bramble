@@ -1,0 +1,47 @@
+Bramble è un gestore di password che vive nel tuo browser e conserva i tuoi segreti sul tuo dispositivo. Nessun account, nessun server che custodisce il tuo vault, nessuna azienda da violare per far trapelare tutto. Tu tieni il vault, tu tieni la password, e basta.
+
+Funziona in Chrome, Edge, Brave, Arc e altri browser Chromium. Installalo e sarai operativo in circa un minuto.
+
+COSA FA
+
+Le tue password sono crittografate sul tuo dispositivo e conservate nell'archivio privato del browser. Non c'è account né server che custodisce il tuo vault. Imposta una volta e inizi subito a compilare automaticamente gli accessi, salvarne di nuovi e generare password.
+
+Hai più di un dispositivo? Abbinali e Bramble sincronizza il tuo vault direttamente tra di loro, con crittografia end-to-end. Il relay che introduce i tuoi dispositivi vede solo testo cifrato e non memorizza nulla, quindi i tuoi segreti non finiscono mai su un server altrui. Vuoi una copia nelle tue mani? Esporta un file di backup crittografato in qualsiasi momento.
+
+CARATTERISTICHE
+
+- Sempre locale per primo. Il tuo vault crittografato rimane sul tuo dispositivo, nell'archivio privato del browser. Nessun account, nessuna copia su server.
+- Sincronizzazione multi-dispositivo. I tuoi dispositivi rimangono sincronizzati tramite un canale peer-to-peer crittografato end-to-end; il relay che li collega vede solo testo cifrato e non memorizza nulla.
+- Crittografia seria. Argon2id per la tua chiave, AES-256-GCM per i dati, crittografia a busta in modo che ogni voce abbia la propria chiave. I segreti vengono cancellati dalla memoria dopo l'uso.
+- Tutto crittografato. Nomi dei siti, nomi utente, note, tutto.
+- Compilazione automatica intelligente per dominio. www.example.com, ca.accounts.example.com ed example.com corrispondono a un unico accesso. Una voce, più URL.
+- Passkey. Bramble è il tuo autenticatore passkey personale: crea e accedi con passkey, memorizzate nel tuo vault e crittografate come tutto il resto.
+- Più che accessi. Accessi, carte di pagamento, note sicure e chiavi SSH, ciascuno con i propri campi.
+- Generatore di password integrato.
+- Sblocco con chiave hardware. Registra una YubiKey, Touch ID o Windows Hello e sblocca con un tocco tramite WebAuthn PRF. Usalo insieme alla tua password principale o rendilo il tuo unico metodo di accesso.
+- Backup crittografati. Esporta l'intero vault in un file crittografato in qualsiasi momento, per una copia offline che conservi tu. Richiede comunque la tua password principale per aprirlo.
+- Codici di recupero. Ogni vault riceve un codice di recupero sicuro durante la configurazione: un backup stampabile che lo sblocca indipendentemente dalla tua password principale.
+- Codici TOTP / 2FA. Incolla un URI otpauth:// o un segreto e Bramble genera i codici.
+- Controllo opzionale delle violazioni. Ricerca Have I Been Pwned utilizzando k-anonimato, in modo che nulla della tua password lasci il tuo dispositivo. Disattivato per impostazione predefinita.
+- Blocco automatico dopo 15 minuti di inattività (configurabile).
+- Importazione da KeePass, Bitwarden, Proton Pass e 1Password.
+
+PERCHÉ LOCALE PER PRIMO
+
+I gestori cloud conservano i vault di tutti sui loro server, che sono un unico grande bersaglio. Quando uno viene violato, non è un vault a trapelare, ma milioni contemporaneamente, spesso divulgati mesi dopo.
+
+Bramble inverte la situazione:
+- Nessun server da violare. Il tuo vault non lascia mai il tuo controllo.
+- Nessun account, nessun abbonamento, nessuna telemetria. Niente a cui iscriversi.
+- I tuoi dati, i tuoi dispositivi. Sincronizzalo tra i tuoi dispositivi, tienilo su una macchina o esporta un backup crittografato che conservi tu. Niente viene mai parcheggiato sul server di qualcun altro.
+- Niente da fidarsi se non il codice. Il codice è open source e viene eseguito interamente sul tuo dispositivo.
+
+COME FUNZIONA LA CRITTOGRAFIA
+
+Bramble utilizza slot di chiave in stile LUKS e crittografia a busta. Una chiave vault casuale protegge i tuoi dati. Ogni metodo di sblocco (password principale, chiave di sicurezza, codice di recupero) deriva la propria chiave di crittografia delle chiavi che sblocca una copia della stessa chiave vault, quindi aggiungere o revocare un metodo di sblocco non richiede mai di ricrittografare una singola voce. La chiave vault sblocca quindi una nuova chiave per voce per ogni elemento. Tutto è AES-256-GCM.
+
+PROVENIENZA DA KEEPASS?
+
+Ti sentirai a casa: il tuo vault crittografato, il tuo controllo, nessun intermediario cloud, e Bramble importa i tuoi file KDBX4. Le differenze: vive nel tuo browser (nessuna app desktop separata o bridge plugin), la compilazione automatica è integrata con corrispondenza del dominio e un menu a discesa sulla pagina, e fornisce una build moderna con Argon2id e AES-256-GCM invece di una miriade di plugin. Interfaccia pulita, modalità scura inclusa.
+
+Leggi l'informativa sulla privacy completa collegata in questa pagina.
