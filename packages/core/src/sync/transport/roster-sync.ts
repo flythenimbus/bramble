@@ -250,6 +250,15 @@ async function syncPeer(
 		const ct = await Promise.race([channel.recv(), aborted]);
 		if (ct === null) break;
 		entry.lastSeen = Date.now();
+		// Refuse inbound from a peer revoked since the handshake: don't apply its data.
+		if (!inRoster(await currentRoster(opts), peerPub)) {
+			entry.close();
+			peers.delete(peerPub);
+			break;
+		}
 		await applyEnvelope(opts, await wasm.handshake_decrypt(sess.sessionId, ct));
+		// The envelope may have gossiped a revocation of another peer; drop it now rather than
+		// waiting for the next re-broadcast tick, so a revocation propagates across the mesh at once.
+		reapRevoked(opts, peers, await currentRoster(opts));
 	}
 }
