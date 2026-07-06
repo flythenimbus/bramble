@@ -24,10 +24,16 @@ class ParsedStructure(
     val hasFields: Boolean get() = usernameIds.isNotEmpty() || passwordIds.isNotEmpty() || otpIds.isNotEmpty()
     val allIds: List<AutofillId> get() = usernameIds + passwordIds + otpIds
 
-    /** Requested hosts to match against the vault: web domains, else a guess from the package. */
-    fun requestedHosts(): List<String> {
-        if (webDomains.isNotEmpty()) return webDomains.map { VaultReader.normalizeHost(it) }.filter { it.isNotEmpty() }
-        return packageDomainGuesses(packageName)
+    /** Hosts to match saved logins against. `webDomain` is attacker-controllable (any app can set
+     * it on a virtual view structure) and the package name is not a web identity, so we honour a
+     * webDomain ONLY from a verified browser (see TrustedBrowsers) and never derive a host from the
+     * package. An untrusted caller gets no host-based auto-match; the user can still open the full
+     * searchable list. */
+    fun requestedHosts(isTrustedBrowser: Boolean): List<String> {
+        if (isTrustedBrowser && webDomains.isNotEmpty()) {
+            return webDomains.map { VaultReader.normalizeHost(it) }.filter { it.isNotEmpty() }
+        }
+        return emptyList()
     }
 }
 
@@ -155,14 +161,8 @@ object StructureParser {
     }
 }
 
-// Best-effort domains for a native app with no web domain: reverse the package's first two
-// labels (com.github.android -> github.com) and also try the bare package, so a login saved
-// against either still matches. When neither matches, the unlock list's "show all" covers it.
-private fun packageDomainGuesses(pkg: String?): List<String> {
-    if (pkg.isNullOrEmpty()) return emptyList()
-    val out = LinkedHashSet<String>()
-    val parts = pkg.split('.').filter { it.isNotEmpty() }
-    if (parts.size >= 2) out.add("${parts[1]}.${parts[0]}".lowercase())
-    out.add(pkg.lowercase())
-    return out.toList()
-}
+// NOTE: the old packageDomainGuesses() reverse-DNS heuristic (com.github.android -> github.com)
+// was removed: a sideloaded app could pick a package like com.paypal.evil and harvest the
+// victim's paypal.com login. Native-app -> web association must be proven (Digital Asset Links),
+// not guessed from the package name; that verified path is a follow-up. Until then a non-browser
+// app gets no host-based auto-match, only the manual searchable list.

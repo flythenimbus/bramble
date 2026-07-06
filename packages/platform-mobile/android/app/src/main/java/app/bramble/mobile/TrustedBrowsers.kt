@@ -1,0 +1,72 @@
+package app.bramble.mobile
+
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import java.security.MessageDigest
+
+// A curated allow-list of browsers we trust to vouch for a web page's origin. An autofill
+// request's `webDomain` is attacker-controllable (any app can set it on a virtual view
+// structure), so we honour it ONLY when the caller is a known browser: its package is listed
+// here AND its actual signing certificate matches an allow-listed SHA-256 fingerprint. The
+// certificate is OS-verified, so a malicious app cannot impersonate a browser.
+//
+// Source of the package + fingerprint values: Google's GPM privileged-apps list
+//   https://www.gstatic.com/gpm-passkeys-privileged-apps/apps.json
+// This is a maintained subset; keep it in sync (ideally by bundling the full file). A WRONG or
+// MISSING fingerprint fails closed: that browser is treated as untrusted and its web autofill
+// stops working, so confirm every entry on-device before shipping. The passkey provider reuses
+// the same data via allowlistJson() for CallingAppInfo.getOrigin().
+object TrustedBrowsers {
+
+    // packageName -> allowed signing-cert SHA-256 fingerprints (uppercase, colon-separated hex,
+    // matching the getPackageInfo signing-cert digest format).
+    val BROWSERS: Map<String, Set<String>> = mapOf(
+        "com.android.chrome" to
+            setOf(
+                "F0:FD:6C:5B:41:0F:25:CB:25:C3:B5:33:46:C8:97:2F:AE:30:F8:EE:74:11:DF:91:04:80:AD:6B:2D:60:DB:83",
+                "19:75:B2:F1:71:77:BC:89:A5:DF:F3:1F:9E:64:A6:CA:E2:81:A5:3D:C1:D1:D5:9B:1D:14:7F:E1:C8:2A:FA:00",
+            ),
+        "org.mozilla.firefox" to
+            setOf("A7:8B:62:A5:16:5B:44:94:B2:FE:AD:9E:76:A2:80:D2:2D:93:7F:EE:62:51:AE:CE:59:94:46:B2:EA:31:9B:04"),
+        "com.microsoft.emmx" to
+            setOf("01:E1:99:97:10:A8:2C:27:49:B4:D5:0C:44:5D:C8:5D:67:0B:61:36:08:9D:0A:76:6A:73:82:7C:82:A1:EA:C9"),
+        "com.brave.browser" to
+            setOf("9C:2D:B7:05:13:51:5F:DB:FB:BC:58:5B:3E:DF:3D:71:23:D4:DC:67:C9:4F:FD:30:63:61:C1:D7:9B:BF:18:AC"),
+        "com.duckduckgo.mobile.android" to
+            setOf("BB:7B:B3:1C:57:3C:46:A1:DA:7F:C5:C5:28:A6:AC:F4:32:10:84:56:FE:EC:50:81:0C:7F:33:69:4E:B3:D2:D4"),
+        "com.opera.mini.native" to
+            setOf("57:AC:BC:52:5F:1B:2E:BD:19:19:6C:D6:F0:14:39:7C:C9:10:FD:18:84:1E:0A:E8:50:FE:BC:3E:1E:59:3F:F2"),
+    )
+
+    /** True iff `packageName` is an allow-listed browser AND its real signing cert matches. */
+    fun isTrustedBrowser(context: Context, packageName: String?): Boolean {
+        val pkg = packageName ?: return false
+        val allowed = BROWSERS[pkg] ?: return false
+        return signingFingerprints(context.packageManager, pkg).any { it in allowed }
+    }
+
+    /** SHA-256 of a signing certificate's DER bytes, formatted like the allow-list (uppercase,
+     * colon-separated). Exposed for unit tests. */
+    internal fun certFingerprint(der: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(der)
+        return digest.joinToString(":") { "%02X".format(it) }
+    }
+
+    private fun signingFingerprints(pm: PackageManager, pkg: String): Set<String> =
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
+                (info.signingInfo?.apkContentsSigners ?: emptyArray())
+                    .map { certFingerprint(it.toByteArray()) }
+                    .toSet()
+            } else {
+                @Suppress("DEPRECATION")
+                val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES)
+                @Suppress("DEPRECATION")
+                (info.signatures ?: emptyArray()).map { certFingerprint(it.toByteArray()) }.toSet()
+            }
+        } catch (e: Exception) {
+            emptySet()
+        }
+}
