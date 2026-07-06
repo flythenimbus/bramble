@@ -57,6 +57,14 @@ export interface ShellAdapter {
 	 * eTLD+1 matching. Empty when there's no current site (mobile, chrome://).
 	 */
 	matchCurrentTab(logins: CurrentTabLogin[]): Promise<string[]>;
+	/**
+	 * Call immediately before opening a native file picker. On single-window hosts (mobile)
+	 * the OS picker backgrounds the app, which would trip the "Immediately" auto-lock and drop
+	 * the in-progress import/keyfile selection; this keeps the vault unlocked across that one
+	 * background→foreground cycle. Absent on the extension, where pickers run in a full tab
+	 * whose session isn't foreground-gated (no-op).
+	 */
+	notifyFilePickerOpening?(): void;
 	/** Open the current UI in a detached window so it doesn't dismiss on focus loss, closing the originating popup. `handoff` resumes the route + draft. */
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	/** Read (and clear) the handoff stashed by a preceding popOut(). Null when there's nothing to restore. Called once during boot. */
