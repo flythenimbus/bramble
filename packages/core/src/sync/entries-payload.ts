@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 import { EncryptedEntrySchema } from "../vault-format";
-import { HlcSchema } from "./hlc";
+import { HlcSchema, isFutureStamp } from "./hlc";
 
 /** A deletion record: the deleted id and the stamp at which it was deleted. */
 export const TombstoneSchema = z.object({
@@ -35,4 +35,17 @@ export function encodeEntriesPayload(payload: EntriesPayload): string {
 /** Parse and validate a decrypted payload. Throws on the legacy bare-array shape. */
 export function decodeEntriesPayload(json: string): EntriesPayload {
 	return EntriesPayloadSchema.parse(JSON.parse(json));
+}
+
+/** Drop entries and tombstones stamped implausibly far in the future before merging a
+ * REMOTELY-received payload, so a member can't pin an un-deletable entry by stamping it years
+ * ahead (mirrors the roster guard). Honest payloads carry near-present stamps. */
+export function sanitizeRemoteEntriesPayload(
+	payload: EntriesPayload,
+	now: number = Date.now(),
+): EntriesPayload {
+	return {
+		entries: payload.entries.filter((e) => !isFutureStamp(e.hlc, now)),
+		tombstones: payload.tombstones.filter((t) => !isFutureStamp(t.hlc, now)),
+	};
 }

@@ -14,7 +14,7 @@ import {
 	emptyEntriesPayload,
 	encodeEntriesPayload,
 	encodeRoster,
-	mergeRosters,
+	mergeRemoteRoster,
 	type VaultSyncPort,
 } from "@core/sync";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
@@ -191,7 +191,7 @@ async function syncApplyRoster(rosterJson: string): Promise<void> {
 	if (!group) return;
 	await storeGroup({
 		groupKey: group.groupKey,
-		roster: mergeRosters(group.roster, decodeRoster(rosterJson)),
+		roster: mergeRemoteRoster(group.roster, decodeRoster(rosterJson)),
 	});
 	api.runtime
 		.sendMessage({ type: "SYNC_EVENT", payload: { kind: "roster" } satisfies SyncEventMsg })

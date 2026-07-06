@@ -13,7 +13,7 @@ import {
 	ensureDeviceId,
 	type HybridClock,
 	makeClock,
-	mergeRosters,
+	mergeRemoteRoster,
 	type RosterEntry,
 	type RosterPayload,
 	type SyncEvent,
@@ -233,7 +233,7 @@ async function startRoster(): Promise<void> {
 			if (!g) return;
 			await mobileStorage.setMeta(GROUP_KEY, {
 				...g,
-				roster: mergeRosters(g.roster, decodeRoster(rosterJson)),
+				roster: mergeRemoteRoster(g.roster, decodeRoster(rosterJson)),
 			});
 			emit({ kind: "roster" });
 		},

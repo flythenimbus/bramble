@@ -97,6 +97,33 @@ describe("applyRemotePayload", () => {
 		expect(live(res.payload)).toEqual(["a"]);
 		expect(writes).toHaveLength(1);
 	});
+
+	// A peer's payload is untrusted: a stamp far in the future is poisoned (an honest clock
+	// clamps its own), so it is dropped before merge/witness.
+	const FAR_FUTURE = 9_000_000_000_000; // year ~2255
+
+	it("drops a future-dated remote entry (poisoned stamp), merging nothing", async () => {
+		const { port, writes, witnessed } = fakePort(payload([env("a", "a", hlc(100, "x"))]));
+		const res = await applyRemotePayload(
+			port,
+			payload([env("evil", "evil", hlc(FAR_FUTURE, "evil"))]),
+		);
+		expect(res.changed).toBe(false);
+		expect(live(res.payload)).toEqual(["a"]);
+		expect(writes).toHaveLength(0);
+		expect(witnessed).toHaveLength(0);
+	});
+
+	it("drops a future-dated remote tombstone (cannot force-delete via a poisoned stamp)", async () => {
+		const { port, writes } = fakePort(payload([env("a", "a", hlc(100, "x"))]));
+		const res = await applyRemotePayload(
+			port,
+			payload([], [{ id: "a", hlc: hlc(FAR_FUTURE, "evil") }]),
+		);
+		expect(res.changed).toBe(false);
+		expect(live(res.payload)).toEqual(["a"]); // "a" survives; the poisoned tombstone is ignored
+		expect(writes).toHaveLength(0);
+	});
 });
 
 describe("payloadsEquivalent", () => {
