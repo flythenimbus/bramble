@@ -43,7 +43,7 @@ context. Not page-reachable today (no `externally_connectable`; no content scrip
 page-controlled `type`s), so it's a latent primitive: any future content-script relay bug → full
 key compromise.
 
-**Fix - three edits:**
+**Fix - four edits** (the audit first scoped three; implementation found a fourth CRYPTO_* path):
 
 1. New `packages/platform-extension/src/sender.ts`:
    ```ts
@@ -84,6 +84,15 @@ key compromise.
    ```
    Wrap: `on("SYNC_APPLY_ROSTER", extensionOnly(async (m) => {…}))`, etc. All legit `SYNC_*`
    senders are the popup/offscreen (extension origin) → nothing breaks.
+
+4. **Gate the `CRYPTO_*` router prefix (missed in the original scoping).** `CRYPTO_*` is not
+   only reachable via the offscreen listener (edit 2): `session.ts` registers
+   `onPrefix("CRYPTO_", cryptoHandler)`, so a content script can send a plain
+   `{type:"CRYPTO_EXPORT_VEK"}` (no `target`) to the **SW router**, which forwards it to the
+   offscreen and returns the VEK - bypassing edit 2 entirely. Wrap the registration:
+   `onPrefix("CRYPTO_", extensionOnly(cryptoHandler))`. Legit `CRYPTO_*` senders are the
+   popup/options (extension origin); the background's own crypto calls use `sendToOffscreen`
+   directly and never traverse the router, so nothing breaks.
 
 **Compat/risk:** none persisted. Verify SW→offscreen sender carries `sender.url`/`origin` on the
 extension origin via `test-harness.ts`; fallback `sender.id === api.runtime.id && !sender.tab` if
