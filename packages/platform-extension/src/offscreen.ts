@@ -9,6 +9,7 @@
 
 import { handleHostMessage, type SyncBridge, setSyncBridge } from "./offscreen-core";
 import { api } from "./platform-api";
+import { isExtensionSender } from "./sender";
 import type { ApplyRemoteMsg } from "./sync/messages";
 
 // Local read + merge + write happen in the background (it has chrome.storage); the
@@ -53,8 +54,20 @@ interface OffscreenMessage {
 	payload?: unknown;
 }
 
-api.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
+api.runtime.onMessage.addListener((message: OffscreenMessage, sender, sendResponse) => {
 	if (message?.target !== "offscreen") return false;
+	// Only extension-context callers reach the crypto/sync host; reject content scripts.
+	// Respond explicitly (not a silent drop) so a misclassified legit caller is diagnosable
+	// rather than a generic "no response from offscreen" timeout. See docs/sec-audit-7726.md (A3).
+	if (!isExtensionSender(sender)) {
+		console.warn("[offscreen] rejected non-extension sender", {
+			origin: sender.origin,
+			url: sender.url,
+			tab: sender.tab?.id,
+		});
+		sendResponse({ ok: false, error: "forbidden" });
+		return false;
+	}
 	void handleHostMessage(message.type ?? "", message.payload).then(sendResponse);
 	return true;
 });

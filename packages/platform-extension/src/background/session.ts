@@ -6,7 +6,7 @@ import { CAPTURE_KEY_PREFIX, CORNER_HANDOFF_KEY } from "./corner-prompt";
 import { markOffscreenKey, sendToOffscreen } from "./offscreen-client";
 import { POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
-import { type MessageEnvelope, onPrefix } from "./router";
+import { extensionOnly, type MessageEnvelope, onPrefix } from "./router";
 import { maybeStartSync, stopSync } from "./sync";
 
 const VEK_KEY = "vault.vek";
@@ -137,4 +137,6 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 	return response;
 }
 
-onPrefix("CRYPTO_", cryptoHandler);
+// CRYPTO_* reaches the offscreen crypto host (incl. CRYPTO_EXPORT_VEK); only extension
+// pages may drive it, never a content script. See docs/sec-audit-7726.md (A3).
+onPrefix("CRYPTO_", extensionOnly(cryptoHandler));

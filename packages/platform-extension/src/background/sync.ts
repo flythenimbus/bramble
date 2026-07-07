@@ -36,7 +36,7 @@ import {
 	storeKeypair,
 } from "../sync/sync-config";
 import { sendToOffscreen } from "./offscreen-client";
-import { type MessageEnvelope, on } from "./router";
+import { extensionOnly, type MessageEnvelope, on } from "./router";
 import { witnessStamps } from "./sync-clock";
 import {
 	base64ToBytes,
@@ -48,19 +48,26 @@ import {
 
 // --- enrollment (forwarded to the offscreen) ---
 
-on("SYNC_DISCONNECT", (message) => sendToOffscreen(message));
+on(
+	"SYNC_DISCONNECT",
+	extensionOnly((message) => sendToOffscreen(message)),
+);
 
 // Device identity lives here (chrome.storage); the offscreen only generates the keypair.
-on("SYNC_DEVICE_PUBKEY", async () => {
-	let kp = await getStoredKeypair();
-	if (!kp) {
-		const res = await sendToOffscreen({ type: "SYNC_GENERATE_KEYPAIR" });
-		if (!res.ok || !res.data) return { ok: false, error: res.error ?? "keypair generation failed" };
-		kp = res.data as DeviceKeypair;
-		await storeKeypair(kp);
-	}
-	return { ok: true, data: kp.publicKey };
-});
+on(
+	"SYNC_DEVICE_PUBKEY",
+	extensionOnly(async () => {
+		let kp = await getStoredKeypair();
+		if (!kp) {
+			const res = await sendToOffscreen({ type: "SYNC_GENERATE_KEYPAIR" });
+			if (!res.ok || !res.data)
+				return { ok: false, error: res.error ?? "keypair generation failed" };
+			kp = res.data as DeviceKeypair;
+			await storeKeypair(kp);
+		}
+		return { ok: true, data: kp.publicKey };
+	}),
+);
 
 const withDeviceKey = async (message: {
 	type: string;
@@ -73,8 +80,8 @@ const withDeviceKey = async (message: {
 		payload: { ...message.payload, devicePrivB64: kp.privateKey },
 	});
 };
-on("SYNC_ENROLL_INVITE", withDeviceKey);
-on("SYNC_ENROLL_JOIN", withDeviceKey);
+on("SYNC_ENROLL_INVITE", extensionOnly(withDeviceKey));
+on("SYNC_ENROLL_JOIN", extensionOnly(withDeviceKey));
 
 // --- ongoing sync (background-driven) ---
 
@@ -198,16 +205,28 @@ async function syncApplyRoster(rosterJson: string): Promise<void> {
 		.catch(() => {});
 }
 
-on("SYNC_LOCAL_PAYLOAD", async () => ({ ok: true, data: await syncLocalPayload() }));
-on("SYNC_APPLY_REMOTE", async (message) => ({
-	ok: true,
-	data: await syncApplyRemote(ApplyRemoteMsgSchema.parse(message.payload).payloadJson),
-}));
-on("SYNC_LOCAL_ROSTER", async () => ({ ok: true, data: await syncLocalRoster() }));
-on("SYNC_APPLY_ROSTER", async (message) => {
-	await syncApplyRoster(ApplyRosterMsgSchema.parse(message.payload).rosterJson);
-	return { ok: true };
-});
+on(
+	"SYNC_LOCAL_PAYLOAD",
+	extensionOnly(async () => ({ ok: true, data: await syncLocalPayload() })),
+);
+on(
+	"SYNC_APPLY_REMOTE",
+	extensionOnly(async (message) => ({
+		ok: true,
+		data: await syncApplyRemote(ApplyRemoteMsgSchema.parse(message.payload).payloadJson),
+	})),
+);
+on(
+	"SYNC_LOCAL_ROSTER",
+	extensionOnly(async () => ({ ok: true, data: await syncLocalRoster() })),
+);
+on(
+	"SYNC_APPLY_ROSTER",
+	extensionOnly(async (message) => {
+		await syncApplyRoster(ApplyRosterMsgSchema.parse(message.payload).rosterJson);
+		return { ok: true };
+	}),
+);
 
 // Firefox: no offscreen document, so the roster-sync host runs in this event page
 // and calls these directly instead of round-tripping through runtime messaging.

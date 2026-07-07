@@ -241,7 +241,9 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 	vi.stubGlobal("chrome", chrome);
 	await import("../background/background");
 
-	const send = (message: AnyMsg, sender: any = {}) =>
+	// Default to an extension-context sender: bg.send models a message from the popup/SW
+	// unless a test passes an explicit pageSender/{} to exercise the content-script gate.
+	const send = (message: AnyMsg, sender: any = extensionSender) =>
 		new Promise<{ handled: boolean; resp: any }>((resolve) => {
 			const dispatch = state.listeners.message;
 			if (!dispatch) {
