@@ -22,6 +22,7 @@ comments point here instead of repeating it.
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |
 | [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
 | [p2p-sync-testing.md](p2p-sync-testing.md) | Exercising device sync locally with two browser profiles + the relay |
+| [cloud-storage-backups.md](cloud-storage-backups.md) | Planned scheduled encrypted backups: why the provider need not be zero-knowledge, and targeting S3 + WebDAV to cover Nextcloud/self-host and the privacy providers |
 | [firefox-port.md](firefox-port.md) | Firefox MV3 port feasibility and the filesystem-sync gap P2P sync fills |
 | [mobile-port.md](mobile-port.md) | Tauri 2 mobile port feasibility; native autofill + biometric-unlock constraints |
 | [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
