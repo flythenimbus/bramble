@@ -79,7 +79,7 @@ Bramble flips that around:
 - **No server to breach.** Your vault never leaves your control. No central pile of data for anyone to go after.
 - **No account, no subscription, no telemetry.** Nothing to sign up for, nothing phoning home.
 - **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like — your call.
-- **Cloud-like convenience, without the cloud.** Peer-to-peer sync keeps all your devices in step automatically, just like a cloud manager, except the vault travels straight from one of your devices to another over an end-to-end encrypted link. Pair a new device and it is a full copy in seconds. You get the seamless multi-device experience with none of the central-server baggage: no honeypot of everyone's vaults, no company sitting between you and your data.
+- **Cloud-like convenience, without the cloud.** Sync keeps every device up to date automatically, like a cloud manager would, but your vault travels straight between them over an end-to-end encrypted link. No central honeypot, no company in the middle.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data."
 
 The tradeoff is real and worth being honest about: there's no "I forgot my password" button on a server somewhere. But you're not without a safety net: every vault gets a recovery code, and you can register a hardware key as another way in. Save the recovery code, keep a second device synced, and export a backup now and then. Lose *all* of your ways in (password, key, and recovery code) and the vault is gone, because nobody else holds a copy.
