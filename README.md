@@ -29,6 +29,16 @@ Your passwords are encrypted on your own device and stay there: in the browser's
 
 Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Key derivation, encryption, and decryption all run in that core, and derived keys are wiped from memory after use.
 
+## Backups
+
+Nobody else holds a copy of your vault, so keeping a backup is up to you. Bramble gives you two ways to do it:
+
+- **Explicit: export a backup file.** From Settings (browser extension for now), export your whole vault to an encrypted `.bramble` file and stash it somewhere safe: another drive, a USB stick, wherever you like. It stays ciphertext, so opening it still needs your master password and a stolen backup is useless on its own. Do this now and then, especially before any big change.
+- **Implicit: peer-to-peer sync.** Turn on sync and every device in your sync group is basically a live copy of the vault. Pair a second device and each one holds everything, so if you lose or wipe one, the others still have your data. It is the simplest safety net there is, with no files to remember to export.
+- **Coming in the future: scheduled cloud backups.** Point Bramble at a storage provider you already use (Dropbox, Google Drive, and other popular options) and it will drop an encrypted backup there on a schedule you set. It stays ciphertext in the cloud and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable.
+
+A synced second device and the occasional export together mean you are never one lost or broken device away from losing your vault.
+
 ## On your phone
 
 The mobile apps reuse Bramble's Rust crypto core and vault format, with native OS autofill on top:
@@ -69,6 +79,7 @@ Bramble flips that around:
 - **No server to breach.** Your vault never leaves your control. No central pile of data for anyone to go after.
 - **No account, no subscription, no telemetry.** Nothing to sign up for, nothing phoning home.
 - **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like — your call.
+- **Cloud-like convenience, without the cloud.** Peer-to-peer sync keeps all your devices in step automatically, just like a cloud manager, except the vault travels straight from one of your devices to another over an end-to-end encrypted link. Pair a new device and it is a full copy in seconds. You get the seamless multi-device experience with none of the central-server baggage: no honeypot of everyone's vaults, no company sitting between you and your data.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data."
 
 The tradeoff is real and worth being honest about: there's no "I forgot my password" button on a server somewhere. But you're not without a safety net: every vault gets a recovery code, and you can register a hardware key as another way in. Save the recovery code, keep a second device synced, and export a backup now and then. Lose *all* of your ways in (password, key, and recovery code) and the vault is gone, because nobody else holds a copy.
