@@ -206,6 +206,13 @@ export const extensionShell: ShellAdapter = {
 		if (typeof res.data !== "string") throw new Error("roster signature response malformed");
 		return res.data;
 	},
+	async resetSyncState() {
+		// Sync identity lives in chrome.storage.local under `sync.*` (group, device keys, relay);
+		// drop it all so a newly created vault starts as an un-enrolled device. See useVault.createVault.
+		const all = await api.storage.local.get(null);
+		const keys = Object.keys(all).filter((k) => k.startsWith("sync."));
+		if (keys.length) await api.storage.local.remove(keys);
+	},
 	async startEnrollInvite(opts) {
 		await syncStart("SYNC_ENROLL_INVITE", opts);
 	},
