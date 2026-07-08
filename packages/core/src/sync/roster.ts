@@ -163,6 +163,7 @@ export function verifyRemoteRoster(
 	remote: RosterPayload,
 	isSigValid: (entry: RosterEntry) => boolean,
 	isAdmissionValid: (entry: RosterEntry) => boolean,
+	require: { signatures?: boolean; admission?: boolean } = {},
 ): RosterPayload {
 	const anchored = new Map<string, string>(); // known id -> its established (first-seen) sigKey
 	for (const d of local.devices) if (d.sigKey) anchored.set(d.id, d.sigKey);
@@ -174,10 +175,15 @@ export function verifyRemoteRoster(
 			// Established signing device: same key + valid signature (no swap, no downgrade).
 			return entry.sigKey === anchor && entry.sig !== undefined && isSigValid(entry);
 		}
-		// Brand-new id: self-sign verify-if-present, then the admission gate (rogue-injection).
-		if (entry.sigKey !== undefined && entry.sig !== undefined && !isSigValid(entry)) return false;
+		// Brand-new id: self-sign + admission gates. Verify-if-present in phase 1; the `require` flags
+		// (from core flags.json) flip enforcement on in phase 2.
+		if (entry.sigKey !== undefined && entry.sig !== undefined) {
+			if (!isSigValid(entry)) return false;
+		} else if (require.signatures) {
+			return false; // phase-2: reject an unsigned new id
+		}
 		if (entry.admission !== undefined) return isAdmissionValid(entry);
-		return true; // no admission -> tolerated in phase 1; phase-2 "require" rejects it
+		return !require.admission; // phase-1: tolerate; phase-2: reject an unadmitted new id
 	});
 	return { devices, revoked: remote.revoked };
 }

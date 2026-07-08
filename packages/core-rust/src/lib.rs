@@ -41,6 +41,8 @@ mod passkey;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
 mod roster_sig;
+// Build-time feature flags, generated from packages/core/src/flags.json (one source shared with TS).
+mod flags;
 // Sync handshake/nostr compile into both layers: device sync must run natively so it
 // works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding.
 #[cfg(any(feature = "wasm", feature = "ffi"))]

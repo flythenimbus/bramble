@@ -200,6 +200,27 @@ describe("verifyRemoteRoster (TOFU id->key binding, Item A)", () => {
 		const remote: RosterPayload = { devices: [device("newbie", 5)], revoked: [] };
 		expect(idsOf(verifyRemoteRoster(emptyRoster(), remote, isValid, admValid))).toEqual(["newbie"]);
 	});
+
+	it("phase-2 require.signatures rejects an unsigned new id", () => {
+		const remote: RosterPayload = { devices: [device("newbie", 5)], revoked: [] };
+		const out = verifyRemoteRoster(emptyRoster(), remote, isValid, admValid, { signatures: true });
+		expect(out.devices).toEqual([]);
+	});
+
+	it("phase-2 require.admission rejects an unadmitted new id but keeps a validly-admitted one", () => {
+		const local: RosterPayload = { devices: [withAdmissionKey("laptop", 1)], revoked: [] };
+		const unadmitted: RosterPayload = { devices: [signed("solo", 5, "sk-solo")], revoked: [] };
+		expect(
+			verifyRemoteRoster(local, unadmitted, isValid, admValid, { admission: true }).devices,
+		).toEqual([]);
+		const admittedRemote: RosterPayload = {
+			devices: [admitted("phone", 5, "laptop")],
+			revoked: [],
+		};
+		expect(
+			idsOf(verifyRemoteRoster(local, admittedRemote, isValid, admValid, { admission: true })),
+		).toEqual(["phone"]);
+	});
 });
 
 describe("roster add/revoke", () => {
