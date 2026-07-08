@@ -15,15 +15,6 @@ import {
 	revokeDevice,
 	signRosterEntry,
 } from "../sync";
-
-/** Sign this device's own roster entry when the host is signing-capable (Item A); otherwise return
- * it unsigned (verify-if-present tolerates that during the phase-1 rollout). */
-async function signOwnEntry(shell: ShellAdapter, entry: RosterEntry): Promise<RosterEntry> {
-	if (!shell.syncSigningPublicKey || !shell.signRoster) return entry;
-	const sigKey = await shell.syncSigningPublicKey();
-	return signRosterEntry(entry, sigKey, shell.signRoster);
-}
-
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { defaultDeviceLabel } from "../util/device-label";
 import { createPrfCredential } from "../vault/webauthn-ceremony";
@@ -34,6 +25,14 @@ import {
 	type WebauthnSlot,
 } from "../vault-format";
 import type { JoinUnlock, UseVault } from "./useVault";
+
+/** Sign this device's own roster entry when the host is signing-capable (Item A); otherwise return
+ * it unsigned (verify-if-present tolerates that during the phase-1 rollout). */
+async function signOwnEntry(shell: ShellAdapter, entry: RosterEntry): Promise<RosterEntry> {
+	if (!shell.syncSigningPublicKey || !shell.signRoster) return entry;
+	const sigKey = await shell.syncSigningPublicKey();
+	return signRosterEntry(entry, sigKey, shell.signRoster);
+}
 
 /** Shared vault internals the enrollment ops need from VaultProvider. */
 export interface SyncEnrollmentDeps {
