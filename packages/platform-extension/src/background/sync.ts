@@ -23,6 +23,7 @@ import { api } from "../platform-api";
 import {
 	ApplyRemoteMsgSchema,
 	ApplyRosterMsgSchema,
+	RosterSignEntryMsgSchema,
 	type RosterSyncMsg,
 	type SyncEventMsg,
 } from "../sync/messages";
@@ -32,8 +33,11 @@ import {
 	getStoredIceUrl,
 	getStoredKeypair,
 	getStoredRelay,
+	getStoredSigningKey,
+	type SigningKeypair,
 	storeGroup,
 	storeKeypair,
+	storeSigningKey,
 } from "../sync/sync-config";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
@@ -82,6 +86,35 @@ const withDeviceKey = async (message: {
 };
 on("SYNC_ENROLL_INVITE", extensionOnly(withDeviceKey));
 on("SYNC_ENROLL_JOIN", extensionOnly(withDeviceKey));
+
+// Ed25519 roster-signing identity (Item A). The key is generated in the offscreen (has the wasm)
+// and persisted here (has chrome.storage), mirroring the Noise keypair. See docs/p2p-sync-revocation-hardening.md.
+on(
+	"SYNC_SIGNING_PUBKEY",
+	extensionOnly(async () => {
+		let kp = await getStoredSigningKey();
+		if (!kp) {
+			const res = await sendToOffscreen({ type: "SYNC_GENERATE_SIGNING_KEY" });
+			if (!res.ok || !res.data)
+				return { ok: false, error: res.error ?? "signing key generation failed" };
+			kp = res.data as SigningKeypair;
+			await storeSigningKey(kp);
+		}
+		return { ok: true, data: kp.publicKey };
+	}),
+);
+on(
+	"SYNC_SIGN_ENTRY",
+	extensionOnly(async (message) => {
+		const kp = await getStoredSigningKey();
+		if (!kp) return { ok: false, error: "no signing key — create or join a group first" };
+		const { canonical } = RosterSignEntryMsgSchema.parse(message.payload);
+		return sendToOffscreen({
+			type: "SYNC_ROSTER_SIGN",
+			payload: { secretB64: kp.secretKey, message: canonical },
+		});
+	}),
+);
 
 // --- ongoing sync (background-driven) ---
 

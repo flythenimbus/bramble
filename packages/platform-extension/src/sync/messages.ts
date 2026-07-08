@@ -65,6 +65,14 @@ export type ApplyRemoteMsg = z.infer<typeof ApplyRemoteMsgSchema>;
 export const ApplyRosterMsgSchema = z.object({ rosterJson: z.string() });
 export type ApplyRosterMsg = z.infer<typeof ApplyRosterMsgSchema>;
 
+/** shell -> background (SYNC_SIGN_ENTRY): the canonical roster-entry string to Ed25519-sign. */
+export const RosterSignEntryMsgSchema = z.object({ canonical: z.string() });
+export type RosterSignEntryMsg = z.infer<typeof RosterSignEntryMsgSchema>;
+
+/** background -> offscreen (SYNC_ROSTER_SIGN): the Ed25519 seed + the message to sign. */
+export const RosterSignHostMsgSchema = z.object({ secretB64: z.string(), message: z.string() });
+export type RosterSignHostMsg = z.infer<typeof RosterSignHostMsgSchema>;
+
 /** offscreen -> popup broadcast: a structured enrollment event. Mirrors core's SyncEvent. */
 export const SyncEventMsgSchema = z.object({
 	kind: z.string(),

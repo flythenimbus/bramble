@@ -34,11 +34,12 @@ import { api } from "./platform-api";
 import {
 	EnrollInviteMsgSchema,
 	EnrollJoinMsgSchema,
+	RosterSignHostMsgSchema,
 	RosterSyncMsgSchema,
 	type SyncEventMsg,
 	type SyncStatusMsg,
 } from "./sync/messages";
-import type { KeypairWasm } from "./sync/sync-config";
+import type { KeypairWasm, RosterSigWasm } from "./sync/sync-config";
 import { loadWasm, type VaultCrypto } from "./wasm-loader";
 
 /**
@@ -304,6 +305,19 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 			// Generate only — the background persists it (the host has no chrome.storage).
 			const w = (await getWasm()) as unknown as KeypairWasm;
 			return { ok: true, data: w.handshake_generate_keypair() };
+		}
+		if (type === "SYNC_GENERATE_SIGNING_KEY") {
+			// Ed25519 roster-signing keypair (Item A). Generate only; the background persists it.
+			const w = (await getWasm()) as unknown as RosterSigWasm;
+			return { ok: true, data: w.roster_sig_generate_key() };
+		}
+		if (type === "SYNC_ROSTER_SIGN") {
+			// Ed25519-sign a canonical roster-entry string with this device's seed (from the background).
+			const w = (await getWasm()) as unknown as {
+				roster_sign(secretB64: string, message: string): string;
+			};
+			const { secretB64, message } = RosterSignHostMsgSchema.parse(payload);
+			return { ok: true, data: w.roster_sign(secretB64, message) };
 		}
 		if (type === "SYNC_ENROLL_INVITE" || type === "SYNC_ENROLL_JOIN") {
 			const w = (await getWasm()) as unknown as EnrollWasm;
