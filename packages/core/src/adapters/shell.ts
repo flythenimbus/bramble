@@ -117,6 +117,12 @@ export interface ShellAdapter {
 	onSyncStatus(callback: (status: string) => void): () => void;
 	/** This device's Noise static public key (base64), for the roster and pairing code. Generated + persisted on first call. */
 	syncDevicePublicKey(): Promise<string>;
+	/** This device's Ed25519 roster-signing verify key (base64), for authenticated roster entries
+	 * (Item A). Generated + persisted on first call. Optional: absent on hosts not yet signing-capable,
+	 * where entries stay unsigned (verify-if-present tolerates that during rollout). Paired with signRoster. */
+	syncSigningPublicKey?(): Promise<string>;
+	/** Ed25519-sign a canonical roster-entry string (see canonicalRosterEntry). Paired with syncSigningPublicKey. */
+	signRoster?(canonical: string): Promise<string>;
 	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
 	startEnrollInvite(opts: {
 		relayUrl: string;

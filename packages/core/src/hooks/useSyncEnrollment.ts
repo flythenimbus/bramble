@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import type { ShellAdapter } from "../adapters/shell";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	addDevice,
@@ -12,7 +13,17 @@ import {
 	type RosterPayload,
 	randomKeyB64,
 	revokeDevice,
+	signRosterEntry,
 } from "../sync";
+
+/** Sign this device's own roster entry when the host is signing-capable (Item A); otherwise return
+ * it unsigned (verify-if-present tolerates that during the phase-1 rollout). */
+async function signOwnEntry(shell: ShellAdapter, entry: RosterEntry): Promise<RosterEntry> {
+	if (!shell.syncSigningPublicKey || !shell.signRoster) return entry;
+	const sigKey = await shell.syncSigningPublicKey();
+	return signRosterEntry(entry, sigKey, shell.signRoster);
+}
+
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { defaultDeviceLabel } from "../util/device-label";
 import { createPrfCredential } from "../vault/webauthn-ceremony";
@@ -57,13 +68,14 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		const clock = await ensureClock();
 		const hlc = clock.send();
 		const groupKey = randomKeyB64();
-		const roster = addDevice(emptyRoster(), {
+		const entry = await signOwnEntry(shell, {
 			id: hlc.node,
 			publicKey: inviterPub,
 			label: defaultDeviceLabel(),
 			addedAt: Date.now(),
 			hlc,
 		});
+		const roster = addDevice(emptyRoster(), entry);
 		await storage.setMeta("sync.group", { groupKey, roster });
 		return groupKey;
 	}, [storage, shell, ensureClock]);
@@ -152,13 +164,13 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			const ownPub = await shell.syncDevicePublicKey();
 			const clock = await ensureClock();
 			const hlc = clock.send();
-			const ownEntry: RosterEntry = {
+			const ownEntry = await signOwnEntry(shell, {
 				id: hlc.node,
 				publicKey: ownPub,
 				label: defaultDeviceLabel(),
 				addedAt: Date.now(),
 				hlc,
-			};
+			});
 
 			const joined = new Promise<{ vaultBlobB64: string; roster: RosterPayload }>(
 				(resolve, reject) => {
