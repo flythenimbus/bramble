@@ -20,8 +20,29 @@ export const RosterEntrySchema = z.object({
 	/** Wall-clock enrollment time, for display only. */
 	addedAt: z.number().int().nonnegative(),
 	hlc: HlcSchema,
+	/** Ed25519 verify key that signs this entry (base64). Optional through the phase-1 rollout
+	 * (Item A): absent on legacy/unsigned entries. See docs/p2p-sync-revocation-hardening.md. */
+	sigKey: z.string().min(1).optional(),
+	/** Ed25519 signature over `canonicalRosterEntry` (base64). Optional through phase-1. */
+	sig: z.string().min(1).optional(),
 });
 export type RosterEntry = z.infer<typeof RosterEntrySchema>;
+
+/** The stable string signed for a roster entry: binds `id` <-> `publicKey` <-> `sigKey` <-> stamp,
+ * so a member cannot rewrite another device's entry or backdate one. Excludes the mutable display
+ * `label` and the `sig` itself. TS and core-rust MUST produce byte-identical output; the pinned test
+ * vector is the cross-language contract. Fixed-order array avoids object-key-order ambiguity. */
+export function canonicalRosterEntry(entry: RosterEntry): string {
+	return JSON.stringify([
+		entry.id,
+		entry.publicKey,
+		entry.sigKey ?? "",
+		entry.addedAt,
+		entry.hlc.wall,
+		entry.hlc.counter,
+		entry.hlc.node,
+	]);
+}
 
 /** The stored/wire roster: active devices plus the revocation graveyard. */
 export const RosterPayloadSchema = z.object({

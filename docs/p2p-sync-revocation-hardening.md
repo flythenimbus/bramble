@@ -260,3 +260,46 @@ loop (this variant) vs. a strongly-consistent coordinator for fully-automatic re
 
 Do not start B before A is landed and the group is broadly on a signing-capable build, because B's
 re-admission relies on the roster check being trustworthy.
+
+## Decision & implementation notes (2026-07-07)
+
+**Decision:** Item B (group-key rotation) is deferred - accept the metadata residual (option 3). Item
+A proceeds now.
+
+**Code-grounded findings (from reading `sync/{roster,merge,device-clock}.ts`):**
+
+- **`sync.deviceId` is a stable, persisted UUID** (device-clock.ts) that doubles as the HLC node id,
+  reused across sessions and re-enrollments. So B1's re-add cannot be closed by "sticky tombstones":
+  that would permanently lock out a legitimately re-enrolled device keeping its stable id. B1 closes
+  via the *same signing* as A1 - a re-add needs an enrollment-admission signature a revoked device
+  cannot produce. (`roster.test.ts:58` "re-enrolling with a newer stamp brings a device back" encodes
+  today's LWW resurrection; that behavior changes under signing.)
+- **`merge.ts` is a shared generic CRDT** used by *both* entries and roster. Roster-specific rules
+  (signature verify, new-id gate) go in the roster layer (`sanitizeRemoteRoster`/`mergeRemoteRoster`
+  or a new `verifyRemoteRoster`), NEVER the shared kernel (entries rely on LWW resurrection).
+- **`core-rust` is the single signer.** It already signs (`nostr.rs`, BIP340/secp256k1); add an
+  Ed25519 module (`ed25519-dalek`) exported to wasm + uniffi so all four platforms verify with one
+  implementation (kills the "four impls must agree" risk). Verify-on-merge runs in the crypto host
+  (offscreen/wasm), like the other `CRYPTO_*` ops.
+- **Versioning:** the `hello` already carries capabilities (`rtc`, mesh.ts); add a `rosterVersion`
+  signing-capability bit for the phase-1 verify-if-present -> phase-2 require flip.
+
+**Signature model (A1 close):** TOFU id->key binding. The first entry seen for an id fixes its
+`sigKey`; every later update to that id must verify against that first-seen key, so a compromised
+member cannot rewrite another device's entry. New ids (and re-adds of tombstoned ids) are admitted
+only via the `enroll-host` PSK path carrying an admission signature from an existing member, never via
+plain gossip - this is the new-id gate, and it is why entry signing and the gate are co-designed, not
+shippable separately.
+
+**Increments (revised order):**
+
+1. **TS foundation:** additive optional `sigKey`/`sig` on `RosterEntrySchema` + `canonicalRosterEntry()`
+   (the byte-identical signable form: `id, publicKey, sigKey, addedAt, hlc`) + tests. No behavior
+   change; pins the cross-language canonical bytes.
+2. **`core-rust` Ed25519** keygen/sign/verify (mirrors `nostr.rs`) + wasm/uniffi exposure. Needs the
+   `ed25519-dalek` dep (registry fetch).
+3. **Sign + verify on merge:** sign own entry at enrollment; TOFU verify + new-id gate in the roster
+   merge (verify-if-present, drop only the offending entry).
+4. **`hello` capability + phase-2 "require signatures".**
+
+Multi-device acceptance runs on Chrome profiles (not Android-gated).

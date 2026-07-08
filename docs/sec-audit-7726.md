@@ -242,6 +242,13 @@ on-device).
 
 ## Phase 2 - Durable revocation fix (required, multi-device tested) - closes B1 **and** A1
 
+> **DECISION (2026-07-07): Item B (group-key rotation) deferred - accept the metadata residual
+> (option 3).** A revoked device retains only signaling-metadata visibility (never vault content);
+> the user accepted that residual rather than build rotation now. **Item A proceeds** (roster entry
+> signing + new-id gate), which closes A1 and B1. The admin-authority re-admit variant in
+> `docs/p2p-sync-revocation-hardening.md` is documented but unneeded while Item B is deferred. See
+> that note's "Decision & implementation notes" for the code-grounded Item A plan.
+
 **Reframe:** `docs/p2p-sync-revocation-hardening.md` is written as optional hardening; the recheck
 shows it is **required to close Finding 4**. Today a compromised member survives revocation via B1
 (re-gossip a re-add stamped ~now, beats the tombstone by LWW) and A1 (mint a rogue entry the admin
