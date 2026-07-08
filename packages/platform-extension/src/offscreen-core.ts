@@ -83,8 +83,11 @@ const unregisteredBridge: SyncBridge = {
 let enrollSession: MeshSession | null = null;
 let syncSession: MeshSession | null = null;
 
-/** Broadcast a dev-sync status line; the Settings panel listens for SYNC_STATUS. */
+/** Broadcast a dev-sync status line; the Settings panel listens for SYNC_STATUS. Also logged to the
+ * host console (offscreen on Chrome / event page on Firefox), which persists across popup closes -
+ * unlike the panel log, which the popup drops when it closes during cross-browser enrollment. */
 function reportSyncStatus(status: string): void {
+	console.log("[bramble:sync]", status);
 	const payload: SyncStatusMsg = { status };
 	void api.runtime.sendMessage({ type: "SYNC_STATUS", payload }).catch(() => {});
 }

@@ -50,6 +50,15 @@ import {
 	writeVault,
 } from "./vault-io";
 
+// Mirror sync status into the background console too, so it's visible in the easy-to-reach
+// service-worker console (Chrome) - the offscreen broadcasts SYNC_STATUS here. On Firefox the host
+// runs in this same event page, so reportSyncStatus already logs there. Diagnostic only; doesn't
+// consume the message (the popup panel still receives it).
+api.runtime.onMessage.addListener((msg: { type?: string; payload?: { status?: string } }) => {
+	if (msg?.type === "SYNC_STATUS") console.log("[bramble:sync]", msg.payload?.status ?? "");
+	return false;
+});
+
 // --- enrollment (forwarded to the offscreen) ---
 
 on(
