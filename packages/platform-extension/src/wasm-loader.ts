@@ -17,7 +17,7 @@ export function loadWasm(): Promise<VaultCrypto> {
 			/* @vite-ignore */ chrome.runtime.getURL("wasm/vault_crypto.js")
 		);
 		await wasmModule.default(api.runtime.getURL("wasm/vault_crypto_bg.wasm"));
-		return wasmModule as unknown as VaultCrypto;
+		return wasmModule as VaultCrypto;
 	})();
 	return cached;
 }
