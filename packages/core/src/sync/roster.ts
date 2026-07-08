@@ -106,6 +106,41 @@ export function mergeRemoteRoster(
 	return mergeRosters(local, sanitizeRemoteRoster(remote, now));
 }
 
+/**
+ * Verify a REMOTELY-received roster's device entries before merge (Item A). Drops entries that fail
+ * Ed25519 verification or violate the TOFU id->key binding, so a compromised member cannot
+ * impersonate another device (rewrite its entry with a different key). `isSigValid` is the
+ * host-computed signature verdict for a signed entry (the Ed25519 verify runs in the crypto host
+ * over `canonicalRosterEntry`; core stays pure/sync). Rules:
+ *  - A device we already know as signing (its id has an established `sigKey`) MUST re-present the
+ *    same `sigKey` with a valid signature: no key swap (impersonation) and no downgrade to unsigned.
+ *  - An id not yet established accepts an unsigned entry (verify-if-present, phase-1 rollout); a
+ *    signed one is validated. (The phase-1 establishment window is closed by phase 2 "require".)
+ *  - Tombstones pass through untouched: revocation stays member-level authority.
+ * Hosts run this before mergeRemoteRoster. Does NOT yet gate NEW ids / re-adds of tombstoned ids
+ * (rogue-injection, B1) - that is the admission-signed new-id gate, a following slice.
+ * See docs/p2p-sync-revocation-hardening.md.
+ */
+export function verifyRemoteRoster(
+	local: RosterPayload,
+	remote: RosterPayload,
+	isSigValid: (entry: RosterEntry) => boolean,
+): RosterPayload {
+	const anchored = new Map<string, string>(); // known id -> its established (first-seen) sigKey
+	for (const d of local.devices) if (d.sigKey) anchored.set(d.id, d.sigKey);
+	const devices = remote.devices.filter((entry) => {
+		const anchor = anchored.get(entry.id);
+		if (anchor !== undefined) {
+			// Established signing device: same key + valid signature (no swap, no downgrade).
+			return entry.sigKey === anchor && entry.sig !== undefined && isSigValid(entry);
+		}
+		// Not yet established: accept unsigned (phase 1); validate a signature if present.
+		if (entry.sigKey !== undefined && entry.sig !== undefined) return isSigValid(entry);
+		return true;
+	});
+	return { devices, revoked: remote.revoked };
+}
+
 /** Enroll (or re-enroll) a device. The entry must carry a freshly stamped hlc. */
 export function addDevice(roster: RosterPayload, device: RosterEntry): RosterPayload {
 	return mergeRosters(roster, { devices: [device], revoked: [] });
