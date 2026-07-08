@@ -359,8 +359,7 @@ async function cornerPromptResponse(
 			await api.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
 			try {
 				// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
-				const openPopupFn = (api.action as unknown as { openPopup?: () => Promise<void> })
-					.openPopup;
+				const openPopupFn = (api.action as { openPopup?: () => Promise<void> }).openPopup;
 				if (typeof openPopupFn === "function") {
 					await openPopupFn.call(api.action);
 				} else {

@@ -93,5 +93,8 @@ export function normalizeEntryData(raw: Record<string, unknown>): EntryData {
 			.join(",");
 		console.error(`[vault] decrypted entry has an unexpected shape (type=${type}, keys=${keys})`);
 	}
+	// candidate is validated by the schema tripwire above but deliberately returned even on a
+	// mismatch (the bytes are AES-GCM-authenticated); Record<string, unknown> has no overlap with
+	// EntryData's shape, so this is a genuine reinterpret, not a reducible cast.
 	return candidate as unknown as EntryData;
 }

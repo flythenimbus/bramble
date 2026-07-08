@@ -21,7 +21,7 @@ export function loadWasm(): Promise<VaultCrypto> {
 		const base = import.meta.env.BASE_URL;
 		const mod = await import(/* @vite-ignore */ `${base}wasm/vault_crypto.js`);
 		await mod.default(`${base}wasm/vault_crypto_bg.wasm`);
-		return mod as unknown as VaultCrypto;
+		return mod as VaultCrypto;
 	})();
 	return cached;
 }

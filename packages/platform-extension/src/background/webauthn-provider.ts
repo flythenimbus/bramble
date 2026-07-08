@@ -53,7 +53,7 @@ async function activeTabId(): Promise<number | undefined> {
  *  was used instead (it dismisses on its own). */
 async function openPopupForUnlock(): Promise<number | undefined> {
 	try {
-		const openPopup = (api.action as unknown as { openPopup?: () => Promise<void> }).openPopup;
+		const openPopup = (api.action as { openPopup?: () => Promise<void> }).openPopup;
 		if (typeof openPopup === "function") {
 			await openPopup.call(api.action);
 			return undefined;
