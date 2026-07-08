@@ -387,4 +387,65 @@ class NativeCryptoPlugin : Plugin() {
             call.resolve(JSObject().put("value", uniffi.vault_crypto.nostrVerify(pub, hash, sig)))
         }
     }
+
+    // --- roster-entry signing (Ed25519) + password-authority admission (Item A) ---
+
+    @PluginMethod
+    fun rosterSigGenerateKey(call: PluginCall) = call.runCrypto {
+        val k = uniffi.vault_crypto.rosterSigGenerateKey()
+        call.resolve(JSObject().put("secretKey", k.secretKey).put("publicKey", k.publicKey))
+    }
+
+    @PluginMethod
+    fun rosterSigPublicKey(call: PluginCall) {
+        val secret = str(call, "secretB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.rosterSigPublicKey(secret)))
+        }
+    }
+
+    @PluginMethod
+    fun rosterSign(call: PluginCall) {
+        val secret = str(call, "secretB64") ?: return
+        val message = str(call, "message") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.rosterSign(secret, message)))
+        }
+    }
+
+    @PluginMethod
+    fun rosterVerify(call: PluginCall) {
+        val pub = str(call, "publicB64") ?: return
+        val message = str(call, "message") ?: return
+        val sig = str(call, "sigB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.rosterVerify(pub, message, sig)))
+        }
+    }
+
+    @PluginMethod
+    fun rosterAdmissionPublicKey(call: PluginCall) {
+        val password = str(call, "password") ?: return
+        val salt = str(call, "saltB64") ?: return
+        call.runCrypto {
+            call.resolve(
+                JSObject().put("value", uniffi.vault_crypto.rosterAdmissionPublicKey(password, salt))
+            )
+        }
+    }
+
+    @PluginMethod
+    fun rosterAdmissionSign(call: PluginCall) {
+        val password = str(call, "password") ?: return
+        val salt = str(call, "saltB64") ?: return
+        val message = str(call, "message") ?: return
+        call.runCrypto {
+            call.resolve(
+                JSObject().put(
+                    "value",
+                    uniffi.vault_crypto.rosterAdmissionSign(password, salt, message)
+                )
+            )
+        }
+    }
 }

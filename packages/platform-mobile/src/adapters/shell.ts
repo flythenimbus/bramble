@@ -8,10 +8,14 @@ import { scanQrCode } from "../scan";
 import {
 	onSyncEvent,
 	onSyncStatus,
+	signRoster,
 	startEnrollInvite,
 	startEnrollJoin,
 	stopSync,
+	syncAdmissionPublicKey,
+	syncAdmissionSign,
 	syncDevicePublicKey,
+	syncSigningPublicKey,
 } from "../sync/sync-manager";
 
 // Single-window in-app navigation to the setup/create-vault and import flows. The
@@ -85,6 +89,12 @@ export const mobileShell: ShellAdapter = {
 	stopSyncSpike: stopSync,
 	onSyncStatus,
 	syncDevicePublicKey,
+	// Roster-entry signing + password-authority admission (Item A). Once these are present the
+	// shared core signs own entries + admission-signs joiners automatically. See docs/p2p-sync-revocation-hardening.md.
+	syncSigningPublicKey,
+	signRoster,
+	syncAdmissionPublicKey,
+	syncAdmissionSign,
 	startEnrollInvite,
 	startEnrollJoin,
 	onSyncEvent,
