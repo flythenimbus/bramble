@@ -32,6 +32,8 @@ import {
 } from "./crypto/messages";
 import { api } from "./platform-api";
 import {
+	AdmissionPubkeyMsgSchema,
+	AdmissionSignHostMsgSchema,
 	EnrollInviteMsgSchema,
 	EnrollJoinMsgSchema,
 	RosterSignHostMsgSchema,
@@ -321,6 +323,23 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 			};
 			const { secretB64, message } = RosterSignHostMsgSchema.parse(payload);
 			return { ok: true, data: w.roster_sign(secretB64, message) };
+		}
+		if (type === "SYNC_ROSTER_ADMISSION_PUBKEY") {
+			// Derive this device's admission verify key from the re-entered master password + slot salt
+			// (Item A). Argon2 -> KEK -> HKDF -> Ed25519; the signing key is derived and dropped, never stored.
+			const w = (await getWasm()) as unknown as {
+				roster_admission_public_key(password: string, saltB64: string): string;
+			};
+			const { password, saltB64 } = AdmissionPubkeyMsgSchema.parse(payload);
+			return { ok: true, data: w.roster_admission_public_key(password, saltB64) };
+		}
+		if (type === "SYNC_ROSTER_ADMISSION_SIGN") {
+			// Admission-sign an admitted device's canonical entry with the password-derived admission key.
+			const w = (await getWasm()) as unknown as {
+				roster_admission_sign(password: string, saltB64: string, message: string): string;
+			};
+			const { password, saltB64, message } = AdmissionSignHostMsgSchema.parse(payload);
+			return { ok: true, data: w.roster_admission_sign(password, saltB64, message) };
 		}
 		if (type === "SYNC_ENROLL_INVITE" || type === "SYNC_ENROLL_JOIN") {
 			const w = (await getWasm()) as unknown as EnrollWasm;

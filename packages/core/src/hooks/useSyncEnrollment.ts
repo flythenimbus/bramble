@@ -3,6 +3,7 @@ import type { ShellAdapter } from "../adapters/shell";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	addDevice,
+	canonicalRosterEntry,
 	decodePairingCode,
 	type EntriesPayload,
 	emptyRoster,
@@ -21,6 +22,7 @@ import { createPrfCredential } from "../vault/webauthn-ceremony";
 import {
 	findPasswordSlot,
 	findWebauthnSlots,
+	type PasswordSlot,
 	type VaultBlob,
 	type WebauthnSlot,
 } from "../vault-format";
@@ -32,6 +34,34 @@ async function signOwnEntry(shell: ShellAdapter, entry: RosterEntry): Promise<Ro
 	if (!shell.syncSigningPublicKey || !shell.signRoster) return entry;
 	const sigKey = await shell.syncSigningPublicKey();
 	return signRosterEntry(entry, sigKey, shell.signRoster);
+}
+
+/** What the inviter needs, after re-entering the master password, to admission-sign a joiner's entry
+ * (Item A rogue-injection close): the password + this device's password-slot salt (to re-derive the
+ * admission signing key transiently) and this device's id (the `admission.by`). Held only for the
+ * duration of one invite. Null when the device can't admit (security-key-only, or host without
+ * password-authority admission). See docs/p2p-sync-revocation-hardening.md. */
+interface AdmissionContext {
+	password: string;
+	saltB64: string;
+	adminId: string;
+}
+
+/** Attach an `admission` (this device's password-derived signature over the joiner's canonical entry)
+ * so peers can verify a NEW id was admitted by a live member. No-op when the inviter can't admit;
+ * the entry is then tolerated only through the phase-1 rollout. */
+async function admissionSign(
+	shell: ShellAdapter,
+	admit: AdmissionContext | null,
+	entry: RosterEntry,
+): Promise<RosterEntry> {
+	if (!admit || !shell.syncAdmissionSign) return entry;
+	const sig = await shell.syncAdmissionSign(
+		admit.password,
+		admit.saltB64,
+		canonicalRosterEntry(entry),
+	);
+	return { ...entry, admission: { by: admit.adminId, sig } };
 }
 
 /** Shared vault internals the enrollment ops need from VaultProvider. */
@@ -79,18 +109,52 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		return groupKey;
 	}, [storage, shell, ensureClock]);
 
+	// Publish this device's admission key on its own roster entry, derived from the re-entered master
+	// password + this device's password-slot salt (Item A rogue-injection close), and return the
+	// context to admission-sign the joiner. The admissionKey is deterministic from (password, salt),
+	// so a repeat invite re-derives the same value and is a no-op. Returns null when this device can't
+	// admit: no password re-entered, no password slot (security-key-only), or a host without
+	// password-authority admission — the joiner's new id is then tolerated only through phase 1.
+	const publishAdmissionKey = useCallback(
+		async (
+			inviterPub: string,
+			password: string | undefined,
+			pwSlot: PasswordSlot | null,
+		): Promise<AdmissionContext | null> => {
+			if (!password || !pwSlot || !shell.syncAdmissionPublicKey || !shell.syncAdmissionSign)
+				return null;
+			const saltB64 = bytesToBase64(pwSlot.salt);
+			const admissionKey = await shell.syncAdmissionPublicKey(password, saltB64);
+			const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
+				"sync.group",
+			);
+			const own = group?.roster.devices.find((d) => d.publicKey === inviterPub);
+			if (!group || !own) return null;
+			// Re-stamp + re-sign our own entry so the added admissionKey wins the merge (the signature
+			// covers it via canonicalRosterEntry). Skipped when already published (deterministic key).
+			if (own.admissionKey !== admissionKey) {
+				const hlc = (await ensureClock()).send();
+				const updated = await signOwnEntry(shell, { ...own, admissionKey, hlc });
+				await storage.setMeta("sync.group", {
+					groupKey: group.groupKey,
+					roster: addDevice(group.roster, updated),
+				});
+			}
+			return { password, saltB64, adminId: own.id };
+		},
+		[shell, storage, ensureClock],
+	);
+
 	// Generate a fresh one-time pairing code and start listening for a device to
 	// join. The code carries no vault secrets (groupKey + our pubkey + PSK + relay).
 	const inviteDevice = useCallback(
-		async (relayUrl: string, iceUrl?: string): Promise<string> => {
+		async (relayUrl: string, iceUrl?: string, password?: string): Promise<string> => {
 			// Persist + propagate (via the pairing code) both relays so a joiner adopts them.
 			await storage.setMeta("sync.relay", relayUrl);
 			await storage.setMeta("sync.iceUrl", iceUrl ?? "");
 			const groupKey = await ensureGroup();
 			const inviterPub = await shell.syncDevicePublicKey();
 			const psk = randomKeyB64();
-			const group = await storage.getMeta<{ roster: RosterPayload }>("sync.group");
-			const roster = group?.roster ?? emptyRoster();
 			const entries = await readEntriesPayload();
 			// Ship our password-slot verifier so the joiner can PROVE its typed password
 			// matches this device's. Omitted when this device unlocks by security key only.
@@ -102,7 +166,12 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 						verifierB64: bytesToBase64(pwSlot.verifier),
 					}
 				: undefined;
-			// When the device finishes joining, add its roster entry to ours (symmetric rosters).
+			// Publish this device's admission key (from the re-entered password) and keep the context to
+			// admission-sign the joiner. Reads the group AFTER this, so `roster` ships the admissionKey.
+			const admit = await publishAdmissionKey(inviterPub, password, pwSlot);
+			const group = await storage.getMeta<{ roster: RosterPayload }>("sync.group");
+			const roster = group?.roster ?? emptyRoster();
+			// When the device finishes joining, admission-sign then add its entry to ours (symmetric rosters).
 			enrollUnsubRef.current?.();
 			enrollUnsubRef.current = shell.onSyncEvent((ev) => {
 				if (ev.kind !== "enrolled" || !ev.entryJson) return;
@@ -113,13 +182,14 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 					return; // ignore a malformed enrolled-event payload
 				}
 				void (async () => {
+					const admitted = await admissionSign(shell, admit, entry);
 					const cur = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
 						"sync.group",
 					);
 					if (!cur) return;
 					await storage.setMeta("sync.group", {
 						groupKey: cur.groupKey,
-						roster: addDevice(cur.roster, entry),
+						roster: addDevice(cur.roster, admitted),
 					});
 					enrollUnsubRef.current?.();
 					enrollUnsubRef.current = null;
@@ -144,7 +214,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				iceUrl: iceUrl || undefined,
 			});
 		},
-		[ensureGroup, shell, storage, readEntriesPayload, readDecodedBlob],
+		[ensureGroup, shell, storage, readEntriesPayload, readDecodedBlob, publishAdmissionKey],
 	);
 
 	// Join from a pairing code: the offscreen runs the handshake and rebuilds the

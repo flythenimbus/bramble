@@ -123,6 +123,15 @@ export interface ShellAdapter {
 	syncSigningPublicKey?(): Promise<string>;
 	/** Ed25519-sign a canonical roster-entry string (see canonicalRosterEntry). Paired with syncSigningPublicKey. */
 	signRoster?(canonical: string): Promise<string>;
+	/** This device's admission verify key (base64), derived from the master password + this device's
+	 * password-slot salt (Item A rogue-injection close). Published in the device's roster entry so
+	 * peers can verify which NEW devices this one admits. Requires a fresh password entry; the signing
+	 * key is derived transiently in the crypto host and never stored. Optional: absent on hosts without
+	 * password-authority admission. See docs/p2p-sync-revocation-hardening.md. */
+	syncAdmissionPublicKey?(password: string, saltB64: string): Promise<string>;
+	/** Admission-sign an admitted device's canonical roster entry with THIS device's password-derived
+	 * admission key (see syncAdmissionPublicKey). Requires a fresh password entry. Paired with it. */
+	syncAdmissionSign?(password: string, saltB64: string, canonical: string): Promise<string>;
 	/** Clear all of this device's local sync state (group, device keys, relay) so a freshly created
 	 * vault starts as an un-enrolled device — sync identity belongs to the vault, not the browser.
 	 * Optional: platforms with no local sync state may omit it. */
