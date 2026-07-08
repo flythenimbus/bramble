@@ -303,3 +303,48 @@ shippable separately.
 4. **`hello` capability + phase-2 "require signatures".**
 
 Multi-device acceptance runs on Chrome profiles (not Android-gated).
+
+## Rogue-injection close: password-authority admission (2026-07-08)
+
+Impersonation (A1) and re-add (B1) are closed by signing + sticky tombstones. The remaining A1
+variant - a compromised *member* conjuring a brand-new rogue device id as a revocation backup - is
+NOT closeable by member-level admission signatures (a compromised member is a valid admitter). It IS
+closeable by binding admission to the **master password**, which a member holds only transiently (a
+member holds the VEK, not the KEK). Residual: an attacker who also captures the password can forge
+admissions - but then revocation is moot regardless (rotate the password); out of scope.
+
+**The admission key (per-device, password-derived, never at rest or in memory).**
+
+    adm_key = Ed25519(HKDF(KEK, "roster/admission/v1")),  KEK = Argon2(password, this device's slot salt)
+
+Derived ONLY at device registration from a *fresh* password entry, used to sign, then zeroized. Never
+stored; never loaded on a normal unlock. A compromised member that scraped the VEK + device keys but
+never captured a password re-entry cannot derive it. Per-device (KEK differs by slot salt), so there
+is NO group-wide secret to distribute and NO migration - each device derives its own. The oracle it
+adds (admission pubkey + slot salt -> offline password crack) is one the attacker already has from
+the compromised device's password slot, so no new surface.
+
+**Fields (additive).** `RosterEntry` gains optional `admissionKey` (base64 verify key, added to
+`canonicalRosterEntry` so it is covered by the device's self-signature, TOFU-anchored like `sigKey`)
+and `admission` (`{ by: <admitter id>, sig: <base64> }`, the admitter's signature over the admitted
+entry's canonical; absent for the initial enrolled set).
+
+**Flows.**
+- *Group creation:* the first device derives + publishes its `admissionKey` (it is the root, no `admission`).
+- *Add a device (the "sudo" moment):* the inviter re-enters the master password -> Argon2 -> KEK ->
+  derives its admission key -> signs the joiner's entry -> attaches `admission` -> zeroizes. The
+  joiner derives + publishes its own `admissionKey` at join. New UX: a password prompt on "Add device".
+- *Verify (`verifyRemoteRoster`):* a brand-new id is admitted only if its `admission.sig` verifies
+  against a *current, live* member's anchored `admissionKey`. Known ids: TOFU. Tombstoned: dead
+  (sticky). Verify-if-present in phase 1; phase-2 "require" (with #4) flips the teeth on.
+- *Password change:* re-derive the admission key, update this device's own `admissionKey` (re-sign).
+  Only affects future admissions - admission is a new-id gate, never re-checked, so nothing is invalidated.
+
+**Bootstrapping trust** = the PSK enrollment ceremony: the initial roster received in the
+authenticated bundle is trusted on first sight (anchored); everything after must be admission-signed.
+
+**Build order:** (1) schema + `admissionKey` in canonical + `verifyRemoteRoster` admission gate
+(pure, unit-tested) + `verifyRosterEnvelope` admission verify; (2) core-rust admission derive/sign op
+(Argon2 -> KEK -> HKDF -> Ed25519, reuses existing deps); (3) enrollment: publish `admissionKey`,
+password re-prompt, produce the admission sig; (4) phase-2 require via the #4 capability. No group-key
+rotation, no admin-device concept.

@@ -25,18 +25,27 @@ export const RosterEntrySchema = z.object({
 	sigKey: z.string().min(1).optional(),
 	/** Ed25519 signature over `canonicalRosterEntry` (base64). Optional through phase-1. */
 	sig: z.string().min(1).optional(),
+	/** Ed25519 verify key for admitting NEW devices (base64), derived from the master password at
+	 * registration (never at rest). Published here - covered by `sig` - so peers can verify who this
+	 * device admits. Optional through rollout. See docs/p2p-sync-revocation-hardening.md. */
+	admissionKey: z.string().min(1).optional(),
+	/** Admission of a NON-initial device: the admitting member's id + its signature over this entry's
+	 * canonical. Absent for the initial enrolled set (bootstrapped via the PSK ceremony). */
+	admission: z.object({ by: z.string().min(1), sig: z.string().min(1) }).optional(),
 });
 export type RosterEntry = z.infer<typeof RosterEntrySchema>;
 
-/** The stable string signed for a roster entry: binds `id` <-> `publicKey` <-> `sigKey` <-> stamp,
- * so a member cannot rewrite another device's entry or backdate one. Excludes the mutable display
- * `label` and the `sig` itself. TS and core-rust MUST produce byte-identical output; the pinned test
+/** The stable string signed for a roster entry: binds `id` <-> `publicKey` <-> `sigKey` <->
+ * `admissionKey` <-> stamp, so a member cannot rewrite another device's entry, swap its keys, or
+ * backdate one. Excludes the mutable display `label`, the `sig`, and the `admission` (the admitter
+ * signs THIS same string). TS and core-rust MUST produce byte-identical output; the pinned test
  * vector is the cross-language contract. Fixed-order array avoids object-key-order ambiguity. */
 export function canonicalRosterEntry(entry: RosterEntry): string {
 	return JSON.stringify([
 		entry.id,
 		entry.publicKey,
 		entry.sigKey ?? "",
+		entry.admissionKey ?? "",
 		entry.addedAt,
 		entry.hlc.wall,
 		entry.hlc.counter,
@@ -143,15 +152,17 @@ export function mergeRemoteRoster(
  *    signed one is validated. (The phase-1 establishment window is closed by phase 2 "require".)
  *  - A revoked (locally-tombstoned) id is dropped: gossip cannot re-add a removed device (B1).
  *    Combined with the sticky liveness in `liveDevices`, a tombstoned id stays dead for good.
+ *  - A brand-new (never-seen) id carrying an `admission` is admitted only if `isAdmissionValid`
+ *    (the admitting member's password-derived admission key verifies it) - closing rogue-injection.
+ *    A new id with no admission is tolerated in phase 1; phase-2 "require" flips that off (#4).
  *  - Tombstones pass through untouched: revocation stays member-level authority.
- * Hosts run this before mergeRemoteRoster. Does NOT gate a brand-new *never-seen* id a compromised
- * member conjures (rogue-injection); fully closing that needs admin-only admission (deferred with
- * group-key rotation). See docs/p2p-sync-revocation-hardening.md.
+ * Hosts run this before mergeRemoteRoster. See docs/p2p-sync-revocation-hardening.md.
  */
 export function verifyRemoteRoster(
 	local: RosterPayload,
 	remote: RosterPayload,
 	isSigValid: (entry: RosterEntry) => boolean,
+	isAdmissionValid: (entry: RosterEntry) => boolean,
 ): RosterPayload {
 	const anchored = new Map<string, string>(); // known id -> its established (first-seen) sigKey
 	for (const d of local.devices) if (d.sigKey) anchored.set(d.id, d.sigKey);
@@ -163,9 +174,10 @@ export function verifyRemoteRoster(
 			// Established signing device: same key + valid signature (no swap, no downgrade).
 			return entry.sigKey === anchor && entry.sig !== undefined && isSigValid(entry);
 		}
-		// Not yet established: accept unsigned (phase 1); validate a signature if present.
-		if (entry.sigKey !== undefined && entry.sig !== undefined) return isSigValid(entry);
-		return true;
+		// Brand-new id: self-sign verify-if-present, then the admission gate (rogue-injection).
+		if (entry.sigKey !== undefined && entry.sig !== undefined && !isSigValid(entry)) return false;
+		if (entry.admission !== undefined) return isAdmissionValid(entry);
+		return true; // no admission -> tolerated in phase 1; phase-2 "require" rejects it
 	});
 	return { devices, revoked: remote.revoked };
 }
