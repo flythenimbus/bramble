@@ -7,7 +7,14 @@
 // the background (fetchLocalPayload / pushRemotePayload), so this stays storage-free.
 // See docs/p2p-sync.md.
 
-import { decodeRoster, type RosterPayload } from "..";
+import {
+	canonicalRosterEntry,
+	decodeRoster,
+	encodeRoster,
+	type RosterEntry,
+	type RosterPayload,
+	verifyRemoteRoster,
+} from "..";
 import type { Channel } from "./channel";
 import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./handshake";
 import type { PeerSession } from "./mesh";
@@ -29,7 +36,14 @@ interface RosterHandshakeWasm extends PumpWasm {
 	handshake_decrypt(sessionId: number, ciphertextB64: string): Awaitable<string>;
 }
 
-export type RosterSyncWasm = NostrWasm & RosterHandshakeWasm;
+/** Ed25519 roster-entry verification (Item A). Optional: absent on hosts not yet wired for roster
+ * signing (e.g. an older mobile native-crypto shim), where verification degrades to
+ * verify-if-present (pass-through). See docs/p2p-sync-revocation-hardening.md. */
+interface RosterVerifyWasm {
+	roster_verify?(publicB64: string, message: string, sigB64: string): Awaitable<boolean>;
+}
+
+export type RosterSyncWasm = NostrWasm & RosterHandshakeWasm & RosterVerifyWasm;
 type Report = (status: string) => void;
 
 const REBROADCAST_MS = 4000;
@@ -85,8 +99,42 @@ async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<voi
 	} catch {
 		return;
 	}
-	if (env.roster && opts.pushRemoteRoster) await opts.pushRemoteRoster(env.roster);
+	if (env.roster && opts.pushRemoteRoster) {
+		const verified = await verifyRosterEnvelope(opts, env.roster);
+		if (verified !== null) await opts.pushRemoteRoster(verified);
+	}
 	if (env.entries) await opts.pushRemotePayload(env.entries);
+}
+
+/** Verify a gossiped roster before it is pushed to merge (Item A): drop entries that fail Ed25519
+ * verification or violate the TOFU id->key binding, so a compromised member cannot impersonate
+ * another device. Returns the cleaned roster JSON, or null if it cannot be parsed. Degrades to
+ * pass-through when the host is not wired for verification (roster_verify absent), preserving
+ * verify-if-present. Exported for tests. See docs/p2p-sync-revocation-hardening.md. */
+export async function verifyRosterEnvelope(
+	opts: Pick<RosterSyncOptions, "roster" | "fetchLocalRoster" | "wasm">,
+	rosterJson: string,
+): Promise<string | null> {
+	let remote: RosterPayload;
+	try {
+		remote = decodeRoster(rosterJson);
+	} catch {
+		return null;
+	}
+	const rosterVerify = opts.wasm.roster_verify;
+	if (!rosterVerify) return rosterJson; // host not wired for verification: verify-if-present passes.
+	const local = await currentRoster(opts);
+	const valid = new Set<RosterEntry>(); // keyed by object identity: robust against duplicate ids
+	for (const entry of remote.devices) {
+		if (!entry.sigKey || !entry.sig) continue;
+		try {
+			if (await rosterVerify(entry.sigKey, canonicalRosterEntry(entry), entry.sig))
+				valid.add(entry);
+		} catch {
+			// A verification error is a failed signature: fail closed (leave out of `valid`).
+		}
+	}
+	return encodeRoster(verifyRemoteRoster(local, remote, (entry) => valid.has(entry)));
 }
 
 interface AuthedPeer {
