@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { type Tombstone, TombstoneSchema } from "./entries-payload";
 import { type Hlc, HlcSchema, isFutureStamp } from "./hlc";
-import { liveRecords, mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
+import { mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
 
 /** One member device. `id` is the device's node id (the same id used in HLC stamps). */
 export const RosterEntrySchema = z.object({
@@ -82,9 +82,22 @@ function toReplica(roster: RosterPayload): ReplicaState<RosterEntry> {
 	);
 }
 
+/** Roster liveness is STICKY: a tombstoned id is dead regardless of any record's stamp, so a
+ * revoked device can never be resurrected by a re-add (closes B1). Re-adding a removed device is a
+ * fresh enrollment with a fresh id, not a reuse of the dead one. This differs deliberately from the
+ * shared `liveRecords` (last-writer-wins), which the entries CRDT still needs. See
+ * docs/p2p-sync-revocation-hardening.md. */
+function liveDevices(state: ReplicaState<RosterEntry>): RosterEntry[] {
+	const out: RosterEntry[] = [];
+	for (const [id, rec] of state.records) {
+		if (!state.tombstones.has(id)) out.push(rec);
+	}
+	return out;
+}
+
 function toPayload(state: ReplicaState<RosterEntry>): RosterPayload {
 	return {
-		devices: liveRecords(state),
+		devices: liveDevices(state),
 		revoked: [...state.tombstones].map(([id, hlc]) => ({ id, hlc })),
 	};
 }
@@ -128,10 +141,12 @@ export function mergeRemoteRoster(
  *    same `sigKey` with a valid signature: no key swap (impersonation) and no downgrade to unsigned.
  *  - An id not yet established accepts an unsigned entry (verify-if-present, phase-1 rollout); a
  *    signed one is validated. (The phase-1 establishment window is closed by phase 2 "require".)
+ *  - A revoked (locally-tombstoned) id is dropped: gossip cannot re-add a removed device (B1).
+ *    Combined with the sticky liveness in `liveDevices`, a tombstoned id stays dead for good.
  *  - Tombstones pass through untouched: revocation stays member-level authority.
- * Hosts run this before mergeRemoteRoster. Does NOT yet gate NEW ids / re-adds of tombstoned ids
- * (rogue-injection, B1) - that is the admission-signed new-id gate, a following slice.
- * See docs/p2p-sync-revocation-hardening.md.
+ * Hosts run this before mergeRemoteRoster. Does NOT gate a brand-new *never-seen* id a compromised
+ * member conjures (rogue-injection); fully closing that needs admin-only admission (deferred with
+ * group-key rotation). See docs/p2p-sync-revocation-hardening.md.
  */
 export function verifyRemoteRoster(
 	local: RosterPayload,
@@ -140,7 +155,9 @@ export function verifyRemoteRoster(
 ): RosterPayload {
 	const anchored = new Map<string, string>(); // known id -> its established (first-seen) sigKey
 	for (const d of local.devices) if (d.sigKey) anchored.set(d.id, d.sigKey);
+	const tombstoned = new Set(local.revoked.map((t) => t.id)); // revoked ids stay dead (B1)
 	const devices = remote.devices.filter((entry) => {
+		if (tombstoned.has(entry.id)) return false;
 		const anchor = anchored.get(entry.id);
 		if (anchor !== undefined) {
 			// Established signing device: same key + valid signature (no swap, no downgrade).
@@ -165,7 +182,7 @@ export function revokeDevice(roster: RosterPayload, id: string, hlc: Hlc): Roste
 
 /** The currently active member devices (not revoked). */
 export function activeDevices(roster: RosterPayload): RosterEntry[] {
-	return liveRecords(toReplica(roster));
+	return liveDevices(toReplica(roster));
 }
 
 /** True iff `id` is an active member (used to gate roster-auth handshakes). */
