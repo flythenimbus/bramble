@@ -5,6 +5,7 @@
 
 import {
 	buildSignalEvent,
+	clockAheadMinutes,
 	connectSignaling,
 	decryptSignal,
 	deriveRoomId,
@@ -42,8 +43,11 @@ export interface MeshOptions {
 	iceServers?: RTCIceServer[];
 	onStatus: (status: string) => void;
 	onPeer: (session: PeerSession) => void;
-	/** Rotate the room per epoch (subscribe current+previous) so a relay can't link the
-	 *  group's activity across epochs. Off (stable room) for the brief enrollment room. */
+	/** Rotate the room id per epoch (subscribe current+previous) so no single permanent room id
+	 *  identifies the group forever. This is hygiene, NOT relay-unlinkability: a live relay still
+	 *  links epochs via the persistent socket + source IP, the reused subscription id, and the
+	 *  stable per-session author pubkey on every event (see A2 in docs/sec-audit-7726.md). Off
+	 *  (stable room) for the brief enrollment room. */
 	epochRooms?: boolean;
 }
 
@@ -83,8 +87,10 @@ function webrtcAvailable(): boolean {
 // network, so anything past this is a reachability failure, not slowness.
 const CONNECT_TIMEOUT_MS = 10_000;
 
-// Rotate the sync room hourly so a relay can't link a group's activity across epochs;
-// subscribe to current + previous so a clock skew or a boundary crossing still meets.
+// Rotate the sync room id hourly so no single permanent room id identifies the group. Hygiene, not
+// relay-unlinkability: a live relay still links epochs (persistent socket + IP, reused subId, stable
+// per-session author pubkey). Subscribe to current + previous so a clock skew or a boundary crossing
+// still meets. See A2 in docs/sec-audit-7726.md.
 const EPOCH_MS = 60 * 60 * 1000;
 const ROLL_CHECK_MS = 60 * 1000;
 const epochNow = (): number => Math.floor(Date.now() / EPOCH_MS);
@@ -102,6 +108,7 @@ class Mesh {
 	private rooms: string[] = [];
 	private publishRoom = "";
 	private rollTimer: ReturnType<typeof setInterval> | undefined;
+	private clockWarned = false;
 
 	constructor(private readonly opts: MeshOptions) {}
 
@@ -208,6 +215,22 @@ class Mesh {
 		void this.publish({ kind: "hello", rtc: webrtcAvailable() });
 	}
 
+	// A verified peer event carries the peer's live wall time (created_at) — the relay stores nothing,
+	// so it was just published. If our clock is far AHEAD of it, our own writes are future-stamped and
+	// silently dropped by peers (isFutureStamp / sanitizeRemote*), so warn once so the user can fix
+	// this device's date/time (the real remedy; a per-receiver clamp would break convergence). Only
+	// the ahead (fast) side warns — the culprit whose entries get dropped. B4 in docs/sec-audit-7726.md.
+	private checkClockSkew(ev: NostrEvent): void {
+		if (this.clockWarned) return;
+		const ahead = clockAheadMinutes(nowSec(), ev.created_at);
+		if (ahead === null) return;
+		this.clockWarned = true;
+		this.opts.onStatus(
+			`⚠ clock skew: this device is ~${ahead} min ahead of a peer — ` +
+				"check its date & time, or your synced changes may be dropped",
+		);
+	}
+
 	private onEvent(ev: NostrEvent): void {
 		void this.handleEvent(ev);
 	}
@@ -220,6 +243,7 @@ class Mesh {
 			this.opts.onStatus(`ignored bad-signature event from ${short(ev.pubkey)}`);
 			return;
 		}
+		this.checkClockSkew(ev);
 		let payload: {
 			kind?: string;
 			to?: string;

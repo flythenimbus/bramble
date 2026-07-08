@@ -1,5 +1,6 @@
 package app.bramble.mobile
 
+import java.net.InetAddress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -78,5 +79,36 @@ class DigitalAssetLinksTest {
     fun candidateDomainEmptyForSingleLabelOrBlank() {
         assertTrue(DigitalAssetLinks.candidateDomains("android").isEmpty())
         assertTrue(DigitalAssetLinks.candidateDomains("").isEmpty())
+    }
+
+    // ---- B3: SSRF hardening on the assetlinks.json fetch ----
+
+    @Test
+    fun ipLiteralsAreDetected() {
+        assertTrue(DigitalAssetLinks.isIpLiteral("10.0.0.1"))
+        assertTrue(DigitalAssetLinks.isIpLiteral("169.254.169.254"))
+        assertTrue(DigitalAssetLinks.isIpLiteral("::1"))
+        assertTrue(DigitalAssetLinks.isIpLiteral("fd00::1"))
+        assertFalse(DigitalAssetLinks.isIpLiteral("github.com"))
+        assertFalse(DigitalAssetLinks.isIpLiteral("1.2.3")) // not four octets
+    }
+
+    @Test
+    fun globalAddressExcludesPrivateLoopbackAndLinkLocal() {
+        // getByName on a literal parses it without a DNS lookup, so these stay offline.
+        for (priv in
+            listOf("127.0.0.1", "10.0.0.1", "192.168.1.1", "172.16.0.1", "169.254.169.254", "100.64.0.1", "fd00::1", "::1")) {
+            assertFalse(priv, DigitalAssetLinks.isGlobalAddress(InetAddress.getByName(priv)))
+        }
+        for (pub in listOf("8.8.8.8", "1.1.1.1")) {
+            assertTrue(pub, DigitalAssetLinks.isGlobalAddress(InetAddress.getByName(pub)))
+        }
+    }
+
+    @Test
+    fun publicHostRejectsBareNamesAndIpLiteralsWithoutDns() {
+        assertFalse(DigitalAssetLinks.isPublicHost("localhost")) // no dot -> rejected before any DNS
+        assertFalse(DigitalAssetLinks.isPublicHost("10.0.0.1")) // IP literal -> rejected before any DNS
+        assertFalse(DigitalAssetLinks.isPublicHost("")) // empty
     }
 }
