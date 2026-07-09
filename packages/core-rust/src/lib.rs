@@ -38,6 +38,9 @@ mod kdbx;
 // Passkey authenticator (provider role): mint/assert WebAuthn credentials for other
 // sites. Pure + sync, compiled into both layers. See docs/passkey-provider.md.
 mod passkey;
+// Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
+// compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
+mod roster_sig;
 // Sync handshake/nostr compile into both layers: device sync must run natively so it
 // works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding.
 #[cfg(any(feature = "wasm", feature = "ffi"))]
