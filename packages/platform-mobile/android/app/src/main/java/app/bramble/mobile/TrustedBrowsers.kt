@@ -69,7 +69,10 @@ object TrustedBrowsers {
         return digest.joinToString(":") { "%02X".format(it) }
     }
 
-    private fun signingFingerprints(pm: PackageManager, pkg: String): Set<String> =
+    /** The SHA-256 fingerprints of a package's current signing certificates (uppercase,
+     * colon-separated). Empty if the package is absent or unreadable. Shared with the Digital
+     * Asset Links check. */
+    internal fun signingFingerprints(pm: PackageManager, pkg: String): Set<String> =
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)

@@ -55,10 +55,14 @@ class BrambleAutofillService : AutofillService() {
             return
         }
         val parsed = StructureParser.parse(structure)
-        // webDomain is only trusted from a verified browser; an untrusted app gets no host-based
-        // auto-match (it can still open the searchable list). See TrustedBrowsers / StructureParser.
+        // Resolve the hosts we may auto-match: a verified browser vouches for its webDomain; a
+        // native app is matched only to domains it is proven to own via Digital Asset Links (its
+        // spoofable webDomain and package name are never trusted). Either may be empty, leaving the
+        // user the manual searchable list.
         val trustedBrowser = TrustedBrowsers.isTrustedBrowser(this, parsed.packageName)
-        val hosts = parsed.requestedHosts(trustedBrowser)
+        val hosts =
+            if (trustedBrowser) parsed.requestedHosts(isTrustedBrowser = true)
+            else DigitalAssetLinks.verifiedDomainsFor(this, parsed.packageName)
         // Page-side diagnostics only (field counts + the page's own domain/package). Never
         // logs vault data.
         Log.d(
