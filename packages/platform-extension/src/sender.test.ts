@@ -40,14 +40,20 @@ describe("isExtensionSender", () => {
 		expect(isExtensionSender({ origin: "https://evil.com" } as any)).toBe(false);
 	});
 
-	it("rejects any sender carrying a tab, even one claiming the extension origin", async () => {
+	it("accepts an extension page hosted in a tab (popout / options page)", async () => {
+		// A popout window and an options-in-a-tab carry the extension origin AND a tab; the
+		// origin, not the tab, is what distinguishes them from a content script.
 		const isExtensionSender = await loadSender();
-		expect(isExtensionSender({ origin: EXT_ORIGIN, tab: { id: 1 } } as any)).toBe(false);
+		expect(isExtensionSender({ origin: EXT_ORIGIN, tab: { id: 1 } } as any)).toBe(true);
+		expect(isExtensionSender({ url: `${EXT_ORIGIN}/popup.html`, tab: { id: 1 } } as any)).toBe(
+			true,
+		);
 	});
 
-	it("falls back to the same-extension id when origin and url are absent", async () => {
+	it("falls back to the same-extension id (tab-free) when origin and url are absent", async () => {
 		const isExtensionSender = await loadSender();
 		expect(isExtensionSender({ id: "testext" } as any)).toBe(true); // legit SW/offscreen, no origin
+		expect(isExtensionSender({ id: "testext", tab: { id: 1 } } as any)).toBe(false); // guard
 		expect(isExtensionSender({ id: "otherext" } as any)).toBe(false);
 		expect(isExtensionSender({} as any)).toBe(false);
 	});

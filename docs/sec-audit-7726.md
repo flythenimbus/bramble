@@ -110,22 +110,26 @@ origin, which fails closed if that field is ever absent for a legit SW->offscree
 message (its population has varied across Chrome versions and message paths). Handle this by making
 the predicate layered and fail-safe in both directions:
 
-1. **`sender.tab` is the reliable discriminator, not origin.** Content scripts always run in a tab
-   and carry `sender.tab`; the SW, popup, options page, and offscreen document never do.
-   `sender.id === runtime.id` does *not* discriminate on its own (our own content script also has
-   our extension id) - the `!sender.tab` is what does the work. So:
+1. **The origin is the authoritative discriminator - NOT `sender.tab`.** A content script always
+   carries the *page* origin; every extension surface (SW, popup, popout, options, offscreen)
+   carries the *extension* origin, whether or not it is hosted in a tab. `sender.tab` must **not**
+   be used to reject: a popout window and an options-in-a-tab are extension pages that legitimately
+   carry `sender.tab`. (An earlier draft of this fix gated on `if (sender.tab) return false` and
+   was caught in smoke testing wrongly returning `forbidden` when unlocking from a **popout** - a
+   real regression. The origin check alone already rejects content scripts, since the browser sets
+   `sender.origin` and a content script can never forge the extension origin.)
    ```ts
    // packages/platform-extension/src/sender.ts
    export function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
-     if (sender.tab) return false;               // content script -> reject (browser-set, reliable)
      const src = sender.origin ?? sender.url ?? "";
      if (src) return src === EXTENSION_ORIGIN || src.startsWith(`${EXTENSION_ORIGIN}/`);
-     return sender.id === api.runtime.id;        // origin absent -> accept same-extension, no-tab
+     return sender.id === api.runtime.id && !sender.tab; // origin absent -> same-extension, tab-free
    }
    ```
-   A content script is caught by `sender.tab` even in the ambiguous case; a legit extension sender
-   with an unexpectedly-absent origin still passes via the id fallback instead of being locked out.
-   All comparisons are string-only at call time (no per-call `new URL`), so the predicate can't throw.
+   A legit extension sender whose origin/url is unexpectedly absent still passes via the
+   same-extension id fallback instead of being locked out; the `!sender.tab` guards only that
+   ambiguous fallback (a content script always has `sender.url`, so it never reaches it). All
+   comparisons are string-only at call time (no per-call `new URL`), so the predicate can't throw.
 2. **Reject with a diagnosable envelope, never a silent drop or hang.** In the offscreen listener,
    respond explicitly rather than returning `false`; a dropped message surfaces to the caller as the
    generic `"no response from offscreen"` in `deliver` (offscreen-client.ts:66), indistinguishable
@@ -143,13 +147,14 @@ the predicate layered and fail-safe in both directions:
 3. **Fail loud.** The `console.warn` above is the most important measure for a released product: if
    the predicate ever misclassifies a real path on some browser build, a tagged log line naming the
    sender turns a silent "vault won't unlock" into a diagnosable regression.
-4. **Verify against reality before shipping.** In a dev build, log the actual `sender` object for
-   the three legit flows - SW->offscreen (`sendToOffscreen`), offscreen->SW (the `chromeBridge`
-   round-trips `SYNC_LOCAL_PAYLOAD` etc.), popup/options->SW (enroll `SYNC_*`) - and confirm each has
-   no `tab` and the extension origin. Tests assert both directions, including the origin-absent
-   fallback (`{ id: runtime.id }` with no origin/tab is accepted). The content-script autofill path
-   is untouched: those messages aren't `CRYPTO_*`/`SYNC_*` and keep going through
-   `senderHostname`/`authorizeFill` hostname gating.
+4. **Verify against reality before shipping.** Exercise every legit surface, not just the toolbar
+   popup: SW->offscreen (`sendToOffscreen`), offscreen->SW (the `chromeBridge` round-trips
+   `SYNC_LOCAL_PAYLOAD` etc.), popup->SW, and crucially the **popout window** and options page
+   (extension origin + `sender.tab`) - the popout regression above was invisible to the popup-only
+   path and to unit tests using a tab-free `extensionSender`. Tests assert both directions, including
+   the popout case (extension origin + tab is accepted) and the origin-absent fallback. The
+   content-script autofill path is untouched: those messages aren't `CRYPTO_*`/`SYNC_*` and keep
+   going through `senderHostname`/`authorizeFill` hostname gating.
 
 ### A4 - Corner-update origin parity
 
