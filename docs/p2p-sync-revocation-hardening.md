@@ -151,6 +151,77 @@ Options (pick one; this is the crux of Item B):
 
 Recommend **option 1 with option 2 as the manual fallback** past the grace window.
 
+### Admin-authority variant (server-free, human-in-the-loop re-admit)
+
+The *automatic* form of option 1 has a fail-open: a survivor may re-admit a device before the
+revocation tombstone has reached it (the roster is eventually consistent), i.e. re-admit the very
+device that was just revoked - worse than not rotating. Closing that window *automatically* requires
+a strongly-consistent, always-available coordinator (a server / Cloudflare Durable Object holding
+signed tombstones + `keyEpoch` + ack state, gossip as backstop, group key never leaving the
+devices). That works, but reintroduces a semi-trusted availability dependency and a churn-metadata
+surface, against this project's server-minimizing posture.
+
+This variant keeps the design **server-free** by putting a human in the loop. Authority lives on a
+user-designated **admin device**, and the human approval *is* the roster re-check that closes the
+fail-open. Two mechanisms:
+
+1. **Admin-signed revocations (authority).** Only an admin device's Ed25519 key (from Item A) may
+   sign a revocation/rotation. Narrows today's "any member can revoke any member" DoS to "any admin".
+   Signatures verify offline, so an admin need only be online to *author* a revocation, never to
+   *serve* a registry.
+2. **Admin-approved re-admit (offline fix).** A stranded (offline-then-woke) device is re-admitted
+   only via an explicit approval on an admin device, which re-checks the roster at approval time
+   before handing over `groupKey'`. That check - gated behind a human looking at a specific named
+   device plus a channel-bound verification code - is what prevents re-admitting a revoked device.
+
+Designation: the group creator is admin by default; **recommend >=2 admins** (a single admin cannot
+revoke itself, and re-admit waits on an admin being reachable). Non-admin devices sync normally but
+cannot remove or reconnect devices.
+
+#### User flow
+
+- **Normal removal (lost phone).** On an admin device: Settings -> Devices -> pick the device ->
+  Remove, confirm with biometric / master password. The admin signs the revocation, rotates the key,
+  and pushes `groupKey'` to online survivors over their authenticated channels; UI shows progress
+  ("iPhone removed. Pixel updated. Work laptop is offline - it'll reconnect next time you open it").
+  Online survivors update silently (optional security-log entry). The revoked device is denied *and*
+  can no longer derive the new room.
+- **Re-admit within the grace window (the security-critical tap).** The offline device wakes, lands
+  in the now-empty old room, and a still-listening survivor answers with a *signed* "group moved to a
+  newer epoch, ask an admin" notice (no key). The device shows "This device was offline when your
+  group's key changed. Approve it from an admin device" + a verification code. An admin device shows
+  a matching prompt ("Work laptop wants to reconnect. Code 4821 - matches? [Approve]"). On approve
+  (biometric), the admin re-checks the roster, then delivers `groupKey'` over a fresh authenticated
+  channel. **This approval is the roster re-check that closes the fail-open.** Feels like an
+  approve-this-sign-in 2FA prompt.
+- **Past the grace window.** No survivor is still listening on the old room, so it degrades to a full
+  re-link: the device shows "Re-link this device", the user gets a pairing code/QR from an admin and
+  re-enrolls it like a new device. Always works; more steps. (This is option 2.)
+
+#### Edges
+
+- **Admin offline when approval is needed:** the reconnecting device shows "Waiting for approval from
+  an admin device"; with >=2 admins the user uses whichever is awake. This is the honest cost of
+  server-free: authority lives on a device, so a reconnect waits on that device being reachable.
+- **Admin device lost:** with >=2 admins, remove it from the other admin (normal removal). With a
+  single admin that is gone, break-glass: re-found the group from a surviving device via the master
+  password / recovery code and re-pair the rest. This is why the >=2-admins nudge exists and why
+  dropping to one admin warns.
+- **Remove attempted from a non-admin device:** the action is disabled with "Only an admin device can
+  remove or reconnect devices. Your admins: ...".
+
+#### Caveats (honest)
+
+- It does **not** close the timing window for an automatic path - there is no automatic path. The
+  window is closed by requiring a human approval that re-checks the roster.
+- Availability cost: a reconnect waits on an admin device being reachable (mitigated by >=2 admins).
+- Unlike the server/DO option, no third party learns group churn.
+- Testing: the roster-recheck-on-approval logic is unit-testable; the multi-device grace/beacon
+  behavior still needs the Chrome-profile matrix.
+
+**Status: leading server-free candidate, not yet committed.** The fork is: accept a human in the
+loop (this variant) vs. a strongly-consistent coordinator for fully-automatic re-admit (server/DO).
+
 ### Wire format & version negotiation
 
 - `sync.group` gains `keyEpoch` and a short `keyHistory` (recent `{epoch, groupKey}` for the grace
