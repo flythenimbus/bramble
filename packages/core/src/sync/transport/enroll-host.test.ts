@@ -7,6 +7,7 @@ import { type Channel, makeChannel } from "./channel";
 import { type EnrollOptions, type EnrollWasm, receiveBundle, sendBundle } from "./enroll-host";
 import type { Session } from "./handshake";
 import type { PeerSession } from "./mesh";
+import { CHUNK_BYTES } from "./secure-channel";
 
 // Covers the provable same-password enforcement added to enrollment: the inviter
 // ships its password-slot verifier in the bundle, and the joiner proves its typed
@@ -199,5 +200,63 @@ describe("sendBundle — inviter ships its password verifier", () => {
 	it("omits primaryPasswordCheck when this device has no password slot", async () => {
 		const out = await captureBundle(inviterOpts()); // no passwordCheck
 		expect(JSON.parse(out).primaryPasswordCheck).toBeUndefined();
+	});
+});
+
+describe("large vault: bundle spans multiple Noise frames", () => {
+	// A vault big enough that the bundle exceeds one 64 KiB Noise frame — the case that
+	// used to throw "message too large for one Noise frame". Cheap to inflate via tombstones.
+	const tombstones = Array.from({ length: 400 }, (_, i) => ({
+		id: `deleted-${i}-${"x".repeat(80)}`,
+		hlc: { wall: i, counter: 0, node: "n" },
+	}));
+	const bigEntries = { entries: [], tombstones };
+
+	it("chunks the bundle on send and the joiner reassembles + rebuilds from it", async () => {
+		// Sanity: this bundle really does exceed one frame, so sendBundle must chunk it.
+		expect(bundleJson().length).toBeLessThan(CHUNK_BYTES);
+		const bigBundle = encodeEnrollmentBundle({
+			vek: b64(32),
+			roster: emptyRoster(),
+			entries: bigEntries,
+		});
+		expect(bigBundle.length).toBeGreaterThan(CHUNK_BYTES);
+
+		// Inviter: capture every frame sendBundle emits (the ack wait is parked).
+		const frames: string[] = [];
+		const inviterChannel: Channel = {
+			send: (d) => void frames.push(d),
+			recv: () => new Promise<string>(() => {}),
+		};
+		void sendBundle(
+			{
+				relayUrl: "wss://r",
+				groupKeyB64: b64(32),
+				psk: b64(32),
+				devicePrivB64: b64(32),
+				wasm: mockWasm(),
+				report: () => {},
+				roster: emptyRoster(),
+				entries: bigEntries,
+			},
+			inviterChannel,
+			sess,
+		);
+		await new Promise((r) => setTimeout(r, 0));
+		expect(frames.length).toBeGreaterThan(1); // multi-frame, not one oversized send
+		expect(frames.every((f) => f.startsWith("{"))).toBe(true); // JSON continuation frames
+
+		// Joiner: feed those frames in; receiveBundle must reassemble, decode, and rebuild.
+		const onJoined = vi.fn();
+		const onJoinError = vi.fn();
+		const { channel, push } = makeChannel(() => {}); // ack send ignored
+		for (const f of frames) push(f);
+		await receiveBundle(
+			joinerOpts(mockWasm(), { onJoined, onJoinError }),
+			{ remotePubkey: "inviter", initiator: false, channel, close: () => {} },
+			sess,
+		);
+		expect(onJoinError).not.toHaveBeenCalled();
+		expect(onJoined).toHaveBeenCalledOnce();
 	});
 });

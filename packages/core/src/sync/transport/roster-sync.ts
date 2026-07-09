@@ -21,6 +21,7 @@ import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./han
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, startMeshSession } from "./peer-session";
+import { recvSecure, sendSecure } from "./secure-channel";
 
 /** The Noise KK roster-auth + transport exports. Returns are Awaitable so the native
  * plugin (async bridge) and the in-webview WASM module share one interface. */
@@ -255,7 +256,7 @@ async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>
 	if (peers.size === 0) return;
 	const payload = await localEnvelope(opts);
 	for (const { channel, sessionId } of peers.values()) {
-		channel.send(await opts.wasm.handshake_encrypt(sessionId, payload));
+		await sendSecure(channel, opts.wasm, sessionId, payload);
 	}
 }
 
@@ -323,12 +324,14 @@ async function syncPeer(
 	peers.set(peerPub, entry);
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
-	channel.send(await wasm.handshake_encrypt(sess.sessionId, await localEnvelope(opts)));
+	await sendSecure(channel, wasm, sess.sessionId, await localEnvelope(opts));
+	// Race each frame's (unbounded) receive against reaping, so a dropped peer's loop exits
+	// instead of leaking a pending recv() forever (relay channels have no close event).
+	const recvFrame = () => Promise.race([channel.recv(), aborted]);
 	for (;;) {
-		// Race the (unbounded) receive against reaping, so a dropped peer's loop exits
-		// instead of leaking a pending recv() forever (relay channels have no close event).
-		const ct = await Promise.race([channel.recv(), aborted]);
-		if (ct === null) break;
+		// recvSecure reassembles an envelope that spans multiple Noise frames (large vault).
+		const envelope = await recvSecure(recvFrame, wasm, sess.sessionId);
+		if (envelope === null) break;
 		entry.lastSeen = Date.now();
 		// Refuse inbound from a peer revoked since the handshake: don't apply its data.
 		if (!inRoster(await currentRoster(opts), peerPub)) {
@@ -336,7 +339,7 @@ async function syncPeer(
 			peers.delete(peerPub);
 			break;
 		}
-		await applyEnvelope(opts, await wasm.handshake_decrypt(sess.sessionId, ct));
+		await applyEnvelope(opts, envelope);
 		// The envelope may have gossiped a revocation of another peer; drop it now rather than
 		// waiting for the next re-broadcast tick, so a revocation propagates across the mesh at once.
 		reapRevoked(opts, peers, await currentRoster(opts));
