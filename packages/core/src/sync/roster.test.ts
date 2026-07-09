@@ -3,6 +3,7 @@ import { HLC_MAX_DRIFT_MS, type Hlc } from "./hlc";
 import {
 	activeDevices,
 	addDevice,
+	canonicalRosterEntry,
 	decodeRoster,
 	emptyRoster,
 	encodeRoster,
@@ -11,6 +12,7 @@ import {
 	mergeRemoteRoster,
 	mergeRosters,
 	type RosterEntry,
+	RosterEntrySchema,
 	type RosterPayload,
 	revokeDevice,
 	sanitizeRemoteRoster,
@@ -29,6 +31,66 @@ const ids = (r: RosterPayload) =>
 	activeDevices(r)
 		.map((d) => d.id)
 		.sort();
+
+describe("roster entry signing foundation (Item A)", () => {
+	it("parses a legacy entry with no sigKey/sig (backward compatible)", () => {
+		const legacy = { id: "laptop", publicKey: "pk", label: "L", addedAt: 1, hlc: hlc(1, "laptop") };
+		const parsed = RosterEntrySchema.parse(legacy);
+		expect(parsed.sigKey).toBeUndefined();
+		expect(parsed.sig).toBeUndefined();
+		// A legacy roster round-trips through encode/decode unchanged.
+		const r = addDevice(emptyRoster(), legacy);
+		expect(decodeRoster(encodeRoster(r))).toEqual(r);
+	});
+
+	it("parses and round-trips a signed entry", () => {
+		const signed = { ...device("phone", 5), sigKey: "sk-phone", sig: "sig-phone" };
+		const parsed = RosterEntrySchema.parse(signed);
+		expect(parsed.sigKey).toBe("sk-phone");
+		const r = addDevice(emptyRoster(), signed);
+		expect(findDevice(r, "phone")?.sig).toBe("sig-phone");
+	});
+
+	it("canonical form is deterministic and pins a cross-language vector", () => {
+		const entry: RosterEntry = {
+			id: "laptop",
+			publicKey: "pk-laptop",
+			label: "My laptop",
+			addedAt: 1700000000000,
+			hlc: { wall: 1700000000000, counter: 3, node: "laptop" },
+			sigKey: "sk-laptop",
+		};
+		// Fixed-order array of [id, publicKey, sigKey, addedAt, wall, counter, node]. core-rust must
+		// reproduce these exact bytes; if this vector changes, the Rust signer must change with it.
+		expect(canonicalRosterEntry(entry)).toBe(
+			'["laptop","pk-laptop","sk-laptop",1700000000000,1700000000000,3,"laptop"]',
+		);
+		expect(canonicalRosterEntry({ ...entry })).toBe(canonicalRosterEntry(entry));
+	});
+
+	it("canonical form ignores the mutable label but binds identity + stamp", () => {
+		const base: RosterEntry = {
+			id: "phone",
+			publicKey: "pk-phone",
+			label: "Phone",
+			addedAt: 10,
+			hlc: hlc(10, "phone"),
+			sigKey: "sk-phone",
+		};
+		// Renaming the device does not change what was signed.
+		expect(canonicalRosterEntry({ ...base, label: "Renamed" })).toBe(canonicalRosterEntry(base));
+		// Any identity/stamp field does.
+		expect(canonicalRosterEntry({ ...base, publicKey: "pk-evil" })).not.toBe(
+			canonicalRosterEntry(base),
+		);
+		expect(canonicalRosterEntry({ ...base, sigKey: "sk-evil" })).not.toBe(
+			canonicalRosterEntry(base),
+		);
+		expect(canonicalRosterEntry({ ...base, hlc: hlc(11, "phone") })).not.toBe(
+			canonicalRosterEntry(base),
+		);
+	});
+});
 
 describe("roster add/revoke", () => {
 	it("adds devices", () => {
