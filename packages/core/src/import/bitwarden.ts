@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SubdomainMatchMode } from "../adapters/autofill";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
@@ -19,7 +20,10 @@ const itemSchema = z.object({
 	fields: z.array(fieldSchema).nullish(),
 	login: z
 		.object({
-			uris: z.array(z.object({ uri: z.string().nullish() })).nullish(),
+			// `match` is Bitwarden's per-URI UriMatchType: 0 Domain (base domain, the default),
+			// 1 Host, 2 StartsWith, 3 Exact, 4 RegularExpression, 5 Never; null = the account
+			// default (base domain). https://bitwarden.com/help/uri-match-detection/
+			uris: z.array(z.object({ uri: z.string().nullish(), match: z.number().nullish() })).nullish(),
 			username: z.string().nullish(),
 			password: z.string().nullish(),
 			totp: z.string().nullish(),
@@ -49,6 +53,20 @@ const FORMAT_ERROR = "This doesn't look like a Bitwarden JSON export.";
 // array - so it would otherwise trip FORMAT_ERROR and look like "not Bitwarden".
 const ENCRYPTED_ERROR =
 	'This is an encrypted (password-protected) Bitwarden export. Re-export from Bitwarden as a plain .json with "Password protected" turned off, then import that file.';
+
+/**
+ * Map Bitwarden's per-URI match detection onto our per-entry `subdomainMatch`. Bitwarden's
+ * default (0 Domain / null) is base-domain matching = our "etld1" (matches all subdomains),
+ * so it stays the default (undefined). Any URI the user narrowed away from that default
+ * (Host / StartsWith / Exact / Regex / Never) tightens the whole entry to "exact" — because
+ * our model has one match mode per entry, not per URI, and tightening is the safe direction.
+ */
+function subdomainMatchFor(
+	uris: { match?: number | null }[] | null | undefined,
+): SubdomainMatchMode | undefined {
+	const tightened = (uris ?? []).some((u) => typeof u.match === "number" && u.match !== 0);
+	return tightened ? "exact" : undefined;
+}
 
 /** Map Bitwarden custom fields. Drops type 3 (linked refs); type 1 is hidden. */
 function mapFields(fields: BwField[] | null | undefined): RawField[] {
@@ -88,7 +106,7 @@ export function parseBitwarden(raw: string | Uint8Array): ImportResult {
 			if (login.fido2Credentials?.length) {
 				warnings.push(`"${name}" has a passkey, which can't be imported yet.`);
 			}
-			// Keep all URLs; per-URI `match` is dropped (we use per-entry subdomainMatch).
+			// Keep all URLs; collapse their per-URI match detection into one per-entry mode.
 			const urls = (login.uris ?? [])
 				.map((u) => u.uri)
 				.filter((u): u is string => typeof u === "string" && u.length > 0);
@@ -100,6 +118,7 @@ export function parseBitwarden(raw: string | Uint8Array): ImportResult {
 				username: login.username ?? "",
 				password: login.password ?? "",
 				totp: login.totp || undefined,
+				subdomainMatch: subdomainMatchFor(login.uris),
 				customFields: toCustomFields(fields),
 			});
 		} else if (item.type === 3) {
