@@ -13,6 +13,7 @@ import "./sync";
 import "./theme";
 import "./webauthn-proxy-init";
 import "./webauthn-content-transport";
+import { VAULT_BLOB_KEY } from "../storage";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
@@ -107,5 +108,15 @@ api.storage.onChanged.addListener((changes, area) => {
 	if (area !== "local") return;
 	if (changes[PREF_AUTOLOCK_MINUTES] && !vaultLocked()) {
 		void scheduleAutoLock();
+	}
+	// A vault-blob change (a local edit, or a remote merge that actually changed state — the merge
+	// skips the write otherwise, so this can't echo) pushes to peers now instead of waiting for the
+	// rebroadcast tick. Matters most on Firefox, whose event page suspends between ticks; the write
+	// itself wakes it. Best-effort. See docs/p2p-sync.md.
+	if (changes[VAULT_BLOB_KEY] && !vaultLocked()) {
+		void (async () => {
+			await maybeStartSync();
+			await sendToOffscreen({ type: "SYNC_BROADCAST_NOW" }).catch(() => {});
+		})();
 	}
 });

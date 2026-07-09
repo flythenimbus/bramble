@@ -5,7 +5,7 @@ import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import { api } from "./platform-api";
 import { clearLegacyHandle, getLegacyHandle } from "./storage-legacy";
 
-const VAULT_BLOB_KEY = "vault-blob-b64";
+export const VAULT_BLOB_KEY = "vault-blob-b64";
 /** Recovery snapshot of the previous vault bytes, written before every overwrite so a crash mid-write leaves a recoverable copy. */
 const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
 

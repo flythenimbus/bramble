@@ -17,6 +17,9 @@ export interface Stoppable {
 export interface MeshSession {
 	/** Tear down the mesh and run the caller's onStop. Safe to call more than once. */
 	stop(): void;
+	/** Push this device's current payload to all peers now, rather than waiting for the rebroadcast
+	 * tick. Populated by roster-sync (ongoing sync); enrollment sessions omit it. */
+	broadcastNow?(): Promise<void>;
 }
 
 export interface MeshSessionOptions {
