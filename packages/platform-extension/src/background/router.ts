@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import { api } from "../platform-api";
+import { isExtensionSender } from "../sender";
 
 // A typed handler registry with a single onMessage dispatcher. Each concern
 // module registers its own handlers; the dispatcher awaits hydration once and
@@ -25,6 +26,18 @@ export function on(type: string, handler: MessageHandler): void {
 /** Register a handler for every message `type` sharing a prefix (e.g. "CRYPTO_"). */
 export function onPrefix(prefix: string, handler: MessageHandler): void {
 	prefixHandlers.push([prefix, handler]);
+}
+
+/**
+ * Wrap a handler so only extension-context senders (SW/offscreen/popup/options) reach
+ * it; a content-script sender gets a `forbidden` envelope. For privileged handlers
+ * (CRYPTO_*, SYNC_*) that must never be driven from a page. See docs/sec-audit-7726.md (A3).
+ */
+export function extensionOnly(handler: MessageHandler): MessageHandler {
+	return (message, sender) =>
+		isExtensionSender(sender)
+			? handler(message, sender)
+			: Promise.resolve({ ok: false, error: "forbidden" });
 }
 
 /** Set the promise the dispatcher awaits before running any handler. */

@@ -170,6 +170,36 @@ describe("commit: update an existing login (password rotation)", () => {
 		);
 		expect(resp).toEqual({ ok: false, error: "update missing chosenEntryId" });
 	});
+
+	// A4: a capture on site A must never be written into a login offered only on site B,
+	// even if a crafted response names that entry's id. See docs/sec-audit-7726.md (A4).
+	it("refuses to update a login whose hostname the capture does not match", async () => {
+		const bg = await unlocked();
+		// Capture on attacker.com; the only indexed login (login1) is on example.com.
+		const cap = await bg.send(
+			{ type: "CORNER_PROMPT_CAPTURE", payload: { username: "mallory", password: "PWNED" } },
+			pageSender("attacker.com", 9),
+		);
+		const promptId = cap.resp.data.promptId;
+
+		const res = await bg.send(
+			{
+				type: "CORNER_PROMPT_RESPONSE",
+				payload: { promptId, action: "update", chosenEntryId: "login1" },
+			},
+			pageSender("attacker.com", 9),
+		);
+		expect(res.resp.ok).toBe(false);
+		expect(res.resp.error).toContain("not offered on this origin");
+		expect(vaultChanged(bg)).toBe(false);
+
+		// login1 is untouched: still the original credential, not the captured one.
+		const fetched = await bg.send(
+			{ type: "AUTOFILL_FETCH", payload: { entryId: "login1" } },
+			extensionSender,
+		);
+		expect(fetched.resp.data.password).toBe("pw1");
+	});
 });
 
 describe("commit: CORNER_FLUSH_HANDOFF after unlock", () => {

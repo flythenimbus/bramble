@@ -8,7 +8,7 @@ import type {
 	UpdateLoginPrompt,
 } from "@core/adapters/autofill";
 import { type EncryptedEntry, encodeVaultBlob, type VaultBlob } from "@core/vault-format";
-import { type DedupeOutcome, registrableDomain } from "../dedupe";
+import { type DedupeOutcome, hostnameMatches, registrableDomain } from "../dedupe";
 import { api } from "../platform-api";
 import {
 	addLoginEntry,
@@ -157,6 +157,11 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 	const indexEntry = getIndexEntry(chosenEntryId);
 	if (indexEntry?.type !== "login") {
 		throw new Error(`update target not in index: ${chosenEntryId}`);
+	}
+	// Parity with authorizeFill: only overwrite a login the captured hostname matches, so a
+	// capture on site A can never be written into site B's entry. See docs/sec-audit-7726.md (A4).
+	if (!hostnameMatches(indexEntry, capture.hostname)) {
+		throw new Error("update target is not offered on this origin");
 	}
 	const blob = await readAndDecodeVault();
 	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => {

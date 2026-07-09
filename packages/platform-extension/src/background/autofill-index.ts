@@ -17,6 +17,7 @@ import {
 	registrableDomain,
 } from "../dedupe";
 import { api } from "../platform-api";
+import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
 import { scheduleAutoLock, vaultLocked } from "./session";
@@ -168,9 +169,6 @@ function fetchFill(entryId: string): FillPayload {
 	};
 }
 
-// Extension pages send the extension origin; content scripts send the page origin.
-const EXTENSION_ORIGIN = new URL(api.runtime.getURL("")).origin;
-
 /** Verified page hostname for a content-script sender, or "" when none can be derived. */
 function senderHostname(sender: chrome.runtime.MessageSender): string {
 	try {
@@ -178,12 +176,6 @@ function senderHostname(sender: chrome.runtime.MessageSender): string {
 		if (src) return new URL(src).hostname;
 	} catch {}
 	return "";
-}
-
-/** True only for senders on the extension origin (popup/options/offscreen), not a content script. */
-function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
-	const src = sender.origin ?? sender.url ?? "";
-	return src === EXTENSION_ORIGIN || src.startsWith(`${EXTENSION_ORIGIN}/`);
 }
 
 /** A login may be filled only on a page its hostname matches; cards are site-agnostic. See docs/autofill.md. */

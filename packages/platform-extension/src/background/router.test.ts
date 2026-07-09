@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { extensionSender, loadBackground } from "../test/test-harness";
+import { extensionSender, loadBackground, pageSender } from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -43,6 +43,33 @@ describe("router dispatch", () => {
 		);
 		expect(resp.ok).toBe(false);
 		expect(resp.error).toBe("Error: entry not found: missing");
+	});
+
+	// A3: privileged crypto/sync handlers must reject content-script senders. A content
+	// script that reaches the SW router (e.g. via a relay bug) must not drive CRYPTO_* or
+	// SYNC_*. See docs/sec-audit-7726.md (A3).
+	it("rejects CRYPTO_* from a content-script sender", async () => {
+		const bg = await loadBackground();
+		const { handled, resp } = await bg.send(
+			{ type: "CRYPTO_GENERATE_VEK" },
+			pageSender("example.com", 3),
+		);
+		expect(handled).toBe(true);
+		expect(resp).toEqual({ ok: false, error: "forbidden" });
+	});
+
+	it("allows CRYPTO_* from an extension-context sender", async () => {
+		const bg = await loadBackground();
+		const { resp } = await bg.send({ type: "CRYPTO_GENERATE_VEK" }, extensionSender);
+		expect(resp).toEqual({ ok: true, data: "VEK_GENERATED" });
+	});
+
+	it("rejects SYNC_* from a content-script sender", async () => {
+		const bg = await loadBackground();
+		for (const type of ["SYNC_LOCAL_PAYLOAD", "SYNC_DEVICE_PUBKEY", "SYNC_APPLY_ROSTER"]) {
+			const { resp } = await bg.send({ type, payload: {} }, pageSender("example.com", 3));
+			expect(resp).toEqual({ ok: false, error: "forbidden" });
+		}
 	});
 
 	it("awaits hydration before running handlers (seeded VEK is visible)", async () => {
