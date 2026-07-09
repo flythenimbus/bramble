@@ -46,6 +46,22 @@ object TrustedBrowsers {
         return signingFingerprints(context.packageManager, pkg).any { it in allowed }
     }
 
+    /** The allow-list as the JSON string `CallingAppInfo.getOrigin()` expects (Google's GPM
+     * privileged-apps format), built from BROWSERS so there is a single source of truth. The
+     * package names and fingerprints contain no JSON-special characters, so plain concatenation is
+     * safe. Used by the passkey provider to decide whether to trust a caller-supplied origin. */
+    fun allowlistJson(): String {
+        val apps =
+            BROWSERS.entries.joinToString(",") { (pkg, fingerprints) ->
+                val signatures =
+                    fingerprints.joinToString(",") {
+                        """{"build":"release","cert_fingerprint_sha256":"$it"}"""
+                    }
+                """{"type":"android","info":{"package_name":"$pkg","signatures":[$signatures]}}"""
+            }
+        return """{"apps":[$apps]}"""
+    }
+
     /** SHA-256 of a signing certificate's DER bytes, formatted like the allow-list (uppercase,
      * colon-separated). Exposed for unit tests. */
     internal fun certFingerprint(der: ByteArray): String {

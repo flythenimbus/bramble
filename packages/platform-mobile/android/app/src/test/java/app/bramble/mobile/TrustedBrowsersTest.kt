@@ -50,6 +50,19 @@ class TrustedBrowsersTest {
     }
 
     @Test
+    fun allowlistJsonIncludesEveryBrowserAndFingerprint() {
+        // The passkey provider feeds this to CallingAppInfo.getOrigin(); it must carry every
+        // package + fingerprint in the GPM privileged-apps shape. (getOrigin parses it on-device.)
+        val json = TrustedBrowsers.allowlistJson()
+        assertTrue(json.startsWith("{\"apps\":["))
+        assertTrue(json.contains("\"cert_fingerprint_sha256\""))
+        for ((pkg, fingerprints) in TrustedBrowsers.BROWSERS) {
+            assertTrue("missing $pkg", json.contains("\"package_name\":\"$pkg\""))
+            for (fp in fingerprints) assertTrue("missing fingerprint $fp for $pkg", json.contains(fp))
+        }
+    }
+
+    @Test
     fun allowlistFingerprintsAreWellFormed() {
         // Catch a typo'd fingerprint (wrong length / bad chars) that would silently break a browser.
         val fingerprint = Regex("^([0-9A-F]{2}:){31}[0-9A-F]{2}$")
