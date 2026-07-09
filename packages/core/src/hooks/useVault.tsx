@@ -140,6 +140,7 @@ export type JoinUnlock =
 	| { kind: "securityKey"; label?: string };
 
 import {
+	DEVICE_ID_KEY,
 	decodeEntriesPayload,
 	type EntriesPayload,
 	emptyEntriesPayload,
@@ -312,6 +313,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			clockRef.current = makeClock(id);
 		}
 		return clockRef.current;
+	}, [storage]);
+
+	/** Mint a fresh device id for a (re)join. A device id is stable and persisted, and a tombstoned id
+	 * stays dead forever (sticky revocation, B1) — so a device re-added after being revoked must NOT
+	 * reuse its old id, or the group's tombstone drops its entry everywhere (it can't see itself and
+	 * peers can't see it). Clearing the id + cached clock makes the next ensureClock() generate a new
+	 * one, so the joiner enters as a genuinely new member. See docs/p2p-sync-revocation-hardening.md. */
+	const rotateDeviceId = useCallback(async (): Promise<void> => {
+		await storage.removeMeta(DEVICE_ID_KEY);
+		clockRef.current = null;
 	}, [storage]);
 
 	/** Read+decode the vault, falling back to the backup snapshot on decode failure. */
@@ -942,6 +953,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// read, unlock, and entries-payload read from here.
 	const { inviteDevice, joinGroup, removeDevice } = useSyncEnrollment({
 		ensureClock,
+		rotateDeviceId,
 		readDecodedBlob,
 		unlock,
 		finishWebauthnUnlock,
