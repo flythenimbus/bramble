@@ -175,15 +175,18 @@ describe("AUTOFILL_FETCH", () => {
 });
 
 describe("AUTOFILL_SELECT authorize + fill", () => {
-	it("fills a login on a matching origin and echoes isAuto/otpOnly", async () => {
+	it("fills a login on a matching origin, echoes isAuto/otpOnly, and targets the requesting frame", async () => {
 		const bg = await unlockedWithIndex();
 		const { resp } = await bg.send(
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1", isAuto: false, otpOnly: false } },
-			pageSender("example.com", 11),
+			pageSender("example.com", 11, 7),
 		);
 		expect(resp).toEqual({ ok: true });
 		const fill = bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL");
 		expect(fill?.tabId).toBe(11);
+		// The decrypted secret must be delivered ONLY to the frame that requested it,
+		// never broadcast to the whole tab (a co-resident cross-origin iframe would harvest it).
+		expect(fill?.options).toEqual({ frameId: 7 });
 		expect(fill?.message.payload).toMatchObject({
 			kind: "login",
 			username: "alice",
@@ -191,6 +194,21 @@ describe("AUTOFILL_SELECT authorize + fill", () => {
 			isAuto: false,
 			otpOnly: false,
 		});
+	});
+
+	it("fails closed (sends no fill) when the sender carries no frame id", async () => {
+		const bg = await unlockedWithIndex();
+		const noFrame = {
+			origin: "https://example.com",
+			url: "https://example.com/login",
+			tab: { id: 11, windowId: 1, url: "https://example.com/login" },
+		};
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			noFrame,
+		);
+		expect(resp).toEqual({ ok: true });
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL")).toBeUndefined();
 	});
 
 	it("refuses to fill a login on a non-matching origin (clickjacking / wrong-site guard)", async () => {

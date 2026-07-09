@@ -45,7 +45,7 @@ export interface HarnessState {
 	session: Record<string, unknown>;
 	local: Record<string, unknown>;
 	alarms: Record<string, unknown>;
-	tabMessages: Array<{ tabId: number; message: AnyMsg }>;
+	tabMessages: Array<{ tabId: number; message: AnyMsg; options?: AnyMsg }>;
 	broadcasts: AnyMsg[];
 	offscreenCalls: AnyMsg[];
 	windowsCreated: AnyMsg[];
@@ -59,10 +59,15 @@ const EXT_ORIGIN = "https://extension.example";
 
 /** A MessageSender on the extension origin (popup/options/offscreen). */
 export const extensionSender = { origin: EXT_ORIGIN };
-/** A MessageSender for a content script on `https://<host>` with an optional tab. */
-export function pageSender(host: string, tabId?: number): any {
+/** A MessageSender for a content script on `https://<host>` with an optional tab.
+ * A real content-script sender always carries a frameId (0 = top frame), so set one
+ * whenever a tab is present. */
+export function pageSender(host: string, tabId?: number, frameId = 0): any {
 	const sender: any = { origin: `https://${host}`, url: `https://${host}/login` };
-	if (tabId !== undefined) sender.tab = { id: tabId, windowId: 1, url: `https://${host}/login` };
+	if (tabId !== undefined) {
+		sender.tab = { id: tabId, windowId: 1, url: `https://${host}/login` };
+		sender.frameId = frameId;
+	}
 	return sender;
 }
 
@@ -192,8 +197,8 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			Reason: { WORKERS: "WORKERS", CLIPBOARD: "CLIPBOARD" },
 		},
 		tabs: {
-			sendMessage: vi.fn(async (tabId: number, message: AnyMsg) => {
-				state.tabMessages.push({ tabId, message });
+			sendMessage: vi.fn(async (tabId: number, message: AnyMsg, options?: AnyMsg) => {
+				state.tabMessages.push({ tabId, message, options });
 			}),
 			captureVisibleTab: vi.fn(async () => "data:image/png;base64,AAAA"),
 		},

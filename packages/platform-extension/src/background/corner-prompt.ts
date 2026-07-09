@@ -224,7 +224,11 @@ async function dispatchCornerPromptForCapture(
 	await writePendingCapture(capture);
 	if (tabId !== undefined) {
 		// SPA path: if the page navigated away, the next load's CORNER_PROMPT_QUERY picks up the stash.
-		await api.tabs.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }).catch(() => {});
+		// Target the top frame (where the corner card renders) so the captured password never
+		// reaches a sub-frame's content script.
+		await api.tabs
+			.sendMessage(tabId, { type: "CORNER_PROMPT_SHOW", payload }, { frameId: 0 })
+			.catch(() => {});
 	}
 	return payload;
 }
