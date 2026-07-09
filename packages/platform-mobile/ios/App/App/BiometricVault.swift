@@ -23,9 +23,9 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	// service / account / accessGroup live in BrambleVault (shared with the AutoFill
 	// extension and the keychain-access-groups entitlement). See docs/mobile-port.md.
 
-	// The iOS Simulator's keychain doesn't support access groups: any query carrying
-	// kSecAttrAccessGroup fails with errSecMissingEntitlement (-34018). Omit it there
-	// (the app<->extension sharing it enables is a device-only concern anyway).
+	// Add the shared access group to a WRITE (reads omit it, so they span every group we're
+	// entitled to). The iOS Simulator's keychain doesn't support access groups - any query
+	// carrying kSecAttrAccessGroup fails with errSecMissingEntitlement (-34018) - so omit it there.
 	private static func withAccessGroup(_ query: [String: Any]) -> [String: Any] {
 		#if targetEnvironment(simulator)
 			return query
@@ -59,14 +59,16 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	// Presence check that never triggers a biometric prompt: ask only for attributes
 	// (not the protected data) and skip the auth UI.
 	@objc func hasSecret(_ call: CAPPluginCall) {
-		let query = Self.withAccessGroup([
+		// No access group: the query spans every group we're entitled to, so it finds the item
+		// whether setSecret wrote it to the shared group or the no-group fallback.
+		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
 			kSecAttrAccount as String: BrambleVault.vekAccount,
 			kSecReturnData as String: false,
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
 			kSecMatchLimit as String: kSecMatchLimitOne,
-		])
+		]
 		let status = SecItemCopyMatching(query as CFDictionary, nil)
 		let present = status == errSecSuccess || status == errSecInteractionNotAllowed
 		call.resolve(["value": present])
@@ -77,13 +79,14 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing secret")
 			return
 		}
-		let base = Self.withAccessGroup([
+		// Item identity without an access group, so we replace any prior copy wherever it landed
+		// (the shared group, or a no-group fallback from a previous run).
+		let identity: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
 			kSecAttrAccount as String: BrambleVault.vekAccount,
-		])
-		// Replace any prior (possibly invalidated) item.
-		SecItemDelete(base as CFDictionary)
+		]
+		SecItemDelete(identity as CFDictionary)  // replace any prior (possibly invalidated) item
 
 		var acError: Unmanaged<CFError>?
 		guard
@@ -100,11 +103,18 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Couldn't create the biometric access control")
 			return
 		}
-		var add = base
+		var add = identity
 		add[kSecValueData as String] = data
 		add[kSecAttrAccessControl as String] = access
 		// Writing the protected item does not require a biometric prompt; only reading does.
-		let status = SecItemAdd(add as CFDictionary, nil)
+		// Prefer the shared group so the AutoFill extension can read this cache too.
+		var status = SecItemAdd(Self.withAccessGroup(add) as CFDictionary, nil)
+		// If the shared group isn't usable on this install (errSecMissingEntitlement, -34018),
+		// fall back to the app's default group: in-app biometric unlock still works, only the
+		// extension can't read THIS cache (and it couldn't if the shared group were unusable anyway).
+		if status == errSecMissingEntitlement {
+			status = SecItemAdd(add as CFDictionary, nil)
+		}
 		if status == errSecSuccess {
 			call.resolve()
 		} else {
@@ -129,7 +139,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 				}
 				return
 			}
-			let query = Self.withAccessGroup([
+			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
 				kSecAttrService as String: BrambleVault.biometricService,
 				kSecAttrAccount as String: BrambleVault.vekAccount,
@@ -137,7 +147,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: context,
 				kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
-			])
+			]
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
 			if status == errSecSuccess, let data = item as? Data,
@@ -153,11 +163,12 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	@objc func deleteSecret(_ call: CAPPluginCall) {
-		let query = Self.withAccessGroup([
+		// No access group: deletes the item from whichever entitled group it landed in.
+		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
 			kSecAttrAccount as String: BrambleVault.vekAccount,
-		])
+		]
 		let status = SecItemDelete(query as CFDictionary)
 		if status == errSecSuccess || status == errSecItemNotFound {
 			call.resolve()
