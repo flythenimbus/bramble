@@ -166,6 +166,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             clientDataJson = "{}"
             clientDataHashStdB64 = Base64.encodeToString(browserHash, Base64.NO_WRAP)
         } else {
+            if (browserHash != null) warnUnverifiedBrowserHash(request.callingAppInfo)
             val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
             clientDataJson = WebauthnJson.clientDataJson("webauthn.get", challenge, origin)
             clientDataHashStdB64 = Base64.encodeToString(
@@ -204,6 +205,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             if (createReq.clientDataHash != null && trustedBrowserOrigin(request.callingAppInfo) != null) {
                 "{}"
             } else {
+                if (createReq.clientDataHash != null) warnUnverifiedBrowserHash(request.callingAppInfo)
                 val origin = apkKeyHashOrigin(request.callingAppInfo) ?: return false
                 WebauthnJson.clientDataJson("webauthn.create", challenge, origin)
             }
@@ -246,6 +248,23 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         } catch (e: Exception) {
             null
         }
+
+    // A caller that supplies a clientDataHash is telling us it is a browser, but we honour it only
+    // when it verifies as a privileged browser (trustedBrowserOrigin != null). When it does NOT, the
+    // else-branch signs an apk-key-hash clientDataJSON the real browser will replace, so the RP sees
+    // mismatched hashes and rejects with NotAllowedError. Log the caller's package + signing
+    // fingerprints so a missing allow-list entry surfaces as a diagnosable line, not a silent field
+    // failure. See docs/sec-audit-7726.md (B2).
+    private fun warnUnverifiedBrowserHash(info: CallingAppInfo) {
+        val pkg = info.packageName
+        val fingerprints = TrustedBrowsers.signingFingerprints(packageManager, pkg)
+        Log.w(
+            TAG,
+            "caller $pkg supplied a clientDataHash but is not a verified privileged browser; " +
+                "web passkey sign-in will fail if this is a real browser. Add it to TrustedBrowsers " +
+                "if these signing fingerprints are legitimate: $fingerprints",
+        )
+    }
 
     // clientDataJSON origin for a caller we build the JSON for (anything but a verified privileged
     // browser): the standard android:apk-key-hash:<base64url sha256(signing cert)>, which binds the
