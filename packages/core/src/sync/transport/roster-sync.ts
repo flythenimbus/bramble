@@ -7,7 +7,7 @@
 // the background (fetchLocalPayload / pushRemotePayload), so this stays storage-free.
 // See docs/p2p-sync.md.
 
-import type { RosterPayload } from "..";
+import { decodeRoster, type RosterPayload } from "..";
 import type { Channel } from "./channel";
 import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./handshake";
 import type { PeerSession } from "./mesh";
@@ -134,8 +134,44 @@ function inRoster(roster: RosterPayload, pubkey: string): boolean {
 	return roster.devices.some((d) => d.publicKey === pubkey);
 }
 
+/** The CURRENT roster membership, read fresh each time (fetchLocalRoster hits storage) so a
+ * revocation takes effect on a live session instead of at the next lock/unlock. Falls back to
+ * the initial snapshot when fetchLocalRoster is not wired or returns something unparseable.
+ * Exported for tests. */
+export async function currentRoster(
+	opts: Pick<RosterSyncOptions, "roster" | "fetchLocalRoster">,
+): Promise<RosterPayload> {
+	if (!opts.fetchLocalRoster) return opts.roster;
+	try {
+		return decodeRoster(await opts.fetchLocalRoster());
+	} catch {
+		return opts.roster;
+	}
+}
+
+/** Drop (and tear down) peers no longer active in `roster` — a device revoked mid-session.
+ * Closing the peer also breaks its receive loop, so a revoked device loses access in both
+ * directions without waiting for a relock. Exported for tests. */
+export function reapRevoked(
+	opts: Pick<RosterSyncOptions, "report">,
+	peers: Map<string, AuthedPeer>,
+	roster: RosterPayload,
+): void {
+	for (const [pub, peer] of peers) {
+		if (!inRoster(roster, pub)) {
+			opts.report(`peer ${pub.slice(0, 8)} revoked — disconnecting`);
+			peer.close();
+			peers.delete(pub);
+		}
+	}
+}
+
 /** Send our current payload to every authenticated peer (closed channels no-op). */
 async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>): Promise<void> {
+	if (peers.size === 0) return;
+	// Enforce revocation on the live session before sending: a device revoked since the session
+	// started must stop receiving our vault now, not at the next lock/unlock.
+	reapRevoked(opts, peers, await currentRoster(opts));
 	if (peers.size === 0) return;
 	const payload = await localEnvelope(opts);
 	for (const { channel, sessionId } of peers.values()) {
@@ -171,7 +207,9 @@ async function syncPeer(
 	let sess: { sessionId: number };
 	try {
 		peerPub = await withTimeout(channel.recv(), HANDSHAKE_TIMEOUT_MS, "roster-auth");
-		if (!inRoster(opts.roster, peerPub)) {
+		// Gate on the CURRENT roster (read fresh), so a device revoked since this session started
+		// cannot (re-)authenticate against a stale snapshot.
+		if (!inRoster(await currentRoster(opts), peerPub)) {
 			opts.report(`⚠ ${peerPub.slice(0, 8)} not in roster — ignoring`);
 			peer.close();
 			return;
