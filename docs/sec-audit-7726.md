@@ -193,6 +193,21 @@ corner-prompt and autofill in an unpacked build.
 
 ### B2 - Verify browser passkey sign-in before shipping commit `a266dfa7`
 
+> **STATUS - PENDING ANDROID DEVICE TESTING (no device available as of this branch).**
+> - **Landed:** the fail-loud logging robustness edit (`warnUnverifiedBrowserHash` in
+>   CredentialFulfillActivity) - when a caller supplies a `clientDataHash` but does not verify as a
+>   privileged browser, logcat (`BrambleCredential` tag) prints the caller package + real signing
+>   fingerprints. Compiles with the Android Studio JBR; host-JVM unit tests pass. Additive only.
+> - **Pending device:** the register+authenticate matrix (Chrome/Firefox/Edge/Brave/DDG/Opera Mini +
+>   one native caller) against a live RP. **`a266dfa7` must not ship to users until it passes.**
+> - **Pending device (required manual allowlist entries):** **IronFox** (hardened Gecko, Mull
+>   successor - package changed from `us.spotco.fennec_dos`) and **Vanadium** (GrapheneOS Chromium).
+>   High priority for the privacy userbase; neither is in Google's GPM list, so both are permanent
+>   manual `TrustedBrowsers.BROWSERS` entries. Get the real package + fingerprint from the installed
+>   app (the fail-loud log prints them in allow-list format) - do NOT hardcode a guess.
+> - **Still deferred:** bundling the full GPM list (task 8) and declining unrecognized callers
+>   (decide after the matrix).
+
 **Root cause:** Fix correctly signs a caller-supplied `clientDataHash` only when
 `CallingAppInfo.getOrigin(allowlist)` is non-null (CredentialFulfillActivity.kt:165,204). If a
 legit browser is missing/wrong in the allowlist, or sets no request origin, the else-branch signs a
