@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, Download, TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { usePlatform } from "../../context/PlatformContext";
 
 interface RecoveryCodeDisplayProps {
 	code: string;
@@ -21,6 +22,7 @@ export function RecoveryCodeDisplay({
 	onContinue,
 }: RecoveryCodeDisplayProps) {
 	const { t } = useLingui();
+	const { shell } = usePlatform();
 	const [copied, setCopied] = useState(false);
 	const titleText = title ?? t`Save your recovery code`;
 	const continueText = continueLabel ?? t`I've saved it, continue`;
@@ -35,7 +37,7 @@ export function RecoveryCodeDisplay({
 		}
 	};
 
-	const download = () => {
+	const download = async () => {
 		const body = [
 			t`Titanpass recovery code`,
 			"",
@@ -44,12 +46,23 @@ export function RecoveryCodeDisplay({
 			t`Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys.`,
 			"",
 		].join("\n");
-		const url = URL.createObjectURL(new Blob([body], { type: "text/plain" }));
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = "titanpass-recovery-code.txt";
-		a.click();
-		URL.revokeObjectURL(url);
+		const name = "titanpass-recovery-code.txt";
+		try {
+			// On native platforms this saves via the OS share sheet ("Save to Files", Mail, ...);
+			// a WKWebView ignores <a download>, so the blob path below is a web/extension fallback.
+			if (shell.exportBytes) {
+				await shell.exportBytes(name, new TextEncoder().encode(body), "text/plain");
+				return;
+			}
+			const url = URL.createObjectURL(new Blob([body], { type: "text/plain" }));
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = name;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch {
+			// Save/share failed or was dismissed; the code is still on screen to copy by hand.
+		}
 	};
 
 	return (
