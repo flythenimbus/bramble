@@ -4,7 +4,7 @@
 // platform APIs and crypto. See docs/p2p-sync.md.
 
 import type { EntriesBlobStore } from "../vault/entries-blob";
-import type { EntriesPayload } from "./entries-payload";
+import { type EntriesPayload, sanitizeRemoteEntriesPayload } from "./entries-payload";
 import { compareHlc, type Hlc } from "./hlc";
 import { mergeEntriesPayload } from "./vault-merge";
 
@@ -61,11 +61,14 @@ export async function applyRemotePayload(
 	port: VaultSyncPort,
 	remote: EntriesPayload,
 ): Promise<ApplyResult> {
+	// A peer's payload is untrusted: drop any future-dated (poisoned) stamps before merge or
+	// witness, so a member can't pin an un-deletable entry by stamping it years ahead.
+	const safe = sanitizeRemoteEntriesPayload(remote);
 	const local = await port.readLocal();
-	const merged = mergeEntriesPayload(local, remote);
+	const merged = mergeEntriesPayload(local, safe);
 	const changed = !payloadsEquivalent(local, merged);
 	if (changed) {
-		await port.witnessRemote(remoteStamps(remote));
+		await port.witnessRemote(remoteStamps(safe));
 		await port.writeMerged(merged);
 	}
 	return { payload: merged, changed };

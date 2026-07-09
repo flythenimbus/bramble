@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Tombstone, TombstoneSchema } from "./entries-payload";
-import { type Hlc, HlcSchema } from "./hlc";
+import { type Hlc, HlcSchema, isFutureStamp } from "./hlc";
 import { liveRecords, mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
 
 /** One member device. `id` is the device's node id (the same id used in HLC stamps). */
@@ -59,6 +59,30 @@ function toPayload(state: ReplicaState<RosterEntry>): RosterPayload {
 /** Merge two rosters. Same convergence guarantees as the entries merge. */
 export function mergeRosters(a: RosterPayload, b: RosterPayload): RosterPayload {
 	return toPayload(mergeReplicas(toReplica(a), toReplica(b)));
+}
+
+/** Drop device entries and tombstones stamped implausibly far in the future before merging a
+ * REMOTELY-received roster. Without this a malicious member could gossip its own entry stamped
+ * years ahead, so a later revocation tombstone (stamped ~now) could never win the merge and the
+ * device would be permanently un-revocable. Honest rosters carry near-present stamps. */
+export function sanitizeRemoteRoster(
+	roster: RosterPayload,
+	now: number = Date.now(),
+): RosterPayload {
+	return {
+		devices: roster.devices.filter((d) => !isFutureStamp(d.hlc, now)),
+		revoked: roster.revoked.filter((t) => !isFutureStamp(t.hlc, now)),
+	};
+}
+
+/** Merge a peer's roster into the local one, dropping future-dated (poisoned) stamps first.
+ * Hosts MUST use this for a remotely-received roster instead of mergeRosters directly. */
+export function mergeRemoteRoster(
+	local: RosterPayload,
+	remote: RosterPayload,
+	now: number = Date.now(),
+): RosterPayload {
+	return mergeRosters(local, sanitizeRemoteRoster(remote, now));
 }
 
 /** Enroll (or re-enroll) a device. The entry must carry a freshly stamped hlc. */

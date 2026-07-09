@@ -46,6 +46,15 @@ export function maxHlc(a: Hlc, b: Hlc): Hlc {
 	return compareHlc(a, b) >= 0 ? a : b;
 }
 
+/** True if a stamp's wall clock is implausibly far ahead of `now` (beyond honest skew).
+ * Honest devices clamp their own clock (see receive()), so a real stamp is never this far in
+ * the future; a future-dated stamp is poisoned. Remote payloads are filtered by this before
+ * merge so a member can't stamp a record years ahead to outrank a later revocation/deletion
+ * forever (the tombstone, stamped ~now, would otherwise always lose). */
+export function isFutureStamp(hlc: Hlc, now: number = Date.now()): boolean {
+	return hlc.wall > now + HLC_MAX_DRIFT_MS;
+}
+
 /** Serialize a stamp to `wall:counter:node`. node may itself contain colons. */
 export function formatHlc(h: Hlc): string {
 	return `${h.wall}:${h.counter}:${h.node}`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Hlc } from "./hlc";
+import { HLC_MAX_DRIFT_MS, type Hlc } from "./hlc";
 import {
 	activeDevices,
 	addDevice,
@@ -8,10 +8,12 @@ import {
 	encodeRoster,
 	findDevice,
 	isActiveDevice,
+	mergeRemoteRoster,
 	mergeRosters,
 	type RosterEntry,
 	type RosterPayload,
 	revokeDevice,
+	sanitizeRemoteRoster,
 } from "./roster";
 
 const hlc = (wall: number, node: string): Hlc => ({ wall, counter: 0, node });
@@ -81,5 +83,58 @@ describe("roster codec", () => {
 	it("rejects a malformed roster", () => {
 		expect(() => decodeRoster(JSON.stringify({ devices: [{ id: "x" }], revoked: [] }))).toThrow();
 		expect(() => decodeRoster(JSON.stringify([]))).toThrow();
+	});
+});
+
+describe("remote-roster future-stamp guard (revocation integrity)", () => {
+	const now = 1_000_000; // "current" wall the ingest guard evaluates against
+	const futureWall = now + HLC_MAX_DRIFT_MS + 60_000; // implausibly far ahead
+	const evilFutureAdd: RosterPayload = {
+		devices: [
+			{
+				id: "evil",
+				publicKey: "pk-evil",
+				label: "evil",
+				addedAt: 100,
+				hlc: hlc(futureWall, "evil"),
+			},
+		],
+		revoked: [],
+	};
+
+	it("sanitizeRemoteRoster drops future-dated devices and tombstones, keeps present ones", () => {
+		const roster: RosterPayload = {
+			devices: [device("ok", now), evilFutureAdd.devices[0]!],
+			revoked: [{ id: "gone", hlc: hlc(futureWall, "evil") }],
+		};
+		const safe = sanitizeRemoteRoster(roster, now);
+		expect(safe.devices.map((d) => d.id)).toEqual(["ok"]);
+		expect(safe.revoked).toEqual([]);
+	});
+
+	it("a revoked device cannot re-arm itself with a future-dated roster gossip", () => {
+		// evil is legitimately enrolled at t=100, then revoked at t=200.
+		let local = addDevice(emptyRoster(), device("evil", 100));
+		local = revokeDevice(local, "evil", hlc(200, "me"));
+		expect(isActiveDevice(local, "evil")).toBe(false);
+		// evil gossips a roster re-adding itself stamped years in the future.
+		local = mergeRemoteRoster(local, evilFutureAdd, now);
+		expect(isActiveDevice(local, "evil")).toBe(false); // guard holds: stays revoked
+	});
+
+	it("plain mergeRosters WOULD let the future re-add win (the hole mergeRemoteRoster closes)", () => {
+		let local = addDevice(emptyRoster(), device("evil", 100));
+		local = revokeDevice(local, "evil", hlc(200, "me"));
+		const unguarded = mergeRosters(local, evilFutureAdd); // no sanitize
+		expect(isActiveDevice(unguarded, "evil")).toBe(true);
+	});
+
+	it("keeps a normally-stamped remote device", () => {
+		const merged = mergeRemoteRoster(
+			emptyRoster(),
+			{ devices: [device("phone", now)], revoked: [] },
+			now,
+		);
+		expect(isActiveDevice(merged, "phone")).toBe(true);
 	});
 });

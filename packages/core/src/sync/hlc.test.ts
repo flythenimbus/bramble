@@ -5,6 +5,7 @@ import {
 	HLC_MAX_DRIFT_MS,
 	type Hlc,
 	HybridClock,
+	isFutureStamp,
 	maxHlc,
 	parseHlc,
 } from "./hlc";
@@ -146,5 +147,19 @@ describe("HybridClock.receive", () => {
 		// A later honest send stays at real time, so the poisoned stamp can't keep winning.
 		time.set(1000 + HLC_MAX_DRIFT_MS + 1);
 		expect(clock.send().wall).toBe(1000 + HLC_MAX_DRIFT_MS + 1);
+	});
+});
+
+describe("isFutureStamp", () => {
+	const now = 1_000_000;
+	it("is false at now and within max drift", () => {
+		expect(isFutureStamp(h(now, 0, "a"), now)).toBe(false);
+		expect(isFutureStamp(h(now - 1_000_000, 5, "a"), now)).toBe(false); // past
+		expect(isFutureStamp(h(now + HLC_MAX_DRIFT_MS, 0, "a"), now)).toBe(false); // at the edge
+	});
+
+	it("is true just beyond max drift and for absurd far-future stamps", () => {
+		expect(isFutureStamp(h(now + HLC_MAX_DRIFT_MS + 1, 0, "a"), now)).toBe(true);
+		expect(isFutureStamp(h(9_000_000_000_000, 0, "evil"), now)).toBe(true); // year ~2255
 	});
 });
