@@ -55,12 +55,16 @@ class BrambleAutofillService : AutofillService() {
             return
         }
         val parsed = StructureParser.parse(structure)
+        // webDomain is only trusted from a verified browser; an untrusted app gets no host-based
+        // auto-match (it can still open the searchable list). See TrustedBrowsers / StructureParser.
+        val trustedBrowser = TrustedBrowsers.isTrustedBrowser(this, parsed.packageName)
+        val hosts = parsed.requestedHosts(trustedBrowser)
         // Page-side diagnostics only (field counts + the page's own domain/package). Never
         // logs vault data.
         Log.d(
             BrambleAutofill.LOG_TAG,
             "onFillRequest user=${parsed.usernameIds.size} pass=${parsed.passwordIds.size} " +
-                "otp=${parsed.otpIds.size} pkg=${parsed.packageName} hosts=${parsed.requestedHosts()} " +
+                "otp=${parsed.otpIds.size} pkg=${parsed.packageName} browser=$trustedBrowser hosts=$hosts " +
                 "inlineReqByKeyboard=$inlineRequested",
         )
         if (!parsed.hasFields || parsed.packageName == packageName) {
@@ -68,7 +72,7 @@ class BrambleAutofillService : AutofillService() {
             return
         }
         val response = try {
-            buildResponse(request, parsed)
+            buildResponse(request, parsed, hosts)
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "onFillRequest failed", e)
             null
@@ -76,12 +80,16 @@ class BrambleAutofillService : AutofillService() {
         callback.onSuccess(response)
     }
 
-    private fun buildResponse(request: FillRequest, parsed: ParsedStructure): FillResponse {
+    private fun buildResponse(
+        request: FillRequest,
+        parsed: ParsedStructure,
+        hosts: List<String>,
+    ): FillResponse {
         val inline = inlineContext(request)
         val builder = FillResponse.Builder()
         val session = KeepUnlockedStore.load(this)
-        val filled = session != null && addDirectDatasets(builder, parsed, session, inline)
-        if (!filled) addLockedDataset(builder, parsed, inline)
+        val filled = session != null && addDirectDatasets(builder, parsed, hosts, session, inline)
+        if (!filled) addLockedDataset(builder, parsed, hosts, inline)
         addSaveInfo(builder, parsed)
         return builder.build()
     }
@@ -92,6 +100,7 @@ class BrambleAutofillService : AutofillService() {
     private fun addDirectDatasets(
         builder: FillResponse.Builder,
         parsed: ParsedStructure,
+        hosts: List<String>,
         vekB64: String,
         inline: InlineContext?,
     ): Boolean {
@@ -102,7 +111,6 @@ class BrambleAutofillService : AutofillService() {
             if (wasLocked) lock()
             KeepUnlockedStore.save(this, vekB64) // slide the window forward
 
-            val hosts = parsed.requestedHosts()
             val matches = logins.filter { VaultReader.matches(it, hosts) }
             val now = System.currentTimeMillis()
             for (login in matches) {
@@ -113,7 +121,7 @@ class BrambleAutofillService : AutofillService() {
                     )
                 )
             }
-            builder.addDataset(showAllDataset(parsed, inline))
+            builder.addDataset(showAllDataset(parsed, hosts, inline))
             true
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "directFill failed; falling back to auth", e)
@@ -123,24 +131,29 @@ class BrambleAutofillService : AutofillService() {
 
     // Locked: one dataset that authenticates before revealing anything.
     @Suppress("DEPRECATION")
-    private fun addLockedDataset(builder: FillResponse.Builder, parsed: ParsedStructure, inline: InlineContext?) {
+    private fun addLockedDataset(
+        builder: FillResponse.Builder,
+        parsed: ParsedStructure,
+        hosts: List<String>,
+        inline: InlineContext?,
+    ) {
         val pres = Datasets.presentation(this, getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val inlinePres = inline?.next(getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val dataset = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(dataset, id, pres, inlinePres)
-        dataset.setAuthentication(authSender(parsed, showAll = false))
+        dataset.setAuthentication(authSender(parsed, hosts, showAll = false))
         builder.addDataset(dataset.build())
     }
 
     // A "Show all logins" entry: authenticates (or reuses the live session) into the full
     // searchable list. Used in the unlocked dropdown so the user can reach non-matching logins.
     @Suppress("DEPRECATION")
-    private fun showAllDataset(parsed: ParsedStructure, inline: InlineContext?): Dataset {
+    private fun showAllDataset(parsed: ParsedStructure, hosts: List<String>, inline: InlineContext?): Dataset {
         val pres = Datasets.presentation(this, getString(R.string.af_ds_show_all_logins), getString(R.string.af_ds_search_vault))
         val inlinePres = inline?.next(getString(R.string.af_ds_show_all), getString(R.string.af_ds_search_vault))
         val builder = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(builder, id, pres, inlinePres)
-        builder.setAuthentication(authSender(parsed, showAll = true))
+        builder.setAuthentication(authSender(parsed, hosts, showAll = true))
         return builder.build()
     }
 
@@ -177,13 +190,13 @@ class BrambleAutofillService : AutofillService() {
 
     // PendingIntent into the unlock Activity, carrying the field ids + requested hosts so the
     // Activity can build the chosen Dataset. Mutable so the framework can attach its extras.
-    private fun authSender(parsed: ParsedStructure, showAll: Boolean): IntentSender {
+    private fun authSender(parsed: ParsedStructure, hosts: List<String>, showAll: Boolean): IntentSender {
         val intent = Intent(this, AutofillUnlockActivity::class.java).apply {
             putParcelableArrayListExtra(AutofillUnlockActivity.EXTRA_USERNAME_IDS, ArrayList(parsed.usernameIds))
             putParcelableArrayListExtra(AutofillUnlockActivity.EXTRA_PASSWORD_IDS, ArrayList(parsed.passwordIds))
             putParcelableArrayListExtra(AutofillUnlockActivity.EXTRA_OTP_IDS, ArrayList(parsed.otpIds))
-            putStringArrayListExtra(AutofillUnlockActivity.EXTRA_HOSTS, ArrayList(parsed.requestedHosts()))
-            putExtra(AutofillUnlockActivity.EXTRA_LABEL, displayLabel(parsed))
+            putStringArrayListExtra(AutofillUnlockActivity.EXTRA_HOSTS, ArrayList(hosts))
+            putExtra(AutofillUnlockActivity.EXTRA_LABEL, hosts.firstOrNull() ?: "")
             putExtra(AutofillUnlockActivity.EXTRA_SHOW_ALL, showAll)
         }
         return PendingIntent.getActivity(this, requestCode.getAndIncrement(), intent, pendingIntentFlags()).intentSender
@@ -221,9 +234,14 @@ class BrambleAutofillService : AutofillService() {
     private fun isOwnApp(structure: android.app.assist.AssistStructure): Boolean =
         structure.activityComponent?.packageName == packageName
 
-    private fun displayLabel(parsed: ParsedStructure): String {
-        parsed.webDomains.firstOrNull()?.let { return VaultReader.normalizeHost(it) }
-        return parsed.requestedHosts().firstOrNull() ?: ""
+    // Label for a saved capture: the web domain only when the caller is a verified browser (so a
+    // spoofed webDomain can't seed a mislabeled entry that later matches the real site), else the
+    // caller package.
+    private fun saveLabel(parsed: ParsedStructure): String {
+        if (TrustedBrowsers.isTrustedBrowser(this, parsed.packageName)) {
+            parsed.webDomains.firstOrNull()?.let { return VaultReader.normalizeHost(it) }
+        }
+        return parsed.packageName ?: ""
     }
 
     // The user confirmed "Save to Bramble?". Capture the submitted username + password and
@@ -236,7 +254,7 @@ class BrambleAutofillService : AutofillService() {
                 val parsed = StructureParser.parse(structure)
                 val password = parsed.password ?: ""
                 if (password.isNotEmpty() && parsed.packageName != packageName) {
-                    PendingSave.write(this, displayLabel(parsed), parsed.username ?: "", password)
+                    PendingSave.write(this, saveLabel(parsed), parsed.username ?: "", password)
                     val launch = Intent(this, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(launch)
