@@ -322,6 +322,9 @@ class Mesh {
 				this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: () => peer.close() }),
 			onClose: () => {
 				this.peers.delete(remote);
+				// Evict from `known` so a peer that drops (suspend, network blip, reap) is re-discovered
+				// on its next hello instead of being ignored until the whole mesh restarts.
+				this.known.delete(remote);
 				this.opts.onStatus(`channel closed with ${short(remote)}`);
 			},
 			onState: (state) => this.opts.onStatus(`${short(remote)}: ${state}`),
@@ -355,6 +358,8 @@ class Mesh {
 			receive: makeReassembler((padded) => push(unpadMessage(padded))),
 			close: () => {
 				this.relayPeers.delete(remote);
+				// See makePeer.onClose: re-discovery of a bounced relay peer needs `known` cleared.
+				this.known.delete(remote);
 			},
 		};
 		this.relayPeers.set(remote, entry);
