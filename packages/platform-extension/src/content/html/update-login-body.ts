@@ -42,6 +42,9 @@ export function updateLoginBody({
 		`;
 	}
 
+	// candidatesBody is nested html; interpolate via a one-element array so the html helper
+	// joins it verbatim, since a bare html string would be escaped as a scalar (renders the
+	// markup as literal text). The helper treats arrays, not strings, as trusted nested html.
 	return html`
 		<div class="tp-head">
 			<div>
@@ -50,7 +53,7 @@ export function updateLoginBody({
 			</div>
 			<button class="tp-close" data-tp-action="dismiss" aria-label="Dismiss">×</button>
 		</div>
-		${candidatesBody}
+		${[candidatesBody]}
 		<div class="tp-actions">
 			<button class="tp-btn tp-btn-primary" data-tp-action="${primaryAction}">${primaryLabel}</button>
 			<button class="tp-btn" data-tp-action="save-new" title="${t("saveAsNewHint")}">${t("saveAsNew")}</button>
