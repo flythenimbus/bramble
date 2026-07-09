@@ -257,6 +257,15 @@ field to the entry payload; see "Deferred / known limitations".
   the metadata/availability surface (the relay would then *store* ciphertext, not just relay it).
   Mobile compounds this: the OS suspends backgrounded apps and there's no FCM wake (no Google
   Play), so mobile is realistically "syncs when you open it."
+- **Push latency on suspending hosts.** A local edit is pushed to peers immediately — a vault-blob
+  change triggers a broadcast, so it doesn't wait for the ~4s rebroadcast tick. But where the sync
+  host suspends between ticks (Firefox's background event page, like mobile), an edit made while
+  suspended only lands on the next wake/reconnect, so Firefox→peer can lag (seconds up to ~a minute).
+  Chromium's persistent offscreen is effectively instant both ways.
+- **Cross-network first connect can be slow.** On a hard NAT / VPN the working path is the TURN relay,
+  whose candidates (especially the TCP/TLS variants that beat a UDP-blocking VPN) are gathered and
+  checked *last*, so the first cross-network connect may need a retry before it lands — not a failure.
+  Same-network / same-machine peers connect instantly.
 - **Field-level merge is deferred** (see above).
 - **Conflict history + surfacing is deferred.** Today a same-entry conflict silently drops the
   losing version (see "Conflict loser"). Keeping the sealed loser in an entry history list and
@@ -291,9 +300,27 @@ Source of truth is the persisted `sync.group` roster.
   VEK + a local vault copy offline. True lockout requires **VEK rotation + re-wrap of every slot
   and re-encrypt of entries**, distributed over sync. Plain revoke = "stops future sync," not
   "wipes that device."
-- **Known edges.** A revoked-but-currently-connected peer keeps its open channel until the session
-  restarts (auth uses the start-time roster snapshot); re-check `isActiveDevice` per inbound auth
-  to cut mid-session. **Rename** (edit `label`, propagate via the roster CRDT) is still TODO.
+- **Live-session revocation, built.** A revoked peer is cut *mid-session* now, not just at the next
+  restart: roster-sync reads the roster fresh each check (`currentRoster`), drops revoked peers from a
+  running session (`reapRevoked`, outbound + inbound), and a gossiped revocation reaps across the mesh
+  at once. (The old "keeps its channel until restart" edge is closed.)
+- **Re-adding a removed device uses a FRESH id.** Tombstones are sticky (a revoked id stays dead, so
+  gossip can't resurrect it — closes B1), and device ids are stable/persisted, so a re-add under the
+  old id would be dropped everywhere (it couldn't see itself; peers couldn't see it). `joinGroup`
+  therefore rotates the device id first (`rotateDeviceId`), so a re-add enters as a genuinely new
+  member while the old id stays dead. See docs/p2p-sync-revocation-hardening.md.
+- **A revoked device is not notified.** The tombstone can't reach it (every survivor refuses it), so
+  it keeps a stale "still synced" UI but has no access. Accepted: there is deliberately **no remote
+  self-destruct** (it would only fire on honest devices and arm a compromised member to wipe peers;
+  see the revocation-hardening note).
+- **New vault = clean sync identity.** Creating a vault wipes all local sync state
+  (`shell.resetSyncState`: group, relay, device id + Noise/signing keys), so a fresh vault never
+  inherits the old group/mesh. Sync identity belongs to the vault, not the device.
+- **Roster entries are signed + admission-gated (Item A).** Each entry carries an Ed25519 `sigKey` +
+  `sig` (TOFU id↔key binding) and, for a non-initial device, an `admission` from a member's
+  password-derived key. Verify-if-present today; enforced in a later release. See
+  docs/p2p-sync-revocation-hardening.md.
+- **Rename** (edit `label`, propagate via the roster CRDT) is still TODO.
 - **Device labels.** New enrollments self-label by platform (`defaultDeviceLabel`: "Android device",
   "Firefox on Mac", …) instead of a generic "This device"; the UI marks the current device by
   public-key match, so a label collision is only cosmetic.
