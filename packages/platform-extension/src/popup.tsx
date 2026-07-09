@@ -6,6 +6,11 @@ import { extensionClipboard } from "./clipboard";
 import { extensionCrypto } from "./crypto";
 import { extensionShell } from "./shell";
 import { extensionStorage } from "./storage";
+import { connectViewPort } from "./view-port";
+
+// Hold a port for this view's lifetime so "Immediate" auto-lock can lock the vault when
+// the last extension view closes (background/view-lock.ts). No-op in other auto-lock modes.
+connectViewPort();
 
 const platform: Platform = {
 	storage: extensionStorage,

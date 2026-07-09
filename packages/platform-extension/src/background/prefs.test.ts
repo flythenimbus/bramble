@@ -33,14 +33,18 @@ describe("getAutoLockMinutes", () => {
 		const { prefs } = await loadPrefs();
 		expect(await prefs.getAutoLockMinutes()).toBe(15);
 	});
-	it("returns a stored non-negative value (0 allowed = never)", async () => {
-		const { prefs } = await loadPrefs({ "pref.autoLockMinutes": 0 });
-		expect(await prefs.getAutoLockMinutes()).toBe(0);
-	});
-	it("falls back to the default for a negative or non-number value", async () => {
-		expect(await (await loadPrefs({ "pref.autoLockMinutes": -1 })).prefs.getAutoLockMinutes()).toBe(
-			15,
+	it("returns a stored finite value: 0 = never, -1 = Immediate, N = minutes", async () => {
+		expect(await (await loadPrefs({ "pref.autoLockMinutes": 0 })).prefs.getAutoLockMinutes()).toBe(
+			0,
 		);
+		expect(await (await loadPrefs({ "pref.autoLockMinutes": -1 })).prefs.getAutoLockMinutes()).toBe(
+			-1,
+		);
+		expect(await (await loadPrefs({ "pref.autoLockMinutes": 30 })).prefs.getAutoLockMinutes()).toBe(
+			30,
+		);
+	});
+	it("falls back to the default for a non-number value", async () => {
 		expect(
 			await (await loadPrefs({ "pref.autoLockMinutes": "5" })).prefs.getAutoLockMinutes(),
 		).toBe(15);

@@ -598,8 +598,8 @@ msgid "I've saved it, continue"
 msgstr "Lo he guardado, continuar"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
-msgid "Immediately"
-msgstr "Inmediatamente"
+msgid "Immediate"
+msgstr "Inmediato"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Import"

@@ -37,6 +37,9 @@ export interface BackgroundHarness {
 	fireStorageChanged: (changes: Record<string, unknown>, area: string) => void;
 	fireInstalled: () => void;
 	fireStartup: () => void;
+	/** Simulate a view (popup/options/pop-out) opening a runtime port; returns a handle whose
+	 * disconnect() models the view closing. */
+	fireConnect: (name?: string) => { disconnect: () => void };
 	/** Drain pending microtasks + timers so async listener work settles. */
 	flush: () => Promise<void>;
 }
@@ -163,6 +166,11 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 					state.listeners.startup = fn;
 				},
 			},
+			onConnect: {
+				addListener: (fn: any) => {
+					state.listeners.connect = fn;
+				},
+			},
 			sendMessage: vi.fn(async (msg: AnyMsg) => {
 				if (msg && msg.target === "offscreen") {
 					state.offscreenCalls.push(msg);
@@ -278,6 +286,19 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 		fireStorageChanged: (changes, area2) => state.listeners.storageChanged?.(changes, area2),
 		fireInstalled: () => state.listeners.installed?.(),
 		fireStartup: () => state.listeners.startup?.(),
+		fireConnect: (name = "tp-view") => {
+			const disconnectListeners: Array<() => void> = [];
+			const port = {
+				name,
+				onDisconnect: { addListener: (fn: () => void) => disconnectListeners.push(fn) },
+			};
+			state.listeners.connect?.(port);
+			return {
+				disconnect: () => {
+					for (const fn of [...disconnectListeners]) fn();
+				},
+			};
+		},
 		flush,
 	};
 }

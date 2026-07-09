@@ -27,6 +27,7 @@ import {
 	vaultLocked,
 } from "./session";
 import { maybeStartSync, SYNC_KEEPALIVE_ALARM } from "./sync";
+import { startViewLock } from "./view-lock";
 import { isProviderEnabled, loadProviderEnabled } from "./webauthn-provider";
 import { initWebauthnProxy } from "./webauthn-proxy-init";
 
@@ -90,6 +91,10 @@ api.commands?.onCommand.addListener((command) => {
 		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
 	})();
 });
+
+// "Immediate" auto-lock: lock when the last extension view (popup / pop-out / options)
+// closes. The browser analog of mobile's lock-on-background.
+startViewLock();
 
 // Lock immediately on OS screen-lock. Only `locked` is acted on; `idle` would
 // also fire on long reads/videos and is left to the sliding alarm.
