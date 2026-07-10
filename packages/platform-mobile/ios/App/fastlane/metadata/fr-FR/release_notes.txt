@@ -1,1 +1,7 @@
-Bramble pour iOS : un gestionnaire de mots de passe axé sur le local, avec AutoFill, les clés de passe, déverrouillage par Face ID et Touch ID, codes TOTP et importation depuis KeePass. Pas de compte, pas de cloud.
+Corrections de bugs et améliorations de sécurité dans cette version :
+
+- Le déverrouillage par Face ID et Touch ID est désormais plus fiable.
+- La synchronisation de pair à pair est renforcée : les appareils se vérifient mutuellement avant de fusionner les modifications, et seuls les appareils approuvés peuvent rejoindre votre groupe de synchronisation.
+- Correction de la synchronisation des grands coffres entre appareils.
+
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

@@ -1,1 +1,7 @@
-Bramble para iOS: um gerenciador de senhas que prioriza o armazenamento local, com AutoFill, passkeys, desbloqueio por Face ID e Touch ID, códigos TOTP e importação do KeePass. Sem conta, sem nuvem.
+Correções de bugs e melhorias de segurança nesta versão:
+
+- O desbloqueio por Face ID e Touch ID agora é mais confiável.
+- A sincronização ponto a ponto foi reforçada: os dispositivos verificam uns aos outros antes de mesclar alterações, e apenas dispositivos aprovados podem entrar no seu grupo de sincronização.
+- Corrigida a sincronização de cofres grandes entre dispositivos.
+
+Sem conta, sem nuvem. Tudo permanece em seus dispositivos.
