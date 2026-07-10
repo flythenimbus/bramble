@@ -650,6 +650,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const createVault = useCallback(
 		async (password: string): Promise<string> => {
 			setError(null);
+			// A new vault is a fresh sync identity: clear any prior device's group/keys/relay so an
+			// old device doesn't linger (sync state belongs to the vault, not the browser).
+			await shell.resetSyncState?.();
 			await crypto.generateVek();
 			const passwordSlot = await wrapPasswordSlot(password);
 			const code = makeRecoveryCode();
@@ -668,7 +671,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await refreshSlotMetadata();
 			return code;
 		},
-		[storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
+		[shell, storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
 	);
 
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1

@@ -123,6 +123,10 @@ export interface ShellAdapter {
 	syncSigningPublicKey?(): Promise<string>;
 	/** Ed25519-sign a canonical roster-entry string (see canonicalRosterEntry). Paired with syncSigningPublicKey. */
 	signRoster?(canonical: string): Promise<string>;
+	/** Clear all of this device's local sync state (group, device keys, relay) so a freshly created
+	 * vault starts as an un-enrolled device — sync identity belongs to the vault, not the browser.
+	 * Optional: platforms with no local sync state may omit it. */
+	resetSyncState?(): Promise<void>;
 	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
 	startEnrollInvite(opts: {
 		relayUrl: string;
