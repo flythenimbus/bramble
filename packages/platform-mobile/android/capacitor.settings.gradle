@@ -20,5 +20,8 @@ project(':capacitor-filesystem').projectDir = new File('../../../node_modules/.p
 include ':capacitor-preferences'
 project(':capacitor-preferences').projectDir = new File('../../../node_modules/.pnpm/@capacitor+preferences@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/preferences/android')
 
+include ':capacitor-share'
+project(':capacitor-share').projectDir = new File('../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/share/android')
+
 include ':capacitor-splash-screen'
 project(':capacitor-splash-screen').projectDir = new File('../../../node_modules/.pnpm/@capacitor+splash-screen@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/splash-screen/android')

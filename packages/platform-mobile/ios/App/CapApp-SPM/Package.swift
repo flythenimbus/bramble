@@ -18,6 +18,7 @@ let package = Package(
         .package(name: "CapacitorDevice", path: "../../../../../node_modules/.pnpm/@capacitor+device@8.0.2_@capacitor+core@8.4.1/node_modules/@capacitor/device"),
         .package(name: "CapacitorFilesystem", path: "../../../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.1/node_modules/@capacitor/filesystem"),
         .package(name: "CapacitorPreferences", path: "../../../../../node_modules/.pnpm/@capacitor+preferences@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/preferences"),
+        .package(name: "CapacitorShare", path: "../../../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/share"),
         .package(name: "CapacitorSplashScreen", path: "../../../../../node_modules/.pnpm/@capacitor+splash-screen@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/splash-screen")
     ],
     targets: [
@@ -32,6 +33,7 @@ let package = Package(
                 .product(name: "CapacitorDevice", package: "CapacitorDevice"),
                 .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
                 .product(name: "CapacitorPreferences", package: "CapacitorPreferences"),
+                .product(name: "CapacitorShare", package: "CapacitorShare"),
                 .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen")
             ]
         )
