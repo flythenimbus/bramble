@@ -206,6 +206,26 @@ export const extensionShell: ShellAdapter = {
 		if (typeof res.data !== "string") throw new Error("roster signature response malformed");
 		return res.data;
 	},
+	async syncAdmissionPublicKey(password: string, saltB64: string) {
+		const res = (await api.runtime.sendMessage({
+			type: "SYNC_ADMISSION_PUBKEY",
+			payload: { password, saltB64 },
+		})) as { ok: boolean; data?: string; error?: string } | undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
+		if (typeof res.data !== "string") throw new Error("admission key response malformed");
+		return res.data;
+	},
+	async syncAdmissionSign(password: string, saltB64: string, canonical: string) {
+		const res = (await api.runtime.sendMessage({
+			type: "SYNC_ADMISSION_SIGN",
+			payload: { password, saltB64, canonical },
+		})) as { ok: boolean; data?: string; error?: string } | undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
+		if (typeof res.data !== "string") throw new Error("admission signature response malformed");
+		return res.data;
+	},
 	async resetSyncState() {
 		// Sync identity lives in chrome.storage.local under `sync.*` (group, device keys, relay);
 		// drop it all so a newly created vault starts as an un-enrolled device. See useVault.createVault.

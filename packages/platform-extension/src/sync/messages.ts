@@ -73,6 +73,28 @@ export type RosterSignEntryMsg = z.infer<typeof RosterSignEntryMsgSchema>;
 export const RosterSignHostMsgSchema = z.object({ secretB64: z.string(), message: z.string() });
 export type RosterSignHostMsg = z.infer<typeof RosterSignHostMsgSchema>;
 
+/** shell -> background (SYNC_ADMISSION_PUBKEY) / background -> offscreen (SYNC_ROSTER_ADMISSION_PUBKEY):
+ * the re-entered master password + this device's password-slot salt, to derive the admission verify
+ * key transiently (never stored). See docs/p2p-sync-revocation-hardening.md. */
+export const AdmissionPubkeyMsgSchema = z.object({ password: z.string(), saltB64: z.string() });
+export type AdmissionPubkeyMsg = z.infer<typeof AdmissionPubkeyMsgSchema>;
+
+/** shell -> background (SYNC_ADMISSION_SIGN): password + salt + the canonical entry to admission-sign. */
+export const AdmissionSignEntryMsgSchema = z.object({
+	password: z.string(),
+	saltB64: z.string(),
+	canonical: z.string(),
+});
+export type AdmissionSignEntryMsg = z.infer<typeof AdmissionSignEntryMsgSchema>;
+
+/** background -> offscreen (SYNC_ROSTER_ADMISSION_SIGN): password + salt + the message to sign. */
+export const AdmissionSignHostMsgSchema = z.object({
+	password: z.string(),
+	saltB64: z.string(),
+	message: z.string(),
+});
+export type AdmissionSignHostMsg = z.infer<typeof AdmissionSignHostMsgSchema>;
+
 /** offscreen -> popup broadcast: a structured enrollment event. Mirrors core's SyncEvent. */
 export const SyncEventMsgSchema = z.object({
 	kind: z.string(),

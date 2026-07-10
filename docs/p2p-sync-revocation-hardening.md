@@ -348,3 +348,35 @@ authenticated bundle is trusted on first sight (anchored); everything after must
 (Argon2 -> KEK -> HKDF -> Ed25519, reuses existing deps); (3) enrollment: publish `admissionKey`,
 password re-prompt, produce the admission sig; (4) phase-2 require via the #4 capability. No group-key
 rotation, no admin-device concept.
+
+### Producer + verify-side status (2026-07-08)
+
+**Producer built (extension); verify side left exactly as validated.** Steps (1)-(3) are wired end to
+end on the extension: on "Add device" the inviter re-enters the master password (a new gate modal in
+`SyncConnectSection`), which derives this device's `admissionKey` (`roster_admission_public_key`,
+published on its own re-stamped + re-signed entry) and, when the joiner's entry arrives,
+admission-signs it (`roster_admission_sign` -> `admission: { by, sig }`). Shell ops
+`syncAdmissionPublicKey` / `syncAdmissionSign` route popup -> background -> offscreen; the admission
+signing key is derived transiently in the offscreen and **never persisted** (unlike the Ed25519
+device signing key). Core's `inviteDevice` gained an optional `password`; a security-key-only vault
+(no password slot) skips the gate and enrolls the joiner unsigned (phase-1 tolerated). The core
+producer is platform-agnostic, so mobile signs + admits automatically once its shell exposes the four
+methods (`syncSigningPublicKey` / `signRoster` / `syncAdmissionPublicKey` / `syncAdmissionSign`).
+
+**BLOCKER before flipping `rosterRequireAdmission` (phase 2): pin `admissionKey`.** The signature
+model above says `admissionKey` is "TOFU-anchored like `sigKey`", but `verifyRemoteRoster` does NOT
+yet pin it: for a known id it pins `sigKey` only. A compromised member holds the device's `sigKey`
+**secret** (it sits in `chrome.storage.local` in the clear), so it can rewrite an existing member's
+entry to carry an attacker-controlled `admissionKey` (re-signed with the held sigKey), then admit a
+rogue device under it - bypassing admission WITHOUT the password, defeating the whole point. This is
+**inert in phase 1** (`rosterRequireAdmission = false`, admission not enforced), so it does NOT block
+the producer release, but it MUST be closed before the flip. The fix - anchor `admissionKey`
+first-seen and reject a later swap - collides with "password change re-derives `admissionKey`" (a
+legit rotation is indistinguishable from the attack using only the sigKey the attacker holds); the
+complete form is a **rotation chain** (a new `admissionKey` signed by the old admission key, which
+needs the old password the attacker lacks). Land this WITH the phase-2 flip and its multi-device
+test pass, NOT with the producer release. Tracked as a flip prerequisite in the audit + flags.
+
+Same-priority note for `rosterRequireSignatures`: `sigKey` pinning is already implemented, so that
+flip is sound as coded - but it closes **impersonation only**, not rogue-injection (a rogue new id
+with a valid self-signature passes the signatures gate; only a sound admission gate stops it).

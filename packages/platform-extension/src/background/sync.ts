@@ -21,6 +21,8 @@ import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { setSyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
 import {
+	AdmissionPubkeyMsgSchema,
+	AdmissionSignEntryMsgSchema,
 	ApplyRemoteMsgSchema,
 	ApplyRosterMsgSchema,
 	RosterSignEntryMsgSchema,
@@ -121,6 +123,30 @@ on(
 		return sendToOffscreen({
 			type: "SYNC_ROSTER_SIGN",
 			payload: { secretB64: kp.secretKey, message: canonical },
+		});
+	}),
+);
+
+// Password-authority admission (Item A rogue-injection close): the admission key is derived in the
+// offscreen (has the wasm) from the re-entered master password + the device's password-slot salt,
+// and is NEVER persisted — unlike the Ed25519 signing key above. The background only forwards.
+on(
+	"SYNC_ADMISSION_PUBKEY",
+	extensionOnly(async (message) => {
+		const { password, saltB64 } = AdmissionPubkeyMsgSchema.parse(message.payload);
+		return sendToOffscreen({
+			type: "SYNC_ROSTER_ADMISSION_PUBKEY",
+			payload: { password, saltB64 },
+		});
+	}),
+);
+on(
+	"SYNC_ADMISSION_SIGN",
+	extensionOnly(async (message) => {
+		const { password, saltB64, canonical } = AdmissionSignEntryMsgSchema.parse(message.payload);
+		return sendToOffscreen({
+			type: "SYNC_ROSTER_ADMISSION_SIGN",
+			payload: { password, saltB64, message: canonical },
 		});
 	}),
 );

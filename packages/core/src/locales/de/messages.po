@@ -248,6 +248,10 @@ msgid "Confirm disconnect"
 msgstr "Trennung bestätigen"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Confirm it's you"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Confirm master password"
 msgstr "Master-Passwort bestätigen"
@@ -275,6 +279,10 @@ msgstr "Inhalt"
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "contents"
 msgstr "Inhalt"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Continue"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Controls which URLs this entry will offer credentials for."
@@ -463,6 +471,10 @@ msgstr "Geben Sie Ihr aktuelles Passwort ein"
 msgid "Enter your master password"
 msgstr "Geben Sie Ihr Master-Passwort ein"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
+msgstr ""
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your master password to unlock your vault"
 msgstr "Geben Sie Ihr Master-Passwort ein, um den Tresor zu entsperren"
@@ -615,6 +627,7 @@ msgid "Importing…"
 msgstr "Importiere..."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Incorrect master password"
 msgstr "Falsches Master-Passwort"
 

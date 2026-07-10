@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
-import { useVaultActions } from "../../../../hooks/useVault";
+import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { activeDevices, type RosterEntry, type RosterPayload } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
@@ -40,7 +40,8 @@ const addedOn = (ms: number): string =>
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
-	const { inviteDevice, joinGroup, removeDevice } = useVaultActions();
+	const { inviteDevice, joinGroup, removeDevice, verifyMasterPassword } = useVaultActions();
+	const { hasPasswordSlot } = useVault();
 	const { t } = useLingui();
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
@@ -57,6 +58,13 @@ export function SyncConnectSection() {
 	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
+	// Master-password gate before adding a device: the re-entered password admission-signs the new
+	// device (Item A). Open only for a password vault; a security-key-only vault skips it (no password
+	// to derive an admission key from, so the joiner is enrolled unsigned). See docs/p2p-sync-revocation-hardening.md.
+	const [pwGateOpen, setPwGateOpen] = useState(false);
+	const [gatePassword, setGatePassword] = useState("");
+	const [gateError, setGateError] = useState<string | null>(null);
+	const [gateBusy, setGateBusy] = useState(false);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
 	// Security-key pairing only where WebAuthn keys actually work: the extension.
@@ -148,11 +156,35 @@ export function SyncConnectSection() {
 		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
 	);
 
-	const addDevice = () =>
+	const addDevice = (password?: string) =>
 		run("creating pairing code…", async () => {
-			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined));
+			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined, password));
 			await refreshGroup();
 		});
+	// "Add device" entry point: a password vault confirms the master password first (it admission-signs
+	// the joiner); a security-key-only vault has no password to re-enter, so it enrolls directly.
+	const beginAddDevice = () => {
+		if (!hasPasswordSlot) return void addDevice();
+		setGatePassword("");
+		setGateError(null);
+		setPwGateOpen(true);
+	};
+	const confirmGate = async () => {
+		setGateBusy(true);
+		setGateError(null);
+		try {
+			if (!(await verifyMasterPassword(gatePassword))) {
+				setGateError(t`Incorrect master password`);
+				return;
+			}
+			const password = gatePassword;
+			setPwGateOpen(false);
+			setGatePassword("");
+			await addDevice(password);
+		} finally {
+			setGateBusy(false);
+		}
+	};
 	const join = () =>
 		run("joining…", async () => {
 			setJoinError(null);
@@ -296,7 +328,7 @@ export function SyncConnectSection() {
 					<div className="flex flex-wrap items-center gap-2">
 						<button
 							type="button"
-							onClick={() => void addDevice()}
+							onClick={beginAddDevice}
 							className={`${btnClass} inline-flex items-center gap-1.5`}
 						>
 							<Plus className="w-3.5 h-3.5" /> <Trans>Add another device</Trans>
@@ -345,7 +377,7 @@ export function SyncConnectSection() {
 						title={t`Add a device`}
 						subtitle={t`Generate a one-time pairing code and listen for a device to join. No vault secrets in the code.`}
 					>
-						<button type="button" onClick={() => void addDevice()} className={btnClass}>
+						<button type="button" onClick={beginAddDevice} className={btnClass}>
 							<Trans>Add a device</Trans>
 						</button>
 					</Row>
@@ -442,6 +474,59 @@ export function SyncConnectSection() {
 					</p>
 				</>
 			)}
+
+			<Modal
+				open={pwGateOpen}
+				onClose={() => {
+					setPwGateOpen(false);
+					setGatePassword("");
+				}}
+				className="max-w-sm"
+			>
+				<form
+					className="p-5 space-y-4"
+					onSubmit={(e) => {
+						e.preventDefault();
+						void confirmGate();
+					}}
+				>
+					<h2 className="text-base font-medium">
+						<Trans>Confirm it's you</Trans>
+					</h2>
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							Enter your master password to authorize the new device. This proves the request came
+							from you, not just a device that was already unlocked.
+						</Trans>
+					</p>
+					<TextField
+						type="password"
+						label={t`Master password`}
+						value={gatePassword}
+						autoFocus
+						onChange={(e) => {
+							setGatePassword(e.target.value);
+							setGateError(null);
+						}}
+						error={gateError ?? undefined}
+					/>
+					<div className="flex justify-end gap-2">
+						<button
+							type="button"
+							onClick={() => {
+								setPwGateOpen(false);
+								setGatePassword("");
+							}}
+							className={btnClass}
+						>
+							<Trans>Cancel</Trans>
+						</button>
+						<button type="submit" disabled={!gatePassword || gateBusy} className={btnClass}>
+							<Trans>Continue</Trans>
+						</button>
+					</div>
+				</form>
+			</Modal>
 
 			<Modal
 				open={pairingCode !== null}
