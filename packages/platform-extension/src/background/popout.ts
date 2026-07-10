@@ -2,6 +2,7 @@
 
 import { api } from "../platform-api";
 import { type MessageEnvelope, on } from "./router";
+import { armViewGrace } from "./view-lock";
 
 // In-memory only: a draft can hold a plaintext password, never persist to local.
 export const POPOUT_HANDOFF_KEY = "popout.handoff";
@@ -10,6 +11,9 @@ async function popoutOpen(
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ): Promise<MessageEnvelope> {
+	// The popup closes as the detached window takes focus; hold "Immediate" auto-lock across
+	// that gap so popping out doesn't lock the vault out from under the new window.
+	armViewGrace();
 	// Stash the handoff before creating the window so the new window's boot read sees it.
 	const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
 	if (handoff) {

@@ -8,9 +8,11 @@ import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
 
-// Auto-lock timeout values: -1 = Immediately, >0 = minutes, 0 = Never. On mobile this
-// one setting also drives the autofill provider's keep-unlocked window: Immediately ->
-// 0 (require auth every fill), N minutes -> N, Never -> -1 (never expire).
+// Auto-lock timeout values: -1 = Immediate, >0 = minutes, 0 = Never. "Immediate" locks the
+// moment the app/UI is no longer in use (mobile: on backgrounding; extension: when the last
+// popup/window closes); "Never" holds the vault open until a manual lock, OS screen-lock, or
+// restart. On mobile this one setting also drives the autofill provider's keep-unlocked window:
+// Immediate -> 0 (require auth every fill), N minutes -> N, Never -> -1 (never expire).
 const keepUnlockedWindow = (autoLockMinutes: number) =>
 	autoLockMinutes < 0 ? 0 : autoLockMinutes > 0 ? autoLockMinutes : -1;
 
@@ -63,13 +65,16 @@ export function GeneralSection() {
 						value={String(prefs.autoLockMinutes)}
 						onChange={(e) => void update("autoLockMinutes", Number(e.target.value))}
 					>
-						{/* Mobile (native autofill) extreme: lock right away and require auth on
-						    every fill. The default on mobile. */}
-						{autofill.setKeepUnlocked && <option value="-1">{t`Immediately`}</option>}
+						{/* Most secure: lock the instant the UI is no longer in use. On mobile that's
+						    the moment the app is backgrounded (require auth on every fill); on the
+						    extension it's when the last popup/window closes. */}
+						<option value="-1">{t`Immediate`}</option>
 						<option value="5">{t`5 minutes`}</option>
 						<option value="15">{t`15 minutes`}</option>
 						<option value="30">{t`30 minutes`}</option>
 						<option value="60">{t`1 hour`}</option>
+						{/* Never auto-lock: hold the vault open until a manual lock, OS screen-lock,
+						    or restart. */}
 						<option value="0">{t`Never`}</option>
 					</SelectField>
 				</div>

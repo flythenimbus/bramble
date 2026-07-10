@@ -19,7 +19,9 @@ export async function getAutoLockMinutes(): Promise<number> {
 	try {
 		const r = await api.storage.local.get(PREF_AUTOLOCK_MINUTES);
 		const v = r[PREF_AUTOLOCK_MINUTES];
-		if (typeof v === "number" && v >= 0) return v;
+		// -1 = "Immediate" (lock on last view close), 0 = "Never", >0 = minutes. Accept any
+		// finite value the setting writes; only garbage (NaN/undefined) falls back to default.
+		if (typeof v === "number" && Number.isFinite(v)) return v;
 	} catch {}
 	return DEFAULT_AUTOLOCK_MINUTES;
 }
