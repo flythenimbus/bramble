@@ -1,6 +1,9 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import type { OptionsScreen, ShellAdapter } from "@core/index";
+import { bytesToBase64 } from "@core/util/bytes";
 import { armFilePickGrace } from "../auto-lock";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
 import { scanQrNative } from "../qr-scanner";
@@ -84,6 +87,33 @@ export const mobileShell: ShellAdapter = {
 	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
 	// would fire and drop the in-progress import. See ./auto-lock.ts.
 	notifyFilePickerOpening: armFilePickGrace,
+
+	// Save bytes the user keeps (recovery code, encrypted vault export) via the native share
+	// sheet, so "Save to Files", Mail, etc. are offered - WKWebView has no <a download> or
+	// navigator.share. Stage the file in the cache dir, hand its URL to the share sheet, then
+	// clean up. The sheet backgrounds the app, which would trip "Immediate" auto-lock, so arm
+	// the file-pick grace first (see ./auto-lock.ts).
+	async exportBytes(suggestedName, bytes, _mimeType) {
+		await Filesystem.writeFile({
+			path: suggestedName,
+			data: bytesToBase64(bytes),
+			directory: Directory.Cache,
+		});
+		const { uri } = await Filesystem.getUri({ path: suggestedName, directory: Directory.Cache });
+		armFilePickGrace();
+		try {
+			// `files` (not `url`) is the cross-platform file-share path: on Android it routes the
+			// file:// URI through a FileProvider (a raw file:// url would throw FileUriExposedException).
+			await Share.share({ title: suggestedName, files: [uri] });
+		} catch (e) {
+			// Dismissing the share sheet rejects; that's a normal cancel, not a failure.
+			if (!/cancel/i.test(String((e as Error)?.message))) throw e;
+		} finally {
+			await Filesystem.deleteFile({ path: suggestedName, directory: Directory.Cache }).catch(
+				() => {},
+			);
+		}
+	},
 
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
 	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.
