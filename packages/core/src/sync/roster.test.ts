@@ -16,6 +16,7 @@ import {
 	type RosterPayload,
 	revokeDevice,
 	sanitizeRemoteRoster,
+	verifyRemoteRoster,
 } from "./roster";
 
 const hlc = (wall: number, node: string): Hlc => ({ wall, counter: 0, node });
@@ -89,6 +90,54 @@ describe("roster entry signing foundation (Item A)", () => {
 		expect(canonicalRosterEntry({ ...base, hlc: hlc(11, "phone") })).not.toBe(
 			canonicalRosterEntry(base),
 		);
+	});
+});
+
+describe("verifyRemoteRoster (TOFU id->key binding, Item A)", () => {
+	const signed = (id: string, wall: number, sigKey: string, sig = "valid"): RosterEntry => ({
+		...device(id, wall),
+		sigKey,
+		sig,
+	});
+	// Mock the host's Ed25519 verdict: an entry stamped `sig: "valid"` verifies, anything else fails.
+	const isValid = (e: RosterEntry) => e.sig === "valid";
+	const idsOf = (r: RosterPayload) => r.devices.map((d) => d.id).sort();
+
+	it("accepts unsigned or validly-signed entries for ids not yet established", () => {
+		const remote: RosterPayload = {
+			devices: [device("plain", 1), signed("signer", 2, "sk-signer")],
+			revoked: [],
+		};
+		expect(idsOf(verifyRemoteRoster(emptyRoster(), remote, isValid))).toEqual(["plain", "signer"]);
+	});
+
+	it("drops a signed entry whose signature does not verify", () => {
+		const remote: RosterPayload = { devices: [signed("bad", 1, "sk-bad", "forged")], revoked: [] };
+		expect(verifyRemoteRoster(emptyRoster(), remote, isValid).devices).toEqual([]);
+	});
+
+	it("TOFU: rejects a swapped sigKey for a known signing device (impersonation)", () => {
+		const local = addDevice(emptyRoster(), signed("laptop", 1, "sk-laptop"));
+		// Attacker re-presents laptop's id with its own key + a signature valid under that key.
+		const remote: RosterPayload = { devices: [signed("laptop", 5, "sk-attacker")], revoked: [] };
+		expect(verifyRemoteRoster(local, remote, isValid).devices).toEqual([]);
+	});
+
+	it("no downgrade: rejects an unsigned entry for a known signing device", () => {
+		const local = addDevice(emptyRoster(), signed("laptop", 1, "sk-laptop"));
+		const remote: RosterPayload = { devices: [device("laptop", 5)], revoked: [] };
+		expect(verifyRemoteRoster(local, remote, isValid).devices).toEqual([]);
+	});
+
+	it("accepts a same-key, validly-signed update to a known signing device", () => {
+		const local = addDevice(emptyRoster(), signed("laptop", 1, "sk-laptop"));
+		const remote: RosterPayload = { devices: [signed("laptop", 5, "sk-laptop")], revoked: [] };
+		expect(idsOf(verifyRemoteRoster(local, remote, isValid))).toEqual(["laptop"]);
+	});
+
+	it("passes tombstones through untouched (revocation stays member-level)", () => {
+		const remote: RosterPayload = { devices: [], revoked: [{ id: "gone", hlc: hlc(9, "x") }] };
+		expect(verifyRemoteRoster(emptyRoster(), remote, isValid).revoked).toEqual(remote.revoked);
 	});
 });
 
