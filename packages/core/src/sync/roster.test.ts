@@ -149,6 +149,14 @@ describe("verifyRemoteRoster (TOFU id->key binding, Item A)", () => {
 		expect(idsOf(verifyRemoteRoster(local, remote, isValid))).toEqual(["laptop"]);
 	});
 
+	it("drops a gossiped re-add of a locally-revoked id, even validly signed (B1)", () => {
+		let local = addDevice(emptyRoster(), signed("phone", 1, "sk-phone"));
+		local = revokeDevice(local, "phone", hlc(5, "me"));
+		// Attacker re-gossips phone with a valid signature and a newer stamp; the tombstone wins.
+		const remote: RosterPayload = { devices: [signed("phone", 9, "sk-phone")], revoked: [] };
+		expect(verifyRemoteRoster(local, remote, isValid).devices).toEqual([]);
+	});
+
 	it("passes tombstones through untouched (revocation stays member-level)", () => {
 		const remote: RosterPayload = { devices: [], revoked: [{ id: "gone", hlc: hlc(9, "x") }] };
 		expect(verifyRemoteRoster(emptyRoster(), remote, isValid).revoked).toEqual(remote.revoked);
@@ -180,11 +188,15 @@ describe("roster add/revoke", () => {
 		expect(ids(mergeRosters(stale, r))).toEqual([]);
 	});
 
-	it("re-enrolling with a newer stamp brings a device back", () => {
+	it("re-adding a revoked id stays dead (sticky tombstone, B1); a fresh id is required", () => {
 		let r = addDevice(emptyRoster(), device("phone", 100));
 		r = revokeDevice(r, "phone", hlc(200, "laptop"));
+		// A re-add reusing the tombstoned id does NOT resurrect it, even with a strictly newer stamp.
 		r = addDevice(r, device("phone", 300));
-		expect(ids(r)).toEqual(["phone"]);
+		expect(ids(r)).toEqual([]);
+		// Re-adding the device under a fresh id brings it back (that is how a removed device returns).
+		r = addDevice(r, device("phone-2", 400));
+		expect(ids(r)).toEqual(["phone-2"]);
 	});
 });
 
@@ -247,11 +259,13 @@ describe("remote-roster future-stamp guard (revocation integrity)", () => {
 		expect(isActiveDevice(local, "evil")).toBe(false); // guard holds: stays revoked
 	});
 
-	it("plain mergeRosters WOULD let the future re-add win (the hole mergeRemoteRoster closes)", () => {
+	it("sticky tombstone keeps a revoked id dead even in a plain (unsanitized) merge (B1)", () => {
 		let local = addDevice(emptyRoster(), device("evil", 100));
 		local = revokeDevice(local, "evil", hlc(200, "me"));
-		const unguarded = mergeRosters(local, evilFutureAdd); // no sanitize
-		expect(isActiveDevice(unguarded, "evil")).toBe(true);
+		// Even a future-stamped re-add merged WITHOUT the future-stamp guard cannot resurrect evil:
+		// roster liveness is sticky, so the tombstone dominates regardless of the record's stamp.
+		const unguarded = mergeRosters(local, evilFutureAdd);
+		expect(isActiveDevice(unguarded, "evil")).toBe(false);
 	});
 
 	it("keeps a normally-stamped remote device", () => {
