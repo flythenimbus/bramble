@@ -7,6 +7,7 @@
 // the background (fetchLocalPayload / pushRemotePayload), so this stays storage-free.
 // See docs/p2p-sync.md.
 
+import { flags } from "../../flags";
 import {
 	canonicalRosterEntry,
 	decodeRoster,
@@ -161,6 +162,7 @@ export async function verifyRosterEnvelope(
 			remote,
 			(entry) => valid.has(entry),
 			(entry) => validAdmission.has(entry),
+			{ signatures: flags.rosterRequireSignatures, admission: flags.rosterRequireAdmission },
 		),
 	);
 }

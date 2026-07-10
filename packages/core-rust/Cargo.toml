@@ -94,6 +94,11 @@ chacha20 = "0.9"
 flate2 = "1"        # default backend is pure-Rust miniz_oxide -> wasm-clean
 quick-xml = "0.37"
 
+# Host-only: build.rs parses packages/core/src/flags.json to generate feature-flag constants; not
+# shipped in the binary.
+[build-dependencies]
+serde_json = "1"
+
 [profile.release]
 opt-level = "z"
 lto = true
