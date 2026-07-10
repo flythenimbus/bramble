@@ -77,6 +77,15 @@ function releaseExtension(target: string, version: string) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
+	// Chrome Web Store publish prereq, checked before the slow gate + build so a missing
+	// credential fails fast. sign-cws.ts uploads + publishes with the service account.
+	const cwsAge =
+		process.env.CWS_SERVICE_ACCOUNT_AGE ?? join(HOME, ".config/bramble/cws-service-account.age");
+	if (!process.env.CWS_SERVICE_ACCOUNT_JSON && !existsSync(cwsAge))
+		fail(
+			`no Chrome Web Store credentials: set CWS_SERVICE_ACCOUNT_JSON, or provide ${cwsAge} (override CWS_SERVICE_ACCOUNT_AGE). See docs/release-signing.md.`,
+		);
+
 	gate();
 
 	const before = readFileSync(manifest, "utf8");
@@ -96,8 +105,14 @@ function releaseExtension(target: string, version: string) {
 		run("pnpm run wasm:build");
 		run("pnpm --filter @vault/platform-extension run bundle:chromium");
 		run("pnpm run sign");
+		// Upload + publish to the Chrome Web Store (goes to CWS review, then live). Runs before
+		// commit/tag/push so a store failure aborts the release cleanly. Consumes the version at
+		// the store, like the Firefox/AMO path.
+		run("pnpm run sign:cws");
 	} catch {
-		fail(`build or signing failed; run \`git checkout ${manifest}\` to undo the bump`);
+		fail(
+			`build, signing, or Chrome Web Store publish failed; run \`git checkout ${manifest}\` to undo the bump`,
+		);
 	}
 
 	const zip = `${DIST}/bramble.zip`;
@@ -128,7 +143,7 @@ function releaseExtension(target: string, version: string) {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(
-		`\nreleased ${tag}: signed bramble_${target}_${version}.crx + SHA256SUMS attached to the release.`,
+		`\nreleased ${tag}: published to the Chrome Web Store (in review) + signed bramble_${target}_${version}.crx + SHA256SUMS attached to the GitHub release.`,
 	);
 }
 
