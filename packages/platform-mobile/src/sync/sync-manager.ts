@@ -85,6 +85,62 @@ async function deviceKeypair(): Promise<DeviceKeypair> {
 	return kp;
 }
 
+// This device's Ed25519 roster-signing keypair (Item A), generated once and held in secure storage
+// (Keychain/Keystore) like the Noise keypair. secretKey is the 32-byte seed; only the public key
+// (the roster entry's sigKey) ever leaves the device. See docs/p2p-sync-revocation-hardening.md.
+interface SigningKeypair {
+	secretKey: string;
+	publicKey: string;
+}
+const SIGNING_KEY_KEY = "sync.signingKey";
+
+// Roster signing + password-authority admission ops, backed natively (or WASM on the dev browser).
+// Awaitable across both like the handshake ops.
+type RosterSigWasm = {
+	roster_sig_generate_key(): Awaitable<SigningKeypair>;
+	roster_sign(secretB64: string, message: string): Awaitable<string>;
+	roster_admission_public_key(password: string, saltB64: string): Awaitable<string>;
+	roster_admission_sign(password: string, saltB64: string, message: string): Awaitable<string>;
+};
+
+async function signingKeypair(): Promise<SigningKeypair> {
+	const stored = await secureStorage.get<SigningKeypair>(SIGNING_KEY_KEY);
+	if (stored?.secretKey && stored?.publicKey) return stored;
+	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	const kp = await wasm.roster_sig_generate_key();
+	await secureStorage.set(SIGNING_KEY_KEY, kp);
+	return kp;
+}
+
+/** This device's Ed25519 roster-signing verify key (base64). Paired with signRoster. */
+export async function syncSigningPublicKey(): Promise<string> {
+	return (await signingKeypair()).publicKey;
+}
+
+/** Ed25519-sign a canonical roster-entry string with this device's signing seed. */
+export async function signRoster(canonical: string): Promise<string> {
+	const { secretKey } = await signingKeypair();
+	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	return wasm.roster_sign(secretKey, canonical);
+}
+
+/** This device's admission verify key, derived transiently from the re-entered master password +
+ * this device's password-slot salt (never stored). Published in the roster entry (Item A). */
+export async function syncAdmissionPublicKey(password: string, saltB64: string): Promise<string> {
+	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	return wasm.roster_admission_public_key(password, saltB64);
+}
+
+/** Admission-sign an admitted device's canonical entry with this device's password-derived key. */
+export async function syncAdmissionSign(
+	password: string,
+	saltB64: string,
+	canonical: string,
+): Promise<string> {
+	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	return wasm.roster_admission_sign(password, saltB64, canonical);
+}
+
 const statusSubs = new Set<(s: string) => void>();
 const eventSubs = new Set<(e: SyncEvent) => void>();
 // Ring buffer of recent status so a panel that mounts after sync started (e.g. it

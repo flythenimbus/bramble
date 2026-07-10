@@ -120,6 +120,22 @@ interface NativeCryptoPlugin {
 		hashB64: string;
 		sigB64: string;
 	}): Promise<{ value: boolean }>;
+
+	// --- roster-entry signing (Ed25519 device keys) + password-authority admission (Item A) ---
+	rosterSigGenerateKey(): Promise<{ secretKey: string; publicKey: string }>;
+	rosterSigPublicKey(o: { secretB64: string }): Promise<{ value: string }>;
+	rosterSign(o: { secretB64: string; message: string }): Promise<{ value: string }>;
+	rosterVerify(o: {
+		publicB64: string;
+		message: string;
+		sigB64: string;
+	}): Promise<{ value: boolean }>;
+	rosterAdmissionPublicKey(o: { password: string; saltB64: string }): Promise<{ value: string }>;
+	rosterAdmissionSign(o: {
+		password: string;
+		saltB64: string;
+		message: string;
+	}): Promise<{ value: string }>;
 }
 
 const Native = registerPlugin<NativeCryptoPlugin>("NativeCrypto");
@@ -266,4 +282,17 @@ export const nativeSyncCrypto = {
 		(await Native.nostrSign({ secretB64, hashB64 })).value,
 	nostr_verify: async (publicB64: string, hashB64: string, sigB64: string) =>
 		(await Native.nostrVerify({ publicB64, hashB64, sigB64 })).value,
+	// Roster signing + admission (Item A). roster_verify here also activates native
+	// consumer verification (verifyRosterEnvelope no longer degrades to pass-through).
+	roster_sig_generate_key: () => Native.rosterSigGenerateKey(),
+	roster_sig_public_key: async (secretB64: string) =>
+		(await Native.rosterSigPublicKey({ secretB64 })).value,
+	roster_sign: async (secretB64: string, message: string) =>
+		(await Native.rosterSign({ secretB64, message })).value,
+	roster_verify: async (publicB64: string, message: string, sigB64: string) =>
+		(await Native.rosterVerify({ publicB64, message, sigB64 })).value,
+	roster_admission_public_key: async (password: string, saltB64: string) =>
+		(await Native.rosterAdmissionPublicKey({ password, saltB64 })).value,
+	roster_admission_sign: async (password: string, saltB64: string, message: string) =>
+		(await Native.rosterAdmissionSign({ password, saltB64, message })).value,
 };

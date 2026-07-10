@@ -47,6 +47,13 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "nostrPublicKey", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "nostrSign", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "nostrVerify", returnType: CAPPluginReturnPromise),
+		// Roster-entry signing (Ed25519) + password-authority admission (Item A).
+		CAPPluginMethod(name: "rosterSigGenerateKey", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "rosterSigPublicKey", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "rosterSign", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "rosterVerify", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "rosterAdmissionPublicKey", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "rosterAdmissionSign", returnType: CAPPluginReturnPromise),
 	]
 
 	// --- helpers ---
@@ -346,6 +353,54 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 			let sig = str(call, "sigB64") else { return }
 		do {
 			call.resolve(["value": try App.nostrVerify(publicB64: pub, hashB64: hash, sigB64: sig)])
+		} catch { fail(call, error) }
+	}
+
+	// --- roster-entry signing (Ed25519) + password-authority admission (Item A) ---
+
+	@objc func rosterSigGenerateKey(_ call: CAPPluginCall) {
+		do {
+			let k = try App.rosterSigGenerateKey()
+			call.resolve(["secretKey": k.secretKey, "publicKey": k.publicKey])
+		} catch { fail(call, error) }
+	}
+
+	@objc func rosterSigPublicKey(_ call: CAPPluginCall) {
+		guard let secret = str(call, "secretB64") else { return }
+		do {
+			call.resolve(["value": try App.rosterSigPublicKey(secretB64: secret)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func rosterSign(_ call: CAPPluginCall) {
+		guard let secret = str(call, "secretB64"), let message = str(call, "message") else { return }
+		do {
+			call.resolve(["value": try App.rosterSign(secretB64: secret, message: message)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func rosterVerify(_ call: CAPPluginCall) {
+		guard let pub = str(call, "publicB64"), let message = str(call, "message"),
+			let sig = str(call, "sigB64") else { return }
+		do {
+			call.resolve(["value": try App.rosterVerify(publicB64: pub, message: message, sigB64: sig)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func rosterAdmissionPublicKey(_ call: CAPPluginCall) {
+		guard let password = str(call, "password"), let salt = str(call, "saltB64") else { return }
+		do {
+			call.resolve(["value": try App.rosterAdmissionPublicKey(password: password, saltB64: salt)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func rosterAdmissionSign(_ call: CAPPluginCall) {
+		guard let password = str(call, "password"), let salt = str(call, "saltB64"),
+			let message = str(call, "message") else { return }
+		do {
+			call.resolve([
+				"value": try App.rosterAdmissionSign(password: password, saltB64: salt, message: message)
+			])
 		} catch { fail(call, error) }
 	}
 }
