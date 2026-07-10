@@ -290,6 +290,19 @@ you redo in Item A. Recommend skipping straight to Item A unless the window is u
 
 ## Phase 3 - Low-priority hardening
 
+> **STATUS (2026-07-08): all three landed.**
+> - **A2** - took the doc-correction option (not key rotation): corrected the two `mesh.ts` comments
+>   that claimed epoch rooms stop a relay linking epochs. They don't (persistent socket + IP, reused
+>   subId, stable per-session author pubkey); room rotation is hygiene, not relay-unlinkability. The
+>   docs already described the relay's metadata visibility honestly.
+> - **B3** - constrained the Android DAL fetch: `isPublicHost` rejects IP-literal / bare-hostname
+>   targets and hosts that resolve to private / loopback / link-local / CGNAT / unique-local
+>   addresses (blocks DNS-based SSRF to e.g. 169.254.169.254). Unit-tested; compiles + passes offline.
+> - **B4** - clock-skew UX: the mesh reads a peer's live event time and warns (once) when THIS device
+>   is > `HLC_MAX_DRIFT_MS` ahead (the fast device whose writes get dropped). Kept the drop (a
+>   per-receiver clamp breaks convergence); documented that tradeoff in `hlc.ts`. `clockAheadMinutes`
+>   unit-tested.
+
 ### A2 - Rotate Nostr signing key per epoch (or correct the claim)
 Make the mesh signer mutable (`newSigner?: () => Promise<SignerPair>` in `MeshOptions`); in
 `maybeRoll()` swap to a fresh `SignerPair` with a one-epoch grace on self-echo/`to` checks; pass

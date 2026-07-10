@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	clockAheadMinutes,
 	compareHlc,
 	formatHlc,
 	HLC_MAX_DRIFT_MS,
@@ -161,5 +162,21 @@ describe("isFutureStamp", () => {
 	it("is true just beyond max drift and for absurd far-future stamps", () => {
 		expect(isFutureStamp(h(now + HLC_MAX_DRIFT_MS + 1, 0, "a"), now)).toBe(true);
 		expect(isFutureStamp(h(9_000_000_000_000, 0, "evil"), now)).toBe(true); // year ~2255
+	});
+});
+
+describe("clockAheadMinutes (B4 clock-skew detection)", () => {
+	const driftSec = HLC_MAX_DRIFT_MS / 1000; // 300s
+	const peer = 1_700_000_000; // a peer's live event time, unix seconds
+
+	it("returns null within the drift budget (and when we're behind)", () => {
+		expect(clockAheadMinutes(peer, peer)).toBeNull(); // in sync
+		expect(clockAheadMinutes(peer + driftSec, peer)).toBeNull(); // exactly at the edge
+		expect(clockAheadMinutes(peer - 3600, peer)).toBeNull(); // we're an hour BEHIND: peer warns, not us
+	});
+
+	it("returns the minutes ahead once past the budget", () => {
+		expect(clockAheadMinutes(peer + driftSec + 60, peer)).toBe(6); // 6 min ahead
+		expect(clockAheadMinutes(peer + 3600, peer)).toBe(60); // an hour ahead
 	});
 });

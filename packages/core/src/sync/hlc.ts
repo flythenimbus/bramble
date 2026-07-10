@@ -50,9 +50,25 @@ export function maxHlc(a: Hlc, b: Hlc): Hlc {
  * Honest devices clamp their own clock (see receive()), so a real stamp is never this far in
  * the future; a future-dated stamp is poisoned. Remote payloads are filtered by this before
  * merge so a member can't stamp a record years ahead to outrank a later revocation/deletion
- * forever (the tombstone, stamped ~now, would otherwise always lose). */
+ * forever (the tombstone, stamped ~now, would otherwise always lose).
+ *
+ * Tradeoff (B4): callers DROP a future-stamped remote entry rather than clamping it. A per-receiver
+ * clamp would rewrite the stamp to a different value on each device (each has its own `now`), which
+ * breaks CRDT convergence. The cost of dropping is that a device with a persistently-fast clock
+ * (> HLC_MAX_DRIFT_MS) has its honest edits dropped by every peer; the mesh detects that skew from a
+ * peer's live event time and warns the fast device (see Mesh.checkClockSkew), so the user can fix the
+ * clock — which is the real remedy. */
 export function isFutureStamp(hlc: Hlc, now: number = Date.now()): boolean {
 	return hlc.wall > now + HLC_MAX_DRIFT_MS;
+}
+
+/** Minutes THIS device's clock is ahead of a peer's observed live time, but only once it exceeds the
+ * drift budget (HLC_MAX_DRIFT_MS) that makes our writes get dropped as future-stamped; null when within
+ * budget. Inputs are unix seconds (e.g. a peer's live Nostr event `created_at` vs our `now`). Only the
+ * ahead (fast) side crosses the threshold, so it targets the device whose edits get dropped. B4. */
+export function clockAheadMinutes(ourSec: number, peerSec: number): number | null {
+	const aheadMs = (ourSec - peerSec) * 1000;
+	return aheadMs > HLC_MAX_DRIFT_MS ? Math.round(aheadMs / 60000) : null;
 }
 
 /** Serialize a stamp to `wall:counter:node`. node may itself contain colons. */

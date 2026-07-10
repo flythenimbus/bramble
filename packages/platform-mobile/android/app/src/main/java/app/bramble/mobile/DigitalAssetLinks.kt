@@ -2,6 +2,7 @@ package app.bramble.mobile
 
 import android.content.Context
 import android.util.Log
+import java.net.InetAddress
 import java.net.URL
 import java.util.Collections
 import java.util.concurrent.TimeUnit
@@ -142,6 +143,12 @@ object DigitalAssetLinks {
         return try {
             val url = URL(urlStr)
             if (!url.protocol.equals("https", ignoreCase = true)) return null
+            // SSRF hardening (B3): the host is derived from the caller's OWN package name, but its DNS
+            // is attacker-controllable, so refuse an IP literal, a bare (non-registrable) hostname, or a
+            // host that resolves to a private / loopback / link-local address (e.g. the cloud metadata
+            // endpoint 169.254.169.254). The response is never exfiltrated, so this is defense in depth;
+            // a resolve-then-connect (DNS-rebinding) gap remains, acceptable given the low impact.
+            if (!isPublicHost(url.host)) return null
             conn =
                 (url.openConnection() as HttpsURLConnection).apply {
                     connectTimeout = CONNECT_TIMEOUT_MS
@@ -167,6 +174,50 @@ object DigitalAssetLinks {
         } finally {
             conn?.disconnect()
         }
+    }
+
+    /** A host we will fetch assetlinks.json from: a dotted domain name (not an IP literal, not a bare
+     * hostname) whose DNS resolves entirely to global (public) addresses. Does the DNS lookup, so it
+     * is called on the background refresh thread. Exposed for tests. */
+    internal fun isPublicHost(host: String): Boolean {
+        if (host.isEmpty() || !host.contains('.')) return false // require a registrable domain
+        if (isIpLiteral(host)) return false
+        return try {
+            val addrs = InetAddress.getAllByName(host)
+            addrs.isNotEmpty() && addrs.all { isGlobalAddress(it) }
+        } catch (e: Exception) {
+            false // unresolvable -> not fetchable
+        }
+    }
+
+    /** True for an IPv4/IPv6 address literal; we only fetch named domains, never a raw IP. Test-exposed. */
+    internal fun isIpLiteral(host: String): Boolean {
+        if (host.contains(':')) return true // IPv6
+        val octets = host.split('.')
+        return octets.size == 4 &&
+            octets.all {
+                val n = it.toIntOrNull()
+                n != null && n in 0..255
+            }
+    }
+
+    /** False for loopback / any-local / link-local / private (RFC1918 + CGNAT 100.64/10) /
+     * unique-local-v6 (fc00::/7) / multicast; true otherwise. Test-exposed. */
+    internal fun isGlobalAddress(addr: InetAddress): Boolean {
+        if (addr.isLoopbackAddress ||
+            addr.isAnyLocalAddress ||
+            addr.isLinkLocalAddress ||
+            addr.isSiteLocalAddress ||
+            addr.isMulticastAddress
+        ) {
+            return false
+        }
+        val b = addr.address
+        if (b.size == 16 && (b[0].toInt() and 0xfe) == 0xfc) return false // fc00::/7 unique-local v6
+        if (b.size == 4 && (b[0].toInt() and 0xff) == 100 && (b[1].toInt() and 0xff) in 64..127) {
+            return false // 100.64.0.0/10 CGNAT
+        }
+        return true
     }
 
     // ---- cache (SharedPreferences: survives the short-lived :autofill process) ----
