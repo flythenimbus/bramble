@@ -249,7 +249,7 @@ msgstr "Trennung bestätigen"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Confirm it's you"
-msgstr ""
+msgstr "Bestätigen Sie Ihre Identität"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
@@ -282,7 +282,7 @@ msgstr "Inhalt"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Continue"
-msgstr ""
+msgstr "Weiter"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Controls which URLs this entry will offer credentials for."
@@ -473,7 +473,7 @@ msgstr "Geben Sie Ihr Master-Passwort ein"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
-msgstr ""
+msgstr "Geben Sie Ihr Master-Passwort ein, um das neue Gerät zu autorisieren. So ist belegt, dass die Anfrage von Ihnen stammt und nicht nur von einem bereits entsperrten Gerät."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your master password to unlock your vault"
