@@ -45,7 +45,7 @@ export interface NostrVerifier {
 
 // crypto.subtle wants BufferSource; our Uint8Arrays are ArrayBufferLike-backed,
 // which newer TS lib.dom types reject without a cast.
-const buf = (b: Uint8Array): BufferSource => b as unknown as BufferSource;
+const buf = (b: Uint8Array): BufferSource => b as BufferSource;
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
 	return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", buf(data))));

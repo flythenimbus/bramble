@@ -23,7 +23,7 @@ export function deepQueryAll<E extends Element = HTMLElement>(
 	const out: E[] = [];
 	const visit = (parent: ParentNode): void => {
 		for (const el of Array.from(parent.children)) {
-			if (el.matches(selector)) out.push(el as unknown as E);
+			if (el.matches(selector)) out.push(el as E);
 			if (el.shadowRoot) visit(el.shadowRoot);
 			visit(el);
 		}
@@ -39,7 +39,7 @@ export function deepQuery<E extends Element = HTMLElement>(
 ): E | null {
 	const visit = (parent: ParentNode): E | null => {
 		for (const el of Array.from(parent.children)) {
-			if (el.matches(selector)) return el as unknown as E;
+			if (el.matches(selector)) return el as E;
 			const inShadow = el.shadowRoot ? visit(el.shadowRoot) : null;
 			if (inShadow) return inShadow;
 			const inLight = visit(el);

@@ -296,3 +296,8 @@ export const nativeSyncCrypto = {
 	roster_admission_sign: async (password: string, saltB64: string, message: string) =>
 		(await Native.rosterAdmissionSign({ password, saltB64, message })).value,
 };
+
+/** The full sync-transport crypto surface (vault crypto + handshake/nostr/roster), as implemented
+ * by nativeSyncCrypto. The dev-browser WASM module also exports every op at runtime, though its
+ * VaultCrypto type covers only the crypto slice — so sync-manager loads against this composed type. */
+export type SyncCrypto = typeof nativeSyncCrypto;

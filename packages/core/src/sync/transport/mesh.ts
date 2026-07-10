@@ -163,7 +163,7 @@ class Mesh {
 			);
 		};
 		this.client = connectSignaling(
-			this.socket as unknown as SocketLike,
+			this.socket as SocketLike,
 			this.rooms,
 			(ev) => this.onEvent(ev),
 			() => {

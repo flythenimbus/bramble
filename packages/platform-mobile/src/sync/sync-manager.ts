@@ -18,14 +18,13 @@ import {
 	type RosterPayload,
 	type SyncEvent,
 } from "@core/index";
-import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
-import type { Awaitable } from "@core/sync/transport/handshake";
+import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
-import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
+import { startRosterSync } from "@core/sync/transport/roster-sync";
 import { mobileCrypto } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
-import { nativeSyncCrypto } from "../native-crypto";
+import { nativeSyncCrypto, type SyncCrypto } from "../native-crypto";
 import { secureStorage } from "../secure-storage";
 import { loadWasm } from "../wasm-loader";
 
@@ -48,20 +47,19 @@ interface DeviceKeypair {
 	privateKey: string;
 	publicKey: string;
 }
-// The device-keypair export (camelCase result, see #[serde(rename_all)]). Awaitable:
-// native on device, synchronous on the dev-browser WASM path.
-type KeypairWasm = { handshake_generate_keypair(): Awaitable<DeviceKeypair> };
 
 const DEVICE_KEYPAIR_KEY = "sync.deviceKeypair";
 
-// Sync transport crypto (Noise handshake + Nostr): native on device (iOS + Android),
-// so it shares the one native module that holds the VEK (the vault already runs native
-// there) and works under iOS Lockdown Mode where WASM is gone. The in-webview WASM
-// module is only the dev-browser fallback. The transport awaits every call, so the
-// async native / sync WASM split is transparent. Mirrors the vault dispatch in
-// adapters/crypto.ts.
-function loadSyncCrypto(): Promise<unknown> {
-	return Capacitor.isNativePlatform() ? Promise.resolve(nativeSyncCrypto) : loadWasm();
+// Sync transport crypto (Noise handshake + Nostr + roster signing): native on device (iOS +
+// Android), so it shares the one native module that holds the VEK (the vault already runs native
+// there) and works under iOS Lockdown Mode where WASM is gone. The in-webview WASM module is only
+// the dev-browser fallback; its VaultCrypto type covers only the crypto slice, so the sync ops are
+// asserted onto SyncCrypto there. The transport awaits every call, so the async native / sync WASM
+// split is transparent. Mirrors the vault dispatch in adapters/crypto.ts.
+function loadSyncCrypto(): Promise<SyncCrypto> {
+	return Capacitor.isNativePlatform()
+		? Promise.resolve(nativeSyncCrypto)
+		: loadWasm().then((w) => w as SyncCrypto);
 }
 
 // This device's Noise static keypair, generated once and held in secure storage
@@ -79,7 +77,7 @@ async function deviceKeypair(): Promise<DeviceKeypair> {
 		await Preferences.remove({ key: `meta:${DEVICE_KEYPAIR_KEY}` });
 		return legacy;
 	}
-	const wasm = (await loadSyncCrypto()) as unknown as KeypairWasm;
+	const wasm = await loadSyncCrypto();
 	const kp = await wasm.handshake_generate_keypair();
 	await secureStorage.set(DEVICE_KEYPAIR_KEY, kp);
 	return kp;
@@ -94,19 +92,10 @@ interface SigningKeypair {
 }
 const SIGNING_KEY_KEY = "sync.signingKey";
 
-// Roster signing + password-authority admission ops, backed natively (or WASM on the dev browser).
-// Awaitable across both like the handshake ops.
-type RosterSigWasm = {
-	roster_sig_generate_key(): Awaitable<SigningKeypair>;
-	roster_sign(secretB64: string, message: string): Awaitable<string>;
-	roster_admission_public_key(password: string, saltB64: string): Awaitable<string>;
-	roster_admission_sign(password: string, saltB64: string, message: string): Awaitable<string>;
-};
-
 async function signingKeypair(): Promise<SigningKeypair> {
 	const stored = await secureStorage.get<SigningKeypair>(SIGNING_KEY_KEY);
 	if (stored?.secretKey && stored?.publicKey) return stored;
-	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	const wasm = await loadSyncCrypto();
 	const kp = await wasm.roster_sig_generate_key();
 	await secureStorage.set(SIGNING_KEY_KEY, kp);
 	return kp;
@@ -120,14 +109,14 @@ export async function syncSigningPublicKey(): Promise<string> {
 /** Ed25519-sign a canonical roster-entry string with this device's signing seed. */
 export async function signRoster(canonical: string): Promise<string> {
 	const { secretKey } = await signingKeypair();
-	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	const wasm = await loadSyncCrypto();
 	return wasm.roster_sign(secretKey, canonical);
 }
 
 /** This device's admission verify key, derived transiently from the re-entered master password +
  * this device's password-slot salt (never stored). Published in the roster entry (Item A). */
 export async function syncAdmissionPublicKey(password: string, saltB64: string): Promise<string> {
-	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	const wasm = await loadSyncCrypto();
 	return wasm.roster_admission_public_key(password, saltB64);
 }
 
@@ -137,7 +126,7 @@ export async function syncAdmissionSign(
 	saltB64: string,
 	canonical: string,
 ): Promise<string> {
-	const wasm = (await loadSyncCrypto()) as unknown as RosterSigWasm;
+	const wasm = await loadSyncCrypto();
 	return wasm.roster_admission_sign(password, saltB64, canonical);
 }
 
@@ -180,7 +169,7 @@ export async function startEnrollInvite(opts: {
 	entries: EntriesPayload;
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 }): Promise<void> {
-	const wasm = (await loadSyncCrypto()) as unknown as EnrollWasm;
+	const wasm = await loadSyncCrypto();
 	const { privateKey } = await deviceKeypair();
 	session?.stop();
 	session = await startEnroll("inviter", {
@@ -208,7 +197,7 @@ export async function startEnrollJoin(opts: {
 	password?: string;
 	webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
 }): Promise<void> {
-	const wasm = (await loadSyncCrypto()) as unknown as EnrollWasm;
+	const wasm = await loadSyncCrypto();
 	const { privateKey } = await deviceKeypair();
 	session?.stop();
 	session = await startEnroll("joiner", {
@@ -269,7 +258,7 @@ async function startRoster(): Promise<void> {
 	const { privateKey, publicKey } = await deviceKeypair();
 	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
 	const iceUrl = (await mobileStorage.getMeta<string>(ICE_KEY)) ?? "";
-	const wasm = (await loadSyncCrypto()) as unknown as RosterSyncWasm;
+	const wasm = await loadSyncCrypto();
 	rosterSession?.stop();
 	rosterSession = await startRosterSync({
 		relayUrl: relay,
