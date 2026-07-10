@@ -31,6 +31,7 @@ import {
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import webExt from "web-ext";
+import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const argv = process.argv.slice(2);
 const channelIdx = argv.indexOf("--channel");
@@ -89,6 +90,7 @@ try {
 		// The identity stub points at the YubiKey slot; it is not key material.
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
 		// Prompts for PIN + touch on the terminal.
+		notifyYubiKeyTouch("decrypt the AMO API credentials");
 		execFileSync("age", ["-d", "-i", idFile, "-o", credFile, CREDS_AGE], { stdio: "inherit" });
 		const parsed = JSON.parse(readFileSync(credFile, "utf8"));
 		apiKey = parsed.apiKey;

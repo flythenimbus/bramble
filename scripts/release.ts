@@ -30,6 +30,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = process.env.HOME ?? "";
 
@@ -291,6 +292,7 @@ function releaseAndroid(version: string) {
 		run("pnpm --filter @vault/platform-mobile exec cap sync android");
 
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
+		notifyYubiKeyTouch("decrypt the Android signing keystore");
 		execFileSync("age", ["-d", "-i", idFile, "-o", ksFile, ksAge], { stdio: "inherit" });
 		execFileSync(
 			join(ANDROID, "gradlew"),
