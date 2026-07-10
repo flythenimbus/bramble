@@ -4,6 +4,7 @@ import {
 	applyRemotePayload,
 	createEntriesBlobStore,
 	createVaultSyncPort,
+	DEVICE_ID_KEY,
 	decodeEntriesPayload,
 	decodeRoster,
 	decodeVaultBlob,
@@ -319,4 +320,23 @@ export function initRosterSync(): () => void {
 		if (locked) stopRosterSync();
 		else void maybeStartRosterSync();
 	});
+}
+
+/** Clear ALL of this device's local sync state, for new-vault creation. Tears down any live mesh,
+ * then drops the group, relays, device id + cached clock, and the Noise + Ed25519 keys (secure
+ * store). Sync identity belongs to the vault, not the device, so a fresh vault must not inherit the
+ * old group/mesh. Mirrors the extension's shell.resetSyncState (core createVault calls it). */
+export async function resetSyncState(): Promise<void> {
+	await stopSync(); // stop syncing the old group before its keys are gone
+	clockPromise = null; // next getClock() re-seeds from a fresh device id
+	const ignore = () => {};
+	await Promise.all([
+		mobileStorage.removeMeta(GROUP_KEY),
+		mobileStorage.removeMeta(RELAY_KEY),
+		mobileStorage.removeMeta(ICE_KEY),
+		mobileStorage.removeMeta(DEVICE_ID_KEY),
+		mobileStorage.removeMeta(DEVICE_KEYPAIR_KEY), // legacy plaintext copy (pre-secureStorage)
+		secureStorage.remove(DEVICE_KEYPAIR_KEY).catch(ignore), // absent-key removal may reject
+		secureStorage.remove(SIGNING_KEY_KEY).catch(ignore),
+	]);
 }

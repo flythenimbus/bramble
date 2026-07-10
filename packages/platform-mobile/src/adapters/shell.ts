@@ -8,6 +8,7 @@ import { scanQrCode } from "../scan";
 import {
 	onSyncEvent,
 	onSyncStatus,
+	resetSyncState,
 	signRoster,
 	startEnrollInvite,
 	startEnrollJoin,
@@ -87,6 +88,9 @@ export const mobileShell: ShellAdapter = {
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
 	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.
 	stopSyncSpike: stopSync,
+	// Wipe all local sync state on new-vault creation (group, device keys, relay, mesh); without
+	// this a fresh vault inherited the old group and reconnected to the old mesh. See sync-manager.
+	resetSyncState,
 	onSyncStatus,
 	syncDevicePublicKey,
 	// Roster-entry signing + password-authority admission (Item A). Once these are present the
