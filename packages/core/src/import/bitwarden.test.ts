@@ -77,6 +77,48 @@ describe("parseBitwarden", () => {
 		expect(res.imported[4]?.customFields).toEqual([{ key: "firstName", value: "Jane" }]);
 	});
 
+	it("maps per-URI match detection onto the entry's subdomainMatch", () => {
+		const res = parseBitwarden(
+			json({
+				items: [
+					// Default (base domain) / null: stays eTLD+1, so no explicit subdomainMatch.
+					{
+						type: 1,
+						name: "domain-default",
+						login: { uris: [{ uri: "https://a.com", match: 0 }] },
+					},
+					{ type: 1, name: "null-match", login: { uris: [{ uri: "https://b.com", match: null }] } },
+					{ type: 1, name: "no-match-field", login: { uris: [{ uri: "https://c.com" }] } },
+					// Host (1): the reported case — tighten to exact.
+					{ type: 1, name: "host", login: { uris: [{ uri: "https://accounts.d.com", match: 1 }] } },
+					{ type: 1, name: "exact", login: { uris: [{ uri: "https://e.com", match: 3 }] } },
+					// Mixed: any non-default URI tightens the whole entry.
+					{
+						type: 1,
+						name: "mixed",
+						login: {
+							uris: [
+								{ uri: "https://f.com", match: 0 },
+								{ uri: "https://g.f.com", match: 1 },
+							],
+						},
+					},
+				],
+			}),
+		);
+		const bySubMatch = Object.fromEntries(
+			res.imported.map((e) => [e.name, (e as { subdomainMatch?: string }).subdomainMatch]),
+		);
+		expect(bySubMatch).toEqual({
+			"domain-default": undefined,
+			"null-match": undefined,
+			"no-match-field": undefined,
+			host: "exact",
+			exact: "exact",
+			mixed: "exact",
+		});
+	});
+
 	it("tolerates a login with no uris and warns on passkeys", () => {
 		const res = parseBitwarden(
 			json({
