@@ -12,7 +12,9 @@
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use hkdf::Hkdf;
 use serde::Serialize;
+use sha2::Sha256;
 
 use crate::CryptoError;
 #[cfg(feature = "wasm")]
@@ -52,6 +54,23 @@ fn verify(pubkey: &[u8], msg: &[u8], sig: &[u8]) -> Result<bool, String> {
         Err(_) => return Ok(false),
     };
     Ok(vk.verify(msg, &Signature::from_bytes(&sig)).is_ok())
+}
+
+// ---- admission key: password-derived, for authorizing NEW roster ids (Item A) ----
+
+const ADMISSION_INFO: &[u8] = b"roster/admission/v1";
+
+/// Derive this device's admission Ed25519 key from the master password + its password-slot salt:
+/// KEK = Argon2(password, salt); admission seed = HKDF-SHA256(KEK, ADMISSION_INFO). The KEK is
+/// password-bound - a member holds the VEK, not the KEK - so a compromised member without the
+/// password cannot derive this. Derived transiently at registration, never stored.
+fn admission_signing_key(password: &str, salt: &[u8]) -> Result<SigningKey, CryptoError> {
+    let kek = crate::derive_kek(password, salt)?;
+    let mut seed = [0u8; 32];
+    Hkdf::<Sha256>::new(None, kek.as_slice())
+        .expand(ADMISSION_INFO, &mut seed)
+        .map_err(|e| ce(format!("hkdf: {e}")))?;
+    Ok(SigningKey::from_bytes(&seed))
 }
 
 // ---- binding layers: serde -> JsValue under wasm, uniffi under ffi ----
@@ -107,6 +126,28 @@ pub fn roster_verify(
     verify(&b64dec(&public_b64)?, message.as_bytes(), &b64dec(&sig_b64)?).map_err(ce)
 }
 
+/// This device's admission verify key (base64), derived from the master password + password-slot
+/// salt, to publish in its roster entry so peers can verify who it admits.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn roster_admission_public_key(password: String, salt_b64: String) -> Result<String, CryptoError> {
+    let sk = admission_signing_key(&password, &b64dec(&salt_b64)?)?;
+    Ok(B64.encode(sk.verifying_key().to_bytes()))
+}
+
+/// Admission-sign an admitted device's canonical roster entry with THIS device's password-derived
+/// admission key. Requires a fresh password entry; the key is derived transiently and dropped.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "ffi", uniffi::export)]
+pub fn roster_admission_sign(
+    password: String,
+    salt_b64: String,
+    message: String,
+) -> Result<String, CryptoError> {
+    let sk = admission_signing_key(&password, &b64dec(&salt_b64)?)?;
+    Ok(B64.encode(sk.sign(message.as_bytes()).to_bytes()))
+}
+
 /// Generate an Ed25519 device keypair. Returns base64 secret seed + verify key.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
@@ -158,5 +199,23 @@ mod tests {
         let (_secret, public) = generate().unwrap();
         assert!(!verify(&public, b"m", &[0u8; 10]).unwrap()); // bad sig length
         assert!(!verify(&[0u8; 5], b"m", &[0u8; 64]).unwrap()); // bad pubkey length
+    }
+
+    #[test]
+    fn admission_key_is_deterministic_and_signs() {
+        let salt = [7u8; 16];
+        let sk = super::admission_signing_key("hunter2", &salt).unwrap();
+        let again = super::admission_signing_key("hunter2", &salt).unwrap();
+        assert_eq!(sk.verifying_key().to_bytes(), again.verifying_key().to_bytes());
+        let sig = sign(&sk.to_bytes(), b"admit-phone").unwrap();
+        assert!(verify(&sk.verifying_key().to_bytes(), b"admit-phone", &sig).unwrap());
+    }
+
+    #[test]
+    fn admission_key_binds_to_the_password() {
+        let salt = [7u8; 16];
+        let a = super::admission_signing_key("pw-a", &salt).unwrap().verifying_key().to_bytes();
+        let b = super::admission_signing_key("pw-b", &salt).unwrap().verifying_key().to_bytes();
+        assert_ne!(a, b);
     }
 }
