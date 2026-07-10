@@ -191,11 +191,20 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         val rpId = opts.optJSONObject("rp")?.optString("id").orEmpty()
         val user = opts.optJSONObject("user")
         val challenge = opts.optString("challenge")
-        if (rpId.isEmpty() || user == null || challenge.isEmpty()) return false
-        // ES256 (-7) only; decline otherwise so the OS can try another provider.
+        val caller = request.callingAppInfo.packageName
+        if (rpId.isEmpty() || user == null || challenge.isEmpty()) {
+            Log.w(TAG, "declined create for $caller: missing rp.id / user / challenge in requestJson")
+            return false
+        }
+        // ES256 (-7) only; decline otherwise so the OS can try another provider. Fail loud: a silent
+        // decline surfaces to the RP as "no authenticator supported the algorithms", and on GrapheneOS
+        // there is no Google authenticator to fall back to, so this would otherwise be undiagnosable.
         val algs = opts.optJSONArray("pubKeyCredParams")
         val supportsEs256 = algs != null && (0 until algs.length()).any { algs.optJSONObject(it)?.optInt("alg") == -7 }
-        if (!supportsEs256) return false
+        if (!supportsEs256) {
+            Log.w(TAG, "declined create for $caller: pubKeyCredParams=$algs offers no ES256(-7); Bramble only mints ES256")
+            return false
+        }
 
         val reg = passkeyMakeCredential(rpId, true)
         // Same trust rule as the assertion: only a verified privileged browser's clientDataHash is

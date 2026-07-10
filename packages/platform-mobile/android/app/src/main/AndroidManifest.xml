@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Package visibility (Android 11+): so we can read a caller browser's real signing certificate
+         (getPackageInfo GET_SIGNING_CERTIFICATES). Without this, TrustedBrowsers.signingFingerprints
+         returns empty, which breaks the autofill webDomain-trust check and makes the passkey fail-loud
+         log print no fingerprint. Browsers = apps handling a BROWSABLE https VIEW intent; targeted so
+         we avoid the heavy QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

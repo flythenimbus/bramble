@@ -37,6 +37,18 @@ object TrustedBrowsers {
             setOf("BB:7B:B3:1C:57:3C:46:A1:DA:7F:C5:C5:28:A6:AC:F4:32:10:84:56:FE:EC:50:81:0C:7F:33:69:4E:B3:D2:D4"),
         "com.opera.mini.native" to
             setOf("57:AC:BC:52:5F:1B:2E:BD:19:19:6C:D6:F0:14:39:7C:C9:10:FD:18:84:1E:0A:E8:50:FE:BC:3E:1E:59:3F:F2"),
+        // Privacy browsers NOT in Google's GPM list, so permanent MANUAL entries. Fingerprints are read
+        // on-device (never guessed), not from GPM. Vanadium (GrapheneOS Chromium, shipped as Trichrome)
+        // is signed with the GrapheneOS release key. See docs/sec-audit-7726.md B2 / #9.
+        "app.vanadium.browser" to
+            setOf("C6:AD:B8:B8:3C:6D:4C:17:D2:92:AF:DE:56:FD:48:8A:51:D3:16:FF:8F:2C:11:C5:41:02:23:BF:F8:A7:DB:B3"),
+        // IronFox (hardened Gecko, Mull successor; package changed from us.spotco.fennec_dos).
+        "org.ironfoxoss.ironfox" to
+            setOf("C5:E2:91:B5:A5:71:F9:C8:CD:9A:97:99:C2:C9:4E:02:EC:97:03:94:88:93:F2:CA:75:6D:67:B9:42:04:F9:04"),
+        // Firefox from F-Droid (Fenix, "Fennec" flavour): a SEPARATE package with F-Droid's signing key,
+        // so the GPM org.mozilla.firefox entry doesn't cover it. Common on GrapheneOS. Read on-device.
+        "org.mozilla.fennec_fdroid" to
+            setOf("06:66:53:58:EF:D8:BA:05:BE:23:6A:47:A1:2C:B0:95:8D:7D:75:DD:93:9D:77:C2:B3:1F:53:98:53:7E:BD:C5"),
     )
 
     /** True iff `packageName` is an allow-listed browser AND its real signing cert matches. */
