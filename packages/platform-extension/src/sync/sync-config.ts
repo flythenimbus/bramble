@@ -38,6 +38,32 @@ export async function storeKeypair(kp: DeviceKeypair): Promise<void> {
 	await api.storage.local.set({ [DEVICE_KEYPAIR_KEY]: kp });
 }
 
+const SIGNING_KEY_KEY = "sync.signingKey";
+
+/** This device's Ed25519 roster-signing keypair (base64; secretKey is the 32-byte seed). Item A. */
+export interface SigningKeypair {
+	secretKey: string;
+	publicKey: string;
+}
+
+/** The wasm roster-signing keygen export (camelCase result, see #[serde(rename_all)]). */
+export interface RosterSigWasm {
+	roster_sig_generate_key(): SigningKeypair;
+}
+
+/** This device's stored Ed25519 signing keypair, or null if not yet generated. */
+export async function getStoredSigningKey(): Promise<SigningKeypair | null> {
+	const stored = (await api.storage.local.get(SIGNING_KEY_KEY))[SIGNING_KEY_KEY] as
+		| SigningKeypair
+		| undefined;
+	return stored?.secretKey && stored?.publicKey ? stored : null;
+}
+
+/** Persist this device's Ed25519 signing keypair. */
+export async function storeSigningKey(kp: SigningKeypair): Promise<void> {
+	await api.storage.local.set({ [SIGNING_KEY_KEY]: kp });
+}
+
 const GROUP_KEY = "sync.group";
 
 /** The group config written by useVault (createGroup/join): the shared key + roster. */

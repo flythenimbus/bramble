@@ -187,6 +187,25 @@ export const extensionShell: ShellAdapter = {
 		if (typeof res.data !== "string") throw new Error("device key response malformed");
 		return res.data;
 	},
+	async syncSigningPublicKey() {
+		const res = (await api.runtime.sendMessage({ type: "SYNC_SIGNING_PUBKEY" })) as
+			| { ok: boolean; data?: string; error?: string }
+			| undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
+		if (typeof res.data !== "string") throw new Error("signing key response malformed");
+		return res.data;
+	},
+	async signRoster(canonical: string) {
+		const res = (await api.runtime.sendMessage({
+			type: "SYNC_SIGN_ENTRY",
+			payload: { canonical },
+		})) as { ok: boolean; data?: string; error?: string } | undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
+		if (typeof res.data !== "string") throw new Error("roster signature response malformed");
+		return res.data;
+	},
 	async startEnrollInvite(opts) {
 		await syncStart("SYNC_ENROLL_INVITE", opts);
 	},
