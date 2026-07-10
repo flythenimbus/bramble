@@ -124,17 +124,45 @@ export async function verifyRosterEnvelope(
 	const rosterVerify = opts.wasm.roster_verify;
 	if (!rosterVerify) return rosterJson; // host not wired for verification: verify-if-present passes.
 	const local = await currentRoster(opts);
-	const valid = new Set<RosterEntry>(); // keyed by object identity: robust against duplicate ids
+	const valid = new Set<RosterEntry>(); // valid self-signature (keyed by object identity)
+	const validAdmission = new Set<RosterEntry>(); // valid admission by a current member
 	for (const entry of remote.devices) {
-		if (!entry.sigKey || !entry.sig) continue;
-		try {
-			if (await rosterVerify(entry.sigKey, canonicalRosterEntry(entry), entry.sig))
-				valid.add(entry);
-		} catch {
-			// A verification error is a failed signature: fail closed (leave out of `valid`).
+		if (entry.sigKey && entry.sig) {
+			try {
+				if (await rosterVerify(entry.sigKey, canonicalRosterEntry(entry), entry.sig))
+					valid.add(entry);
+			} catch {
+				// A verification error is a failed signature: fail closed (leave out of `valid`).
+			}
+		}
+		// An admission is valid iff a CURRENT live member (the admitter) signed this entry with its
+		// published admission key. A compromised member without the password can't produce one.
+		if (entry.admission) {
+			const admitter = local.devices.find((d) => d.id === entry.admission?.by);
+			if (admitter?.admissionKey) {
+				try {
+					if (
+						await rosterVerify(
+							admitter.admissionKey,
+							canonicalRosterEntry(entry),
+							entry.admission.sig,
+						)
+					)
+						validAdmission.add(entry);
+				} catch {
+					// failed admission signature -> not in validAdmission
+				}
+			}
 		}
 	}
-	return encodeRoster(verifyRemoteRoster(local, remote, (entry) => valid.has(entry)));
+	return encodeRoster(
+		verifyRemoteRoster(
+			local,
+			remote,
+			(entry) => valid.has(entry),
+			(entry) => validAdmission.has(entry),
+		),
+	);
 }
 
 interface AuthedPeer {
