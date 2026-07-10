@@ -16,6 +16,7 @@ import {
 	type RosterPayload,
 	revokeDevice,
 	sanitizeRemoteRoster,
+	signRosterEntry,
 	verifyRemoteRoster,
 } from "./roster";
 
@@ -67,6 +68,19 @@ describe("roster entry signing foundation (Item A)", () => {
 			'["laptop","pk-laptop","sk-laptop",1700000000000,1700000000000,3,"laptop"]',
 		);
 		expect(canonicalRosterEntry({ ...entry })).toBe(canonicalRosterEntry(entry));
+	});
+
+	it("signRosterEntry attaches sigKey + sig over the canonical form (which includes sigKey)", async () => {
+		const base = device("phone", 5);
+		let signedCanonical = "";
+		const sign = async (c: string) => {
+			signedCanonical = c;
+			return "the-sig";
+		};
+		const out = await signRosterEntry(base, "sk-phone", sign);
+		expect(out.sigKey).toBe("sk-phone");
+		expect(out.sig).toBe("the-sig");
+		expect(signedCanonical).toBe(canonicalRosterEntry({ ...base, sigKey: "sk-phone" }));
 	});
 
 	it("canonical form ignores the mutable label but binds identity + stamp", () => {

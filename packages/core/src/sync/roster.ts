@@ -44,6 +44,18 @@ export function canonicalRosterEntry(entry: RosterEntry): string {
 	]);
 }
 
+/** Attach this device's Ed25519 `sigKey` + `sig` to its own roster entry (Item A). The signature
+ * covers the canonical form *including* the sigKey, so `sigKey` is set before signing. `sign` is the
+ * host's Ed25519 signer over the canonical string. See docs/p2p-sync-revocation-hardening.md. */
+export async function signRosterEntry(
+	entry: RosterEntry,
+	sigKey: string,
+	sign: (canonical: string) => Promise<string>,
+): Promise<RosterEntry> {
+	const withKey: RosterEntry = { ...entry, sigKey };
+	return { ...withKey, sig: await sign(canonicalRosterEntry(withKey)) };
+}
+
 /** The stored/wire roster: active devices plus the revocation graveyard. */
 export const RosterPayloadSchema = z.object({
 	devices: z.array(RosterEntrySchema),
