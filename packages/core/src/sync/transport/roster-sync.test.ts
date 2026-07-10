@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { encodeRoster, type RosterPayload } from "..";
+import { decodeRoster, encodeRoster, type RosterEntry, type RosterPayload } from "..";
 import type { Channel } from "./channel";
-import { currentRoster, reapRevoked, reapStale } from "./roster-sync";
+import {
+	currentRoster,
+	type RosterSyncWasm,
+	reapRevoked,
+	reapStale,
+	verifyRosterEnvelope,
+} from "./roster-sync";
 
 const fakeChannel: Channel = { send: () => {}, recv: () => new Promise<string>(() => {}) };
 
@@ -57,6 +63,59 @@ describe("currentRoster (revocation takes effect on a live session)", () => {
 		const snap = rosterWith(["snappk"]);
 		expect(await currentRoster({ roster: snap })).toEqual(snap);
 		expect(await currentRoster({ roster: snap, fetchLocalRoster: async () => "" })).toEqual(snap);
+	});
+});
+
+describe("verifyRosterEnvelope (Item A: reject impersonation before merge)", () => {
+	const entry = (id: string, sigKey?: string, sig?: string): RosterEntry => ({
+		id,
+		publicKey: `pk-${id}`,
+		label: id,
+		addedAt: 0,
+		hlc: { wall: 1, counter: 0, node: id },
+		...(sigKey ? { sigKey } : {}),
+		...(sig ? { sig } : {}),
+	});
+	// Mock the host Ed25519 verdict: a sig of "valid" verifies, anything else fails.
+	const wasm = {
+		roster_verify: async (_p: string, _m: string, sig: string) => sig === "valid",
+	} as unknown as RosterSyncWasm;
+	const opts = (local: RosterPayload) => ({
+		roster: local,
+		fetchLocalRoster: async () => encodeRoster(local),
+		wasm,
+	});
+
+	it("drops a gossiped entry that swaps a known signing device's key (impersonation)", async () => {
+		const local: RosterPayload = { devices: [entry("laptop", "sk-laptop", "valid")], revoked: [] };
+		const remote: RosterPayload = {
+			devices: [entry("laptop", "sk-attacker", "valid")],
+			revoked: [],
+		};
+		const out = await verifyRosterEnvelope(opts(local), encodeRoster(remote));
+		expect(out).not.toBeNull();
+		expect(decodeRoster(out as string).devices).toEqual([]);
+	});
+
+	it("keeps a valid same-key signed update", async () => {
+		const local: RosterPayload = { devices: [entry("laptop", "sk-laptop", "valid")], revoked: [] };
+		const remote: RosterPayload = { devices: [entry("laptop", "sk-laptop", "valid")], revoked: [] };
+		const out = await verifyRosterEnvelope(opts(local), encodeRoster(remote));
+		expect(decodeRoster(out as string).devices.map((d) => d.id)).toEqual(["laptop"]);
+	});
+
+	it("passes the roster through unchanged when the host has no roster_verify (degrade)", async () => {
+		const json = encodeRoster({ devices: [entry("x", "sk-x", "forged")], revoked: [] });
+		const noVerify = {
+			roster: rosterWith([]),
+			fetchLocalRoster: async () => "",
+			wasm: {} as unknown as RosterSyncWasm,
+		};
+		expect(await verifyRosterEnvelope(noVerify, json)).toBe(json);
+	});
+
+	it("returns null on an unparseable roster", async () => {
+		expect(await verifyRosterEnvelope(opts(rosterWith([])), "not json")).toBeNull();
 	});
 });
 
