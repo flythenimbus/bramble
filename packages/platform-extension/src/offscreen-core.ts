@@ -99,10 +99,29 @@ function broadcastSyncEvent(payload: SyncEventMsg): void {
 	void api.runtime.sendMessage({ type: "SYNC_EVENT", payload }).catch(() => {});
 }
 
-let wasm: VaultCrypto | null = null;
+/** The roster-signing + password-authority admission wasm exports the host calls directly (Item A). */
+interface RosterSignWasm {
+	roster_sign(secretB64: string, message: string): string;
+	roster_admission_public_key(password: string, saltB64: string): string;
+	roster_admission_sign(password: string, saltB64: string, message: string): string;
+}
 
-async function getWasm(): Promise<VaultCrypto> {
-	if (!wasm) wasm = await loadWasm();
+/** Everything the offscreen host drives off the one wasm module: the vault-crypto surface plus the
+ * sync-transport views (handshake / nostr / roster). The module exports them all; VaultCrypto is
+ * intentionally crypto-only (see @core/wasm), so the host composes the full view here — this is why
+ * getWasm can hand every case a fully typed module without per-call casts. */
+type HostWasm = VaultCrypto &
+	RosterSyncWasm &
+	EnrollWasm &
+	KeypairWasm &
+	RosterSigWasm &
+	RosterSignWasm;
+
+let wasm: HostWasm | null = null;
+
+async function getWasm(): Promise<HostWasm> {
+	// The single module implements every surface above; loadWasm types it as the crypto slice only.
+	if (!wasm) wasm = (await loadWasm()) as HostWasm;
 	return wasm;
 }
 
@@ -275,95 +294,93 @@ async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
 export async function handleHostMessage(type: string, payload: unknown): Promise<HostResponse> {
 	const bridge = syncBridge ?? unregisteredBridge;
 	try {
-		if (type === "CLIPBOARD_CLEAR") {
-			return { ok: true, data: await clearClipboard() };
+		switch (type) {
+			case "CLIPBOARD_CLEAR":
+				return { ok: true, data: await clearClipboard() };
+			case "QR_DECODE": {
+				const dataUrl = (payload as { dataUrl?: unknown } | null)?.dataUrl;
+				if (typeof dataUrl !== "string") throw new Error("QR_DECODE requires a dataUrl");
+				return { ok: true, data: await decodeQrDataUrl(dataUrl) };
+			}
+			case "SYNC_DISCONNECT":
+				enrollSession?.stop();
+				enrollSession = null;
+				syncSession?.stop();
+				syncSession = null;
+				reportSyncStatus("disconnected");
+				return { ok: true };
+			case "SYNC_ROSTER_SYNC": {
+				const opts = RosterSyncMsgSchema.parse(payload);
+				const w = await getWasm();
+				syncSession?.stop();
+				syncSession = await startRosterSync({
+					...opts,
+					wasm: w,
+					report: reportSyncStatus,
+					fetchLocalPayload: bridge.fetchLocalPayload,
+					pushRemotePayload: bridge.pushRemotePayload,
+					fetchLocalRoster: bridge.fetchLocalRoster,
+					pushRemoteRoster: bridge.pushRemoteRoster,
+				});
+				return { ok: true };
+			}
+			case "SYNC_GENERATE_KEYPAIR": {
+				// Generate only — the background persists it (the host has no chrome.storage).
+				const w = await getWasm();
+				return { ok: true, data: w.handshake_generate_keypair() };
+			}
+			case "SYNC_GENERATE_SIGNING_KEY": {
+				// Ed25519 roster-signing keypair (Item A). Generate only; the background persists it.
+				const w = await getWasm();
+				return { ok: true, data: w.roster_sig_generate_key() };
+			}
+			case "SYNC_ROSTER_SIGN": {
+				// Ed25519-sign a canonical roster-entry string with this device's seed (from the background).
+				const w = await getWasm();
+				const { secretB64, message } = RosterSignHostMsgSchema.parse(payload);
+				return { ok: true, data: w.roster_sign(secretB64, message) };
+			}
+			case "SYNC_ROSTER_ADMISSION_PUBKEY": {
+				// Derive this device's admission verify key from the re-entered master password + slot salt
+				// (Item A). Argon2 -> KEK -> HKDF -> Ed25519; the signing key is derived and dropped, never stored.
+				const w = await getWasm();
+				const { password, saltB64 } = AdmissionPubkeyMsgSchema.parse(payload);
+				return { ok: true, data: w.roster_admission_public_key(password, saltB64) };
+			}
+			case "SYNC_ROSTER_ADMISSION_SIGN": {
+				// Admission-sign an admitted device's canonical entry with the password-derived admission key.
+				const w = await getWasm();
+				const { password, saltB64, message } = AdmissionSignHostMsgSchema.parse(payload);
+				return { ok: true, data: w.roster_admission_sign(password, saltB64, message) };
+			}
+			case "SYNC_ENROLL_INVITE":
+			case "SYNC_ENROLL_JOIN": {
+				const w = await getWasm();
+				const role = type === "SYNC_ENROLL_INVITE" ? "inviter" : "joiner";
+				const opts =
+					role === "inviter"
+						? EnrollInviteMsgSchema.parse(payload)
+						: EnrollJoinMsgSchema.parse(payload);
+				enrollSession?.stop();
+				enrollSession = await startEnroll(role, {
+					...opts,
+					wasm: w,
+					report: reportSyncStatus,
+					onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
+					onJoinError: (msg) => broadcastSyncEvent({ kind: "join-error", message: msg }),
+					onEnrolled: (entryJson) => broadcastSyncEvent({ kind: "enrolled", entryJson }),
+				});
+				return { ok: true };
+			}
+			default: {
+				// Everything else is a CRYPTO_* message for the shared adapter; anything else is unknown.
+				if (!type.startsWith("CRYPTO_")) {
+					throw new Error(`unknown message type: ${type}`);
+				}
+				const data = await dispatchCrypto(cryptoAdapter, type, payload);
+				return { ok: true, data };
+			}
 		}
-		if (type === "QR_DECODE") {
-			const dataUrl = (payload as { dataUrl?: unknown } | null)?.dataUrl;
-			if (typeof dataUrl !== "string") throw new Error("QR_DECODE requires a dataUrl");
-			return { ok: true, data: await decodeQrDataUrl(dataUrl) };
-		}
-		if (type === "SYNC_DISCONNECT") {
-			enrollSession?.stop();
-			enrollSession = null;
-			syncSession?.stop();
-			syncSession = null;
-			reportSyncStatus("disconnected");
-			return { ok: true };
-		}
-		if (type === "SYNC_ROSTER_SYNC") {
-			const opts = RosterSyncMsgSchema.parse(payload);
-			const w = (await getWasm()) as unknown as RosterSyncWasm;
-			syncSession?.stop();
-			syncSession = await startRosterSync({
-				...opts,
-				wasm: w,
-				report: reportSyncStatus,
-				fetchLocalPayload: bridge.fetchLocalPayload,
-				pushRemotePayload: bridge.pushRemotePayload,
-				fetchLocalRoster: bridge.fetchLocalRoster,
-				pushRemoteRoster: bridge.pushRemoteRoster,
-			});
-			return { ok: true };
-		}
-		if (type === "SYNC_GENERATE_KEYPAIR") {
-			// Generate only — the background persists it (the host has no chrome.storage).
-			const w = (await getWasm()) as unknown as KeypairWasm;
-			return { ok: true, data: w.handshake_generate_keypair() };
-		}
-		if (type === "SYNC_GENERATE_SIGNING_KEY") {
-			// Ed25519 roster-signing keypair (Item A). Generate only; the background persists it.
-			const w = (await getWasm()) as unknown as RosterSigWasm;
-			return { ok: true, data: w.roster_sig_generate_key() };
-		}
-		if (type === "SYNC_ROSTER_SIGN") {
-			// Ed25519-sign a canonical roster-entry string with this device's seed (from the background).
-			const w = (await getWasm()) as unknown as {
-				roster_sign(secretB64: string, message: string): string;
-			};
-			const { secretB64, message } = RosterSignHostMsgSchema.parse(payload);
-			return { ok: true, data: w.roster_sign(secretB64, message) };
-		}
-		if (type === "SYNC_ROSTER_ADMISSION_PUBKEY") {
-			// Derive this device's admission verify key from the re-entered master password + slot salt
-			// (Item A). Argon2 -> KEK -> HKDF -> Ed25519; the signing key is derived and dropped, never stored.
-			const w = (await getWasm()) as unknown as {
-				roster_admission_public_key(password: string, saltB64: string): string;
-			};
-			const { password, saltB64 } = AdmissionPubkeyMsgSchema.parse(payload);
-			return { ok: true, data: w.roster_admission_public_key(password, saltB64) };
-		}
-		if (type === "SYNC_ROSTER_ADMISSION_SIGN") {
-			// Admission-sign an admitted device's canonical entry with the password-derived admission key.
-			const w = (await getWasm()) as unknown as {
-				roster_admission_sign(password: string, saltB64: string, message: string): string;
-			};
-			const { password, saltB64, message } = AdmissionSignHostMsgSchema.parse(payload);
-			return { ok: true, data: w.roster_admission_sign(password, saltB64, message) };
-		}
-		if (type === "SYNC_ENROLL_INVITE" || type === "SYNC_ENROLL_JOIN") {
-			const w = (await getWasm()) as unknown as EnrollWasm;
-			const role = type === "SYNC_ENROLL_INVITE" ? "inviter" : "joiner";
-			const opts =
-				role === "inviter"
-					? EnrollInviteMsgSchema.parse(payload)
-					: EnrollJoinMsgSchema.parse(payload);
-			enrollSession?.stop();
-			enrollSession = await startEnroll(role, {
-				...opts,
-				wasm: w,
-				report: reportSyncStatus,
-				onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
-				onJoinError: (msg) => broadcastSyncEvent({ kind: "join-error", message: msg }),
-				onEnrolled: (entryJson) => broadcastSyncEvent({ kind: "enrolled", entryJson }),
-			});
-			return { ok: true };
-		}
-		if (!type.startsWith("CRYPTO_")) {
-			throw new Error(`unknown message type: ${type}`);
-		}
-		const data = await dispatchCrypto(cryptoAdapter, type, payload);
-		return { ok: true, data };
 	} catch (err) {
 		return { ok: false, error: String(err) };
 	}
