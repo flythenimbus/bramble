@@ -174,6 +174,27 @@ Platform note (learned the hard way): iOS VPNs (NetworkExtension) leave local-ne
 *outside* the tunnel by default, so same-LAN host candidates kept working with a VPN on; Android's
 `VpnService` full-tunnel does not, so Android needed TURN to sync under the same VPN.
 
+### Framing: chunk the vault across Noise frames (`secure-channel.ts`)
+
+A Noise transport frame caps at 64 KiB (`core-rust` `MAX_MSG`), so handing the whole
+`{vek, roster, entries}` bundle (enrollment) or sync envelope (roster-sync) to `handshake_encrypt`
+in one call throws `message too large for one Noise frame` once a vault holds more than a few
+dozen entries. `sendSecure`/`recvSecure` split the plaintext into frame-sized (`CHUNK_BYTES`,
+UTF-8-boundary-safe) chunks, encrypt each into its own Noise frame, and reassemble on receipt.
+Each frame is also small enough to stay under the WebRTC data-channel max message size (which
+`webrtc-peer` sends unchunked), so this one seam clears both ceilings.
+
+Noise transport is nonce-ordered, so frames must be decrypted in send order; both transports
+already deliver in order (SCTP is ordered+reliable; the relay path assumed it for single messages
+too). Wire compatibility is graceful: a **single-chunk** payload is sent as a bare base64
+ciphertext — byte-identical to the pre-framing format — so an un-updated peer still syncs small
+vaults; a **multi-chunk** payload uses JSON `{i, n, c}` frames, recognised by the leading `{`
+(base64 never starts with one). A peer old enough not to understand multi-frame already couldn't
+receive a large vault at all, so this is a pure improvement, not a break. This is distinct from
+the relay's `relay-channel.ts` chunking, which splits the *outer* group-key ciphertext to fit the
+relay's per-message cap (see docs/firefox-port.md); framing here is the *inner* Noise layer and
+applies on every transport.
+
 ## Topology: pairwise-gossip mesh, no coordinator
 
 Each device opens channels to whichever group peers are present, runs a pairwise merge with

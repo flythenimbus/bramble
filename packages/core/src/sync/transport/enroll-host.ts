@@ -32,6 +32,7 @@ import {
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, startMeshSession } from "./peer-session";
+import { recvSecure, sendSecure } from "./secure-channel";
 
 /** The XXpsk3 enrollment handshake exports. Returns are Awaitable so the native
  * plugin (async bridge) and the in-webview WASM module share one interface. */
@@ -183,9 +184,9 @@ export async function sendBundle(
 		entries: opts.entries ?? { entries: [], tombstones: [] },
 		primaryPasswordCheck: opts.passwordCheck,
 	});
-	channel.send(await opts.wasm.handshake_encrypt(sess.sessionId, bundle));
+	await sendSecure(channel, opts.wasm, sess.sessionId, bundle);
 	// The joiner acks with its roster entry, so our roster learns it (symmetric).
-	const entryJson = await opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv());
+	const entryJson = (await recvSecure(() => channel.recv(), opts.wasm, sess.sessionId)) ?? "";
 	// Validate the entry and pin its publicKey to the static key the joiner actually
 	// proved in the handshake, so it can't seat a key it doesn't control (or a third
 	// party's) into the roster.
@@ -210,7 +211,7 @@ export async function receiveBundle(
 ): Promise<void> {
 	const { channel } = peer;
 	const bundle = decodeEnrollmentBundle(
-		await opts.wasm.handshake_decrypt(sess.sessionId, await channel.recv()),
+		(await recvSecure(() => channel.recv(), opts.wasm, sess.sessionId)) ?? "",
 	);
 	// Provable same-password enforcement: when the inviter shipped its password-slot
 	// verifier and this device is joining with a password, the typed password MUST
@@ -242,7 +243,7 @@ export async function receiveBundle(
 		: await wrapPasswordSlot(slotCrypto, opts.password ?? "");
 	const bytes = await buildVaultBytes(slotCrypto, [slot], bundle.entries);
 	// Ack with our roster entry so the inviter's roster learns this device.
-	channel.send(await opts.wasm.handshake_encrypt(sess.sessionId, JSON.stringify(opts.ownEntry)));
+	await sendSecure(channel, opts.wasm, sess.sessionId, JSON.stringify(opts.ownEntry));
 	opts.report("vault received ✅ — finishing setup");
 	opts.onJoined?.({ vaultBlobB64: bytesToBase64(bytes), roster: bundle.roster });
 }
