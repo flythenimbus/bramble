@@ -9,12 +9,14 @@ import Security
 enum BrambleVault {
 	// App Group container shared by the app and the AutoFill extension.
 	static let appGroup = "group.app.bramble.mobile"
-	// Shared Keychain access group. Resolved from THIS build's own signed entitlements, so the
-	// team prefix always matches whatever team signed the build (the entitlements'
-	// $(AppIdentifierPrefix)) and the app<->extension Keychain sharing the autofill/biometric
-	// unlock depends on never breaks. Read straight from the entitlement (not by probing the
-	// Keychain) so it can't be poisoned by a locked-Keychain probe on first access.
-	static let accessGroup = resolveSharedAccessGroup()
+	// Shared Keychain access group, shared by the app and the AutoFill extension. This MUST equal
+	// the resolved keychain-access-groups entitlement ($(AppIdentifierPrefix)app.bramble.mobile.shared)
+	// so both targets address the same item. Hardcoded to the signing team's App ID Prefix:
+	// resolving it at runtime via a Keychain probe proved unreliable (the probe's own group-less
+	// read fails to find its item on device, so it returned an un-prefixed group and setSecret hit
+	// errSecMissingEntitlement / -34018). Verified against `codesign -d --entitlements` on the
+	// archive. If the signing team ever changes, update this to match the new $(AppIdentifierPrefix).
+	static let accessGroup = "BHGR3PP64J.app.bramble.mobile.shared"
 
 	// Keychain item: the biometric-gated VEK cache (BiometricVault writes, extension reads).
 	static let biometricService = "app.bramble.mobile.biometric-vault"
@@ -34,51 +36,4 @@ enum BrambleVault {
 	// it on next launch. Array of {iv, ciphertext}. Mirrors Android's PendingSave.
 	static let pendingPasskeysKey = "autofill.pendingPasskeys"
 
-	private static let sharedGroupSuffix = ".app.bramble.mobile.shared"
-
-	// Prefer the app's own `keychain-access-groups` entitlement: Xcode resolves $(AppIdentifierPrefix)
-	// into it at signing, so it already holds the exact string iOS will accept (e.g.
-	// "TEAMID.app.bramble.mobile.shared") and is readable in any lock state - unlike a Keychain
-	// probe, which returns errSecMissingEntitlement (-34018) if it runs while the Keychain is
-	// locked. The probe below is only a fallback; if both fail we return the un-prefixed group and
-	// the Keychain writers fall back to no access group, so in-app biometric unlock still works.
-	private static func resolveSharedAccessGroup() -> String {
-		let entitledGroups = SecTaskCreateFromSelf(nil).flatMap {
-			SecTaskCopyValueForEntitlement($0, "keychain-access-groups" as CFString, nil) as? [String]
-		}
-		if let shared = entitledGroups?.first(where: { $0.hasSuffix(sharedGroupSuffix) }) {
-			return shared
-		}
-		if let prefix = probeTeamPrefix() {
-			return "\(prefix)app.bramble.mobile.shared"
-		}
-		return "app.bramble.mobile.shared"
-	}
-
-	// Fallback prefix resolver: an item added without an explicit access group lands in our first
-	// keychain-access-group, whose id carries the resolved team prefix. Skips com.apple.token and
-	// returns nil (never a poisoned empty prefix) on any failure.
-	private static func probeTeamPrefix() -> String? {
-		let probe = "app.bramble.mobile.teamprefix-probe"
-		let query: [String: Any] = [
-			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: probe,
-			kSecAttrAccount as String: probe,
-			kSecReturnAttributes as String: true,
-			kSecMatchLimit as String: kSecMatchLimitOne,
-		]
-		var item: CFTypeRef?
-		var status = SecItemCopyMatching(query as CFDictionary, &item)
-		if status == errSecItemNotFound {
-			SecItemAdd(query as CFDictionary, nil)
-			status = SecItemCopyMatching(query as CFDictionary, &item)
-		}
-		guard status == errSecSuccess,
-			let attrs = item as? [String: Any],
-			let group = attrs[kSecAttrAccessGroup as String] as? String,
-			group != "com.apple.token",
-			let prefix = group.split(separator: ".").first
-		else { return nil }
-		return "\(prefix)."
-	}
 }
