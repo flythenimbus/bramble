@@ -932,13 +932,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		UserDefaults(suiteName: BrambleVault.appGroup)?.integer(forKey: BrambleVault.keepUnlockedKey) ?? 0
 	}
 
-	// No access group: reads/deletes then span every group we're entitled to, so they find the
-	// session wherever it was written (the shared group, or the no-group fallback in saveSession).
 	private func sessionBaseQuery() -> [String: Any] {
 		[
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.sessionService,
 			kSecAttrAccount as String: BrambleVault.vekAccount,
+			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 		]
 	}
 
@@ -949,17 +948,11 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				"vek": vek, "at": Date().timeIntervalSince1970,
 			])
 		else { return }
-		SecItemDelete(sessionBaseQuery() as CFDictionary)  // clear any prior copy (any group)
+		SecItemDelete(sessionBaseQuery() as CFDictionary)
 		var add = sessionBaseQuery()
 		add[kSecValueData as String] = data
 		add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-		// Write into the shared group so the main app can clear it; fall back to the default group
-		// if the shared group isn't usable on this install (errSecMissingEntitlement, -34018).
-		var shared = add
-		shared[kSecAttrAccessGroup as String] = BrambleVault.accessGroup
-		if SecItemAdd(shared as CFDictionary, nil) == errSecMissingEntitlement {
-			SecItemAdd(add as CFDictionary, nil)
-		}
+		SecItemAdd(add as CFDictionary, nil)
 	}
 
 	private func loadSession() -> String? {
@@ -1002,14 +995,15 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	private func vekExists() -> Bool {
-		// No access group: finds the main app's VEK in the shared group we're entitled to, without
-		// depending on the group string resolving correctly in this process.
 		let q: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
 			kSecAttrAccount as String: BrambleVault.vekAccount,
+			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 			kSecReturnData as String: false,
-			kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
+			// UIFail (not UISkip): report the auth-required item as existing via
+			// errSecInteractionNotAllowed rather than silently skipping it (errSecItemNotFound).
+			kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
 			kSecMatchLimit as String: kSecMatchLimitOne,
 		]
 		let status = SecItemCopyMatching(q as CFDictionary, nil)
@@ -1022,12 +1016,11 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let ctx = LAContext()
 			ctx.localizedReason = reason
-			// No access group: reads the main app's VEK from the shared group we're entitled to,
-			// independent of how the group string resolved in this process.
 			let query: [String: Any] = [
 				kSecClass as String: kSecClassGenericPassword,
 				kSecAttrService as String: BrambleVault.biometricService,
 				kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: ctx,
