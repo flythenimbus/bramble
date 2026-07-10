@@ -67,6 +67,9 @@ async function admissionSign(
 /** Shared vault internals the enrollment ops need from VaultProvider. */
 export interface SyncEnrollmentDeps {
 	ensureClock: () => Promise<HybridClock>;
+	/** Mint a fresh device id (clears the persisted id + cached clock). Called before a join so a
+	 * re-added device never reuses an id that may be tombstoned in the group (B1). */
+	rotateDeviceId: () => Promise<void>;
 	readDecodedBlob: () => Promise<{ blob: VaultBlob }>;
 	unlock: (password: string) => Promise<void>;
 	/** Finish a security-key unlock with an in-hand PRF secret (no extra tap). */
@@ -83,7 +86,14 @@ type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup" | "removeDevic
  * entries-payload read are passed in. See docs/p2p-sync.md.
  */
 export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
-	const { ensureClock, readDecodedBlob, unlock, finishWebauthnUnlock, readEntriesPayload } = deps;
+	const {
+		ensureClock,
+		rotateDeviceId,
+		readDecodedBlob,
+		unlock,
+		finishWebauthnUnlock,
+		readEntriesPayload,
+	} = deps;
 	const { storage, shell } = usePlatform();
 	// Unsubscribe for the inviter's enrolled-device listener (adds the joiner to the roster).
 	const enrollUnsubRef = useRef<(() => void) | null>(null);
@@ -229,6 +239,9 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			// unlock without a second tap.
 			const cred =
 				method.kind === "securityKey" ? await createPrfCredential(method.label ?? "") : undefined;
+			// Enter the group as a fresh device: mint a new id first, so a device re-added after being
+			// revoked doesn't reuse its old (now-tombstoned) id, which would be dropped everywhere.
+			await rotateDeviceId();
 			// Build our roster entry up front so we can hand it to the inviter in the ack.
 			const ownPub = await shell.syncDevicePublicKey();
 			const clock = await ensureClock();
@@ -300,7 +313,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				await unlock(method.password);
 			}
 		},
-		[shell, storage, ensureClock, unlock, finishWebauthnUnlock, readDecodedBlob],
+		[shell, storage, ensureClock, rotateDeviceId, unlock, finishWebauthnUnlock, readDecodedBlob],
 	);
 
 	// Revoke a device: a roster tombstone that ongoing sync gossips to peers (so it

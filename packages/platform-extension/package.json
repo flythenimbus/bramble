@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"build": "pnpm run build:chromium && pnpm run build:firefox",
 		"build:chromium": "vite build",
 		"build:firefox": "TARGET=firefox vite build",
 		"bundle:chromium": "vite build && rm -f bramble.zip && (cd dist-chromium && zip -rq ../bramble.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
