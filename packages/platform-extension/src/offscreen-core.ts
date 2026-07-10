@@ -309,6 +309,10 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				syncSession = null;
 				reportSyncStatus("disconnected");
 				return { ok: true };
+			case "SYNC_BROADCAST_NOW":
+				// A local vault write landed: push it to peers now instead of at the next tick.
+				await syncSession?.broadcastNow?.();
+				return { ok: true };
 			case "SYNC_ROSTER_SYNC": {
 				const opts = RosterSyncMsgSchema.parse(payload);
 				const w = await getWasm();

@@ -205,7 +205,9 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 		void broadcast(opts, peers);
 	}, REBROADCAST_MS);
 	opts.report("syncing — listening for peers…");
-	return session;
+	// broadcastNow lets the host push a local edit the instant it lands (see SYNC_BROADCAST_NOW)
+	// instead of waiting up to REBROADCAST_MS — important where the host suspends between ticks.
+	return { ...session, broadcastNow: () => broadcast(opts, peers) };
 }
 
 function inRoster(roster: RosterPayload, pubkey: string): boolean {
