@@ -15,6 +15,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import crx3 from "crx3";
+import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const argv = process.argv.slice(2);
 const optional = argv.includes("--optional");
@@ -60,6 +61,7 @@ try {
 	// The identity stub points at the YubiKey slot; it is not key material.
 	writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
 	// Prompts for PIN + touch on the terminal.
+	notifyYubiKeyTouch("decrypt the Chrome Web Store signing key");
 	execFileSync("age", ["-d", "-i", idFile, "-o", keyPem, KEY_AGE], { stdio: "inherit" });
 	await crx3([DIST], { keyPath: keyPem, crxPath: OUT });
 	console.log(`\nsigned ${OUT}\nupload it to the Chrome Web Store (verified upload).`);

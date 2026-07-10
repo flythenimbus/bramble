@@ -13,7 +13,7 @@ The same encrypted vault and the same Rust crypto core sit behind all three, and
 **Get Bramble:**
 
 - Chromium: [Chrome Web Store](https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm)
-- Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/firefox/addon/bramble/) (pending approval - get from [Releases](https://github.com/flythenimbus/bramble/releases))
+- Firefox: [Firefox Add-ons Store](https://addons.mozilla.org/firefox/addon/bramble/)
 - Android: [Releases](https://github.com/flythenimbus/bramble/releases)
 - iOS: [App Store](https://apps.apple.com/us/app/bramble-password-manager/id6783071787)
 

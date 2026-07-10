@@ -16,6 +16,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const STORE = resolve("packages/platform-extension/store/firefox");
@@ -103,6 +104,7 @@ try {
 		const idFile = join(tmp, "id.txt");
 		const credFile = join(tmp, "creds.json");
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
+		notifyYubiKeyTouch("decrypt the AMO API credentials");
 		execFileSync("age", ["-d", "-i", idFile, "-o", credFile, CREDS_AGE], { stdio: "inherit" });
 		const parsed = JSON.parse(readFileSync(credFile, "utf8"));
 		apiKey = parsed.apiKey;
