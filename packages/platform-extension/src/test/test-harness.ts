@@ -50,6 +50,10 @@ export interface HarnessState {
 	offscreenCalls: AnyMsg[];
 	windowsCreated: AnyMsg[];
 	listeners: Record<string, ((...args: any[]) => any) | undefined>;
+	/** All runtime.onMessage listeners, in registration order. Chrome dispatches a message to
+	 * every listener (not just the last), so the background legitimately registers more than one
+	 * (the router dispatcher + the SYNC_STATUS console mirror); the harness must model that. */
+	messageListeners: Array<(...args: any[]) => any>;
 }
 
 // Node's URL gives chrome-extension:// an opaque "null" origin, so use an https
@@ -112,6 +116,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		offscreenCalls: [],
 		windowsCreated: [],
 		listeners: {},
+		messageListeners: [],
 	};
 	let hasDoc = false;
 	const offscreen = opts.offscreen ?? defaultOffscreen;
@@ -142,8 +147,10 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			getURL: (p: string) => `${EXT_ORIGIN}/${p}`,
 			getManifest: () => ({ name: "Bramble" }),
 			onMessage: {
+				// Chrome supports multiple onMessage listeners; keep them all (the mock used to keep
+				// only the last, so a second listener like the SYNC_STATUS mirror clobbered the router).
 				addListener: (fn: any) => {
-					state.listeners.message = fn;
+					state.messageListeners.push(fn);
 				},
 			},
 			onInstalled: {
@@ -245,13 +252,20 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 	// unless a test passes an explicit pageSender/{} to exercise the content-script gate.
 	const send = (message: AnyMsg, sender: any = extensionSender) =>
 		new Promise<{ handled: boolean; resp: any }>((resolve) => {
-			const dispatch = state.listeners.message;
-			if (!dispatch) {
-				resolve({ handled: false, resp: undefined });
-				return;
+			// Dispatch to every listener, as Chrome does. The first sendResponse wins; a listener
+			// that returns true keeps the channel open for an async response. handled is true iff
+			// some listener took the message (returned true or responded).
+			let settled = false;
+			const respond = (resp: any) => {
+				if (settled) return;
+				settled = true;
+				resolve({ handled: true, resp });
+			};
+			let keptOpen = false;
+			for (const fn of state.messageListeners) {
+				if (fn(message, sender, respond) === true) keptOpen = true;
 			}
-			const ret = dispatch(message, sender, (resp: any) => resolve({ handled: true, resp }));
-			if (ret !== true) resolve({ handled: false, resp: undefined });
+			if (!keptOpen && !settled) resolve({ handled: false, resp: undefined });
 		});
 
 	return {
