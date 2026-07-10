@@ -1,9 +1,11 @@
 # P2P sync: revocation hardening (design note)
 
-Status: **proposed**, not implemented. This note scopes the two remaining hardening items from
-the security review so they can be built deliberately, with a multi-device test pass, rather than
-shipped as an untested protocol change to live users. It assumes the reader knows
-[p2p-sync.md](p2p-sync.md).
+Status: **Item A implemented** - roster-entry signing + password-authority admission producer,
+device-tested on browsers + iOS; *enforcement* is still deferred (verify-if-present today, gated on
+the feature flags + the `admissionKey`-pinning prerequisite below). **Item B (group-key rotation)
+deferred** (accept the metadata residual). The design/threat sections below are the original scoping;
+the "Producer + verify-side status", "Decisions & residuals", and transport-fix sections at the end
+record the built state + open follow-ups. Assumes the reader knows [p2p-sync.md](p2p-sync.md).
 
 Platform/threat facts are dated **mid-2026**; re-verify before acting on them later.
 
@@ -380,3 +382,42 @@ test pass, NOT with the producer release. Tracked as a flip prerequisite in the 
 Same-priority note for `rosterRequireSignatures`: `sigKey` pinning is already implemented, so that
 flip is sound as coded - but it closes **impersonation only**, not rogue-injection (a rogue new id
 with a valid self-signature passes the signatures gate; only a sound admission gate stops it).
+
+## Decisions & residuals (2026-07-09)
+
+**No remote self-destruct on revoke.** Considered wiping a revoked device's local vault when it
+learns it was removed; rejected. It only ever fires on *honest* devices (a compromised device won't
+run our wipe code and has already copied the data), it hands a compromised member a "revoke + wipe
+any honest device" weapon (strictly worse than today's DoS ceiling), and it is a data-loss footgun
+on an accidental / wrong removal. The legitimate "cut them off" is group-key rotation (Item B,
+deferred); the accepted residual is that a revoked device keeps its offline data + a stale UI but no
+further access, and is not notified (every survivor refuses it, so a tombstone has no path to reach
+it).
+
+**Security-key-only vaults can't admit (residual + the path to close it).** Admission is
+password-derived (`Ed25519(HKDF(KEK, ...))`, `KEK = Argon2(password, salt)`), so a vault unlocked by a
+security key only has no password to derive from: it enrolls joiners unsigned (tolerated in phase 1),
+and the "Add device" flow currently skips any re-auth for a key-only vault. The symmetric fix is to
+derive the admission key from the WebAuthn **PRF secret** the key already produces:
+`adm_key = Ed25519(HKDF(prf_secret, "roster/admission/v1"))`. The required tap then does double duty
+exactly like the password re-prompt - it proves the physical key is present (defeats an
+unlocked-session hijack that lacks the key) AND mints a stable, pinnable admission key an attacker
+without the key cannot derive. That closes the residual and makes the two unlock modes symmetric.
+Needs: a Rust `roster_admission_from_secret` (HKDF over the PRF secret instead of Argon2 over a
+password), shell methods that run a WebAuthn assertion for the PRF secret, and a key-vs-password
+branch in the Add-device gate. Follow-up, not phase 1; extension-only (iOS/Android don't do security
+keys).
+
+## Sync transport fixes surfaced during device testing (2026-07-09)
+
+Not audit findings, but P2P bugs found while device-testing the admission work; all landed on
+`security/review-fixes`. Recorded here because they interact with revocation/enrollment:
+
+- **Re-add lockout -> fresh-id-on-join.** A revoked device reused its stable, tombstoned id and was
+  dropped everywhere; `joinGroup` now rotates the device id first. (See p2p-sync.md revocation.)
+- **Mesh `known`-set never pruned.** A bounced peer wasn't re-discovered until the mesh restarted;
+  now cleared on peer close, so a suspended/blipped peer reconnects on its next hello.
+- **Broadcast-on-write.** A vault-blob change fires an immediate broadcast (loop-safe: a no-op merge
+  skips the write, so it can't echo), so a local edit doesn't wait for the rebroadcast tick.
+- **Mobile `resetSyncState`.** The mobile shell now implements it, so a new vault wipes group + device
+  keys + relay + the live mesh instead of inheriting the old group (the extension already did).
