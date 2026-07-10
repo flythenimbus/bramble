@@ -96,6 +96,45 @@ age -r age1yubikey1NEW -o ~/.config/bramble/cws-signing-key.age /tmp/cws.pem
 rm -P /tmp/cws.pem
 ```
 
+## Chrome Web Store — auto-publish (service account)
+
+`pnpm run release chromium <version>` uploads `bramble.zip` to the store and publishes it
+(→ CWS review → live), via `scripts/sign-cws.ts` and the Chrome Web Store Publish API **V2**.
+Auth is a **Google Cloud service account** (the classic V1 refresh-token flow is deprecated
+after 15 Oct 2026). The service-account JSON is the secret; it rides the same age + YubiKey
+scheme.
+
+### One-time setup
+
+1. [console.cloud.google.com](https://console.cloud.google.com): create/select a project, and in
+   the API library enable the **Chrome Web Store API**.
+2. **IAM & Admin → Service Accounts → Create** (no roles needed). Open it → **Keys → Add key →
+   JSON** and download the key.
+3. In the **CWS Developer Dashboard → Account**, add the service-account **email** (only one SA
+   per publisher is allowed). The Google account also needs 2-Step Verification on.
+4. Encrypt the JSON to the YubiKey and destroy the plaintext:
+
+```sh
+age -r age1yubikey1XXXX -o ~/.config/bramble/cws-service-account.age /path/to/downloaded-sa.json
+rm -P /path/to/downloaded-sa.json
+```
+
+The item id defaults to the published extension in `scripts/sign-cws.ts`; override with
+`CWS_ITEM_ID`. Creds resolve from `CWS_SERVICE_ACCOUNT_JSON` (a plaintext path, for CI) else
+`~/.config/bramble/cws-service-account.age` (override `CWS_SERVICE_ACCOUNT_AGE`).
+
+### Test / build without publishing
+
+```sh
+pnpm run bundle              # build packages/platform-extension/bramble.zip
+pnpm run sign:cws --upload-only   # auth + upload only, no publish (safe dry run)
+```
+
+### If the service-account key is exposed
+
+Delete the key in Google Cloud (**Service Accounts → Keys**), create a new JSON key, re-encrypt
+it (step 4). The service-account email and its CWS access are unchanged, so nothing else to redo.
+
 ## Firefox (listed on addons.mozilla.org)
 
 The Firefox add-on ships **listed on addons.mozilla.org** (the public store): we submit the built

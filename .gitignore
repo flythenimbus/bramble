@@ -19,6 +19,10 @@ packages/platform-extension/public/wasm/
 *.age
 *.jks
 *.keystore
+# Google / Chrome Web Store service-account keys (secret JSON private keys)
+*-service-account.json
+*.iam.gserviceaccount.com.json
+bramble-502002-*.json
 
 # Local env (API keys, never tracked)
 .env.local
