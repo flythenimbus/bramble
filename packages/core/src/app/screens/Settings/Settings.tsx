@@ -4,6 +4,7 @@ import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { SelectField } from "../../components/ui/select-field";
 import { type ThemeMode, useTheme } from "../../hooks/useTheme";
+import { BackupSection } from "./components/BackupSection";
 import { BiometricSection } from "./components/BiometricSection";
 import { GeneralSection } from "./components/GeneralSection";
 import { MasterPasswordSection } from "./components/MasterPasswordSection";
@@ -81,6 +82,8 @@ export function Settings() {
 						</Row>
 					)}
 				</Section>
+
+				<BackupSection />
 
 				<SyncConnectSection />
 
