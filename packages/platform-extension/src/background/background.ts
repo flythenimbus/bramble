@@ -5,7 +5,9 @@
 // idle, prefs). Each concern module registers its own message handlers; the
 // router (./background/router) owns the single onMessage dispatcher.
 
+import { BACKUP_TARGETS_KEY } from "@core/backup/config";
 import { api } from "../platform-api";
+import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
 import "./corner-prompt";
 import "./popout";
 import "./qr";
@@ -35,9 +37,14 @@ import { initWebauthnProxy } from "./webauthn-proxy-init";
 const hydrated = Promise.all([sessionHydration, indexHydration]);
 setReady(hydrated);
 
-// Resume continuous sync after a service-worker restart if the vault is unlocked.
+// Resume continuous sync after a service-worker restart if the vault is unlocked,
+// re-arm the backup poke, and run any backup that's already due.
 void hydrated.then(() => {
-	if (!vaultLocked()) void maybeStartSync();
+	if (!vaultLocked()) {
+		void maybeStartSync();
+		void runDueBackups();
+	}
+	void scheduleBackups();
 });
 
 // Load the passkey-provider opt-in into the in-memory flag (default off). On Chrome the
@@ -79,6 +86,10 @@ api.alarms.onAlarm.addListener((alarm) => {
 		// Firefox keep-alive: the fire already woke the event page (which re-runs the
 		// resume-on-startup above); re-ensure sync in case it wasn't a cold start.
 		if (!vaultLocked()) void maybeStartSync();
+		return;
+	}
+	if (alarm.name === BACKUP_ALARM) {
+		if (!vaultLocked()) void runDueBackups();
 		return;
 	}
 });
@@ -124,4 +135,6 @@ api.storage.onChanged.addListener((changes, area) => {
 			await sendToOffscreen({ type: "SYNC_BROADCAST_NOW" }).catch(() => {});
 		})();
 	}
+	// Re-arm or clear the backup poke when the target list or a schedule changes.
+	if (changes[BACKUP_TARGETS_KEY]) void scheduleBackups();
 });

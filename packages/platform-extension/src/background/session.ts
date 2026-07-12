@@ -2,6 +2,7 @@
 
 import { api } from "../platform-api";
 import { clearIndex } from "./autofill-index";
+import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX, CORNER_HANDOFF_KEY } from "./corner-prompt";
 import { markOffscreenKey, sendToOffscreen } from "./offscreen-client";
 import { POPOUT_HANDOFF_KEY } from "./popout";
@@ -115,6 +116,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				await scheduleAutoLock();
 				await exportAndCacheVek();
 				void maybeStartSync(); // begin continuous sync if this vault is in a group
+				void runDueBackups(); // back up any target that's due, now that the VEK is live
 			}
 		} else if (type === "CRYPTO_ROTATE_VEK") {
 			if (typeof response.data === "string") {
