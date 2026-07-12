@@ -239,8 +239,11 @@ URI. The redirect is the extension's own `chrome.identity.getRedirectURL()`, i.e
 (`https://kmokhdhoggbdcgoepifeckhgbfakaknm.chromiumapp.org/`); an **unpacked** dev
 build gets a random id unless a `key` is pinned in the manifest, so for local testing
 either pin the CWS public `key` or also register whatever `chrome.identity.getRedirectURL()`
-prints in the dev build's console. Firefox uses a different scheme (`browser.identity.getRedirectURL()`
-returns an `*.allizom.org` URL), registered separately.
+prints in the dev build's console. Firefox uses a different scheme
+(`browser.identity.getRedirectURL()` returns an `*.allizom.org` URL, stable because the
+`gecko.id` is pinned); that second redirect URI is registered on the same Dropbox app.
+The connect is verified working on both Chromium and Firefox: the whole flow runs in the
+background (service worker on Chrome, event page on Firefox), so it's browser-agnostic.
 
 Dropbox needs `token_access_type=offline` on the authorize request to return a refresh
 token.
