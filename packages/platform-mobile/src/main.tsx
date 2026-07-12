@@ -41,12 +41,16 @@ const platform: Platform = {
 let deviceLocale: string | undefined;
 
 function Root() {
-	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard.
-	// The last two render OptionsApp and dismiss back to "app" on completion/close.
-	const [view, setView] = useState<"app" | "setup" | "import">("app");
+	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard;
+	// "restore" = restore a .bramble backup. All but "app" render OptionsApp and dismiss
+	// back to "app" on completion/close.
+	const [view, setView] = useState<"app" | "setup" | "import" | "restore">("app");
 	const [pendingLogin, setPendingLogin] = useState<PendingLogin | null>(null);
 	useEffect(
-		() => registerOpenSetup((screen) => setView(screen === "import" ? "import" : "setup")),
+		() =>
+			registerOpenSetup((screen) =>
+				setView(screen === "import" ? "import" : screen === "restore" ? "restore" : "setup"),
+			),
 		[],
 	);
 
@@ -79,7 +83,7 @@ function Root() {
 		<OptionsApp
 			onComplete={() => setView("app")}
 			mobile
-			screen={view === "import" ? "import" : undefined}
+			screen={view === "import" ? "import" : view === "restore" ? "restore" : undefined}
 			preferredLocale={deviceLocale}
 		/>
 	);

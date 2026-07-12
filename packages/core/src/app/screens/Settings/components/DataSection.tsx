@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Download } from "lucide-react";
+import { ArchiveRestore, DatabaseBackup, Download, Upload } from "lucide-react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Section } from "./primitives";
@@ -7,22 +7,24 @@ import { Row, Section } from "./primitives";
 const rowBtn =
 	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all";
 
-/** Import / local export. Shown under the Data tab alongside cloud backups. */
+/** Import & backup: restore a .bramble, export a .bramble, or import from another manager. */
 export function DataSection() {
 	const { shell } = usePlatform();
 	const { exportVault } = useVault();
 	const { t } = useLingui();
 	return (
-		<Section icon={<Download className="w-4 h-4 text-primary" />} title={t`Data`}>
-			<Row
-				icon={<Download className="w-4 h-4 text-primary" />}
-				title={t`Import from another manager`}
-				subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass`}
-			>
-				<button type="button" onClick={() => void shell.openSetup("import")} className={rowBtn}>
-					<Trans>Import</Trans>
-				</button>
-			</Row>
+		<Section icon={<DatabaseBackup className="w-4 h-4 text-primary" />} title={t`Import & backup`}>
+			{shell.supportsRestore && (
+				<Row
+					icon={<ArchiveRestore className="w-4 h-4 text-primary" />}
+					title={t`Import a backup`}
+					subtitle={t`Restore an encrypted .bramble backup. This replaces the vault on this device.`}
+				>
+					<button type="button" onClick={() => void shell.openSetup("restore")} className={rowBtn}>
+						<Trans>Restore</Trans>
+					</button>
+				</Row>
+			)}
 			{shell.exportBytes && (
 				<Row
 					icon={<Download className="w-4 h-4 text-primary" />}
@@ -38,6 +40,15 @@ export function DataSection() {
 					</button>
 				</Row>
 			)}
+			<Row
+				icon={<Upload className="w-4 h-4 text-primary" />}
+				title={t`Import from another manager`}
+				subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass`}
+			>
+				<button type="button" onClick={() => void shell.openSetup("import")} className={rowBtn}>
+					<Trans>Import</Trans>
+				</button>
+			</Row>
 		</Section>
 	);
 }
