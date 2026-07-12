@@ -35,7 +35,7 @@ const btnClass =
 const primaryBtnClass =
 	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50";
 
-// s3/webdav fill in credentials; oauth is one-click sign-in via shell.runOAuthFlow.
+// s3/webdav fill in credentials; oauth is one-click sign-in via shell.connectBackupOAuth.
 type Kind = "s3" | "webdav" | "oauth";
 type IconComponent = ComponentType<{ className?: string }>;
 

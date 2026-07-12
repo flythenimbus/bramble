@@ -1,11 +1,6 @@
 /// <reference types="chrome" />
 
-import type {
-	OAuthAuthRequest,
-	OptionsScreen,
-	PopOutHandoff,
-	ShellAdapter,
-} from "@core/adapters/shell";
+import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
 import { extractHostname } from "@core/vault/autofill-index";
 import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
 import { hostnameMatches } from "./dedupe";
@@ -134,41 +129,17 @@ export const extensionShell: ShellAdapter = {
 	supportsSecurityKeys: typeof location === "undefined" || location.protocol !== "moz-extension:",
 	supportsSaveCapture: true,
 	supportsRestore: true,
-	// Interactive OAuth for one-click backup providers. Runs in the popup/options context
-	// (needs a user gesture); chrome.identity computes the redirect URI itself, so it never
-	// has to be hardcoded. The token exchange/refresh are plain fetches in @core/backup/oauth.
-	async runOAuthFlow(req: OAuthAuthRequest) {
-		const redirectUri = api.identity.getRedirectURL();
-		const url = new URL(req.authUrl);
-		const p = url.searchParams;
-		p.set("client_id", req.clientId);
-		p.set("response_type", "code");
-		p.set("redirect_uri", redirectUri);
-		p.set("scope", req.scopes.join(" "));
-		p.set("code_challenge", req.codeChallenge);
-		p.set("code_challenge_method", "S256");
-		p.set("state", req.state);
-		for (const [k, v] of Object.entries(req.extraParams ?? {})) p.set(k, v);
-
-		const redirect = await api.identity.launchWebAuthFlow({
-			url: url.toString(),
-			interactive: true,
-		});
-		if (!redirect) throw new Error("Sign-in was cancelled.");
-		const back = new URL(redirect);
-		// Providers return the code in the query; fall back to the fragment just in case.
-		const params =
-			back.searchParams.has("code") || back.searchParams.has("error")
-				? back.searchParams
-				: new URLSearchParams(back.hash.replace(/^#/, ""));
-		const err = params.get("error_description") || params.get("error");
-		if (err) throw new Error(`Sign-in failed: ${err}`);
-		if (params.get("state") !== req.state) {
-			throw new Error("Sign-in could not be verified (state mismatch).");
-		}
-		const code = params.get("code");
-		if (!code) throw new Error("No authorization code was returned.");
-		return { code, redirectUri };
+	// One-click backup OAuth runs entirely in the background service worker (see
+	// background/backup-connect): launchWebAuthFlow's provider window steals focus and
+	// closes this popup, so the flow can't complete here. We just kick it off and surface
+	// any error; the background persists the target, visible when the popup reopens.
+	async connectBackupOAuth(providerId: string, opts?: { targetId?: string }) {
+		const res = (await api.runtime.sendMessage({
+			type: "BACKUP_OAUTH_CONNECT",
+			payload: { providerId, targetId: opts?.targetId },
+		})) as { ok?: boolean; error?: string } | undefined;
+		if (!res) throw new Error("No response from Bramble's background (reload the extension?).");
+		if (!res.ok) throw new Error(res.error ?? "Sign-in failed.");
 	},
 	// Chromium delivers the passkey provider via the webAuthenticationProxy permission;
 	// Firefox has no such API and delivers it via a MAIN-world content-script override

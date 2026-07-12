@@ -8,6 +8,7 @@
 import { BACKUP_TARGETS_KEY } from "@core/backup/config";
 import { api } from "../platform-api";
 import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
+import "./backup-connect";
 import "./corner-prompt";
 import "./popout";
 import "./qr";
