@@ -181,6 +181,10 @@ msgstr "Backing up…"
 msgid "Backup's master password"
 msgstr "Backup's master password"
 
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Backups"
+msgstr "Backups"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
 #~ msgstr "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
@@ -484,8 +488,8 @@ msgid "Dark"
 msgstr "Dark"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
-msgid "Data"
-msgstr "Data"
+#~ msgid "Data"
+#~ msgstr "Data"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx

@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Database, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
+import { Archive, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
 import { cn } from "../../components/ui/utils";
 import { AboutSection } from "./components/AboutSection";
 import { AppearanceSection } from "./components/AppearanceSection";
@@ -22,7 +22,7 @@ export function Settings() {
 	const tabs: { id: SettingsTab; label: string; Icon: LucideIcon }[] = [
 		{ id: "general", label: t`General`, Icon: SlidersHorizontal },
 		{ id: "security", label: t`Security`, Icon: Lock },
-		{ id: "data", label: t`Data`, Icon: Database },
+		{ id: "backups", label: t`Backups`, Icon: Archive },
 		{ id: "sync", label: t`Sync`, Icon: Wifi },
 		{ id: "about", label: t`About`, Icon: Info },
 	];
@@ -60,7 +60,7 @@ export function Settings() {
 					</>
 				)}
 				{tab === "security" && <SecuritySection />}
-				{tab === "data" && (
+				{tab === "backups" && (
 					<>
 						<DataSection />
 						<BackupSection />
