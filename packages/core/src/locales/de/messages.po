@@ -78,6 +78,10 @@ msgstr "ID des Zugriffsschlüssels"
 msgid "Add"
 msgstr "Hinzufügen"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Add a backup target"
+msgstr "Backup-Ziel hinzufügen"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Add a device"
 msgstr "Ein Gerät hinzufügen"
@@ -89,6 +93,10 @@ msgstr "Hinzufügen eines neuen Logins"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Add another device"
 msgstr "Ein weiteres Gerät hinzufügen"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Add another target"
+msgstr "Weiteres Ziel hinzufügen"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Add custom fields to store additional information like security questions, billing postal codes, account numbers, etc."
@@ -156,21 +164,30 @@ msgstr "Zurück"
 msgid "Back up now"
 msgstr "Jetzt sichern"
 
+#. placeholder {0}: runningIds.size
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backing up {0}…"
+msgstr "{0} wird gesichert …"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backing up…"
 msgstr "Sicherung läuft…"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Backup failed"
-msgstr "Sicherung fehlgeschlagen"
+#~ msgid "Backup failed"
+#~ msgstr "Sicherung fehlgeschlagen"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Backup's master password"
 msgstr "Master-Passwort des Backups"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
-msgstr "Backups erfolgen nach bestmöglicher Bemühung, nicht zu einem festgelegten Zeitpunkt. Bramble sichert höchstens so oft, wie Sie hier festlegen, und zwar erst beim nächsten Entsperren nach Fälligkeit eines Backups. Wie oft Backups tatsächlich stattfinden, hängt also davon ab, wie oft Sie Bramble auf diesem Gerät öffnen. Unveränderte Tresore werden übersprungen. Benötigen Sie sofort eines? Nutzen Sie „Jetzt sichern“."
+#~ msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
+#~ msgstr "Backups erfolgen nach bestmöglicher Bemühung, nicht zu einem festgelegten Zeitpunkt. Bramble sichert höchstens so oft, wie Sie hier festlegen, und zwar erst beim nächsten Entsperren nach Fälligkeit eines Backups. Wie oft Backups tatsächlich stattfinden, hängt also davon ab, wie oft Sie Bramble auf diesem Gerät öffnen. Unveränderte Tresore werden übersprungen. Benötigen Sie sofort eines? Nutzen Sie „Jetzt sichern“."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
+msgstr "Backups erfolgen nach bestem Bemühen, nicht zu einem festgelegten Zeitpunkt. Jedes Ziel wird höchstens so oft gesichert, wie Sie es festlegen, und zwar beim nächsten Entsperren von Bramble nach Fälligkeit. Die tatsächliche Häufigkeit hängt also davon ab, wie oft Sie die App auf diesem Gerät öffnen. Unveränderte Tresore werden übersprungen."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Biometric unlock"
@@ -259,8 +276,12 @@ msgid "Choose another file"
 msgstr "Andere Datei auswählen"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault."
-msgstr "Wählen Sie aus, wo verschlüsselte Sicherungen gespeichert werden sollen. Bramble lädt ausschließlich Chiffretext hoch, sodass Ihr Anbieter nichts in Ihrem Tresor lesen kann."
+#~ msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault."
+#~ msgstr "Wählen Sie aus, wo verschlüsselte Sicherungen gespeichert werden sollen. Bramble lädt ausschließlich Chiffretext hoch, sodass Ihr Anbieter nichts in Ihrem Tresor lesen kann."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault. Add as many as you like."
+msgstr "Wählen Sie aus, wo verschlüsselte Backups gespeichert werden sollen. Bramble lädt ausschließlich Chiffretext hoch, sodass Ihr Anbieter nichts in Ihrem Tresor lesen kann. Fügen Sie beliebig viele Ziele hinzu."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Choose where to store your encrypted vault and pick a master password."
@@ -331,8 +352,8 @@ msgstr "Neues Passwort bestätigen"
 #~ msgstr "{name} verbinden"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Connected"
-msgstr "Verbunden"
+#~ msgid "Connected"
+#~ msgstr "Verbunden"
 
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Content"
@@ -604,6 +625,10 @@ msgstr "Face ID"
 msgid "Face ID or a fingerprint"
 msgstr "Face ID oder Fingerabdruck"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Field name"
 msgstr "Feldname"
@@ -688,8 +713,8 @@ msgid "Hide value"
 msgstr "Wert ausblenden"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "How often to back up, at most. Off keeps manual backups only."
-msgstr "Wie oft maximal gesichert werden soll. „Aus“ behält nur manuelle Backups."
+#~ msgid "How often to back up, at most. Off keeps manual backups only."
+#~ msgstr "Wie oft maximal gesichert werden soll. „Aus“ behält nur manuelle Backups."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
@@ -782,7 +807,7 @@ msgstr "Tastaturenvorschläge"
 msgid "Keys"
 msgstr "Schlüssel"
 
-#. placeholder {0}: formatWhen(config.lastBackupAt)
+#. placeholder {0}: formatWhen(target.lastBackupAt)
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Last backed up {0}"
 msgstr "Zuletzt gesichert {0}"
