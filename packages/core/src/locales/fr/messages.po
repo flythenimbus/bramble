@@ -65,6 +65,7 @@ msgstr "5 minutes"
 msgid "A one-time backup code that unlocks your vault if you're locked out."
 msgstr "Code de sauvegarde unique qui déverrouille votre coffre en cas de blocage."
 
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "About"
 msgstr "À propos"
@@ -127,7 +128,7 @@ msgstr "Tous"
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un point de terminaison qui renvoie vos propres serveurs ICE au format JSON. Par défaut : ceux du relais."
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Appearance"
 msgstr "Apparence"
 
@@ -156,6 +157,14 @@ msgid "Back up now"
 msgstr "Sauvegarder maintenant"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backing up…"
+msgstr "Sauvegarde en cours…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backup failed"
+msgstr "Échec de la sauvegarde"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
 msgstr "Les sauvegardes sont effectuées au mieux, sans horaire fixe. Bramble sauvegarde au maximum aussi souvent que vous le choisissez ici, et uniquement la prochaine fois que vous le déverrouillez après qu'une sauvegarde est due. La fréquence réelle des sauvegardes dépend donc de la fréquence à laquelle vous ouvrez Bramble sur cet appareil. Les coffres non modifiés sont ignorés. Besoin d'une sauvegarde immédiate ? Utilisez « Sauvegarder maintenant »."
 
@@ -172,7 +181,7 @@ msgstr "Bramble a rencontré une erreur inattendue. Votre coffre-fort est en sé
 msgid "Breached"
 msgstr "Compromis"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
 msgstr "Importer les entrées depuis 1Password, Bitwarden, KeePass ou Proton Pass"
 
@@ -270,6 +279,10 @@ msgstr "Fermer l'importation"
 msgid "Cloud backups"
 msgstr "Sauvegardes dans le cloud"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Coming soon"
+msgstr "Bientôt disponible"
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm"
 msgstr "Confirmer"
@@ -304,8 +317,8 @@ msgid "Confirm your new password"
 msgstr "Confirmer le nouveau mot de passe"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Connect {name}"
-msgstr "Connecter {name}"
+#~ msgid "Connect {name}"
+#~ msgstr "Connecter {name}"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Connected"
@@ -422,10 +435,11 @@ msgstr "CVV"
 msgid "Daily"
 msgstr "Quotidiennement"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Dark"
 msgstr "Mode sombre"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Data"
 msgstr "Données"
@@ -559,11 +573,11 @@ msgstr "Nom d'hôte exact uniquement"
 msgid "Expires"
 msgstr "Expiration"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Export"
 msgstr "Exportation"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Export a backup"
 msgstr "Exporter une sauvegarde"
 
@@ -596,6 +610,7 @@ msgid "Frequency"
 msgstr "Fréquence"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+#: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "General"
 msgstr "Général"
 
@@ -669,7 +684,7 @@ msgstr "Je l'ai sauvegardé, continuer"
 msgid "Immediate"
 msgstr "Immédiat"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Import"
 msgstr "Importer"
 
@@ -682,7 +697,7 @@ msgstr "Importer {0} éléments"
 msgid "Import data"
 msgstr "Importer les données"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Import from another manager"
 msgstr "Importer depuis un autre gestionnaire"
 
@@ -740,11 +755,16 @@ msgstr "Suggestions de clavier"
 msgid "Keys"
 msgstr "Clés"
 
+#. placeholder {0}: formatWhen(config.lastBackupAt)
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Last backed up: never"
-msgstr "Dernière sauvegarde : jamais"
+msgid "Last backed up {0}"
+msgstr "Dernière sauvegarde {0}"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#~ msgid "Last backed up: never"
+#~ msgstr "Dernière sauvegarde : jamais"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Light"
 msgstr "Lumière"
 
@@ -789,7 +809,7 @@ msgstr "Mot de passe maître défini."
 msgid "Master password updated."
 msgstr "Mot de passe maître mis à jour."
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Mode"
 msgstr "Mode"
 
@@ -872,6 +892,10 @@ msgid "Nostr relay URL"
 msgstr "URL du relais Nostr"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Not backed up yet"
+msgstr "Pas encore sauvegardé"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Not set"
 #~ msgstr "Non défini"
 
@@ -903,6 +927,10 @@ msgstr "Proposer l'enregistrement des identifiants"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
 msgstr "Une fois inscrit, les appareils se synchronisent automatiquement en arrière-plan tant qu'ils sont déverrouillés ; aucun bouton ni fenêtre n'est nécessaire."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
+msgstr "La connexion en un clic pour {name} sera disponible dans une future mise à jour. Pour l'instant, choisissez un fournisseur sous \\"
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -1156,7 +1184,7 @@ msgstr "Enregistrer"
 msgid "Save {modeLabel}"
 msgstr "Sauvegarder {modeLabel}"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
 msgstr "Enregistrez une copie .bramble chiffrée de votre coffre. Elle nécessite toujours votre mot de passe principal pour être ouverte."
 
@@ -1205,6 +1233,7 @@ msgstr "Clé d'accès secrète"
 msgid "Secure note"
 msgstr "Note sécurisée"
 
+#: packages/core/src/app/screens/Settings/components/SecuritySection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Security"
 msgstr "Sécurité"
@@ -1254,6 +1283,10 @@ msgstr "Configurer votre coffre-fort"
 #: packages/core/src/app/layouts/AppLayout.tsx
 msgid "Settings"
 msgstr "Paramètres"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Settings sections"
+msgstr "Sections des paramètres"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
@@ -1350,12 +1383,16 @@ msgstr "Fort"
 msgid "Subdomain match"
 msgstr "Correspondance de sous-domaine"
 
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Sync"
+msgstr "Synchronisation"
+
 #. placeholder {0}: devices.length
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Synced · {0} devices"
 msgstr "Synchronisé · {0} appareils"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "System"
 msgstr "Système"
 
@@ -1372,7 +1409,7 @@ msgstr "Tapotez votre clé..."
 msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
 msgstr "Le relais de signalisation qui introduit les appareils. Par défaut, le relais hébergé ; pointez-le vers votre propre relais ou un relais Nostr public."
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Theme"
 msgstr "Thème"
 
@@ -1445,7 +1482,7 @@ msgstr "Activer les suggestions du clavier"
 msgid "Toggle offer to save logins"
 msgstr "Activer l'offre d'enregistrement des identifiants"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 msgid "Total entries"
 msgstr "Nombre total d'entrées"
 
@@ -1540,7 +1577,7 @@ msgstr "Utiliser Bramble pour les clés de passe"
 #~ msgid "Use iCloud Drive"
 #~ msgstr "Utiliser iCloud Drive"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Utiliser clair, sombre ou assortir à votre système"
 
@@ -1581,7 +1618,7 @@ msgstr "Code de vérification (TOTP)"
 msgid "Verifying…"
 msgstr "Vérification en cours..."
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 msgid "Version"
 msgstr "Version"
 
@@ -1651,8 +1688,8 @@ msgid "You won't be able to see this code again."
 msgstr "Vous ne pourrez plus voir ce code."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "You'll sign in to {name} in a new window and let Bramble upload encrypted backups to your account. Bramble only ever uploads ciphertext."
-msgstr "Vous vous connecterez à {name} dans une nouvelle fenêtre et laisserez Bramble télécharger des sauvegardes chiffrées vers votre compte. Bramble ne télécharge jamais que du texte chiffré."
+#~ msgid "You'll sign in to {name} in a new window and let Bramble upload encrypted backups to your account. Bramble only ever uploads ciphertext."
+#~ msgstr "Vous vous connecterez à {name} dans une nouvelle fenêtre et laisserez Bramble télécharger des sauvegardes chiffrées vers votre compte. Bramble ne télécharge jamais que du texte chiffré."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "You'll tap your security key when you press Join. No master password is set on this device."

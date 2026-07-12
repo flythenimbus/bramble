@@ -12,6 +12,8 @@ import {
 	X,
 } from "lucide-react";
 import { type ComponentType, useState } from "react";
+import type { BackupFrequency } from "../../../../backup/config";
+import { useBackup } from "../../../../hooks/useBackup";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
@@ -26,11 +28,10 @@ import { Row, Section } from "./primitives";
 const btnClass =
 	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50";
 const primaryBtnClass =
-	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all";
+	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50";
 
-// s3/webdav fill in credentials; oauth is one-click sign-in.
+// s3/webdav fill in credentials; oauth is one-click sign-in (Phase 2, stubbed here).
 type Kind = "s3" | "webdav" | "oauth";
-type Frequency = "off" | "daily" | "weekly" | "monthly";
 type IconComponent = ComponentType<{ className?: string }>;
 
 const isOneClick = (kind: Kind) => kind === "oauth";
@@ -49,9 +50,9 @@ interface ProviderDef {
 }
 
 // Popular providers. Brand icons where we have them, lucide placeholders otherwise
-// (Storj/pCloud/Fastmail/generic). Endpoints are sensible defaults for this preview;
-// verify each against the provider's docs before wiring. OAuth (Drive/Dropbox) is
-// UI-only here; its sign-in flow is Phase 2. See docs/cloud-storage-backups.md.
+// (Storj/pCloud/Fastmail/generic). Endpoints are sensible defaults; verify each
+// against the provider's docs. OAuth (Drive/Dropbox) is UI-only here; its sign-in
+// flow is Phase 2. See docs/cloud-storage-backups.md.
 const PROVIDERS: ProviderDef[] = [
 	{
 		id: "gdrive",
@@ -155,6 +156,8 @@ const PROVIDERS: ProviderDef[] = [
 	},
 ];
 
+const providerById = (id: string): ProviderDef | null => PROVIDERS.find((p) => p.id === id) ?? null;
+
 /** A clickable provider tile: icon badge + name + one-line blurb. */
 function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void }) {
 	const Icon = def.Icon;
@@ -200,35 +203,41 @@ function ProviderModalHeader({ def, onClose }: { def: ProviderDef; onClose: () =
 	);
 }
 
-/** One-click modal body: an explanation and a single Connect button (no fields). */
-function OneClickConnect({ def, onConnect }: { def: ProviderDef; onConnect: () => void }) {
+/** OAuth modal body. Sign-in is Phase 2, so the action is disabled for now. */
+function OneClickComingSoon({ def }: { def: ProviderDef }) {
 	const name = def.name;
 	return (
 		<>
 			<p className="text-xs text-muted-foreground">
 				<Trans>
-					You'll sign in to {name} in a new window and let Bramble upload encrypted backups to your
-					account. Bramble only ever uploads ciphertext.
+					One-click sign-in for {name} is coming in a future update. For now, pick a provider under
+					"Bring your own storage".
 				</Trans>
 			</p>
-			<button type="button" onClick={onConnect} className={primaryBtnClass}>
-				<Trans>Connect {name}</Trans>
+			<button type="button" disabled className={primaryBtnClass}>
+				<Trans>Coming soon</Trans>
 			</button>
 		</>
 	);
 }
 
+function formatWhen(ms: number): string {
+	return new Date(ms).toLocaleString();
+}
+
 /**
- * Cloud backups panel. UI only for now: local state, no persistence and no
- * upload. Providers are tiles that open a per-kind modal: credentials for
- * S3/WebDAV, a one-click connect for OAuth (Drive/Dropbox). Those flows are
- * wired in Phase 2. See docs/cloud-storage-backups.md.
+ * Cloud backups panel. Providers are tiles that open a per-kind modal: S3/WebDAV
+ * credentials (persisted device-local, credentials VEK-wrapped) or a one-click
+ * OAuth connect (Phase 2). "Back up now" uploads immediately. Scheduling is
+ * Phase 1. See docs/cloud-storage-backups.md.
  */
 export function BackupSection() {
 	const { t } = useLingui();
-	const [connected, setConnected] = useState<{ def: ProviderDef; summary: string } | null>(null);
+	const backup = useBackup();
+	const { config, running } = backup;
+
 	const [modalId, setModalId] = useState<string | null>(null);
-	const [frequency, setFrequency] = useState<Frequency>("daily");
+	const [saving, setSaving] = useState(false);
 
 	// Modal form fields (only the ones for the open provider's kind are shown).
 	const [endpoint, setEndpoint] = useState("");
@@ -243,12 +252,13 @@ export function BackupSection() {
 	const [davPassword, setDavPassword] = useState("");
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 
-	const modalDef = modalId ? (PROVIDERS.find((p) => p.id === modalId) ?? null) : null;
+	const modalDef = modalId ? providerById(modalId) : null;
+	const connectedDef = config ? providerById(config.providerId) : null;
 	const oneClickProviders = PROVIDERS.filter((p) => isOneClick(p.kind));
 	const byoProviders = PROVIDERS.filter((p) => !isOneClick(p.kind));
 
-	// Open a provider tile: seed the form from its defaults, and reveal Advanced
-	// only when there's nothing prefilled to hide (generic or self-hosted).
+	// Open a provider tile fresh: seed the form from its defaults and reveal
+	// Advanced only when there's nothing prefilled to hide (generic or self-hosted).
 	const openProvider = (def: ProviderDef) => {
 		setEndpoint(def.endpoint ?? "");
 		setRegion(def.region ?? "");
@@ -264,47 +274,89 @@ export function BackupSection() {
 		setModalId(def.id);
 	};
 
+	// Edit the saved provider: prefill non-secret fields; credentials are re-entered
+	// (we never decrypt secrets back into the DOM).
+	const editProvider = () => {
+		if (!config || !connectedDef) return;
+		setEndpoint(config.endpoint ?? "");
+		setRegion(config.region ?? "");
+		setBucket(config.bucket ?? "");
+		setPrefix(config.prefix ?? "");
+		setServerUrl(config.serverUrl ?? "");
+		setDavPath(config.path ?? "");
+		setAccessKeyId("");
+		setSecretKey("");
+		setDavUser("");
+		setDavPassword("");
+		setAdvancedOpen(false);
+		setModalId(connectedDef.id);
+	};
+
 	const canSave = modalDef
 		? modalDef.kind === "s3"
 			? Boolean(bucket.trim() && accessKeyId.trim() && secretKey.trim())
 			: Boolean(serverUrl.trim() && davUser.trim() && davPassword.trim())
 		: false;
 
-	const save = () => {
-		if (!modalDef || !canSave) return;
-		const summary = modalDef.kind === "s3" ? bucket.trim() : serverUrl.trim();
-		setConnected({ def: modalDef, summary });
-		setModalId(null);
+	const doSave = async () => {
+		if (!modalDef || modalDef.kind === "oauth" || !canSave) return;
+		setSaving(true);
+		try {
+			await backup.save(
+				modalDef.kind === "s3"
+					? {
+							providerId: modalDef.id,
+							provider: "s3",
+							endpoint: endpoint.trim(),
+							region: region.trim(),
+							bucket: bucket.trim(),
+							prefix: prefix.trim() || undefined,
+							secrets: { accessKeyId: accessKeyId.trim(), secretAccessKey: secretKey.trim() },
+						}
+					: {
+							providerId: modalDef.id,
+							provider: "webdav",
+							serverUrl: serverUrl.trim(),
+							path: davPath.trim() || undefined,
+							secrets: { username: davUser.trim(), password: davPassword.trim() },
+						},
+			);
+			setModalId(null);
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	return (
 		<Section icon={<CloudUpload className="w-4 h-4 text-primary" />} title={t`Cloud backups`}>
-			{connected ? (
+			{connectedDef && config ? (
 				<>
 					<div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
 						<div className="flex min-w-0 items-center gap-3">
 							<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
-								<connected.def.Icon className={`w-4 h-4 ${connected.def.accent}`} />
+								<connectedDef.Icon className={`w-4 h-4 ${connectedDef.accent}`} />
 							</div>
 							<div className="min-w-0">
-								<p className="text-sm truncate">{connected.def.name}</p>
+								<p className="text-sm truncate">{connectedDef.name}</p>
 								<p className="text-xs text-muted-foreground truncate">
 									{t`Connected`}
-									{connected.summary ? ` · ${connected.summary}` : ""}
+									{config.provider === "s3"
+										? config.bucket
+											? ` · ${config.bucket}`
+											: ""
+										: config.serverUrl
+											? ` · ${config.serverUrl}`
+											: ""}
 								</p>
 							</div>
 						</div>
 						<div className="flex shrink-0 items-center gap-2">
-							<button
-								type="button"
-								onClick={() => setModalId(connected.def.id)}
-								className={btnClass}
-							>
+							<button type="button" onClick={editProvider} className={btnClass}>
 								<Trans>Edit</Trans>
 							</button>
 							<button
 								type="button"
-								onClick={() => setConnected(null)}
+								onClick={() => void backup.remove()}
 								className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
 							>
 								<Trans>Remove</Trans>
@@ -320,8 +372,8 @@ export function BackupSection() {
 						<div className="w-40">
 							<SelectField
 								label={t`Frequency`}
-								value={frequency}
-								onChange={(e) => setFrequency(e.target.value as Frequency)}
+								value={config.frequency}
+								onChange={(e) => void backup.setFrequency(e.target.value as BackupFrequency)}
 							>
 								<option value="off">{t`Off`}</option>
 								<option value="daily">{t`Daily`}</option>
@@ -341,15 +393,30 @@ export function BackupSection() {
 					</p>
 
 					<div className="flex flex-wrap items-center gap-3">
-						<button type="button" className={btnClass}>
+						<button
+							type="button"
+							onClick={() => void backup.backupNow().catch(() => {})}
+							disabled={running}
+							className={btnClass}
+						>
 							<Trans>Back up now</Trans>
 						</button>
 						<span className="text-xs text-muted-foreground">
-							<Trans>Last backed up: never</Trans>
+							{running ? (
+								<Trans>Backing up…</Trans>
+							) : config.lastError ? (
+								<span className="text-red-500">
+									<Trans>Backup failed</Trans>: {config.lastError}
+								</span>
+							) : config.lastBackupAt ? (
+								<Trans>Last backed up {formatWhen(config.lastBackupAt)}</Trans>
+							) : (
+								<Trans>Not backed up yet</Trans>
+							)}
 						</span>
 					</div>
 				</>
-			) : (
+			) : config === undefined ? null : (
 				<>
 					<p className="text-sm text-muted-foreground">
 						<Trans>
@@ -387,20 +454,14 @@ export function BackupSection() {
 					(isOneClick(modalDef.kind) ? (
 						<div className="p-5 space-y-4">
 							<ProviderModalHeader def={modalDef} onClose={() => setModalId(null)} />
-							<OneClickConnect
-								def={modalDef}
-								onConnect={() => {
-									setConnected({ def: modalDef, summary: "" });
-									setModalId(null);
-								}}
-							/>
+							<OneClickComingSoon def={modalDef} />
 						</div>
 					) : (
 						<form
 							className="p-5 space-y-4"
 							onSubmit={(e) => {
 								e.preventDefault();
-								save();
+								void doSave();
 							}}
 						>
 							<ProviderModalHeader def={modalDef} onClose={() => setModalId(null)} />
@@ -505,7 +566,7 @@ export function BackupSection() {
 								<button type="button" onClick={() => setModalId(null)} className={btnClass}>
 									<Trans>Cancel</Trans>
 								</button>
-								<button type="submit" disabled={!canSave} className={btnClass}>
+								<button type="submit" disabled={!canSave || saving} className={btnClass}>
 									<Trans>Save</Trans>
 								</button>
 							</div>
