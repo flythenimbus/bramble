@@ -1,0 +1,125 @@
+# Advanced CodeQL setup. Replaces default setup so Swift can be scanned: the iOS
+# app is a Capacitor + Rust-FFI project whose autobuild fails on a clean checkout
+# (it references two gitignored generated artifacts - the VaultCrypto.xcframework
+# and the synced web assets under App/App/public). Swift therefore needs a real
+# build (build-mode: manual); the other languages need no build (build-mode: none).
+# Free on this public repo, macOS runners included.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "27 3 * * 1" # weekly, Monday 03:27 UTC
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # No-build languages. Ubuntu, runs on every push/PR + the weekly schedule.
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, rust]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # Swift needs the iOS app to compile: web bundle -> cap sync -> Rust FFI
+  # xcframework -> xcodebuild. macOS runner (free on public repos). Skipped on PRs
+  # so PR feedback stays fast; runs on push-to-main + the weekly schedule.
+  analyze-swift:
+    name: Analyze (swift)
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Reads packages/core-rust/rust-toolchain.toml. The FFI build adds the iOS
+      # targets itself (rustup target add), so none are declared here.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      # Caches the webrtc-rs dependency compile so repeat runs skip the slow part
+      # of the release iOS cross-build.
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/core-rust
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # Populates packages/platform-mobile/dist (Capacitor webDir).
+      - name: Build web bundle
+        run: pnpm --filter @vault/platform-mobile run build
+
+      # Copies dist -> ios/App/App/public and resolves the CapApp-SPM plugin graph.
+      - name: Sync Capacitor iOS
+        run: pnpm --filter @vault/platform-mobile exec cap sync ios
+
+      # Builds VaultCrypto.xcframework + uniffi Swift glue into ios/App/VaultCryptoFFI.
+      - name: Build Rust FFI xcframework
+        run: pnpm run ffi:build:ios
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: swift
+          build-mode: manual
+
+      # Unsigned simulator build - just enough for CodeQL to observe the Swift
+      # compilation. The App scheme pulls in its embedded AutoFillProbe extension.
+      - name: Build iOS app for extraction
+        run: |
+          xcodebuild build \
+            -project packages/platform-mobile/ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:swift"
