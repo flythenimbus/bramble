@@ -36,7 +36,7 @@ Nobody else holds a copy of your vault, so keeping a backup is up to you. Brambl
 
 - **Explicit: export a backup file.** From Settings (browser extension for now), export your whole vault to an encrypted `.bramble` file and stash it somewhere safe: another drive, a USB stick, wherever you like. It stays ciphertext, so opening it still needs your master password and a stolen backup is useless on its own. Do this now and then, especially before any big change.
 - **Implicit: peer-to-peer sync.** Turn on sync and every device in your sync group is basically a live copy of the vault. Pair a second device and each one holds everything, so if you lose or wipe one, the others still have your data. It is the simplest safety net there is, with no files to remember to export.
-- **Coming in the future: scheduled cloud backups.** Point Bramble at a storage provider you already use (Dropbox, Google Drive, and other popular options) and it will drop an encrypted backup there on a schedule you set. It stays ciphertext in the cloud and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable.
+- **Coming in the future: scheduled cloud backups.** Point Bramble at a storage provider you already use and it will drop an encrypted backup there on a schedule you set: conventional cloud drives (Google Drive, Dropbox), any S3-compatible bucket, or your own self-hosted server over WebDAV (Nextcloud, ownCloud, and the like). It stays ciphertext in the cloud and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable, and you can keep the whole thing on infrastructure you run yourself.
 
 A synced second device and the occasional export together mean you are never one lost or broken device away from losing your vault.
 
@@ -132,8 +132,8 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 
 ## What's coming next
 
-- **Smarter autofill.** More form-detection coverage and fixes for the weird checkout and login pages that like to break things.
-- **Firefox and Safari.** Extension support beyond Chromium.
+- **Cloud backups.** Point Bramble at storage you already use and it drops an encrypted backup there on a schedule you set: conventional cloud drives (Google Drive, Dropbox), any S3-compatible bucket, or self-hosted storage over WebDAV (Nextcloud and friends). It stays ciphertext and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable.
+- **Multiple vaults.** Keep more than one vault side by side and pick which to open when you launch the app. Handy for sharing a device between people, or walling off separate sets of logins behind their own master passwords.
 
 ## Status
 
