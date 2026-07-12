@@ -21,14 +21,15 @@ export interface OAuthProviderMeta {
 // Public app keys, safe to ship in the client (PKCE, no secret). Registered by the
 // app owner with the provider; the redirect URI is the extension's own
 // chrome.identity.getRedirectURL(). Replace the placeholder with the real app key.
-const DROPBOX_CLIENT_ID = "REPLACE_WITH_DROPBOX_APP_KEY";
+const DROPBOX_CLIENT_ID = "z3dojxeco2znshq";
 
 export const OAUTH_PROVIDERS: Record<OAuthProviderId, OAuthProviderMeta> = {
 	dropbox: {
 		authUrl: "https://www.dropbox.com/oauth2/authorize",
 		tokenUrl: "https://api.dropboxapi.com/oauth2/token",
 		clientId: DROPBOX_CLIENT_ID,
-		scopes: ["files.content.write", "files.content.read"],
+		// write = upload + delete; read = download; metadata.read = list_folder (retention prune).
+		scopes: ["files.content.write", "files.content.read", "files.metadata.read"],
 		authParams: { token_access_type: "offline" },
 	},
 };
