@@ -40,7 +40,15 @@ function Wrapper({ children, onClose }: { children: React.ReactNode; onClose?: (
  * Replacing is safe: writeVaultBlob snapshots the previous vault first. Opened in
  * the setup tab via shell.openSetup("restore"). See docs/cloud-storage-backups.md.
  */
-export function RestoreShell({ onClose }: { onClose?: () => void } = {}) {
+export function RestoreShell({
+	onClose,
+	onRestored,
+}: {
+	onClose?: () => void;
+	/** Called after a successful restore+unlock instead of showing the terminal "Vault restored"
+	 * screen. Used when embedded in the setup flow, which owns the post-unlock screen. */
+	onRestored?: () => void;
+} = {}) {
 	const { unlock } = useVault();
 	const { shell, crypto, storage } = usePlatform();
 	const { t } = useLingui();
@@ -105,7 +113,8 @@ export function RestoreShell({ onClose }: { onClose?: () => void } = {}) {
 			await storage.writeVaultBlob(picked.bytes); // snapshots the previous vault first
 			await shell.resetSyncState?.(); // fresh sync identity; the restored vault isn't enrolled
 			await unlock(password); // reads the freshly-written blob and loads its VEK
-			setDone(true);
+			if (onRestored) onRestored();
+			else setDone(true);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : t`Couldn't restore this backup.`);
 		} finally {

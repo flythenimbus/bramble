@@ -1004,6 +1004,10 @@ msgstr "L'accesso con un clic per {name} sarà disponibile in un futuro aggiorna
 msgid "Open {name}"
 msgstr "Apri {name}"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Open a backup file instead"
+msgstr "Apri invece un file di backup"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Apri un backup .bramble crittografato e rendilo il vault su questo dispositivo."

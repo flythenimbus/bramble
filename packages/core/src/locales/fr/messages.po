@@ -1004,6 +1004,10 @@ msgstr "La connexion en un clic pour {name} sera disponible dans une future mise
 msgid "Open {name}"
 msgstr "Ouvrir {name}"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Open a backup file instead"
+msgstr "Ouvrir un fichier de sauvegarde à la place"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Ouvrir une sauvegarde .bramble chiffrée et en faire le coffre sur cet appareil."

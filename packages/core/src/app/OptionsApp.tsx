@@ -28,6 +28,23 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const [done, setDone] = useState<null | "created" | "opened">(null);
 	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+	// "Open existing vault" -> open a .bramble file: reuse the restore flow (extension only).
+	const [openingFile, setOpeningFile] = useState(false);
+
+	if (openingFile) {
+		return (
+			<Suspense fallback={null}>
+				<RestoreShell
+					onClose={() => setOpeningFile(false)}
+					onRestored={() => {
+						setOpeningFile(false);
+						if (onComplete) onComplete();
+						else setDone("opened");
+					}}
+				/>
+			</Suspense>
+		);
+	}
 
 	if (recoveryCode) {
 		return (
@@ -78,6 +95,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 				if (onComplete) onComplete();
 				else setDone("opened");
 			}}
+			onOpenFile={shell.supportsRestore ? () => setOpeningFile(true) : undefined}
 		/>
 	);
 }
