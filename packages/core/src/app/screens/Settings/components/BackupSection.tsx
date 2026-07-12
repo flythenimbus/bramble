@@ -17,6 +17,7 @@ import {
 	type BackupTargetConfig,
 	normalizeS3,
 } from "../../../../backup/config";
+import { isOAuthConfigured, OAUTH_PROVIDERS, type OAuthProviderId } from "../../../../backup/oauth";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
@@ -34,11 +35,18 @@ const btnClass =
 const primaryBtnClass =
 	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50";
 
-// s3/webdav fill in credentials; oauth is one-click sign-in (Phase 2, stubbed here).
+// s3/webdav fill in credentials; oauth is one-click sign-in via shell.runOAuthFlow.
 type Kind = "s3" | "webdav" | "oauth";
 type IconComponent = ComponentType<{ className?: string }>;
 
 const isOneClick = (kind: Kind) => kind === "oauth";
+
+// A tile's id maps to a wired OAuth provider only when that provider exists and has a
+// real app key configured; otherwise the tile stays "coming soon".
+const oauthProviderOf = (providerId: string): OAuthProviderId | null =>
+	providerId in OAUTH_PROVIDERS && isOAuthConfigured(providerId as OAuthProviderId)
+		? (providerId as OAuthProviderId)
+		: null;
 
 interface ProviderDef {
 	id: string;
@@ -55,8 +63,8 @@ interface ProviderDef {
 
 // Popular providers. Brand icons where we have them, lucide placeholders otherwise
 // (Storj/pCloud/Fastmail/generic). Endpoints are sensible defaults; verify each
-// against the provider's docs. OAuth (Drive/Dropbox) is UI-only here; its sign-in
-// flow is Phase 2. See docs/cloud-storage-backups.md.
+// against the provider's docs. OAuth tiles (Drive/Dropbox) connect via
+// backup.connectOAuth once an app key is configured. See docs/cloud-storage-backups.md.
 const PROVIDERS: ProviderDef[] = [
 	{
 		id: "gdrive",
@@ -241,19 +249,75 @@ function ProviderModalHeader({ def, onClose }: { def: ProviderDef; onClose: () =
 	);
 }
 
-/** OAuth modal body. Sign-in is Phase 2, so the action is disabled for now. */
-function OneClickComingSoon({ def }: { def: ProviderDef }) {
+/**
+ * OAuth modal body. When the platform can run the flow and the provider is wired, it
+ * offers a "Connect" button that signs in and adds the target; otherwise it falls back
+ * to the "coming soon" note (mobile, or a build with no app key configured).
+ */
+function OneClickPanel({
+	def,
+	available,
+	onConnect,
+	onClose,
+}: {
+	def: ProviderDef;
+	available: boolean;
+	onConnect: () => Promise<void>;
+	onClose: () => void;
+}) {
+	const [connecting, setConnecting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const name = def.name;
+
+	if (!available) {
+		return (
+			<>
+				<p className="text-xs text-muted-foreground">
+					<Trans>
+						One-click sign-in for {name} is coming in a future update. For now, pick a provider
+						under "Bring your own storage".
+					</Trans>
+				</p>
+				<button type="button" disabled className={primaryBtnClass}>
+					<Trans>Coming soon</Trans>
+				</button>
+			</>
+		);
+	}
+
+	const connect = async () => {
+		setError(null);
+		setConnecting(true);
+		try {
+			await onConnect();
+			onClose();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setConnecting(false);
+		}
+	};
+
 	return (
 		<>
 			<p className="text-xs text-muted-foreground">
 				<Trans>
-					One-click sign-in for {name} is coming in a future update. For now, pick a provider under
-					"Bring your own storage".
+					Sign in and Bramble stores encrypted backups in its own {name} app folder. Only ciphertext
+					is uploaded, so {name} can't read anything in your vault.
 				</Trans>
 			</p>
-			<button type="button" disabled className={primaryBtnClass}>
-				<Trans>Coming soon</Trans>
+			{error && (
+				<p className="text-xs text-red-500 break-words" title={error}>
+					{error}
+				</p>
+			)}
+			<button
+				type="button"
+				onClick={() => void connect()}
+				disabled={connecting}
+				className={primaryBtnClass}
+			>
+				{connecting ? <Trans>Connecting…</Trans> : <Trans>Connect {name}</Trans>}
 			</button>
 		</>
 	);
@@ -266,6 +330,7 @@ function TargetCard({
 	running,
 	onFrequency,
 	onEdit,
+	onReconnect,
 	onRemove,
 }: {
 	target: BackupTargetConfig;
@@ -273,11 +338,18 @@ function TargetCard({
 	running: boolean;
 	onFrequency: (f: BackupFrequency) => void;
 	onEdit: () => void;
+	// Present for OAuth targets: re-run sign-in in place instead of editing credential fields.
+	onReconnect?: () => void;
 	onRemove: () => void;
 }) {
 	const { t } = useLingui();
 	const Icon = def.Icon;
-	const summary = target.provider === "s3" ? target.bucket : target.serverUrl;
+	const summary =
+		target.provider === "s3"
+			? target.bucket
+			: target.provider === "webdav"
+				? target.serverUrl
+				: target.path || def.name;
 	return (
 		<div className="rounded-lg border border-border p-3 space-y-3">
 			<div className="flex items-start justify-between gap-3">
@@ -322,9 +394,15 @@ function TargetCard({
 				</div>
 			</div>
 			<div className="flex items-center gap-3">
-				<button type="button" onClick={onEdit} className={btnClass}>
-					<Trans>Edit</Trans>
-				</button>
+				{onReconnect ? (
+					<button type="button" onClick={onReconnect} className={btnClass}>
+						<Trans>Reconnect</Trans>
+					</button>
+				) : (
+					<button type="button" onClick={onEdit} className={btnClass}>
+						<Trans>Edit</Trans>
+					</button>
+				)}
 				<button
 					type="button"
 					onClick={onRemove}
@@ -342,7 +420,7 @@ type ModalState = { step: "grid" } | { step: "form"; providerId: string; editing
 /**
  * Cloud backups panel. The vault can have many device-local targets, each on its
  * own frequency; "Back up now" fans out to all of them. S3/WebDAV credentials are
- * VEK-wrapped; OAuth (Drive/Dropbox) is Phase 2. See docs/cloud-storage-backups.md.
+ * VEK-wrapped; OAuth providers store a refresh token instead. See docs/cloud-storage-backups.md.
  */
 export function BackupSection() {
 	const { t } = useLingui();
@@ -478,6 +556,7 @@ export function BackupSection() {
 						{targets.map((target) => {
 							const def = providerById(target.providerId);
 							if (!def) return null;
+							const oauthId = oauthProviderOf(def.id);
 							return (
 								<TargetCard
 									key={target.id}
@@ -486,6 +565,12 @@ export function BackupSection() {
 									running={runningIds.has(target.id)}
 									onFrequency={(f) => void backup.setFrequency(target.id, f)}
 									onEdit={() => editTarget(target)}
+									onReconnect={
+										oauthId
+											? () =>
+													void backup.connectOAuth(oauthId, { targetId: target.id }).catch(() => {})
+											: undefined
+									}
 									onRemove={() => void backup.removeTarget(target.id)}
 								/>
 							);
@@ -548,7 +633,15 @@ export function BackupSection() {
 					isOneClick(modalDef.kind) ? (
 						<div className="p-5 space-y-4">
 							<ProviderModalHeader def={modalDef} onClose={() => setModal(null)} />
-							<OneClickComingSoon def={modalDef} />
+							<OneClickPanel
+								def={modalDef}
+								available={backup.oauthAvailable && oauthProviderOf(modalDef.id) !== null}
+								onConnect={async () => {
+									const id = oauthProviderOf(modalDef.id);
+									if (id) await backup.connectOAuth(id);
+								}}
+								onClose={() => setModal(null)}
+							/>
 						</div>
 					) : (
 						<form

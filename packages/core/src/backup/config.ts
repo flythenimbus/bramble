@@ -18,7 +18,7 @@ export interface WrappedCreds {
 export interface BackupTargetConfig {
 	id: string;
 	providerId: string; // provider tile id (drives the icon/name), e.g. "backblaze"
-	provider: "s3" | "webdav";
+	provider: "s3" | "webdav" | "dropbox";
 	endpoint?: string;
 	region?: string;
 	bucket?: string;
@@ -35,7 +35,8 @@ export interface BackupTargetConfig {
 
 export type S3Secrets = { accessKeyId: string; secretAccessKey: string };
 export type WebdavSecrets = { username: string; password: string };
-export type BackupSecrets = S3Secrets | WebdavSecrets;
+export type DropboxSecrets = { refreshToken: string };
+export type BackupSecrets = S3Secrets | WebdavSecrets | DropboxSecrets;
 
 /** Combine a target's non-secret config with unwrapped secrets into a ProviderConfig. */
 export function toProviderConfig(cfg: BackupTargetConfig, secrets: BackupSecrets): ProviderConfig {
@@ -50,6 +51,10 @@ export function toProviderConfig(cfg: BackupTargetConfig, secrets: BackupSecrets
 			accessKeyId: s.accessKeyId,
 			secretAccessKey: s.secretAccessKey,
 		};
+	}
+	if (cfg.provider === "dropbox") {
+		const s = secrets as DropboxSecrets;
+		return { kind: "dropbox", refreshToken: s.refreshToken, path: cfg.path };
 	}
 	const s = secrets as WebdavSecrets;
 	return {

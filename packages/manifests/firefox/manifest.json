@@ -36,7 +36,7 @@
 		"scripts": ["background.js"],
 		"type": "module"
 	},
-	"permissions": ["storage", "unlimitedStorage", "alarms", "idle", "clipboardWrite"],
+	"permissions": ["storage", "unlimitedStorage", "alarms", "idle", "clipboardWrite", "identity"],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [
 		{

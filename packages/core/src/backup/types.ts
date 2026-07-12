@@ -33,4 +33,11 @@ export interface WebdavConfig {
 	password: string;
 }
 
-export type ProviderConfig = S3Config | WebdavConfig;
+export interface DropboxConfig {
+	kind: "dropbox";
+	refreshToken: string; // long-lived; mints access tokens on demand
+	accessToken?: string; // optional warm token, else minted lazily from the refresh token
+	path?: string; // optional subfolder within the connected app folder
+}
+
+export type ProviderConfig = S3Config | WebdavConfig | DropboxConfig;

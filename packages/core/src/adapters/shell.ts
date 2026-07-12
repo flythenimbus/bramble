@@ -20,6 +20,25 @@ export interface PopOutHandoff {
 /** Full-tab screens the options page can boot into, via `?screen=`. Default (omitted) is the vault setup flow. */
 export type OptionsScreen = "import" | "restore";
 
+/** A one-click backup provider's authorize request; the shell adds the redirect URI and runs the interactive step. */
+export interface OAuthAuthRequest {
+	authUrl: string;
+	clientId: string;
+	scopes: string[];
+	/** PKCE S256 challenge. */
+	codeChallenge: string;
+	/** Opaque anti-forgery value the shell must echo back for verification. */
+	state: string;
+	/** Provider-specific extras, e.g. Dropbox token_access_type=offline. */
+	extraParams?: Record<string, string>;
+}
+
+/** The result of the interactive authorize step: the code and the redirect URI it used (needed for the token exchange). */
+export interface OAuthAuthResult {
+	code: string;
+	redirectUri: string;
+}
+
 /** A passkey the provider just stored, for a confirmation toast. */
 export interface PasskeySavedInfo {
 	rpId: string;
@@ -90,6 +109,13 @@ export interface ShellAdapter {
 	supportsSaveCapture: boolean;
 	/** Whether the .bramble backup restore flow is available. Extension only for now; the mobile file picker doesn't recognize .bramble yet. Gates the "Import a backup" row. */
 	supportsRestore: boolean;
+	/**
+	 * Run a one-click backup provider's interactive OAuth authorize step and return the auth code.
+	 * Extension only (chrome.identity.launchWebAuthFlow, popup context); absent on mobile, which
+	 * keeps the OAuth tiles in their "coming soon" state. The non-interactive token exchange/refresh
+	 * live in @core/backup/oauth. See docs/cloud-storage-backups.md.
+	 */
+	runOAuthFlow?(req: OAuthAuthRequest): Promise<OAuthAuthResult>;
 	/** Whether this platform can act as a WebAuthn passkey provider for other sites. True on the Chromium extension (chrome.webAuthenticationProxy); false elsewhere. Gates the passkey-provider setting. See docs/passkey-provider.md. */
 	supportsPasskeyProvider: boolean;
 	/** Attach/detach the passkey provider at runtime (extension only; paired with supportsPasskeyProvider). Persisting the pref is the caller's job; this just applies it now. */

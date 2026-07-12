@@ -198,6 +198,50 @@ One WebDAV client reaches the self-hosted and privacy ecosystem.
 | Fastmail, mailbox.org, Koofr | hosted WebDAV |
 | pCloud, Filen, Internxt | also expose WebDAV, so this adapter catches them too |
 
+## OAuth one-click providers (Dropbox, then Google Drive)
+
+For mainstream users who don't have S3 keys or a WebDAV server, the "Easiest" tiles
+offer sign-in-with-your-account. These use OAuth 2.0 with PKCE as a **public client**
+(no client secret ever ships), and each provider's own REST upload API rather than
+S3/WebDAV. We store only the long-lived **refresh token** (VEK-wrapped, like every
+other credential) and mint a short-lived access token on demand, so a scheduled
+backup in the background service worker can refresh + upload with no user present.
+
+**The seam.** The interactive authorize step is the one browser-only piece, so it
+lives behind an optional `shell.runOAuthFlow` (extension: `chrome.identity.launchWebAuthFlow`
+in the popup, which needs a user gesture; absent on mobile, so the tiles stay "coming
+soon" there). Everything else is a plain `fetch` and lives in `@core/backup/oauth`
+(PKCE, code exchange, refresh) and `@core/backup/dropbox` (the storage client). The
+target factory (`createTarget`) gains a `dropbox` kind; `toProviderConfig` stays pure
+and sync because the access token is minted lazily inside the client (and re-minted
+once on a 401), not during config assembly.
+
+**Flow.** Connect: generate a PKCE verifier/challenge + random `state` → `runOAuthFlow`
+opens the provider's consent page and returns the auth `code` (state verified) → core
+exchanges `code` + verifier for a refresh token → stored as the target's creds. Backup:
+unwrap the refresh token → mint an access token → upload to the app folder, prune to
+keep-last-N. Object naming/retention are identical to S3/WebDAV; keys live under the
+connected app folder (an app-folder-scoped app only ever sees its own files).
+
+**Registering the app (one-time, by the app owner).** OAuth needs a public app key
+registered with the provider; drop it into `OAUTH_PROVIDERS` in `@core/backup/oauth`
+(replacing the `REPLACE_WITH_...` placeholder, which keeps the tile in "coming soon"
+until set). Dropbox: create an app at the App Console, **App folder** access,
+scopes `files.content.write` + `files.content.read`, and add the extension's redirect
+URI. The redirect is the extension's own `chrome.identity.getRedirectURL()`, i.e.
+`https://<extension-id>.chromiumapp.org/`. The **published** Chrome id is stable
+(`https://kmokhdhoggbdcgoepifeckhgbfakaknm.chromiumapp.org/`); an **unpacked** dev
+build gets a random id unless a `key` is pinned in the manifest, so for local testing
+either pin the CWS public `key` or also register whatever `chrome.identity.getRedirectURL()`
+prints in the dev build's console. Firefox uses a different scheme (`browser.identity.getRedirectURL()`
+returns an `*.allizom.org` URL), registered separately.
+
+Google Drive follows the same shape but needs Google OAuth-app verification and the
+`drive.file` scope (per-file access, avoids the restricted-scope security assessment);
+add it once we're willing to run Google's verification. `token_access_type=offline`
+(Dropbox) / `access_type=offline` + `prompt=consent` (Google) is required to receive a
+refresh token.
+
 ## Dedicated providers worth naming
 
 Only worth a bespoke integration if users ask for it and the API is clean.
@@ -234,9 +278,12 @@ The mechanism above is platform plumbing; the adapters below are the reach.
    triggers, the decision rule, and skip-if-unchanged.
 3. **Mobile automatic (opportunistic).** The same client and config, fired on
    resume and unlock. Native background scheduling deferred.
-4. **OAuth consumer providers** (Dropbox, Google Drive, pCloud) for mainstream
-   one-click users. Defer MEGA and Proton; note Proton as "planned once its SDK
-   stabilizes".
+4. **OAuth consumer providers** (Dropbox first, then Google Drive, pCloud) for
+   mainstream one-click users. Dropbox is built (PKCE public client, refresh-token
+   creds, app-folder REST client, `shell.runOAuthFlow` on the extension); it goes
+   live once the app key is registered. Google Drive follows after its OAuth-app
+   verification. Defer MEGA and Proton; note Proton as "planned once its SDK
+   stabilizes". See "OAuth one-click providers" above.
 
 Because the payload is already ciphertext, the user-facing promise (the provider
 never sees anything readable) holds for every backend, not only the private ones.
