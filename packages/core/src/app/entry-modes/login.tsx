@@ -312,7 +312,9 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 									</div>
 									<div className="text-xs text-muted-foreground truncate">
 										{pk.rpId}
-										{pk.createdAt ? ` · ${new Date(pk.createdAt).toLocaleDateString()}` : ""}
+										{pk.createdAt
+											? ` · ${i18n.date(new Date(pk.createdAt), { dateStyle: "medium" })}`
+											: ""}
 									</div>
 								</div>
 								<button

@@ -1,3 +1,4 @@
+import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	Boxes,
@@ -170,8 +171,10 @@ const PROVIDERS: ProviderDef[] = [
 
 const providerById = (id: string): ProviderDef | null => PROVIDERS.find((p) => p.id === id) ?? null;
 
+// Format with the active app locale (i18n.date), not the browser default, so the date
+// matches the language chosen in Settings.
 function formatWhen(ms: number): string {
-	return new Date(ms).toLocaleString();
+	return i18n.date(new Date(ms), { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** A clickable provider tile: icon badge + name + one-line blurb. */
