@@ -23,7 +23,6 @@ import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
-import { GoogleDrive } from "../../../components/icons/GoogleDrive";
 import { NextCloud } from "../../../components/icons/NextCloud";
 import { Wasabi } from "../../../components/icons/Wasabi";
 import { Modal } from "../../../components/ui/modal";
@@ -64,17 +63,11 @@ interface ProviderDef {
 
 // Popular providers. Brand icons where we have them, lucide placeholders otherwise
 // (Storj/pCloud/Fastmail/generic). Endpoints are sensible defaults; verify each
-// against the provider's docs. OAuth tiles (Drive/Dropbox) connect via
-// backup.connectOAuth once an app key is configured. See docs/cloud-storage-backups.md.
+// against the provider's docs. Dropbox is the only OAuth tile: it's the one big
+// consumer cloud with a true public PKCE client (no secret, no broker). Google Drive
+// and OneDrive were evaluated and dropped (see docs/cloud-storage-backups.md);
+// everyone else is reachable via the S3 / WebDAV tiles.
 const PROVIDERS: ProviderDef[] = [
-	{
-		id: "gdrive",
-		name: "Google Drive",
-		blurb: "One-click setup",
-		kind: "oauth",
-		Icon: GoogleDrive,
-		accent: "text-amber-500",
-	},
 	{
 		id: "dropbox",
 		name: "Dropbox",
