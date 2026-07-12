@@ -84,6 +84,23 @@ describe("exchangeCodeForTokens", () => {
 			}),
 		).rejects.toThrow(/400/);
 	});
+
+	it("surfaces the provider's error_description on a failed exchange", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				jsonResponse({ error: "invalid_grant", error_description: "code expired" }, 400),
+			),
+		);
+		await expect(
+			exchangeCodeForTokens({
+				providerId: "dropbox",
+				code: "c",
+				codeVerifier: "v",
+				redirectUri: "r",
+			}),
+		).rejects.toThrow(/code expired/);
+	});
 });
 
 describe("refreshAccessToken", () => {
@@ -106,5 +123,13 @@ describe("refreshAccessToken", () => {
 			vi.fn(async () => jsonResponse({ error: "expired_access_token" }, 401)),
 		);
 		await expect(refreshAccessToken("dropbox", "RT")).rejects.toThrow(/reconnect/i);
+	});
+
+	it("rejects a malformed (non-string) access token a truthiness check would accept", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => jsonResponse({ access_token: 12345 })),
+		);
+		await expect(refreshAccessToken("dropbox", "RT")).rejects.toThrow(/no access token/i);
 	});
 });
