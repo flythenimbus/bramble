@@ -8,30 +8,35 @@ import { Section } from "./primitives";
 interface Wallet {
 	name: string; // brand name, not localized
 	ticker: string;
-	scheme: string; // URI scheme for the QR so wallets auto-fill (BIP-21 style)
+	/** Shown + copied: the human-readable value a donor pastes into their wallet. */
 	address: string;
+	/** QR payload (a payment URI). May differ from `address`: for Lightning it's the
+	 * `lightning:LNURL…` (most universally scannable), while the copyable address stays
+	 * the human `you@domain`; for Monero it's `monero:<addr>`. */
+	qr: string;
 	Icon: LucideIcon;
 	accent: string;
 }
 
-// Donation wallets. Addresses are the app owner's; drop the real ones in (replacing the
-// placeholders). A coin with an unconfigured address is hidden, and the whole Support
-// section disappears if none are set, so a placeholder is never shown or donated to.
+// Donation wallets. Addresses are the app owner's. An entry with an unconfigured address is
+// hidden, and the whole Support section disappears if none are set, so a placeholder is never
+// shown or donated to. The Lightning QR encodes the LNURL for flythenimbus@cake.cash (verified
+// live); regenerate it if the address changes.
 const WALLETS: Wallet[] = [
 	{
 		name: "Bitcoin",
-		ticker: "BTC",
-		scheme: "bitcoin",
-		address: "REPLACE_WITH_BTC_ADDRESS",
+		ticker: "Lightning",
+		address: "flythenimbus@cake.cash",
+		qr: "lightning:LNURL1DP68GURN8GHJ7CMPDDJJUCMPWD5Z7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKVMREW35X2MNFD4382UCG2WCEJ",
 		Icon: Bitcoin,
 		accent: "text-orange-500",
 	},
 	{
 		name: "Monero",
 		ticker: "XMR",
-		scheme: "monero",
 		address:
 			"4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
+		qr: "monero:4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
 		Icon: Coins,
 		accent: "text-orange-600",
 	},
@@ -60,7 +65,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			</div>
 			{/* White quiet-zone so the QR scans against the dark theme. */}
 			<div className="rounded-lg bg-white p-2">
-				<QRCodeSVG value={`${wallet.scheme}:${wallet.address}`} size={132} marginSize={0} />
+				<QRCodeSVG value={wallet.qr} size={132} marginSize={0} />
 			</div>
 			<p className="break-all text-center font-mono text-[11px] text-muted-foreground">
 				{wallet.address}
