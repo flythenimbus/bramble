@@ -1,3 +1,4 @@
+import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -31,7 +32,7 @@ interface SyncGroup {
 
 const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
 const addedOn = (ms: number): string =>
-	new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+	i18n.date(new Date(ms), { month: "short", day: "numeric", year: "numeric" });
 
 /**
  * Device sync panel. State-aware: before you're in a group it offers "add a device"
