@@ -1,9 +1,10 @@
-// OAuth (PKCE, public client) for one-click backup providers. The interactive
-// authorize step is platform-owned (shell.runOAuthFlow -> chrome.identity on the
-// extension); the token exchange + refresh here are plain fetches with no client
-// secret, so they run anywhere (popup or background service worker). We store only
-// the long-lived refresh token (VEK-wrapped, like other creds) and mint a short-lived
-// access token on demand. See docs/cloud-storage-backups.md.
+// OAuth (PKCE, public client) for one-click backup providers. The whole connect runs
+// in the extension background service worker (see background/backup-connect): the
+// interactive authorize step via chrome.identity, then these helpers. The token
+// exchange + refresh are plain fetches with no client secret, so they run anywhere
+// (background or the Dropbox client). We store only the long-lived refresh token
+// (VEK-wrapped, like other creds) and mint a short-lived access token on demand.
+// See docs/cloud-storage-backups.md.
 
 import { bytesToBase64Url } from "../util/bytes";
 

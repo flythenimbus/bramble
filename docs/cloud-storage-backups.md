@@ -207,14 +207,19 @@ S3/WebDAV. We store only the long-lived **refresh token** (VEK-wrapped, like eve
 other credential) and mint a short-lived access token on demand, so a scheduled
 backup in the background service worker can refresh + upload with no user present.
 
-**The seam.** The interactive authorize step is the one browser-only piece, so it
-lives behind an optional `shell.runOAuthFlow` (extension: `chrome.identity.launchWebAuthFlow`
-in the popup, which needs a user gesture; absent on mobile, so the tiles stay "coming
-soon" there). Everything else is a plain `fetch` and lives in `@core/backup/oauth`
-(PKCE, code exchange, refresh) and `@core/backup/dropbox` (the storage client). The
-target factory (`createTarget`) gains a `dropbox` kind; `toProviderConfig` stays pure
-and sync because the access token is minted lazily inside the client (and re-minted
-once on a 401), not during config assembly.
+**The seam.** The connect is run entirely in the extension **background service
+worker** (`background/backup-connect`), not the popup. This matters:
+`launchWebAuthFlow` opens a provider window that steals focus, which closes the popup
+and destroys any context awaiting the auth code. The background survives that (with a
+keepalive across the possibly-minutes-long 2FA sign-in), does the whole flow
+(interactive authorize via `chrome.identity`, code exchange, VEK-wrap via the offscreen
+host, persist the target), and the popup just triggers it via `shell.connectBackupOAuth`
+and reloads. So even if the popup is torn down mid-flow, the target is saved and shows
+on reopen. Absent on mobile, so the tiles stay "coming soon" there. The pure pieces are
+plain `fetch`: `@core/backup/oauth` (PKCE, code exchange, refresh) and
+`@core/backup/dropbox` (the storage client). The target factory (`createTarget`) gains a
+`dropbox` kind; `toProviderConfig` stays pure and sync because the access token is minted
+lazily inside the client (and re-minted once on a 401), not during config assembly.
 
 **Flow.** Connect: generate a PKCE verifier/challenge + random `state` → `runOAuthFlow`
 opens the provider's consent page and returns the auth `code` (state verified) → core
