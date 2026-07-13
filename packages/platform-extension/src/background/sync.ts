@@ -249,13 +249,20 @@ async function syncLocalPayload(): Promise<string> {
 	return encodeEntriesPayload(payload);
 }
 
+let lastSyncStampAt = 0;
+
 /** A peer's payload arrived: merge into the local vault. Returns whether it changed. */
 async function syncApplyRemote(payloadJson: string): Promise<boolean> {
 	const remote = decodeEntriesPayload(payloadJson);
 	const { changed } = await applyRemotePayload(makeVaultSyncPort(), remote);
-	// Every reconcile (changed or no-op) is a "we're up to date with a peer" moment; the Sync
-	// settings UI live-reads this via chrome.storage.onChanged (subscribeMeta).
-	await extensionStorage.setMeta(SYNC_LAST_SYNCED_KEY, Date.now());
+	// Every reconcile (changed or no-op) means "we're up to date with a peer". Peers rebroadcast
+	// every few seconds, so throttle the stamp to ~30s to avoid churn (each write wakes the Sync
+	// UI via storage.onChanged). The UI live-reads this via subscribeMeta.
+	const now = Date.now();
+	if (now - lastSyncStampAt >= 30_000) {
+		lastSyncStampAt = now;
+		await extensionStorage.setMeta(SYNC_LAST_SYNCED_KEY, now);
+	}
 	return changed;
 }
 

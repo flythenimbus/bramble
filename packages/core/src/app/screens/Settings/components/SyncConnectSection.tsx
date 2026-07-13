@@ -45,7 +45,9 @@ const relativeTime = (ms: number): string => {
 	const rtf = new Intl.RelativeTimeFormat(i18n.locale || "en", { numeric: "auto" });
 	const sec = Math.round((ms - Date.now()) / 1000); // negative = in the past
 	const abs = Math.abs(sec);
-	if (abs < 60) return rtf.format(sec, "second");
+	// Coarsen sub-minute to a stable "now": while both devices are connected they reconcile
+	// every few seconds, so second-precision would flicker "now" / "2 seconds ago".
+	if (abs < 60) return rtf.format(0, "second");
 	if (abs < 3600) return rtf.format(Math.round(sec / 60), "minute");
 	if (abs < 86_400) return rtf.format(Math.round(sec / 3600), "hour");
 	return rtf.format(Math.round(sec / 86_400), "day");

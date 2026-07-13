@@ -253,6 +253,8 @@ const blobStore = createEntriesBlobStore({
 });
 
 let rosterSession: MeshSession | null = null;
+// Throttle the "last synced" stamp: peers rebroadcast every few seconds, so update at most ~30s.
+let lastSyncStampAt = 0;
 
 async function startRoster(): Promise<void> {
 	const group = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
@@ -295,11 +297,15 @@ async function startRoster(): Promise<void> {
 				onChanged: notifyExternalChange, // refresh the in-app list with the peer's edits
 			});
 			await applyRemotePayload(port, decodeEntriesPayload(json));
-			// Every reconcile (changed or no-op) is a "we're up to date with a peer" moment. Persist it
-			// and emit the live tick; the in-process Sync UI updates via onSyncEvent ("synced").
+			// Every reconcile (changed or no-op) means "we're up to date with a peer". Throttle to
+			// ~30s (peers rebroadcast every few seconds); persist + emit the live tick for the in-process
+			// Sync UI (onSyncEvent "synced").
 			const at = Date.now();
-			await mobileStorage.setMeta(SYNC_LAST_SYNCED_KEY, at);
-			emit({ kind: "synced", at });
+			if (at - lastSyncStampAt >= 30_000) {
+				lastSyncStampAt = at;
+				await mobileStorage.setMeta(SYNC_LAST_SYNCED_KEY, at);
+				emit({ kind: "synced", at });
+			}
 		},
 	});
 }
