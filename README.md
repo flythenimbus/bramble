@@ -152,14 +152,28 @@ PRs that add real-site autofill fixtures or import-format coverage are especiall
 
 ## Support
 
-Bramble is free and open source. If it's useful to you, toss some Monero our way. 💜
+Bramble is free and open source. If it's useful to you, a tip is hugely appreciated. 💜 Scan a code with your wallet, or copy an address below.
 
-<p align="center">
-  <img src="monero.png" alt="Monero donation QR code" width="200" />
-</p>
+| Monero (XMR) | Bitcoin · Lightning | Bitcoin · on-chain |
+|:---:|:---:|:---:|
+| <img src="monero.png" alt="Monero donation QR code" width="200" /> | <img src="bitcoin-lightning.png" alt="Bitcoin Lightning donation QR code" width="200" /> | <img src="bitcoin-onchain.png" alt="Bitcoin on-chain donation QR code" width="200" /> |
+
+**Monero (XMR)**
 
 ```
 4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq
+```
+
+**Bitcoin · Lightning**
+
+```
+flythenimbus@cake.cash
+```
+
+**Bitcoin · on-chain**
+
+```
+bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t
 ```
 
 ## License
