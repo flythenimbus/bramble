@@ -5,53 +5,82 @@ import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { Section } from "./primitives";
 
-interface Wallet {
-	name: string; // brand name, not localized
-	ticker: string;
+interface Method {
+	label: string; // e.g. "Lightning" / "On-chain"; technical, not localized (like the coin names)
 	/** Shown + copied: the human-readable value a donor pastes into their wallet. */
 	address: string;
-	/** QR payload (a payment URI). May differ from `address`: for Lightning it's the
-	 * `lightning:LNURL…` (most universally scannable), while the copyable address stays
-	 * the human `you@domain`; for Monero it's `monero:<addr>`. */
+	/** QR payload (a payment URI). May differ from `address`: Lightning encodes the
+	 * `lightning:LNURL…` (most universally scannable) while the copyable address stays the
+	 * human `you@domain`; Monero/on-chain BTC use the `monero:`/`bitcoin:` URIs. */
 	qr: string;
+}
+
+interface Wallet {
+	name: string; // brand name, not localized
+	ticker?: string;
+	/** One payment method, or several with a toggle (e.g. BTC: Lightning + on-chain). */
+	methods: Method[];
 	Icon: LucideIcon;
 	accent: string;
 }
 
-// Donation wallets. Addresses are the app owner's. An entry with an unconfigured address is
-// hidden, and the whole Support section disappears if none are set, so a placeholder is never
-// shown or donated to. The Lightning QR encodes the LNURL for flythenimbus@cake.cash (verified
-// live); regenerate it if the address changes.
+// Donation wallets. Addresses are the app owner's. A method with an unconfigured address is
+// dropped, a wallet with no configured method is hidden, and the whole Support section
+// disappears if none remain, so a placeholder is never shown or donated to. The Lightning QR
+// encodes the LNURL for flythenimbus@cake.cash (verified live); regenerate it if it changes.
 const WALLETS: Wallet[] = [
-	{
-		name: "Bitcoin",
-		ticker: "Lightning",
-		address: "flythenimbus@cake.cash",
-		qr: "lightning:LNURL1DP68GURN8GHJ7CMPDDJJUCMPWD5Z7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKVMREW35X2MNFD4382UCG2WCEJ",
-		Icon: Bitcoin,
-		accent: "text-orange-500",
-	},
 	{
 		name: "Monero",
 		ticker: "XMR",
-		address:
-			"4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
-		qr: "monero:4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
 		Icon: Coins,
 		accent: "text-orange-600",
+		methods: [
+			{
+				label: "Monero",
+				address:
+					"4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
+				qr: "monero:4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
+			},
+		],
+	},
+	{
+		name: "Bitcoin",
+		ticker: "BTC",
+		Icon: Bitcoin,
+		accent: "text-orange-500",
+		methods: [
+			{
+				label: "Lightning",
+				address: "flythenimbus@cake.cash",
+				qr: "lightning:LNURL1DP68GURN8GHJ7CMPDDJJUCMPWD5Z7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKVMREW35X2MNFD4382UCG2WCEJ",
+			},
+			{
+				label: "On-chain",
+				address: "bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t",
+				qr: "bitcoin:bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t",
+			},
+		],
 	},
 ];
 
 const isConfigured = (address: string) => !address.startsWith("REPLACE_WITH_");
 
-/** One coin: QR (scan to pay), the full address, and a copy button that doesn't auto-clear. */
+const toggleBtn = (active: boolean) =>
+	`flex-1 rounded-md px-2 py-1 transition-colors ${
+		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+	}`;
+
+/** One coin: an optional method toggle, a QR (scan to pay), the address, and a non-clearing copy. */
 function WalletCard({ wallet }: { wallet: Wallet }) {
 	const { clipboard } = usePlatform();
 	const [copied, setCopied] = useState(false);
+	const [selected, setSelected] = useState(0);
 	const Icon = wallet.Icon;
+	const method = wallet.methods[selected] ?? wallet.methods[0];
+	if (!method) return null;
 
 	const copy = async () => {
-		await (clipboard.copyPlain ?? clipboard.copy)(wallet.address);
+		await (clipboard.copyPlain ?? clipboard.copy)(method.address);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1500);
 	};
@@ -61,14 +90,33 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			<div className="flex items-center gap-2 self-start">
 				<Icon className={`w-4 h-4 ${wallet.accent}`} />
 				<span className="text-sm font-medium">{wallet.name}</span>
-				<span className="text-xs text-muted-foreground">{wallet.ticker}</span>
+				{wallet.ticker && <span className="text-xs text-muted-foreground">{wallet.ticker}</span>}
 			</div>
+
+			{wallet.methods.length > 1 && (
+				<div className="flex w-full rounded-lg border border-border p-0.5 text-xs">
+					{wallet.methods.map((m, i) => (
+						<button
+							key={m.label}
+							type="button"
+							onClick={() => {
+								setSelected(i);
+								setCopied(false);
+							}}
+							className={toggleBtn(i === selected)}
+						>
+							{m.label}
+						</button>
+					))}
+				</div>
+			)}
+
 			{/* White quiet-zone so the QR scans against the dark theme; scales to the column. */}
 			<div className="w-full max-w-[150px] rounded-lg bg-white p-2">
-				<QRCodeSVG value={wallet.qr} size={132} marginSize={0} className="h-auto w-full" />
+				<QRCodeSVG value={method.qr} size={132} marginSize={0} className="h-auto w-full" />
 			</div>
 			<p className="break-all text-center font-mono text-[11px] text-muted-foreground">
-				{wallet.address}
+				{method.address}
 			</p>
 			<button
 				type="button"
@@ -94,7 +142,10 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 /** About tab: optional donations panel. Hidden entirely until a wallet address is configured. */
 export function SupportSection() {
 	const { t } = useLingui();
-	const wallets = WALLETS.filter((w) => isConfigured(w.address));
+	const wallets = WALLETS.map((w) => ({
+		...w,
+		methods: w.methods.filter((m) => isConfigured(m.address)),
+	})).filter((w) => w.methods.length > 0);
 	if (wallets.length === 0) return null;
 
 	return (
@@ -107,7 +158,7 @@ export function SupportSection() {
 			</p>
 			<div className={`grid gap-3 ${wallets.length > 1 ? "grid-cols-2" : "mx-auto max-w-xs"}`}>
 				{wallets.map((w) => (
-					<WalletCard key={w.ticker} wallet={w} />
+					<WalletCard key={w.name} wallet={w} />
 				))}
 			</div>
 		</Section>
