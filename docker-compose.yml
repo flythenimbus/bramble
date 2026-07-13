@@ -1,0 +1,41 @@
+# Local Nextcloud for testing Bramble's WebDAV cloud backup end-to-end.
+# This is NOT part of the app; it's a throwaway WebDAV server you run on your
+# own machine to exercise the S3/WebDAV backup path without a cloud account.
+#
+#   docker compose up -d       # start it (first boot installs Nextcloud, ~30-90s)
+#   docker compose logs -f      # watch until Apache is serving requests
+#   docker compose down         # stop + remove the container
+#   docker compose down -v      # ...and wipe the data volume for a clean slate
+#
+# Once it's up, point Bramble's WebDAV provider at:
+#   Server URL: http://localhost:8080/remote.php/dav/files/admin/
+#   Username:   admin
+#   Password:   Bramble-test-123
+# Backups land in a "bramble/" folder under that user's files. http://localhost
+# works from the extension popup (host permissions bypass CORS; localhost is
+# exempt from mixed-content blocking).
+
+services:
+  nextcloud:
+    image: nextcloud:stable
+    container_name: bramble-nextcloud
+    ports:
+      # host:container. Change the left port (8080) if something already uses it.
+      - "8080:80"
+    environment:
+      # Setting these auto-runs the Nextcloud installer on first boot, so there's
+      # no web setup wizard. SQLite keeps it to a single container, which is plenty
+      # for testing (a real deploy would use MariaDB/Postgres + Redis).
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: Bramble-test-123
+      # Without this, Nextcloud rejects requests with an "untrusted domain" error.
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost 127.0.0.1
+    volumes:
+      # Persist the install + uploaded backups across restarts. Blow it away with
+      # `docker compose down -v` to get a fresh, empty instance.
+      - bramble-nextcloud-data:/var/www/html
+    restart: unless-stopped
+
+volumes:
+  bramble-nextcloud-data:
