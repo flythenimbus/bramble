@@ -69,14 +69,18 @@ export function VaultSetup({
 					onSubmit={handleSubmit}
 					mobile={mobile}
 				/>
-				{mode === "open" && onOpenFile && (
+				{onOpenFile && (
 					<button
 						type="button"
 						onClick={onOpenFile}
 						disabled={busy}
 						className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
 					>
-						<Trans>Open a backup file instead</Trans>
+						{mode === "create" ? (
+							<Trans>Have a backup? Open a .bramble file instead</Trans>
+						) : (
+							<Trans>Open a backup file instead</Trans>
+						)}
 					</button>
 				)}
 			</div>

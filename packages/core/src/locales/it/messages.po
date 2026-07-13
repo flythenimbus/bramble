@@ -690,6 +690,10 @@ msgstr "Torna indietro"
 msgid "Go to vault"
 msgstr "Vai al vault"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Have a backup? Open a .bramble file instead"
+msgstr "Ha un backup? Apri invece un file .bramble"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
 msgstr "Nascosto"
@@ -1003,6 +1007,11 @@ msgstr "L'accesso con un clic per {name} sarà disponibile in un futuro aggiorna
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
 msgstr "Apri {name}"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
+msgstr "Apri <0>{0}</0> come archivio su questo dispositivo. Inserisci la sua password principale."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Open a backup file instead"

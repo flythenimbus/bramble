@@ -35,6 +35,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 		return (
 			<Suspense fallback={null}>
 				<RestoreShell
+					mobile={mobile}
 					onClose={() => setOpeningFile(false)}
 					onRestored={() => {
 						setOpeningFile(false);
@@ -126,7 +127,7 @@ export default function OptionsApp({
 							</Suspense>
 						) : active === "restore" ? (
 							<Suspense fallback={null}>
-								<RestoreShell onClose={onComplete} />
+								<RestoreShell onClose={onComplete} mobile={mobile} />
 							</Suspense>
 						) : (
 							<SetupShell onComplete={onComplete} mobile={mobile} />
