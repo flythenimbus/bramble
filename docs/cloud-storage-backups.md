@@ -36,16 +36,17 @@ ciphertext insight above plus one platform fact: the browser extension has a
 scheduler (`chrome.alarms`) and can reach any host, while the mobile apps have
 no background scheduler at all and run only while open.
 
-### One source, no syncing
+### Device-local, no syncing
 
-Backup configuration (provider, endpoint, bucket, credentials, schedule) is
-**device-local**. It is stored the way device preferences and sync endpoints
-already are, per-device under `backup.*` keys, and is **never** placed in a sync
-payload. The P2P sync code is untouched: no new wire field, no roster change, no
-synced settings record.
+Backup configuration is **device-local**: a list of targets, each with its own
+provider, credentials, and schedule. A vault can back up to several destinations
+at once (say Drive daily, R2 weekly, Nextcloud monthly). It is stored the way
+device preferences and sync endpoints already are, per-device under `backup.*`
+keys, and is **never** placed in a sync payload. The P2P sync code is untouched:
+no new wire field, no roster change, no synced settings record.
 
 The user configures backups on one device, typically an always-on desktop with
-the extension. Only that device holds credentials and runs the schedule.
+the extension. Only that device holds credentials and runs the schedules.
 
 This makes the multi-device story trivially conflict-free, because conflicts
 need shared state and device-local config has none. A user who deliberately
@@ -63,8 +64,8 @@ coordination surface.
 
 ### Best-effort: a frequency, not a clock time
 
-The user picks a **frequency** (Off / Daily / Weekly / Monthly), not a time of
-day. A wall-clock moment cannot be promised: mobile has no background scheduler,
+Each target has its own **frequency** (Off / Daily / Weekly / Monthly), not a
+time of day. A wall-clock moment cannot be promised: mobile has no background scheduler,
 and because backups are unlock-gated (below) the vault is usually locked at any
 given instant. The promise is a ceiling: at most once per frequency, the next
 time the device is unlocked after one is due.
@@ -88,23 +89,29 @@ upgrade if best-effort proves too loose. Deferred for now.
 
 ### Config and state (device-local)
 
+A vault holds a list of targets under `backup.targets`; each carries its own
+non-secret provider config, VEK-wrapped credentials, schedule, and run state:
+
 ```
-BackupConfig  { enabled, frequency: off|daily|weekly|monthly,
-                provider: { kind: s3|webdav, endpoint, bucket/path, region } }
-BackupCreds   { ... }        // VEK-wrapped at rest
-BackupState   { lastBackupAt, lastVaultHash, lastError? }   // written per run
+backup.targets: BackupTargetConfig[]   // each:
+  { id, providerId, provider: s3|webdav,
+    endpoint, region, bucket, prefix | serverUrl, path,   // non-secret
+    frequency: off|daily|weekly|monthly, keep,
+    creds: { iv, ciphertext },          // VEK-wrapped secret credentials
+    lastBackupAt, lastVaultHash, lastError? }             // per-target run state
 ```
 
-Stored under `backup.*` via the same per-device meta storage as `sync.relay` and
-the `pref.*` values.
+Stored via the same per-device meta storage as `sync.relay` and the `pref.*`
+values. "Back up now" fans out to every target; scheduling evaluates each target
+independently.
 
 ### The decision rule
 
 On each trigger a pure, testable function decides whether to upload:
 
 ```
-shouldBackup(now, state, config, currentVaultHash, isUnlocked):
-  if not enabled          -> skip (disabled)
+shouldBackup(now, target, currentVaultHash, isUnlocked):   // evaluated per target
+  if target.frequency == off -> skip (off)
   if not isUnlocked       -> skip (locked)
   due     = lastBackupAt is null or now - lastBackupAt >= interval(frequency)
   if not due              -> skip (not due)
@@ -134,9 +141,10 @@ Opportunistic, per platform:
 ### Back up now
 
 A Settings button, always available while unlocked. It bypasses the due and
-changed checks and uploads a fresh dated snapshot at once, with inline feedback
-(uploading, then backed up at a time, or failed with a reason). It is the escape
-hatch for a change the user does not want to hold until the next window.
+changed checks and uploads a fresh dated snapshot to every target at once, with
+per-target feedback (uploading, then backed up at a time, or failed with a
+reason). It is the escape hatch for a change the user does not want to hold until
+the next window.
 
 ### Object naming and retention
 

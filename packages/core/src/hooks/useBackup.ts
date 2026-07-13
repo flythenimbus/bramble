@@ -2,15 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { createTarget, runBackup } from "../backup";
 import {
 	BACKUP_CONFIG_KEY,
+	BACKUP_TARGETS_KEY,
 	type BackupFrequency,
 	type BackupSecrets,
+	type BackupTargetConfig,
 	backupPrefix,
-	type StoredBackupConfig,
 	toProviderConfig,
 } from "../backup/config";
 import { usePlatform } from "../context/PlatformContext";
 
-export interface SaveBackupInput {
+export interface SaveTargetInput {
 	providerId: string;
 	provider: "s3" | "webdav";
 	endpoint?: string;
@@ -19,23 +20,35 @@ export interface SaveBackupInput {
 	prefix?: string;
 	serverUrl?: string;
 	path?: string;
-	secrets?: BackupSecrets; // omit to keep the currently-saved credentials
+	secrets?: BackupSecrets; // omit on edit to keep the saved credentials
 }
 
+const newId = () => globalThis.crypto.randomUUID();
+
 /**
- * Manual cloud backup: persist a provider config (credentials VEK-wrapped) and
- * run a one-off backup. Scheduling (Phase 1) rides on top of the same config.
- * The upload runs in this UI context; on the extension its host permissions let
- * a popup fetch reach any provider. See docs/cloud-storage-backups.md.
+ * Manual cloud backup across many device-local targets, each with credentials
+ * VEK-wrapped. Scheduling (Phase 1) rides on top of the same targets. Uploads run
+ * in this UI context; on the extension a popup fetch reaches any provider via host
+ * permissions. See docs/cloud-storage-backups.md.
  */
 export function useBackup() {
 	const { storage, crypto } = usePlatform();
-	// undefined = still loading; null = no provider configured.
-	const [config, setConfig] = useState<StoredBackupConfig | null | undefined>(undefined);
-	const [running, setRunning] = useState(false);
+	// undefined = still loading.
+	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
+	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
 
 	const reload = useCallback(async () => {
-		setConfig((await storage.getMeta<StoredBackupConfig>(BACKUP_CONFIG_KEY)) ?? null);
+		let list = await storage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY);
+		if (!list) {
+			// Migrate a legacy single-target config into the array (unreleased format).
+			const legacy = await storage.getMeta<Omit<BackupTargetConfig, "id">>(BACKUP_CONFIG_KEY);
+			list = legacy ? [{ ...legacy, id: newId() }] : [];
+			if (legacy) {
+				await storage.setMeta(BACKUP_TARGETS_KEY, list);
+				await storage.removeMeta(BACKUP_CONFIG_KEY);
+			}
+		}
+		setTargets(list);
 	}, [storage]);
 
 	useEffect(() => {
@@ -43,24 +56,26 @@ export function useBackup() {
 	}, [reload]);
 
 	const persist = useCallback(
-		async (next: StoredBackupConfig) => {
-			await storage.setMeta(BACKUP_CONFIG_KEY, next);
-			setConfig(next);
+		async (next: BackupTargetConfig[]) => {
+			await storage.setMeta(BACKUP_TARGETS_KEY, next);
+			setTargets(next);
 		},
 		[storage],
 	);
 
-	const save = useCallback(
-		async (input: SaveBackupInput) => {
-			// New credentials get VEK-wrapped; if none were entered (an edit of only
-			// non-secret fields) keep the ones already saved.
-			const creds = input.secrets
-				? await crypto
-						.encryptWithVek(JSON.stringify(input.secrets))
-						.then((w) => ({ iv: w.iv, ciphertext: w.ciphertext }))
-				: config?.creds;
-			if (!creds) throw new Error("Enter your credentials.");
-			await persist({
+	const wrap = useCallback(
+		async (secrets: BackupSecrets) => {
+			const w = await crypto.encryptWithVek(JSON.stringify(secrets));
+			return { iv: w.iv, ciphertext: w.ciphertext };
+		},
+		[crypto],
+	);
+
+	const addTarget = useCallback(
+		async (input: SaveTargetInput) => {
+			if (!input.secrets) throw new Error("Enter your credentials.");
+			const target: BackupTargetConfig = {
+				id: newId(),
 				providerId: input.providerId,
 				provider: input.provider,
 				endpoint: input.endpoint,
@@ -69,53 +84,95 @@ export function useBackup() {
 				prefix: input.prefix,
 				serverUrl: input.serverUrl,
 				path: input.path,
-				frequency: config?.frequency ?? "daily",
-				keep: config?.keep ?? 30,
-				creds,
-			});
+				frequency: "daily",
+				keep: 30,
+				creds: await wrap(input.secrets),
+			};
+			await persist([...(targets ?? []), target]);
 		},
-		[crypto, persist, config],
+		[wrap, persist, targets],
 	);
 
-	const remove = useCallback(async () => {
-		await storage.removeMeta(BACKUP_CONFIG_KEY);
-		setConfig(null);
-	}, [storage]);
+	const updateTarget = useCallback(
+		async (id: string, input: SaveTargetInput) => {
+			const list = targets ?? [];
+			const cur = list.find((t) => t.id === id);
+			if (!cur) return;
+			// A new credential pair re-wraps; omitting them keeps the saved ones.
+			const creds = input.secrets ? await wrap(input.secrets) : cur.creds;
+			const updated: BackupTargetConfig = {
+				...cur,
+				providerId: input.providerId,
+				provider: input.provider,
+				endpoint: input.endpoint,
+				region: input.region,
+				bucket: input.bucket,
+				prefix: input.prefix,
+				serverUrl: input.serverUrl,
+				path: input.path,
+				creds,
+			};
+			await persist(list.map((t) => (t.id === id ? updated : t)));
+		},
+		[wrap, persist, targets],
+	);
 
 	const setFrequency = useCallback(
-		async (frequency: BackupFrequency) => {
-			if (config) await persist({ ...config, frequency });
+		async (id: string, frequency: BackupFrequency) => {
+			await persist((targets ?? []).map((t) => (t.id === id ? { ...t, frequency } : t)));
 		},
-		[config, persist],
+		[persist, targets],
 	);
 
-	const backupNow = useCallback(async () => {
-		if (!config) throw new Error("No backup provider is set up.");
-		setRunning(true);
-		try {
-			const secrets = JSON.parse(
-				await crypto.decryptWithVek(config.creds.iv, config.creds.ciphertext),
-			) as BackupSecrets;
-			const target = createTarget(toProviderConfig(config, secrets));
-			const blob = await storage.readVaultBlob();
-			const result = await runBackup(target, blob, {
-				prefix: backupPrefix(config),
-				keep: config.keep,
-			});
-			await persist({
-				...config,
-				lastBackupAt: Date.now(),
-				lastVaultHash: result.hash,
-				lastError: undefined,
-			});
-			return result;
-		} catch (e) {
-			await persist({ ...config, lastError: (e as Error).message });
-			throw e;
-		} finally {
-			setRunning(false);
-		}
-	}, [config, crypto, storage, persist]);
+	const removeTarget = useCallback(
+		async (id: string) => {
+			await persist((targets ?? []).filter((t) => t.id !== id));
+		},
+		[persist, targets],
+	);
 
-	return { config, running, save, remove, setFrequency, backupNow };
+	// Back up to one target (id given) or all of them. Reads the vault blob once and
+	// runs the targets concurrently; each records its own success/failure.
+	const backupNow = useCallback(
+		async (id?: string) => {
+			const list = targets ?? [];
+			const toRun = id ? list.filter((t) => t.id === id) : list;
+			if (toRun.length === 0) return;
+			const blob = await storage.readVaultBlob();
+			setRunningIds(new Set(toRun.map((t) => t.id)));
+			const results = await Promise.all(
+				toRun.map(async (t) => {
+					try {
+						const secrets = JSON.parse(
+							await crypto.decryptWithVek(t.creds.iv, t.creds.ciphertext),
+						) as BackupSecrets;
+						const bt = createTarget(toProviderConfig(t, secrets));
+						const r = await runBackup(bt, blob, { prefix: backupPrefix(t), keep: t.keep });
+						return {
+							id: t.id,
+							hash: r.hash as string | undefined,
+							error: undefined as string | undefined,
+						};
+					} catch (e) {
+						return { id: t.id, hash: undefined, error: (e as Error).message };
+					}
+				}),
+			);
+			const byId = new Map(results.map((r) => [r.id, r]));
+			const now = Date.now();
+			await persist(
+				list.map((t) => {
+					const r = byId.get(t.id);
+					if (!r) return t;
+					return r.error !== undefined
+						? { ...t, lastError: r.error }
+						: { ...t, lastBackupAt: now, lastVaultHash: r.hash, lastError: undefined };
+				}),
+			);
+			setRunningIds(new Set());
+		},
+		[targets, storage, crypto, persist],
+	);
+
+	return { targets, runningIds, addTarget, updateTarget, setFrequency, removeTarget, backupNow };
 }

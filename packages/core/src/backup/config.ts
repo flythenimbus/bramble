@@ -1,8 +1,10 @@
 import type { ProviderConfig } from "./types";
 
-// Device-local backup config. Non-secret fields are stored in the clear via
-// storage.setMeta; the credential fields are VEK-wrapped (see useBackup). Never
-// synced. See docs/cloud-storage-backups.md.
+// Device-local backup targets. Non-secret fields are stored in the clear via
+// storage.setMeta; credentials are VEK-wrapped (see useBackup). Never synced.
+// See docs/cloud-storage-backups.md.
+export const BACKUP_TARGETS_KEY = "backup.targets";
+// Legacy single-target key, migrated into the array on first load (unreleased format).
 export const BACKUP_CONFIG_KEY = "backup.config";
 
 export type BackupFrequency = "off" | "daily" | "weekly" | "monthly";
@@ -12,7 +14,9 @@ export interface WrappedCreds {
 	ciphertext: string;
 }
 
-export interface StoredBackupConfig {
+/** One configured backup destination. The vault can have many, each on its own schedule. */
+export interface BackupTargetConfig {
+	id: string;
 	providerId: string; // provider tile id (drives the icon/name), e.g. "backblaze"
 	provider: "s3" | "webdav";
 	endpoint?: string;
@@ -33,8 +37,8 @@ export type S3Secrets = { accessKeyId: string; secretAccessKey: string };
 export type WebdavSecrets = { username: string; password: string };
 export type BackupSecrets = S3Secrets | WebdavSecrets;
 
-/** Combine stored (non-secret) config with unwrapped secrets into a ProviderConfig. */
-export function toProviderConfig(cfg: StoredBackupConfig, secrets: BackupSecrets): ProviderConfig {
+/** Combine a target's non-secret config with unwrapped secrets into a ProviderConfig. */
+export function toProviderConfig(cfg: BackupTargetConfig, secrets: BackupSecrets): ProviderConfig {
 	if (cfg.provider === "s3") {
 		const s = secrets as S3Secrets;
 		return {
@@ -58,6 +62,6 @@ export function toProviderConfig(cfg: StoredBackupConfig, secrets: BackupSecrets
 }
 
 /** The folder backups live under: the user's S3 prefix if set, else "bramble". */
-export function backupPrefix(cfg: StoredBackupConfig): string {
+export function backupPrefix(cfg: BackupTargetConfig): string {
 	return cfg.prefix?.trim().replace(/\/+$/, "") || "bramble";
 }

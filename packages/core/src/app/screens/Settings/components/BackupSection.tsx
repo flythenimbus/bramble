@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	Boxes,
-	CalendarClock,
 	ChevronDown,
 	ChevronRight,
 	Cloud,
@@ -9,11 +8,12 @@ import {
 	FolderTree,
 	HardDrive,
 	Mail,
+	Plus,
 	X,
 } from "lucide-react";
 import { type ComponentType, useState } from "react";
-import type { BackupFrequency } from "../../../../backup/config";
-import { useBackup } from "../../../../hooks/useBackup";
+import type { BackupFrequency, BackupTargetConfig } from "../../../../backup/config";
+import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
@@ -23,7 +23,7 @@ import { Wasabi } from "../../../components/icons/Wasabi";
 import { Modal } from "../../../components/ui/modal";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
-import { Row, Section } from "./primitives";
+import { Section } from "./primitives";
 
 const btnClass =
 	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50";
@@ -158,6 +158,10 @@ const PROVIDERS: ProviderDef[] = [
 
 const providerById = (id: string): ProviderDef | null => PROVIDERS.find((p) => p.id === id) ?? null;
 
+function formatWhen(ms: number): string {
+	return new Date(ms).toLocaleString();
+}
+
 /** A clickable provider tile: icon badge + name + one-line blurb. */
 function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void }) {
 	const Icon = def.Icon;
@@ -175,6 +179,36 @@ function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void 
 				<p className="text-xs text-muted-foreground mt-0.5">{def.blurb}</p>
 			</div>
 		</button>
+	);
+}
+
+/** The provider picker: one-click providers, then bring-your-own storage. */
+function ProviderGrid({ onPick }: { onPick: (def: ProviderDef) => void }) {
+	const oneClick = PROVIDERS.filter((p) => isOneClick(p.kind));
+	const byo = PROVIDERS.filter((p) => !isOneClick(p.kind));
+	return (
+		<div className="space-y-3">
+			<div className="space-y-1.5">
+				<p className="text-xs font-medium text-muted-foreground">
+					<Trans>Easiest</Trans>
+				</p>
+				<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{oneClick.map((p) => (
+						<ProviderTile key={p.id} def={p} onClick={() => onPick(p)} />
+					))}
+				</div>
+			</div>
+			<div className="space-y-1.5">
+				<p className="text-xs font-medium text-muted-foreground">
+					<Trans>Bring your own storage</Trans>
+				</p>
+				<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{byo.map((p) => (
+						<ProviderTile key={p.id} def={p} onClick={() => onPick(p)} />
+					))}
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -221,25 +255,96 @@ function OneClickComingSoon({ def }: { def: ProviderDef }) {
 	);
 }
 
-function formatWhen(ms: number): string {
-	return new Date(ms).toLocaleString();
+/** One configured target: icon + name + status, its frequency, and edit/remove. */
+function TargetCard({
+	target,
+	def,
+	running,
+	onFrequency,
+	onEdit,
+	onRemove,
+}: {
+	target: BackupTargetConfig;
+	def: ProviderDef;
+	running: boolean;
+	onFrequency: (f: BackupFrequency) => void;
+	onEdit: () => void;
+	onRemove: () => void;
+}) {
+	const { t } = useLingui();
+	const Icon = def.Icon;
+	const summary = target.provider === "s3" ? target.bucket : target.serverUrl;
+	return (
+		<div className="rounded-lg border border-border p-3 space-y-3">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex min-w-0 items-center gap-3">
+					<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
+						<Icon className={`w-4 h-4 ${def.accent}`} />
+					</div>
+					<div className="min-w-0">
+						<p className="text-sm truncate">{def.name}</p>
+						<p className="text-xs text-muted-foreground truncate">
+							{running ? (
+								<Trans>Backing up…</Trans>
+							) : target.lastError ? (
+								<span className="text-red-500">
+									<Trans>Failed</Trans>: {target.lastError}
+								</span>
+							) : target.lastBackupAt ? (
+								<Trans>Last backed up {formatWhen(target.lastBackupAt)}</Trans>
+							) : summary ? (
+								summary
+							) : (
+								<Trans>Not backed up yet</Trans>
+							)}
+						</p>
+					</div>
+				</div>
+				<div className="w-32 shrink-0">
+					<SelectField
+						label={t`Frequency`}
+						value={target.frequency}
+						onChange={(e) => onFrequency(e.target.value as BackupFrequency)}
+					>
+						<option value="off">{t`Off`}</option>
+						<option value="daily">{t`Daily`}</option>
+						<option value="weekly">{t`Weekly`}</option>
+						<option value="monthly">{t`Monthly`}</option>
+					</SelectField>
+				</div>
+			</div>
+			<div className="flex items-center gap-3">
+				<button type="button" onClick={onEdit} className={btnClass}>
+					<Trans>Edit</Trans>
+				</button>
+				<button
+					type="button"
+					onClick={onRemove}
+					className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
+				>
+					<Trans>Remove</Trans>
+				</button>
+			</div>
+		</div>
+	);
 }
 
+type ModalState = { step: "grid" } | { step: "form"; providerId: string; editingId?: string };
+
 /**
- * Cloud backups panel. Providers are tiles that open a per-kind modal: S3/WebDAV
- * credentials (persisted device-local, credentials VEK-wrapped) or a one-click
- * OAuth connect (Phase 2). "Back up now" uploads immediately. Scheduling is
- * Phase 1. See docs/cloud-storage-backups.md.
+ * Cloud backups panel. The vault can have many device-local targets, each on its
+ * own frequency; "Back up now" fans out to all of them. S3/WebDAV credentials are
+ * VEK-wrapped; OAuth (Drive/Dropbox) is Phase 2. See docs/cloud-storage-backups.md.
  */
 export function BackupSection() {
 	const { t } = useLingui();
 	const backup = useBackup();
-	const { config, running } = backup;
+	const { targets, runningIds } = backup;
 
-	const [modalId, setModalId] = useState<string | null>(null);
+	const [modal, setModal] = useState<ModalState | null>(null);
 	const [saving, setSaving] = useState(false);
 
-	// Modal form fields (only the ones for the open provider's kind are shown).
+	// Form fields for the add/edit modal.
 	const [endpoint, setEndpoint] = useState("");
 	const [region, setRegion] = useState("");
 	const [bucket, setBucket] = useState("");
@@ -252,16 +357,12 @@ export function BackupSection() {
 	const [davPassword, setDavPassword] = useState("");
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 
-	const modalDef = modalId ? providerById(modalId) : null;
-	const connectedDef = config ? providerById(config.providerId) : null;
-	const oneClickProviders = PROVIDERS.filter((p) => isOneClick(p.kind));
-	const byoProviders = PROVIDERS.filter((p) => !isOneClick(p.kind));
-	// Editing the already-saved provider: blank credential fields keep the saved ones.
-	const editing = Boolean(config && modalDef && modalDef.id === config.providerId);
+	const modalDef = modal?.step === "form" ? providerById(modal.providerId) : null;
+	const editing = modal?.step === "form" && Boolean(modal.editingId);
 
-	// Open a provider tile fresh: seed the form from its defaults and reveal
-	// Advanced only when there's nothing prefilled to hide (generic or self-hosted).
-	const openProvider = (def: ProviderDef) => {
+	// Add a fresh provider tile: seed the form from its defaults, revealing Advanced
+	// only when there's nothing prefilled to hide.
+	const pickProvider = (def: ProviderDef) => {
 		setEndpoint(def.endpoint ?? "");
 		setRegion(def.region ?? "");
 		setBucket("");
@@ -273,25 +374,26 @@ export function BackupSection() {
 		setDavUser("");
 		setDavPassword("");
 		setAdvancedOpen(def.kind === "s3" ? !def.endpoint : Boolean(def.needsServerUrl));
-		setModalId(def.id);
+		setModal({ step: "form", providerId: def.id });
 	};
 
-	// Edit the saved provider: prefill non-secret fields and leave credentials
-	// blank (we never decrypt secrets back into the DOM); blank on save keeps them.
-	const editProvider = () => {
-		if (!config || !connectedDef) return;
-		setEndpoint(config.endpoint ?? "");
-		setRegion(config.region ?? "");
-		setBucket(config.bucket ?? "");
-		setPrefix(config.prefix ?? "");
-		setServerUrl(config.serverUrl ?? "");
-		setDavPath(config.path ?? "");
+	// Edit a saved target: prefill non-secret fields; credentials stay blank (we never
+	// decrypt secrets back into the DOM), and blank on save keeps them.
+	const editTarget = (target: BackupTargetConfig) => {
+		const def = providerById(target.providerId);
+		if (!def) return;
+		setEndpoint(target.endpoint ?? "");
+		setRegion(target.region ?? "");
+		setBucket(target.bucket ?? "");
+		setPrefix(target.prefix ?? "");
+		setServerUrl(target.serverUrl ?? "");
+		setDavPath(target.path ?? "");
 		setAccessKeyId("");
 		setSecretKey("");
 		setDavUser("");
 		setDavPassword("");
 		setAdvancedOpen(false);
-		setModalId(connectedDef.id);
+		setModal({ step: "form", providerId: def.id, editingId: target.id });
 	};
 
 	const isS3 = modalDef?.kind === "s3";
@@ -302,8 +404,6 @@ export function BackupSection() {
 		? Boolean(accessKeyId.trim() || secretKey.trim())
 		: Boolean(davUser.trim() || davPassword.trim());
 	const baseFilled = isS3 ? Boolean(bucket.trim()) : Boolean(serverUrl.trim());
-	// New setup needs full credentials; an edit may leave them blank (keep the saved
-	// ones), but a half-filled pair is rejected.
 	const canSave = Boolean(
 		modalDef &&
 			modalDef.kind !== "oauth" &&
@@ -315,8 +415,7 @@ export function BackupSection() {
 		if (!modalDef || modalDef.kind === "oauth" || !canSave) return;
 		setSaving(true);
 		try {
-			// Only send credentials when they were (re-)entered; blank keeps the saved ones.
-			await backup.save(
+			const input: SaveTargetInput =
 				modalDef.kind === "s3"
 					? {
 							providerId: modalDef.id,
@@ -337,9 +436,13 @@ export function BackupSection() {
 							secrets: credsFilled
 								? { username: davUser.trim(), password: davPassword.trim() }
 								: undefined,
-						},
-			);
-			setModalId(null);
+						};
+			if (modal?.step === "form" && modal.editingId) {
+				await backup.updateTarget(modal.editingId, input);
+			} else {
+				await backup.addTarget(input);
+			}
+			setModal(null);
 		} finally {
 			setSaving(false);
 		}
@@ -347,131 +450,92 @@ export function BackupSection() {
 
 	return (
 		<Section icon={<CloudUpload className="w-4 h-4 text-primary" />} title={t`Cloud backups`}>
-			{connectedDef && config ? (
-				<>
-					<div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-						<div className="flex min-w-0 items-center gap-3">
-							<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
-								<connectedDef.Icon className={`w-4 h-4 ${connectedDef.accent}`} />
-							</div>
-							<div className="min-w-0">
-								<p className="text-sm truncate">{connectedDef.name}</p>
-								<p className="text-xs text-muted-foreground truncate">
-									{t`Connected`}
-									{config.provider === "s3"
-										? config.bucket
-											? ` · ${config.bucket}`
-											: ""
-										: config.serverUrl
-											? ` · ${config.serverUrl}`
-											: ""}
-								</p>
-							</div>
-						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							<button type="button" onClick={editProvider} className={btnClass}>
-								<Trans>Edit</Trans>
-							</button>
-							<button
-								type="button"
-								onClick={() => void backup.remove()}
-								className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
-							>
-								<Trans>Remove</Trans>
-							</button>
-						</div>
-					</div>
-
-					<Row
-						icon={<CalendarClock className="w-4 h-4 text-primary" />}
-						title={t`Frequency`}
-						subtitle={t`How often to back up, at most. Off keeps manual backups only.`}
-					>
-						<div className="w-40">
-							<SelectField
-								label={t`Frequency`}
-								value={config.frequency}
-								onChange={(e) => void backup.setFrequency(e.target.value as BackupFrequency)}
-							>
-								<option value="off">{t`Off`}</option>
-								<option value="daily">{t`Daily`}</option>
-								<option value="weekly">{t`Weekly`}</option>
-								<option value="monthly">{t`Monthly`}</option>
-							</SelectField>
-						</div>
-					</Row>
-
-					<p className="text-xs text-muted-foreground">
-						<Trans>
-							Backups are best-effort, not a fixed time. Bramble backs up at most as often as you
-							pick here, and only the next time you unlock it after a backup is due, so how often
-							backups actually happen depends on how often you open Bramble on this device.
-							Unchanged vaults are skipped. Need one right now? Use Back up now.
-						</Trans>
-					</p>
-
-					<div className="flex flex-wrap items-center gap-3">
-						<button
-							type="button"
-							onClick={() => void backup.backupNow().catch(() => {})}
-							disabled={running}
-							className={btnClass}
-						>
-							<Trans>Back up now</Trans>
-						</button>
-						<span className="text-xs text-muted-foreground">
-							{running ? (
-								<Trans>Backing up…</Trans>
-							) : config.lastError ? (
-								<span className="text-red-500">
-									<Trans>Backup failed</Trans>: {config.lastError}
-								</span>
-							) : config.lastBackupAt ? (
-								<Trans>Last backed up {formatWhen(config.lastBackupAt)}</Trans>
-							) : (
-								<Trans>Not backed up yet</Trans>
-							)}
-						</span>
-					</div>
-				</>
-			) : config === undefined ? null : (
+			{targets === undefined ? null : targets.length === 0 ? (
 				<>
 					<p className="text-sm text-muted-foreground">
 						<Trans>
 							Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your
-							provider can't read anything in your vault.
+							provider can't read anything in your vault. Add as many as you like.
 						</Trans>
 					</p>
-
-					<div className="space-y-1.5">
-						<p className="text-xs font-medium text-muted-foreground">
-							<Trans>Easiest</Trans>
-						</p>
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-							{oneClickProviders.map((prov) => (
-								<ProviderTile key={prov.id} def={prov} onClick={() => openProvider(prov)} />
-							))}
-						</div>
+					<ProviderGrid onPick={pickProvider} />
+				</>
+			) : (
+				<>
+					<div className="space-y-2">
+						{targets.map((target) => {
+							const def = providerById(target.providerId);
+							if (!def) return null;
+							return (
+								<TargetCard
+									key={target.id}
+									target={target}
+									def={def}
+									running={runningIds.has(target.id)}
+									onFrequency={(f) => void backup.setFrequency(target.id, f)}
+									onEdit={() => editTarget(target)}
+									onRemove={() => void backup.removeTarget(target.id)}
+								/>
+							);
+						})}
 					</div>
 
-					<div className="space-y-1.5">
-						<p className="text-xs font-medium text-muted-foreground">
-							<Trans>Bring your own storage</Trans>
-						</p>
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-							{byoProviders.map((prov) => (
-								<ProviderTile key={prov.id} def={prov} onClick={() => openProvider(prov)} />
-							))}
-						</div>
+					<div className="flex flex-wrap items-center gap-3">
+						<button
+							type="button"
+							onClick={() => setModal({ step: "grid" })}
+							className={`${btnClass} inline-flex items-center gap-1.5`}
+						>
+							<Plus className="w-3.5 h-3.5" />
+							<Trans>Add another target</Trans>
+						</button>
+						<button
+							type="button"
+							onClick={() => void backup.backupNow().catch(() => {})}
+							disabled={runningIds.size > 0}
+							className={btnClass}
+						>
+							<Trans>Back up now</Trans>
+						</button>
+						{runningIds.size > 0 && (
+							<span className="text-xs text-muted-foreground">
+								<Trans>Backing up {runningIds.size}…</Trans>
+							</span>
+						)}
 					</div>
+
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							Backups are best-effort, not a fixed time. Each target backs up at most as often as
+							you pick, the next time you unlock Bramble after one is due, so real frequency depends
+							on how often you open it on this device. Unchanged vaults are skipped.
+						</Trans>
+					</p>
 				</>
 			)}
 
-			<Modal open={modalDef !== null} onClose={() => setModalId(null)} className="max-w-md">
-				{modalDef &&
-					(isOneClick(modalDef.kind) ? (
+			<Modal open={modal !== null} onClose={() => setModal(null)} className="max-w-md">
+				{modal?.step === "grid" ? (
+					<div className="p-5 space-y-4">
+						<div className="flex items-center justify-between">
+							<h2 className="text-base font-medium">
+								<Trans>Add a backup target</Trans>
+							</h2>
+							<button
+								type="button"
+								onClick={() => setModal(null)}
+								aria-label={t`Close`}
+								className="text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<X className="w-4 h-4" />
+							</button>
+						</div>
+						<ProviderGrid onPick={pickProvider} />
+					</div>
+				) : modalDef ? (
+					isOneClick(modalDef.kind) ? (
 						<div className="p-5 space-y-4">
-							<ProviderModalHeader def={modalDef} onClose={() => setModalId(null)} />
+							<ProviderModalHeader def={modalDef} onClose={() => setModal(null)} />
 							<OneClickComingSoon def={modalDef} />
 						</div>
 					) : (
@@ -482,7 +546,7 @@ export function BackupSection() {
 								void doSave();
 							}}
 						>
-							<ProviderModalHeader def={modalDef} onClose={() => setModalId(null)} />
+							<ProviderModalHeader def={modalDef} onClose={() => setModal(null)} />
 
 							<p className="text-xs text-muted-foreground">
 								{modalDef.kind === "s3" ? (
@@ -587,7 +651,7 @@ export function BackupSection() {
 							</div>
 
 							<div className="flex justify-end gap-2 pt-1">
-								<button type="button" onClick={() => setModalId(null)} className={btnClass}>
+								<button type="button" onClick={() => setModal(null)} className={btnClass}>
 									<Trans>Cancel</Trans>
 								</button>
 								<button type="submit" disabled={!canSave || saving} className={btnClass}>
@@ -595,7 +659,8 @@ export function BackupSection() {
 								</button>
 							</div>
 						</form>
-					))}
+					)
+				) : null}
 			</Modal>
 		</Section>
 	);
