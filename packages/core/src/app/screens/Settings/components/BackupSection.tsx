@@ -256,6 +256,8 @@ export function BackupSection() {
 	const connectedDef = config ? providerById(config.providerId) : null;
 	const oneClickProviders = PROVIDERS.filter((p) => isOneClick(p.kind));
 	const byoProviders = PROVIDERS.filter((p) => !isOneClick(p.kind));
+	// Editing the already-saved provider: blank credential fields keep the saved ones.
+	const editing = Boolean(config && modalDef && modalDef.id === config.providerId);
 
 	// Open a provider tile fresh: seed the form from its defaults and reveal
 	// Advanced only when there's nothing prefilled to hide (generic or self-hosted).
@@ -274,8 +276,8 @@ export function BackupSection() {
 		setModalId(def.id);
 	};
 
-	// Edit the saved provider: prefill non-secret fields; credentials are re-entered
-	// (we never decrypt secrets back into the DOM).
+	// Edit the saved provider: prefill non-secret fields and leave credentials
+	// blank (we never decrypt secrets back into the DOM); blank on save keeps them.
 	const editProvider = () => {
 		if (!config || !connectedDef) return;
 		setEndpoint(config.endpoint ?? "");
@@ -292,16 +294,28 @@ export function BackupSection() {
 		setModalId(connectedDef.id);
 	};
 
-	const canSave = modalDef
-		? modalDef.kind === "s3"
-			? Boolean(bucket.trim() && accessKeyId.trim() && secretKey.trim())
-			: Boolean(serverUrl.trim() && davUser.trim() && davPassword.trim())
-		: false;
+	const isS3 = modalDef?.kind === "s3";
+	const credsFilled = isS3
+		? Boolean(accessKeyId.trim() && secretKey.trim())
+		: Boolean(davUser.trim() && davPassword.trim());
+	const credsTouched = isS3
+		? Boolean(accessKeyId.trim() || secretKey.trim())
+		: Boolean(davUser.trim() || davPassword.trim());
+	const baseFilled = isS3 ? Boolean(bucket.trim()) : Boolean(serverUrl.trim());
+	// New setup needs full credentials; an edit may leave them blank (keep the saved
+	// ones), but a half-filled pair is rejected.
+	const canSave = Boolean(
+		modalDef &&
+			modalDef.kind !== "oauth" &&
+			baseFilled &&
+			(editing ? !credsTouched || credsFilled : credsFilled),
+	);
 
 	const doSave = async () => {
 		if (!modalDef || modalDef.kind === "oauth" || !canSave) return;
 		setSaving(true);
 		try {
+			// Only send credentials when they were (re-)entered; blank keeps the saved ones.
 			await backup.save(
 				modalDef.kind === "s3"
 					? {
@@ -311,14 +325,18 @@ export function BackupSection() {
 							region: region.trim(),
 							bucket: bucket.trim(),
 							prefix: prefix.trim() || undefined,
-							secrets: { accessKeyId: accessKeyId.trim(), secretAccessKey: secretKey.trim() },
+							secrets: credsFilled
+								? { accessKeyId: accessKeyId.trim(), secretAccessKey: secretKey.trim() }
+								: undefined,
 						}
 					: {
 							providerId: modalDef.id,
 							provider: "webdav",
 							serverUrl: serverUrl.trim(),
 							path: davPath.trim() || undefined,
-							secrets: { username: davUser.trim(), password: davPassword.trim() },
+							secrets: credsFilled
+								? { username: davUser.trim(), password: davPassword.trim() }
+								: undefined,
 						},
 			);
 			setModalId(null);
@@ -515,6 +533,12 @@ export function BackupSection() {
 										onChange={(e) => setDavPassword(e.target.value)}
 									/>
 								</>
+							)}
+
+							{editing && (
+								<p className="text-xs text-muted-foreground">
+									<Trans>Leave the credential fields blank to keep the ones you saved.</Trans>
+								</p>
 							)}
 
 							<div>

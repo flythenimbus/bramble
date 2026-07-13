@@ -164,6 +164,10 @@ msgstr "Backup in corso…"
 msgid "Backup failed"
 msgstr "Backup non riuscito"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Backup's master password"
+msgstr "Password principale del backup"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
 msgstr "I backup sono effettuati al meglio, non a orari fissi. Bramble esegue il backup al massimo con la frequenza selezionata e solo la prossima volta che lo sblocchi dopo la scadenza del backup; pertanto, la frequenza effettiva dei backup dipende da quanto spesso apri Bramble su questo dispositivo. I vault non modificati vengono saltati. Ne serve uno immediatamente? Utilizza Esegui backup ora."
@@ -241,11 +245,16 @@ msgstr "Cambiare la password principale"
 msgid "Check passwords for breaches"
 msgstr "Controllare le password per violazioni"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Choose a .bramble file"
+msgstr "Scegli un file .bramble"
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Choose a master password"
 msgstr "Scegliere una password principale"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Choose another file"
 msgstr "Scegliere un altro file"
 
@@ -266,6 +275,7 @@ msgid "Clipboard auto-clear"
 msgstr "Auto-cancellazione della clipboard"
 
 #: packages/core/src/app/components/ui/modal.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Close"
@@ -371,8 +381,13 @@ msgid "Couldn't open this database."
 msgstr "Impossibile aprire questo database."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Couldn't read this file."
 msgstr "Impossibile leggere questo file."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Couldn't restore this backup."
+msgstr "Impossibile ripristinare questo backup."
 
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Couldn't unlock the vault."
@@ -439,7 +454,6 @@ msgstr "Giornaliero"
 msgid "Dark"
 msgstr "Modalità scura"
 
-#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Data"
 msgstr "Dati"
@@ -487,6 +501,7 @@ msgid "Disconnect"
 msgstr "Disconnetti"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Done"
 msgstr "Conferma"
@@ -693,6 +708,14 @@ msgstr "Importa"
 msgid "Import {0} items"
 msgstr "Importa {0} elementi"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import & backup"
+msgstr "Importa e backup"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import a backup"
+msgstr "Importa un backup"
+
 #: packages/core/src/app/screens/Import/components/Header.tsx
 msgid "Import data"
 msgstr "Importa dati"
@@ -713,6 +736,10 @@ msgstr "In corso l'importazione..."
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Incorrect master password"
 msgstr "Passworde principale errata"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Incorrect master password for this backup."
+msgstr "Password principale errata per questo backup."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "item"
@@ -763,6 +790,10 @@ msgstr "Ultimo backup effettuato {0}"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Last backed up: never"
 #~ msgstr "Ultimo backup: mai"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Leave the credential fields blank to keep the ones you saved."
+msgstr "Lasciare vuoti i campi delle credenziali per mantenere quelli salvati."
 
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Light"
@@ -936,6 +967,10 @@ msgstr "L'accesso con un clic per {name} sarà disponibile in un futuro aggiorna
 msgid "Open {name}"
 msgstr "Apri {name}"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Open an encrypted .bramble backup and make it the vault on this device."
+msgstr "Apri un backup .bramble crittografato e rendilo il vault su questo dispositivo."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Open Bramble on your other device and scan the code, or paste it there."
 msgstr "Apra Bramble sul suo altro dispositivo e scansioni il codice, oppure incollilo lì."
@@ -1087,6 +1122,7 @@ msgid "Re-enter the password"
 msgstr "Reinserire la password"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Reading file…"
 msgstr "Lettura del file..."
 
@@ -1166,6 +1202,26 @@ msgstr "Ripristina"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Resetting invalidates your old code."
 msgstr "Il ripristino invalida il tuo codice precedente."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Restore"
+msgstr "Ripristina"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore a backup"
+msgstr "Ripristina un backup"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
+msgstr "Ripristina un backup .bramble crittografato. Questa operazione sostituisce il vault su questo dispositivo."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore vault"
+msgstr "Ripristina vault"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restoring…"
+msgstr "Ripristino in corso…"
 
 #. placeholder {0}: provider.label
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -1405,6 +1461,14 @@ msgstr "Tappi una chiave di sicurezza per sbloccare invece di digitare la passwo
 msgid "Tap your key…"
 msgstr "Tappi la sua chiave..."
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "That doesn't look like a Bramble backup (.bramble) file."
+msgstr "Questo non sembra un file di backup Bramble (.bramble)."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "The one you saved with Export a backup, or a cloud backup."
+msgstr "Quello salvato con Esporta un backup, o un backup cloud."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
 msgstr "Il relay di segnalazione che introduce i dispositivi. Predefinito sul relay ospitato; indirizzatelo verso il suo o un qualsiasi relay pubblico Nostr."
@@ -1425,6 +1489,10 @@ msgstr "Sono ora nella sua vault. Per la sua sicurezza, elimini il file di espor
 msgid "This authenticator key is invalid and can't generate codes."
 msgstr "Questa chiave di autenticazione è non valida e non può generare codici."
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This backup has no master password, so it can't be restored here."
+msgstr "Questo backup non ha una password principale, quindi non può essere ripristinato qui."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This device"
 msgstr "Questo dispositivo"
@@ -1442,6 +1510,10 @@ msgstr "Questo dominio e i suoi sottodomini"
 msgid "This file held {0} {noun}, but none matched a supported format."
 msgstr "Questo file conteneva {0} {noun}, ma nessuno corrisponde a un formato supportato."
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This file is too large to be a Bramble backup."
+msgstr "Questo file è troppo grande per essere un backup Bramble."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
 msgstr "Questo file è troppo grande per essere importato ({sizeMb} MB; massimo {MAX_IMPORT_FILE_MB} MB)."
@@ -1453,6 +1525,11 @@ msgstr "Questo login ha una chiave di accesso"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This password appeared in a known data breach."
 msgstr "Questa password è apparsa in una violazione di dati nota."
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
+msgstr "Questa operazione sostituisce il vault attualmente presente su questo dispositivo con <0>{0}</0>. Inserisci la password principale di quel backup per aprirlo."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
@@ -1606,6 +1683,10 @@ msgstr "Valore"
 msgid "Vault ready"
 msgstr "Vault pronto"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Vault restored"
+msgstr "Vault ripristinato"
+
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault unlocked"
 msgstr "Vault sbloccato"
@@ -1698,6 +1779,15 @@ msgstr "Toccherà la sua chiave di sicurezza quando premerà Unisciti. Nessuna p
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
 msgstr "Sbloccherà questa vault solo con la sua chiave di sicurezza. Se perde tutte le sue chiavi di sicurezza, il codice di recupero è l'unico modo per rientrare. Non c'è una password principale su cui fare affidamento."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup is now the vault on this device."
+msgstr "Il tuo backup è ora il vault su questo dispositivo."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup is now the vault on this device. You can close this tab and use the {0} popup."
+msgstr "Il tuo backup è ora il vault su questo dispositivo. Puoi chiudere questa scheda e utilizzare il popup di {0}."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."

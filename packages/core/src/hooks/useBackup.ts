@@ -19,7 +19,7 @@ export interface SaveBackupInput {
 	prefix?: string;
 	serverUrl?: string;
 	path?: string;
-	secrets: BackupSecrets;
+	secrets?: BackupSecrets; // omit to keep the currently-saved credentials
 }
 
 /**
@@ -52,7 +52,14 @@ export function useBackup() {
 
 	const save = useCallback(
 		async (input: SaveBackupInput) => {
-			const wrapped = await crypto.encryptWithVek(JSON.stringify(input.secrets));
+			// New credentials get VEK-wrapped; if none were entered (an edit of only
+			// non-secret fields) keep the ones already saved.
+			const creds = input.secrets
+				? await crypto
+						.encryptWithVek(JSON.stringify(input.secrets))
+						.then((w) => ({ iv: w.iv, ciphertext: w.ciphertext }))
+				: config?.creds;
+			if (!creds) throw new Error("Enter your credentials.");
 			await persist({
 				providerId: input.providerId,
 				provider: input.provider,
@@ -64,7 +71,7 @@ export function useBackup() {
 				path: input.path,
 				frequency: config?.frequency ?? "daily",
 				keep: config?.keep ?? 30,
-				creds: { iv: wrapped.iv, ciphertext: wrapped.ciphertext },
+				creds,
 			});
 		},
 		[crypto, persist, config],
