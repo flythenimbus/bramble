@@ -66,7 +66,7 @@ const WALLETS: Wallet[] = [
 const isConfigured = (address: string) => !address.startsWith("REPLACE_WITH_");
 
 const toggleBtn = (active: boolean) =>
-	`flex-1 rounded-md px-2 py-1 transition-colors ${
+	`rounded px-2.5 py-0.5 transition-colors ${
 		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
 	}`;
 
@@ -93,8 +93,13 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 				{wallet.ticker && <span className="text-xs text-muted-foreground">{wallet.ticker}</span>}
 			</div>
 
+			{/* White quiet-zone so the QR scans against the dark theme; scales to the column. */}
+			<div className="w-full max-w-[150px] rounded-lg bg-white p-2">
+				<QRCodeSVG value={method.qr} size={132} marginSize={0} className="h-auto w-full" />
+			</div>
+
 			{wallet.methods.length > 1 && (
-				<div className="flex w-full rounded-lg border border-border p-0.5 text-xs">
+				<div className="flex rounded-md border border-border p-0.5 text-[11px]">
 					{wallet.methods.map((m, i) => (
 						<button
 							key={m.label}
@@ -110,11 +115,6 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 					))}
 				</div>
 			)}
-
-			{/* White quiet-zone so the QR scans against the dark theme; scales to the column. */}
-			<div className="w-full max-w-[150px] rounded-lg bg-white p-2">
-				<QRCodeSVG value={method.qr} size={132} marginSize={0} className="h-auto w-full" />
-			</div>
 			<p className="break-all text-center font-mono text-[11px] text-muted-foreground">
 				{method.address}
 			</p>
