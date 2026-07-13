@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Database, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
-import { useState } from "react";
 import { cn } from "../../components/ui/utils";
 import { AboutSection } from "./components/AboutSection";
 import { AppearanceSection } from "./components/AppearanceSection";
@@ -9,14 +9,17 @@ import { DataSection } from "./components/DataSection";
 import { GeneralSection } from "./components/GeneralSection";
 import { SecuritySection } from "./components/SecuritySection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
-
-type TabId = "general" | "security" | "data" | "sync" | "about";
+import type { SettingsTab } from "./settings-search";
 
 export function Settings() {
 	const { t } = useLingui();
-	const [tab, setTab] = useState<TabId>("general");
+	const { tab } = useSearch({ from: "/_app/settings" });
+	const navigate = useNavigate();
+	// replace: switching tabs shouldn't stack history entries.
+	const setTab = (id: SettingsTab) =>
+		navigate({ to: "/settings", search: (prev) => ({ ...prev, tab: id }), replace: true });
 
-	const tabs: { id: TabId; label: string; Icon: LucideIcon }[] = [
+	const tabs: { id: SettingsTab; label: string; Icon: LucideIcon }[] = [
 		{ id: "general", label: t`General`, Icon: SlidersHorizontal },
 		{ id: "security", label: t`Security`, Icon: Lock },
 		{ id: "data", label: t`Data`, Icon: Database },

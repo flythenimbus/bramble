@@ -14,6 +14,7 @@ import { EntryDetailRoute } from "./routes/EntryDetailRoute";
 import { EntryEditRoute } from "./routes/EntryEditRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
+import { settingsSearchSchema } from "./screens/Settings/settings-search";
 import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
 
 // Slice of vault state route guards read; injected via RouterProvider context.
@@ -98,6 +99,8 @@ const entryEditRoute = createRoute({
 const settingsRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/settings",
+	// Active tab in search params so it survives navigation + popup close/reopen.
+	validateSearch: settingsSearchSchema,
 	staticData: { back: { to: "/vault" } },
 	component: SettingsRoute,
 });
