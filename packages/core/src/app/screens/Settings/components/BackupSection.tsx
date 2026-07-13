@@ -12,7 +12,11 @@ import {
 	X,
 } from "lucide-react";
 import { type ComponentType, useState } from "react";
-import type { BackupFrequency, BackupTargetConfig } from "../../../../backup/config";
+import {
+	type BackupFrequency,
+	type BackupTargetConfig,
+	normalizeS3,
+} from "../../../../backup/config";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
@@ -283,21 +287,25 @@ function TargetCard({
 					</div>
 					<div className="min-w-0">
 						<p className="text-sm truncate">{def.name}</p>
-						<p className="text-xs text-muted-foreground truncate">
-							{running ? (
+						{running ? (
+							<p className="text-xs text-muted-foreground truncate">
 								<Trans>Backing up…</Trans>
-							) : target.lastError ? (
-								<span className="text-red-500">
-									<Trans>Failed</Trans>: {target.lastError}
-								</span>
-							) : target.lastBackupAt ? (
-								<Trans>Last backed up {formatWhen(target.lastBackupAt)}</Trans>
-							) : summary ? (
-								summary
-							) : (
-								<Trans>Not backed up yet</Trans>
-							)}
-						</p>
+							</p>
+						) : target.lastError ? (
+							<p className="text-xs text-red-500 break-words" title={target.lastError}>
+								<Trans>Failed</Trans>: {target.lastError}
+							</p>
+						) : (
+							<p className="text-xs text-muted-foreground truncate">
+								{target.lastBackupAt ? (
+									<Trans>Last backed up {formatWhen(target.lastBackupAt)}</Trans>
+								) : summary ? (
+									summary
+								) : (
+									<Trans>Not backed up yet</Trans>
+								)}
+							</p>
+						)}
 					</div>
 				</div>
 				<div className="w-32 shrink-0">
@@ -397,13 +405,17 @@ export function BackupSection() {
 	};
 
 	const isS3 = modalDef?.kind === "s3";
+	// Accept a full bucket URL pasted into the bucket or endpoint field; split on save.
+	const s3Fields = normalizeS3({ endpoint, bucket, prefix });
 	const credsFilled = isS3
 		? Boolean(accessKeyId.trim() && secretKey.trim())
 		: Boolean(davUser.trim() && davPassword.trim());
 	const credsTouched = isS3
 		? Boolean(accessKeyId.trim() || secretKey.trim())
 		: Boolean(davUser.trim() || davPassword.trim());
-	const baseFilled = isS3 ? Boolean(bucket.trim()) : Boolean(serverUrl.trim());
+	// The endpoint must be a real URL, not the R2-style "<account-id>" placeholder.
+	const s3EndpointOk = /^https?:\/\//i.test(s3Fields.endpoint) && !s3Fields.endpoint.includes("<");
+	const baseFilled = isS3 ? Boolean(s3Fields.bucket) && s3EndpointOk : Boolean(serverUrl.trim());
 	const canSave = Boolean(
 		modalDef &&
 			modalDef.kind !== "oauth" &&
@@ -420,10 +432,10 @@ export function BackupSection() {
 					? {
 							providerId: modalDef.id,
 							provider: "s3",
-							endpoint: endpoint.trim(),
+							endpoint: s3Fields.endpoint,
 							region: region.trim(),
-							bucket: bucket.trim(),
-							prefix: prefix.trim() || undefined,
+							bucket: s3Fields.bucket,
+							prefix: s3Fields.prefix,
 							secrets: credsFilled
 								? { accessKeyId: accessKeyId.trim(), secretAccessKey: secretKey.trim() }
 								: undefined,
@@ -552,7 +564,7 @@ export function BackupSection() {
 								{modalDef.kind === "s3" ? (
 									<Trans>
 										Create an access key with read and write access to a bucket, then paste it
-										below.
+										below. For the bucket you can paste its full URL (https://host/bucket).
 									</Trans>
 								) : (
 									<Trans>Enter your WebDAV address and an app password for your account.</Trans>

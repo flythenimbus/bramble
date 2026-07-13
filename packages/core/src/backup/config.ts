@@ -65,3 +65,31 @@ export function toProviderConfig(cfg: BackupTargetConfig, secrets: BackupSecrets
 export function backupPrefix(cfg: BackupTargetConfig): string {
 	return cfg.prefix?.trim().replace(/\/+$/, "") || "bramble";
 }
+
+/**
+ * Accept a full bucket URL pasted into the endpoint or bucket field and split it:
+ * host -> endpoint, first path segment -> bucket, the rest -> prefix. A plain
+ * bucket name plus a separate endpoint passes through unchanged.
+ */
+export function normalizeS3(input: { endpoint: string; bucket: string; prefix?: string }): {
+	endpoint: string;
+	bucket: string;
+	prefix?: string;
+} {
+	const endpoint = input.endpoint.trim();
+	const bucket = input.bucket.trim();
+	const prefix = (input.prefix ?? "").trim().replace(/^\/+|\/+$/g, "");
+	// A URL pasted into either field is authoritative; otherwise read the endpoint.
+	const src = /^https?:\/\//i.test(bucket) ? bucket : endpoint;
+	try {
+		const u = new URL(src);
+		const origin = `${u.protocol}//${u.host}`;
+		const segs = u.pathname.split("/").filter(Boolean);
+		if (segs.length === 0) return { endpoint: origin, bucket, prefix: prefix || undefined };
+		const first = segs[0] ?? "";
+		const merged = [segs.slice(1).join("/"), prefix].filter(Boolean).join("/");
+		return { endpoint: origin, bucket: first, prefix: merged || undefined };
+	} catch {
+		return { endpoint, bucket, prefix: prefix || undefined };
+	}
+}

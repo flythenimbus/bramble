@@ -423,8 +423,12 @@ msgid "Couldn't write to the vault."
 msgstr "Non è stato possibile scrivere nel vault."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Create an access key with read and write access to a bucket, then paste it below."
-msgstr "Crea una chiave di accesso con permessi di lettura e scrittura su un bucket, quindi incollala qui sotto."
+#~ msgid "Create an access key with read and write access to a bucket, then paste it below."
+#~ msgstr "Crea una chiave di accesso con permessi di lettura e scrittura su un bucket, quindi incollala qui sotto."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Create an access key with read and write access to a bucket, then paste it below. For the bucket you can paste its full URL (https://host/bucket)."
+msgstr "Crea una chiave di accesso con permessi di lettura e scrittura per un bucket, quindi incollala qui sotto. Per il bucket, puoi incollare il suo URL completo (https://host/bucket)."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser."
