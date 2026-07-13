@@ -2,12 +2,14 @@
 // push, then publish a GitHub release with the artifacts attached.
 //
 // Usage:
-//   pnpm run release chromium <version>   e.g. pnpm run release chromium 1.0.0
-//   pnpm run release firefox  <version>   e.g. pnpm run release firefox  1.0.0
-//   pnpm run release android  <version>   e.g. pnpm run release android  1.1.0
-//   pnpm run release ios      <version>   e.g. pnpm run release ios      1.1.0
-//   pnpm run release ios      <version> --ipa   dry run: build the signed IPA to ~/Desktop,
-//                                               no upload, no tag (test the pipeline first)
+//   pnpm run release chromium <version|patch|minor|major>   e.g. 1.0.0, or `patch` to bump
+//   pnpm run release firefox  <version|patch|minor|major>
+//   pnpm run release android  <version|patch|minor|major>
+//   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
+//
+// The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
+// (patch/minor/major) that increments the SELECTED target's current version. Targets version
+// independently, so `android patch` and `chromium patch` can land on different numbers.
 //
 // Tags as <version>-<platform> (e.g. 1.0.0-chromium, 1.0.0-firefox, 1.1.0-android, 1.1.0-ios).
 // chromium/firefox/android publish a GitHub release; publishing fires
@@ -44,10 +46,20 @@ const capture = (cmd: string) => execSync(cmd, { encoding: "utf8" }).trim();
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")));
 const [platform, rawVersion] = argv.filter((a) => !a.startsWith("--"));
-// Accept either 0.1.0 or v0.1.0; the stored version is the bare numeric form.
-const version = (rawVersion ?? "").replace(/^v/, "");
-if (!platform) fail("usage: pnpm run release <chromium|android|ios> <version>");
-if (!version) fail(`missing version. usage: pnpm run release ${platform} <version>`);
+if (!platform)
+	fail("usage: pnpm run release <chromium|firefox|android|ios> <version|patch|minor|major>");
+if (!rawVersion)
+	fail(`missing version. usage: pnpm run release ${platform} <version|patch|minor|major>`);
+
+// The version arg is either an explicit version (0.1.0 or v0.1.0, stored bare) or a semver bump
+// keyword (patch/minor/major) that increments THIS target's current version. Each target versions
+// independently, so a bump reads that target's own manifest/gradle/pbxproj.
+const bumpKind = ["patch", "minor", "major"].includes(rawVersion)
+	? (rawVersion as "patch" | "minor" | "major")
+	: null;
+const version = bumpKind
+	? nextVersion(currentVersion(platform), bumpKind)
+	: rawVersion.replace(/^v/, "");
 
 if (platform === "android") releaseAndroid(version);
 else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
@@ -446,6 +458,58 @@ function releaseIos(version: string, ipaOnly: boolean) {
 }
 
 // ----- shared helpers -----
+
+// A target's current version, read from its own source of truth (each versions independently):
+// the manifest `version` for chromium/firefox, `versionName` for android, MARKETING_VERSION for ios.
+function currentVersion(platform: string): string {
+	if (platform === "android")
+		return matchVersion(
+			readFileSync("packages/platform-mobile/android/app/build.gradle", "utf8"),
+			/versionName "([^"]+)"/,
+			"versionName in build.gradle",
+		);
+	if (platform === "ios")
+		return matchVersion(
+			readFileSync("packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj", "utf8"),
+			/MARKETING_VERSION = ([^;]+);/,
+			"MARKETING_VERSION in project.pbxproj",
+		);
+	const manifest =
+		platform === "firefox"
+			? "packages/manifests/firefox/manifest.json"
+			: "packages/manifests/chromium/manifest.json";
+	return matchVersion(
+		readFileSync(manifest, "utf8"),
+		/"version"\s*:\s*"([^"]+)"/,
+		`version in ${manifest}`,
+	);
+}
+
+function matchVersion(content: string, re: RegExp, what: string): string {
+	const v = content.match(re)?.[1];
+	if (!v) fail(`couldn't read current ${what}`);
+	return v.trim();
+}
+
+// Bump a semver-ish version for patch/minor/major; missing parts count as 0 and the result is
+// always major.minor.patch (each platform's own validator still checks the final form).
+function nextVersion(current: string, kind: "patch" | "minor" | "major"): string {
+	const nums = current.split(".").map((n) => Number.parseInt(n, 10));
+	if (nums.some((n) => Number.isNaN(n)))
+		fail(`can't ${kind}-bump: current version "${current}" isn't numeric`);
+	let [maj = 0, min = 0, pat = 0] = nums;
+	if (kind === "major") {
+		maj += 1;
+		min = 0;
+		pat = 0;
+	} else if (kind === "minor") {
+		min += 1;
+		pat = 0;
+	} else {
+		pat += 1;
+	}
+	return `${maj}.${min}.${pat}`;
+}
 
 // Gate on the same lint + typecheck + tests CI enforces on main, before touching
 // anything, so a tag never ships from a red tree. typecheck matters because the
