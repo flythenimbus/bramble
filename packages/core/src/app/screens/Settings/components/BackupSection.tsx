@@ -190,9 +190,17 @@ function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void 
 	);
 }
 
-/** The provider picker: every provider in one alphabetical grid. */
+// The generic "Other ..." catch-all tiles sort last, after the named brands.
+const GENERIC_IDS = new Set(["s3", "webdav"]);
+
+/** The provider picker: named brands alphabetically, then the generic catch-alls. */
 function ProviderGrid({ onPick }: { onPick: (def: ProviderDef) => void }) {
-	const providers = [...PROVIDERS].sort((a, b) => a.name.localeCompare(b.name));
+	const providers = [...PROVIDERS].sort((a, b) => {
+		const ga = GENERIC_IDS.has(a.id);
+		const gb = GENERIC_IDS.has(b.id);
+		if (ga !== gb) return ga ? 1 : -1;
+		return a.name.localeCompare(b.name);
+	});
 	return (
 		<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
 			{providers.map((p) => (
