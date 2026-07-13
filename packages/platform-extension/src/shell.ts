@@ -128,6 +128,7 @@ export const extensionShell: ShellAdapter = {
 	// Gate on the origin scheme. A content-script transport is a possible fast-follow.
 	supportsSecurityKeys: typeof location === "undefined" || location.protocol !== "moz-extension:",
 	supportsSaveCapture: true,
+	supportsRestore: true,
 	// Chromium delivers the passkey provider via the webAuthenticationProxy permission;
 	// Firefox has no such API and delivers it via a MAIN-world content-script override
 	// instead (docs/firefox-port.md), so enable the setting on both. Read the manifest

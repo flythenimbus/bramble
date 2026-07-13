@@ -66,6 +66,8 @@ export const mobileShell: ShellAdapter = {
 	// Android has a native AutofillService save flow (onSaveRequest -> SaveInfo prompt ->
 	// prefilled add-login). iOS has no save surface. See docs/mobile-port.md.
 	supportsSaveCapture: Capacitor.getPlatform() === "android",
+	// Restore is extension-only for now; the mobile file picker doesn't recognize .bramble.
+	supportsRestore: false,
 	// Passkey provider is the Chromium webAuthenticationProxy; mobile uses native
 	// credential-provider extensions instead. supportsPasskeyProvider gates the extension's
 	// runtime toggle (mobile enables the provider in OS Settings, so it stays false).

@@ -14,6 +14,9 @@ import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup
 const ImportShell = lazy(() =>
 	import("./screens/Import/ImportShell").then((m) => ({ default: m.ImportShell })),
 );
+const RestoreShell = lazy(() =>
+	import("./screens/Restore/RestoreShell").then((m) => ({ default: m.RestoreShell })),
+);
 
 // `onComplete` lets a single-window host (mobile) return to its main UI instead of
 // the "close this tab" terminal screen. When omitted (the extension's options tab),
@@ -102,6 +105,10 @@ export default function OptionsApp({
 						{active === "import" ? (
 							<Suspense fallback={null}>
 								<ImportShell onClose={onComplete} />
+							</Suspense>
+						) : active === "restore" ? (
+							<Suspense fallback={null}>
+								<RestoreShell onClose={onComplete} />
 							</Suspense>
 						) : (
 							<SetupShell onComplete={onComplete} mobile={mobile} />

@@ -18,7 +18,7 @@ export interface PopOutHandoff {
 }
 
 /** Full-tab screens the options page can boot into, via `?screen=`. Default (omitted) is the vault setup flow. */
-export type OptionsScreen = "import";
+export type OptionsScreen = "import" | "restore";
 
 /** A passkey the provider just stored, for a confirmation toast. */
 export interface PasskeySavedInfo {
@@ -88,6 +88,8 @@ export interface ShellAdapter {
 	supportsSecurityKeys: boolean;
 	/** Whether this platform can capture a submitted login and offer to save it (the corner-prompt flow). True on the extension; false on mobile (no save hook wired). Gates the "Offer to save logins" setting. See docs/mobile-port.md. */
 	supportsSaveCapture: boolean;
+	/** Whether the .bramble backup restore flow is available. Extension only for now; the mobile file picker doesn't recognize .bramble yet. Gates the "Import a backup" row. */
+	supportsRestore: boolean;
 	/** Whether this platform can act as a WebAuthn passkey provider for other sites. True on the Chromium extension (chrome.webAuthenticationProxy); false elsewhere. Gates the passkey-provider setting. See docs/passkey-provider.md. */
 	supportsPasskeyProvider: boolean;
 	/** Attach/detach the passkey provider at runtime (extension only; paired with supportsPasskeyProvider). Persisting the pref is the caller's job; this just applies it now. */
