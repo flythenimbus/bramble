@@ -31,7 +31,8 @@
 		"idle",
 		"offscreen",
 		"clipboardWrite",
-		"webAuthenticationProxy"
+		"webAuthenticationProxy",
+		"identity"
 	],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [

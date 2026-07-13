@@ -348,12 +348,16 @@ msgid "Confirm your new password"
 msgstr "Confirmer le nouveau mot de passe"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Connect {name}"
-#~ msgstr "Connecter {name}"
+msgid "Connect {name}"
+msgstr "Connecter {name}"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Connected"
 #~ msgstr "Connecté"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Connecting…"
+msgstr "Connexion en cours…"
 
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Content"
@@ -1167,6 +1171,10 @@ msgstr "Mis à jour récemment"
 msgid "Recently used"
 msgstr "Utilisés récemment"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Reconnect"
+msgstr "Reconnecter"
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Recovery code"
@@ -1418,6 +1426,10 @@ msgstr "Afficher la valeur"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Sign in (easiest)"
 #~ msgstr "Se connecter (le plus simple)"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Sign in and Bramble stores encrypted backups in its own {name} app folder. Only ciphertext is uploaded, so {name} can't read anything in your vault."
+msgstr "Connectez-vous et Bramble stocke les sauvegardes chiffrées dans son propre dossier d'application {name}. Seul le texte chiffré est téléchargé, {name} ne peut donc rien lire dans votre coffre."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Sites you've muted"

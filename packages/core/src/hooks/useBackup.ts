@@ -7,13 +7,20 @@ import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupPrefix,
+	type DropboxSecrets,
 	toProviderConfig,
 } from "../backup/config";
+import {
+	exchangeCodeForTokens,
+	generatePkce,
+	OAUTH_PROVIDERS,
+	type OAuthProviderId,
+} from "../backup/oauth";
 import { usePlatform } from "../context/PlatformContext";
 
 export interface SaveTargetInput {
 	providerId: string;
-	provider: "s3" | "webdav";
+	provider: "s3" | "webdav" | "dropbox";
 	endpoint?: string;
 	region?: string;
 	bucket?: string;
@@ -32,7 +39,7 @@ const newId = () => globalThis.crypto.randomUUID();
  * permissions. See docs/cloud-storage-backups.md.
  */
 export function useBackup() {
-	const { storage, crypto } = usePlatform();
+	const { storage, crypto, shell } = usePlatform();
 	// undefined = still loading.
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
 	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -124,6 +131,42 @@ export function useBackup() {
 		[persist, targets],
 	);
 
+	// Connect a one-click OAuth provider: run the interactive authorize step (platform-owned),
+	// exchange the code for a refresh token, then add a new target or (targetId given) re-wrap an
+	// existing one's credentials in place. Throws if the platform can't run the flow.
+	const connectOAuth = useCallback(
+		async (oauthId: OAuthProviderId, opts?: { targetId?: string }) => {
+			if (!shell.runOAuthFlow) throw new Error("One-click sign-in isn't available here.");
+			const meta = OAUTH_PROVIDERS[oauthId];
+			const pkce = await generatePkce();
+			const { code, redirectUri } = await shell.runOAuthFlow({
+				authUrl: meta.authUrl,
+				clientId: meta.clientId,
+				scopes: meta.scopes,
+				codeChallenge: pkce.challenge,
+				state: newId(),
+				extraParams: meta.authParams,
+			});
+			const tokens = await exchangeCodeForTokens({
+				providerId: oauthId,
+				code,
+				codeVerifier: pkce.verifier,
+				redirectUri,
+			});
+			const secrets: DropboxSecrets = { refreshToken: tokens.refreshToken };
+			if (opts?.targetId) {
+				const list = targets ?? [];
+				const creds = await wrap(secrets);
+				await persist(
+					list.map((t) => (t.id === opts.targetId ? { ...t, creds, lastError: undefined } : t)),
+				);
+			} else {
+				await addTarget({ providerId: oauthId, provider: oauthId, secrets });
+			}
+		},
+		[shell, targets, wrap, persist, addTarget],
+	);
+
 	const removeTarget = useCallback(
 		async (id: string) => {
 			await persist((targets ?? []).filter((t) => t.id !== id));
@@ -174,5 +217,16 @@ export function useBackup() {
 		[targets, storage, crypto, persist],
 	);
 
-	return { targets, runningIds, addTarget, updateTarget, setFrequency, removeTarget, backupNow };
+	return {
+		targets,
+		runningIds,
+		addTarget,
+		updateTarget,
+		setFrequency,
+		removeTarget,
+		backupNow,
+		connectOAuth,
+		// Whether this platform can run the interactive OAuth step at all (extension yes, mobile no).
+		oauthAvailable: Boolean(shell.runOAuthFlow),
+	};
 }
