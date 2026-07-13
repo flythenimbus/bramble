@@ -57,15 +57,15 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 	};
 
 	return (
-		<div className="flex flex-col items-center gap-3 rounded-lg border border-border p-4">
+		<div className="flex flex-col items-center gap-3 rounded-lg border border-border p-3">
 			<div className="flex items-center gap-2 self-start">
 				<Icon className={`w-4 h-4 ${wallet.accent}`} />
 				<span className="text-sm font-medium">{wallet.name}</span>
 				<span className="text-xs text-muted-foreground">{wallet.ticker}</span>
 			</div>
-			{/* White quiet-zone so the QR scans against the dark theme. */}
-			<div className="rounded-lg bg-white p-2">
-				<QRCodeSVG value={wallet.qr} size={132} marginSize={0} />
+			{/* White quiet-zone so the QR scans against the dark theme; scales to the column. */}
+			<div className="w-full max-w-[150px] rounded-lg bg-white p-2">
+				<QRCodeSVG value={wallet.qr} size={132} marginSize={0} className="h-auto w-full" />
 			</div>
 			<p className="break-all text-center font-mono text-[11px] text-muted-foreground">
 				{wallet.address}
@@ -105,7 +105,7 @@ export function SupportSection() {
 					code with your wallet, or copy the address. Thank you.
 				</Trans>
 			</p>
-			<div className={`grid gap-3 ${wallets.length > 1 ? "sm:grid-cols-2" : "mx-auto max-w-xs"}`}>
+			<div className={`grid gap-3 ${wallets.length > 1 ? "grid-cols-2" : "mx-auto max-w-xs"}`}>
 				{wallets.map((w) => (
 					<WalletCard key={w.ticker} wallet={w} />
 				))}
