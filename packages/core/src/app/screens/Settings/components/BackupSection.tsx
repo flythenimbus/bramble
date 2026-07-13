@@ -190,32 +190,14 @@ function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void 
 	);
 }
 
-/** The provider picker: one-click providers, then bring-your-own storage. */
+/** The provider picker: every provider in one alphabetical grid. */
 function ProviderGrid({ onPick }: { onPick: (def: ProviderDef) => void }) {
-	const oneClick = PROVIDERS.filter((p) => isOneClick(p.kind));
-	const byo = PROVIDERS.filter((p) => !isOneClick(p.kind));
+	const providers = [...PROVIDERS].sort((a, b) => a.name.localeCompare(b.name));
 	return (
-		<div className="space-y-3">
-			<div className="space-y-1.5">
-				<p className="text-xs font-medium text-muted-foreground">
-					<Trans>Easiest</Trans>
-				</p>
-				<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-					{oneClick.map((p) => (
-						<ProviderTile key={p.id} def={p} onClick={() => onPick(p)} />
-					))}
-				</div>
-			</div>
-			<div className="space-y-1.5">
-				<p className="text-xs font-medium text-muted-foreground">
-					<Trans>Bring your own storage</Trans>
-				</p>
-				<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-					{byo.map((p) => (
-						<ProviderTile key={p.id} def={p} onClick={() => onPick(p)} />
-					))}
-				</div>
-			</div>
+		<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+			{providers.map((p) => (
+				<ProviderTile key={p.id} def={p} onClick={() => onPick(p)} />
+			))}
 		</div>
 	);
 }

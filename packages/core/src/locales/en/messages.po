@@ -211,8 +211,8 @@ msgid "Bring your logins, cards and notes over from another manager"
 msgstr "Bring your logins, cards and notes over from another manager"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Bring your own storage"
-msgstr "Bring your own storage"
+#~ msgid "Bring your own storage"
+#~ msgstr "Bring your own storage"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bucket"
@@ -540,8 +540,8 @@ msgid "Download"
 msgstr "Download"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Easiest"
-msgstr "Easiest"
+#~ msgid "Easiest"
+#~ msgstr "Easiest"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx

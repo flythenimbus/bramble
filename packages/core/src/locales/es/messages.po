@@ -211,8 +211,8 @@ msgid "Bring your logins, cards and notes over from another manager"
 msgstr "Traslade sus credenciales, tarjetas y notas desde otro gestor"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Bring your own storage"
-msgstr "Use su propio almacenamiento"
+#~ msgid "Bring your own storage"
+#~ msgstr "Use su propio almacenamiento"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bucket"
@@ -540,8 +540,8 @@ msgid "Download"
 msgstr "Descargar"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Easiest"
-msgstr "Más sencillo"
+#~ msgid "Easiest"
+#~ msgstr "Más sencillo"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
