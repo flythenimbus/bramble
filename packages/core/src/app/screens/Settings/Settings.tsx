@@ -8,6 +8,7 @@ import { BackupSection } from "./components/BackupSection";
 import { DataSection } from "./components/DataSection";
 import { GeneralSection } from "./components/GeneralSection";
 import { SecuritySection } from "./components/SecuritySection";
+import { SupportSection } from "./components/SupportSection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
 import type { SettingsTab } from "./settings-search";
 
@@ -67,7 +68,12 @@ export function Settings() {
 					</>
 				)}
 				{tab === "sync" && <SyncConnectSection />}
-				{tab === "about" && <AboutSection />}
+				{tab === "about" && (
+					<>
+						<AboutSection />
+						<SupportSection />
+					</>
+				)}
 			</div>
 		</main>
 	);

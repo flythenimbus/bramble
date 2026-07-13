@@ -16,4 +16,8 @@ export const mobileClipboard: ClipboardAdapter = {
 			void Clipboard.write({ string: "" });
 		}, CLEAR_AFTER_MS);
 	},
+	// Non-sensitive copy (donation address, URL): no auto-clear timer, so it persists.
+	async copyPlain(text) {
+		await Clipboard.write({ string: text });
+	},
 };

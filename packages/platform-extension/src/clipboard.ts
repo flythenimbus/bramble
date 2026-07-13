@@ -15,4 +15,8 @@ export const extensionClipboard: ClipboardAdapter = {
 			// still worked. Don't fail the user-visible operation.
 		}
 	},
+	// Non-sensitive copy (donation address, URL): no scheduled clear, so it persists.
+	async copyPlain(text: string) {
+		await navigator.clipboard.writeText(text);
+	},
 };
