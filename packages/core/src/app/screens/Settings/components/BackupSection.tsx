@@ -28,6 +28,7 @@ import { Wasabi } from "../../../components/icons/Wasabi";
 import { Modal } from "../../../components/ui/modal";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
+import { cn } from "../../../components/ui/utils";
 import { Section } from "./primitives";
 
 const btnClass =
@@ -180,7 +181,7 @@ function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void 
 			className="flex items-start gap-2.5 rounded-lg border border-border p-3 text-left hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98] transition-all"
 		>
 			<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
-				<Icon className={`w-4 h-4 ${def.accent}`} />
+				<Icon className={cn("w-4 h-4", def.accent)} />
 			</div>
 			<div className="min-w-0">
 				<p className="text-sm truncate">{def.name}</p>
@@ -217,7 +218,7 @@ function ProviderModalHeader({ def, onClose }: { def: ProviderDef; onClose: () =
 	return (
 		<div className="flex items-center gap-3">
 			<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
-				<Icon className={`w-5 h-5 ${def.accent}`} />
+				<Icon className={cn("w-5 h-5", def.accent)} />
 			</div>
 			<div className="min-w-0">
 				<h2 className="text-base font-medium truncate">{def.name}</h2>
@@ -341,7 +342,7 @@ function TargetCard({
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex min-w-0 items-center gap-3">
 					<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
-						<Icon className={`w-4 h-4 ${def.accent}`} />
+						<Icon className={cn("w-4 h-4", def.accent)} />
 					</div>
 					<div className="min-w-0">
 						<p className="text-sm truncate">{def.name}</p>
@@ -572,7 +573,7 @@ export function BackupSection() {
 						<button
 							type="button"
 							onClick={() => setModal({ step: "grid" })}
-							className={`${btnClass} inline-flex items-center gap-1.5`}
+							className={cn(btnClass, "inline-flex items-center gap-1.5")}
 						>
 							<Plus className="w-3.5 h-3.5" />
 							<Trans>Add another target</Trans>

@@ -3,6 +3,7 @@ import { Bitcoin, Check, Coins, Copy, Heart, type LucideIcon } from "lucide-reac
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
+import { cn } from "../../../components/ui/utils";
 import { Section } from "./primitives";
 
 interface Method {
@@ -66,9 +67,10 @@ const WALLETS: Wallet[] = [
 const isConfigured = (address: string) => !address.startsWith("REPLACE_WITH_");
 
 const toggleBtn = (active: boolean) =>
-	`rounded px-2.5 py-0.5 transition-colors ${
-		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
-	}`;
+	cn(
+		"rounded px-2.5 py-0.5 transition-colors",
+		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground",
+	);
 
 /** One coin: an optional method toggle, a QR (scan to pay), the address, and a non-clearing copy. */
 function WalletCard({ wallet }: { wallet: Wallet }) {
@@ -88,7 +90,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 	return (
 		<div className="flex flex-col items-center gap-3 rounded-lg border border-border p-3">
 			<div className="flex items-center gap-2 self-start">
-				<Icon className={`w-4 h-4 ${wallet.accent}`} />
+				<Icon className={cn("w-4 h-4", wallet.accent)} />
 				<span className="text-sm font-medium">{wallet.name}</span>
 				{wallet.ticker && <span className="text-xs text-muted-foreground">{wallet.ticker}</span>}
 			</div>
@@ -156,7 +158,7 @@ export function SupportSection() {
 					code with your wallet, or copy the address. Thank you.
 				</Trans>
 			</p>
-			<div className={`grid gap-3 ${wallets.length > 1 ? "grid-cols-2" : "mx-auto max-w-xs"}`}>
+			<div className={cn("grid gap-3", wallets.length > 1 ? "grid-cols-2" : "mx-auto max-w-xs")}>
 				{wallets.map((w) => (
 					<WalletCard key={w.name} wallet={w} />
 				))}
