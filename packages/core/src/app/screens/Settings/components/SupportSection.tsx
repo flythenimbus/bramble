@@ -73,7 +73,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			<button
 				type="button"
 				onClick={() => void copy()}
-				className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs transition-all hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98]"
+				className="mt-auto inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs transition-all hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98]"
 			>
 				{copied ? (
 					<>
