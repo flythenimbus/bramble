@@ -26,10 +26,13 @@ export function AboutSection() {
 				<span className="text-muted-foreground">
 					<Trans>Source code</Trans>
 				</span>
-				<span className="flex items-center gap-3">
+				<span className="flex items-center gap-2">
 					<a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
 						GitHub
 					</a>
+					<span className="text-muted-foreground" aria-hidden>
+						·
+					</span>
 					<a href={CODEBERG_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
 						Codeberg
 					</a>
