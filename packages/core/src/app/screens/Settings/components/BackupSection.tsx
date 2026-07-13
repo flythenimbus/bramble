@@ -427,6 +427,7 @@ export function BackupSection() {
 	const [davPath, setDavPath] = useState("");
 	const [davUser, setDavUser] = useState("");
 	const [davPassword, setDavPassword] = useState("");
+	const [keep, setKeep] = useState(30);
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 
 	const modalDef = modal?.step === "form" ? providerById(modal.providerId) : null;
@@ -445,6 +446,7 @@ export function BackupSection() {
 		setDavPath("");
 		setDavUser("");
 		setDavPassword("");
+		setKeep(30);
 		setAdvancedOpen(def.kind === "s3" ? !def.endpoint : Boolean(def.needsServerUrl));
 		setModal({ step: "form", providerId: def.id });
 	};
@@ -464,6 +466,7 @@ export function BackupSection() {
 		setSecretKey("");
 		setDavUser("");
 		setDavPassword("");
+		setKeep(target.keep ?? 30);
 		setAdvancedOpen(false);
 		setModal({ step: "form", providerId: def.id, editingId: target.id });
 	};
@@ -496,6 +499,7 @@ export function BackupSection() {
 					? {
 							providerId: modalDef.id,
 							provider: "s3",
+							keep,
 							endpoint: s3Fields.endpoint,
 							region: region.trim(),
 							bucket: s3Fields.bucket,
@@ -507,6 +511,7 @@ export function BackupSection() {
 					: {
 							providerId: modalDef.id,
 							provider: "webdav",
+							keep,
 							serverUrl: serverUrl.trim(),
 							path: davPath.trim() || undefined,
 							secrets: credsFilled
@@ -737,6 +742,16 @@ export function BackupSection() {
 												onChange={(e) => setDavPath(e.target.value)}
 											/>
 										)}
+										<SelectField
+											label={t`Backups to keep`}
+											value={String(keep)}
+											onChange={(e) => setKeep(Number(e.target.value))}
+										>
+											<option value="5">{t`Last 5`}</option>
+											<option value="10">{t`Last 10`}</option>
+											<option value="30">{t`Last 30`}</option>
+											<option value="100">{t`Last 100`}</option>
+										</SelectField>
 									</div>
 								)}
 							</div>

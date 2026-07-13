@@ -193,6 +193,10 @@ msgstr "Backup"
 msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
 msgstr "I backup vengono eseguiti al meglio, non in un orario fisso. Ogni destinazione esegue il backup al massimo con la frequenza da Lei scelta, la volta successiva in cui sblocca Bramble dopo la scadenza; pertanto la frequenza effettiva dipende da quanto spesso apre l'app su questo dispositivo. I caveau invariati vengono saltati."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups to keep"
+msgstr "Backup da conservare"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Biometric unlock"
 msgstr "Sblocco biometrico"
@@ -822,6 +826,22 @@ msgstr "Suggerimenti per la tastiera"
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Keys"
 msgstr "Chiavi"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 10"
+msgstr "Ultimi 10"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 100"
+msgstr "Ultimi 100"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 30"
+msgstr "Ultimi 30"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 5"
+msgstr "Ultimi 5"
 
 #. placeholder {0}: formatWhen(target.lastBackupAt)
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx

@@ -21,6 +21,7 @@ export interface SaveTargetInput {
 	prefix?: string;
 	serverUrl?: string;
 	path?: string;
+	keep?: number; // snapshots to retain (keep-last-N); defaults to 30
 	secrets?: BackupSecrets; // omit on edit to keep the saved credentials
 }
 
@@ -86,7 +87,7 @@ export function useBackup() {
 				serverUrl: input.serverUrl,
 				path: input.path,
 				frequency: "daily",
-				keep: 30,
+				keep: input.keep ?? 30,
 				creds: await wrap(input.secrets),
 			};
 			await persist([...(targets ?? []), target]);
@@ -111,6 +112,7 @@ export function useBackup() {
 				prefix: input.prefix,
 				serverUrl: input.serverUrl,
 				path: input.path,
+				keep: input.keep ?? cur.keep,
 				creds,
 			};
 			await persist(list.map((t) => (t.id === id ? updated : t)));
