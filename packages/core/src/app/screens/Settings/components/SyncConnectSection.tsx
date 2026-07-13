@@ -5,7 +5,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
-import { activeDevices, type RosterEntry, type RosterPayload } from "../../../../sync";
+import {
+	activeDevices,
+	type RosterEntry,
+	type RosterPayload,
+	SYNC_LAST_SYNCED_KEY,
+} from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
 import { Modal } from "../../../components/ui/modal";
@@ -33,6 +38,18 @@ interface SyncGroup {
 const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
 const addedOn = (ms: number): string =>
 	i18n.date(new Date(ms), { month: "short", day: "numeric", year: "numeric" });
+
+// Locale-aware relative time ("just now" / "5 minutes ago" / "2 days ago") via Intl, so
+// "Last synced" reads at a glance. Coarsens by magnitude; refreshes on the next re-render.
+const relativeTime = (ms: number): string => {
+	const rtf = new Intl.RelativeTimeFormat(i18n.locale || "en", { numeric: "auto" });
+	const sec = Math.round((ms - Date.now()) / 1000); // negative = in the past
+	const abs = Math.abs(sec);
+	if (abs < 60) return rtf.format(sec, "second");
+	if (abs < 3600) return rtf.format(Math.round(sec / 60), "minute");
+	if (abs < 86_400) return rtf.format(Math.round(sec / 3600), "hour");
+	return rtf.format(Math.round(sec / 86_400), "day");
+};
 
 /**
  * Device sync panel. State-aware: before you're in a group it offers "add a device"
@@ -77,6 +94,8 @@ export function SyncConnectSection() {
 	// while loading so we don't flash the onboarding UI over an existing group.
 	const [group, setGroup] = useState<SyncGroup | null | undefined>(undefined);
 	const [myPub, setMyPub] = useState<string | null>(null);
+	// Epoch ms of the last successful reconcile with a peer (null = never / not loaded).
+	const [lastSynced, setLastSynced] = useState<number | null>(null);
 
 	const refreshGroup = useCallback(async () => {
 		const [g, pub] = await Promise.all([
@@ -115,14 +134,26 @@ export function SyncConnectSection() {
 	};
 
 	// A device finishing enrollment (inviter side) or this device joining changes the roster.
+	// "synced" carries the last-synced tick on mobile (in-process); the extension uses subscribeMeta.
 	useEffect(
 		() =>
 			shell.onSyncEvent((e) => {
 				if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
 					void refreshGroup();
+				if (e.kind === "synced") setLastSynced(e.at ?? Date.now());
 			}),
 		[shell, refreshGroup],
 	);
+
+	// "Last synced": read the persisted stamp on mount, and on the extension live-refresh via
+	// storage change events (the background writes it). No-op subscription on mobile, where the
+	// onSyncEvent "synced" tick above carries updates instead.
+	useEffect(() => {
+		const read = () =>
+			void storage.getMeta<number>(SYNC_LAST_SYNCED_KEY).then((v) => setLastSynced(v ?? null));
+		read();
+		return storage.subscribeMeta?.(SYNC_LAST_SYNCED_KEY, read);
+	}, [storage]);
 
 	// Stream transport status into the log for the panel's lifetime so enrollment
 	// progress shows on both sides. The inviter's connection happens after its pairing
@@ -269,6 +300,12 @@ export function SyncConnectSection() {
 							)}
 						</span>
 					</div>
+
+					{lastSynced && (
+						<p className="-mt-2 text-xs text-muted-foreground">
+							<Trans>Last synced {relativeTime(lastSynced)}</Trans>
+						</p>
+					)}
 
 					<div className="rounded-lg border border-border divide-y divide-border/60">
 						{sortedDevices.map((d: RosterEntry) => (

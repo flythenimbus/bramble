@@ -852,6 +852,11 @@ msgstr "Ultimo backup effettuato {0}"
 #~ msgid "Last backed up: never"
 #~ msgstr "Ultimo backup: mai"
 
+#. placeholder {0}: relativeTime(lastSynced)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Last synced {0}"
+msgstr "Ultima sincronizzazione {0}"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
 msgstr "Lasciare vuoti i campi delle credenziali per mantenere quelli salvati."

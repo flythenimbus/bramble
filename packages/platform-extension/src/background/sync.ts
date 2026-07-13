@@ -15,11 +15,13 @@ import {
 	encodeEntriesPayload,
 	encodeRoster,
 	mergeRemoteRoster,
+	SYNC_LAST_SYNCED_KEY,
 	type VaultSyncPort,
 } from "@core/sync";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { setSyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
+import { extensionStorage } from "../storage";
 import {
 	AdmissionPubkeyMsgSchema,
 	AdmissionSignEntryMsgSchema,
@@ -251,6 +253,9 @@ async function syncLocalPayload(): Promise<string> {
 async function syncApplyRemote(payloadJson: string): Promise<boolean> {
 	const remote = decodeEntriesPayload(payloadJson);
 	const { changed } = await applyRemotePayload(makeVaultSyncPort(), remote);
+	// Every reconcile (changed or no-op) is a "we're up to date with a peer" moment; the Sync
+	// settings UI live-reads this via chrome.storage.onChanged (subscribeMeta).
+	await extensionStorage.setMeta(SYNC_LAST_SYNCED_KEY, Date.now());
 	return changed;
 }
 

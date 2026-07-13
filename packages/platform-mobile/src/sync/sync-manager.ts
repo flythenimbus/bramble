@@ -17,6 +17,7 @@ import {
 	mergeRemoteRoster,
 	type RosterEntry,
 	type RosterPayload,
+	SYNC_LAST_SYNCED_KEY,
 	type SyncEvent,
 } from "@core/index";
 import { startEnroll } from "@core/sync/transport/enroll-host";
@@ -294,6 +295,11 @@ async function startRoster(): Promise<void> {
 				onChanged: notifyExternalChange, // refresh the in-app list with the peer's edits
 			});
 			await applyRemotePayload(port, decodeEntriesPayload(json));
+			// Every reconcile (changed or no-op) is a "we're up to date with a peer" moment. Persist it
+			// and emit the live tick; the in-process Sync UI updates via onSyncEvent ("synced").
+			const at = Date.now();
+			await mobileStorage.setMeta(SYNC_LAST_SYNCED_KEY, at);
+			emit({ kind: "synced", at });
 		},
 	});
 }
