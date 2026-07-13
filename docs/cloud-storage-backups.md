@@ -198,10 +198,10 @@ One WebDAV client reaches the self-hosted and privacy ecosystem.
 | Fastmail, mailbox.org, Koofr | hosted WebDAV |
 | pCloud, Filen, Internxt | also expose WebDAV, so this adapter catches them too |
 
-## OAuth one-click providers (Dropbox, then Google Drive)
+## OAuth one-click providers (Dropbox only)
 
-For mainstream users who don't have S3 keys or a WebDAV server, the "Easiest" tiles
-offer sign-in-with-your-account. These use OAuth 2.0 with PKCE as a **public client**
+For mainstream users who don't have S3 keys or a WebDAV server, the "Easiest" tile
+offers sign-in-with-your-account. It uses OAuth 2.0 with PKCE as a **public client**
 (no client secret ever ships), and each provider's own REST upload API rather than
 S3/WebDAV. We store only the long-lived **refresh token** (VEK-wrapped, like every
 other credential) and mint a short-lived access token on demand, so a scheduled
@@ -232,7 +232,8 @@ connected app folder (an app-folder-scoped app only ever sees its own files).
 registered with the provider; drop it into `OAUTH_PROVIDERS` in `@core/backup/oauth`
 (replacing the `REPLACE_WITH_...` placeholder, which keeps the tile in "coming soon"
 until set). Dropbox: create an app at the App Console, **App folder** access,
-scopes `files.content.write` + `files.content.read`, and add the extension's redirect
+scopes `files.content.write` + `files.content.read` + `files.metadata.read` (the last
+is needed for `list_folder`, i.e. the keep-last-N prune), and add the extension's redirect
 URI. The redirect is the extension's own `chrome.identity.getRedirectURL()`, i.e.
 `https://<extension-id>.chromiumapp.org/`. The **published** Chrome id is stable
 (`https://kmokhdhoggbdcgoepifeckhgbfakaknm.chromiumapp.org/`); an **unpacked** dev
@@ -241,11 +242,27 @@ either pin the CWS public `key` or also register whatever `chrome.identity.getRe
 prints in the dev build's console. Firefox uses a different scheme (`browser.identity.getRedirectURL()`
 returns an `*.allizom.org` URL), registered separately.
 
-Google Drive follows the same shape but needs Google OAuth-app verification and the
-`drive.file` scope (per-file access, avoids the restricted-scope security assessment);
-add it once we're willing to run Google's verification. `token_access_type=offline`
-(Dropbox) / `access_type=offline` + `prompt=consent` (Google) is required to receive a
-refresh token.
+Dropbox needs `token_access_type=offline` on the authorize request to return a refresh
+token.
+
+**Why Dropbox is the only OAuth tile.** Google Drive and OneDrive were both evaluated
+and dropped, because neither offers Dropbox's true-public-client experience:
+
+- **Google Drive** — Google's Web application client (the only type `launchWebAuthFlow`
+  can use) *requires* a `client_secret` at the token exchange even with PKCE (confirmed:
+  omitting it returns `"client_secret is missing"`). A secret can't ship in a client-side
+  extension, so a refresh token would need a server-side broker. The only secret-less
+  Google path is `chrome.identity.getAuthToken`, which is Chrome-only and Chrome-manages
+  the tokens (no stored refresh token, doesn't fit the uniform model). Not worth the split.
+- **OneDrive** — technically the closest fit (public/native client, *no* secret, long-lived
+  refresh token, app-folder scope). Dropped only because registering the Entra app now
+  requires an Azure directory, and Azure signup demands a credit card. Revisit if that
+  friction ever lifts; the client would be a near-copy of the Dropbox one (register the
+  redirect as **Mobile and desktop / native**, never SPA, to avoid the 24h refresh cap).
+
+Everyone else (pCloud, Fastmail, Yandex, Koofr, Filen, Internxt) is already reachable via
+the WebDAV tile, and Backblaze / R2 / Storj / Wasabi / iDrive / MinIO via S3, so no other
+OAuth work is warranted.
 
 ## Dedicated providers worth naming
 
@@ -283,12 +300,11 @@ The mechanism above is platform plumbing; the adapters below are the reach.
    triggers, the decision rule, and skip-if-unchanged.
 3. **Mobile automatic (opportunistic).** The same client and config, fired on
    resume and unlock. Native background scheduling deferred.
-4. **OAuth consumer providers** (Dropbox first, then Google Drive, pCloud) for
-   mainstream one-click users. Dropbox is built (PKCE public client, refresh-token
-   creds, app-folder REST client, `shell.runOAuthFlow` on the extension); it goes
-   live once the app key is registered. Google Drive follows after its OAuth-app
-   verification. Defer MEGA and Proton; note Proton as "planned once its SDK
-   stabilizes". See "OAuth one-click providers" above.
+4. **OAuth consumer provider (Dropbox).** Built and live: PKCE public client,
+   refresh-token creds, app-folder REST client, connect run in the background service
+   worker (`shell.connectBackupOAuth`). Dropbox is the only OAuth tile; Google Drive and
+   OneDrive were evaluated and dropped (see "Why Dropbox is the only OAuth tile" above).
+   MEGA and Proton stay deferred (Proton "planned once its SDK stabilizes").
 
 Because the payload is already ciphertext, the user-facing promise (the provider
 never sees anything readable) holds for every backend, not only the private ones.
