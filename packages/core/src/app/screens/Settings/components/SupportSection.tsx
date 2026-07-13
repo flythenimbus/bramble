@@ -30,7 +30,8 @@ const WALLETS: Wallet[] = [
 		name: "Monero",
 		ticker: "XMR",
 		scheme: "monero",
-		address: "REPLACE_WITH_XMR_ADDRESS",
+		address:
+			"4AC3txuTwFm4fkamoYeK47c9EpnPwbreHNxJeKDYHiDNN6weD5vVA4BCH1azQhSxa6JjereuVpt21Pu2MyRDFDNNH6KGnWq",
 		Icon: Coins,
 		accent: "text-orange-600",
 	},
@@ -99,7 +100,7 @@ export function SupportSection() {
 					code with your wallet, or copy the address. Thank you.
 				</Trans>
 			</p>
-			<div className="grid gap-3 sm:grid-cols-2">
+			<div className={`grid gap-3 ${wallets.length > 1 ? "sm:grid-cols-2" : "mx-auto max-w-xs"}`}>
 				{wallets.map((w) => (
 					<WalletCard key={w.ticker} wallet={w} />
 				))}
