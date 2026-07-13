@@ -277,16 +277,29 @@ Only worth a bespoke integration if users ask for it and the API is clean.
 | Filen | TS/Rust/Go SDKs, REST API, plus WebDAV + S3 gateways | best "private name with a first-class API"; already reachable via WebDAV/S3 |
 | Internxt | open source, CLI + WebDAV + S3 gateway | already reachable via the two adapters |
 | Storj | S3-compatible + native libuplink | already covered by S3 |
-| MEGA | C++ SDK + JS/Python libs, E2EE | heavier and crypto-fiddly; skip unless demanded |
+| MEGA | official C++ SDK (native), maintained browser-compatible `megajs` (unofficial, MIT), E2EE, permissive licenses, stable API | **feasible + shippable** (medium effort — `megajs` does login/upload/crypto and even works cross-origin, so possibly no mobile native-HTTP needed). Held back not by difficulty but by two trust issues: no OAuth so it's the full MEGA **account password** (no app passwords; store the session id, not the password), and bundling an *unofficial* account-crypto lib in a password manager needs a real security review. Skip unless demand mounts. |
 
 ## Proton Drive: not yet
 
 Historically no public API (people used the reverse-engineered Proton-API-Bridge
-that rclone rides on). As of Jan 2026 Proton shipped an **official SDK in
-preview** and is migrating its own clients onto it through 2026. Caveats: it is
-preview (interface still changing), personal / non-commercial use only right now,
-and a crypto-model migration is slated for late 2026 / early 2027. Not
-production-safe this year. Revisit around 2027.
+that rclone rides on). Proton shipped an **official SDK** (ProtonDriveApps/sdk,
+TypeScript-first, MIT code), but evaluating it (July 2026) confirms it's not
+worth it yet, for reasons independent of effort:
+
+- **The SDK doesn't do auth.** It explicitly excludes login, session management,
+  and the address provider ("official clients wire these in"). Proton has no
+  OAuth: you'd implement the full **SRP password login + 2FA + account key
+  hierarchy** yourself, i.e. users typing their Proton *account* password into a
+  password manager. That's the bulk of the work and a trust problem.
+- **The terms forbid shipping it.** "Not yet ready for third-party production
+  use"; personal / non-commercial only. Bramble is a public product (CWS / App
+  Store / Play), so it's out of bounds regardless of the MIT code license.
+- **Pre-release + a breaking crypto migration** at end-2026 / early-2027, after
+  which clients on older SDK releases stop interoperating.
+
+Revisit once it's production-ready for third parties, the migration has landed,
+and the terms permit public distribution (~2027). Until then Proton users can
+manually drop an exported `.bramble` into Proton Drive.
 
 ## Recommendation and phasing
 
