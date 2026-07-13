@@ -1,106 +1,70 @@
-import { Trans, useLingui } from "@lingui/react/macro";
-import { Download, Info, Lock, Palette } from "lucide-react";
-import { usePlatform } from "../../../context/PlatformContext";
-import { useVault } from "../../../hooks/useVault";
-import { SelectField } from "../../components/ui/select-field";
-import { type ThemeMode, useTheme } from "../../hooks/useTheme";
+import { useLingui } from "@lingui/react/macro";
+import { Database, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
+import { useState } from "react";
+import { cn } from "../../components/ui/utils";
+import { AboutSection } from "./components/AboutSection";
+import { AppearanceSection } from "./components/AppearanceSection";
 import { BackupSection } from "./components/BackupSection";
-import { BiometricSection } from "./components/BiometricSection";
+import { DataSection } from "./components/DataSection";
 import { GeneralSection } from "./components/GeneralSection";
-import { MasterPasswordSection } from "./components/MasterPasswordSection";
-import { Row, Section } from "./components/primitives";
-import { RecoveryCodeSection } from "./components/RecoveryCodeSection";
-import { SecurityKeysSection } from "./components/SecurityKeysSection";
+import { SecuritySection } from "./components/SecuritySection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
 
+type TabId = "general" | "security" | "data" | "sync" | "about";
+
 export function Settings() {
-	const { themeMode, setThemeMode } = useTheme();
-	const { shell } = usePlatform();
-	const { entries, exportVault } = useVault();
 	const { t } = useLingui();
+	const [tab, setTab] = useState<TabId>("general");
+
+	const tabs: { id: TabId; label: string; Icon: LucideIcon }[] = [
+		{ id: "general", label: t`General`, Icon: SlidersHorizontal },
+		{ id: "security", label: t`Security`, Icon: Lock },
+		{ id: "data", label: t`Data`, Icon: Database },
+		{ id: "sync", label: t`Sync`, Icon: Wifi },
+		{ id: "about", label: t`About`, Icon: Info },
+	];
 
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-5">
+			<nav
+				className="flex gap-1 overflow-x-auto border-b border-border/50 mb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+				aria-label={t`Settings sections`}
+			>
+				{tabs.map(({ id, label, Icon }) => (
+					<button
+						key={id}
+						type="button"
+						aria-current={tab === id}
+						onClick={() => setTab(id)}
+						className={cn(
+							"flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors",
+							tab === id
+								? "border-primary text-foreground"
+								: "border-transparent text-muted-foreground hover:text-foreground",
+						)}
+					>
+						<Icon className="w-4 h-4" />
+						{label}
+					</button>
+				))}
+			</nav>
+
 			<div className="space-y-4">
-				<GeneralSection />
-
-				<Section icon={<Lock className="w-4 h-4 text-primary" />} title={t`Security`}>
-					<MasterPasswordSection />
-					{/* Security keys (WebAuthn) don't work on mobile; biometric unlock takes their slot there. */}
-					{shell.supportsSecurityKeys && <SecurityKeysSection />}
-					<BiometricSection />
-					<RecoveryCodeSection />
-				</Section>
-
-				<Section icon={<Palette className="w-4 h-4 text-primary" />} title={t`Appearance`}>
-					<Row
-						icon={<Palette className="w-4 h-4 text-primary" />}
-						title={t`Theme`}
-						subtitle={t`Use light, dark, or match your system`}
-					>
-						<div className="w-44">
-							<SelectField
-								label={t`Mode`}
-								value={themeMode}
-								onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
-							>
-								<option value="light">{t`Light`}</option>
-								<option value="dark">{t`Dark`}</option>
-								<option value="system">{t`System`}</option>
-							</SelectField>
-						</div>
-					</Row>
-				</Section>
-
-				<Section icon={<Download className="w-4 h-4 text-primary" />} title={t`Data`}>
-					<Row
-						icon={<Download className="w-4 h-4 text-primary" />}
-						title={t`Import from another manager`}
-						subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass`}
-					>
-						<button
-							type="button"
-							onClick={() => void shell.openSetup("import")}
-							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
-						>
-							<Trans>Import</Trans>
-						</button>
-					</Row>
-					{shell.exportBytes && (
-						<Row
-							icon={<Download className="w-4 h-4 text-primary" />}
-							title={t`Export a backup`}
-							subtitle={t`Save an encrypted .bramble copy of your vault. It still needs your master password to open.`}
-						>
-							<button
-								type="button"
-								onClick={() => void exportVault().catch(() => {})}
-								className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
-							>
-								<Trans>Export</Trans>
-							</button>
-						</Row>
-					)}
-				</Section>
-
-				<BackupSection />
-
-				<SyncConnectSection />
-
-				<Section icon={<Info className="w-4 h-4 text-primary" />} title={t`About`}>
-					<div className="flex items-center justify-between text-sm">
-						<span className="text-muted-foreground">
-							<Trans>Version</Trans>
-						</span>
-						<span>{shell.version}</span>
-					</div>
-					<div className="flex items-center justify-between text-sm">
-						<span className="text-muted-foreground">
-							<Trans>Total entries</Trans>
-						</span>
-						<span>{entries.length}</span>
-					</div>
-				</Section>
+				{tab === "general" && (
+					<>
+						<GeneralSection />
+						<AppearanceSection />
+					</>
+				)}
+				{tab === "security" && <SecuritySection />}
+				{tab === "data" && (
+					<>
+						<DataSection />
+						<BackupSection />
+					</>
+				)}
+				{tab === "sync" && <SyncConnectSection />}
+				{tab === "about" && <AboutSection />}
 			</div>
 		</main>
 	);
