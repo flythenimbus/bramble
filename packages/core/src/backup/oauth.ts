@@ -6,6 +6,7 @@
 // (VEK-wrapped, like other creds) and mint a short-lived access token on demand.
 // See docs/cloud-storage-backups.md.
 
+import { z } from "zod";
 import { bytesToBase64Url } from "../util/bytes";
 
 export type OAuthProviderId = "dropbox";
@@ -65,6 +66,26 @@ async function postForm(url: string, params: Record<string, string>): Promise<Re
 	});
 }
 
+// Token-endpoint response shapes. Providers send extra fields (token_type,
+// expires_in, scope, account_id, ...) which are ignored; we validate only what we
+// consume, and reject anything malformed rather than trusting the wire.
+const TokenPairSchema = z.object({ access_token: z.string(), refresh_token: z.string() });
+const AccessTokenSchema = z.object({ access_token: z.string() });
+const TokenErrorSchema = z.object({
+	error: z.string().optional(),
+	error_description: z.string().optional(),
+});
+
+// Best-effort detail from a failed token request: the OAuth error body, else the status.
+async function tokenErrorDetail(res: Response): Promise<string> {
+	try {
+		const parsed = TokenErrorSchema.safeParse(await res.json());
+		const msg = parsed.success ? (parsed.data.error_description ?? parsed.data.error) : undefined;
+		if (msg) return msg;
+	} catch {}
+	return `HTTP ${res.status}`;
+}
+
 /** Trade an authorization code (+ PKCE verifier) for a refresh + access token. */
 export async function exchangeCodeForTokens(opts: {
 	providerId: OAuthProviderId;
@@ -80,12 +101,12 @@ export async function exchangeCodeForTokens(opts: {
 		client_id: meta.clientId,
 		redirect_uri: opts.redirectUri,
 	});
-	if (!res.ok) throw new Error(`Sign-in failed (${res.status}).`);
-	const json = (await res.json()) as { access_token?: string; refresh_token?: string };
-	if (!json.access_token || !json.refresh_token) {
+	if (!res.ok) throw new Error(`Sign-in failed (${res.status}). ${await tokenErrorDetail(res)}`);
+	const parsed = TokenPairSchema.safeParse(await res.json());
+	if (!parsed.success) {
 		throw new Error("The provider didn't return a refresh token. Try connecting again.");
 	}
-	return { accessToken: json.access_token, refreshToken: json.refresh_token };
+	return { accessToken: parsed.data.access_token, refreshToken: parsed.data.refresh_token };
 }
 
 /** Mint a fresh short-lived access token from the stored refresh token (non-interactive). */
@@ -99,8 +120,12 @@ export async function refreshAccessToken(
 		refresh_token: refreshToken,
 		client_id: meta.clientId,
 	});
-	if (!res.ok) throw new Error(`Couldn't refresh access (${res.status}). Reconnect the account.`);
-	const json = (await res.json()) as { access_token?: string };
-	if (!json.access_token) throw new Error("No access token returned.");
-	return json.access_token;
+	if (!res.ok) {
+		throw new Error(
+			`Couldn't refresh access (${res.status}: ${await tokenErrorDetail(res)}). Reconnect the account.`,
+		);
+	}
+	const parsed = AccessTokenSchema.safeParse(await res.json());
+	if (!parsed.success) throw new Error("No access token returned. Reconnect the account.");
+	return parsed.data.access_token;
 }
