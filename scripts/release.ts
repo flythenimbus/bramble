@@ -614,15 +614,16 @@ function has(bin: string) {
 }
 
 // Read a secret from the macOS login Keychain (encrypted at rest, unlocked at login). Returns
-// null off macOS or when the service isn't stored, so callers can fall back to the env var.
-function secretFromKeychain(service: string): string | null {
-	if (process.platform !== "darwin") return null;
+// undefined off macOS or when the service isn't stored, so callers can fall back to the env var
+// via `??` (and undefined, unlike null, is a valid absent value for a process-env field).
+function secretFromKeychain(service: string): string | undefined {
+	if (process.platform !== "darwin") return undefined;
 	try {
 		return execFileSync("security", ["find-generic-password", "-s", service, "-w"], {
 			encoding: "utf8",
 		}).replace(/\n$/, ""); // strip only the trailing newline `security -w` adds
 	} catch {
-		return null;
+		return undefined;
 	}
 }
 
