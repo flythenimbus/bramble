@@ -104,4 +104,15 @@ export const extensionStorage: StorageAdapter = {
 	async removeMeta(key) {
 		await api.storage.local.remove(key);
 	},
+
+	// Fire when this key changes in storage.local, including writes from the background
+	// (e.g. a scheduled backup updating backup.targets), so an open popup/options page can
+	// live-refresh instead of showing stale status until reopened.
+	subscribeMeta(key, callback) {
+		const handler = (changes: { [name: string]: chrome.storage.StorageChange }, area: string) => {
+			if (area === "local" && key in changes) callback();
+		};
+		api.storage.onChanged.addListener(handler);
+		return () => api.storage.onChanged.removeListener(handler);
+	},
 };

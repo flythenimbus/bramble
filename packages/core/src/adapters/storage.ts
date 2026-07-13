@@ -14,4 +14,11 @@ export interface StorageAdapter {
 	setMeta<T>(key: string, value: T): Promise<void>;
 	/** Delete a metadata key (e.g. clearing `sync.group` when leaving the sync group). */
 	removeMeta(key: string): Promise<void>;
+	/**
+	 * Subscribe to changes of a metadata key made in another context (e.g. a background
+	 * scheduled backup writing `backup.targets`) so open UI can live-refresh. Returns an
+	 * unsubscribe. Optional: absent where nothing writes metadata out-of-context (mobile
+	 * runs backups in-process, so its own React state already reflects the write).
+	 */
+	subscribeMeta?(key: string, callback: () => void): () => void;
 }
