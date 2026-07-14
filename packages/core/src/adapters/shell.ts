@@ -184,4 +184,6 @@ export interface SyncEvent {
 	entryJson?: string;
 	/** Joiner: a human-readable reason a join failed recoverably (e.g. password mismatch). */
 	message?: string;
+	/** For kind "synced": epoch ms of the reconcile, carrying the "last synced" tick to the UI (mobile). */
+	at?: number;
 }
