@@ -72,7 +72,7 @@ export function BiometricSection() {
 		<>
 			<Row icon={<Icon className="w-4 h-4 text-primary" />} title={title} subtitle={subtitle}>
 				<Toggle
-					checked={biometricEnabled}
+					checked={biometricEnabled && biometricAvailable}
 					onChange={(next) => void onToggle(next)}
 					label={t`Biometric unlock`}
 					disabled={busy || !biometricAvailable}

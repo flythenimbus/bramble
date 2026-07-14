@@ -9,7 +9,7 @@ import {
 	Plus,
 	ScanFace,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
@@ -32,8 +32,10 @@ export function Auth() {
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
 		biometricEnabled,
+		biometricAvailable,
 		biometryType,
 		unlockWithBiometric,
+		refreshBiometric,
 		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
@@ -42,6 +44,15 @@ export function Auth() {
 	const { t } = useLingui();
 	const appName = shell.appName;
 	const onPopOut = canPopOut ? popOut : undefined;
+
+	// OS biometry can be turned off while backgrounded; re-probe on foreground so the button reflects it.
+	useEffect(() => {
+		const onVisible = () => {
+			if (document.visibilityState === "visible") void refreshBiometric();
+		};
+		document.addEventListener("visibilitychange", onVisible);
+		return () => document.removeEventListener("visibilitychange", onVisible);
+	}, [refreshBiometric]);
 
 	const [showPassword, setShowPassword] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -130,7 +141,7 @@ export function Auth() {
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
-	const showBiometric = hasVault && biometricEnabled;
+	const showBiometric = hasVault && biometricEnabled && biometricAvailable;
 	// Label/icon track the enrolled modality: Face ID gets its own icon, everything
 	// else (Touch ID, generic Android fingerprint) uses the fingerprint icon.
 	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
