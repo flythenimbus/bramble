@@ -128,6 +128,7 @@ try {
 	// registered "Verified CRX Uploads" key, then repackages under its own key.
 	type UploadRes = {
 		uploadState?: string;
+		crxVersion?: string;
 		itemError?: { error_code?: string; error_detail?: string }[];
 	};
 	const uploadDetail = (r: UploadRes) => {
@@ -150,18 +151,29 @@ try {
 	});
 	let up = (await upRes.json()) as UploadRes;
 	if (!upRes.ok) fail(`upload failed (HTTP ${upRes.status}): ${uploadDetail(up)}`);
-	// A raw upload usually settles synchronously (SUCCESS); a large package may report
-	// UPLOAD_IN_PROGRESS, so poll :fetchStatus until it settles (or give up after ~60s).
-	for (let i = 0; up.uploadState === "UPLOAD_IN_PROGRESS" && i < 20; i++) {
+	// v2 upload states: SUCCEEDED (done), IN_PROGRESS (async — poll :fetchStatus), FAILED. A raw
+	// upload of this size usually settles synchronously; poll for the async case (give up after ~60s).
+	// (Match on both the v2 and legacy spellings so a state rename can't false-fail a good upload.)
+	const inProgress = (s?: string) =>
+		s === "IN_PROGRESS" || s === "UPLOAD_IN_PROGRESS" || s === "PENDING";
+	const succeeded = (s?: string) => s === "SUCCEEDED" || s === "SUCCESS";
+	for (let i = 0; inProgress(up.uploadState) && i < 20; i++) {
 		await new Promise((r) => setTimeout(r, 3000));
 		const stRes = await fetch(`https://chromewebstore.googleapis.com/v2/${itemPath}:fetchStatus`, {
 			headers: { authorization: bearer },
 		});
 		const st = (await stRes.json()) as { lastAsyncUploadState?: string } & UploadRes;
-		up = { uploadState: st.lastAsyncUploadState, itemError: st.itemError };
+		up = {
+			uploadState: st.lastAsyncUploadState,
+			crxVersion: st.crxVersion,
+			itemError: st.itemError,
+		};
 	}
-	if (up.uploadState !== "SUCCESS")
+	if (!succeeded(up.uploadState))
 		fail(`upload failed (state ${up.uploadState ?? "unknown"}): ${uploadDetail(up)}`);
+	console.log(
+		`upload OK (state ${up.uploadState}${up.crxVersion ? `, crx v${up.crxVersion}` : ""})`,
+	);
 
 	if (uploadOnly) {
 		console.log(`\nuploaded ${ITEM_ID} (not published; drop --upload-only to publish).`);
