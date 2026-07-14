@@ -205,6 +205,10 @@ msgstr "Biometric unlock"
 msgid "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
 msgstr "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
 
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
+msgstr "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
+
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Breached"
@@ -384,6 +388,7 @@ msgid "Controls which URLs this entry will offer credentials for."
 msgstr "Controls which URLs this entry will offer credentials for."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Copied"
 msgstr "Copied"
 
@@ -404,6 +409,10 @@ msgstr "Copy"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Copy {0}"
 msgstr "Copy {0}"
+
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Copy address"
+msgstr "Copy address"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Copy verification code"
@@ -1521,6 +1530,10 @@ msgstr "Strong"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Subdomain match"
 msgstr "Subdomain match"
+
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Support"
+msgstr "Support"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Sync"
