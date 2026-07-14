@@ -14,7 +14,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // versionCode: seconds since 2020-01-01 UTC (mirrors the iOS build number; monotonic, computed at build).
         versionCode(((System.currentTimeMillis() / 1000L) - 1577836800L) as int)
-        versionName "0.6.1"
+        versionName "0.7.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
