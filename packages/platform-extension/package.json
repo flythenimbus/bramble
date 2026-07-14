@@ -7,7 +7,7 @@
 		"build": "pnpm run build:chromium && pnpm run build:firefox",
 		"build:chromium": "vite build",
 		"build:firefox": "TARGET=firefox vite build",
-		"bundle:chromium": "vite build && rm -f bramble.zip && (cd dist-chromium && zip -rq ../bramble.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
+		"bundle:chromium": "vite build && node ../../scripts/strip-manifest-key.mjs dist-chromium/manifest.json && rm -f bramble.zip && (cd dist-chromium && zip -rq ../bramble.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
 		"bundle:firefox": "TARGET=firefox vite build && rm -f bramble-firefox.zip && (cd dist-firefox && zip -rq ../bramble-firefox.zip . -x '*.d.ts' 'wasm/package.json' 'wasm/.gitignore' '*.DS_Store')",
 		"lint:firefox": "web-ext lint -s dist-firefox",
 		"run:firefox": "web-ext run -s dist-firefox",
