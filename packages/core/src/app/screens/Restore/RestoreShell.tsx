@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertTriangle, ArchiveRestore, ArrowLeft, Check, Loader2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { bytesToBase64 } from "../../../util/bytes";
@@ -43,15 +43,34 @@ function Wrapper({ children, onClose }: { children: React.ReactNode; onClose?: (
 export function RestoreShell({
 	onClose,
 	onRestored,
+	mobile,
 }: {
 	onClose?: () => void;
 	/** Called after a successful restore+unlock instead of showing the terminal "Vault restored"
 	 * screen. Used when embedded in the setup flow, which owns the post-unlock screen. */
 	onRestored?: () => void;
+	/** Loosen the file `accept` so the native mobile document picker doesn't grey out .bramble
+	 * (no UTType/MIME is registered for the custom extension). */
+	mobile?: boolean;
 } = {}) {
 	const { unlock } = useVault();
 	const { shell, crypto, storage } = usePlatform();
 	const { t } = useLingui();
+	// Whether a vault already exists here: gates the "this replaces your vault" warning, which is
+	// wrong on a fresh install (nothing to replace, e.g. onboarding restore on mobile).
+	const [hasVault, setHasVault] = useState(false);
+	useEffect(() => {
+		let alive = true;
+		storage
+			.hasVaultHandle()
+			.then((v) => {
+				if (alive) setHasVault(v);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [storage]);
 	const [picked, setPicked] = useState<{
 		bytes: Uint8Array;
 		slot: PasswordSlot;
@@ -175,7 +194,8 @@ export function RestoreShell({
 					<label className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all">
 						<input
 							type="file"
-							accept=".bramble"
+							// Desktop filters to .bramble; mobile omits it so the native picker shows the file.
+							accept={mobile ? undefined : ".bramble"}
 							className="hidden"
 							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
 							onClick={() => shell.notifyFilePickerOpening?.()}
@@ -214,16 +234,25 @@ export function RestoreShell({
 						void restore();
 					}}
 				>
-					<div className="flex items-start gap-2.5 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
-						<AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+					{hasVault ? (
+						<div className="flex items-start gap-2.5 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+							<AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+							<p className="text-xs text-muted-foreground">
+								<Trans>
+									This replaces the vault currently on this device with{" "}
+									<span className="text-foreground">{picked.name}</span>. Enter that backup's master
+									password to open it.
+								</Trans>
+							</p>
+						</div>
+					) : (
 						<p className="text-xs text-muted-foreground">
 							<Trans>
-								This replaces the vault currently on this device with{" "}
-								<span className="text-foreground">{picked.name}</span>. Enter that backup's master
-								password to open it.
+								Open <span className="text-foreground">{picked.name}</span> as the vault on this
+								device. Enter its master password.
 							</Trans>
 						</p>
-					</div>
+					)}
 					<TextField
 						type="password"
 						label={t`Backup's master password`}

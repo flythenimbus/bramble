@@ -690,6 +690,10 @@ msgstr "Zurück"
 msgid "Go to vault"
 msgstr "Zum Tresor gehen"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Have a backup? Open a .bramble file instead"
+msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
 msgstr "Verborgen"
@@ -1003,6 +1007,11 @@ msgstr "Die Ein-Klick-Anmeldung für {name} wird in einem zukünftigen Update ve
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
 msgstr "Öffnen {name}"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
+msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Master-Passwort ein."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Open a backup file instead"

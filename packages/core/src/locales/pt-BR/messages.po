@@ -690,6 +690,10 @@ msgstr "Voltar"
 msgid "Go to vault"
 msgstr "Acessar o cofre"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Have a backup? Open a .bramble file instead"
+msgstr "Tem um backup? Abra um arquivo .bramble"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
 msgstr "Oculto"
@@ -1003,6 +1007,11 @@ msgstr "O login com um clique para {name} estará disponível em uma futura atua
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
 msgstr "Abrir {name}"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
+msgstr "Abra <0>{0}</0> como o cofre neste dispositivo. Insira sua senha mestra."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Open a backup file instead"
