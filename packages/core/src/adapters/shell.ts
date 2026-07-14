@@ -80,16 +80,8 @@ export interface ShellAdapter {
 	restoreRoute?(): Promise<string | null>;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
-	/** Whether this platform can detach the UI into a standalone window. False on single-window hosts (mobile), which hides the pop-out affordance. */
-	supportsPopOut: boolean;
-	/** True where `scanQrFromActiveTab` is a live camera scan (mobile) rather than an active-tab capture; gates camera-scan affordances (e.g. scanning a pairing QR). */
-	supportsCameraScan: boolean;
-	/** Whether WebAuthn security-key unlock works here. False on mobile (iOS doesn't pass `prf` to authenticators, Android is NFC-blocked), where biometric unlock replaces it. Gates the security-key UI. */
-	supportsSecurityKeys: boolean;
-	/** Whether this platform can capture a submitted login and offer to save it (the corner-prompt flow). True on the extension; false on mobile (no save hook wired). Gates the "Offer to save logins" setting. See docs/mobile-port.md. */
-	supportsSaveCapture: boolean;
-	/** Whether the .bramble backup restore flow is available. Extension only for now; the mobile file picker doesn't recognize .bramble yet. Gates the "Import a backup" row. */
-	supportsRestore: boolean;
+	// Static per-target capability flags (popOut, cameraScan, securityKeys, saveCapture, restore,
+	// cloudBackup, passkeyProvider) now live in flags.ts `CAPABILITIES`, resolved via `useCan`.
 	/**
 	 * Connect a one-click backup provider end to end: run the interactive OAuth flow, exchange the
 	 * code, and persist the resulting target (a new one, or `targetId` to reconnect an existing one).
@@ -99,9 +91,7 @@ export interface ShellAdapter {
 	 * keeps the OAuth tiles "coming soon". See docs/cloud-storage-backups.md.
 	 */
 	connectBackupOAuth?(providerId: string, opts?: { targetId?: string }): Promise<void>;
-	/** Whether this platform can act as a WebAuthn passkey provider for other sites. True on the Chromium extension (chrome.webAuthenticationProxy); false elsewhere. Gates the passkey-provider setting. See docs/passkey-provider.md. */
-	supportsPasskeyProvider: boolean;
-	/** Attach/detach the passkey provider at runtime (extension only; paired with supportsPasskeyProvider). Persisting the pref is the caller's job; this just applies it now. */
+	/** Attach/detach the passkey provider at runtime (extension only; paired with the passkeyProvider capability). Persisting the pref is the caller's job; this just applies it now. */
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */
 	onPasskeySaved?(callback: (info: PasskeySavedInfo) => void): () => void;

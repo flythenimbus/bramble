@@ -5,8 +5,11 @@ import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
+import { type CapabilityKey, can, type Target } from "../flags";
 
 export interface Platform {
+	/** Build-target identity; the single per-project value that resolves platform capabilities (see flags.ts `can`). */
+	target: Target;
 	storage: StorageAdapter;
 	crypto: CryptoAdapter;
 	autofill: AutofillAdapter;
@@ -32,4 +35,9 @@ export function usePlatform(): Platform {
 	const ctx = useContext(PlatformContext);
 	if (!ctx) throw new Error("usePlatform called outside PlatformProvider");
 	return ctx;
+}
+
+/** Resolve a platform capability for the current build target. See flags.ts `CAPABILITIES`. */
+export function useCan(cap: CapabilityKey): boolean {
+	return can(cap, usePlatform().target);
 }

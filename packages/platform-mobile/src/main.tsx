@@ -11,7 +11,7 @@ import { mobileAutofill } from "./adapters/autofill";
 import { mobileBiometric } from "./adapters/biometric";
 import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
-import { mobileShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
+import { mobileShell, mobileTarget, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
 import { consumePendingAutofillSave } from "./autofill-pending";
@@ -23,6 +23,7 @@ import { initRosterSync } from "./sync/sync-manager";
 installNativeWebRtc();
 
 const platform: Platform = {
+	target: mobileTarget,
 	storage: mobileStorage,
 	crypto: mobileCrypto,
 	autofill: mobileAutofill,

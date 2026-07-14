@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from "react";
-import { usePlatform } from "../../context/PlatformContext";
+import { useCan, usePlatform } from "../../context/PlatformContext";
 import type { AppRouter } from "../router";
 
 /** Getter the active form route registers so pop-out can snapshot its in-flight draft. */
@@ -30,6 +30,7 @@ export function PopOutProvider({
 	children: ReactNode;
 }) {
 	const { shell } = usePlatform();
+	const popOutCapable = useCan("popOut");
 	const draftGetterRef = useRef<DraftGetter | null>(null);
 	const initialDraftRef = useRef<unknown>(initialDraft);
 
@@ -51,12 +52,12 @@ export function PopOutProvider({
 
 	const value = useMemo<PopOutContextValue>(
 		() => ({
-			canPopOut: shell.supportsPopOut && !shell.isDetached(),
+			canPopOut: popOutCapable && !shell.isDetached(),
 			popOut,
 			registerDraftGetter,
 			takeInitialDraft,
 		}),
-		[shell, popOut, registerDraftGetter, takeInitialDraft],
+		[shell, popOutCapable, popOut, registerDraftGetter, takeInitialDraft],
 	);
 
 	return <PopOutContext.Provider value={value}>{children}</PopOutContext.Provider>;

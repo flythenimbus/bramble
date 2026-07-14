@@ -4,7 +4,7 @@ import "@core/styles/index.css";
 import { extensionAutofill } from "./autofill";
 import { extensionClipboard } from "./clipboard";
 import { extensionCrypto } from "./crypto";
-import { extensionShell } from "./shell";
+import { extensionShell, extensionTarget } from "./shell";
 import { extensionStorage } from "./storage";
 import { connectViewPort } from "./view-port";
 
@@ -13,6 +13,7 @@ import { connectViewPort } from "./view-port";
 connectViewPort();
 
 const platform: Platform = {
+	target: extensionTarget,
 	storage: extensionStorage,
 	crypto: extensionCrypto,
 	autofill: extensionAutofill,

@@ -68,7 +68,7 @@ const isConfigured = (address: string) => !address.startsWith("REPLACE_WITH_");
 
 const toggleBtn = (active: boolean) =>
 	cn(
-		"rounded px-2.5 py-0.5 transition-colors",
+		"rounded px-2 py-0.5 transition-colors",
 		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground",
 	);
 
@@ -101,7 +101,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			</div>
 
 			{wallet.methods.length > 1 && (
-				<div className="flex rounded-md border border-border p-0.5 text-[11px]">
+				<div className="flex rounded-md border border-border p-0.5 text-[10px]">
 					{wallet.methods.map((m, i) => (
 						<button
 							key={m.label}

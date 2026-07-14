@@ -3,7 +3,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePlatform } from "../../../../context/PlatformContext";
+import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import {
 	activeDevices,
@@ -60,6 +60,7 @@ const relativeTime = (ms: number): string => {
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
+	const canCameraScan = useCan("cameraScan");
 	const { inviteDevice, joinGroup, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
 	const { t } = useLingui();
@@ -90,7 +91,7 @@ export function SyncConnectSection() {
 	// Security-key pairing only where WebAuthn keys actually work: the extension.
 	// Mobile webviews expose PublicKeyCredential but can't use security keys (no prf
 	// on iOS, NFC-blocked on Android), so the join there is master-password only.
-	const canUseSecurityKey = shell.supportsSecurityKeys && isWebauthnAvailable();
+	const canUseSecurityKey = useCan("securityKeys") && isWebauthnAvailable();
 
 	// Group membership (source of truth for "are we paired, and with whom"). undefined
 	// while loading so we don't flash the onboarding UI over an existing group.
@@ -447,7 +448,7 @@ export function SyncConnectSection() {
 							value={joinCode}
 							onChange={(e) => setJoinCode(e.target.value)}
 						/>
-						{shell.supportsCameraScan && (
+						{canCameraScan && (
 							<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
 								<Trans>Scan QR code</Trans>
 							</button>

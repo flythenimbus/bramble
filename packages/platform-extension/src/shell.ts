@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
+import type { Target } from "@core/flags";
 import { extractHostname } from "@core/vault/autofill-index";
 import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
 import { hostnameMatches } from "./dedupe";
@@ -32,6 +33,13 @@ setWebauthnInterceptionPauser(async (run) => {
 });
 
 const manifest = api.runtime.getManifest();
+
+/** Build target: the firefox build runs on a moz-extension:// origin; everything else is chromium.
+ *  Resolves platform capabilities (see @core/flags `can`); set on the Platform in options/popup. */
+export const extensionTarget: Target =
+	typeof location !== "undefined" && location.protocol === "moz-extension:"
+		? "firefox"
+		: "chromium";
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {
@@ -119,16 +127,6 @@ export const extensionShell: ShellAdapter = {
 		if (typeof window === "undefined") return false;
 		return new URLSearchParams(window.location.search).has(DETACHED_FLAG);
 	},
-	supportsPopOut: true,
-	// Extension QR scan captures the active tab, not a camera; no camera-scan UI.
-	supportsCameraScan: false,
-	// navigator.credentials.create for the security-key unlock runs in the popup/options
-	// page. On Firefox that origin is moz-extension://<uuid>, which WebAuthn rejects as an
-	// RP ("The operation is insecure"); Chromium's chrome-extension:// origin is accepted.
-	// Gate on the origin scheme. A content-script transport is a possible fast-follow.
-	supportsSecurityKeys: typeof location === "undefined" || location.protocol !== "moz-extension:",
-	supportsSaveCapture: true,
-	supportsRestore: true,
 	// One-click backup OAuth runs entirely in the background service worker (see
 	// background/backup-connect): launchWebAuthFlow's provider window steals focus and
 	// closes this popup, so the flow can't complete here. We just kick it off and surface
@@ -141,15 +139,6 @@ export const extensionShell: ShellAdapter = {
 		if (!res) throw new Error("No response from Bramble's background (reload the extension?).");
 		if (!res.ok) throw new Error(res.error ?? "Sign-in failed.");
 	},
-	// Chromium delivers the passkey provider via the webAuthenticationProxy permission;
-	// Firefox has no such API and delivers it via a MAIN-world content-script override
-	// instead (docs/firefox-port.md), so enable the setting on both. Read the manifest
-	// permission rather than probing the namespace (this runs in the popup/options context
-	// where the API object may be absent even on Chromium); on Firefox key off the
-	// moz-extension origin, where the content transport ships.
-	supportsPasskeyProvider:
-		((manifest.permissions as string[] | undefined)?.includes("webAuthenticationProxy") ?? false) ||
-		(typeof location !== "undefined" && location.protocol === "moz-extension:"),
 	async setPasskeyProviderEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({
 			type: "PASSKEY_PROVIDER_SET_ENABLED",

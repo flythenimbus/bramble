@@ -2,7 +2,7 @@ import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
-import { usePlatform } from "../context/PlatformContext";
+import { useCan, usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -23,6 +23,7 @@ const RestoreShell = lazy(() =>
 // the terminal done screen is shown as before.
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
+	const canRestore = useCan("restore");
 	const { createVault, unlock } = useVault();
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	const [done, setDone] = useState<null | "created" | "opened">(null);
@@ -96,7 +97,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 				if (onComplete) onComplete();
 				else setDone("opened");
 			}}
-			onOpenFile={shell.supportsRestore ? () => setOpeningFile(true) : undefined}
+			onOpenFile={canRestore ? () => setOpeningFile(true) : undefined}
 		/>
 	);
 }

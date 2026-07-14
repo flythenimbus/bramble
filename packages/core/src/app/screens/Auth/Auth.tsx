@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { usePlatform } from "../../../context/PlatformContext";
+import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { TextField } from "../../components/ui/text-field";
@@ -37,6 +37,7 @@ export function Auth() {
 		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
+	const canSecurityKeys = useCan("securityKeys");
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
 	const appName = shell.appName;
@@ -125,8 +126,7 @@ export function Auth() {
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
 	// Security-key unlock is hidden where it can't work (mobile): no PRF, so offering it
 	// would be a dead end even for a vault synced from desktop with a registered key.
-	const securityKeyAvailable =
-		hasVault && shell.supportsSecurityKeys && (hasWebauthnSlot || couldNotRead);
+	const securityKeyAvailable = hasVault && canSecurityKeys && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.

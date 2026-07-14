@@ -2,7 +2,7 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import type { OptionsScreen, ShellAdapter } from "@core/index";
+import type { OptionsScreen, ShellAdapter, Target } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { armFilePickGrace } from "../auto-lock";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
@@ -37,6 +37,9 @@ export function registerOpenSetup(fn: OpenSetupHandler): () => void {
 // Mobile is a single-window app: the pop-out / detached-window machinery and the
 // "active browser tab" concept have no meaning here, so those collapse to no-ops.
 // QR scanning is native AVFoundation on iOS (../qr-scanner) and jsQR on Android (../scan).
+/** Build target from the Capacitor runtime; resolves platform capabilities (see @core/flags `can`). */
+export const mobileTarget: Target = Capacitor.getPlatform() === "ios" ? "ios" : "android";
+
 export const mobileShell: ShellAdapter = {
 	appName: "Bramble",
 	// Fallback; resolveAppVersion() overwrites from the native bundle before first render.
@@ -60,20 +63,6 @@ export const mobileShell: ShellAdapter = {
 	isDetached() {
 		return false;
 	},
-	supportsPopOut: false,
-	supportsCameraScan: true,
-	supportsSecurityKeys: false,
-	// Android has a native AutofillService save flow (onSaveRequest -> SaveInfo prompt ->
-	// prefilled add-login). iOS has no save surface. See docs/mobile-port.md.
-	supportsSaveCapture: Capacitor.getPlatform() === "android",
-	// Restore a .bramble backup (local: read file -> verify -> write blob -> unlock; no network).
-	// The picker uses a loosened `accept` on mobile so the native document picker doesn't grey out
-	// the custom .bramble extension (no UTType/MIME is registered for it). See RestoreShell.
-	supportsRestore: true,
-	// Passkey provider is the Chromium webAuthenticationProxy; mobile uses native
-	// credential-provider extensions instead. supportsPasskeyProvider gates the extension's
-	// runtime toggle (mobile enables the provider in OS Settings, so it stays false).
-	supportsPasskeyProvider: false,
 	// iOS + Android: the native credential provider mints passkeys during sign-in registration but
 	// can't write the vault, so it hands them off (iOS App Group / Android file) and the app drains
 	// them here on launch. drainPendingPasskeys reads the right per-platform source.
