@@ -37,7 +37,7 @@ export function registerOpenSetup(fn: OpenSetupHandler): () => void {
 // Mobile is a single-window app: the pop-out / detached-window machinery and the
 // "active browser tab" concept have no meaning here, so those collapse to no-ops.
 // QR scanning is native AVFoundation on iOS (../qr-scanner) and jsQR on Android (../scan).
-/** Build target from the Capacitor runtime; resolves platform capabilities (see @core/flags `can`). */
+/** Build target from the Capacitor runtime. */
 export const mobileTarget: Target = Capacitor.getPlatform() === "ios" ? "ios" : "android";
 
 export const mobileShell: ShellAdapter = {

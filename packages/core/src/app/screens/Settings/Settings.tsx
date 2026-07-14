@@ -23,8 +23,7 @@ export function Settings() {
 	const setTab = (id: SettingsTab) =>
 		navigate({ to: "/settings", search: (prev) => ({ ...prev, tab: id }), replace: true });
 
-	// On narrow screens the horizontal tab strip can hide trailing tabs (e.g. "About") with no
-	// affordance. Track scroll position and fade whichever edge still has tabs off-screen.
+	// Fade whichever edge of the tab strip still has tabs scrolled off (else they hide with no hint).
 	const tabsRef = useRef<HTMLElement>(null);
 	const [edges, setEdges] = useState({ left: false, right: false });
 	useEffect(() => {
@@ -58,8 +57,7 @@ export function Settings() {
 			<div className="relative mb-4">
 				<nav
 					ref={tabsRef}
-					// overflow-y-hidden + touch-pan-x: horizontal scroll only, so a vertical drag on the
-					// strip scrolls the page instead of dragging the tab row around (iOS).
+					// overflow-y-hidden + touch-pan-x: horizontal only, so a vertical drag scrolls the page (iOS).
 					className="flex gap-1 overflow-x-auto overflow-y-hidden touch-pan-x border-b border-border/50 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					aria-label={t`Settings sections`}
 				>
@@ -81,7 +79,6 @@ export function Settings() {
 						</button>
 					))}
 				</nav>
-				{/* Scroll hints: fade the edge that still has tabs off-screen (only shows when overflowing). */}
 				{edges.left && (
 					<div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-background to-transparent" />
 				)}
@@ -101,7 +98,6 @@ export function Settings() {
 				{tab === "backups" && (
 					<>
 						<DataSection />
-						{/* Cloud backup providers gated off where not shipped (mobile); local export/import stays. */}
 						{canCloudBackup && <BackupSection />}
 					</>
 				)}

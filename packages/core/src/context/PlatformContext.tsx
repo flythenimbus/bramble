@@ -8,7 +8,7 @@ import type { StorageAdapter } from "../adapters/storage";
 import { type CapabilityKey, can, type Target } from "../flags";
 
 export interface Platform {
-	/** Build-target identity; the single per-project value that resolves platform capabilities (see flags.ts `can`). */
+	/** Build-target identity; resolves platform capabilities (flags.ts `can`). */
 	target: Target;
 	storage: StorageAdapter;
 	crypto: CryptoAdapter;
@@ -37,7 +37,7 @@ export function usePlatform(): Platform {
 	return ctx;
 }
 
-/** Resolve a platform capability for the current build target. See flags.ts `CAPABILITIES`. */
+/** Resolve a platform capability for the current build target. */
 export function useCan(cap: CapabilityKey): boolean {
 	return can(cap, usePlatform().target);
 }

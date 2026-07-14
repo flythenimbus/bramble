@@ -34,8 +34,7 @@ setWebauthnInterceptionPauser(async (run) => {
 
 const manifest = api.runtime.getManifest();
 
-/** Build target: the firefox build runs on a moz-extension:// origin; everything else is chromium.
- *  Resolves platform capabilities (see @core/flags `can`); set on the Platform in options/popup. */
+/** Build target: firefox runs on a moz-extension:// origin, everything else is chromium. */
 export const extensionTarget: Target =
 	typeof location !== "undefined" && location.protocol === "moz-extension:"
 		? "firefox"

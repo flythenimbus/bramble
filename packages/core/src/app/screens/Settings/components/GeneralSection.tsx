@@ -20,7 +20,7 @@ const keepUnlockedWindow = (autoLockMinutes: number) =>
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill, shell } = usePlatform();
-	const canPasskeyProvider = useCan("passkeyProvider");
+	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
 	const canSaveCapture = useCan("saveCapture");
 	const { entries } = useVault();
 	const { t } = useLingui();
@@ -141,7 +141,7 @@ export function GeneralSection() {
 			{/* Passkey provider: extension only (Chromium via webAuthenticationProxy, Firefox via
 			    a MAIN-world content-script override). While on, Bramble handles passkey prompts,
 			    so the subtitle is explicit. Toggling applies live and persists for next startup. */}
-			{canPasskeyProvider && (
+			{hasPasskeyProviderToggle && (
 				<Row
 					icon={<KeyRound className="w-4 h-4 text-primary" />}
 					title={t`Use Bramble for passkeys`}

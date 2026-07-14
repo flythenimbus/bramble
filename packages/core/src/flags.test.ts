@@ -24,6 +24,11 @@ describe("can()", () => {
 		// `saveCapture`: android yes, iOS no (no save surface).
 		expect(can("saveCapture", "android")).toBe(true);
 		expect(can("saveCapture", "ios")).toBe(false);
+		// `passkeyProviderToggle`: extension has an in-app toggle; mobile's provider is OS-managed.
+		expect(can("passkeyProviderToggle", "chromium")).toBe(true);
+		expect(can("passkeyProviderToggle", "firefox")).toBe(true);
+		expect(can("passkeyProviderToggle", "android")).toBe(false);
+		expect(can("passkeyProviderToggle", "ios")).toBe(false);
 	});
 
 	it("returns a boolean for every capability on every target", () => {

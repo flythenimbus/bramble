@@ -80,8 +80,7 @@ export interface ShellAdapter {
 	restoreRoute?(): Promise<string | null>;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
-	// Static per-target capability flags (popOut, cameraScan, securityKeys, saveCapture, restore,
-	// cloudBackup, passkeyProvider) now live in flags.ts `CAPABILITIES`, resolved via `useCan`.
+	// Static per-target capability flags live in flags.ts `CAPABILITIES` (resolved via `useCan`).
 	/**
 	 * Connect a one-click backup provider end to end: run the interactive OAuth flow, exchange the
 	 * code, and persist the resulting target (a new one, or `targetId` to reconnect an existing one).
