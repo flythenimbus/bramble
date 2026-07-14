@@ -132,6 +132,10 @@ msgstr "Advanced"
 msgid "All"
 msgstr "All"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+msgstr "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
@@ -885,6 +889,10 @@ msgstr "Lock vault"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock vault after inactivity"
 msgstr "Lock vault after inactivity"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock when the screen locks"
+msgstr "Lock when the screen locks"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
@@ -1654,6 +1662,10 @@ msgstr "Toggle breach checks"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Toggle keyboard suggestions"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle lock when the screen locks"
+msgstr "Toggle lock when the screen locks"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"

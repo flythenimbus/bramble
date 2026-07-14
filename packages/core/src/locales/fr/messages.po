@@ -132,6 +132,10 @@ msgstr "Avancé"
 msgid "All"
 msgstr "Tous"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+msgstr "Verrouillez également le coffre lorsque l'écran de votre ordinateur se verrouille, quel que soit le délai d'attente."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un point de terminaison qui renvoie vos propres serveurs ICE au format JSON. Par défaut : ceux du relais."
@@ -885,6 +889,10 @@ msgstr "Verrouiller le coffre-fort"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock vault after inactivity"
 msgstr "Verrouiller le coffre-fort après inactivité"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock when the screen locks"
+msgstr "Verrouiller lorsque l'écran se verrouille"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
@@ -1654,6 +1662,10 @@ msgstr "Activer la vérification des fuites"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Activer les suggestions du clavier"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle lock when the screen locks"
+msgstr "Activer le verrouillage lorsque l'écran se verrouille"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"

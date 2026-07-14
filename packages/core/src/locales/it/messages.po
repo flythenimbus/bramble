@@ -132,6 +132,10 @@ msgstr "Avanzate"
 msgid "All"
 msgstr "Tutti"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+msgstr "Blocca il caveau anche quando lo schermo del computer si blocca, indipendentemente dal timeout."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un endpoint che restituisce i propri server ICE in formato JSON. Predefinito sul relay."
@@ -885,6 +889,10 @@ msgstr "Blocca la cassaforte"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock vault after inactivity"
 msgstr "Blocca la cassaforte dopo l'inattività"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock when the screen locks"
+msgstr "Blocca quando lo schermo si blocca"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
@@ -1654,6 +1662,10 @@ msgstr "Attiva controlli delle violazioni"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Attiva suggerimenti della tastiera"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle lock when the screen locks"
+msgstr "Attiva/disattiva il blocco quando lo schermo si blocca"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"

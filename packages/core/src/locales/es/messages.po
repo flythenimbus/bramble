@@ -132,6 +132,10 @@ msgstr "Avanzado"
 msgid "All"
 msgstr "Todos"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+msgstr "Bloquee también la bóveda cada vez que se bloquee la pantalla de su computadora, independientemente del tiempo de espera."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un punto final que devuelve sus propios servidores ICE en formato JSON. Por defecto utiliza los del retransmisor."
@@ -885,6 +889,10 @@ msgstr "Bloquear bóveda"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock vault after inactivity"
 msgstr "Bloquear la bóveda después de la inactividad"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock when the screen locks"
+msgstr "Bloquear al bloquear la pantalla"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
@@ -1654,6 +1662,10 @@ msgstr "Comprobación de vulnerabilidades"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Sugerencias del teclado"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle lock when the screen locks"
+msgstr "Alternar bloqueo al bloquear la pantalla"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"
