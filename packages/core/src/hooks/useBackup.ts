@@ -57,6 +57,13 @@ export function useBackup() {
 		void reload();
 	}, [reload]);
 
+	// Live-refresh when a background scheduled backup rewrites the targets (status/lastError),
+	// so an open Settings page reflects it without a reopen. No-op where unsupported (mobile).
+	useEffect(
+		() => storage.subscribeMeta?.(BACKUP_TARGETS_KEY, () => void reload()),
+		[storage, reload],
+	);
+
 	const persist = useCallback(
 		async (next: BackupTargetConfig[]) => {
 			await storage.setMeta(BACKUP_TARGETS_KEY, next);
