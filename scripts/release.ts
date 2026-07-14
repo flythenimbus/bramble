@@ -371,13 +371,11 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	if (!/^\d+(\.\d+){0,2}$/.test(version))
 		fail(`invalid version "${version}". want 1-3 ints (e.g. 1.1 or 1.1.0)`);
 
-	// TestFlight build number = seconds since 2020, computed here (not in the lane) so the tag this
-	// cuts and the uploaded build agree. Unique per run, so multiple TestFlight builds of one
-	// marketing version each get their own tag (no `tag already exists` collision on re-upload).
+	// TestFlight build number = seconds since 2020, computed here (not in the lane) so the number
+	// logged and the uploaded build agree. Unique per run, so re-uploading a marketing version
+	// just gets a fresh build number.
 	const build = Math.floor(Date.now() / 1000) - 1_577_836_800;
-	const tag = `${version}-ios+${build}`;
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
-	if (!ipaOnly && capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
 	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
 	// fastlane/.env. The actual signing is Xcode-automatic (-allowProvisioningUpdates), so unlike
@@ -411,7 +409,7 @@ function releaseIos(version: string, ipaOnly: boolean) {
 		try {
 			run("pnpm run ios:ipa");
 			console.log(
-				`\ndry run: signed IPA at ~/Desktop/Bramble-TestFlight.ipa (v${version}); not uploaded, not tagged.`,
+				`\ndry run: signed IPA at ~/Desktop/Bramble-TestFlight.ipa (v${version}); not uploaded.`,
 			);
 		} finally {
 			if (bumped) run(`git checkout ${PBXPROJ}`);
@@ -420,8 +418,8 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	}
 
 	// Build + upload to TestFlight (fastlane `beta`: prepare -> build_app -> upload_to_testflight).
-	// BRAMBLE_IOS_BUILD pins the build number to the one in the tag; the lane reads MARKETING_VERSION
-	// from the bump above.
+	// BRAMBLE_IOS_BUILD pins the build number to the one computed above; the lane reads
+	// MARKETING_VERSION from the bump above.
 	process.env.BRAMBLE_IOS_BUILD = String(build);
 	try {
 		run("pnpm run ios:beta");
@@ -430,11 +428,18 @@ function releaseIos(version: string, ipaOnly: boolean) {
 		fail("TestFlight build/upload failed; the version bump was reverted");
 	}
 
-	// Tag the released version+build + push. No GitHub release: the binary lives on TestFlight,
-	// and you submit for App Store review manually in App Store Connect.
-	commitTagPush(bumped, PBXPROJ, `chore(release): ios ${version} (build ${build})`, tag, branch);
+	// Commit the version bump + push the branch. No git tag for iOS: the build is identified on
+	// TestFlight by its build number, so a tag per upload adds nothing. No GitHub release either
+	// (the binary lives on TestFlight; submit for App Store review manually in App Store Connect).
+	if (bumped) {
+		run(`git add ${PBXPROJ}`);
+		run(`git commit -m ${JSON.stringify(`chore(release): ios ${version} (build ${build})`)}`);
+		run(`git push origin ${branch}`);
+	} else {
+		console.log(`${PBXPROJ} already at version ${version}; nothing to commit`);
+	}
 	console.log(
-		`\nreleased ${tag}: uploaded to TestFlight (marketing version ${version}, build ${build}).` +
+		`\nreleased v${version} (build ${build}): uploaded to TestFlight (marketing version ${version}).` +
 			"\nNext: in App Store Connect, attach build " +
 			`${build} to an App Store version and submit for review.`,
 	);
