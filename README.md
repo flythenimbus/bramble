@@ -36,7 +36,7 @@ Nobody else holds a copy of your vault, so keeping a backup is up to you. Brambl
 
 - **Explicit: export a backup file.** From Settings (browser extension for now), export your whole vault to an encrypted `.bramble` file and stash it somewhere safe: another drive, a USB stick, wherever you like. It stays ciphertext, so opening it still needs your master password and a stolen backup is useless on its own. Do this now and then, especially before any big change.
 - **Implicit: peer-to-peer sync.** Turn on sync and every device in your sync group is basically a live copy of the vault. Pair a second device and each one holds everything, so if you lose or wipe one, the others still have your data. It is the simplest safety net there is, with no files to remember to export.
-- **Coming in the future: scheduled cloud backups.** Point Bramble at a storage provider you already use and it will drop an encrypted backup there on a schedule you set: conventional cloud drives (Google Drive, Dropbox), any S3-compatible bucket, or your own self-hosted server over WebDAV (Nextcloud, ownCloud, and the like). It stays ciphertext in the cloud and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable, and you can keep the whole thing on infrastructure you run yourself.
+- **Automatic: scheduled cloud backups (browser extension).** Point Bramble at storage you already use and it drops an encrypted backup there on the schedule you pick. Sign in to **Dropbox** in one click, use any **S3-compatible** bucket (Backblaze B2, Cloudflare R2, Storj, Wasabi, MinIO, and friends), or point it at your own **self-hosted WebDAV** server (Nextcloud, ownCloud, Fastmail, and the like). Add as many destinations as you want, each on its own cadence — daily, weekly, or monthly — or press **Back up now** whenever. Only ciphertext ever leaves your device, so the provider stores something it can't read and a stolen backup still needs your master password to open; Bramble keeps the most recent snapshots and prunes the rest. Restoring a backup onto a new or wiped device works from the extension and the mobile apps.
 
 A synced second device and the occasional export together mean you are never one lost or broken device away from losing your vault.
 
@@ -61,6 +61,7 @@ The iOS and Android apps are versioned and released independently of the extensi
 - **Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - **Encrypted backups.** Export your whole vault to an encrypted `.bramble` file whenever you want a copy in your own hands. It still needs your master password to open.
+- **Scheduled cloud backups.** Set-and-forget encrypted backups to Dropbox (one-click), any S3-compatible bucket, or self-hosted WebDAV, each on the cadence you choose. Ciphertext only, so the provider can't read a thing (browser extension for now).
 - **Built-in password generator.** Strong passwords on tap.
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF on desktop), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
@@ -132,7 +133,7 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 
 ## What's coming next
 
-- **Cloud backups.** Point Bramble at storage you already use and it drops an encrypted backup there on a schedule you set: conventional cloud drives (Google Drive, Dropbox), any S3-compatible bucket, or self-hosted storage over WebDAV (Nextcloud and friends). It stays ciphertext and still needs your master password to open, so you get set-and-forget offsite copies without trusting the provider with anything readable.
+- **Cloud backups on mobile.** The browser extension backs up to Dropbox, S3, and WebDAV on a schedule today; bringing those scheduled uploads to the iOS and Android apps is next (mobile can already restore from a backup file).
 - **Multiple vaults.** Keep more than one vault side by side and pick which to open when you launch the app. Handy for sharing a device between people, or walling off separate sets of logins behind their own master passwords.
 
 ## Status
