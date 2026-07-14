@@ -12,10 +12,13 @@ default_platform(:ios)
 
 REPO = `git rev-parse --show-toplevel`.strip
 BUNDLE_ID = "app.bramble.mobile"
-# Force DerivedData (incl. the SPM checkout cache) onto the internal disk. Xcode's
-# default here points at an external Transcend volume that EPERMs the SPM cache and
-# breaks `build_app` (see packages/platform-mobile/docs/development.md quirks 3-6).
-DERIVED = "/tmp/bramble-derived-data"
+# Force DerivedData (incl. the SPM checkout cache) onto the internal disk, at a stable
+# repo-local (gitignored) path. Xcode's default here points at an external Transcend
+# volume that EPERMs the SPM cache and breaks `build_app` (see
+# packages/platform-mobile/docs/development.md quirks 3-6). /tmp avoided that but macOS
+# prunes /tmp after ~3 days, corrupting the SPM checkout (.git kept, working tree gone);
+# a repo-local path is internal, not auto-pruned, and never committed.
+DERIVED = "#{REPO}/packages/platform-mobile/ios/DerivedData"
 
 # App Store Connect API key, shared by the TestFlight + metadata lanes. Reads the key id /
 # issuer / .p8 path from fastlane/.env (gitignored; see .env.example).
