@@ -1498,6 +1498,10 @@ msgstr "Something went wrong"
 msgid "Sort"
 msgstr "Sort"
 
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Source code"
+msgstr "Source code"
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
 msgstr "SSH key"
@@ -1656,8 +1660,8 @@ msgid "Toggle offer to save logins"
 msgstr "Toggle offer to save logins"
 
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
-msgid "Total entries"
-msgstr "Total entries"
+#~ msgid "Total entries"
+#~ msgstr "Total entries"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
