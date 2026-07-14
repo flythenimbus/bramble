@@ -24,6 +24,8 @@ export interface ChromeMockOptions {
 	lastFocusedWindow?: { id?: number };
 	/** Expose chrome.action.openPopup (Chrome 127+). */
 	hasOpenPopup?: boolean;
+	/** Tabs chrome.tabs.query({}) resolves to (lock-state broadcast fan-out). */
+	openTabs?: Array<{ id?: number; url?: string }>;
 }
 
 export interface BackgroundHarness {
@@ -212,6 +214,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			Reason: { WORKERS: "WORKERS", CLIPBOARD: "CLIPBOARD" },
 		},
 		tabs: {
+			query: vi.fn(async () => opts.openTabs ?? []),
 			sendMessage: vi.fn(async (tabId: number, message: AnyMsg, options?: AnyMsg) => {
 				state.tabMessages.push({ tabId, message, options });
 			}),

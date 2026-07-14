@@ -207,6 +207,25 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		return false;
 	}
 
+	if (message?.type === "VAULT_LOCK_STATE") {
+		// The background pushes lock changes here since content scripts can't watch
+		// storage.session. Keep the cached flag honest and refresh whatever is open so a
+		// stale "Vault locked" row clears on unlock (and stale matches hide on lock).
+		const locked = (message.payload as { locked?: boolean } | undefined)?.locked === true;
+		if (cachedResult) cachedResult.locked = locked;
+		const focused = focusedCandidate();
+		if (picker.activeHost() && focused) {
+			if (locked) {
+				picker.showLocked(focused);
+			} else {
+				picker.remove();
+				queryAutofill();
+			}
+		}
+		sendResponse({ ok: true });
+		return false;
+	}
+
 	if (message?.type === "AUTOFILL_FILL") {
 		const payload = message.payload as FillPayload;
 		picker.removeDropdown();

@@ -144,6 +144,53 @@ describe("lock triggers (alarm / command / idle)", () => {
 		await bg.flush();
 		expect(lockCalls()).toBe(after);
 	});
+
+	it("OS screen-lock is a no-op when 'Lock when the screen locks' is off", async () => {
+		const bg = await loadBackground({ localSeed: { "pref.lockOnScreenLock": false } });
+		await bg.send({ type: "CRYPTO_GENERATE_VEK" });
+		bg.fireIdle("locked");
+		await bg.flush();
+		// The vault stays unlocked: the pref opts out of the screen-lock floor (issue #6).
+		expect(bg.state.session[VEK_KEY]).toBe("VEK_GENERATED");
+		expect(bg.state.offscreenCalls.map((m) => m.type)).not.toContain("CRYPTO_LOCK");
+	});
+});
+
+describe("lock-state broadcast to content scripts", () => {
+	const lockStateMsgs = (bg: Awaited<ReturnType<typeof loadBackground>>) =>
+		bg.state.tabMessages.filter((m) => m.message?.type === "VAULT_LOCK_STATE");
+
+	it("a lock pushes VAULT_LOCK_STATE(true) to every open tab", async () => {
+		const bg = await loadBackground({ openTabs: [{ id: 1 }, { id: 2 }] });
+		await bg.send({ type: "CRYPTO_GENERATE_VEK" });
+		await bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		// The unlock (generate) also broadcasts false; scope this to the lock's true pushes.
+		const locked = lockStateMsgs(bg).filter((m) => m.message.payload.locked === true);
+		expect(locked.map((m) => m.tabId).sort()).toEqual([1, 2]);
+	});
+
+	it("an unlock pushes VAULT_LOCK_STATE(false)", async () => {
+		const bg = await loadBackground({ openTabs: [{ id: 5 }] });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		await bg.flush();
+		const msgs = lockStateMsgs(bg);
+		expect(msgs).toHaveLength(1);
+		expect(msgs[0]).toMatchObject({ tabId: 5, message: { payload: { locked: false } } });
+	});
+
+	it("tabs without a content script (rejected sendMessage) don't throw", async () => {
+		const bg = await loadBackground({ openTabs: [{ id: 9 }] });
+		bg.chrome.tabs.sendMessage = vi.fn(async () => {
+			throw new Error("Receiving end does not exist");
+		});
+		await bg.send({ type: "CRYPTO_GENERATE_VEK" });
+		// A locking path must still complete cleanly despite the per-tab rejection.
+		const { resp } = await bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		expect(resp).toEqual({ ok: true, data: null });
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+	});
 });
 
 describe("vault lock state drives query results", () => {

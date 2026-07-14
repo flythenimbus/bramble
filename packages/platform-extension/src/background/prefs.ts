@@ -8,10 +8,14 @@ const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
 const PREF_OFFER_TO_SAVE = "pref.offerToSave";
 const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
+export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
 
 const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_CLIPBOARD_SECONDS = 30;
 const DEFAULT_OFFER_TO_SAVE = true;
+// On by default: an OS screen-lock is a reasonable security floor. Off = stay unlocked across
+// screen-locks (what "Never" users on a trusted device want). See issue #6.
+const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 // Off by default: attaching the proxy intercepts ALL browser WebAuthn (see webauthn-proxy.ts).
 const DEFAULT_PASSKEY_PROVIDER = false;
 
@@ -24,6 +28,15 @@ export async function getAutoLockMinutes(): Promise<number> {
 		if (typeof v === "number" && Number.isFinite(v)) return v;
 	} catch {}
 	return DEFAULT_AUTOLOCK_MINUTES;
+}
+
+export async function getLockOnScreenLock(): Promise<boolean> {
+	try {
+		const r = await api.storage.local.get(PREF_LOCK_ON_SCREEN_LOCK);
+		const v = r[PREF_LOCK_ON_SCREEN_LOCK];
+		if (typeof v === "boolean") return v;
+	} catch {}
+	return DEFAULT_LOCK_ON_SCREEN_LOCK;
 }
 
 export async function getClipboardSeconds(): Promise<number> {

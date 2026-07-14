@@ -22,6 +22,10 @@ export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
 // Extension only: act as a WebAuthn passkey provider for other sites. Off by default
 // (attaching the proxy intercepts all browser WebAuthn). See docs/passkey-provider.md.
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
+// Extension only: also lock the vault when the OS screen locks, independent of the timeout.
+// On by default (a screen-lock is a reasonable security floor); turned off to stay unlocked
+// on a trusted device even under "Never". See issue #6.
+export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -32,6 +36,7 @@ export const DEFAULT_OFFER_TO_SAVE = true;
 export const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 export const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
+export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -45,6 +50,8 @@ export interface Prefs {
 	autofillQuickType: boolean;
 	// Extension: act as a WebAuthn passkey provider for other sites.
 	passkeyProviderEnabled: boolean;
+	// Extension: also lock when the OS screen locks, regardless of the timeout.
+	lockOnScreenLock: boolean;
 }
 
 const DEFAULT_PREFS: Prefs = {
@@ -55,6 +62,7 @@ const DEFAULT_PREFS: Prefs = {
 	neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
+	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 };
 
 export interface UsePrefs {
@@ -78,7 +86,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g] = await Promise.all([
+			const [a, b, c, d, e, f, g, h] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -86,6 +94,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
+				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -96,6 +105,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				neverSaveSites: Array.isArray(e) ? e : DEFAULT_NEVER_SAVE_SITES,
 				autofillQuickType: typeof f === "boolean" ? f : DEFAULT_AUTOFILL_QUICKTYPE,
 				passkeyProviderEnabled: typeof g === "boolean" ? g : DEFAULT_PASSKEY_PROVIDER,
+				lockOnScreenLock: typeof h === "boolean" ? h : DEFAULT_LOCK_ON_SCREEN_LOCK,
 			});
 			setLoaded(true);
 		})();
@@ -120,7 +130,9 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 									? PREF_NEVER_SAVE_SITES
 									: key === "autofillQuickType"
 										? PREF_AUTOFILL_QUICKTYPE
-										: PREF_PASSKEY_PROVIDER;
+										: key === "passkeyProviderEnabled"
+											? PREF_PASSKEY_PROVIDER
+											: PREF_LOCK_ON_SCREEN_LOCK;
 			await storage.setMeta(metaKey, value);
 		},
 		[storage],

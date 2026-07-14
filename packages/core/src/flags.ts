@@ -48,6 +48,9 @@ export const CAPABILITIES = {
 	saveCapture: { chromium: true, firefox: true, android: true, ios: false },
 	// In-app runtime toggle for the passkey provider (extension only; mobile's provider is OS-managed).
 	passkeyProviderToggle: { chromium: true, firefox: true, android: false, ios: false },
+	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
+	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
+	lockOnScreenLock: { extension: true, mobile: false },
 } satisfies Record<string, Capability>;
 
 export type CapabilityKey = keyof typeof CAPABILITIES;

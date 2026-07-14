@@ -74,6 +74,22 @@ async function exportAndCacheVek(): Promise<void> {
 	}
 }
 
+/** Push the vault's lock state to every tab's content script. Content scripts aren't trusted
+ * contexts, so they can't watch storage.session for the VEK; without this push a page's autofill
+ * dropdown keeps showing a stale "Vault locked" after an unlock (and stale matches after a lock).
+ * Best-effort per tab; tabs with no content script (chrome://, the store) just reject. */
+async function broadcastLockState(locked: boolean): Promise<void> {
+	try {
+		const tabs = await api.tabs.query({});
+		for (const tab of tabs) {
+			if (tab.id === undefined) continue;
+			void api.tabs
+				.sendMessage(tab.id, { type: "VAULT_LOCK_STATE", payload: { locked } })
+				.catch(() => {});
+		}
+	} catch {}
+}
+
 /** Lock: clear the VEK, in-memory index, and every session item holding plaintext. */
 export async function clearSession(): Promise<void> {
 	cachedVek = null;
@@ -89,6 +105,7 @@ export async function clearSession(): Promise<void> {
 		await api.storage.session.remove(toRemove);
 	} catch {}
 	void api.alarms.clear(AUTOLOCK_ALARM);
+	void broadcastLockState(true);
 }
 
 /**
@@ -106,6 +123,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				await persistVek();
 			}
 			await scheduleAutoLock();
+			void broadcastLockState(false);
 		} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
 			// Password or security-key unlock. Only count it if the verifier matched;
 			// both slot kinds return true iff the VEK was recovered, so cache it the
@@ -117,6 +135,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				await exportAndCacheVek();
 				void maybeStartSync(); // begin continuous sync if this vault is in a group
 				void runDueBackups(); // back up any target that's due, now that the VEK is live
+				void broadcastLockState(false);
 			}
 		} else if (type === "CRYPTO_ROTATE_VEK") {
 			if (typeof response.data === "string") {

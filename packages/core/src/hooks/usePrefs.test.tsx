@@ -41,8 +41,8 @@ describe("usePrefs shared provider", () => {
 		);
 		await act(async () => {});
 
-		// One load of the 7 pref keys total, not one load per consumer (the old plain-hook bug).
-		expect(storage.getMeta).toHaveBeenCalledTimes(7);
+		// One load of the 8 pref keys total, not one load per consumer (the old plain-hook bug).
+		expect(storage.getMeta).toHaveBeenCalledTimes(8);
 	});
 
 	it("propagates an update from one consumer to another", async () => {
@@ -73,6 +73,28 @@ describe("usePrefs shared provider", () => {
 			await doUpdate();
 		});
 		expect(screen.getByTestId("offer").textContent).toBe("false"); // reader saw the writer's update
+	});
+
+	it("update() persists lockOnScreenLock under its own meta key", async () => {
+		const { platform, storage } = makePlatform();
+		let doUpdate = async () => {};
+		function Writer() {
+			const { update } = usePrefs();
+			doUpdate = () => update("lockOnScreenLock", false);
+			return null;
+		}
+		render(
+			<PlatformProvider platform={platform}>
+				<PrefsProvider>
+					<Writer />
+				</PrefsProvider>
+			</PlatformProvider>,
+		);
+		await act(async () => {});
+		await act(async () => {
+			await doUpdate();
+		});
+		expect(storage.setMeta).toHaveBeenCalledWith("pref.lockOnScreenLock", false);
 	});
 
 	it("throws when used outside a PrefsProvider", () => {

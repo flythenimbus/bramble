@@ -20,7 +20,7 @@ import { VAULT_BLOB_KEY } from "../storage";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
-import { PREF_AUTOLOCK_MINUTES } from "./prefs";
+import { getLockOnScreenLock, PREF_AUTOLOCK_MINUTES } from "./prefs";
 import { setReady } from "./router";
 import {
 	AUTOLOCK_ALARM,
@@ -108,13 +108,15 @@ api.commands?.onCommand.addListener((command) => {
 // closes. The browser analog of mobile's lock-on-background.
 startViewLock();
 
-// Lock immediately on OS screen-lock. Only `locked` is acted on; `idle` would
-// also fire on long reads/videos and is left to the sliding alarm.
+// Lock on OS screen-lock, unless the user turned off "Lock when the screen locks" (default
+// on) to stay unlocked on a trusted device even under "Never" (issue #6). Only `locked` is
+// acted on; `idle` would also fire on long reads/videos and is left to the sliding alarm.
 api.idle?.onStateChanged.addListener((state) => {
 	if (state !== "locked") return;
 	// Already torn down: avoid needlessly spinning up the offscreen document.
 	if (vaultLocked()) return;
 	void (async () => {
+		if (!(await getLockOnScreenLock())) return;
 		await clearSession();
 		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
 	})();

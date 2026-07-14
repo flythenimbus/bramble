@@ -1,5 +1,13 @@
 import { useLingui } from "@lingui/react/macro";
-import { Clock, Keyboard, KeyRound, ShieldCheck, SlidersHorizontal, Timer } from "lucide-react";
+import {
+	Clock,
+	Keyboard,
+	KeyRound,
+	Lock,
+	ShieldCheck,
+	SlidersHorizontal,
+	Timer,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
@@ -10,9 +18,11 @@ import { Row, Section, Toggle } from "./primitives";
 
 // Auto-lock timeout values: -1 = Immediate, >0 = minutes, 0 = Never. "Immediate" locks the
 // moment the app/UI is no longer in use (mobile: on backgrounding; extension: when the last
-// popup/window closes); "Never" holds the vault open until a manual lock, OS screen-lock, or
-// restart. On mobile this one setting also drives the autofill provider's keep-unlocked window:
-// Immediate -> 0 (require auth every fill), N minutes -> N, Never -> -1 (never expire).
+// popup/window closes); "Never" holds the vault open until a manual lock or restart. On the
+// extension, OS screen-lock is governed separately by the "Lock when the screen locks" toggle
+// below (default on), so "Never + toggle off" stays unlocked on a trusted device. On mobile
+// this one setting also drives the autofill provider's keep-unlocked window: Immediate -> 0
+// (require auth every fill), N minutes -> N, Never -> -1 (never expire).
 const keepUnlockedWindow = (autoLockMinutes: number) =>
 	autoLockMinutes < 0 ? 0 : autoLockMinutes > 0 ? autoLockMinutes : -1;
 
@@ -21,6 +31,7 @@ export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill, shell } = usePlatform();
 	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
+	const hasLockOnScreenLock = useCan("lockOnScreenLock");
 	const canSaveCapture = useCan("saveCapture");
 	const { entries } = useVault();
 	const { t } = useLingui();
@@ -75,12 +86,28 @@ export function GeneralSection() {
 						<option value="15">{t`15 minutes`}</option>
 						<option value="30">{t`30 minutes`}</option>
 						<option value="60">{t`1 hour`}</option>
-						{/* Never auto-lock: hold the vault open until a manual lock, OS screen-lock,
-						    or restart. */}
+						{/* Never auto-lock: hold the vault open until a manual lock or restart.
+						    OS screen-lock is governed by the separate toggle below. */}
 						<option value="0">{t`Never`}</option>
 					</SelectField>
 				</div>
 			</Row>
+
+			{/* Extension only: lock on OS screen-lock, independent of the timeout. On by default;
+			    turning it off is what makes "Never" truly stay unlocked on a trusted device. */}
+			{hasLockOnScreenLock && (
+				<Row
+					icon={<Lock className="w-4 h-4 text-primary" />}
+					title={t`Lock when the screen locks`}
+					subtitle={t`Also lock the vault whenever your computer's screen locks, whatever the timeout.`}
+				>
+					<Toggle
+						checked={prefs.lockOnScreenLock}
+						onChange={(enabled) => void update("lockOnScreenLock", enabled)}
+						label={t`Toggle lock when the screen locks`}
+					/>
+				</Row>
+			)}
 
 			{/* Keyboard suggestions opt-in: only shown where inline suggestions can actually
 			    render (always on iOS; on Android only on a keyboard that supports them). Off by
