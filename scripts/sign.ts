@@ -24,6 +24,9 @@ const DIST = resolve(distArg ?? "packages/platform-extension/dist-chromium");
 const OUT = resolve("packages/platform-extension/bramble.crx");
 const KEY_AGE =
 	process.env.CWS_KEY_AGE ?? join(process.env.HOME ?? "", ".config/bramble/cws-signing-key.age");
+// A pre-decrypted plaintext key (release.ts decrypts both CWS secrets in one YubiKey touch; CI can
+// also provide it). When set, skip the age/YubiKey decrypt entirely.
+const KEY_PEM = process.env.CWS_KEY_PEM;
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
@@ -48,23 +51,32 @@ const has = (bin: string) => {
 
 if (!existsSync(join(DIST, "manifest.json")))
 	fail(`no manifest.json in ${DIST}; run 'pnpm run bundle' first`);
-if (!existsSync(KEY_AGE)) need(`encrypted key not found at ${KEY_AGE} (override with CWS_KEY_AGE)`);
-for (const bin of ["age", "age-plugin-yubikey"]) {
-	if (!has(bin)) need(`${bin} not found; see docs/release-signing.md for setup`);
-}
 
-// 0700 scratch dir; the plaintext key never leaves it and is wiped in finally.
-const tmp = mkdtempSync(join(tmpdir(), "bramble-sign-"));
-const keyPem = join(tmp, "key.pem");
-const idFile = join(tmp, "id.txt");
-try {
+// Resolve the signing key: a pre-decrypted plaintext (CWS_KEY_PEM) if provided, else decrypt the
+// age file here with the YubiKey. Any temp plaintext is wiped in the finally below.
+let keyPath: string;
+let cleanup = () => {};
+if (KEY_PEM) {
+	if (!existsSync(KEY_PEM)) fail(`CWS_KEY_PEM=${KEY_PEM} not found`);
+	keyPath = KEY_PEM;
+} else {
+	if (!existsSync(KEY_AGE))
+		need(`encrypted key not found at ${KEY_AGE} (override with CWS_KEY_AGE)`);
+	for (const bin of ["age", "age-plugin-yubikey"])
+		if (!has(bin)) need(`${bin} not found; see docs/release-signing.md for setup`);
+	// 0700 scratch dir; the plaintext key never leaves it and is wiped in finally.
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-sign-"));
+	cleanup = () => rmSync(tmp, { recursive: true, force: true });
+	const idFile = join(tmp, "id.txt");
+	keyPath = join(tmp, "key.pem");
 	// The identity stub points at the YubiKey slot; it is not key material.
 	writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
-	// Prompts for PIN + touch on the terminal.
-	notifyYubiKeyTouch("decrypt the Chrome Web Store signing key");
-	execFileSync("age", ["-d", "-i", idFile, "-o", keyPem, KEY_AGE], { stdio: "inherit" });
-	await crx3([DIST], { keyPath: keyPem, crxPath: OUT });
+	notifyYubiKeyTouch("decrypt the Chrome Web Store signing key"); // prompts PIN + touch
+	execFileSync("age", ["-d", "-i", idFile, "-o", keyPath, KEY_AGE], { stdio: "inherit" });
+}
+try {
+	await crx3([DIST], { keyPath, crxPath: OUT });
 	console.log(`\nsigned ${OUT}\nupload it to the Chrome Web Store (verified upload).`);
 } finally {
-	rmSync(tmp, { recursive: true, force: true });
+	cleanup();
 }

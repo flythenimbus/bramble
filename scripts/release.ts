@@ -97,6 +97,11 @@ function releaseExtension(target: string, version: string) {
 		fail(
 			`no Chrome Web Store credentials: set CWS_SERVICE_ACCOUNT_JSON, or provide ${cwsAge} (override CWS_SERVICE_ACCOUNT_AGE). See docs/release-signing.md.`,
 		);
+	const cwsKeyAge = process.env.CWS_KEY_AGE ?? join(HOME, ".config/bramble/cws-signing-key.age");
+	if (!process.env.CWS_KEY_PEM && !existsSync(cwsKeyAge))
+		fail(
+			`no Chrome Web Store signing key: set CWS_KEY_PEM, or provide ${cwsKeyAge} (override CWS_KEY_AGE). See docs/release-signing.md.`,
+		);
 
 	gate();
 
@@ -116,11 +121,20 @@ function releaseExtension(target: string, version: string) {
 	try {
 		run("pnpm run wasm:build");
 		run("pnpm --filter @vault/platform-extension run bundle:chromium");
-		run("pnpm run sign");
-		// Upload + publish to the Chrome Web Store (goes to CWS review, then live). Runs before
-		// commit/tag/push so a store failure aborts the release cleanly. Consumes the version at
-		// the store, like the Firefox/AMO path.
-		run("pnpm run sign:cws");
+		// Decrypt BOTH CWS secrets (signing key + service account) in one YubiKey session, then hand
+		// the plaintexts to sign/sign:cws via env so neither prompts for its own touch. Back-to-back
+		// decrypts share the PIN + cached touch, so it's a single tap; the crx3 pack that used to sit
+		// between the separate `sign`/`sign:cws` touches blew past the ~15s cache window.
+		const clearCwsSecrets = primeCwsSecrets(cwsKeyAge, cwsAge);
+		try {
+			run("pnpm run sign");
+			// Upload + publish to the Chrome Web Store (goes to CWS review, then live). Runs before
+			// commit/tag/push so a store failure aborts the release cleanly. Consumes the version at
+			// the store, like the Firefox/AMO path.
+			run("pnpm run sign:cws");
+		} finally {
+			clearCwsSecrets();
+		}
 	} catch {
 		fail(
 			`build, signing, or Chrome Web Store publish failed; run \`git checkout ${manifest}\` to undo the bump`,
@@ -509,6 +523,46 @@ function nextVersion(current: string, kind: "patch" | "minor" | "major"): string
 		pat += 1;
 	}
 	return `${maj}.${min}.${pat}`;
+}
+
+// Decrypt the two Chrome Web Store secrets (signing key + service-account JSON) in one YubiKey
+// session and expose them to sign/sign:cws via env (CWS_KEY_PEM / CWS_SERVICE_ACCOUNT_JSON), so
+// neither step prompts for its own touch. The decrypts run back-to-back, sharing the YubiKey PIN
+// and (cached-policy) touch — one tap instead of two. Skips a secret already provided via env (CI).
+// Returns a cleanup that wipes the plaintext temp dir and restores the env.
+function primeCwsSecrets(keyAge: string, saAge: string): () => void {
+	const haveKey = Boolean(process.env.CWS_KEY_PEM);
+	const haveSa = Boolean(process.env.CWS_SERVICE_ACCOUNT_JSON);
+	if (haveKey && haveSa) return () => {}; // both already plaintext (CI); nothing to decrypt
+
+	for (const bin of ["age", "age-plugin-yubikey"])
+		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+
+	// 0700 scratch dir; the plaintext secrets never leave it and are wiped by the cleanup.
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-cws-secrets-"));
+	try {
+		const idFile = join(tmp, "id.txt"); // identity stub -> YubiKey slot; not key material
+		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
+		notifyYubiKeyTouch("decrypt the Chrome Web Store signing key + service account");
+		if (!haveKey) {
+			const keyPem = join(tmp, "key.pem");
+			execFileSync("age", ["-d", "-i", idFile, "-o", keyPem, keyAge], { stdio: "inherit" });
+			process.env.CWS_KEY_PEM = keyPem;
+		}
+		if (!haveSa) {
+			const saJson = join(tmp, "sa.json");
+			execFileSync("age", ["-d", "-i", idFile, "-o", saJson, saAge], { stdio: "inherit" });
+			process.env.CWS_SERVICE_ACCOUNT_JSON = saJson;
+		}
+	} catch (e) {
+		rmSync(tmp, { recursive: true, force: true });
+		throw e;
+	}
+	return () => {
+		rmSync(tmp, { recursive: true, force: true });
+		if (!haveKey) delete process.env.CWS_KEY_PEM;
+		if (!haveSa) delete process.env.CWS_SERVICE_ACCOUNT_JSON;
+	};
 }
 
 // Gate on the same lint + typecheck + tests CI enforces on main, before touching
