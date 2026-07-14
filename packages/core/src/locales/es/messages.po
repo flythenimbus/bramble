@@ -731,8 +731,8 @@ msgstr "Ocultar CVV"
 msgid "Hide passphrase"
 msgstr "Ocultar frase de contraseña"
 
+#: packages/core/src/app/components/ui/password-field.tsx
 #: packages/core/src/app/entry-modes/login.tsx
-#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Hide password"
 msgstr "Ocultar contraseña"
 
@@ -1464,8 +1464,8 @@ msgstr "Mostrar inicios de sesión coincidentes sobre el teclado para autocomple
 msgid "Show passphrase"
 msgstr "Mostrar frase de contraseña"
 
+#: packages/core/src/app/components/ui/password-field.tsx
 #: packages/core/src/app/entry-modes/login.tsx
-#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Show password"
 msgstr "Mostrar contraseña"
 

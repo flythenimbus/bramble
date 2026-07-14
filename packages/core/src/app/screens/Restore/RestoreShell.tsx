@@ -10,7 +10,7 @@ import {
 	type PasswordSlot,
 	verifierPrefix,
 } from "../../../vault-format";
-import { TextField } from "../../components/ui/text-field";
+import { PasswordField } from "../../components/ui/password-field";
 
 // Above any realistic vault; guards against OOM from a hostile/corrupt file.
 const MAX_RESTORE_MB = 100;
@@ -253,8 +253,7 @@ export function RestoreShell({
 							</Trans>
 						</p>
 					)}
-					<TextField
-						type="password"
+					<PasswordField
 						label={t`Backup's master password`}
 						value={password}
 						autoFocus

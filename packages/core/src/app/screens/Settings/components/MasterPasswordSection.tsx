@@ -9,7 +9,7 @@ import {
 } from "../../../../util/master-password-strength";
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { Modal } from "../../../components/ui/modal";
-import { TextField } from "../../../components/ui/text-field";
+import { PasswordField } from "../../../components/ui/password-field";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
 import { Row, Toggle } from "./primitives";
 
@@ -189,9 +189,8 @@ export function MasterPasswordSection() {
 						</div>
 					)}
 					{formMode === "change" && (
-						<TextField
+						<PasswordField
 							label={t`Current password`}
-							type="password"
 							autoComplete="current-password"
 							autoFocus
 							error={errors.currentPassword?.message}
@@ -199,9 +198,8 @@ export function MasterPasswordSection() {
 						/>
 					)}
 					<div>
-						<TextField
+						<PasswordField
 							label={t`New password`}
-							type="password"
 							autoComplete="new-password"
 							autoFocus={formMode === "set"}
 							error={errors.newPassword?.message}
@@ -213,9 +211,8 @@ export function MasterPasswordSection() {
 						/>
 						<MasterPasswordMeter value={newPasswordValue ?? ""} />
 					</div>
-					<TextField
+					<PasswordField
 						label={t`Confirm new password`}
-						type="password"
 						autoComplete="new-password"
 						error={errors.confirmPassword?.message}
 						{...register("confirmPassword", {

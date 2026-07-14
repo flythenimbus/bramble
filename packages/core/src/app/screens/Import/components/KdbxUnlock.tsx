@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { bytesToBase64 } from "../../../../util/bytes";
-import { TextField } from "../../../components/ui/text-field";
+import { PasswordField } from "../../../components/ui/password-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
@@ -47,9 +47,8 @@ export function KdbxUnlock({
 				onSubmit={submit}
 				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
 			>
-				<TextField
+				<PasswordField
 					label={t`KeePass master password`}
-					type="password"
 					autoComplete="off"
 					autoFocus
 					value={password}

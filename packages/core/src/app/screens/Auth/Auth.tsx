@@ -1,20 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import {
-	Asterisk,
-	ExternalLink,
-	Eye,
-	EyeOff,
-	Fingerprint,
-	KeyRound,
-	Plus,
-	ScanFace,
-} from "lucide-react";
+import { Asterisk, ExternalLink, Fingerprint, KeyRound, Plus, ScanFace } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
-import { TextField } from "../../components/ui/text-field";
+import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
 
 interface FormValues {
@@ -54,7 +45,6 @@ export function Auth() {
 		return () => document.removeEventListener("visibilitychange", onVisible);
 	}, [refreshBiometric]);
 
-	const [showPassword, setShowPassword] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [showRecovery, setShowRecovery] = useState(false);
 	const [recoveryCode, setRecoveryCode] = useState("");
@@ -217,25 +207,10 @@ export function Auth() {
 							)}
 							{showPasswordForm && (
 								<form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
-									<TextField
+									<PasswordField
 										label={t`Master password`}
-										type={showPassword ? "text" : "password"}
 										autoFocus
 										error={errors.masterPassword?.message}
-										endAdornment={
-											<button
-												type="button"
-												onClick={() => setShowPassword(!showPassword)}
-												className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
-												aria-label={showPassword ? t`Hide password` : t`Show password`}
-											>
-												{showPassword ? (
-													<EyeOff className="w-4 h-4" />
-												) : (
-													<Eye className="w-4 h-4" />
-												)}
-											</button>
-										}
 										{...register("masterPassword", {
 											required: t`Please enter your master password`,
 										})}

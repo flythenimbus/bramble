@@ -7,7 +7,7 @@ import {
 	masterPasswordWarning,
 } from "../../../../util/master-password-strength";
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
-import { TextField } from "../../../components/ui/text-field";
+import { PasswordField } from "../../../components/ui/password-field";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
 import type { VaultSetupFormValues, VaultSetupMode } from "../types";
 
@@ -56,9 +56,8 @@ export function PasswordCard({
 				</div>
 				<div className="p-5 space-y-4">
 					<div>
-						<TextField
+						<PasswordField
 							label={t`Master password`}
-							type="password"
 							autoComplete={isCreate ? "new-password" : "current-password"}
 							error={errors.masterPassword?.message}
 							{...register("masterPassword", {
@@ -72,9 +71,8 @@ export function PasswordCard({
 						{isCreate && <MasterPasswordMeter value={pw ?? ""} />}
 					</div>
 					{isCreate && (
-						<TextField
+						<PasswordField
 							label={t`Confirm master password`}
-							type="password"
 							autoComplete="new-password"
 							error={errors.confirmPassword?.message}
 							{...register("confirmPassword", {

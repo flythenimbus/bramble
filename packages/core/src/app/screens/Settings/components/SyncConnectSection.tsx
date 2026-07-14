@@ -14,6 +14,7 @@ import {
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
 import { Modal } from "../../../components/ui/modal";
+import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
 import { Row, Section } from "./primitives";
 
@@ -474,8 +475,7 @@ export function SyncConnectSection() {
 							)}
 							{joinMethod === "password" ? (
 								<div className="space-y-4">
-									<TextField
-										type="password"
+									<PasswordField
 										label={t`Master password for this device`}
 										value={joinPassword}
 										onChange={(e) => {
@@ -484,8 +484,7 @@ export function SyncConnectSection() {
 										}}
 										error={joinError ?? undefined}
 									/>
-									<TextField
-										type="password"
+									<PasswordField
 										label={t`Confirm master password`}
 										value={joinPasswordConfirm}
 										onChange={(e) => setJoinPasswordConfirm(e.target.value)}
@@ -540,8 +539,7 @@ export function SyncConnectSection() {
 							from you, not just a device that was already unlocked.
 						</Trans>
 					</p>
-					<TextField
-						type="password"
+					<PasswordField
 						label={t`Master password`}
 						value={gatePassword}
 						autoFocus

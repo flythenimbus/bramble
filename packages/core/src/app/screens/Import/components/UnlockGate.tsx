@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { useState } from "react";
-import { TextField } from "../../../components/ui/text-field";
+import { PasswordField } from "../../../components/ui/password-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
@@ -30,9 +30,8 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 				onSubmit={submit}
 				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
 			>
-				<TextField
+				<PasswordField
 					label={t`Master password`}
-					type="password"
 					autoComplete="current-password"
 					autoFocus
 					value={password}

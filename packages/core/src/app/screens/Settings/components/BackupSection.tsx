@@ -26,6 +26,7 @@ import { Dropbox } from "../../../components/icons/Dropbox";
 import { NextCloud } from "../../../components/icons/NextCloud";
 import { Wasabi } from "../../../components/icons/Wasabi";
 import { Modal } from "../../../components/ui/modal";
+import { PasswordField } from "../../../components/ui/password-field";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
 import { cn } from "../../../components/ui/utils";
@@ -668,8 +669,7 @@ export function BackupSection() {
 										value={accessKeyId}
 										onChange={(e) => setAccessKeyId(e.target.value)}
 									/>
-									<TextField
-										type="password"
+									<PasswordField
 										label={t`Secret access key`}
 										value={secretKey}
 										onChange={(e) => setSecretKey(e.target.value)}
@@ -687,8 +687,7 @@ export function BackupSection() {
 										value={davUser}
 										onChange={(e) => setDavUser(e.target.value)}
 									/>
-									<TextField
-										type="password"
+									<PasswordField
 										label={t`Password`}
 										value={davPassword}
 										onChange={(e) => setDavPassword(e.target.value)}

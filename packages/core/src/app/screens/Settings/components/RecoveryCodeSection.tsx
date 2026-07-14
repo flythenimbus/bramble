@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { RecoveryCodeDisplay } from "../../../components/RecoveryCodeDisplay";
 import { Modal } from "../../../components/ui/modal";
+import { PasswordField } from "../../../components/ui/password-field";
 import { Row } from "./primitives";
 
 /** Settings row to generate or reset the vault's one-time recovery code. */
@@ -103,14 +104,12 @@ export function RecoveryCodeSection() {
 							<Trans>Confirm your master password to generate the recovery code.</Trans>
 						)}
 					</p>
-					<input
-						type="password"
+					<PasswordField
+						label={t`Master password`}
 						autoFocus
 						value={password}
 						onChange={(e) => setPassword(e.target.value)}
-						placeholder={t`Master password`}
 						disabled={busy}
-						className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
 					/>
 					<div className="flex gap-2">
 						<button
