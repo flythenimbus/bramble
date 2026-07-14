@@ -6,6 +6,25 @@ import { armViewGrace } from "./view-lock";
 
 // In-memory only: a draft can hold a plaintext password, never persist to local.
 export const POPOUT_HANDOFF_KEY = "popout.handoff";
+// Id of the detached window we opened, so a later request focuses it instead of duplicating.
+// storage.session (not local) survives a service-worker restart but clears on browser restart,
+// which matches the lifetime of a chrome window id.
+export const POPOUT_WINDOW_KEY = "popout.windowId";
+
+/** Focus the tracked pop-out window if it is still open. Returns false when there is none:
+ * the id was never stored, or the window was closed while the worker slept (windows.get
+ * rejects), in which case the caller should open a fresh one. */
+async function focusExistingPopout(): Promise<boolean> {
+	const stored = await api.storage.session.get(POPOUT_WINDOW_KEY);
+	const id = stored[POPOUT_WINDOW_KEY];
+	if (typeof id !== "number") return false;
+	const win = await api.windows.get(id).catch(() => undefined);
+	if (win?.id === undefined) return false;
+	const update: chrome.windows.UpdateInfo = { focused: true };
+	if (win.state === "minimized") update.state = "normal"; // un-minimize; don't touch other states
+	await api.windows.update(win.id, update).catch(() => undefined);
+	return true;
+}
 
 async function popoutOpen(
 	message: any,
@@ -14,8 +33,17 @@ async function popoutOpen(
 	// The popup closes as the detached window takes focus; hold "Immediate" auto-lock across
 	// that gap so popping out doesn't lock the vault out from under the new window.
 	armViewGrace();
+
+	const handoff = (message.payload as { handoff?: { draft?: unknown } } | undefined)?.handoff;
+	// Single instance: focus an already-open pop-out instead of spawning a duplicate. A request
+	// carrying an in-flight draft is the exception - the open window consumed its boot handoff
+	// once, so focusing it would silently drop the new draft (which can hold a plaintext
+	// password). Route-only / unlock-request pop-outs have nothing to lose, so they dedupe.
+	if (handoff?.draft === undefined && (await focusExistingPopout())) {
+		return { ok: true };
+	}
+
 	// Stash the handoff before creating the window so the new window's boot read sees it.
-	const handoff = (message.payload as { handoff?: unknown } | undefined)?.handoff;
 	if (handoff) {
 		await api.storage.session.set({ [POPOUT_HANDOFF_KEY]: handoff });
 	} else {
@@ -51,6 +79,8 @@ async function popoutOpen(
 			top,
 			left,
 		});
+		// Track this window so the next pop-out request focuses it rather than duplicating.
+		await api.storage.session.set({ [POPOUT_WINDOW_KEY]: created.id });
 	}
 	return { ok: true };
 }
