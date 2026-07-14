@@ -1004,6 +1004,10 @@ msgstr "One-click sign-in for {name} is coming in a future update. For now, pick
 msgid "Open {name}"
 msgstr "Open {name}"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Open a backup file instead"
+msgstr "Open a backup file instead"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Open an encrypted .bramble backup and make it the vault on this device."

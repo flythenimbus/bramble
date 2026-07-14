@@ -1004,6 +1004,10 @@ msgstr "El inicio de sesión con un solo clic para {name} estará disponible en 
 msgid "Open {name}"
 msgstr "Abrir {name}"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Open a backup file instead"
+msgstr "Abrir un archivo de respaldo en su lugar"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Abra una copia de seguridad .bramble cifrada y conviértala en la bóveda de este dispositivo."
