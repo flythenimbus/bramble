@@ -66,9 +66,10 @@ const WALLETS: Wallet[] = [
 
 const isConfigured = (address: string) => !address.startsWith("REPLACE_WITH_");
 
+// text-[10px] must sit on the button: the base `button { font-size }` (theme.css) beats an inherited size.
 const toggleBtn = (active: boolean) =>
 	cn(
-		"rounded px-2 py-0.5 transition-colors",
+		"rounded px-2 py-0.5 text-[10px] leading-none transition-colors",
 		active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground",
 	);
 
@@ -101,7 +102,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			</div>
 
 			{wallet.methods.length > 1 && (
-				<div className="flex rounded-md border border-border p-0.5 text-[10px]">
+				<div className="flex rounded-md border border-border p-0.5">
 					{wallet.methods.map((m, i) => (
 						<button
 							key={m.label}

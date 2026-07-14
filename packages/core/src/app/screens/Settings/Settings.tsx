@@ -1,6 +1,15 @@
 import { useLingui } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Archive, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
+import {
+	Archive,
+	ChevronLeft,
+	ChevronRight,
+	Info,
+	Lock,
+	type LucideIcon,
+	SlidersHorizontal,
+	Wifi,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCan } from "../../../context/PlatformContext";
 import { cn } from "../../components/ui/utils";
@@ -80,10 +89,14 @@ export function Settings() {
 					))}
 				</nav>
 				{edges.left && (
-					<div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-background to-transparent" />
+					<div className="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center bg-gradient-to-r from-background via-background to-transparent">
+						<ChevronLeft className="h-4 w-4 text-foreground/80" />
+					</div>
 				)}
 				{edges.right && (
-					<div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
+					<div className="pointer-events-none absolute inset-y-0 right-0 flex w-12 items-center justify-end bg-gradient-to-l from-background via-background to-transparent">
+						<ChevronRight className="h-4 w-4 text-foreground/80" />
+					</div>
 				)}
 			</div>
 
