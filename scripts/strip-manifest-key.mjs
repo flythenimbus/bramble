@@ -2,11 +2,11 @@
 //   node scripts/strip-manifest-key.mjs <path/to/manifest.json>
 //
 // The source chromium manifest carries a `key` to pin the UNPACKED dev extension ID so the OAuth
-// redirect (https://<id>.chromiumapp.org/) matches production during local testing. But the
-// Chrome Web Store REJECTS a store package that contains a `key` ("You must update your item with
-// a crx package"), and the published item's ID comes from the store while the signed .crx gets
-// its ID from the signature — so the shipped package must not carry it. Unpacked dev builds use
-// `build:chromium` (no strip) and keep the key; the release bundle runs this strip.
+// redirect (https://<id>.chromiumapp.org/) matches production during local testing. That dev key
+// is NOT the production signing key: the released item's ID comes from the store, and the signed
+// .crx gets its ID from the CWS signing key's signature. Shipping the stale dev `key` would leave
+// a mismatched key inside the packaged manifest, so the release bundle strips it. Unpacked dev
+// builds use `build:chromium` (no strip) and keep the key.
 
 import { readFileSync, writeFileSync } from "node:fs";
 

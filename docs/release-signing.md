@@ -98,11 +98,17 @@ rm -P /tmp/cws.pem
 
 ## Chrome Web Store — auto-publish (service account)
 
-`pnpm run release chromium <version>` uploads `bramble.zip` to the store and publishes it
-(→ CWS review → live), via `scripts/sign-cws.ts` and the Chrome Web Store Publish API **V2**.
-Auth is a **Google Cloud service account** (the classic V1 refresh-token flow is deprecated
-after 15 Oct 2026). The service-account JSON is the secret; it rides the same age + YubiKey
-scheme.
+`pnpm run release chromium <version>` uploads the signed `bramble.crx` to the store and publishes
+it (→ CWS review → live), via `scripts/sign-cws.ts` and the Chrome Web Store **REST API v2**
+(`chromewebstore.googleapis.com`). Auth is a **Google Cloud service account** (the classic V1
+refresh-token flow is deprecated after 15 Oct 2026). The service-account JSON is the secret; it
+rides the same age + YubiKey scheme.
+
+The item has **Verified CRX Uploads** enabled, so the store only accepts a signed `.crx` (not a
+`.zip`): the upload sends `X-Goog-Upload-File-Name: bramble.crx`, and CWS verifies the `.crx`
+signature against the item's registered public key, then repackages under its own key. The `.crx`
+must be signed with the key whose public half you registered on the dashboard (Package → Verified
+CRX Uploads) — the same `cws-signing-key.age` `pnpm run sign` uses.
 
 ### One-time setup
 
@@ -119,9 +125,12 @@ age -r age1yubikey1XXXX -o ~/.config/bramble/cws-service-account.age /path/to/do
 rm -P /path/to/downloaded-sa.json
 ```
 
-The item id defaults to the published extension in `scripts/sign-cws.ts`; override with
-`CWS_ITEM_ID`. Creds resolve from `CWS_SERVICE_ACCOUNT_JSON` (a plaintext path, for CI) else
-`~/.config/bramble/cws-service-account.age` (override `CWS_SERVICE_ACCOUNT_AGE`).
+The v2 API is publisher-scoped (`publishers/{id}/items/{id}`), so it also needs your **publisher
+id** — the developer-account id shown in the Developer Dashboard URL / Account page. It defaults in
+`scripts/sign-cws.ts` (next to `CWS_ITEM_ID`); override with `CWS_PUBLISHER_ID`. The item id also
+defaults there; override with `CWS_ITEM_ID`. Creds resolve from `CWS_SERVICE_ACCOUNT_JSON` (a
+plaintext path, for CI) else `~/.config/bramble/cws-service-account.age` (override
+`CWS_SERVICE_ACCOUNT_AGE`).
 
 ### Test / build without publishing
 
