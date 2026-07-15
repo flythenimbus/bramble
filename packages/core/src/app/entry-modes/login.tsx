@@ -23,6 +23,7 @@ import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
 import { usePlatform } from "../../context/PlatformContext";
 import type { LoginEntry, LoginEntryData, PasskeyCredential } from "../../hooks/useVault";
+import { formatDate } from "../../util/format-date";
 import { parseTotp, totpAt } from "../../util/totp";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
@@ -312,9 +313,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 									</div>
 									<div className="text-xs text-muted-foreground truncate">
 										{pk.rpId}
-										{pk.createdAt
-											? ` · ${i18n.date(new Date(pk.createdAt), { dateStyle: "medium" })}`
-											: ""}
+										{pk.createdAt ? ` · ${formatDate(pk.createdAt)}` : ""}
 									</div>
 								</div>
 								<button

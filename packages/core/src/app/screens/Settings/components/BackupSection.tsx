@@ -1,4 +1,3 @@
-import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	Boxes,
@@ -20,6 +19,7 @@ import {
 } from "../../../../backup/config";
 import { isOAuthConfigured, OAUTH_PROVIDERS, type OAuthProviderId } from "../../../../backup/oauth";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
+import { formatDateTime } from "../../../../util/format-date";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
@@ -166,10 +166,8 @@ const PROVIDERS: ProviderDef[] = [
 
 const providerById = (id: string): ProviderDef | null => PROVIDERS.find((p) => p.id === id) ?? null;
 
-// Format with the active app locale (i18n.date), not the browser default, so the date
-// matches the language chosen in Settings.
 function formatWhen(ms: number): string {
-	return i18n.date(new Date(ms), { dateStyle: "medium", timeStyle: "short" });
+	return formatDateTime(ms);
 }
 
 /** A clickable provider tile: icon badge + name + one-line blurb. */

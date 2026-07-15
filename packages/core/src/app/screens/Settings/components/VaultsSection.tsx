@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
+import { formatDate } from "../../../../util/format-date";
 import { displayLabel } from "../../../../vault/vault-registry";
 import { Section } from "./primitives";
 
@@ -111,9 +112,7 @@ export function VaultsSection() {
 									{isCurrent && <Trans>Current</Trans>}
 									{isCurrent && isPrimary && " · "}
 									{isPrimary && <Trans>Primary</Trans>}
-									{!isCurrent &&
-										!isPrimary &&
-										t`Created ${new Date(v.createdAt).toLocaleDateString()}`}
+									{!isCurrent && !isPrimary && t`Created on ${formatDate(v.createdAt)}`}
 								</span>
 							</span>
 							<button

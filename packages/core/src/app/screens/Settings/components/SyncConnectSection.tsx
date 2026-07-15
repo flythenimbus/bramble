@@ -12,6 +12,7 @@ import {
 	SYNC_LAST_SYNCED_KEY,
 } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
+import { formatDate } from "../../../../util/format-date";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -37,8 +38,7 @@ interface SyncGroup {
 }
 
 const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
-const addedOn = (ms: number): string =>
-	i18n.date(new Date(ms), { month: "short", day: "numeric", year: "numeric" });
+const addedOn = (ms: number): string => formatDate(ms);
 
 // Locale-aware relative time ("just now" / "5 minutes ago" / "2 days ago") via Intl, so
 // "Last synced" reads at a glance. Coarsens by magnitude; refreshes on the next re-render.

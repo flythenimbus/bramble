@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronRight, Plus } from "lucide-react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
+import { formatDate } from "../../../util/format-date";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 
@@ -45,7 +46,7 @@ export function VaultPicker() {
 								<span className="flex-1 min-w-0">
 									<span className="block text-sm text-foreground truncate">{label}</span>
 									<span className="block text-xs text-muted-foreground">
-										{t`Created ${new Date(v.createdAt).toLocaleDateString()}`}
+										{t`Created on ${formatDate(v.createdAt)}`}
 									</span>
 								</span>
 								<ChevronRight className="flex-none w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
