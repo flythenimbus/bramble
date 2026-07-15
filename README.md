@@ -136,10 +136,6 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 - **Cloud backups on mobile.** The browser extension backs up to Dropbox, S3, and WebDAV on a schedule today; bringing those scheduled uploads to the iOS and Android apps is next (mobile can already restore from a backup file).
 - **Multiple vaults.** Keep more than one vault side by side and pick which to open when you launch the app. Handy for sharing a device between people, or walling off separate sets of logins behind their own master passwords.
 
-## Status
-
-The core is real and working. The Chromium extension is publicly released, and native iOS and Android apps ship the same vault with system autofill, passkeys, and biometric unlock. Firefox is on the roadmap. Found a bug or have an idea? Open an issue.
-
 ## Contributing
 
 Open source and contributions welcome. A few things worth knowing:
