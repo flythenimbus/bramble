@@ -284,7 +284,7 @@ msgstr "Choisir un fichier .bramble"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Choose a different vault"
-msgstr ""
+msgstr "Choisissez un autre coffre"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Choose a master password"
@@ -292,7 +292,7 @@ msgstr "Choisir un mot de passe maître"
 
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Choose a vault to unlock"
-msgstr ""
+msgstr "Choisissez un coffre à déverrouiller"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
@@ -484,7 +484,7 @@ msgstr "Créer votre coffre-fort"
 #. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created {0}"
-msgstr ""
+msgstr "Créé le {0}"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Creating…"
