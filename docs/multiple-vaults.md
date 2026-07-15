@@ -388,11 +388,17 @@ Each phase is independently shippable.
   vault-scoped storage wrapper, metadata stays device-global). Tested: registry model,
   migration, cross-vault isolation, and the registry provider. Per-vault metadata
   helpers are deferred to Phases 2/4 with the sync/backup readers that consume them.
-- **Phase 1: create + picker.** `createVault` allocates a new record instead of
-  overwriting; `VaultRegistryProvider`; the `/select` route and picker UI on the
-  passkey template; switch-vault; a settings vault list (rename / delete / set
-  primary). Tests: headless guard tests for the 0 / 1 / N branches (matches the
-  existing guard-test pattern), no `/ <-> /select` loop.
+- **Phase 1 (in progress): create + picker.** *Landed:* `createVault` registers a new
+  vault record and writes to its own id instead of overwriting (resetting sync only for
+  the first vault on a device); `createRecord` / `clearSelection` on the registry, which
+  auto-selects only when a single vault exists; the `/select` route + `VaultPicker`
+  (vault rows on the passkey template plus "Create new vault"), fed by a registry slice
+  in the router context with exact-complement guards; and a "choose a different vault"
+  link on the unlock screen. Tested: headless picker guards (0/1/N, no `/ <-> /select`
+  loop) and the registry actions. *Remaining:* in-app switch-vault while unlocked (lock +
+  clear selection) and a settings vault list (rename / delete / set primary), which needs
+  the registry mutation actions plus a per-vault blob delete on the adapter. End-to-end
+  runtime verification (create a second vault, pick, unlock) is still pending.
 - **Phase 2: sync per-vault.** Namespace the `sync.*` keys; re-point the single
   session at the active vault; scope `resetSyncState` / `rotateDeviceId`;
   enrollment "join = add a vault" with `groupKey` dedup; per-vault roster UI. Verify
