@@ -58,7 +58,6 @@ export function PasswordCard({
 					<div>
 						<PasswordField
 							label={t`Master password`}
-							autoComplete={isCreate ? "new-password" : "current-password"}
 							error={errors.masterPassword?.message}
 							{...register("masterPassword", {
 								required: isCreate ? t`Choose a master password` : t`Enter your master password`,
@@ -73,7 +72,6 @@ export function PasswordCard({
 					{isCreate && (
 						<PasswordField
 							label={t`Confirm master password`}
-							autoComplete="new-password"
 							error={errors.confirmPassword?.message}
 							{...register("confirmPassword", {
 								required: t`Re-enter the password`,

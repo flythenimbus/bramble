@@ -18,17 +18,25 @@ function renderPw() {
 }
 
 describe("PasswordField", () => {
-	it("masks by default and toggles between password and text", () => {
+	it("masks by default and actually reveals the value on toggle", () => {
 		renderPw();
 		const input = screen.getByLabelText("Master password") as HTMLInputElement;
 		expect(input.type).toBe("password");
 
 		fireEvent.click(screen.getByRole("button", { name: "Show password" }));
-		expect(input.type).toBe("text");
+		expect(input.type).toBe("text"); // value is genuinely visible, not just relabeled
 
-		// The control relabels so it's announced correctly, then flips back.
 		fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
 		expect(input.type).toBe("password");
+	});
+
+	it("suppresses OS autofill and the smart-keyboard traits", () => {
+		renderPw();
+		const input = screen.getByLabelText("Master password") as HTMLInputElement;
+		expect(input.getAttribute("autocomplete")).toBe("off");
+		expect(input.getAttribute("autocorrect")).toBe("off");
+		expect(input.getAttribute("autocapitalize")).toBe("none");
+		expect(input.getAttribute("spellcheck")).toBe("false");
 	});
 
 	it("keeps the reveal toggle out of the tab order", () => {

@@ -32,7 +32,6 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 			>
 				<PasswordField
 					label={t`Master password`}
-					autoComplete="current-password"
 					autoFocus
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}

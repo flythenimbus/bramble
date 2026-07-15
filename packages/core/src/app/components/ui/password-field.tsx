@@ -3,10 +3,12 @@ import { Eye, EyeOff } from "lucide-react";
 import { type ComponentProps, forwardRef, useState } from "react";
 import { TextField } from "./text-field";
 
-// A TextField that masks its value and carries a show/hide toggle, so every
-// password entry across the app reveals typos consistently (issue #14). Owns the
-// reveal state and the eye button; everything else passes straight through to
-// TextField (label, error, value/onChange, react-hook-form register, etc.).
+// A TextField that masks its value with a show/hide toggle, so every password entry
+// reveals typos consistently (issue #14). Reveal flips type password<->text (the only
+// masking that works across all engines: CSS can't un-mask a real password field, and
+// Firefox lacks -webkit-text-security). Autofill and the smart-keyboard traits are forced
+// off since these are the app's own master-password fields, not OS-managed logins
+// (issue #5). These props win over any caller value, so route every password input here.
 type PasswordFieldProps = Omit<ComponentProps<typeof TextField>, "type" | "endAdornment">;
 
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
@@ -18,6 +20,10 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
 				ref={ref}
 				{...props}
 				type={show ? "text" : "password"}
+				autoComplete="off"
+				autoCorrect="off"
+				autoCapitalize="none"
+				spellCheck={false}
 				endAdornment={
 					<button
 						type="button"

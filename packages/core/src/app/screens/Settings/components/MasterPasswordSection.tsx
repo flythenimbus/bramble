@@ -191,7 +191,6 @@ export function MasterPasswordSection() {
 					{formMode === "change" && (
 						<PasswordField
 							label={t`Current password`}
-							autoComplete="current-password"
 							autoFocus
 							error={errors.currentPassword?.message}
 							{...register("currentPassword", { required: t`Enter your current password` })}
@@ -200,7 +199,6 @@ export function MasterPasswordSection() {
 					<div>
 						<PasswordField
 							label={t`New password`}
-							autoComplete="new-password"
 							autoFocus={formMode === "set"}
 							error={errors.newPassword?.message}
 							{...register("newPassword", {
@@ -213,7 +211,6 @@ export function MasterPasswordSection() {
 					</div>
 					<PasswordField
 						label={t`Confirm new password`}
-						autoComplete="new-password"
 						error={errors.confirmPassword?.message}
 						{...register("confirmPassword", {
 							required: t`Confirm your new password`,

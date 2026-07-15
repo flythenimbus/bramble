@@ -49,7 +49,6 @@ export function KdbxUnlock({
 			>
 				<PasswordField
 					label={t`KeePass master password`}
-					autoComplete="off"
 					autoFocus
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
