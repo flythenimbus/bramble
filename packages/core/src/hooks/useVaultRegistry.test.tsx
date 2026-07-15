@@ -16,7 +16,8 @@ afterEach(cleanup);
 function mount(stored: unknown) {
 	const getMeta = vi.fn(async (key: string) => (key === VAULT_REGISTRY_KEY ? stored : undefined));
 	const setMeta = vi.fn(async () => {});
-	const platform = { storage: { getMeta, setMeta } } as unknown as Platform;
+	const deleteVaultBlob = vi.fn(async () => {});
+	const platform = { storage: { getMeta, setMeta, deleteVaultBlob } } as unknown as Platform;
 	let value: VaultRegistryValue | null = null;
 	function Consumer() {
 		value = useVaultRegistry();
@@ -33,7 +34,7 @@ function mount(stored: unknown) {
 		if (!value) throw new Error("registry value not captured");
 		return value;
 	};
-	return { get, setMeta };
+	return { get, setMeta, deleteVaultBlob };
 }
 
 const one = addVault(EMPTY_REGISTRY, { id: "a", label: "Personal", createdAt: 1 });
@@ -96,6 +97,39 @@ describe("VaultRegistryProvider", () => {
 		expect(v.vaults).toEqual([]);
 		expect(v.primaryId).toBeNull();
 		expect(v.activeId).toBeUndefined();
+	});
+
+	it("rename updates a vault's label", async () => {
+		const { get } = mount(two);
+		await act(async () => {});
+		await act(async () => {
+			await get().rename("b", "Family");
+		});
+		expect(get().vaults.find((v) => v.id === "b")?.label).toBe("Family");
+	});
+
+	it("setPrimaryVault changes the primary", async () => {
+		const { get } = mount(two);
+		await act(async () => {});
+		await act(async () => {
+			await get().setPrimaryVault("b");
+		});
+		expect(get().primaryId).toBe("b");
+	});
+
+	it("remove deletes the blob + record and deselects the active vault", async () => {
+		const { get, deleteVaultBlob } = mount(two);
+		await act(async () => {});
+		await act(async () => {
+			get().selectVault("b");
+		});
+		expect(get().activeId).toBe("b");
+		await act(async () => {
+			await get().remove("b");
+		});
+		expect(deleteVaultBlob).toHaveBeenCalledWith("b");
+		expect(get().vaults.map((v) => v.id)).toEqual(["a"]);
+		expect(get().activeId).toBeUndefined();
 	});
 });
 

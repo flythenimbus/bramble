@@ -13,6 +13,9 @@ import {
 	addVault,
 	EMPTY_REGISTRY,
 	parseRegistry,
+	removeVault,
+	renameVault,
+	setPrimary,
 	VAULT_REGISTRY_KEY,
 	type VaultRecord,
 	type VaultRegistry,
@@ -31,6 +34,12 @@ export interface VaultRegistryValue {
 	clearSelection: () => void;
 	/** Register a new empty vault record and select it; returns its id. The blob is written separately. */
 	createRecord: (label?: string) => Promise<string>;
+	/** Rename a vault (write-through to storage). */
+	rename: (id: string, label: string) => Promise<void>;
+	/** Make a vault the primary (write-through). */
+	setPrimaryVault: (id: string) => Promise<void>;
+	/** Delete a vault: its blob and registry record. Deselects it if it was active. */
+	remove: (id: string) => Promise<void>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
 }
@@ -46,6 +55,9 @@ const DEFAULT: VaultRegistryValue = {
 	selectVault: () => {},
 	clearSelection: () => {},
 	createRecord: async () => "",
+	rename: async () => {},
+	setPrimaryVault: async () => {},
+	remove: async () => {},
 	refresh: async () => {},
 };
 
@@ -78,16 +90,40 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	const selectVault = useCallback((id: string) => setActiveId(id), []);
 	const clearSelection = useCallback(() => setActiveId(undefined), []);
 
+	// Write a new registry to storage and reflect it in state.
+	const persist = useCallback(
+		async (next: VaultRegistry) => {
+			await storage.setMeta(VAULT_REGISTRY_KEY, next);
+			setRegistry(next);
+		},
+		[storage],
+	);
+
 	const createRecord = useCallback(
 		async (label = "") => {
 			const id = crypto.randomUUID();
-			const next = addVault(registry, { id, label, createdAt: Date.now() });
-			await storage.setMeta(VAULT_REGISTRY_KEY, next);
-			setRegistry(next);
+			await persist(addVault(registry, { id, label, createdAt: Date.now() }));
 			setActiveId(id);
 			return id;
 		},
-		[registry, storage],
+		[registry, persist],
+	);
+	const rename = useCallback(
+		(id: string, label: string) => persist(renameVault(registry, id, label)),
+		[registry, persist],
+	);
+	const setPrimaryVault = useCallback(
+		(id: string) => persist(setPrimary(registry, id)),
+		[registry, persist],
+	);
+	const remove = useCallback(
+		async (id: string) => {
+			// Best-effort blob cleanup; an orphaned encrypted blob is harmless if it fails.
+			await storage.deleteVaultBlob(id).catch(() => {});
+			await persist(removeVault(registry, id));
+			setActiveId((cur) => (cur === id ? undefined : cur));
+		},
+		[registry, persist, storage],
 	);
 
 	const value = useMemo<VaultRegistryValue>(
@@ -99,9 +135,23 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			selectVault,
 			clearSelection,
 			createRecord,
+			rename,
+			setPrimaryVault,
+			remove,
 			refresh,
 		}),
-		[ready, registry, activeId, selectVault, clearSelection, createRecord, refresh],
+		[
+			ready,
+			registry,
+			activeId,
+			selectVault,
+			clearSelection,
+			createRecord,
+			rename,
+			setPrimaryVault,
+			remove,
+			refresh,
+		],
 	);
 
 	return <VaultRegistryContext.Provider value={value}>{children}</VaultRegistryContext.Provider>;
@@ -121,6 +171,8 @@ export function makeVaultScopedStorage(
 		readVaultBlob: (id) => storage.readVaultBlob(id ?? vaultId),
 		writeVaultBlob: (blob, id) => storage.writeVaultBlob(blob, id ?? vaultId),
 		restoreVaultFromBackup: (id) => storage.restoreVaultFromBackup(id ?? vaultId),
+		// Delete always targets an explicit vault; no active-vault default.
+		deleteVaultBlob: (id) => storage.deleteVaultBlob(id),
 		// Device-global metadata: pass through untouched (the adapter methods don't use `this`).
 		getMeta: storage.getMeta,
 		setMeta: storage.setMeta,

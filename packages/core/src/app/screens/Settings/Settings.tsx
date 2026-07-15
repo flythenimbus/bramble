@@ -21,6 +21,7 @@ import { GeneralSection } from "./components/GeneralSection";
 import { SecuritySection } from "./components/SecuritySection";
 import { SupportSection } from "./components/SupportSection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
+import { VaultsSection } from "./components/VaultsSection";
 import type { SettingsTab } from "./settings-search";
 
 export function Settings() {
@@ -104,6 +105,7 @@ export function Settings() {
 				{tab === "general" && (
 					<>
 						<GeneralSection />
+						<VaultsSection />
 						<AppearanceSection />
 					</>
 				)}

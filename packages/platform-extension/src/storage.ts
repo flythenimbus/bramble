@@ -169,6 +169,14 @@ export const extensionStorage: StorageAdapter = {
 		return true;
 	},
 
+	/** Delete a vault's blob and recovery snapshot. Idempotent (removing an absent key is a no-op). */
+	async deleteVaultBlob(vaultId) {
+		await ensureMigrated();
+		const reg = await readRegistry();
+		await api.storage.local.remove(blobKeyFor(vaultId, reg));
+		await api.storage.local.remove(backupKeyFor(vaultId, reg));
+	},
+
 	/** Read a plaintext metadata value from chrome.storage.local. */
 	async getMeta(key) {
 		const result = await api.storage.local.get(key);

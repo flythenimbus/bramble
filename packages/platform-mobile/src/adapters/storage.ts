@@ -115,6 +115,15 @@ export const mobileStorage: StorageAdapter = {
 		});
 		return true;
 	},
+	/** Delete a vault's blob file and recovery snapshot. Idempotent (missing files are skipped). */
+	async deleteVaultBlob(vaultId) {
+		await ensureMigrated();
+		const reg = await readRegistry();
+		const path = blobFileFor(vaultId, reg);
+		const bak = backupFileFor(vaultId, reg);
+		if (await fileExists(path)) await Filesystem.deleteFile({ path, directory: DIR });
+		if (await fileExists(bak)) await Filesystem.deleteFile({ path: bak, directory: DIR });
+	},
 
 	async getMeta<T>(key: string): Promise<T | undefined> {
 		const r = await Preferences.get({ key: `meta:${key}` });

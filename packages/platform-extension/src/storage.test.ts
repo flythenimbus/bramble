@@ -197,6 +197,23 @@ describe("multi-vault registry", () => {
 		expect(await storage.readVaultBlob("vault-b")).toEqual(secondBytes);
 	});
 
+	it("deleteVaultBlob removes a vault's blob without touching the primary", async () => {
+		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(new Uint8Array([1])) });
+		const storage = await loadStorage();
+		await storage.readVaultBlob(); // migrate + register the primary
+		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
+		await storage.setMeta(
+			VAULT_REGISTRY_KEY,
+			addVault(reg, { id: "vault-b", label: "", createdAt: 0 }),
+		);
+		await storage.writeVaultBlob(new Uint8Array([2]), "vault-b");
+		expect(local[`${VAULT_KEY}:vault-b`]).toBeDefined();
+
+		await storage.deleteVaultBlob("vault-b");
+		expect(local[`${VAULT_KEY}:vault-b`]).toBeUndefined();
+		expect(local[VAULT_KEY]).toBeDefined();
+	});
+
 	it("reports vault existence for a specific id and for any vault", async () => {
 		stubChrome();
 		const storage = await loadStorage();

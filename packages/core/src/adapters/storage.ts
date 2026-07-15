@@ -14,6 +14,8 @@ export interface StorageAdapter {
 	// false if there was nothing to recover. Run when readVaultBlob no longer
 	// decodes (the usual signal that a write was interrupted).
 	restoreVaultFromBackup(vaultId?: string): Promise<boolean>;
+	/** Delete a vault's blob and its recovery snapshot (used when removing a vault). */
+	deleteVaultBlob(vaultId: string): Promise<void>;
 	getMeta<T>(key: string): Promise<T | undefined>;
 	setMeta<T>(key: string, value: T): Promise<void>;
 	/** Delete a metadata key (e.g. clearing `sync.group` when leaving the sync group). */
