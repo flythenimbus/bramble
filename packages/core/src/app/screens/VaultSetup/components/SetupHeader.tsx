@@ -6,12 +6,15 @@ interface SetupHeaderProps {
 	mode: VaultSetupMode;
 	/** Mobile: storage is app-managed, so drop the "choose where to store" copy. */
 	mobile?: boolean;
+	/** Adding a parallel vault (vaults already exist), not first-run setup. */
+	adding?: boolean;
 }
 
-export function SetupHeader({ mode, mobile }: SetupHeaderProps) {
+export function SetupHeader({ mode, mobile, adding }: SetupHeaderProps) {
 	const { t } = useLingui();
-	const subtitle =
-		mode === "create"
+	const subtitle = adding
+		? t`Create a new vault alongside your existing ones, with its own master password.`
+		: mode === "create"
 			? mobile
 				? t`Pick a master password to protect your vault.`
 				: t`Choose where to store your encrypted vault and pick a master password.`
@@ -22,7 +25,13 @@ export function SetupHeader({ mode, mobile }: SetupHeaderProps) {
 		<div className="text-center mb-6">
 			<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 			<h1 className="text-2xl mb-2 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-				{mode === "create" ? <Trans>Set up your vault</Trans> : <Trans>Open your vault</Trans>}
+				{adding ? (
+					<Trans>Add a vault</Trans>
+				) : mode === "create" ? (
+					<Trans>Set up your vault</Trans>
+				) : (
+					<Trans>Open your vault</Trans>
+				)}
 			</h1>
 			<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>{subtitle}</p>
 		</div>

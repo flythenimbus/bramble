@@ -4,7 +4,7 @@ import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
 import { useCan, usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
-import { VaultRegistryProvider } from "../hooks/useVaultRegistry";
+import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ThemeProvider } from "./hooks/useTheme";
@@ -26,6 +26,9 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const { shell } = usePlatform();
 	const canRestore = useCan("restore");
 	const { createVault, unlock } = useVault();
+	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
+	const { vaults } = useVaultRegistry();
+	const adding = vaults.length > 0;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	const [done, setDone] = useState<null | "created" | "opened">(null);
 	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
@@ -89,9 +92,10 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			mobile={mobile}
 			mode={mode}
 			onModeChange={setMode}
-			onCreate={async (password) => {
+			adding={adding}
+			onCreate={async (password, label) => {
 				// createVault returns the one-time recovery code to display first.
-				setRecoveryCode(await createVault(password));
+				setRecoveryCode(await createVault(password, label));
 			}}
 			onUnlock={async (password) => {
 				await unlock(password);

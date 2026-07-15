@@ -19,6 +19,8 @@ interface PasswordCardProps {
 	onSubmit: (values: VaultSetupFormValues) => Promise<void>;
 	/** Compact/mobile presentation: column footer, full-width button, larger heading. */
 	mobile?: boolean;
+	/** Show an optional vault-name field (when adding a parallel vault). */
+	showName?: boolean;
 }
 
 /** Master-password form card for vault setup, gating weak passwords on create only. */
@@ -29,6 +31,7 @@ export function PasswordCard({
 	submitError,
 	onSubmit,
 	mobile,
+	showName,
 }: PasswordCardProps) {
 	const { t } = useLingui();
 	const {
@@ -55,6 +58,21 @@ export function PasswordCard({
 					</h3>
 				</div>
 				<div className="p-5 space-y-4">
+					{showName && isCreate && (
+						<div>
+							<label htmlFor="vault-name" className="block text-sm mb-1.5">
+								<Trans>Vault name</Trans>
+							</label>
+							<input
+								id="vault-name"
+								type="text"
+								placeholder={t`Optional (e.g. Work)`}
+								autoComplete="off"
+								className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+								{...register("label")}
+							/>
+						</div>
+					)}
 					<div>
 						<PasswordField
 							label={t`Master password`}
