@@ -282,9 +282,17 @@ msgstr "Vérifier les mots de passe pour des violations"
 msgid "Choose a .bramble file"
 msgstr "Choisir un fichier .bramble"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Choose a different vault"
+msgstr ""
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Choose a master password"
 msgstr "Choisir un mot de passe maître"
+
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Choose a vault to unlock"
+msgstr ""
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
@@ -460,6 +468,7 @@ msgid "Create and store passkeys for other sites. While on, Bramble handles all 
 msgstr "Créez et stockez des clés de passe pour d'autres sites. Lorsque cette fonction est active, Bramble gère toutes les invites de clés de passe dans ce navigateur."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
 msgstr "Créer un nouveau coffre"
@@ -471,6 +480,11 @@ msgstr "Créer un coffre-fort"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Create your vault"
 msgstr "Créer votre coffre-fort"
+
+#. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Created {0}"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Creating…"

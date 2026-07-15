@@ -282,9 +282,17 @@ msgstr "Check passwords for breaches"
 msgid "Choose a .bramble file"
 msgstr "Choose a .bramble file"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Choose a different vault"
+msgstr "Choose a different vault"
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Choose a master password"
 msgstr "Choose a master password"
+
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Choose a vault to unlock"
+msgstr "Choose a vault to unlock"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
@@ -460,6 +468,7 @@ msgid "Create and store passkeys for other sites. While on, Bramble handles all 
 msgstr "Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
 msgstr "Create new vault"
@@ -471,6 +480,11 @@ msgstr "Create vault"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Create your vault"
 msgstr "Create your vault"
+
+#. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Created {0}"
+msgstr "Created {0}"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Creating…"
