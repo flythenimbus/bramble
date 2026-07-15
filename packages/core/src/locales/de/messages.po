@@ -90,6 +90,10 @@ msgstr "Ein Gerät hinzufügen"
 msgid "Add a new login"
 msgstr "Hinzufügen eines neuen Logins"
 
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Add a vault"
+msgstr "Tresor hinzufügen"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Add another device"
 msgstr "Ein weiteres Gerät hinzufügen"
@@ -455,6 +459,10 @@ msgstr "Die Überprüfung Ihres Sicherheitsschlüssels ist fehlgeschlagen. Versu
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't write to the vault."
 msgstr "Schreiben in den Tresor war nicht möglich."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Create a new vault alongside your existing ones, with its own master password."
+msgstr "Erstellen Sie einen neuen Tresor zusätzlich zu Ihren bestehenden, mit einem eigenen Master-Passwort."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Create an access key with read and write access to a bucket, then paste it below."
@@ -1126,6 +1134,10 @@ msgstr "Öffnen..."
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Optic ID"
 msgstr "Optic ID"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Optional (e.g. Work)"
+msgstr "Optional (z. B. Arbeit)"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing code"
@@ -1839,6 +1851,7 @@ msgid "Value"
 msgstr "Wert"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Tresorname"
 

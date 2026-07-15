@@ -90,6 +90,10 @@ msgstr "Ajouter un appareil"
 msgid "Add a new login"
 msgstr "Ajouter une nouvelle connexion"
 
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Add a vault"
+msgstr "Ajouter un coffre"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Add another device"
 msgstr "Ajouter un autre appareil"
@@ -455,6 +459,10 @@ msgstr "Impossible de vérifier votre clé de sécurité. Veuillez réessayer."
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't write to the vault."
 msgstr "Impossible d'écrire dans le coffre-fort."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Create a new vault alongside your existing ones, with its own master password."
+msgstr "Créez un nouveau coffre en complément de vos coffres existants, avec son propre mot de passe principal."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Create an access key with read and write access to a bucket, then paste it below."
@@ -1126,6 +1134,10 @@ msgstr "Ouverture..."
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Optic ID"
 msgstr "Optic ID"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Optional (e.g. Work)"
+msgstr "Facultatif (p. ex. Travail)"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing code"
@@ -1839,6 +1851,7 @@ msgid "Value"
 msgstr "Valeur"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Nom du coffre"
 
