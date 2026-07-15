@@ -324,7 +324,7 @@ export function Auth() {
 												setRecoveryError(null);
 												setShowRecovery(true);
 											}}
-											className="hover:text-foreground transition-colors"
+											className="text-xs hover:text-foreground transition-colors"
 										>
 											<Trans>Unlock with recovery code</Trans>
 										</button>
@@ -339,7 +339,7 @@ export function Auth() {
 											type="button"
 											onClick={() => clearSelection()}
 											disabled={busy}
-											className="hover:text-foreground transition-colors disabled:opacity-50"
+											className="text-xs hover:text-foreground transition-colors disabled:opacity-50"
 										>
 											<Trans>Choose a different vault</Trans>
 										</button>
