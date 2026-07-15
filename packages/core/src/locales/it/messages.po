@@ -243,6 +243,7 @@ msgstr "Bucket"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Cancel"
 msgstr "Annullare"
 
@@ -468,6 +469,7 @@ msgid "Create and store passkeys for other sites. While on, Bramble handles all 
 msgstr "Crea e memorizza chiavi di accesso per altri siti. Attivo, Bramble gestisce tutti i prompt relativi alle chiavi di accesso in questo browser."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
@@ -482,6 +484,7 @@ msgid "Create your vault"
 msgstr "Creare la propria cassaforte"
 
 #. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created {0}"
 msgstr "Creato {0}"
@@ -493,6 +496,10 @@ msgstr "Creazione..."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Credit or debit card"
 msgstr "Carta di credito o debito"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Current"
+msgstr "Corrente"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -524,6 +531,7 @@ msgstr "Modalità scura"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete"
 msgstr "Eliminare"
 
@@ -538,6 +546,14 @@ msgstr "Eliminare questa voce definitivamente?"
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Delete this entry?"
 msgstr "Eliminare questa voce?"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
+msgstr "Eliminare questo vault da questo dispositivo? Le copie sincronizzate sugli altri dispositivi non vengono influenzate e questa operazione non può essere annullata qui."
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Delete vault"
+msgstr "Elimina vault"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -916,6 +932,10 @@ msgstr "Accesso"
 msgid "Logins"
 msgstr "Accessi"
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Make primary"
+msgstr "Imposta come principale"
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
@@ -1199,6 +1219,10 @@ msgstr "Indicare il vostro file vault esistente e inserire la password principal
 msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Premere Invio / inviare il modulo subito dopo aver compilato le credenziali."
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Primary"
+msgstr "Principale"
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
 msgstr "Chiave privata"
@@ -1297,6 +1321,10 @@ msgstr "Rimuovi chiave di accesso"
 msgid "Remove URL"
 msgstr "Rimuovere URL"
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Rename"
+msgstr "Rinomina"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
 msgstr "Richiedi la password principale per sbloccare"
@@ -1343,6 +1371,7 @@ msgstr "Rivedi ciò che abbiamo trovato nell'export di {0}"
 #~ msgstr "Compatibile con S3"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Save"
 msgstr "Salva"
 
@@ -1560,6 +1589,10 @@ msgstr "Corrispondenza sottodominio"
 #: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Support"
 msgstr "Supporto"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Switch vault"
+msgstr "Cambia vault"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Sync"
@@ -1805,6 +1838,10 @@ msgstr "Nome utente o email"
 msgid "Value"
 msgstr "Valore"
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Vault name"
+msgstr "Nome vault"
+
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault ready"
 msgstr "Vault pronto"
@@ -1816,6 +1853,10 @@ msgstr "Vault ripristinato"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault unlocked"
 msgstr "Vault sbloccato"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Vaults"
+msgstr "Vault"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
@@ -1885,6 +1926,10 @@ msgstr "Anno (AA)"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "You can close this tab and use the {0} popup."
 msgstr "Può chiudere questa scheda e utilizzare il popup {0}."
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "You can't delete the vault you're in"
+msgstr "Non è possibile eliminare il vault in cui ci si trova"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"
