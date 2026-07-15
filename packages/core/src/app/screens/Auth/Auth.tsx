@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
+import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
@@ -30,6 +31,9 @@ export function Auth() {
 		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
+	// Clearing the selection returns to the picker (the auth guard redirects to /select).
+	const { vaults, clearSelection } = useVaultRegistry();
+	const multipleVaults = vaults.length > 1;
 	const canSecurityKeys = useCan("securityKeys");
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
@@ -322,6 +326,19 @@ export function Auth() {
 									</div>
 								</form>
 							)}
+						</div>
+					)}
+
+					{!firstRun && multipleVaults && (
+						<div className="mt-4 text-center">
+							<button
+								type="button"
+								onClick={() => clearSelection()}
+								disabled={busy}
+								className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+							>
+								<Trans>Choose a different vault</Trans>
+							</button>
 						</div>
 					)}
 
