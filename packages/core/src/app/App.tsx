@@ -4,7 +4,7 @@ import { usePlatform } from "../context/PlatformContext";
 import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
-import { VaultRegistryProvider } from "../hooks/useVaultRegistry";
+import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
@@ -38,8 +38,14 @@ interface AppProps {
 // change to re-run active beforeLoad guards (bouncing to unlock on auto-lock, etc).
 function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: PendingLogin }) {
 	const { isLocked, ready, entries } = useVault();
+	const { ready: registryReady, vaults, activeId } = useVaultRegistry();
 	const { shell } = usePlatform();
 	const vault = useMemo(() => ({ isLocked, ready, entries }), [isLocked, ready, entries]);
+	// Registry slice for the launch-time picker decision.
+	const registry = useMemo(
+		() => ({ ready: registryReady, count: vaults.length, hasActive: activeId != null }),
+		[registryReady, vaults.length, activeId],
+	);
 	const consumed = useRef(false);
 
 	// Mobile: persist passkeys the native provider minted during a sign-in registration.
@@ -59,12 +65,12 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 		return router.subscribe("onResolved", persist);
 	}, [router, shell]);
 
-	// `vault` is the change trigger, not a body input: dropping it would fire
+	// `vault`/`registry` are the change triggers, not body inputs: dropping them would fire
 	// invalidate only on mount and defeat the reactive guards.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: vault is the change trigger for invalidate
+	// biome-ignore lint/correctness/useExhaustiveDependencies: vault/registry are change triggers for invalidate
 	useEffect(() => {
 		void router.invalidate();
-	}, [router, vault]);
+	}, [router, vault, registry]);
 
 	// Autofill save handoff: once the vault is unlocked, seed the create-entry form with
 	// the captured credential and route to it. Deferred past unlock so the form actually
@@ -82,7 +88,7 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 		void router.navigate({ to: "/vault/new/$type", params: { type: "login" } });
 	}, [pendingLogin, ready, isLocked, router]);
 
-	return <RouterProvider router={router} context={{ vault }} />;
+	return <RouterProvider router={router} context={{ vault, registry }} />;
 }
 
 /** Root component: wires theme, vault, pop-out, and router providers around the app. */

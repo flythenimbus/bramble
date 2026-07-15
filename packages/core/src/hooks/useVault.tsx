@@ -218,8 +218,8 @@ export interface VaultState {
 export interface VaultActions {
 	unlock(password: string): Promise<void>;
 	lock(): Promise<void>;
-	/** Creates the vault and returns its initial plaintext recovery code (shown once). */
-	createVault(password: string): Promise<string>;
+	/** Creates a new vault (parallel to any existing ones) and returns its initial plaintext recovery code (shown once). */
+	createVault(password: string, label?: string): Promise<string>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	exportVault(): Promise<void>;
 	addEntry(data: EntryData): Promise<void>;
@@ -272,7 +272,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const { storage: platformStorage, crypto, autofill, shell, biometric } = usePlatform();
 	// The app operates on one vault at a time; bind its id so this provider's blob reads and
 	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
-	const { activeId, ready: registryReady } = useVaultRegistry();
+	const { activeId, ready: registryReady, vaults, createRecord } = useVaultRegistry();
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
 		[platformStorage, activeId],
@@ -669,13 +669,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[readDecodedBlob, storage, refreshSlotMetadata],
 	);
 
-	/** Create a new vault with a password slot and an initial recovery slot. */
+	/** Create a new vault (parallel to any existing ones) with a password slot and an initial recovery slot. */
 	const createVault = useCallback(
-		async (password: string): Promise<string> => {
+		async (password: string, label = ""): Promise<string> => {
 			setError(null);
-			// A new vault is a fresh sync identity: clear any prior device's group/keys/relay so an
-			// old device doesn't linger (sync state belongs to the vault, not the browser).
-			await shell.resetSyncState?.();
+			const isFirst = vaults.length === 0;
+			// Register the new vault first so its blob is written under its own id, then selected.
+			const newId = await createRecord(label);
+			// Only the first vault on a device resets sync identity (a clean slate); creating an
+			// additional vault must not disturb an existing vault's sync state. Sync state is still
+			// device-global until Phase 2 namespaces it per vault. See docs/multiple-vaults.md.
+			if (isFirst) await shell.resetSyncState?.();
 			await crypto.generateVek();
 			const passwordSlot = await wrapPasswordSlot(password);
 			const code = makeRecoveryCode();
@@ -685,16 +689,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				[passwordSlot, recoverySlot],
 				emptyEntriesPayload(),
 			);
-			await storage.writeVaultBlob(bytes);
+			await storage.writeVaultBlob(bytes, newId);
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
 			setHasVault(true);
 			setEntries([]);
 			setIsLocked(false);
-			await refreshSlotMetadata();
+			// Slot metadata + entries are (re)loaded by the mount effect when it re-runs for the
+			// newly selected active id, reading via storage rebound to the new vault.
 			return code;
 		},
-		[shell, storage, crypto, wrapPasswordSlot, wrapRecoverySlot, refreshSlotMetadata],
+		[vaults, createRecord, shell, storage, crypto, wrapPasswordSlot, wrapRecoverySlot],
 	);
 
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1

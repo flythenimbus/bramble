@@ -10,6 +10,7 @@ import {
 import type { StorageAdapter } from "../adapters/storage";
 import { usePlatform } from "../context/PlatformContext";
 import {
+	addVault,
 	EMPTY_REGISTRY,
 	parseRegistry,
 	VAULT_REGISTRY_KEY,
@@ -26,6 +27,10 @@ export interface VaultRegistryValue {
 	activeId: string | undefined;
 	/** Select which vault to operate on (one vault is active at a time). */
 	selectVault: (id: string) => void;
+	/** Clear the active selection so the picker is shown again (e.g. "switch vault"). */
+	clearSelection: () => void;
+	/** Register a new empty vault record and select it; returns its id. The blob is written separately. */
+	createRecord: (label?: string) => Promise<string>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
 }
@@ -39,6 +44,8 @@ const DEFAULT: VaultRegistryValue = {
 	primaryId: null,
 	activeId: undefined,
 	selectVault: () => {},
+	clearSelection: () => {},
+	createRecord: async () => "",
 	refresh: async () => {},
 };
 
@@ -58,8 +65,9 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	const refresh = useCallback(async () => {
 		const reg = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
 		setRegistry(reg);
-		// Default the active vault to the primary; keep an explicit selection once made.
-		setActiveId((cur) => cur ?? reg.primaryId ?? undefined);
+		// Auto-select only when there's exactly one vault (direct unlock). With several, the
+		// active id stays unset so the picker shows; keep an explicit selection once made.
+		setActiveId((cur) => cur ?? (reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined));
 		setReady(true);
 	}, [storage]);
 
@@ -68,6 +76,19 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	}, [refresh]);
 
 	const selectVault = useCallback((id: string) => setActiveId(id), []);
+	const clearSelection = useCallback(() => setActiveId(undefined), []);
+
+	const createRecord = useCallback(
+		async (label = "") => {
+			const id = crypto.randomUUID();
+			const next = addVault(registry, { id, label, createdAt: Date.now() });
+			await storage.setMeta(VAULT_REGISTRY_KEY, next);
+			setRegistry(next);
+			setActiveId(id);
+			return id;
+		},
+		[registry, storage],
+	);
 
 	const value = useMemo<VaultRegistryValue>(
 		() => ({
@@ -76,9 +97,11 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			primaryId: registry.primaryId,
 			activeId,
 			selectVault,
+			clearSelection,
+			createRecord,
 			refresh,
 		}),
-		[ready, registry, activeId, selectVault, refresh],
+		[ready, registry, activeId, selectVault, clearSelection, createRecord, refresh],
 	);
 
 	return <VaultRegistryContext.Provider value={value}>{children}</VaultRegistryContext.Provider>;

@@ -15,7 +15,8 @@ afterEach(cleanup);
 
 function mount(stored: unknown) {
 	const getMeta = vi.fn(async (key: string) => (key === VAULT_REGISTRY_KEY ? stored : undefined));
-	const platform = { storage: { getMeta } } as unknown as Platform;
+	const setMeta = vi.fn(async () => {});
+	const platform = { storage: { getMeta, setMeta } } as unknown as Platform;
 	let value: VaultRegistryValue | null = null;
 	function Consumer() {
 		value = useVaultRegistry();
@@ -28,40 +29,67 @@ function mount(stored: unknown) {
 			</VaultRegistryProvider>
 		</PlatformProvider>,
 	);
-	return () => {
+	const get = () => {
 		if (!value) throw new Error("registry value not captured");
 		return value;
 	};
+	return { get, setMeta };
 }
 
-const two = addVault(addVault(EMPTY_REGISTRY, { id: "a", label: "Personal", createdAt: 1 }), {
-	id: "b",
-	label: "Work",
-	createdAt: 2,
-});
+const one = addVault(EMPTY_REGISTRY, { id: "a", label: "Personal", createdAt: 1 });
+const two = addVault(one, { id: "b", label: "Work", createdAt: 2 });
 
 describe("VaultRegistryProvider", () => {
-	it("loads the registry and defaults the active vault to the primary", async () => {
-		const get = mount(two);
+	it("auto-selects the vault when exactly one exists", async () => {
+		const { get } = mount(one);
 		await act(async () => {});
 		const v = get();
 		expect(v.ready).toBe(true);
-		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
-		expect(v.primaryId).toBe("a");
+		expect(v.vaults.map((r) => r.id)).toEqual(["a"]);
 		expect(v.activeId).toBe("a");
 	});
 
-	it("selectVault changes the active vault", async () => {
-		const get = mount(two);
+	it("does not auto-select when several vaults exist (picker)", async () => {
+		const { get } = mount(two);
+		await act(async () => {});
+		const v = get();
+		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
+		expect(v.primaryId).toBe("a");
+		expect(v.activeId).toBeUndefined();
+	});
+
+	it("selectVault and clearSelection move the active vault", async () => {
+		const { get } = mount(two);
 		await act(async () => {});
 		await act(async () => {
 			get().selectVault("b");
 		});
 		expect(get().activeId).toBe("b");
+		await act(async () => {
+			get().clearSelection();
+		});
+		expect(get().activeId).toBeUndefined();
+	});
+
+	it("createRecord registers a new vault, selects it, and persists", async () => {
+		const { get, setMeta } = mount(one);
+		await act(async () => {});
+		let newId = "";
+		await act(async () => {
+			newId = await get().createRecord("Work");
+		});
+		const v = get();
+		expect(v.vaults.map((r) => r.id)).toEqual(["a", newId]);
+		expect(v.vaults[1]?.label).toBe("Work");
+		expect(v.activeId).toBe(newId);
+		expect(setMeta).toHaveBeenCalledWith(
+			VAULT_REGISTRY_KEY,
+			expect.objectContaining({ primaryId: "a" }),
+		);
 	});
 
 	it("is ready with no vaults and no active id on a fresh install", async () => {
-		const get = mount(undefined);
+		const { get } = mount(undefined);
 		await act(async () => {});
 		const v = get();
 		expect(v.ready).toBe(true);

@@ -12,6 +12,7 @@ import { AuthRoute } from "./routes/AuthRoute";
 import { CreateEntryRoute } from "./routes/CreateEntryRoute";
 import { EntryDetailRoute } from "./routes/EntryDetailRoute";
 import { EntryEditRoute } from "./routes/EntryEditRoute";
+import { SelectVaultRoute } from "./routes/SelectVaultRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 import { settingsSearchSchema } from "./screens/Settings/settings-search";
@@ -22,9 +23,18 @@ import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
 // "not ready, don't decide".
 type VaultGuard = Pick<UseVault, "isLocked" | "ready" | "entries">;
 
-/** Router context: vault guard slice, undefined until React injects it. */
+// Registry slice for the launch-time picker decision: how many vaults exist and whether
+// one is chosen. Undefined until React injects it, like the vault slice.
+interface RegistryGuard {
+	ready: boolean;
+	count: number;
+	hasActive: boolean;
+}
+
+/** Router context: guard slices, undefined until React injects them. */
 export interface RouterContext {
 	vault: VaultGuard | undefined;
+	registry: RegistryGuard | undefined;
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
@@ -38,8 +48,26 @@ const authRoute = createRoute({
 	// "for symmetry" with _app reintroduces a redirect loop.
 	beforeLoad: ({ context }) => {
 		if (context.vault && !context.vault.isLocked) throw redirect({ to: "/vault" });
+		// Several vaults and none chosen yet: pick one first.
+		if (context.registry?.ready && context.registry.count > 1 && !context.registry.hasActive) {
+			throw redirect({ to: "/select" });
+		}
 	},
 	component: AuthRoute,
+});
+
+const selectVaultRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/select",
+	// Show the picker only when several vaults exist and none is chosen; otherwise the unlock
+	// screen (or the vault, if already unlocked). Exact complement of authRoute, so no loop.
+	beforeLoad: ({ context }) => {
+		if (context.vault && !context.vault.isLocked) throw redirect({ to: "/vault" });
+		if (context.registry?.ready && (context.registry.count <= 1 || context.registry.hasActive)) {
+			throw redirect({ to: "/" });
+		}
+	},
+	component: SelectVaultRoute,
 });
 
 const appLayoutRoute = createRoute({
@@ -107,6 +135,7 @@ const settingsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
 	authRoute,
+	selectVaultRoute,
 	appLayoutRoute.addChildren([
 		vaultHomeRoute,
 		createEntryRoute,
@@ -124,7 +153,7 @@ export function createAppRouter(initialPath = "/") {
 	return createRouter({
 		routeTree,
 		history: createMemoryHistory({ initialEntries: [initialPath] }),
-		context: { vault: undefined },
+		context: { vault: undefined, registry: undefined },
 	});
 }
 
