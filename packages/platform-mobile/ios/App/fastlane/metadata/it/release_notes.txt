@@ -1,7 +1,9 @@
-Correzioni di bug e miglioramenti di sicurezza in questo aggiornamento:
+Novità di questa versione:
 
-- Lo sblocco tramite Face ID e Touch ID è ora più affidabile.
-- La sincronizzazione peer-to-peer è stata rafforzata: i dispositivi si verificano reciprocamente prima di unire le modifiche e solo i dispositivi approvati possono unirsi al gruppo di sincronizzazione.
-- Risolta la sincronizzazione di archivi di grandi dimensioni tra dispositivi.
+- Importare un vault esistente aprendo un backup .bramble crittografato, direttamente dalla schermata di configurazione o dalle Impostazioni.
+- Le Impostazioni sono state riorganizzate in schede, per rendere le opzioni più facili da trovare.
+- Mostrare o nascondere la password mentre la si digita, per individuare un errore di battitura prima di sbloccare, creare o modificare un vault.
+- Bramble non consente più a iOS di compilare automaticamente o salvare la Sua password principale. Rimane solo Sua da digitare.
+- Supportare lo sviluppo di Bramble dalle nuove opzioni nella scheda Informazioni.
 
-Nessun account, nessun cloud. Tutto rimane sui tuoi dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.

@@ -1,7 +1,9 @@
-Corrections de bugs et améliorations de sécurité dans cette version :
+Nouveautés de cette version :
 
-- Le déverrouillage par Face ID et Touch ID est désormais plus fiable.
-- La synchronisation de pair à pair est renforcée : les appareils se vérifient mutuellement avant de fusionner les modifications, et seuls les appareils approuvés peuvent rejoindre votre groupe de synchronisation.
-- Correction de la synchronisation des grands coffres entre appareils.
+- Importez un coffre existant en ouvrant une sauvegarde .bramble chiffrée, directement depuis l’écran de configuration ou les Réglages.
+- Les Réglages sont désormais organisés en onglets, pour retrouver plus facilement les options.
+- Affichez ou masquez votre mot de passe pendant la saisie, afin de détecter une erreur avant de déverrouiller, créer ou modifier un coffre.
+- Bramble ne permet plus à iOS de remplir ou d’enregistrer automatiquement votre mot de passe principal. Il reste uniquement à vous de le saisir.
+- Soutenez le développement de Bramble grâce aux nouvelles options de l’onglet À propos.
 
 Pas de compte, pas de cloud. Tout reste sur vos appareils.

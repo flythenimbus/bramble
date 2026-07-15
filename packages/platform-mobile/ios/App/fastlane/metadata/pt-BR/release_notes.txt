@@ -1,7 +1,9 @@
-Correções de bugs e melhorias de segurança nesta versão:
+Novidades desta versão:
 
-- O desbloqueio por Face ID e Touch ID agora é mais confiável.
-- A sincronização ponto a ponto foi reforçada: os dispositivos verificam uns aos outros antes de mesclar alterações, e apenas dispositivos aprovados podem entrar no seu grupo de sincronização.
-- Corrigida a sincronização de cofres grandes entre dispositivos.
+- Importe um cofre existente abrindo um backup .bramble criptografado diretamente da tela de configuração ou das Configurações.
+- As Configurações foram reorganizadas em abas, facilitando a localização das opções.
+- Mostre ou oculte sua senha enquanto a digita, para corrigir um erro de digitação antes de desbloquear, criar ou alterar um cofre.
+- O Bramble não permite mais que o iOS preencha automaticamente ou salve sua senha mestra. Ela permanece exclusivamente sua para digitar.
+- Apoie o desenvolvimento do Bramble por meio das novas opções na aba Sobre.
 
 Sem conta, sem nuvem. Tudo permanece em seus dispositivos.

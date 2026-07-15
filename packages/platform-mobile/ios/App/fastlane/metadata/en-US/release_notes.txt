@@ -1,7 +1,9 @@
-Bug fixes and security improvements in this release:
+What's new in this release:
 
-- Face ID and Touch ID unlock is now more reliable.
-- Peer-to-peer sync is hardened: devices verify one another before merging changes, and only approved devices can join your sync group.
-- Fixed syncing of large vaults between devices.
+- Import an existing vault by opening an encrypted .bramble backup, right from the setup screen or Settings.
+- Settings is reorganized into tabs, so options are easier to find.
+- Show or hide your password as you type it, to catch a typo before you unlock, create, or change a vault.
+- Bramble no longer lets iOS autofill or save your master password. It stays yours alone to type.
+- Support Bramble's development from the new options in the About tab.
 
 No account, no cloud. Everything stays on your devices.

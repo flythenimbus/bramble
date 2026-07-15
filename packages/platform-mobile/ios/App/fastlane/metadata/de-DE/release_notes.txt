@@ -1,7 +1,9 @@
-Fehlerbehebungen und Sicherheitsverbesserungen in dieser Version:
+Neuerungen in dieser Version:
 
-- Die Entsperrung per Face ID und Touch ID ist jetzt zuverlässiger.
-- Die Peer-to-Peer-Synchronisierung wurde verstärkt: Geräte überprüfen sich gegenseitig, bevor Änderungen zusammengeführt werden, und nur genehmigte Geräte können Ihrer Synchronisierungsgruppe beitreten.
-- Behoben: Synchronisierung großer Tresore zwischen Geräten.
+- Importieren Sie einen vorhandenen Tresor, indem Sie ein verschlüsseltes .bramble-Backup direkt auf dem Einrichtungsbildschirm oder in den Einstellungen öffnen.
+- Die Einstellungen sind nun in Registerkarten organisiert, sodass Optionen leichter zu finden sind.
+- Zeigen Sie Ihr Passwort während der Eingabe an oder aus, um Tippfehler vor dem Entsperren, Erstellen oder Ändern eines Tresors zu erkennen.
+- Bramble verhindert, dass iOS Ihr Master-Passwort automatisch ausfüllt oder speichert. Es bleibt allein Ihre Eingabe.
+- Unterstützen Sie die Entwicklung von Bramble über die neuen Optionen im Tab „Über“.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.
