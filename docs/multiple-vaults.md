@@ -399,9 +399,12 @@ Each phase is independently shippable.
   local-only-copy warning, create, and switch-vault, which locks and returns to the
   picker). `StorageAdapter` gained a per-vault `deleteVaultBlob` (extension + mobile).
   Tested: headless picker guards (0/1/N, no `/ <-> /select` loop), registry actions, and
-  `deleteVaultBlob`. Not yet runtime-verified end to end (create a second vault, pick,
-  unlock in the real app), and switch-vault may briefly flash the current vault's unlock
-  screen before the picker (guard-driven navigation), which is worth polishing.
+  `deleteVaultBlob`. The picker renders each vault as its own card, and the setup screen is
+  registry-aware: first run keeps create / open / open-file, but adding a vault (vaults
+  already exist) is create-only with an optional name field and no open-existing /
+  open-file paths, which also removes the restore-overwrite footgun until Phase 4's
+  destination chooser. Not yet runtime-verified end to end, and switch-vault may briefly
+  flash the current vault's unlock screen before the picker (guard-driven navigation).
 - **Phase 2: sync per-vault.** Namespace the `sync.*` keys; re-point the single
   session at the active vault; scope `resetSyncState` / `rotateDeviceId`;
   enrollment "join = add a vault" with `groupKey` dedup; per-vault roster UI. Verify
