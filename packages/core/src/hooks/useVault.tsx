@@ -24,6 +24,7 @@ import {
 	verifierPrefix,
 	type WebauthnSlot,
 } from "../vault-format";
+import { makeVaultScopedStorage, useVaultRegistry } from "./useVaultRegistry";
 
 export interface BreachStatus {
 	leaked: boolean;
@@ -268,7 +269,14 @@ const VaultStateContext = createContext<VaultState | null>(null);
 const VaultActionsContext = createContext<VaultActions | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-	const { storage, crypto, autofill, shell, biometric } = usePlatform();
+	const { storage: platformStorage, crypto, autofill, shell, biometric } = usePlatform();
+	// The app operates on one vault at a time; bind its id so this provider's blob reads and
+	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
+	const { activeId, ready: registryReady } = useVaultRegistry();
+	const storage = useMemo(
+		() => makeVaultScopedStorage(platformStorage, activeId),
+		[platformStorage, activeId],
+	);
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
 	// Device-local biometric gate (mobile). `available` = hardware present + enrolled;
@@ -415,9 +423,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await autofill.setIndex(toAutofillIndex(decrypted));
 	}, [readDecodedBlob, crypto, autofill, ensureClock]);
 
-	// On mount: detect an existing vault handle and whether crypto is already
-	// unlocked (popup reopened mid-session).
+	// On mount (and when the active vault resolves): detect an existing vault handle and
+	// whether crypto is already unlocked (popup reopened mid-session). Waits for the registry
+	// so `storage` is bound to the active vault before the first detect.
 	useEffect(() => {
+		if (!registryReady) return;
 		let cancelled = false;
 		void (async () => {
 			try {
@@ -455,7 +465,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [storage, crypto, loadEntries, shell, refreshSlotMetadata]);
+	}, [registryReady, storage, crypto, loadEntries, shell, refreshSlotMetadata]);
 
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
 	// so the guard redirects to the unlock screen.

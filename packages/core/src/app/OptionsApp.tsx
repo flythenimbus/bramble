@@ -4,6 +4,7 @@ import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
 import { useCan, usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ThemeProvider } from "./hooks/useTheme";
@@ -121,19 +122,21 @@ export default function OptionsApp({
 		<ErrorBoundary>
 			<LocaleGate preferredLocale={preferredLocale}>
 				<ThemeProvider>
-					<VaultProvider>
-						{active === "import" ? (
-							<Suspense fallback={null}>
-								<ImportShell onClose={onComplete} />
-							</Suspense>
-						) : active === "restore" ? (
-							<Suspense fallback={null}>
-								<RestoreShell onClose={onComplete} mobile={mobile} />
-							</Suspense>
-						) : (
-							<SetupShell onComplete={onComplete} mobile={mobile} />
-						)}
-					</VaultProvider>
+					<VaultRegistryProvider>
+						<VaultProvider>
+							{active === "import" ? (
+								<Suspense fallback={null}>
+									<ImportShell onClose={onComplete} />
+								</Suspense>
+							) : active === "restore" ? (
+								<Suspense fallback={null}>
+									<RestoreShell onClose={onComplete} mobile={mobile} />
+								</Suspense>
+							) : (
+								<SetupShell onComplete={onComplete} mobile={mobile} />
+							)}
+						</VaultProvider>
+					</VaultRegistryProvider>
 				</ThemeProvider>
 			</LocaleGate>
 		</ErrorBoundary>

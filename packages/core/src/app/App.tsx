@@ -4,6 +4,7 @@ import { usePlatform } from "../context/PlatformContext";
 import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
+import { VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
@@ -98,13 +99,15 @@ export default function App({
 			<LocaleGate preferredLocale={preferredLocale}>
 				<ThemeProvider>
 					<ToastProvider>
-						<VaultProvider>
-							<PrefsProvider>
-								<PopOutProvider router={router} initialDraft={initialDraft}>
-									<InnerApp router={router} pendingLogin={pendingLogin} />
-								</PopOutProvider>
-							</PrefsProvider>
-						</VaultProvider>
+						<VaultRegistryProvider>
+							<VaultProvider>
+								<PrefsProvider>
+									<PopOutProvider router={router} initialDraft={initialDraft}>
+										<InnerApp router={router} pendingLogin={pendingLogin} />
+									</PopOutProvider>
+								</PrefsProvider>
+							</VaultProvider>
+						</VaultRegistryProvider>
 					</ToastProvider>
 				</ThemeProvider>
 			</LocaleGate>

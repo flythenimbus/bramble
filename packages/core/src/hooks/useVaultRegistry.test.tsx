@@ -1,0 +1,117 @@
+/** @vitest-environment happy-dom */
+import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StorageAdapter } from "../adapters/storage";
+import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import { addVault, EMPTY_REGISTRY, VAULT_REGISTRY_KEY } from "../vault/vault-registry";
+import {
+	makeVaultScopedStorage,
+	useVaultRegistry,
+	VaultRegistryProvider,
+	type VaultRegistryValue,
+} from "./useVaultRegistry";
+
+afterEach(cleanup);
+
+function mount(stored: unknown) {
+	const getMeta = vi.fn(async (key: string) => (key === VAULT_REGISTRY_KEY ? stored : undefined));
+	const platform = { storage: { getMeta } } as unknown as Platform;
+	let value: VaultRegistryValue | null = null;
+	function Consumer() {
+		value = useVaultRegistry();
+		return null;
+	}
+	render(
+		<PlatformProvider platform={platform}>
+			<VaultRegistryProvider>
+				<Consumer />
+			</VaultRegistryProvider>
+		</PlatformProvider>,
+	);
+	return () => {
+		if (!value) throw new Error("registry value not captured");
+		return value;
+	};
+}
+
+const two = addVault(addVault(EMPTY_REGISTRY, { id: "a", label: "Personal", createdAt: 1 }), {
+	id: "b",
+	label: "Work",
+	createdAt: 2,
+});
+
+describe("VaultRegistryProvider", () => {
+	it("loads the registry and defaults the active vault to the primary", async () => {
+		const get = mount(two);
+		await act(async () => {});
+		const v = get();
+		expect(v.ready).toBe(true);
+		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
+		expect(v.primaryId).toBe("a");
+		expect(v.activeId).toBe("a");
+	});
+
+	it("selectVault changes the active vault", async () => {
+		const get = mount(two);
+		await act(async () => {});
+		await act(async () => {
+			get().selectVault("b");
+		});
+		expect(get().activeId).toBe("b");
+	});
+
+	it("is ready with no vaults and no active id on a fresh install", async () => {
+		const get = mount(undefined);
+		await act(async () => {});
+		const v = get();
+		expect(v.ready).toBe(true);
+		expect(v.vaults).toEqual([]);
+		expect(v.primaryId).toBeNull();
+		expect(v.activeId).toBeUndefined();
+	});
+});
+
+describe("makeVaultScopedStorage", () => {
+	it("binds the vault id to blob methods and passes metadata through", async () => {
+		const seen: Record<string, unknown> = {};
+		const base = {
+			readVaultBlob: vi.fn(async (id?: string) => {
+				seen.read = id;
+				return new Uint8Array();
+			}),
+			writeVaultBlob: vi.fn(async (_b: Uint8Array, id?: string) => {
+				seen.write = id;
+			}),
+			hasVaultHandle: vi.fn(async (id?: string) => {
+				seen.has = id;
+				return true;
+			}),
+			restoreVaultFromBackup: vi.fn(async (id?: string) => {
+				seen.restore = id;
+				return false;
+			}),
+			getMeta: vi.fn(async () => "meta"),
+		} as unknown as StorageAdapter;
+		const scoped = makeVaultScopedStorage(base, "vault-x");
+
+		await scoped.readVaultBlob();
+		await scoped.writeVaultBlob(new Uint8Array());
+		await scoped.hasVaultHandle();
+		await scoped.restoreVaultFromBackup();
+		expect(seen).toEqual({ read: "vault-x", write: "vault-x", has: "vault-x", restore: "vault-x" });
+
+		// An explicit id still wins over the bound one.
+		await scoped.readVaultBlob("other");
+		expect(seen.read).toBe("other");
+
+		// Metadata passes through unchanged.
+		expect(await scoped.getMeta("k")).toBe("meta");
+	});
+
+	it("passes undefined (primary) when no vault id is bound", async () => {
+		const read = vi.fn(async () => new Uint8Array());
+		const base = { readVaultBlob: read } as unknown as StorageAdapter;
+		await makeVaultScopedStorage(base, undefined).readVaultBlob();
+		expect(read).toHaveBeenCalledWith(undefined);
+	});
+});
