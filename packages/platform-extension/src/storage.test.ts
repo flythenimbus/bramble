@@ -1,4 +1,5 @@
 import { bytesToBase64 } from "@core/util/bytes";
+import { addVault, VAULT_REGISTRY_KEY, type VaultRegistry } from "@core/vault/vault-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The IndexedDB handle glue is mocked so the migration can be tested without a real
@@ -142,5 +143,69 @@ describe("extensionStorage.writeVaultBlob + restore", () => {
 		await storage.writeVaultBlob(new Uint8Array([2]));
 		expect(local[BACKUP_KEY]).toBeUndefined();
 		expect(await storage.restoreVaultFromBackup()).toBe(false);
+	});
+});
+
+describe("multi-vault registry", () => {
+	it("registers an existing single vault on first access without moving its blob", async () => {
+		const bytes = new Uint8Array([7, 7, 7]);
+		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(bytes) });
+		const storage = await loadStorage();
+
+		expect(await storage.readVaultBlob()).toEqual(bytes);
+
+		const reg = local[VAULT_REGISTRY_KEY] as VaultRegistry;
+		expect(reg.vaults).toHaveLength(1);
+		expect(reg.primaryId).toBe(reg.vaults[0]!.id);
+		// The one vault keeps the legacy blob key: no bytes moved.
+		expect(reg.legacyBlobVaultId).toBe(reg.vaults[0]!.id);
+		expect(local[VAULT_KEY]).toBe(bytesToBase64(bytes));
+	});
+
+	it("bootstraps the first vault at the legacy key on a fresh install write", async () => {
+		const local = stubChrome();
+		const storage = await loadStorage();
+
+		await storage.writeVaultBlob(new Uint8Array([1]));
+
+		const reg = local[VAULT_REGISTRY_KEY] as VaultRegistry;
+		expect(reg.vaults).toHaveLength(1);
+		expect(reg.legacyBlobVaultId).toBe(reg.primaryId);
+		expect(local[VAULT_KEY]).toBe(bytesToBase64(new Uint8Array([1])));
+		expect(await storage.readVaultBlob()).toEqual(new Uint8Array([1]));
+	});
+
+	it("stores a second vault under a namespaced key, isolated from the primary", async () => {
+		const primaryBytes = new Uint8Array([1, 1]);
+		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(primaryBytes) });
+		const storage = await loadStorage();
+
+		// Trigger migration so the primary vault is registered, then register a second vault.
+		await storage.readVaultBlob();
+		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
+		const withSecond = addVault(reg, { id: "vault-b", label: "Work", createdAt: 0 });
+		await storage.setMeta(VAULT_REGISTRY_KEY, withSecond);
+
+		const secondBytes = new Uint8Array([2, 2]);
+		await storage.writeVaultBlob(secondBytes, "vault-b");
+
+		// The second vault lands at a namespaced key; the primary blob is untouched.
+		expect(local[`${VAULT_KEY}:vault-b`]).toBe(bytesToBase64(secondBytes));
+		expect(local[VAULT_KEY]).toBe(bytesToBase64(primaryBytes));
+		// Reads route to the right vault: no id -> primary, explicit id -> that vault.
+		expect(await storage.readVaultBlob()).toEqual(primaryBytes);
+		expect(await storage.readVaultBlob("vault-b")).toEqual(secondBytes);
+	});
+
+	it("reports vault existence for a specific id and for any vault", async () => {
+		stubChrome();
+		const storage = await loadStorage();
+		expect(await storage.hasVaultHandle()).toBe(false);
+
+		await storage.writeVaultBlob(new Uint8Array([9]));
+		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
+		expect(await storage.hasVaultHandle()).toBe(true);
+		expect(await storage.hasVaultHandle(reg.primaryId!)).toBe(true);
+		expect(await storage.hasVaultHandle("nonexistent")).toBe(false);
 	});
 });

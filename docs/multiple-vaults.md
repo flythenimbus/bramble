@@ -297,38 +297,46 @@ Keychain items / Keystore aliases) is a native fast-follow, not v1.
 
 ## Migration
 
-Chosen approach: **migrate everything to the namespaced layout** (uniform, no
-permanent legacy special-case), preserving sync identity so nobody has to re-pair.
-This is the part that needs the most care, but it is bounded: the migration only
-renames local storage keys, and it is invisible to the sync wire protocol. Rooms key
-off the `groupKey`, peer authentication is the device's Noise / Ed25519 identity, and
-the roster is a stored value; all of those are preserved by moving the key, not its
-value. So a migrated device and a not-yet-updated device keep syncing, cross-device
-update skew is a non-issue, and no re-pair is triggered.
+End state: **everything in the namespaced layout** (uniform, no permanent legacy
+special-case), sync identity preserved so nobody has to re-pair. But the migration is
+**staged across the phases, not done in one pass**, because moving a stored key
+requires its readers to already be per-vault, and those land phase by phase. Moving
+the `sync.*` keys before the sync code reads the namespaced keys (Phase 2) would break
+the very pairing the migration is meant to preserve. So each phase migrates only what
+its own code already handles.
 
-One guarded, idempotent migration per platform adapter, run on first load after the
-feature ships:
+Why the eventual moves are safe (and re-pair-free): a migration only renames local
+storage keys, and that is invisible to the sync wire protocol. Rooms key off the
+`groupKey`, peer authentication is the device's Noise / Ed25519 identity, and the
+roster is a stored value; all are preserved by moving the key, not its value. So a
+migrated device and a not-yet-updated device keep syncing, cross-device update skew is
+a non-issue, and no re-pair fires. Every stage is idempotent (write the namespaced key
+before deleting the legacy one, so a crash re-migrates) and must never call
+`resetSyncState` (that would discard the identity being preserved). This mirrors the
+gesture-safe legacy File System Access migration in [storage.md](storage.md).
 
-1. Detect the legacy single vault (`vault-blob-b64` / `vault.vlt1`). If absent, no
-   migration (fresh install starts empty).
-2. Allocate a UUID, register it (blank label, displayed as "Vault 1"), set it primary.
-3. Move the blob and backup snapshot to the namespaced keys.
-4. Move every flat `sync.*` value into that vault's namespace. The values are carried
-   verbatim, which is exactly what keeps the pairing alive. Verify on a real synced
-   pair before release.
-5. Move `backup.*` similarly.
+The stages:
 
-Make it idempotent (safe to re-run if interrupted mid-way): write the namespaced keys
-before deleting the legacy keys, so a crash simply re-migrates, and never call
-`resetSyncState` during migration (that would discard the identity we are
-preserving). This mirrors the existing gesture-safe legacy File System Access
-migration in [storage.md](storage.md).
+- **Phase 0 (landed): register + grandfather the blob in place.** On first access, an
+  idempotent, memoised migration detects the existing single vault (`vault-blob-b64` /
+  `vault.vlt1`, or a not-yet-migrated legacy FSA handle on the extension), allocates a
+  UUID, and registers it as the primary with a blank label. It **moves no bytes**: the
+  first vault keeps the un-suffixed blob key (tracked by `legacyBlobVaultId`), so every
+  current reader is untouched; only additional vaults are namespaced by id. A fresh
+  install starts with an empty registry and bootstraps its first vault at the legacy
+  key on first write. Code: `packages/core/src/vault/vault-registry.ts` (pure model),
+  the extension and mobile `storage` adapters.
+- **Phase 2: move the `sync.*` values** into `vault:<id>:sync.*`, together with the
+  sync readers going per-vault. Verify on a real synced pair before release.
+- **Phase 4: move the `backup.*` values** similarly, with the backup readers.
+- **Finalise: move the primary blob** into the uniform namespace and clear
+  `legacyBlobVaultId`, once every reader resolves the blob through the adapter (the
+  extension's one direct `VAULT_BLOB_KEY` use is a `background.ts` change watcher).
 
-One mobile wrinkle: the vault **file** path moves too, and the autofill readers use a
-fixed path (Android reads `vault.vlt1` directly, `VaultReader.kt`). Point the autofill
-readers at the **primary** vault's current path, which ties the mobile file migration
-to the autofill work; sequence Phase 0 and Phase 3 so autofill always resolves the
-primary vault's location rather than a hardcoded filename.
+One mobile wrinkle for the finalise step: the vault **file** path moves, and the
+autofill readers use a fixed path (Android reads `vault.vlt1` directly,
+`VaultReader.kt`). Point them at the **primary** vault's current path, so the mobile
+file move ties to the autofill work (Phase 3) rather than a hardcoded filename.
 
 ## Why not an in-blob id
 
@@ -365,11 +373,13 @@ need to self-identify.
 
 Each phase is independently shippable.
 
-- **Phase 0: storage + registry (no UI).** Registry model; extend `StorageAdapter`
-  with the registry surface and id-parameterized blob I/O + per-vault meta helpers;
-  implement in the extension and mobile adapters with the migration above; thread
-  `activeId` through `VaultProvider` / `useVault`. Tests: migration idempotency,
-  registry CRUD, cross-vault isolation.
+- **Phase 0: storage + registry (no UI).** *Landed:* the pure registry model
+  (`vault-registry.ts`), id-aware blob I/O on `StorageAdapter` (id omitted resolves to
+  the primary), the extension and mobile adapters, and the register-and-grandfather
+  migration, with registry-CRUD, migration, and cross-vault-isolation tests.
+  *Remaining:* thread the active vault id + registry through `VaultProvider` /
+  `useVault` (still one vault, now addressed by id). Per-vault metadata helpers are
+  deferred to Phases 2/4, alongside the sync/backup readers that consume them.
 - **Phase 1: create + picker.** `createVault` allocates a new record instead of
   overwriting; `VaultRegistryProvider`; the `/select` route and picker UI on the
   passkey template; switch-vault; a settings vault list (rename / delete / set
