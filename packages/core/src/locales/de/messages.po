@@ -494,8 +494,14 @@ msgstr "Erstellen Sie Ihren Tresor"
 #. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
-msgid "Created {0}"
-msgstr "Erstellt {0}"
+#~ msgid "Created {0}"
+#~ msgstr "Erstellt {0}"
+
+#. placeholder {0}: formatDate(v.createdAt)
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Created on {0}"
+msgstr "Erstellt am {0}"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Creating…"
