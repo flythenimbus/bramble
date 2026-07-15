@@ -305,6 +305,13 @@ the `sync.*` keys before the sync code reads the namespaced keys (Phase 2) would
 the very pairing the migration is meant to preserve. So each phase migrates only what
 its own code already handles.
 
+This staging is a development ordering, not a release requirement. Whether the phases
+ship as one release (the migration runs once and does everything, because that build
+contains every reader) or as several (each release migrates only what its readers
+handle) is a release-cadence choice. Every stage is local and wire-invisible, so an
+updated device and a not-yet-updated device keep working either way, with no forced
+re-pair.
+
 Why the eventual moves are safe (and re-pair-free): a migration only renames local
 storage keys, and that is invisible to the sync wire protocol. Rooms key off the
 `groupKey`, peer authentication is the device's Noise / Ed25519 identity, and the
@@ -373,13 +380,14 @@ need to self-identify.
 
 Each phase is independently shippable.
 
-- **Phase 0: storage + registry (no UI).** *Landed:* the pure registry model
+- **Phase 0 (complete): storage + registry (no UI).** The pure registry model
   (`vault-registry.ts`), id-aware blob I/O on `StorageAdapter` (id omitted resolves to
-  the primary), the extension and mobile adapters, and the register-and-grandfather
-  migration, with registry-CRUD, migration, and cross-vault-isolation tests.
-  *Remaining:* thread the active vault id + registry through `VaultProvider` /
-  `useVault` (still one vault, now addressed by id). Per-vault metadata helpers are
-  deferred to Phases 2/4, alongside the sync/backup readers that consume them.
+  the primary), the extension and mobile adapters, the register-and-grandfather
+  migration, and the active-vault-id threading (`VaultRegistryProvider` +
+  `useVaultRegistry`; `VaultProvider` operates on the active vault through a
+  vault-scoped storage wrapper, metadata stays device-global). Tested: registry model,
+  migration, cross-vault isolation, and the registry provider. Per-vault metadata
+  helpers are deferred to Phases 2/4 with the sync/backup readers that consume them.
 - **Phase 1: create + picker.** `createVault` allocates a new record instead of
   overwriting; `VaultRegistryProvider`; the `/select` route and picker UI on the
   passkey template; switch-vault; a settings vault list (rename / delete / set
