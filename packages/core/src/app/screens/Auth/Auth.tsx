@@ -122,6 +122,7 @@ export function Auth() {
 	};
 
 	const firstRun = !hasVault;
+	const showDifferentVault = !firstRun && multipleVaults;
 	// A vault exists but its blob couldn't be read yet (commonly an FSA file whose
 	// read permission needs a user gesture). Rather than a scary error + extra step,
 	// show the unlock controls optimistically: the unlock click is itself a gesture,
@@ -265,20 +266,9 @@ export function Auth() {
 						</p>
 					)}
 
-					{recoveryAvailable && (
+					{(recoveryAvailable || showDifferentVault) && (
 						<div className="mt-4">
-							{!showRecovery ? (
-								<button
-									type="button"
-									onClick={() => {
-										setRecoveryError(null);
-										setShowRecovery(true);
-									}}
-									className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-								>
-									<Trans>Unlock with recovery code</Trans>
-								</button>
-							) : (
+							{recoveryAvailable && showRecovery ? (
 								<form
 									onSubmit={handleRecovery}
 									className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-4 space-y-2"
@@ -325,20 +315,37 @@ export function Auth() {
 										</button>
 									</div>
 								</form>
+							) : (
+								<div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+									{recoveryAvailable && (
+										<button
+											type="button"
+											onClick={() => {
+												setRecoveryError(null);
+												setShowRecovery(true);
+											}}
+											className="hover:text-foreground transition-colors"
+										>
+											<Trans>Unlock with recovery code</Trans>
+										</button>
+									)}
+									{recoveryAvailable && showDifferentVault && (
+										<span aria-hidden="true" className="text-muted-foreground/50">
+											·
+										</span>
+									)}
+									{showDifferentVault && (
+										<button
+											type="button"
+											onClick={() => clearSelection()}
+											disabled={busy}
+											className="hover:text-foreground transition-colors disabled:opacity-50"
+										>
+											<Trans>Choose a different vault</Trans>
+										</button>
+									)}
+								</div>
 							)}
-						</div>
-					)}
-
-					{!firstRun && multipleVaults && (
-						<div className="mt-4 text-center">
-							<button
-								type="button"
-								onClick={() => clearSelection()}
-								disabled={busy}
-								className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-							>
-								<Trans>Choose a different vault</Trans>
-							</button>
 						</div>
 					)}
 
