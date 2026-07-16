@@ -161,7 +161,7 @@ export function Auth() {
 			{vaultLabel && (
 				<div
 					data-testid="active-vault-label"
-					className="absolute top-3 left-4 z-10 flex h-8 max-w-[60%] items-center text-sm text-muted-foreground"
+					className="absolute top-3 left-4 z-10 flex h-8 max-w-[60%] items-center text-sm text-foreground/70"
 				>
 					<span className="truncate">{vaultLabel}</span>
 				</div>

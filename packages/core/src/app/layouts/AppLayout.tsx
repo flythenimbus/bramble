@@ -80,7 +80,7 @@ export function AppLayout() {
 											</span>
 											<span
 												data-testid="active-vault-label"
-												className="max-w-[11rem] truncate text-sm text-muted-foreground"
+												className="max-w-[11rem] truncate text-sm text-foreground/70"
 											>
 												{vaultLabel}
 											</span>
