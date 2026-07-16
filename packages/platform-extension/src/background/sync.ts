@@ -46,6 +46,7 @@ import {
 	storeKeypair,
 	storeSigningKey,
 } from "../sync/sync-config";
+import { keepEventPageAlive, releaseEventPage } from "./event-page-keepalive";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
 import { witnessStamps } from "./sync-clock";
@@ -70,7 +71,11 @@ api.runtime.onMessage.addListener((msg: { type?: string; payload?: { status?: st
 
 on(
 	"SYNC_DISCONNECT",
-	extensionOnly((message) => sendToOffscreen(message)),
+	extensionOnly((message) => {
+		// Enroll/sync is ending; let the Firefox event page suspend again.
+		releaseEventPage();
+		return sendToOffscreen(message);
+	}),
 );
 
 // Per-vault sync identity: which vault this device is enrolling/syncing (the active one).
@@ -104,6 +109,9 @@ const withDeviceKey = async (message: {
 }): Promise<MessageEnvelope> => {
 	const kp = await getStoredKeypair(await requireSyncVault());
 	if (!kp) return { ok: false, error: "no device key — create a group first" };
+	// Starting an enroll (invite or join): keep Firefox's event page awake so the inviter doesn't
+	// suspend while waiting for the joiner's ack (and drop it). No-op on Chrome (persistent offscreen).
+	keepEventPageAlive(syncHostSuspends);
 	return sendToOffscreen({
 		...message,
 		payload: { ...message.payload, devicePrivB64: kp.privateKey },
