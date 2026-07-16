@@ -3,6 +3,8 @@ import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack
 import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
+import { useVaultRegistry } from "../../hooks/useVaultRegistry";
+import { displayLabel } from "../../vault/vault-registry";
 import { BrambleGlyph } from "../components/BrambleGlyph";
 import { PasskeySavedToast } from "../components/PasskeySavedToast";
 import { usePopOut } from "../hooks/usePopOut";
@@ -15,6 +17,15 @@ export function AppLayout() {
 	const { popOut, canPopOut } = usePopOut();
 	const { shell } = usePlatform();
 	const { t } = useLingui();
+
+	// Show which vault is open next to the brand, but only when there's more than one (a single
+	// vault needs no label). Falls back to "Vault N" for an unnamed vault, matching the picker.
+	const { activeId, vaults } = useVaultRegistry();
+	const activeIndex = vaults.findIndex((v) => v.id === activeId);
+	const vaultLabel =
+		vaults.length > 1 && activeIndex >= 0
+			? displayLabel(vaults[activeIndex]!.label, activeIndex)
+			: null;
 
 	// Back prefers real history (so Edit-from-list returns to the list) and falls
 	// back to the route's staticData.back when there's none (a popped-out window
@@ -60,9 +71,19 @@ export function AppLayout() {
 								aria-label={t`Go to vault`}
 							>
 								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
-								<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-									{shell.appName}
-								</h1>
+								<div className="flex flex-col items-start leading-tight min-w-0">
+									<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+										{shell.appName}
+									</h1>
+									{vaultLabel && (
+										<span
+											data-testid="active-vault-label"
+											className="max-w-[11rem] truncate text-xs text-muted-foreground"
+										>
+											{vaultLabel}
+										</span>
+									)}
+								</div>
 							</button>
 						</div>
 						<div className="flex items-center gap-1.5">

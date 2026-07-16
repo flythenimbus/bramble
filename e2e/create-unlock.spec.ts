@@ -37,4 +37,6 @@ test("a newly created second vault opens directly, not the picker", async ({
 	await openPopup(popup, extensionId);
 	await expectUnlocked(popup);
 	await expect(popup.getByRole("heading", { name: /Choose a vault/i })).toHaveCount(0);
+	// The header names the open vault when more than one exists (the second is "Vault 2").
+	await expect(popup.getByTestId("active-vault-label")).toHaveText("Vault 2");
 });
