@@ -12,13 +12,18 @@ import { z } from "zod";
 const magicVersion = z.array(z.number());
 const wrapped = { verifierB64: z.string(), wrapIvB64: z.string(), wrappedVekB64: z.string() };
 
+// Per-vault VEK: the USE-VEK ops receive the target vault's key here. The BACKGROUND injects
+// it (from the vek store) into the message on its way to the offscreen; views never send it.
+// See docs/multiple-vaults.md "Per-vault VEK".
+const vekInject = { vekB64: z.string().optional() };
+
 const passwordSlot = z.object({
 	password: z.string(),
 	saltB64: z.string(),
 	slotIdB64: z.string(),
 	magicVersion,
 });
-export const CryptoWrapPasswordSlotSchema = passwordSlot;
+export const CryptoWrapPasswordSlotSchema = passwordSlot.extend(vekInject);
 export const CryptoVerifyPasswordSlotSchema = passwordSlot.extend({ verifierB64: z.string() });
 export const CryptoUnwrapPasswordSlotSchema = passwordSlot.extend(wrapped);
 
@@ -27,20 +32,25 @@ const webauthnSlot = z.object({
 	slotIdB64: z.string(),
 	magicVersion,
 });
-export const CryptoWrapWebauthnSlotSchema = webauthnSlot;
+export const CryptoWrapWebauthnSlotSchema = webauthnSlot.extend(vekInject);
 export const CryptoVerifyWebauthnSlotSchema = webauthnSlot.extend({ verifierB64: z.string() });
 export const CryptoUnwrapWebauthnSlotSchema = webauthnSlot.extend(wrapped);
 
 export const CryptoUnlockWithVekSchema = z.object({ vekB64: z.string() });
-export const CryptoEncryptSchema = z.object({ plaintextJson: z.string() });
+export const CryptoEncryptSchema = z.object({ plaintextJson: z.string(), ...vekInject });
 export const CryptoDecryptSchema = z.object({
 	ciphertext: z.string(),
 	iv: z.string(),
 	wrappedDek: z.string(),
 	dekIv: z.string(),
+	...vekInject,
 });
-export const CryptoEncryptOuterSchema = z.object({ plaintext: z.string() });
-export const CryptoDecryptOuterSchema = z.object({ iv: z.string(), ciphertext: z.string() });
+export const CryptoEncryptOuterSchema = z.object({ plaintext: z.string(), ...vekInject });
+export const CryptoDecryptOuterSchema = z.object({
+	iv: z.string(),
+	ciphertext: z.string(),
+	...vekInject,
+});
 export const CryptoOpenKdbxSchema = z.object({
 	fileB64: z.string(),
 	password: z.string(),
