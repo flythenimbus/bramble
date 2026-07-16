@@ -25,7 +25,9 @@ const RestoreShell = lazy(() =>
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
 	const canRestore = useCan("restore");
-	const { createVault, unlock } = useVault();
+	// Join-a-device (add a vault by pairing) rides per-vault sync; hidden where that's unsupported.
+	const canJoin = useCan("perVaultSync");
+	const { createVault, unlock, startJoin, joining, joinError } = useVault();
 	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
@@ -102,6 +104,19 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 				if (onComplete) onComplete();
 				else setDone("opened");
 			}}
+			onJoin={
+				canJoin
+					? async (pairingCode, password) => {
+							// startJoin creates a new vault and pairs into it, unlocking on success; then
+							// land on the terminal screen (or hand back to the mobile host).
+							await startJoin(pairingCode, { kind: "password", password });
+							if (onComplete) onComplete();
+							else setDone("opened");
+						}
+					: undefined
+			}
+			joining={joining}
+			joinError={joinError}
 			onOpenFile={canRestore ? () => setOpeningFile(true) : undefined}
 		/>
 	);

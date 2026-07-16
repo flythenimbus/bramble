@@ -12,20 +12,25 @@ interface SetupHeaderProps {
 
 export function SetupHeader({ mode, mobile, adding }: SetupHeaderProps) {
 	const { t } = useLingui();
-	const subtitle = adding
-		? t`Create a new vault alongside your existing ones, with its own master password.`
-		: mode === "create"
-			? mobile
-				? t`Pick a master password to protect your vault.`
-				: t`Choose where to store your encrypted vault and pick a master password.`
-			: mobile
-				? t`Enter your master password to unlock your vault.`
-				: t`Point at your existing vault file and enter your master password.`;
+	const subtitle =
+		mode === "join"
+			? t`Enter the pairing code from your other device to sync its vault onto this one.`
+			: adding
+				? t`Create a new vault alongside your existing ones, with its own master password.`
+				: mode === "create"
+					? mobile
+						? t`Pick a master password to protect your vault.`
+						: t`Choose where to store your encrypted vault and pick a master password.`
+					: mobile
+						? t`Enter your master password to unlock your vault.`
+						: t`Point at your existing vault file and enter your master password.`;
 	return (
 		<div className="text-center mb-6">
 			<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 			<h1 className="text-2xl mb-2 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-				{adding ? (
+				{mode === "join" ? (
+					<Trans>Join a device</Trans>
+				) : adding ? (
 					<Trans>Add a vault</Trans>
 				) : mode === "create" ? (
 					<Trans>Set up your vault</Trans>

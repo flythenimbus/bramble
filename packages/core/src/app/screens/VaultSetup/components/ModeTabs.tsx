@@ -7,13 +7,25 @@ interface ModeTabsProps {
 	disabled?: boolean;
 	/** Borderless pill tabs (no container background or shadow); used on mobile. */
 	pill?: boolean;
-	/** Adding a vault (vaults already exist): swap the first-run "Open existing vault" tab for a
-	 * "Restore from backup" one that opens the .bramble flow (which adds a new vault). The create
-	 * tab is the only real content, so it stays active; the restore tab is a nav action. */
+	/** Adding a vault (vaults already exist): a "Restore from backup" nav action that opens the
+	 * .bramble flow (which adds a new vault), shown in place of the first-run "Open existing" tab. */
 	onRestore?: () => void;
+	/** First-run only: show the "Open existing vault" tab (adding a parallel vault never opens the
+	 * existing one). */
+	showOpen?: boolean;
+	/** Show the "Join a device" tab (gated to where per-vault sync is supported). */
+	showJoin?: boolean;
 }
 
-export function ModeTabs({ mode, onChange, disabled, pill, onRestore }: ModeTabsProps) {
+export function ModeTabs({
+	mode,
+	onChange,
+	disabled,
+	pill,
+	onRestore,
+	showOpen,
+	showJoin,
+}: ModeTabsProps) {
 	const Btn = pill ? PillTab : Tab;
 	return (
 		<div
@@ -23,20 +35,21 @@ export function ModeTabs({ mode, onChange, disabled, pill, onRestore }: ModeTabs
 					: "flex gap-2 mb-4 p-1 rounded-lg bg-muted/40 border border-border/50"
 			}
 		>
-			<Btn
-				active={onRestore ? true : mode === "create"}
-				disabled={disabled}
-				onClick={() => onChange("create")}
-			>
+			<Btn active={mode === "create"} disabled={disabled} onClick={() => onChange("create")}>
 				<Trans>Create new vault</Trans>
 			</Btn>
 			{onRestore ? (
 				<Btn active={false} disabled={disabled} onClick={onRestore}>
 					<Trans>Restore from backup</Trans>
 				</Btn>
-			) : (
+			) : showOpen ? (
 				<Btn active={mode === "open"} disabled={disabled} onClick={() => onChange("open")}>
 					<Trans>Open existing vault</Trans>
+				</Btn>
+			) : null}
+			{showJoin && (
+				<Btn active={mode === "join"} disabled={disabled} onClick={() => onChange("join")}>
+					<Trans>Join a device</Trans>
 				</Btn>
 			)}
 		</div>

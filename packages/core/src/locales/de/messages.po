@@ -388,7 +388,12 @@ msgstr "{name} verbinden"
 #~ msgid "Connected"
 #~ msgstr "Verbunden"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Connecting to your other device…"
+msgstr "Verbindung zu Ihrem anderen Gerät wird hergestellt..."
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Connecting…"
 msgstr "Verbinde..."
 
@@ -652,6 +657,14 @@ msgstr "Endpunkt"
 msgid "Enter a new password"
 msgstr "Geben Sie ein neues Passwort ein"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Enter the master password shared with your other device."
+msgstr "Geben Sie das mit Ihrem anderen Gerät geteilte Master-Passwort ein."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Enter the pairing code from your other device to sync its vault onto this one."
+msgstr "Geben Sie den Pairing-Code von Ihrem anderen Gerät ein, um dessen Tresor auf dieses Gerät zu übertragen."
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Enter the password for your {providerLabel} database"
 msgstr "Geben Sie das Passwort für Ihre {providerLabel}-Datenbank ein"
@@ -874,9 +887,22 @@ msgstr "Elemente ({0})"
 msgid "Join"
 msgstr "Beitreten"
 
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Join a device"
+msgstr "Einem Gerät beitreten"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Join vault"
+msgstr "Tresor beitreten"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Join with a pairing code"
 msgstr "Mit einem Kopplungscode beitreten"
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Keep the invite open on your other device while the vault transfers."
+msgstr "Halten Sie die Einladung auf Ihrem anderen Gerät offen, während der Tresor übertragen wird."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
@@ -970,6 +996,7 @@ msgstr "Anmeldedaten"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Master password"
 msgstr "Master-Passwort"
@@ -1164,7 +1191,12 @@ msgstr "Optional (z. B. Wiederhergestellt)"
 msgid "Optional (e.g. Work)"
 msgstr "Optional (z. B. Arbeit)"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Pair with another device"
+msgstr "Mit einem anderen Gerät koppeln"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Kopplungscode"
 
@@ -1227,6 +1259,14 @@ msgstr "Die Passwörter stimmen nicht überein"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste the code from your other device's \"Add a device\" screen"
+msgstr "Fügen Sie den Code vom anderen Gerät ein, ohne das \\"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste the pairing code from your other device."
+msgstr "Fügen Sie den Pairing-Code von Ihrem anderen Gerät ein."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Path (optional)"
@@ -1700,6 +1740,10 @@ msgstr "Dieser Authentifizierungsschlüssel ist ungültig und kann keine Codes g
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Dieses Backup hat kein Master-Passwort und kann daher hier nicht wiederhergestellt werden."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
+msgstr "Dies erstellt einen neuen Tresor auf diesem Gerät und synchronisiert ihn von Ihrem anderen Gerät. Verwenden Sie dasselbe Master-Passwort wie auf jenem Gerät."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This device"

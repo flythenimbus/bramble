@@ -146,6 +146,7 @@ export type DeleteVaultAuth = { password: string } | { securityKey: true };
 import {
 	DEVICE_ID_KEY,
 	decodeEntriesPayload,
+	decodePairingCode,
 	type EntriesPayload,
 	emptyEntriesPayload,
 	ensureDeviceId,
@@ -153,6 +154,7 @@ import {
 	type HybridClock,
 	makeClock,
 } from "../sync";
+import { syncKeyFor } from "../sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { toAutofillIndex } from "../vault/autofill-index";
 import { biometricUnlockFlow, enableBiometricUnlock } from "../vault/biometric-unlock";
@@ -203,6 +205,10 @@ export interface VaultState {
 	securityKeys: SecurityKeyMeta[];
 	/** False until mount-time hydration resolves; route guards gate on this. */
 	ready: boolean;
+	/** A setup-flow join is in progress (created a new vault, now pairing into it). */
+	joining: boolean;
+	/** The last setup-flow join failure (e.g. password mismatch), or null. */
+	joinError: string | null;
 	entries: Entry[];
 	error: string | null;
 	/** A vault exists on disk but its blob couldn't be read/decoded; null when readable. */
@@ -266,6 +272,10 @@ export interface VaultActions {
 	inviteDevice(relayUrl: string, iceUrl?: string, password?: string): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
 	joinGroup(pairingCode: string, unlock: JoinUnlock): Promise<void>;
+	/** Setup-flow join: create a NEW vault from a pairing code (dedups to an existing vault if already
+	 * a member), then run the join in that vault's context and unlock into it. Resolves when the join
+	 * completes. Drives `joining` / `joinError`. See docs/multiple-vaults.md. */
+	startJoin(pairingCode: string, unlock: JoinUnlock): Promise<void>;
 	/** Revoke a device from the sync group (roster tombstone); propagates over ongoing sync. */
 	removeDevice(deviceId: string): Promise<void>;
 }
@@ -295,6 +305,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		syncKey,
 		createRecord,
 		dropActiveRecord,
+		selectVault,
+		legacyBlobVaultId,
 	} = useVaultRegistry();
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
@@ -1033,6 +1045,75 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		readEntriesPayload: mutations.readEntriesPayload,
 	});
 
+	// Setup-flow join: create a NEW vault from a pairing code, then run joinGroup in that vault's
+	// context. The join's device identity + blob are active-vault-scoped, so the new vault must be
+	// active before joinGroup runs; and the joinGroup captured here still holds the previous active
+	// id (the per-vault VEK binding trap), so we defer to an effect that fires once the new vault is
+	// active and joinGroup has rebound to it. See docs/multiple-vaults.md.
+	const [pendingJoin, setPendingJoin] = useState<{
+		code: string;
+		method: JoinUnlock;
+		targetId: string;
+	} | null>(null);
+	const [joinError, setJoinError] = useState<string | null>(null);
+	const joinResolverRef = useRef<{ resolve: () => void; reject: (e: unknown) => void } | null>(
+		null,
+	);
+	const joinRunningRef = useRef(false);
+
+	const startJoin = useCallback(
+		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
+			setJoinError(null);
+			const code = decodePairingCode(pairingCode.trim()); // validate before creating anything
+			// Dedup: if a vault already syncs this group, open it instead of adding a duplicate.
+			for (const v of vaults) {
+				const g = await storage.getMeta<{ groupKey?: string }>(
+					syncKeyFor("sync.group", v.id, legacyBlobVaultId),
+				);
+				if (g?.groupKey === code.groupKey) {
+					selectVault(v.id);
+					return;
+				}
+			}
+			const newId = await createRecord();
+			await shell.setActiveVault?.(newId);
+			return new Promise<void>((resolve, reject) => {
+				joinResolverRef.current = { resolve, reject };
+				setPendingJoin({ code: pairingCode, method, targetId: newId });
+			});
+		},
+		[vaults, storage, legacyBlobVaultId, createRecord, shell, selectVault],
+	);
+
+	// Run the deferred join once the new vault is active (joinGroup is now scoped to it). One-shot.
+	useEffect(() => {
+		if (
+			!pendingJoin ||
+			activeId !== pendingJoin.targetId ||
+			!registryReady ||
+			joinRunningRef.current
+		)
+			return;
+		joinRunningRef.current = true;
+		const { code, method } = pendingJoin;
+		void (async () => {
+			try {
+				await joinGroup(code, method); // writes + unlocks the new active vault
+				setHasVault(true);
+				setPendingJoin(null);
+				joinResolverRef.current?.resolve();
+			} catch (e) {
+				await dropActiveRecord().catch(() => {}); // remove the orphan empty vault
+				setPendingJoin(null);
+				setJoinError((e as Error).message ?? String(e));
+				joinResolverRef.current?.reject(e);
+			} finally {
+				joinRunningRef.current = false;
+				joinResolverRef.current = null;
+			}
+		})();
+	}, [pendingJoin, activeId, registryReady, joinGroup, dropActiveRecord]);
+
 	const hasWebauthnSlot = webauthnSlots.length > 0;
 	const securityKeys = useMemo<SecurityKeyMeta[]>(
 		() =>
@@ -1053,6 +1134,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasVault,
 			isLocked,
 			ready,
+			joining: pendingJoin !== null,
+			joinError,
 			entries,
 			error,
 			vaultError,
@@ -1069,6 +1152,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasVault,
 			isLocked,
 			ready,
+			pendingJoin,
+			joinError,
 			entries,
 			error,
 			vaultError,
@@ -1131,6 +1216,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			refreshBiometric,
 			inviteDevice,
 			joinGroup,
+			startJoin,
 			removeDevice,
 		}),
 		[
@@ -1160,6 +1246,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			refreshBiometric,
 			inviteDevice,
 			joinGroup,
+			startJoin,
 			removeDevice,
 		],
 	);
