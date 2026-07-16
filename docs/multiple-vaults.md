@@ -248,22 +248,88 @@ Continuous background-sync-all is a **later** project: it needs a separate per-v
 cached while the vault is otherwise locked. That is a real crypto/format change, out
 of scope here.
 
-### Per-vault namespacing and joining
+### The seven sync keys, and which are per-vault
 
-- Namespace every `sync.*` key by vault id (table above). Keep the host holding one
-  session at a time, keyed to the active vault: no per-vault session maps needed for
-  v1, which is simpler than the full multi-session rework.
-- **Joining a group adds a vault.** Today enrollment rebuilds a whole vault and
-  overwrites the single blob (`useSyncEnrollment.ts` -> `writeVaultBlob`). Change it
-  to `createVaultRecord` + write the received blob under the new id + set up that
-  vault's `sync.*:<id>` namespace. **Dedup by `groupKey`:** before creating a
-  record, check whether an existing vault already has this `groupKey`; if so, merge
-  into it rather than create a duplicate. Being the inviter still requires the
-  shared vault unlocked (to `export_vek`), which is fine for an interactive pairing.
-- Make `resetSyncState` and `rotateDeviceId` operate on one vault's namespace, so
-  creating or restoring a vault never disturbs another vault's pairing.
-- The device-management (roster) UI becomes per-vault: it shows the active vault's
-  roster, not a global device list.
+There are exactly seven `sync.*` metadata keys. Five are per-vault (they identify one
+vault's group + this device's membership in it); two are device-global endpoints:
+
+| Key | Holds | Per-vault? |
+|---|---|---|
+| `sync.group` | group key + roster | per-vault |
+| `sync.lastSyncedAt` | last-reconcile timestamp | per-vault |
+| `sync.deviceId` | this device's roster node id | per-vault |
+| `sync.deviceKeypair` | Noise static keypair | per-vault |
+| `sync.signingKey` | Ed25519 roster-signing keypair | per-vault |
+| `sync.relay` | signaling relay URL | device-global |
+| `sync.iceUrl` | ICE/TURN URL | device-global |
+
+The three identity keys are semantically per-vault (they authenticate this device in one
+vault's roster) but are stored flat today (extension: plaintext `chrome.storage.local`;
+mobile: `deviceKeypair`/`signingKey` in the Keychain/Keystore secure store, the rest in
+Preferences). `sync.relay` / `sync.iceUrl` stay flat.
+
+### Namespacing: grandfather the legacy vault, no migration
+
+Same trick as the blob (`legacyBlobVaultId`): the pre-existing synced vault keeps the
+**flat** `sync.*` keys, so its pairing survives with zero key movement; every other vault
+uses `sync.<base>:<vaultId>`. A single helper, `syncKeyFor(flatKey, vaultId,
+legacyBlobVaultId)` (`packages/core/src/sync/sync-keys.ts`), returns the flat key when
+`vaultId === legacyBlobVaultId` and the namespaced key otherwise. This is safest for
+existing pairings (no bytes move on the wire or on disk), and it matches where the flat
+keys already live (Phase 0 never touched them). On mobile, the two secure-store keys need
+a parallel per-vault alias scheme.
+
+### The active vault must reach the background
+
+Today sync binds to the **primary** vault, because the port reads the blob with no id
+(`vault-io.ts` `readVaultBlob()`/`writeVaultBlob()` -> `reg.primaryId`), and the background
+has no notion of an active vault. For active-vault-only sync the background needs the
+active vault id:
+
+- **Extension:** the UI/background writes the active vault id into `chrome.storage.session`
+  (alongside the VEK) on unlock, and clears it on lock. The background reads it in
+  `maybeStartSync`, in `vault-io` (so the port reads/writes the *active* vault's blob), and
+  when building the per-vault sync keys. The blob-change trigger (`background.ts` watches
+  only the un-suffixed `VAULT_BLOB_KEY`) must also watch the active vault's namespaced key.
+- **Mobile:** single webview context, so `sync-manager` can read the registry's active id
+  directly; its `blobStore` (bound once to primary today) must read the active vault.
+- On a **vault switch**, tear down the single session and restart it for the new active
+  vault (nothing restarts it on switch today).
+
+### Join adds a vault instead of overwriting
+
+`joinGroup` currently overwrites the single blob (`useSyncEnrollment.ts:297`
+`writeVaultBlob(...)`, id-omitted) and replaces the one `sync.group` (`:298-301`). Change
+it, mirroring `createVault`, to: `createRecord(label?)` -> `newId`, `writeVaultBlob(bytes,
+newId)`, and write the received group under `sync.group:<newId>`. **Dedup by groupKey:**
+before creating a record, scan existing vaults' `sync.group` values for a matching
+`groupKey` and merge into that vault instead. The pairing code carries only the `groupKey`
+(no vault id/name), which is the sole cross-device vault identity, so it's the dedup key.
+`rotateDeviceId` (`useVault.tsx:347`, clears the device-global `sync.deviceId`) becomes
+per-vault (rotate the joining vault's `sync.deviceId:<newId>`), and the join must not call
+`resetSyncState` (which would wipe other vaults' sync).
+
+### resetSyncState, per-vault
+
+The extension's `resetSyncState` (`shell.ts:230`) wildcard-removes every `sync.*` key;
+mobile's (`sync-manager.ts:341`) removes an explicit list plus the secure-store keys. Both
+must scope to one vault's namespace, so creating or restoring a vault never disturbs
+another vault's pairing. The device-management (roster) UI (`SyncConnectSection`) also
+becomes per-vault: it shows the active vault's roster, not a global device list.
+
+### Increment order
+
+1. `syncKeyFor` helper + tests (naming foundation; changes nothing yet).
+2. Active vault id shared to the background (session storage + unlock flow).
+3. Thread the active vault into `vault-io` (blob) + the per-vault sync keys + the
+   start triggers; restart sync on switch.
+4. Per-vault device identity + `rotateDeviceId` + `resetSyncState` scoping.
+5. Join = add a vault (createRecord in join, groupKey dedup).
+6. Mobile parity (`sync-manager` + per-vault secure-store aliases).
+7. Firefox event-page transport.
+
+Each step keeps existing single-vault sync working (the grandfather keys and the
+primary-vault default mean an un-migrated install behaves exactly as before).
 
 ## Mobile autofill and biometric
 
