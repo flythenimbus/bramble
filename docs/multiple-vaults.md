@@ -678,11 +678,13 @@ a successful unlock or an explicit `setActiveVault` moves that id to the front; 
 per-vault lock removes its entry.
 
 - **Per-vault lock** (the Lock action in a view; `CRYPTO_LOCK` with a vault id): drop that
-  vault's map entry and session key. If it was the active vault: stop sync, clear the
-  autofill index, clear the corner/popout handoff keys, then **promote the MRU head** if
-  another vault is still unlocked (set it active, `maybeStartSync`, broadcast lock state;
-  the autofill index rebuilds lazily from the new active vault on the next query), else
-  fall back to today's full teardown.
+  vault's map entry and session key. If it was the active vault: stop sync, clear the autofill
+  index and the corner/popout handoff keys, then **clear the active id (back to the picker)**.
+  Any OTHER unlocked vault stays cached and opens directly when picked; when nothing is left
+  unlocked, fall back to the full teardown. (An earlier draft **promoted the MRU head** to
+  active instead, but that silently hijacked the locked view into another vault and broke the
+  lock-to-picker flow, so it was dropped: locking is an explicit "I'm done here", and the user
+  chooses what to open next.)
 - **Walk-away locks stay global**: the idle auto-lock alarm, the `lock-vault` command, OS
   screen-lock, and view-lock's last-view-close (Immediate mode) clear the entire map,
   every `vault.vek:*` key, the MRU, and the active id, exactly like today's
@@ -857,9 +859,16 @@ behavior, clobbers included); the fix is real once 3 lands.
 5. **Enrollment.** `vekB64` through `EnrollInviteMsgSchema` + `withDeviceKey` injection;
    `wasmSlotCrypto(wasm, vekB64)` per-op loads; joiner passes `bundle.vek`. (Phase 2's
    "join adds a vault" then binds its ops to the new record's id per the binding trap.)
-6. **Cleanup.** Remove the absent-id / absent-vek fallbacks from 1-2: a VEK-scoped op
-   without a vault id is now an error. Mobile stays untouched throughout (no `withVault`,
-   ids ignored); `primaryId` removal remains a later follow-up.
+6. **Cleanup + atomicity guard.** The plan was to remove the absent-id fallback and make an
+   un-tagged VEK-scoped op an error, but that was **reconsidered and deferred**: an audit found
+   un-tagged-but-correct callers that mean the active vault (`webauthn-proxy`'s `isLocked`, and
+   any future one), and the fallback (resolve the active vault) is a *correct* default now that
+   every specific-vault caller tags explicitly. The corruption is already fixed structurally by
+   inc 3's binding, so the fallback stays as a sensible default rather than a footgun. What
+   landed instead: the offscreen atomicity regression test (two differently-keyed dispatches
+   raced through `handleHostMessage`, asserting every op sits immediately after its own load, so
+   a future stray `await` in the critical section fails loudly). Mobile stays untouched (no
+   `withVault`, ids ignored); `primaryId` removal remains a later follow-up.
 
 ### Testing
 

@@ -102,9 +102,10 @@ export async function clearSession(): Promise<void> {
 	void broadcastLockState(true);
 }
 
-/** Per-vault lock (a view's Lock action): forget just that vault's key. If it was the active
- * vault, tear down its singleton services and promote the next unlocked vault (the MRU head) to
- * active; when nothing is left unlocked, fall back to the full walk-away teardown. */
+/** Per-vault lock (a view's Lock action): forget just that vault's key. If it was the active vault,
+ * tear down its singleton services and return to the picker. Any OTHER unlocked vault stays cached
+ * (it opens directly when picked) rather than one silently taking over the view; when nothing is
+ * left unlocked, this is the full walk-away teardown. */
 async function lockVault(vaultId: string): Promise<void> {
 	const wasActive = vekStore.getActiveVaultId() === vaultId;
 	await vekStore.removeVek(vaultId);
@@ -112,17 +113,15 @@ async function lockVault(vaultId: string): Promise<void> {
 		// A non-active vault (open in another view) locked: nothing singleton to move.
 		return;
 	}
+	if (vekStore.unlockedMru().length === 0) {
+		await clearSession();
+		return;
+	}
 	void stopSync();
 	clearIndex();
 	await removeHandoffKeys();
-	const next = vekStore.unlockedMru()[0] ?? null;
-	if (next !== null) {
-		await vekStore.setActiveVaultId(next);
-		void maybeStartSync();
-		void broadcastLockState(false);
-	} else {
-		await clearSession();
-	}
+	await vekStore.setActiveVaultId(null);
+	void broadcastLockState(true);
 }
 
 /**
