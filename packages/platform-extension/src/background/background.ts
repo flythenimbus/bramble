@@ -16,7 +16,7 @@ import "./sync";
 import "./theme";
 import "./webauthn-proxy-init";
 import "./webauthn-content-transport";
-import { VAULT_BLOB_KEY } from "../storage";
+import { isVaultBlobKey } from "../storage";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
@@ -134,10 +134,7 @@ api.storage.onChanged.addListener((changes, area) => {
 	// itself wakes it. Match the active vault's blob whether it lives at the flat legacy key or a
 	// namespaced `vault-blob-b64:<id>` key (only the unlocked vault changes while unlocked).
 	// Best-effort. See docs/p2p-sync.md.
-	const blobChanged = Object.keys(changes).some(
-		(k) => k === VAULT_BLOB_KEY || k.startsWith(`${VAULT_BLOB_KEY}:`),
-	);
-	if (blobChanged && !vaultLocked()) {
+	if (Object.keys(changes).some(isVaultBlobKey) && !vaultLocked()) {
 		void (async () => {
 			await maybeStartSync();
 			await sendToOffscreen({ type: "SYNC_BROADCAST_NOW" }).catch(() => {});

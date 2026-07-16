@@ -1,0 +1,125 @@
+import {
+	addVault,
+	EMPTY_REGISTRY,
+	VAULT_REGISTRY_KEY,
+	type VaultRegistry,
+} from "@core/vault/vault-registry";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
+
+// Capture what the background hands the offscreen host. The rest of the background wiring is
+// stubbed so importing ./sync doesn't drag in the router/offscreen machinery.
+const { sendToOffscreen } = vi.hoisted(() => ({
+	// Typed with the message param so `.mock.calls[i][0]` is the sent message, not an empty tuple.
+	sendToOffscreen: vi.fn((_message: { type?: string; payload?: Record<string, unknown> }) =>
+		Promise.resolve({ ok: true }),
+	),
+}));
+vi.mock("./offscreen-client", () => ({
+	sendToOffscreen,
+	ensureOffscreen: vi.fn(async () => {}),
+	markOffscreenKey: vi.fn(),
+}));
+vi.mock("./router", () => ({
+	on: vi.fn(),
+	onPrefix: vi.fn(),
+	extensionOnly: (fn: unknown) => fn,
+	setReady: vi.fn(),
+}));
+vi.mock("../offscreen-core", () => ({ setSyncBridge: vi.fn() }));
+vi.mock("./sync-clock", () => ({ witnessStamp: vi.fn(async () => {}), witnessStamps: vi.fn() }));
+
+// chrome stub with local + session storage, alarms, and runtime (./sync adds a status listener at
+// import). No `offscreen` key -> the code treats the host as suspend-y and arms the keepalive alarm.
+function stubChrome(
+	localSeed: Record<string, unknown> = {},
+	sessionSeed: Record<string, unknown> = {},
+) {
+	const local = { ...localSeed };
+	const session = { ...sessionSeed };
+	const area = (store: Record<string, unknown>) => ({
+		get: async (keys?: string | string[] | null) => {
+			if (keys == null) return { ...store };
+			const list = Array.isArray(keys) ? keys : [keys];
+			const out: Record<string, unknown> = {};
+			for (const k of list) if (k in store) out[k] = store[k];
+			return out;
+		},
+		set: async (obj: Record<string, unknown>) => Object.assign(store, obj),
+		remove: async (key: string) => {
+			delete store[key];
+		},
+	});
+	vi.stubGlobal("chrome", {
+		storage: { local: area(local), session: area(session) },
+		alarms: { create: vi.fn(), clear: vi.fn(async () => {}) },
+		runtime: { onMessage: { addListener: vi.fn() } },
+	});
+}
+
+async function loadSync() {
+	vi.resetModules();
+	return import("./sync");
+}
+
+const roster = (label: string) => ({
+	devices: [
+		{ id: label, publicKey: label, label, addedAt: 0, hlc: { wall: 0, counter: 0, node: label } },
+	],
+	revoked: [],
+});
+const two: VaultRegistry = addVault(
+	addVault(EMPTY_REGISTRY, { id: "a", label: "", createdAt: 1 }),
+	{
+		id: "b",
+		label: "",
+		createdAt: 2,
+	},
+);
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.clearAllMocks();
+});
+
+describe("maybeStartSync (per-vault)", () => {
+	it("syncs the active vault's group, not the primary's", async () => {
+		// Primary "a" (flat keys) and active "b" (namespaced) each have their own group + keypair.
+		stubChrome(
+			{
+				[VAULT_REGISTRY_KEY]: two,
+				"sync.group": { groupKey: "GROUP_A", roster: roster("a") },
+				"sync.deviceKeypair": { privateKey: "apriv", publicKey: "apub" },
+				"sync.group:b": { groupKey: "GROUP_B", roster: roster("b") },
+				"sync.deviceKeypair:b": { privateKey: "bpriv", publicKey: "bpub" },
+			},
+			{ [ACTIVE_VAULT_SESSION_KEY]: "b" },
+		);
+		const { maybeStartSync } = await loadSync();
+		await maybeStartSync();
+
+		const rosterSync = sendToOffscreen.mock.calls
+			.map((c) => c[0])
+			.find((m) => m.type === "SYNC_ROSTER_SYNC");
+		expect(rosterSync).toBeDefined();
+		expect(rosterSync?.payload?.groupKeyB64).toBe("GROUP_B");
+		expect(rosterSync?.payload?.devicePrivB64).toBe("bpriv");
+		expect(rosterSync?.payload?.devicePubB64).toBe("bpub");
+	});
+
+	it("does not start sync when the active vault has no group (even if the primary does)", async () => {
+		stubChrome(
+			{
+				[VAULT_REGISTRY_KEY]: two,
+				"sync.group": { groupKey: "GROUP_A", roster: roster("a") },
+				"sync.deviceKeypair": { privateKey: "apriv", publicKey: "apub" },
+			},
+			{ [ACTIVE_VAULT_SESSION_KEY]: "b" },
+		);
+		const { maybeStartSync } = await loadSync();
+		await maybeStartSync();
+
+		const started = sendToOffscreen.mock.calls.some((c) => c[0].type === "SYNC_ROSTER_SYNC");
+		expect(started).toBe(false);
+	});
+});

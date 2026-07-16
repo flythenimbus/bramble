@@ -22,6 +22,13 @@ const VAULT_BLOB_BACKUP_KEY = "vault-blob-backup-b64";
 function blobKeyFor(id: string, reg: VaultRegistry): string {
 	return id === reg.legacyBlobVaultId ? VAULT_BLOB_KEY : `${VAULT_BLOB_KEY}:${id}`;
 }
+
+/** True for any vault's blob storage key: the flat legacy key or a namespaced `<base>:<id>` key.
+ * Excludes the backup key (`vault-blob-backup-b64`). Used by the sync blob-change watcher, which
+ * only knows the changed key name, to detect an edit to the active (unlocked) vault. */
+export function isVaultBlobKey(key: string): boolean {
+	return key === VAULT_BLOB_KEY || key.startsWith(`${VAULT_BLOB_KEY}:`);
+}
 function backupKeyFor(id: string, reg: VaultRegistry): string {
 	return id === reg.legacyBlobVaultId ? VAULT_BLOB_BACKUP_KEY : `${VAULT_BLOB_BACKUP_KEY}:${id}`;
 }

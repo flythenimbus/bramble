@@ -1,6 +1,8 @@
 import { bytesToBase64 } from "@core/util/bytes";
 import { addVault, VAULT_REGISTRY_KEY, type VaultRegistry } from "@core/vault/vault-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
+// Pure helper (no chrome access): safe to import statically alongside the dynamic loadStorage().
+import { isVaultBlobKey } from "./storage";
 
 // The IndexedDB handle glue is mocked so the migration can be tested without a real
 // IndexedDB (a mock FileSystemFileHandle can't be structure-cloned into one anyway).
@@ -224,5 +226,19 @@ describe("multi-vault registry", () => {
 		expect(await storage.hasVaultHandle()).toBe(true);
 		expect(await storage.hasVaultHandle(reg.primaryId!)).toBe(true);
 		expect(await storage.hasVaultHandle("nonexistent")).toBe(false);
+	});
+});
+
+describe("isVaultBlobKey", () => {
+	it("matches the legacy flat key and any namespaced vault blob key", () => {
+		expect(isVaultBlobKey("vault-blob-b64")).toBe(true);
+		expect(isVaultBlobKey("vault-blob-b64:abc-123")).toBe(true);
+	});
+
+	it("does not match the backup key or unrelated keys", () => {
+		expect(isVaultBlobKey("vault-blob-backup-b64")).toBe(false);
+		expect(isVaultBlobKey("vault-blob-backup-b64:abc")).toBe(false);
+		expect(isVaultBlobKey("sync.group")).toBe(false);
+		expect(isVaultBlobKey("vault.registry")).toBe(false);
 	});
 });
