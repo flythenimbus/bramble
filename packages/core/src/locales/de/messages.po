@@ -588,6 +588,10 @@ msgstr "Lösche..."
 msgid "Device sync"
 msgstr "Geräresynchronisierung"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device sync currently applies to your primary vault. Independent sync for each vault is coming soon."
+msgstr "Die Gerätesynchronisation gilt derzeit für Ihren primären Tresor. Eine unabhängige Synchronisation für jeden Tresor ist in Kürze verfügbar."
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
 msgstr "Master-Passwort deaktivieren"

@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
+import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import {
 	activeDevices,
 	type RosterEntry,
@@ -64,7 +65,14 @@ export function SyncConnectSection() {
 	const canCameraScan = useCan("cameraScan");
 	const { inviteDevice, joinGroup, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
+	const { activeId, primaryId, vaults } = useVaultRegistry();
 	const { t } = useLingui();
+	// Sync state (group + this device's sync identity) is still stored in device-global flat
+	// `sync.*` keys, and the background engine syncs the primary vault. So only the primary
+	// vault's panel reflects real sync; any other vault would otherwise show the primary's
+	// devices and let you start a half-wired enrollment. Gate to the primary vault until
+	// per-vault sync lands (docs/multiple-vaults.md, "Sync"); this whole branch is removed then.
+	const syncOwnedByThisVault = vaults.length <= 1 || activeId === primaryId;
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
@@ -269,6 +277,19 @@ export function SyncConnectSection() {
 			await refreshGroup();
 			note("✅ Disconnected — this device is now offline-only.");
 		});
+
+	if (!syncOwnedByThisVault) {
+		return (
+			<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
+				<p className="text-xs text-muted-foreground leading-relaxed">
+					<Trans>
+						Device sync currently applies to your primary vault. Independent sync for each vault is
+						coming soon.
+					</Trans>
+				</p>
+			</Section>
+		);
+	}
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>

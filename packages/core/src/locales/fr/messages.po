@@ -588,6 +588,10 @@ msgstr "Suppression en cours..."
 msgid "Device sync"
 msgstr "Synchronisation des appareils"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device sync currently applies to your primary vault. Independent sync for each vault is coming soon."
+msgstr "La synchronisation des appareils s'applique actuellement à votre coffre principal. Une synchronisation indépendante pour chaque coffre sera bientôt disponible."
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
 msgstr "Désactiver le mot de passe maître"

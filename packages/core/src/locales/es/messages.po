@@ -588,6 +588,10 @@ msgstr "Eliminando..."
 msgid "Device sync"
 msgstr "Sincronización del dispositivo"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device sync currently applies to your primary vault. Independent sync for each vault is coming soon."
+msgstr "La sincronización de dispositivos se aplica actualmente a su bóveda principal. La sincronización independiente para cada bóveda estará disponible próximamente."
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
 msgstr "Deshabilitar contraseña maestra"
