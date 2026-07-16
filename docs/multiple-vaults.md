@@ -922,9 +922,14 @@ behavior, clobbers included); the fix is real once 3 lands.
   lock fix; see [Per-vault VEK](#per-vault-vek)). Fixed the create-time `aead::Error`
   corruption. Not yet runtime-verified on the two-view rig at the time of writing, but the
   build/lock/unlock and sync-isolation e2e are green.
-- **Join = add a vault** (sync increment 5). `joinGroup` still id-less-writes the active
-  vault's blob, so joining a group overwrites the active vault instead of adding a new record
-  with `groupKey` dedup. The multi-vault sync story is incomplete until this lands.
+- ~~**Join = add a vault** (sync increment 5).~~ **LANDED via the setup shell (2026-07, commit
+  8b3e4030): a "Join a device" tab (first-run + add-a-vault, gated to `perVaultSync`) collects a
+  pairing code + master password and calls `useVault.startJoin`, which dedups by `groupKey`, else
+  `createRecord` + `setActiveVault` + runs `joinGroup` in the new vault's context via a deferred
+  effect (the join is active-vault-scoped and the captured `joinGroup` holds the old id - the
+  binding trap), landing you inside the joined vault unlocked. FOLLOW-UP: the raw `joinGroup`
+  behind Settings "Join with a pairing code" still id-less-writes the ACTIVE vault (overwrites it
+  if non-empty); switch that entry to `startJoin` or drop it, since setup is now the safe path.**
 - **Backup target-cred device-key wrap.** Backup target credentials are VEK-wrapped under
   whichever vault created the target. Per-vault VEK ships a mitigation (try the active
   vault's vek, then each other unlocked vault's); the durable fix wraps target config
