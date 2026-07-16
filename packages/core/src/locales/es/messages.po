@@ -1428,6 +1428,10 @@ msgstr "Guarde una copia cifrada .bramble de su bóveda. Aún necesita su contra
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 msgstr "Guárdelo en un lugar seguro y sin conexión ahora. Es la única forma de recuperarlo si olvida su contraseña maestra y pierde sus claves de seguridad, y nosotros no podemos recuperarlo por usted."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Save this device's recovery code"
+msgstr "Guardar el código de recuperación de este dispositivo"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
 msgstr "Guardar su código de recuperación"

@@ -1428,6 +1428,10 @@ msgstr "Speichern Sie eine verschlüsselte .bramble-Kopie Ihres Tresors. Zum Öf
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 msgstr "Speichern Sie es jetzt an einem sicheren Ort offline. Dies ist die einzige Möglichkeit, wieder darauf zuzugreifen, falls Sie Ihr Master-Passwort vergessen und Ihre Sicherheitsschlüssel verlieren – wir können dies nicht für Sie wiederherstellen."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Save this device's recovery code"
+msgstr "Sicherungscode dieses Geräts speichern"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
 msgstr "Speichern Sie Ihren Wiederherstellungscode"

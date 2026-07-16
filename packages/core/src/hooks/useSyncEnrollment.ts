@@ -80,6 +80,9 @@ export interface SyncEnrollmentDeps {
 	unlock: (password: string) => Promise<void>;
 	/** Finish a security-key unlock with an in-hand PRF secret (no extra tap). */
 	finishWebauthnUnlock: (slot: WebauthnSlot, hmacSecret: Uint8Array) => Promise<void>;
+	/** Provision (or reset) this device's recovery code; requires the vault unlocked. Called after a
+	 * join, whose rebuild has no recovery slot, so the joined device still has a recovery path. */
+	generateRecoveryCode: () => Promise<string>;
 	/** Decrypt the on-disk entries payload (the inviter ships it in the bundle). */
 	readEntriesPayload: () => Promise<EntriesPayload>;
 }
@@ -100,6 +103,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		readDecodedBlob,
 		unlock,
 		finishWebauthnUnlock,
+		generateRecoveryCode,
 		readEntriesPayload,
 	} = deps;
 	const { shell } = usePlatform();
@@ -247,7 +251,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// vault around the shared VEK, then hands back the (VEK-wrapped) blob. We add
 	// this device to the roster, write the blob, and unlock with the new password.
 	const joinGroup = useCallback(
-		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
+		async (pairingCode: string, method: JoinUnlock): Promise<string> => {
 			const code = decodePairingCode(pairingCode.trim()); // validate before any prompt
 			// Security-key path: run the PRF create() ceremony FIRST, on this click's
 			// fresh user activation, before any await can spend it. One tap; we keep the
@@ -328,6 +332,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			} else if (method.kind === "password") {
 				await unlock(method.password);
 			}
+			// The join rebuilt the vault with only this device's unlock slot (no recovery), so
+			// provision a fresh recovery code now that it's unlocked, keeping a recovery path on
+			// this device. Returned so the caller shows it once (like the create flow).
+			return generateRecoveryCode();
 		},
 		[
 			shell,
@@ -337,6 +345,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			rotateDeviceId,
 			unlock,
 			finishWebauthnUnlock,
+			generateRecoveryCode,
 			readDecodedBlob,
 		],
 	);

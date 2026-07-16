@@ -1428,6 +1428,10 @@ msgstr "Enregistrez une copie .bramble chiffrée de votre coffre. Elle nécessit
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 msgstr "Enregistrez-le maintenant dans un endroit sûr et hors ligne. C'est la seule façon de pouvoir y accéder si vous oubliez votre mot de passe maître et perdez vos clés de sécurité, et nous ne pouvons pas le récupérer pour vous."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Save this device's recovery code"
+msgstr "Enregistrer le code de récupération de cet appareil"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
 msgstr "Sauvegardez votre code de récupération"
