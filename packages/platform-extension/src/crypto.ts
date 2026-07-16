@@ -47,14 +47,21 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 	});
 }
 
-async function send<T = unknown>(type: string, payload?: unknown): Promise<T> {
-	const res = await withTimeout(api.runtime.sendMessage({ type, payload }), type);
+// Every CRYPTO_* op carries an optional top-level vaultId (set by withVault). The background's
+// vek-store keys the per-vault VEK map by it; an absent id resolves to the active vault.
+async function dispatch<T = unknown>(
+	type: string,
+	payload: unknown,
+	vaultId: string | undefined,
+): Promise<T> {
+	const res = await withTimeout(api.runtime.sendMessage({ type, vaultId, payload }), type);
 	if (!res?.ok) throw new Error(res?.error ?? `crypto ${type} failed`);
 	return res.data as T;
 }
 
-// Mirrors background.ts VEK_KEY. Its removal from session storage is our cross-context lock signal.
-const VEK_SESSION_KEY = "vault.vek";
+// Per-vault VEK session-key prefix (mirrors background/vek-store.ts). A view watches removal of
+// its own vault's key as the cross-context lock signal, so locking vault A never locks vault B.
+const VEK_KEY_PREFIX = "vault.vek:";
 
 // sendMessage mangles Uint8Array into a plain object; send magicVersion as number[] instead.
 function slotPayload(input: WrapPasswordSlotInput): CryptoWrapPasswordSlot {
@@ -74,93 +81,108 @@ function webauthnSlotPayload(input: WrapWebauthnSlotInput): CryptoWrapWebauthnSl
 	};
 }
 
-export const extensionCrypto: CryptoAdapter = {
-	lock: () => send("CRYPTO_LOCK"),
-	isLocked: () => send<boolean>("CRYPTO_IS_LOCKED"),
+/** Build a crypto adapter whose ops target `vaultId` (undefined = the active vault). `withVault`
+ * rebinds it; `useVault` scopes it to the active vault, like it scopes storage. */
+function makeCrypto(vaultId?: string): CryptoAdapter {
+	const send = <T = unknown>(type: string, payload?: unknown): Promise<T> =>
+		dispatch<T>(type, payload, vaultId);
 
-	onExternalLock(callback: () => void) {
-		const handler = (changes: Record<string, chrome.storage.StorageChange>) => {
-			const change = changes[VEK_SESSION_KEY];
-			// Removal (value gone) means locked; a set value (unlock/resume) is self-driven, ignore.
-			if (change && change.oldValue !== undefined && change.newValue === undefined) {
-				callback();
-			}
-		};
-		api.storage.session.onChanged.addListener(handler);
-		return () => api.storage.session.onChanged.removeListener(handler);
-	},
+	return {
+		withVault: (id: string) => makeCrypto(id),
 
-	onExternalChange(callback: () => void) {
-		const handler = (message: { type?: string } | undefined) => {
-			if (message?.type === "VAULT_CHANGED_EXTERNAL") callback();
-		};
-		api.runtime.onMessage.addListener(handler);
-		return () => api.runtime.onMessage.removeListener(handler);
-	},
+		lock: () => send("CRYPTO_LOCK"),
+		isLocked: () => send<boolean>("CRYPTO_IS_LOCKED"),
 
-	generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
-	unlockWithVek: (vekB64) =>
-		send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 } satisfies CryptoUnlockWithVek),
-	exportVek: () => send<string>("CRYPTO_EXPORT_VEK"),
-	rotateVek: () => send<string>("CRYPTO_ROTATE_VEK"),
+		onExternalLock(callback: () => void) {
+			// Watch removal of this vault's own VEK session key. No id (base adapter, no active
+			// vault) means nothing to watch.
+			if (vaultId === undefined) return () => {};
+			const key = `${VEK_KEY_PREFIX}${vaultId}`;
+			const handler = (changes: Record<string, chrome.storage.StorageChange>) => {
+				const change = changes[key];
+				// Removal (value gone) means locked; a set value (unlock/resume) is self-driven, ignore.
+				if (change && change.oldValue !== undefined && change.newValue === undefined) {
+					callback();
+				}
+			};
+			api.storage.session.onChanged.addListener(handler);
+			return () => api.storage.session.onChanged.removeListener(handler);
+		},
 
-	generateSalt: () => send<string>("CRYPTO_GENERATE_SALT"),
-	generateSlotId: () => send<string>("CRYPTO_GENERATE_SLOT_ID"),
+		onExternalChange(callback: () => void) {
+			const handler = (message: { type?: string } | undefined) => {
+				if (message?.type === "VAULT_CHANGED_EXTERNAL") callback();
+			};
+			api.runtime.onMessage.addListener(handler);
+			return () => api.runtime.onMessage.removeListener(handler);
+		},
 
-	wrapVekPassword: (input: WrapPasswordSlotInput) =>
-		send<PasswordSlotBlob>("CRYPTO_WRAP_PASSWORD_SLOT", slotPayload(input)),
+		generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
+		unlockWithVek: (vekB64) =>
+			send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 } satisfies CryptoUnlockWithVek),
+		exportVek: () => send<string>("CRYPTO_EXPORT_VEK"),
+		rotateVek: () => send<string>("CRYPTO_ROTATE_VEK"),
 
-	unwrapVekPassword: (input: UnwrapPasswordSlotInput) =>
-		send<boolean>("CRYPTO_UNWRAP_PASSWORD_SLOT", {
-			...slotPayload(input),
-			verifierB64: input.verifierB64,
-			wrapIvB64: input.wrapIvB64,
-			wrappedVekB64: input.wrappedVekB64,
-		} satisfies CryptoUnwrapPasswordSlot),
+		generateSalt: () => send<string>("CRYPTO_GENERATE_SALT"),
+		generateSlotId: () => send<string>("CRYPTO_GENERATE_SLOT_ID"),
 
-	verifyPasswordSlot: (input: VerifyPasswordSlotInput) =>
-		send<boolean>("CRYPTO_VERIFY_PASSWORD_SLOT", {
-			...slotPayload(input),
-			verifierB64: input.verifierB64,
-		} satisfies CryptoVerifyPasswordSlot),
+		wrapVekPassword: (input: WrapPasswordSlotInput) =>
+			send<PasswordSlotBlob>("CRYPTO_WRAP_PASSWORD_SLOT", slotPayload(input)),
 
-	wrapVekWebauthn: (input: WrapWebauthnSlotInput) =>
-		send<PasswordSlotBlob>("CRYPTO_WRAP_WEBAUTHN_SLOT", webauthnSlotPayload(input)),
+		unwrapVekPassword: (input: UnwrapPasswordSlotInput) =>
+			send<boolean>("CRYPTO_UNWRAP_PASSWORD_SLOT", {
+				...slotPayload(input),
+				verifierB64: input.verifierB64,
+				wrapIvB64: input.wrapIvB64,
+				wrappedVekB64: input.wrappedVekB64,
+			} satisfies CryptoUnwrapPasswordSlot),
 
-	unwrapVekWebauthn: (input: UnwrapWebauthnSlotInput) =>
-		send<boolean>("CRYPTO_UNWRAP_WEBAUTHN_SLOT", {
-			...webauthnSlotPayload(input),
-			verifierB64: input.verifierB64,
-			wrapIvB64: input.wrapIvB64,
-			wrappedVekB64: input.wrappedVekB64,
-		} satisfies CryptoUnwrapWebauthnSlot),
+		verifyPasswordSlot: (input: VerifyPasswordSlotInput) =>
+			send<boolean>("CRYPTO_VERIFY_PASSWORD_SLOT", {
+				...slotPayload(input),
+				verifierB64: input.verifierB64,
+			} satisfies CryptoVerifyPasswordSlot),
 
-	verifyWebauthnSlot: (input: VerifyWebauthnSlotInput) =>
-		send<boolean>("CRYPTO_VERIFY_WEBAUTHN_SLOT", {
-			...webauthnSlotPayload(input),
-			verifierB64: input.verifierB64,
-		} satisfies CryptoVerifyWebauthnSlot),
+		wrapVekWebauthn: (input: WrapWebauthnSlotInput) =>
+			send<PasswordSlotBlob>("CRYPTO_WRAP_WEBAUTHN_SLOT", webauthnSlotPayload(input)),
 
-	encryptEntry: (plaintextJson) =>
-		send<EncryptedPayload>("CRYPTO_ENCRYPT", { plaintextJson } satisfies CryptoEncrypt),
-	decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload satisfies CryptoDecrypt),
-	encryptWithVek: (plaintext) =>
-		send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext } satisfies CryptoEncryptOuter),
-	decryptWithVek: (iv, ciphertext) =>
-		send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
+		unwrapVekWebauthn: (input: UnwrapWebauthnSlotInput) =>
+			send<boolean>("CRYPTO_UNWRAP_WEBAUTHN_SLOT", {
+				...webauthnSlotPayload(input),
+				verifierB64: input.verifierB64,
+				wrapIvB64: input.wrapIvB64,
+				wrappedVekB64: input.wrappedVekB64,
+			} satisfies CryptoUnwrapWebauthnSlot),
 
-	openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
+		verifyWebauthnSlot: (input: VerifyWebauthnSlotInput) =>
+			send<boolean>("CRYPTO_VERIFY_WEBAUTHN_SLOT", {
+				...webauthnSlotPayload(input),
+				verifierB64: input.verifierB64,
+			} satisfies CryptoVerifyWebauthnSlot),
 
-	passkeyMakeCredential: (rpId, userVerified) =>
-		send<PasskeyRegistration>("CRYPTO_PASSKEY_MAKE", {
-			rpId,
-			userVerified,
-		} satisfies CryptoPasskeyMake),
-	passkeyGetAssertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
-		send<PasskeyAssertion>("CRYPTO_PASSKEY_GET", {
-			rpId,
-			privateKeyB64,
-			clientDataHashB64,
-			userVerified,
-		} satisfies CryptoPasskeyGet),
-};
+		encryptEntry: (plaintextJson) =>
+			send<EncryptedPayload>("CRYPTO_ENCRYPT", { plaintextJson } satisfies CryptoEncrypt),
+		decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload satisfies CryptoDecrypt),
+		encryptWithVek: (plaintext) =>
+			send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext } satisfies CryptoEncryptOuter),
+		decryptWithVek: (iv, ciphertext) =>
+			send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
+
+		openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
+
+		passkeyMakeCredential: (rpId, userVerified) =>
+			send<PasskeyRegistration>("CRYPTO_PASSKEY_MAKE", {
+				rpId,
+				userVerified,
+			} satisfies CryptoPasskeyMake),
+		passkeyGetAssertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
+			send<PasskeyAssertion>("CRYPTO_PASSKEY_GET", {
+				rpId,
+				privateKeyB64,
+				clientDataHashB64,
+				userVerified,
+			} satisfies CryptoPasskeyGet),
+	};
+}
+
+export const extensionCrypto: CryptoAdapter = makeCrypto();

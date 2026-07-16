@@ -279,7 +279,13 @@ const VaultStateContext = createContext<VaultState | null>(null);
 const VaultActionsContext = createContext<VaultActions | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-	const { storage: platformStorage, crypto, autofill, shell, biometric } = usePlatform();
+	const {
+		storage: platformStorage,
+		crypto: platformCrypto,
+		autofill,
+		shell,
+		biometric,
+	} = usePlatform();
 	// The app operates on one vault at a time; bind its id so this provider's blob reads and
 	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
 	const {
@@ -293,6 +299,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
 		[platformStorage, activeId],
+	);
+	// Scope crypto to the active vault the same way storage is scoped, so every VEK-scoped op
+	// targets the right vault's key in the background's per-vault map. createVault binds
+	// explicitly to the NEW id (below), since the active id lags a fresh vault by a render.
+	// See docs/multiple-vaults.md "The scoped view adapter, and the create/join binding trap".
+	const crypto = useMemo(
+		() => (activeId ? (platformCrypto.withVault?.(activeId) ?? platformCrypto) : platformCrypto),
+		[platformCrypto, activeId],
 	);
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
@@ -715,12 +729,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// additional vault must not disturb an existing vault's sync state. Sync state is still
 			// device-global until Phase 2 namespaces it per vault. See docs/multiple-vaults.md.
 			if (isFirst) await shell.resetSyncState?.();
-			await crypto.generateVek();
-			const passwordSlot = await wrapPasswordSlot(password);
+			// Bind crypto to the NEW vault id explicitly. The ambient `crypto` is still memoized to
+			// the previous active id (createRecord only just set the new one via React state), so
+			// using it would cache the new vault's VEK under the old id and re-open the original
+			// corruption. See docs/multiple-vaults.md "the create/join binding trap".
+			const bound = platformCrypto.withVault?.(newId) ?? platformCrypto;
+			await bound.generateVek();
+			const passwordSlot = await buildPasswordSlot(bound, password);
 			const code = makeRecoveryCode();
-			const recoverySlot = await wrapRecoverySlot(code);
+			const recoverySlot = await buildRecoverySlot(bound, normalizeRecoveryCode(code));
 			const bytes = await buildVaultBytes(
-				crypto,
+				bound,
 				[passwordSlot, recoverySlot],
 				emptyEntriesPayload(),
 			);
@@ -734,7 +753,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// newly selected active id, reading via storage rebound to the new vault.
 			return code;
 		},
-		[vaults, createRecord, shell, storage, crypto, wrapPasswordSlot, wrapRecoverySlot],
+		[vaults, createRecord, shell, storage, platformCrypto],
 	);
 
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1

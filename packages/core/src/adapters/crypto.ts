@@ -88,6 +88,12 @@ export interface OpenKdbxInput {
 
 /** Vault crypto operations (VEK lifecycle, slot wrap/unwrap, entry encryption, KeePass import). */
 export interface CryptoAdapter {
+	// Return an adapter bound to a specific vault id, so every VEK-scoped op it sends targets
+	// that vault's key (the extension holds a per-vault VEK map in the background). Optional so
+	// the mobile native adapter, which is single-active-vault, need not implement it. See
+	// docs/multiple-vaults.md "Per-vault VEK".
+	withVault?(vaultId: string): CryptoAdapter;
+
 	generateVek(): Promise<string>; // creates VEK + loads it; returns b64 for caching
 	unlockWithVek(vekB64: string): Promise<void>; // session resume (offscreen restart)
 	exportVek(): Promise<string>; // session resume (background cache)
