@@ -96,6 +96,11 @@ export interface EnrollOptions {
 	/** Inviter: the bundle's non-secret parts (the VEK is added from the wasm here). */
 	roster?: RosterPayload;
 	entries?: EntriesPayload;
+	/** Inviter (extension): this vault's VEK (base64), injected by the background from its per-vault
+	 * map so the bundle ships the RIGHT vault's key. Under the scratch-slot offscreen, export_vek()
+	 * would return whatever op ran last. Falls back to wasm.export_vek() for mobile's single-VEK
+	 * core. See docs/multiple-vaults.md "Enrollment". */
+	vekB64?: string;
 	/** Inviter: this device's own password-slot fields (base64), shipped so the joiner
 	 * can prove its typed password matches. Omitted when there is no password slot. */
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
@@ -134,15 +139,28 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 	return session;
 }
 
-function wasmSlotCrypto(wasm: CryptoWasm): VaultBuildCrypto {
+// Load the group vek into the slot, then run the op, with no await between them on the
+// synchronous (extension) path. The joiner shares the offscreen wasm with the per-op seam, so a
+// concurrent crypto op could otherwise clobber the loaded vek between the joiner's wraps. On
+// mobile the wasm calls are async (single-vault, no contention), so a chained .then is fine.
+function loadThen<T>(wasm: CryptoWasm, vekB64: string, op: () => Awaitable<T>): Promise<T> {
+	const r = wasm.unlock_with_vek(vekB64);
+	return r instanceof Promise ? r.then(op) : Promise.resolve(op());
+}
+
+function wasmSlotCrypto(wasm: CryptoWasm, vekB64: string): VaultBuildCrypto {
 	return {
 		generateSalt: () => Promise.resolve(wasm.generate_salt()),
 		generateSlotId: () => Promise.resolve(wasm.generate_slot_id()),
 		wrapVekPassword: (i) =>
-			Promise.resolve(wasm.wrap_vek_password(i.password, i.saltB64, i.slotIdB64, i.magicVersion)),
+			loadThen(wasm, vekB64, () =>
+				wasm.wrap_vek_password(i.password, i.saltB64, i.slotIdB64, i.magicVersion),
+			),
 		wrapVekWebauthn: (i) =>
-			Promise.resolve(wasm.wrap_vek_webauthn(i.hmacSecretB64, i.slotIdB64, i.magicVersion)),
-		encryptWithVek: (p) => Promise.resolve(wasm.encrypt_with_vek(p)),
+			loadThen(wasm, vekB64, () =>
+				wasm.wrap_vek_webauthn(i.hmacSecretB64, i.slotIdB64, i.magicVersion),
+			),
+		encryptWithVek: (p) => loadThen(wasm, vekB64, () => wasm.encrypt_with_vek(p)),
 	};
 }
 
@@ -183,7 +201,7 @@ export async function sendBundle(
 	sess: Session,
 ): Promise<void> {
 	const bundle = encodeEnrollmentBundle({
-		vek: await opts.wasm.export_vek(),
+		vek: opts.vekB64 ?? (await opts.wasm.export_vek()),
 		roster: opts.roster ?? { devices: [], revoked: [] },
 		entries: opts.entries ?? { entries: [], tombstones: [] },
 		primaryPasswordCheck: opts.passwordCheck,
@@ -238,7 +256,7 @@ export async function receiveBundle(
 		}
 	}
 	await opts.wasm.unlock_with_vek(bundle.vek); // adopt the group VEK (stays in the wasm)
-	const slotCrypto = wasmSlotCrypto(opts.wasm);
+	const slotCrypto = wasmSlotCrypto(opts.wasm, bundle.vek);
 	const slot = opts.webauthn
 		? await wrapWebauthnSlot(slotCrypto, {
 				hmacSecretB64: opts.webauthn.hmacSecretB64,

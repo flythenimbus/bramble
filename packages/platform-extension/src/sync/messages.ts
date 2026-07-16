@@ -28,6 +28,9 @@ export const EnrollInviteMsgSchema = z.object({
 	groupKeyB64: z.string(),
 	psk: z.string(),
 	devicePrivB64: z.string(),
+	// The inviter's vault VEK, injected by the background invite handler from the per-vault map
+	// (the scratch-slot offscreen can't be trusted to export the right one). See docs/multiple-vaults.md.
+	vekB64: z.string().optional(),
 	roster: RosterPayloadSchema,
 	entries: EntriesPayloadSchema,
 	passwordCheck: z

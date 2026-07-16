@@ -57,6 +57,7 @@ import {
 	readAndDecodeVault,
 	writeVault,
 } from "./vault-io";
+import * as vekStore from "./vek-store";
 
 // Mirror sync status into the background console too, so it's visible in the easy-to-reach
 // service-worker console (Chrome) - the offscreen broadcasts SYNC_STATUS here. On Firefox the host
@@ -107,14 +108,23 @@ const withDeviceKey = async (message: {
 	type: string;
 	payload?: Record<string, unknown>;
 }): Promise<MessageEnvelope> => {
-	const kp = await getStoredKeypair(await requireSyncVault());
+	const ctx = await requireSyncVault();
+	const kp = await getStoredKeypair(ctx);
 	if (!kp) return { ok: false, error: "no device key — create a group first" };
+	// The inviter ships ITS vault's VEK in the bundle; take it from the per-vault map (the scratch
+	// slot can't be trusted to export the right one) and refuse if the vault is locked. The joiner
+	// doesn't need it (it adopts bundle.vek). See docs/multiple-vaults.md "Enrollment".
+	let vekB64: string | undefined;
+	if (message.type === "SYNC_ENROLL_INVITE") {
+		vekB64 = vekStore.getVek(ctx.vaultId) ?? undefined;
+		if (vekB64 === undefined) return { ok: false, error: "unlock this vault first" };
+	}
 	// Starting an enroll (invite or join): keep Firefox's event page awake so the inviter doesn't
 	// suspend while waiting for the joiner's ack (and drop it). No-op on Chrome (persistent offscreen).
 	keepEventPageAlive(syncHostSuspends);
 	return sendToOffscreen({
 		...message,
-		payload: { ...message.payload, devicePrivB64: kp.privateKey },
+		payload: { ...message.payload, devicePrivB64: kp.privateKey, ...(vekB64 ? { vekB64 } : {}) },
 	});
 };
 on("SYNC_ENROLL_INVITE", extensionOnly(withDeviceKey));

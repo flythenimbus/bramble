@@ -130,7 +130,9 @@ describe("receiveBundle — provable password match", () => {
 			CHECK.verifierB64,
 			expect.any(Uint8Array), // the magic-version prefix
 		);
-		expect(unlock).toHaveBeenCalledOnce();
+		// Adopted the group VEK. wasmSlotCrypto now re-loads it before each wrap/encrypt (the
+		// atomicity fix), so unlock_with_vek fires several times, not once.
+		expect(unlock).toHaveBeenCalled();
 		expect(onJoined).toHaveBeenCalledOnce();
 		expect(onJoinError).not.toHaveBeenCalled();
 	});
@@ -156,6 +158,30 @@ describe("receiveBundle — provable password match", () => {
 		expect(onJoined).toHaveBeenCalledOnce();
 		const blobB64 = onJoined.mock.calls[0]?.[0].vaultBlobB64 as string;
 		expect(findRecoverySlots(decodeVaultBlob(base64ToBytes(blobB64)))).toHaveLength(1);
+	});
+
+	it("re-loads the group vek immediately before every wrap/encrypt (joiner atomicity)", async () => {
+		const order: string[] = [];
+		const wasm = mockWasm({
+			unlock_with_vek: vi.fn(() => {
+				order.push("unlock");
+			}),
+			wrap_vek_password: vi.fn(() => {
+				order.push("wrap");
+				return { verifier: b64(32), wrapIv: b64(12), wrappedVek: b64(48) };
+			}),
+			encrypt_with_vek: vi.fn(() => {
+				order.push("encrypt");
+				return { iv: b64(12), ciphertext: b64(16) };
+			}),
+		});
+		await receiveBundle(joinerOpts(wasm), joinerPeer(bundleJson()), sess);
+		// Each seal is immediately preceded by a load, so nothing can slip a different vault's vek
+		// into the shared slot between load and op (the no-await critical section on the extension).
+		expect(order).toContain("wrap");
+		for (let i = 0; i < order.length; i++) {
+			if (order[i] === "wrap" || order[i] === "encrypt") expect(order[i - 1]).toBe("unlock");
+		}
 	});
 
 	it("falls back without enforcement when the bundle carries no password check", async () => {
@@ -226,6 +252,18 @@ describe("sendBundle — inviter ships its password verifier", () => {
 	it("omits primaryPasswordCheck when this device has no password slot", async () => {
 		const out = await captureBundle(inviterOpts()); // no passwordCheck
 		expect(JSON.parse(out).primaryPasswordCheck).toBeUndefined();
+	});
+
+	it("ships the injected vekB64, not export_vek (scratch slot could be the wrong vault)", async () => {
+		const wasm = mockWasm({ export_vek: () => b64(1) }); // a wrong-length scratch export
+		const out = await captureBundle(inviterOpts({ wasm, vekB64: b64(32) }));
+		expect(JSON.parse(out).vek).toBe(b64(32));
+	});
+
+	it("falls back to export_vek when no vekB64 is injected (mobile's single-VEK core)", async () => {
+		const wasm = mockWasm({ export_vek: () => b64(32) });
+		const out = await captureBundle(inviterOpts({ wasm }));
+		expect(JSON.parse(out).vek).toBe(b64(32));
 	});
 });
 
