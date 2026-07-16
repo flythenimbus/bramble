@@ -6,6 +6,7 @@ import {
 	loadBackground,
 	type OffscreenResponse,
 	pageSender,
+	TEST_VEK_KEY,
 } from "../test/test-harness";
 
 // Sidestep IndexedDB/FSA and the binary vault format: the commit path is about
@@ -91,7 +92,7 @@ function commitOffscreen(msg: Record<string, any>): OffscreenResponse {
 
 async function unlocked(): Promise<BackgroundHarness> {
 	const bg = await loadBackground({
-		sessionSeed: { "vault.vek": "SEED" },
+		sessionSeed: { [TEST_VEK_KEY]: "SEED" },
 		offscreen: commitOffscreen,
 	});
 	await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
@@ -206,7 +207,7 @@ describe("commit: CORNER_FLUSH_HANDOFF after unlock", () => {
 	it("commits a parked save handoff and reports success", async () => {
 		const bg = await loadBackground({
 			sessionSeed: {
-				"vault.vek": "SEED",
+				[TEST_VEK_KEY]: "SEED",
 				"cornerPrompt.handoff": {
 					intent: "save",
 					capture: {

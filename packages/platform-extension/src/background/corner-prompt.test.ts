@@ -4,6 +4,7 @@ import {
 	extensionSender,
 	loadBackground,
 	pageSender,
+	TEST_VEK_KEY,
 } from "../test/test-harness";
 
 afterEach(() => {
@@ -22,7 +23,7 @@ const LOGIN = {
 async function unlocked(extra?: {
 	localSeed?: Record<string, unknown>;
 }): Promise<BackgroundHarness> {
-	const bg = await loadBackground({ sessionSeed: { "vault.vek": "SEED" }, ...extra });
+	const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" }, ...extra });
 	await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
 	return bg;
 }
@@ -191,7 +192,7 @@ describe("CORNER_PROMPT_RESPONSE (non-committing actions)", () => {
 
 describe("CORNER_FLUSH_HANDOFF", () => {
 	it("reports false when there is no parked handoff", async () => {
-		const bg = await loadBackground({ sessionSeed: { "vault.vek": "SEED" } });
+		const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" } });
 		const { resp } = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(resp).toEqual({ ok: true, data: false });
 	});

@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { extensionSender, loadBackground, pageSender } from "../test/test-harness";
+import { extensionSender, loadBackground, pageSender, TEST_VEK_KEY } from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const VEK_KEY = "vault.vek";
+// The active vault's cached-vek session key (per-vault now). The background caches under the
+// active vault id the harness seeds; see docs/multiple-vaults.md "Per-vault VEK".
+const VEK_KEY = TEST_VEK_KEY;
 const AUTOLOCK = "vault:autolock";
 
 describe("CRYPTO_ session state sync", () => {
@@ -21,17 +23,18 @@ describe("CRYPTO_ session state sync", () => {
 		const bg = await loadBackground();
 		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
 		expect(resp).toEqual({ ok: true, data: true });
-		// Exported VEK is cached, not the unwrap result.
+		// The recovered vek rides back in the unwrap reply (no separate EXPORT_VEK round-trip) and
+		// is cached under the active vault; the caller still sees only the boolean.
 		expect(bg.state.session[VEK_KEY]).toBe("VEK_EXPORTED");
 		expect(bg.state.alarms[AUTOLOCK]).toBeDefined();
-		expect(bg.state.offscreenCalls.map((m) => m.type)).toContain("CRYPTO_EXPORT_VEK");
+		expect(bg.state.offscreenCalls.map((m) => m.type)).not.toContain("CRYPTO_EXPORT_VEK");
 	});
 
 	it("CRYPTO_UNWRAP_PASSWORD_SLOT (verifier miss) does not unlock", async () => {
 		const bg = await loadBackground({
 			offscreen: (msg) =>
 				msg.type === "CRYPTO_UNWRAP_PASSWORD_SLOT"
-					? { ok: true, data: false }
+					? { ok: true, data: { ok: false } }
 					: { ok: true, data: null },
 		});
 		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
@@ -45,25 +48,24 @@ describe("CRYPTO_ session state sync", () => {
 		// Regression: the webauthn slot had no branch in cryptoHandler, so a security-key
 		// unlock never cached the VEK and the background reported the vault locked.
 		const bg = await loadBackground({
-			offscreen: (msg) => {
-				if (msg.type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") return { ok: true, data: true };
-				if (msg.type === "CRYPTO_EXPORT_VEK") return { ok: true, data: "VEK_EXPORTED" };
-				return { ok: true, data: null };
-			},
+			offscreen: (msg) =>
+				msg.type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT"
+					? { ok: true, data: { ok: true, vekB64: "VEK_EXPORTED" } }
+					: { ok: true, data: null },
 		});
 		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_WEBAUTHN_SLOT" });
 		expect(resp).toEqual({ ok: true, data: true });
-		// Cached the exported VEK, exactly like a password unlock.
+		// The recovered vek rides back in the unwrap reply and is cached, like a password unlock.
 		expect(bg.state.session[VEK_KEY]).toBe("VEK_EXPORTED");
 		expect(bg.state.alarms[AUTOLOCK]).toBeDefined();
-		expect(bg.state.offscreenCalls.map((m) => m.type)).toContain("CRYPTO_EXPORT_VEK");
+		expect(bg.state.offscreenCalls.map((m) => m.type)).not.toContain("CRYPTO_EXPORT_VEK");
 	});
 
 	it("CRYPTO_UNWRAP_WEBAUTHN_SLOT (verifier miss) does not unlock", async () => {
 		const bg = await loadBackground({
 			offscreen: (msg) =>
 				msg.type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT"
-					? { ok: true, data: false }
+					? { ok: true, data: { ok: false } }
 					: { ok: true, data: null },
 		});
 		const { resp } = await bg.send({ type: "CRYPTO_UNWRAP_WEBAUTHN_SLOT" });

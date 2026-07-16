@@ -4,13 +4,14 @@ import {
 	extensionSender,
 	loadBackground,
 	pageSender,
+	TEST_VEK_KEY,
 } from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const VEK_KEY = "vault.vek";
+const VEK_KEY = TEST_VEK_KEY;
 
 const ENTRIES = [
 	{

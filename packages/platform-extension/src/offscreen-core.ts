@@ -9,7 +9,12 @@
 // Import from the specific adapter modules, not the @core/index barrel: the barrel
 // re-exports the React UI (App/OptionsApp) which pulls in Lingui macros that vitest
 // does not compile, and would also bloat the background bundle.
-import type { CryptoAdapter } from "@core/adapters/crypto";
+import type {
+	CryptoAdapter,
+	EncryptedPayload,
+	PasswordSlotBlob,
+	VekEncrypted,
+} from "@core/adapters/crypto";
 import { buildCryptoAdapter } from "@core/adapters/crypto-wasm";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
@@ -131,7 +136,132 @@ async function getWasm(): Promise<HostWasm> {
 // constructing it at import time touches no WASM.
 const cryptoAdapter: CryptoAdapter = buildCryptoAdapter(getWasm);
 
-function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promise<unknown> {
+// On the extension the wasm resolves in-process (Awaitable<T> -> T), so "load the vek then
+// run the op" is one synchronous section that nothing can interleave — the whole per-vault
+// fix. Cast the module to this synchronous view inside those sections and NEVER await between
+// the load and the op. See docs/multiple-vaults.md "The atomicity rule".
+type SyncVek = {
+	unlock_with_vek(vekB64: string): void;
+	export_vek(): string;
+	wrap_vek_password(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		magicVersion: Uint8Array,
+	): PasswordSlotBlob;
+	wrap_vek_webauthn(
+		hmacSecretB64: string,
+		slotIdB64: string,
+		magicVersion: Uint8Array,
+	): PasswordSlotBlob;
+	unwrap_vek_password(
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		wrapIvB64: string,
+		wrappedVekB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+	unwrap_vek_webauthn(
+		hmacSecretB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		wrapIvB64: string,
+		wrappedVekB64: string,
+		magicVersion: Uint8Array,
+	): boolean;
+	encrypt_entry(plaintextJson: string): EncryptedPayload;
+	decrypt_entry(ciphertext: string, iv: string, wrappedDek: string, dekIv: string): string;
+	encrypt_with_vek(plaintext: string): VekEncrypted;
+	decrypt_with_vek(iv: string, ciphertext: string): string;
+};
+
+/** Load the injected vek (when present) into the scratch slot, then run `op`, as one
+ * synchronous section. `vekB64` is absent only for un-tagged legacy callers (removed in
+ * increment 6); then the op falls back to whatever the slot holds. */
+function withVek<T>(w: SyncVek, vekB64: string | undefined, op: (w: SyncVek) => T): T {
+	if (vekB64 !== undefined) w.unlock_with_vek(vekB64);
+	return op(w);
+}
+
+async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promise<unknown> {
+	// VEK-scoped ops (USE-VEK + the unwraps) call the wasm module DIRECTLY, not through the
+	// shared adapter (whose methods each await getWasm internally, which would let another op's
+	// load slip between load and op — the original race reborn). getWasm is awaited up front;
+	// everything below it in each case is synchronous.
+	switch (type) {
+		case "CRYPTO_WRAP_PASSWORD_SLOT": {
+			const p = CryptoWrapPasswordSlotSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				w.wrap_vek_password(p.password, p.saltB64, p.slotIdB64, new Uint8Array(p.magicVersion)),
+			);
+		}
+		case "CRYPTO_WRAP_WEBAUTHN_SLOT": {
+			const p = CryptoWrapWebauthnSlotSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				w.wrap_vek_webauthn(p.hmacSecretB64, p.slotIdB64, new Uint8Array(p.magicVersion)),
+			);
+		}
+		case "CRYPTO_ENCRYPT": {
+			const p = CryptoEncryptSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.encrypt_entry(p.plaintextJson));
+		}
+		case "CRYPTO_DECRYPT": {
+			const p = CryptoDecryptSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				w.decrypt_entry(p.ciphertext, p.iv, p.wrappedDek, p.dekIv),
+			);
+		}
+		case "CRYPTO_ENCRYPT_OUTER": {
+			const p = CryptoEncryptOuterSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.encrypt_with_vek(p.plaintext));
+		}
+		case "CRYPTO_DECRYPT_OUTER": {
+			const p = CryptoDecryptOuterSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.decrypt_with_vek(p.iv, p.ciphertext));
+		}
+		// SET-VEK unwraps: unwrap leaves the recovered vek in the slot and returns only a
+		// boolean, so unwrap + export_vek MUST be one synchronous section or the exported vek
+		// could be another op's. The background caches vekB64 and strips it back to the boolean.
+		case "CRYPTO_UNWRAP_PASSWORD_SLOT": {
+			const p = CryptoUnwrapPasswordSlotSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			const ok = w.unwrap_vek_password(
+				p.password,
+				p.saltB64,
+				p.slotIdB64,
+				p.verifierB64,
+				p.wrapIvB64,
+				p.wrappedVekB64,
+				new Uint8Array(p.magicVersion),
+			);
+			return ok ? { ok: true, vekB64: w.export_vek() } : { ok: false };
+		}
+		case "CRYPTO_UNWRAP_WEBAUTHN_SLOT": {
+			const p = CryptoUnwrapWebauthnSlotSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			const ok = w.unwrap_vek_webauthn(
+				p.hmacSecretB64,
+				p.slotIdB64,
+				p.verifierB64,
+				p.wrapIvB64,
+				p.wrappedVekB64,
+				new Uint8Array(p.magicVersion),
+			);
+			return ok ? { ok: true, vekB64: w.export_vek() } : { ok: false };
+		}
+	}
+
+	// VEK-independent ops, plus generate/rotate (which return a fresh vek the background caches)
+	// and lock/is-locked/unlock (which the background mostly answers off the map). These stay on
+	// the shared adapter, unchanged, and match mobile.
 	switch (type) {
 		case "CRYPTO_LOCK":
 			return a.lock().then(() => null);
@@ -152,27 +282,6 @@ function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promi
 		case "CRYPTO_GENERATE_SLOT_ID":
 			return a.generateSlotId();
 
-		case "CRYPTO_WRAP_PASSWORD_SLOT": {
-			const p = CryptoWrapPasswordSlotSchema.parse(payload);
-			return a.wrapVekPassword({
-				password: p.password,
-				saltB64: p.saltB64,
-				slotIdB64: p.slotIdB64,
-				magicVersion: new Uint8Array(p.magicVersion),
-			});
-		}
-		case "CRYPTO_UNWRAP_PASSWORD_SLOT": {
-			const p = CryptoUnwrapPasswordSlotSchema.parse(payload);
-			return a.unwrapVekPassword({
-				password: p.password,
-				saltB64: p.saltB64,
-				slotIdB64: p.slotIdB64,
-				verifierB64: p.verifierB64,
-				wrapIvB64: p.wrapIvB64,
-				wrappedVekB64: p.wrappedVekB64,
-				magicVersion: new Uint8Array(p.magicVersion),
-			});
-		}
 		case "CRYPTO_VERIFY_PASSWORD_SLOT": {
 			const p = CryptoVerifyPasswordSlotSchema.parse(payload);
 			return a.verifyPasswordSlot({
@@ -180,26 +289,6 @@ function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promi
 				saltB64: p.saltB64,
 				slotIdB64: p.slotIdB64,
 				verifierB64: p.verifierB64,
-				magicVersion: new Uint8Array(p.magicVersion),
-			});
-		}
-
-		case "CRYPTO_WRAP_WEBAUTHN_SLOT": {
-			const p = CryptoWrapWebauthnSlotSchema.parse(payload);
-			return a.wrapVekWebauthn({
-				hmacSecretB64: p.hmacSecretB64,
-				slotIdB64: p.slotIdB64,
-				magicVersion: new Uint8Array(p.magicVersion),
-			});
-		}
-		case "CRYPTO_UNWRAP_WEBAUTHN_SLOT": {
-			const p = CryptoUnwrapWebauthnSlotSchema.parse(payload);
-			return a.unwrapVekWebauthn({
-				hmacSecretB64: p.hmacSecretB64,
-				slotIdB64: p.slotIdB64,
-				verifierB64: p.verifierB64,
-				wrapIvB64: p.wrapIvB64,
-				wrappedVekB64: p.wrappedVekB64,
 				magicVersion: new Uint8Array(p.magicVersion),
 			});
 		}
@@ -211,24 +300,6 @@ function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown): Promi
 				verifierB64: p.verifierB64,
 				magicVersion: new Uint8Array(p.magicVersion),
 			});
-		}
-
-		case "CRYPTO_ENCRYPT":
-			return a.encryptEntry(CryptoEncryptSchema.parse(payload).plaintextJson);
-		case "CRYPTO_DECRYPT": {
-			const p = CryptoDecryptSchema.parse(payload);
-			return a.decryptEntry({
-				ciphertext: p.ciphertext,
-				iv: p.iv,
-				wrappedDek: p.wrappedDek,
-				dekIv: p.dekIv,
-			});
-		}
-		case "CRYPTO_ENCRYPT_OUTER":
-			return a.encryptWithVek(CryptoEncryptOuterSchema.parse(payload).plaintext);
-		case "CRYPTO_DECRYPT_OUTER": {
-			const p = CryptoDecryptOuterSchema.parse(payload);
-			return a.decryptWithVek(p.iv, p.ciphertext);
 		}
 
 		case "CRYPTO_OPEN_KDBX": {

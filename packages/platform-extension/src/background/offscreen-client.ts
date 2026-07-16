@@ -2,7 +2,7 @@
 
 import { type HostResponse, handleHostMessage } from "../offscreen-core";
 import { api } from "../platform-api";
-import { getVek } from "./session";
+import * as vekStore from "./vek-store";
 
 const OFFSCREEN_URL = "offscreen.html";
 
@@ -11,15 +11,6 @@ const OFFSCREEN_URL = "offscreen.html";
 // no chrome.offscreen; its background is an event page with a DOM, so the same host
 // (./offscreen-core) runs in-process here instead.
 const useOffscreenDoc = typeof api.offscreen !== "undefined";
-
-// Whether the host currently holds the VEK. Reset when a fresh offscreen document is
-// created (Chrome) or when the event page was suspended and relocked (Firefox).
-let offscreenHasKey = false;
-
-/** Mark whether the host holds the VEK (set by the unlock/lock flows). */
-export function markOffscreenKey(present: boolean): void {
-	offscreenHasKey = present;
-}
 
 // A single in-flight createDocument, so concurrent callers (e.g. the mount probe and
 // the first crypto op) don't both call createDocument and race the "Only a single
@@ -42,9 +33,7 @@ export async function ensureOffscreen(): Promise<void> {
 				justification:
 					"Hosts the Vault WASM crypto module, clears the clipboard after a copy, and runs the WebRTC sync transport.",
 			})
-			.then(() => {
-				offscreenHasKey = false; // a fresh document starts locked
-			})
+			.then(() => {})
 			.catch((e: unknown) => {
 				// A concurrent caller already created it: treat as success, not a hang.
 				if (!String(e).includes("Only a single offscreen document")) throw e;
@@ -68,32 +57,86 @@ async function deliver(message: Record<string, unknown>): Promise<HostResponse> 
 	return handleHostMessage(message.type as string, message.payload);
 }
 
+// The VEK-scoped ops that consume an injected vek. Everything else a CRYPTO_* op might be
+// (verify, salt, slot id, passkey, kdbx) needs no vek and passes straight through.
+const USE_VEK = new Set([
+	"CRYPTO_WRAP_PASSWORD_SLOT",
+	"CRYPTO_WRAP_WEBAUTHN_SLOT",
+	"CRYPTO_ENCRYPT",
+	"CRYPTO_DECRYPT",
+	"CRYPTO_ENCRYPT_OUTER",
+	"CRYPTO_DECRYPT_OUTER",
+]);
+
 /**
- * Forward a message to the crypto/sync host, re-injecting the cached VEK first if the
- * host was reset and the WASM relocked (Chrome: the offscreen can be killed; Firefox:
- * the event page can be suspended). Skips injection for the unlock/VEK messages
- * themselves (would infinite-loop), clipboard ops, and sync ops.
+ * The single seam between the background and the crypto host, and the one place per-vault key
+ * state is applied. Every crypto op reaches the offscreen only through here (views via the
+ * router's cryptoHandler, background modules directly), so all of them are keyed the same way.
+ * For a CRYPTO_* op it resolves the target vault (`message.vaultId`, else the active vault for
+ * un-tagged legacy callers, removed in increment 6) and:
+ *  - USE-VEK: injects that vault's vek as `payload.vekB64`; fails fast when the vault is locked.
+ *  - SET-VEK (generate/rotate/unwrap): forwards, then caches the returned vek under the id;
+ *    unwrap replies `{ok, vekB64}` and is stripped back to the plain boolean callers expect.
+ *  - Map-only (export / is-locked / unlock-with-vek): answered from the store, no offscreen trip.
+ *  - Lock: forwarded once to zeroize the scratch slot; the map entry is dropped by session.ts's
+ *    lock taxonomy. Non-CRYPTO_* messages (SYNC_*, clipboard, qr) pass through untouched.
+ * The offscreen retains no key state, so there is no re-injection on document recreation.
  */
 export async function sendToOffscreen(message: Record<string, unknown>): Promise<HostResponse> {
 	await ensureOffscreen();
 	const type = message.type as string | undefined;
-	const skipKeyInjection =
-		type === "CRYPTO_UNWRAP_PASSWORD_SLOT" ||
-		type === "CRYPTO_UNLOCK_WITH_VEK" ||
-		type === "CRYPTO_GENERATE_VEK" ||
-		type === "CLIPBOARD_CLEAR" ||
-		type === "QR_DECODE" ||
-		type?.startsWith("SYNC_") === true;
-	const cachedVek = getVek();
-	if (cachedVek && !offscreenHasKey && !skipKeyInjection) {
-		offscreenHasKey = true;
-		await deliver({
-			type: "CRYPTO_UNLOCK_WITH_VEK",
-			payload: { vekB64: cachedVek },
-		}).catch(() => {
-			offscreenHasKey = false;
-		});
+	if (typeof type !== "string" || !type.startsWith("CRYPTO_")) return deliver(message);
+
+	const vaultId =
+		(typeof message.vaultId === "string" ? message.vaultId : null) ??
+		(await vekStore.resolveActiveVaultId());
+
+	// Map-only ops: answered from the store, no offscreen round-trip.
+	if (type === "CRYPTO_EXPORT_VEK") {
+		const vek = vaultId !== null ? vekStore.getVek(vaultId) : null;
+		return vek !== null ? { ok: true, data: vek } : { ok: false, error: "vault locked" };
 	}
+	if (type === "CRYPTO_IS_LOCKED") {
+		return { ok: true, data: !(vaultId !== null && vekStore.hasVek(vaultId)) };
+	}
+	if (type === "CRYPTO_UNLOCK_WITH_VEK") {
+		const vekB64 = (message.payload as { vekB64?: string } | undefined)?.vekB64;
+		if (vaultId === null || typeof vekB64 !== "string") {
+			return { ok: false, error: "unlock needs a vault id and vek" };
+		}
+		await vekStore.setVek(vaultId, vekB64);
+		return { ok: true, data: null };
+	}
+
+	// USE-VEK ops: inject the target vault's vek; fail fast (no offscreen trip) when locked.
+	if (USE_VEK.has(type)) {
+		if (vaultId === null) return { ok: false, error: "vault locked" };
+		const vek = vekStore.getVek(vaultId);
+		if (vek === null) return { ok: false, error: "vault locked" };
+		const payload = { ...(message.payload as Record<string, unknown>), vekB64: vek };
+		return deliver({ ...message, payload });
+	}
+
+	// SET-VEK: generate/rotate return the vek by contract (cache it, pass through); the unwraps
+	// reply {ok, vekB64} (cache the vek, strip it back to the boolean the adapter returns).
+	if (type === "CRYPTO_GENERATE_VEK" || type === "CRYPTO_ROTATE_VEK") {
+		const res = await deliver(message);
+		if (res.ok && typeof res.data === "string" && vaultId !== null) {
+			await vekStore.setVek(vaultId, res.data);
+		}
+		return res;
+	}
+	if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
+		const res = await deliver(message);
+		if (!res.ok) return res;
+		const data = res.data as { ok: boolean; vekB64?: string };
+		if (data.ok && typeof data.vekB64 === "string" && vaultId !== null) {
+			await vekStore.setVek(vaultId, data.vekB64);
+		}
+		return { ok: true, data: data.ok };
+	}
+
+	// CRYPTO_LOCK (zeroize the scratch slot) and the VEK-independent ops need no key handling.
 	return deliver(message);
 }
 

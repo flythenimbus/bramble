@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadBackground } from "../test/test-harness";
+import { loadBackground, TEST_VEK_KEY } from "../test/test-harness";
 
 // "Immediate" auto-lock (pref.autoLockMinutes < 0): the vault locks when the last extension
 // view (popup / pop-out / options) closes. Views are modeled by fireConnect(); the debounce
 // and pop-out grace timers are driven with fake timers.
 
-const VEK_KEY = "vault.vek";
+const VEK_KEY = TEST_VEK_KEY;
 const AUTOLOCK_PREF = "pref.autoLockMinutes";
 
 /** Load the background in the given auto-lock mode and unlock it (caches a session VEK). */

@@ -80,6 +80,12 @@ export function pageSender(host: string, tabId?: number, frameId = 0): any {
 	return sender;
 }
 
+// The per-vault VEK world: the background caches a vek per vault id. Tests run with this vault
+// active (seeded below), so an un-tagged CRYPTO_* op resolves to it and its vek lands at
+// `vault.vek:<TEST_ACTIVE_VAULT>`. See docs/multiple-vaults.md "Per-vault VEK".
+export const TEST_ACTIVE_VAULT = "v1";
+export const TEST_VEK_KEY = `vault.vek:${TEST_ACTIVE_VAULT}`;
+
 export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 	switch (msg.type) {
 		case "CRYPTO_GENERATE_VEK":
@@ -88,8 +94,11 @@ export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 			return { ok: true, data: "VEK_EXPORTED" };
 		case "CRYPTO_ROTATE_VEK":
 			return { ok: true, data: "VEK_ROTATED" };
+		// Unwraps now reply {ok, vekB64}: the recovered vek rides back with the result (no separate
+		// EXPORT_VEK round-trip), and the background caches it then strips the reply to the boolean.
 		case "CRYPTO_UNWRAP_PASSWORD_SLOT":
-			return { ok: true, data: true };
+		case "CRYPTO_UNWRAP_WEBAUTHN_SLOT":
+			return { ok: true, data: { ok: true, vekB64: "VEK_EXPORTED" } };
 		case "CRYPTO_UNLOCK_WITH_VEK":
 			return { ok: true, data: null };
 		case "CRYPTO_LOCK":
@@ -110,7 +119,12 @@ export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 }
 
 function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState } {
-	const session: Record<string, unknown> = { ...(opts.sessionSeed ?? {}) };
+	// Default to a single active vault so un-tagged CRYPTO_* ops resolve a target (an explicit
+	// sessionSeed can override the active id). The vault is still LOCKED until a vek is cached.
+	const session: Record<string, unknown> = {
+		"vault.activeId": TEST_ACTIVE_VAULT,
+		...(opts.sessionSeed ?? {}),
+	};
 	const local: Record<string, unknown> = { ...(opts.localSeed ?? {}) };
 	const state: HarnessState = {
 		session,

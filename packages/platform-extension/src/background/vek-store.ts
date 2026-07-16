@@ -67,9 +67,23 @@ export function hasVek(vaultId: string): boolean {
 	return veks.has(vaultId);
 }
 
-/** The active vault id (most recently unlocked / explicitly selected), or null. */
+/** The active vault id (most recently unlocked / explicitly selected), or null. Synchronous
+ * (the in-memory mirror); good enough for lock checks, but for the un-tagged-op fallback use
+ * resolveActiveVaultId(), which reads session directly and can't lag the UI's latest write. */
 export function getActiveVaultId(): string | null {
 	return activeId;
+}
+
+/** Read the active vault id straight from session, so it reflects a just-written value even if
+ * the onChanged mirror hasn't fired yet. Used only for the legacy un-tagged-op fallback. */
+export async function resolveActiveVaultId(): Promise<string | null> {
+	try {
+		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
+		const v = r[ACTIVE_VAULT_SESSION_KEY];
+		return typeof v === "string" ? v : null;
+	} catch {
+		return null;
+	}
 }
 
 /** True when the ACTIVE vault has no cached VEK: the lock predicate the singleton services
