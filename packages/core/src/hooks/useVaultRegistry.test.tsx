@@ -13,11 +13,15 @@ import {
 
 afterEach(cleanup);
 
-function mount(stored: unknown) {
+function mount(stored: unknown, unlockedVaultId: string | null = null) {
 	const getMeta = vi.fn(async (key: string) => (key === VAULT_REGISTRY_KEY ? stored : undefined));
 	const setMeta = vi.fn(async () => {});
 	const deleteVaultBlob = vi.fn(async () => {});
-	const platform = { storage: { getMeta, setMeta, deleteVaultBlob } } as unknown as Platform;
+	const shell = { getActiveVault: vi.fn(async () => unlockedVaultId) };
+	const platform = {
+		storage: { getMeta, setMeta, deleteVaultBlob },
+		shell,
+	} as unknown as Platform;
 	let value: VaultRegistryValue | null = null;
 	function Consumer() {
 		value = useVaultRegistry();
@@ -57,6 +61,18 @@ describe("VaultRegistryProvider", () => {
 		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
 		expect(v.primaryId).toBe("a");
 		expect(v.activeId).toBeUndefined();
+	});
+
+	it("restores the unlocked vault on reopen instead of the picker", async () => {
+		const { get } = mount(two, "b"); // "b" is unlocked (recorded in session)
+		await act(async () => {});
+		expect(get().activeId).toBe("b");
+	});
+
+	it("ignores a stale unlocked id that isn't in the registry", async () => {
+		const { get } = mount(two, "gone");
+		await act(async () => {});
+		expect(get().activeId).toBeUndefined();
 	});
 
 	it("selectVault and clearSelection move the active vault", async () => {

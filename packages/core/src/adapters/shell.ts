@@ -140,6 +140,10 @@ export interface ShellAdapter {
 	 * primary vault). Written on unlock, cleared on lock. Optional: single-context hosts (mobile)
 	 * read the active vault directly and can omit it. See docs/multiple-vaults.md (Sync). */
 	setActiveVault?(vaultId: string | null): void;
+	/** Read back the active/unlocked vault id (whatever setActiveVault stored), so a reopened UI
+	 * can restore the unlocked vault and skip the picker. Optional; mobile omits it (it locks on
+	 * background, so a reopen is always locked). See docs/multiple-vaults.md (Sync). */
+	getActiveVault?(): Promise<string | null>;
 	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
 	startEnrollInvite(opts: {
 		relayUrl: string;

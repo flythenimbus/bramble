@@ -241,6 +241,11 @@ export const extensionShell: ShellAdapter = {
 		if (vaultId === null) void api.storage.session.remove(ACTIVE_VAULT_SESSION_KEY);
 		else void api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: vaultId });
 	},
+	async getActiveVault() {
+		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
+		const v = r[ACTIVE_VAULT_SESSION_KEY];
+		return typeof v === "string" ? v : null;
+	},
 	async startEnrollInvite(opts) {
 		await syncStart("SYNC_ENROLL_INVITE", opts);
 	},

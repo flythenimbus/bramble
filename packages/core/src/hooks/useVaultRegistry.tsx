@@ -75,7 +75,7 @@ export function useVaultRegistry(): VaultRegistryValue {
 
 /** Loads the device-local vault registry and tracks which vault is active. */
 export function VaultRegistryProvider({ children }: { children: ReactNode }) {
-	const { storage } = usePlatform();
+	const { storage, shell } = usePlatform();
 	const [ready, setReady] = useState(false);
 	const [registry, setRegistry] = useState<VaultRegistry>(EMPTY_REGISTRY);
 	const [activeId, setActiveId] = useState<string | undefined>(undefined);
@@ -83,11 +83,16 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	const refresh = useCallback(async () => {
 		const reg = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
 		setRegistry(reg);
-		// Auto-select only when there's exactly one vault (direct unlock). With several, the
-		// active id stays unset so the picker shows; keep an explicit selection once made.
-		setActiveId((cur) => cur ?? (reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined));
+		// Restore the unlocked vault on reopen: while a vault is unlocked its id is recorded
+		// (shell.setActiveVault), so jump straight to it instead of the picker. Otherwise
+		// auto-select only when there's exactly one vault; several with none unlocked -> picker.
+		const unlocked = (await shell?.getActiveVault?.()) ?? null;
+		const restore = unlocked && reg.vaults.some((v) => v.id === unlocked) ? unlocked : undefined;
+		setActiveId(
+			(cur) => cur ?? restore ?? (reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined),
+		);
 		setReady(true);
-	}, [storage]);
+	}, [storage, shell]);
 
 	useEffect(() => {
 		void refresh();
