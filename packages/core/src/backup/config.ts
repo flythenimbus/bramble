@@ -72,6 +72,17 @@ export function backupPrefix(cfg: BackupTargetConfig): string {
 }
 
 /**
+ * Where one vault's snapshots live under a target's base prefix. The legacy (primary) vault keeps
+ * the un-suffixed base so existing backups keep going; every other vault gets a SIBLING
+ * `<base>-<id>` namespace — a sibling, not a `<base>/<id>` subfolder, so the base's prefix listing
+ * (`<base>/`) can't sweep up other vaults' files during keep-N retention. Used by both the manual
+ * "Back up now" (active vault) and the scheduled all-vaults run, so their files land in the same place.
+ */
+export function vaultBackupPrefix(base: string, vaultId: string, isLegacy: boolean): string {
+	return isLegacy ? base : `${base}-${vaultId}`;
+}
+
+/**
  * Accept a full bucket URL pasted into the endpoint or bucket field and split it:
  * host -> endpoint, first path segment -> bucket, the rest -> prefix. A plain
  * bucket name plus a separate endpoint passes through unchanged.

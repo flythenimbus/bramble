@@ -13,6 +13,7 @@ import {
 	type BackupTargetConfig,
 	backupPrefix,
 	toProviderConfig,
+	vaultBackupPrefix,
 	type WrappedCreds,
 } from "@core/backup/config";
 import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
@@ -86,13 +87,6 @@ async function hashVaults(vaults: VaultBackup[]): Promise<string> {
 	return sha256Hex(concatBytes(parts));
 }
 
-/** Where a vault's snapshots live at a target: the legacy vault keeps the un-suffixed prefix (so
- * existing backups continue); every other vault gets a sibling `<prefix>-<id>/` folder. A sibling
- * avoids the legacy folder's prefix listing sweeping up other vaults' files during retention. */
-function vaultBackupPrefix(t: BackupTargetConfig, v: VaultBackup): string {
-	return v.legacy ? backupPrefix(t) : `${backupPrefix(t)}-${v.id}`;
-}
-
 export async function runDueBackups(): Promise<void> {
 	if (running || vaultLocked()) return;
 	running = true;
@@ -109,7 +103,8 @@ export async function runDueBackups(): Promise<void> {
 					const target = createTarget(toProviderConfig(t, secrets));
 					// Sequential per vault: the offscreen crypto host is shared and can't race.
 					for (const v of vaults) {
-						await runBackup(target, v.blob, { prefix: vaultBackupPrefix(t, v), keep: t.keep });
+						const prefix = vaultBackupPrefix(backupPrefix(t), v.id, v.legacy);
+						await runBackup(target, v.blob, { prefix, keep: t.keep });
 					}
 				},
 			},
