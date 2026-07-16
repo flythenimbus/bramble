@@ -15,6 +15,7 @@ import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { SelectField } from "../../../components/ui/select-field";
+import { TextField } from "../../../components/ui/text-field";
 import { Row, Section, Toggle } from "./primitives";
 
 // Auto-lock timeout values: -1 = Immediate, >0 = minutes, 0 = Never. "Immediate" locks the
@@ -77,20 +78,14 @@ export function GeneralSection() {
 	return (
 		<Section icon={<SlidersHorizontal className="w-4 h-4 text-primary" />} title={t`General`}>
 			{currentVault && (
-				<div>
-					<label htmlFor="settings-vault-name" className="block text-sm mb-1.5">
-						{t`Vault name`}
-					</label>
-					<input
-						id="settings-vault-name"
-						type="text"
-						value={vaultName}
-						onChange={(e) => setVaultName(e.target.value)}
-						onBlur={saveVaultName}
-						placeholder={t`Vault name`}
-						className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
-					/>
-				</div>
+				<TextField
+					label={t`Vault name`}
+					type="text"
+					value={vaultName}
+					onChange={(e) => setVaultName(e.target.value)}
+					onBlur={saveVaultName}
+					autoComplete="off"
+				/>
 			)}
 
 			<Row
