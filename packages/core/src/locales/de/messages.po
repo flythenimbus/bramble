@@ -243,11 +243,11 @@ msgstr "Bucket"
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -364,6 +364,10 @@ msgstr "Master-Passwort bestätigen"
 msgid "Confirm new password"
 msgstr "Neues Passwort bestätigen"
 
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Confirm with security key"
+msgstr "Mit Sicherheitsschlüssel bestätigen"
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm your master password to generate the recovery code."
 msgstr "Bestätigen Sie Ihr Master-Passwort, um den Wiederherstellungscode zu generieren."
@@ -452,6 +456,10 @@ msgstr "Dieses Backup konnte nicht wiederhergestellt werden."
 msgid "Couldn't unlock the vault."
 msgstr "Der Tresor konnte nicht entsperrt werden."
 
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Couldn't verify your security key."
+msgstr "Ihr Sicherheitsschlüssel konnte nicht verifiziert werden."
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Couldn't verify your security key. Try again."
 msgstr "Die Überprüfung Ihres Sicherheitsschlüssels ist fehlgeschlagen. Versuchen Sie es erneut."
@@ -477,7 +485,6 @@ msgid "Create and store passkeys for other sites. While on, Bramble handles all 
 msgstr "Erstellen und speichern von Passkeys für andere Websites. Während der Aktivierung übernimmt Bramble alle Passkey-Anfragen in diesem Browser."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
@@ -559,20 +566,21 @@ msgstr "Diesen Eintrag dauerhaft löschen?"
 msgid "Delete this entry?"
 msgstr "Diesen Eintrag löschen?"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Delete this vault"
 msgstr "Diesen Tresor löschen"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
-msgstr "Möchten Sie diesen Tresor von diesem Gerät löschen? Synchronisierte Kopien auf Ihren anderen Geräten sind davon nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden."
+#~ msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
+#~ msgstr "Möchten Sie diesen Tresor von diesem Gerät löschen? Synchronisierte Kopien auf Ihren anderen Geräten sind davon nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden."
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Delete vault"
-#~ msgstr "Tresor löschen"
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Delete vault"
+msgstr "Tresor löschen"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Deleting…"
 msgstr "Lösche..."
 
@@ -954,6 +962,7 @@ msgstr "Anmeldedaten"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -1342,8 +1351,8 @@ msgid "Remove URL"
 msgstr "URL entfernen"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Rename"
-msgstr "Umbenennen"
+#~ msgid "Rename"
+#~ msgstr "Umbenennen"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
@@ -1391,7 +1400,6 @@ msgstr "Überprüfen Sie den {0}-Export."
 #~ msgstr "S3-kompatibel"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Save"
 msgstr "Speichern"
 
@@ -1611,8 +1619,8 @@ msgid "Support"
 msgstr "Unterstützen"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Switch vault"
-msgstr "Tresor wechseln"
+#~ msgid "Switch vault"
+#~ msgstr "Tresor wechseln"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Sync"
@@ -1639,6 +1647,10 @@ msgstr "Tappen Sie Ihren Schlüssel..."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
 msgstr "Dies sieht nicht wie eine Bramble-Backup-Datei (.bramble) aus."
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "That password is incorrect."
+msgstr "Dieses Passwort ist falsch."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
@@ -1701,14 +1713,18 @@ msgstr "Diese Anmeldung verfügt über einen Passkey."
 msgid "This password appeared in a known data breach."
 msgstr "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht."
 
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
+msgstr "Dadurch wird der Tresor von diesem Gerät entfernt. Synchronisierte Kopien auf Ihren anderen Geräten sind nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden. Bestätigen Sie, um fortzufahren."
+
 #. placeholder {0}: picked.name
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
 msgstr "Dies ersetzt den aktuell auf diesem Gerät befindlichen Tresor durch <0>{0}</0>. Geben Sie das Master-Passwort dieses Backups ein, um es zu öffnen."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "This vault"
-msgstr "Dieser Tresor"
+#~ msgid "This vault"
+#~ msgstr "Dieser Tresor"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
@@ -1863,10 +1879,10 @@ msgid "Value"
 msgstr "Wert"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Vault"
-msgstr "Tresor"
+#~ msgid "Vault"
+#~ msgstr "Tresor"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Tresorname"
@@ -1908,6 +1924,7 @@ msgid "Waiting for a device to join…"
 msgstr "Wartet darauf, dass ein Gerät beitritt…"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Waiting for your key…"
 msgstr "Warte auf Ihren Schlüssel…"
 
