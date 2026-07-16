@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
+import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { SelectField } from "../../../components/ui/select-field";
 import { Row, Section, Toggle } from "./primitives";
@@ -35,6 +36,18 @@ export function GeneralSection() {
 	const canSaveCapture = useCan("saveCapture");
 	const { entries } = useVault();
 	const { t } = useLingui();
+
+	// The current vault's name, edited inline. rename() only ever touches the active vault.
+	const { vaults, activeId, rename } = useVaultRegistry();
+	const currentVault = vaults.find((v) => v.id === activeId);
+	const [vaultName, setVaultName] = useState("");
+	useEffect(() => {
+		setVaultName(currentVault?.label ?? "");
+	}, [currentVault?.label]);
+	const saveVaultName = () => {
+		const next = vaultName.trim();
+		if (currentVault && next !== currentVault.label) void rename(next);
+	};
 
 	// On mobile the auto-lock timeout also governs the autofill provider's keep-unlocked
 	// window; push it whenever the setting changes. No-op where there's no native provider.
@@ -63,6 +76,23 @@ export function GeneralSection() {
 
 	return (
 		<Section icon={<SlidersHorizontal className="w-4 h-4 text-primary" />} title={t`General`}>
+			{currentVault && (
+				<div>
+					<label htmlFor="settings-vault-name" className="block text-sm mb-1.5">
+						{t`Vault name`}
+					</label>
+					<input
+						id="settings-vault-name"
+						type="text"
+						value={vaultName}
+						onChange={(e) => setVaultName(e.target.value)}
+						onBlur={saveVaultName}
+						placeholder={t`Vault name`}
+						className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+					/>
+				</div>
+			)}
+
 			<Row
 				icon={<Clock className="w-4 h-4 text-primary" />}
 				title={t`Auto-lock timeout`}
