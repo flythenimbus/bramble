@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { bytesToBase64 } from "../../util/bytes";
-import { encodeEnrollmentBundle } from "../enrollment";
+import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
+import { decodeVaultBlob, findRecoverySlots } from "../../vault-format";
+import { encodeEnrollmentBundle, type WireRecoverySlot } from "../enrollment";
 import { emptyEntriesPayload } from "../entries-payload";
 import { emptyRoster, type RosterEntry } from "../roster";
 import { type Channel, makeChannel } from "./channel";
@@ -55,7 +56,9 @@ function mockWasm(overrides: Partial<EnrollWasm> = {}): EnrollWasm {
 	} as EnrollWasm;
 }
 
-const bundleJson = (over: { primaryPasswordCheck?: typeof CHECK } = {}) =>
+const bundleJson = (
+	over: { primaryPasswordCheck?: typeof CHECK; recoverySlots?: WireRecoverySlot[] } = {},
+) =>
 	encodeEnrollmentBundle({
 		vek: b64(32),
 		roster: emptyRoster(),
@@ -130,6 +133,29 @@ describe("receiveBundle — provable password match", () => {
 		expect(unlock).toHaveBeenCalledOnce();
 		expect(onJoined).toHaveBeenCalledOnce();
 		expect(onJoinError).not.toHaveBeenCalled();
+	});
+
+	it("copies the inviter's forwarded recovery slot into the rebuilt vault (shared recovery code)", async () => {
+		const onJoined = vi.fn();
+		const wasm = mockWasm();
+		// A correctly-sized serialized recovery slot (slotId 16, salt 16, verifier 32, iv 12, vek 48).
+		const recoverySlots: WireRecoverySlot[] = [
+			{
+				saltB64: b64(16),
+				slotIdB64: b64(16),
+				verifierB64: b64(32),
+				wrapIvB64: b64(12),
+				wrappedVekB64: b64(48),
+			},
+		];
+		await receiveBundle(
+			joinerOpts(wasm, { onJoined }),
+			joinerPeer(bundleJson({ recoverySlots })),
+			sess,
+		);
+		expect(onJoined).toHaveBeenCalledOnce();
+		const blobB64 = onJoined.mock.calls[0]?.[0].vaultBlobB64 as string;
+		expect(findRecoverySlots(decodeVaultBlob(base64ToBytes(blobB64)))).toHaveLength(1);
 	});
 
 	it("falls back without enforcement when the bundle carries no password check", async () => {

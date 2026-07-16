@@ -1,5 +1,5 @@
 import type { PasskeyCredential } from "../hooks/useVault";
-import type { EntriesPayload, RosterEntry, RosterPayload } from "../sync";
+import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } from "../sync";
 import type { SubdomainMatchMode } from "./autofill";
 
 /** Minimal login shape for current-tab matching: id + the fields the hostname policy reads. */
@@ -156,6 +156,9 @@ export interface ShellAdapter {
 		/** This device's password-slot fields (base64) so a joining device can prove its
 		 * typed password matches; omitted when this device has no password slot. */
 		passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
+		/** This device's recovery slot(s) (base64), forwarded so the joiner shares the group's
+		 * recovery code; omitted when this device has no recovery code. */
+		recoverySlots?: WireRecoverySlot[];
 	}): Promise<void>;
 	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
 	startEnrollJoin(opts: {

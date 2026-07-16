@@ -1433,8 +1433,8 @@ msgid "Save it somewhere safe and offline now. It's the only way back in if you 
 msgstr "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Save this device's recovery code"
-msgstr "Save this device's recovery code"
+#~ msgid "Save this device's recovery code"
+#~ msgstr "Save this device's recovery code"
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"

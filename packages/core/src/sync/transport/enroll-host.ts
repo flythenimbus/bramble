@@ -12,7 +12,7 @@ import {
 	wrapPasswordSlot,
 	wrapWebauthnSlot,
 } from "../../vault/build-vault";
-import { verifierPrefix } from "../../vault-format";
+import { type RecoverySlot, SLOT_KIND_RECOVERY, verifierPrefix } from "../../vault-format";
 import {
 	decodeEnrollmentBundle,
 	type EntriesPayload,
@@ -20,6 +20,7 @@ import {
 	type RosterEntry,
 	RosterEntrySchema,
 	type RosterPayload,
+	type WireRecoverySlot,
 } from "..";
 import type { Channel } from "./channel";
 import {
@@ -98,6 +99,9 @@ export interface EnrollOptions {
 	/** Inviter: this device's own password-slot fields (base64), shipped so the joiner
 	 * can prove its typed password matches. Omitted when there is no password slot. */
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
+	/** Inviter: this device's recovery slot(s) (base64), forwarded so the joiner's vault ends up with
+	 * the same recovery code (they wrap the shared VEK). Omitted when there is no recovery code. */
+	recoverySlots?: WireRecoverySlot[];
 	/** Joiner: pin the inviter's static key, the unlock material for the rebuilt vault
 	 * (a password OR a security-key slot), and this device's roster entry to hand the
 	 * inviter so both rosters end up symmetric. */
@@ -183,6 +187,7 @@ export async function sendBundle(
 		roster: opts.roster ?? { devices: [], revoked: [] },
 		entries: opts.entries ?? { entries: [], tombstones: [] },
 		primaryPasswordCheck: opts.passwordCheck,
+		recoverySlots: opts.recoverySlots,
 	});
 	await sendSecure(channel, opts.wasm, sess.sessionId, bundle);
 	// The joiner acks with its roster entry, so our roster learns it (symmetric).
@@ -241,7 +246,18 @@ export async function receiveBundle(
 				salt: base64ToBytes(opts.webauthn.saltB64),
 			})
 		: await wrapPasswordSlot(slotCrypto, opts.password ?? "");
-	const bytes = await buildVaultBytes(slotCrypto, [slot], bundle.entries);
+	// Copy the inviter's recovery slot(s) verbatim: they wrap the same (group) VEK, so the group's
+	// recovery code unlocks this device too. Without this the rebuilt vault would have no recovery
+	// path (it's rebuilt with just the unlock slot above).
+	const recoverySlots: RecoverySlot[] = (bundle.recoverySlots ?? []).map((s) => ({
+		kind: SLOT_KIND_RECOVERY,
+		slotId: base64ToBytes(s.slotIdB64),
+		salt: base64ToBytes(s.saltB64),
+		verifier: base64ToBytes(s.verifierB64),
+		wrapIv: base64ToBytes(s.wrapIvB64),
+		wrappedVek: base64ToBytes(s.wrappedVekB64),
+	}));
+	const bytes = await buildVaultBytes(slotCrypto, [slot, ...recoverySlots], bundle.entries);
 	// Ack with our roster entry so the inviter's roster learns this device.
 	await sendSecure(channel, opts.wasm, sess.sessionId, JSON.stringify(opts.ownEntry));
 	opts.report("vault received ✅ — finishing setup");

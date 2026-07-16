@@ -60,8 +60,25 @@ export const EnrollmentBundleSchema = z.object({
 	primaryPasswordCheck: z
 		.object({ saltB64: z.string(), slotIdB64: z.string(), verifierB64: z.string() })
 		.optional(),
+	/** The inviter's recovery slot(s) (base64), copied verbatim into the joiner's vault so the
+	 * group's recovery code unlocks every device. Safe to forward: the slot only wraps the VEK, which
+	 * the bundle already carries. Absent when the inviter has no recovery code. See docs/p2p-sync.md. */
+	recoverySlots: z
+		.array(
+			z.object({
+				saltB64: z.string(),
+				slotIdB64: z.string(),
+				verifierB64: z.string(),
+				wrapIvB64: z.string(),
+				wrappedVekB64: z.string(),
+			}),
+		)
+		.optional(),
 });
 export type EnrollmentBundle = z.infer<typeof EnrollmentBundleSchema>;
+
+/** A recovery slot serialized (base64) for transport in the enrollment bundle. */
+export type WireRecoverySlot = NonNullable<EnrollmentBundle["recoverySlots"]>[number];
 
 export function encodeEnrollmentBundle(bundle: EnrollmentBundle): string {
 	return JSON.stringify(EnrollmentBundleSchema.parse(bundle));

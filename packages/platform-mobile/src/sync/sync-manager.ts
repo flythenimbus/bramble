@@ -19,6 +19,7 @@ import {
 	type RosterPayload,
 	SYNC_LAST_SYNCED_KEY,
 	type SyncEvent,
+	type WireRecoverySlot,
 } from "@core/index";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
@@ -170,6 +171,7 @@ export async function startEnrollInvite(opts: {
 	roster: RosterPayload;
 	entries: EntriesPayload;
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
+	recoverySlots?: WireRecoverySlot[];
 }): Promise<void> {
 	const wasm = await loadSyncCrypto();
 	const { privateKey } = await deviceKeypair();
@@ -182,6 +184,7 @@ export async function startEnrollInvite(opts: {
 		roster: opts.roster,
 		entries: opts.entries,
 		passwordCheck: opts.passwordCheck,
+		recoverySlots: opts.recoverySlots,
 		devicePrivB64: privateKey,
 		wasm,
 		report,

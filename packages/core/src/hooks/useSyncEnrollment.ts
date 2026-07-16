@@ -22,6 +22,7 @@ import { defaultDeviceLabel } from "../util/device-label";
 import { createPrfCredential } from "../vault/webauthn-ceremony";
 import {
 	findPasswordSlot,
+	findRecoverySlots,
 	findWebauthnSlots,
 	type PasswordSlot,
 	type VaultBlob,
@@ -80,9 +81,6 @@ export interface SyncEnrollmentDeps {
 	unlock: (password: string) => Promise<void>;
 	/** Finish a security-key unlock with an in-hand PRF secret (no extra tap). */
 	finishWebauthnUnlock: (slot: WebauthnSlot, hmacSecret: Uint8Array) => Promise<void>;
-	/** Provision (or reset) this device's recovery code; requires the vault unlocked. Called after a
-	 * join, whose rebuild has no recovery slot, so the joined device still has a recovery path. */
-	generateRecoveryCode: () => Promise<string>;
 	/** Decrypt the on-disk entries payload (the inviter ships it in the bundle). */
 	readEntriesPayload: () => Promise<EntriesPayload>;
 }
@@ -103,7 +101,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		readDecodedBlob,
 		unlock,
 		finishWebauthnUnlock,
-		generateRecoveryCode,
 		readEntriesPayload,
 	} = deps;
 	const { shell } = usePlatform();
@@ -178,9 +175,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			const inviterPub = await shell.syncDevicePublicKey();
 			const psk = randomKeyB64();
 			const entries = await readEntriesPayload();
+			const { blob } = await readDecodedBlob();
 			// Ship our password-slot verifier so the joiner can PROVE its typed password
 			// matches this device's. Omitted when this device unlocks by security key only.
-			const pwSlot = findPasswordSlot((await readDecodedBlob()).blob);
+			const pwSlot = findPasswordSlot(blob);
 			const passwordCheck = pwSlot
 				? {
 						saltB64: bytesToBase64(pwSlot.salt),
@@ -188,6 +186,15 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 						verifierB64: bytesToBase64(pwSlot.verifier),
 					}
 				: undefined;
+			// Forward our recovery slot(s) so the joiner shares this group's recovery code (they wrap
+			// the same VEK). Empty when this device has no recovery code.
+			const recoverySlots = findRecoverySlots(blob).map((s) => ({
+				saltB64: bytesToBase64(s.salt),
+				slotIdB64: bytesToBase64(s.slotId),
+				verifierB64: bytesToBase64(s.verifier),
+				wrapIvB64: bytesToBase64(s.wrapIv),
+				wrappedVekB64: bytesToBase64(s.wrappedVek),
+			}));
 			// Publish this device's admission key (from the re-entered password) and keep the context to
 			// admission-sign the joiner. Reads the group AFTER this, so `roster` ships the admissionKey.
 			const admit = await publishAdmissionKey(inviterPub, password, pwSlot);
@@ -225,6 +232,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				roster,
 				entries,
 				passwordCheck,
+				recoverySlots,
 			});
 			// Omit iceUrl from the code when empty (the joiner then derives it from the relay).
 			return encodePairingCode({
@@ -251,7 +259,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// vault around the shared VEK, then hands back the (VEK-wrapped) blob. We add
 	// this device to the roster, write the blob, and unlock with the new password.
 	const joinGroup = useCallback(
-		async (pairingCode: string, method: JoinUnlock): Promise<string> => {
+		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
 			const code = decodePairingCode(pairingCode.trim()); // validate before any prompt
 			// Security-key path: run the PRF create() ceremony FIRST, on this click's
 			// fresh user activation, before any await can spend it. One tap; we keep the
@@ -332,10 +340,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			} else if (method.kind === "password") {
 				await unlock(method.password);
 			}
-			// The join rebuilt the vault with only this device's unlock slot (no recovery), so
-			// provision a fresh recovery code now that it's unlocked, keeping a recovery path on
-			// this device. Returned so the caller shows it once (like the create flow).
-			return generateRecoveryCode();
 		},
 		[
 			shell,
@@ -345,7 +349,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			rotateDeviceId,
 			unlock,
 			finishWebauthnUnlock,
-			generateRecoveryCode,
 			readDecodedBlob,
 		],
 	);

@@ -15,7 +15,6 @@ import {
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { formatDate } from "../../../../util/format-date";
 import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
-import { RecoveryCodeDisplay } from "../../../components/RecoveryCodeDisplay";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
@@ -86,9 +85,6 @@ export function SyncConnectSection() {
 	// validation error under the password field. The debug status log is hidden, so
 	// this is the only user-facing surface for a failed join.
 	const [joinError, setJoinError] = useState<string | null>(null);
-	// A join rebuilds this device's vault with only its unlock slot, so joinGroup provisions a fresh
-	// recovery code; show it once (must-acknowledge) so the user saves it.
-	const [joinedRecoveryCode, setJoinedRecoveryCode] = useState<string | null>(null);
 	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
@@ -236,9 +232,8 @@ export function SyncConnectSection() {
 	const join = () =>
 		run("joining…", async () => {
 			setJoinError(null);
-			let recoveryCode: string;
 			try {
-				recoveryCode = await joinGroup(
+				await joinGroup(
 					joinCode,
 					joinMethod === "securityKey"
 						? { kind: "securityKey" }
@@ -256,8 +251,6 @@ export function SyncConnectSection() {
 			setJoinCode("");
 			setJoinPassword("");
 			setJoinPasswordConfirm("");
-			// Surface this device's new recovery code before anything else (must be saved once).
-			setJoinedRecoveryCode(recoveryCode);
 			await refreshGroup();
 		});
 	// Camera scan of the inviter's pairing QR (mobile only).
@@ -300,17 +293,6 @@ export function SyncConnectSection() {
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
-			{/* This device's new recovery code after a join (the joined vault has no recovery slot).
-			    Must-acknowledge so it can't be dismissed without saving. */}
-			{joinedRecoveryCode && (
-				<Modal open dismissable={false} onClose={() => setJoinedRecoveryCode(null)}>
-					<RecoveryCodeDisplay
-						code={joinedRecoveryCode}
-						title={t`Save this device's recovery code`}
-						onContinue={() => setJoinedRecoveryCode(null)}
-					/>
-				</Modal>
-			)}
 			{/* Live transport status log (offer sent / answer applied / ice connected /
 			    channel open) — surfaces enrollment + sync diagnostics in the dev panel. */}
 			{log.length > 0 && (

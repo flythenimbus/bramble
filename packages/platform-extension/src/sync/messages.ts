@@ -33,6 +33,17 @@ export const EnrollInviteMsgSchema = z.object({
 	passwordCheck: z
 		.object({ saltB64: z.string(), slotIdB64: z.string(), verifierB64: z.string() })
 		.optional(),
+	recoverySlots: z
+		.array(
+			z.object({
+				saltB64: z.string(),
+				slotIdB64: z.string(),
+				verifierB64: z.string(),
+				wrapIvB64: z.string(),
+				wrappedVekB64: z.string(),
+			}),
+		)
+		.optional(),
 });
 export type EnrollInviteMsg = z.infer<typeof EnrollInviteMsgSchema>;
 
