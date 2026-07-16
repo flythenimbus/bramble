@@ -498,7 +498,6 @@ msgstr "Créer votre coffre-fort"
 #~ msgstr "Créé le {0}"
 
 #. placeholder {0}: formatDate(v.createdAt)
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created on {0}"
 msgstr "Créé le {0}"
@@ -512,8 +511,8 @@ msgid "Credit or debit card"
 msgstr "Carte de crédit ou de débit"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Current"
-msgstr "Actuel"
+#~ msgid "Current"
+#~ msgstr "Actuel"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -545,7 +544,6 @@ msgstr "Mode sombre"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete"
 msgstr "Supprimer"
 
@@ -562,12 +560,16 @@ msgid "Delete this entry?"
 msgstr "Supprimer cette entrée ?"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Delete this vault"
+msgstr "Supprimer ce coffre"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
 msgstr "Supprimer ce coffre de cet appareil ? Les copies synchronisées sur vos autres appareils ne sont pas affectées, et cette action est irréversible ici."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Delete vault"
-msgstr "Supprimer le coffre"
+#~ msgid "Delete vault"
+#~ msgstr "Supprimer le coffre"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -947,8 +949,8 @@ msgid "Logins"
 msgstr "Identifiants"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Make primary"
-msgstr "Définir comme principal"
+#~ msgid "Make primary"
+#~ msgstr "Définir comme principal"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1238,8 +1240,8 @@ msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Appuyez sur Entrée / soumettez le formulaire une fois les identifiants saisis."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Primary"
-msgstr "Principal"
+#~ msgid "Primary"
+#~ msgstr "Principal"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
@@ -1704,6 +1706,10 @@ msgstr "Ce mot de passe est apparu dans une violation de données connue."
 msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
 msgstr "Cela remplace le coffre actuellement sur cet appareil par <0>{0}</0>. Saisissez le mot de passe principal de cette sauvegarde pour l'ouvrir."
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "This vault"
+msgstr "Ce coffre"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
 msgstr "Délai dépassé"
@@ -1857,6 +1863,10 @@ msgid "Value"
 msgstr "Valeur"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Vault"
+msgstr "Coffre"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Nom du coffre"
@@ -1874,8 +1884,8 @@ msgid "Vault unlocked"
 msgstr "Coffre-fort déverrouillé"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Vaults"
-msgstr "Coffres"
+#~ msgid "Vaults"
+#~ msgstr "Coffres"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
@@ -1947,8 +1957,8 @@ msgid "You can close this tab and use the {0} popup."
 msgstr "Vous pouvez fermer cet onglet et utiliser la fenêtre contextuelle {0}."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "You can't delete the vault you're in"
-msgstr "Vous ne pouvez pas supprimer le coffre dans lequel vous vous trouvez"
+#~ msgid "You can't delete the vault you're in"
+#~ msgstr "Vous ne pouvez pas supprimer le coffre dans lequel vous vous trouvez"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"

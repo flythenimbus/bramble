@@ -498,7 +498,6 @@ msgstr "Creare la propria cassaforte"
 #~ msgstr "Creato {0}"
 
 #. placeholder {0}: formatDate(v.createdAt)
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created on {0}"
 msgstr "Creato il {0}"
@@ -512,8 +511,8 @@ msgid "Credit or debit card"
 msgstr "Carta di credito o debito"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Current"
-msgstr "Corrente"
+#~ msgid "Current"
+#~ msgstr "Corrente"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -545,7 +544,6 @@ msgstr "Modalità scura"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete"
 msgstr "Eliminare"
 
@@ -562,12 +560,16 @@ msgid "Delete this entry?"
 msgstr "Eliminare questa voce?"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Delete this vault"
+msgstr "Elimina questo vault"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
 msgstr "Eliminare questo vault da questo dispositivo? Le copie sincronizzate sugli altri dispositivi non vengono influenzate e questa operazione non può essere annullata qui."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Delete vault"
-msgstr "Elimina vault"
+#~ msgid "Delete vault"
+#~ msgstr "Elimina vault"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -947,8 +949,8 @@ msgid "Logins"
 msgstr "Accessi"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Make primary"
-msgstr "Imposta come principale"
+#~ msgid "Make primary"
+#~ msgstr "Imposta come principale"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1238,8 +1240,8 @@ msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Premere Invio / inviare il modulo subito dopo aver compilato le credenziali."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Primary"
-msgstr "Principale"
+#~ msgid "Primary"
+#~ msgstr "Principale"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
@@ -1704,6 +1706,10 @@ msgstr "Questa password è apparsa in una violazione di dati nota."
 msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
 msgstr "Questa operazione sostituisce il vault attualmente presente su questo dispositivo con <0>{0}</0>. Inserisci la password principale di quel backup per aprirlo."
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "This vault"
+msgstr "Questo vault"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
 msgstr "Timeout"
@@ -1857,6 +1863,10 @@ msgid "Value"
 msgstr "Valore"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Vault"
+msgstr "Vault"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Nome vault"
@@ -1874,8 +1884,8 @@ msgid "Vault unlocked"
 msgstr "Vault sbloccato"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Vaults"
-msgstr "Vault"
+#~ msgid "Vaults"
+#~ msgstr "Vault"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
@@ -1947,8 +1957,8 @@ msgid "You can close this tab and use the {0} popup."
 msgstr "Può chiudere questa scheda e utilizzare il popup {0}."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "You can't delete the vault you're in"
-msgstr "Non è possibile eliminare il vault in cui ci si trova"
+#~ msgid "You can't delete the vault you're in"
+#~ msgstr "Non è possibile eliminare il vault in cui ci si trova"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"

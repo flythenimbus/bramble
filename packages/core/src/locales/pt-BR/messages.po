@@ -498,7 +498,6 @@ msgstr "Crie seu cofre"
 #~ msgstr "Criado em {0}"
 
 #. placeholder {0}: formatDate(v.createdAt)
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created on {0}"
 msgstr "Criado em {0}"
@@ -512,8 +511,8 @@ msgid "Credit or debit card"
 msgstr "Cartão de crédito ou débito"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Current"
-msgstr "Atual"
+#~ msgid "Current"
+#~ msgstr "Atual"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -545,7 +544,6 @@ msgstr "Escuro"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete"
 msgstr "Excluir"
 
@@ -562,12 +560,16 @@ msgid "Delete this entry?"
 msgstr "Excluir esta entrada?"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Delete this vault"
+msgstr "Excluir este cofre"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
 msgstr "Excluir este cofre deste dispositivo? As cópias sincronizadas em seus outros dispositivos não são afetadas, e isso não pode ser desfeito aqui."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Delete vault"
-msgstr "Excluir cofre"
+#~ msgid "Delete vault"
+#~ msgstr "Excluir cofre"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -947,8 +949,8 @@ msgid "Logins"
 msgstr "Logins"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Make primary"
-msgstr "Tornar primário"
+#~ msgid "Make primary"
+#~ msgstr "Tornar primário"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1238,8 +1240,8 @@ msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Pressione Enter / envie o formulário logo após preencher as credenciais."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Primary"
-msgstr "Primário"
+#~ msgid "Primary"
+#~ msgstr "Primário"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
@@ -1704,6 +1706,10 @@ msgstr "Esta senha apareceu em uma violação de dados conhecida."
 msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
 msgstr "Isso substitui o cofre atualmente neste dispositivo por <0>{0}</0>. Insira a senha mestra desse backup para abri-lo."
 
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "This vault"
+msgstr "Este cofre"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
 msgstr "Tempo esgotado"
@@ -1857,6 +1863,10 @@ msgid "Value"
 msgstr "Valor"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
+msgid "Vault"
+msgstr "Cofre"
+
+#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
 msgstr "Nome do cofre"
@@ -1874,8 +1884,8 @@ msgid "Vault unlocked"
 msgstr "Cofre desbloqueado"
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "Vaults"
-msgstr "Cofres"
+#~ msgid "Vaults"
+#~ msgstr "Cofres"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
@@ -1947,8 +1957,8 @@ msgid "You can close this tab and use the {0} popup."
 msgstr "Você pode fechar esta aba e usar o pop-up {0}."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-msgid "You can't delete the vault you're in"
-msgstr "Você não pode excluir o cofre em que está"
+#~ msgid "You can't delete the vault you're in"
+#~ msgstr "Você não pode excluir o cofre em que está"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"
