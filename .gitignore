@@ -27,3 +27,8 @@ bramble-502002-*.json
 # Local env (API keys, never tracked)
 .env.local
 .env*.local
+
+# Playwright E2E artifacts (the browsers live in ~/.cache/ms-playwright, not the repo)
+test-results/
+playwright-report/
+.playwright/
