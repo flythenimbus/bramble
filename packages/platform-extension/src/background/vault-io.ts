@@ -16,13 +16,16 @@ import { witnessStamp } from "./sync-clock";
 // Re-exported so existing background importers keep their import site.
 export { base64ToBytes, bytesToBase64 };
 
-export async function readAndDecodeVault(): Promise<VaultBlob> {
-	return decodeVaultBlob(await extensionStorage.readVaultBlob());
+/** Read + decode a vault's outer blob. `vaultId` targets the active vault for sync; omitted falls
+ * back to the primary (existing single-vault callers). */
+export async function readAndDecodeVault(vaultId?: string): Promise<VaultBlob> {
+	return decodeVaultBlob(await extensionStorage.readVaultBlob(vaultId));
 }
 
-/** Persist the vault blob. chrome.storage.local is always writable headless, so the write always goes straight through. */
-export async function writeVault(blob: Uint8Array): Promise<void> {
-	await extensionStorage.writeVaultBlob(blob);
+/** Persist a vault's blob (`vaultId` targets the active vault; omitted = primary). chrome.storage.local
+ * is always writable headless, so the write always goes straight through. */
+export async function writeVault(blob: Uint8Array, vaultId?: string): Promise<void> {
+	await extensionStorage.writeVaultBlob(blob, vaultId);
 }
 
 /** Decrypt, mutate, re-encrypt the outer entry list via offscreen so plaintext never leaves it. */

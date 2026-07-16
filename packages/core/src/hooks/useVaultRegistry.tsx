@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { StorageAdapter } from "../adapters/storage";
 import { usePlatform } from "../context/PlatformContext";
+import { syncKeyFor } from "../sync/sync-keys";
 import {
 	addVault,
 	EMPTY_REGISTRY,
@@ -26,8 +27,16 @@ export interface VaultRegistryValue {
 	ready: boolean;
 	vaults: VaultRecord[];
 	primaryId: string | null;
+	/** The vault at the flat blob slot (grandfathered, no id suffix on its blob or sync keys), or null. */
+	legacyBlobVaultId: string | null;
 	/** The vault the app currently operates on, or undefined before it resolves (falls back to the primary). */
 	activeId: string | undefined;
+	/**
+	 * The per-vault storage key for a flat sync key (e.g. `"sync.group"`), namespaced to the
+	 * active vault. The legacy vault keeps the flat key (no migration); others get `<key>:<id>`.
+	 * Resolves against the active vault, falling back to the primary before one is selected.
+	 */
+	syncKey: (flatKey: string) => string;
 	/** Select which vault to operate on (one vault is active at a time). */
 	selectVault: (id: string) => void;
 	/** Clear the active selection so the picker is shown again (e.g. "switch vault"). */
@@ -57,7 +66,9 @@ const DEFAULT: VaultRegistryValue = {
 	ready: true,
 	vaults: [],
 	primaryId: null,
+	legacyBlobVaultId: null,
 	activeId: undefined,
+	syncKey: (k) => k,
 	selectVault: () => {},
 	clearSelection: () => {},
 	createRecord: async () => "",
@@ -100,6 +111,16 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 
 	const selectVault = useCallback((id: string) => setActiveId(id), []);
 	const clearSelection = useCallback(() => setActiveId(undefined), []);
+
+	// Namespace a flat sync key to the active vault (fallback: the primary, before one is
+	// selected). The legacy vault keeps the flat key so its pairing survives with no migration.
+	const syncKey = useCallback(
+		(flatKey: string) => {
+			const v = activeId ?? registry.primaryId;
+			return v ? syncKeyFor(flatKey, v, registry.legacyBlobVaultId) : flatKey;
+		},
+		[activeId, registry.primaryId, registry.legacyBlobVaultId],
+	);
 
 	// Write a new registry to storage and reflect it in state.
 	const persist = useCallback(
@@ -144,7 +165,9 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			ready,
 			vaults: registry.vaults,
 			primaryId: registry.primaryId,
+			legacyBlobVaultId: registry.legacyBlobVaultId,
 			activeId,
+			syncKey,
 			selectVault,
 			clearSelection,
 			createRecord,
@@ -157,6 +180,7 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			ready,
 			registry,
 			activeId,
+			syncKey,
 			selectVault,
 			clearSelection,
 			createRecord,

@@ -51,6 +51,10 @@ export const CAPABILITIES = {
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
 	lockOnScreenLock: { extension: true, mobile: false },
+	// The background sync engine targets the active (not just primary) vault, so each vault
+	// syncs independently. Extension only for now; mobile's sync-manager still binds to the
+	// primary vault, so a non-primary vault there shows "coming soon". See docs/multiple-vaults.md.
+	perVaultSync: { extension: true, mobile: false },
 } satisfies Record<string, Capability>;
 
 export type CapabilityKey = keyof typeof CAPABILITIES;

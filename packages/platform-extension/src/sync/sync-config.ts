@@ -1,7 +1,37 @@
 /// <reference types="chrome" />
 
 import type { RosterPayload } from "@core/sync";
+import { syncKeyFor } from "@core/sync/sync-keys";
+import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
+import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
+
+// Which vault the background is syncing: the active (unlocked) vault, resolved so its group and
+// device-identity keys namespace correctly (the legacy vault keeps flat keys, others get `:<id>`).
+// One vault is unlocked at a time, so a single ctx scopes the whole sync/enrollment path.
+export interface SyncVaultCtx {
+	vaultId: string;
+	legacyBlobVaultId: string | null;
+}
+
+/** Resolve the vault to sync: the active vault the UI recorded in session, else the primary
+ * (covers a service-worker resume before any UI ran). Null only when no vault exists yet. */
+export async function resolveSyncVault(): Promise<SyncVaultCtx | null> {
+	const reg = parseRegistry((await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY]);
+	let active: string | null = null;
+	try {
+		const s = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
+		if (typeof s[ACTIVE_VAULT_SESSION_KEY] === "string") active = s[ACTIVE_VAULT_SESSION_KEY];
+	} catch {}
+	const vaultId = active ?? reg.primaryId;
+	if (!vaultId) return null;
+	return { vaultId, legacyBlobVaultId: reg.legacyBlobVaultId };
+}
+
+/** The per-vault storage key for a flat sync key under this ctx. */
+function keyFor(flat: string, ctx: SyncVaultCtx): string {
+	return syncKeyFor(flat, ctx.vaultId, ctx.legacyBlobVaultId);
+}
 
 // Device-local sync identity storage. The device's Noise static keypair (used for
 // roster-anchored channel auth and enrollment) is generated in the offscreen (it
@@ -25,17 +55,16 @@ export interface KeypairWasm {
 	handshake_generate_keypair(): DeviceKeypair;
 }
 
-/** This device's stored Noise static keypair, or null if not yet generated. */
-export async function getStoredKeypair(): Promise<DeviceKeypair | null> {
-	const stored = (await api.storage.local.get(DEVICE_KEYPAIR_KEY))[DEVICE_KEYPAIR_KEY] as
-		| DeviceKeypair
-		| undefined;
+/** This device's stored Noise static keypair for this vault, or null if not yet generated. */
+export async function getStoredKeypair(ctx: SyncVaultCtx): Promise<DeviceKeypair | null> {
+	const key = keyFor(DEVICE_KEYPAIR_KEY, ctx);
+	const stored = (await api.storage.local.get(key))[key] as DeviceKeypair | undefined;
 	return stored?.privateKey && stored?.publicKey ? stored : null;
 }
 
-/** Persist this device's Noise static keypair. */
-export async function storeKeypair(kp: DeviceKeypair): Promise<void> {
-	await api.storage.local.set({ [DEVICE_KEYPAIR_KEY]: kp });
+/** Persist this device's Noise static keypair for this vault. */
+export async function storeKeypair(kp: DeviceKeypair, ctx: SyncVaultCtx): Promise<void> {
+	await api.storage.local.set({ [keyFor(DEVICE_KEYPAIR_KEY, ctx)]: kp });
 }
 
 const SIGNING_KEY_KEY = "sync.signingKey";
@@ -51,17 +80,16 @@ export interface RosterSigWasm {
 	roster_sig_generate_key(): SigningKeypair;
 }
 
-/** This device's stored Ed25519 signing keypair, or null if not yet generated. */
-export async function getStoredSigningKey(): Promise<SigningKeypair | null> {
-	const stored = (await api.storage.local.get(SIGNING_KEY_KEY))[SIGNING_KEY_KEY] as
-		| SigningKeypair
-		| undefined;
+/** This device's stored Ed25519 signing keypair for this vault, or null if not yet generated. */
+export async function getStoredSigningKey(ctx: SyncVaultCtx): Promise<SigningKeypair | null> {
+	const key = keyFor(SIGNING_KEY_KEY, ctx);
+	const stored = (await api.storage.local.get(key))[key] as SigningKeypair | undefined;
 	return stored?.secretKey && stored?.publicKey ? stored : null;
 }
 
-/** Persist this device's Ed25519 signing keypair. */
-export async function storeSigningKey(kp: SigningKeypair): Promise<void> {
-	await api.storage.local.set({ [SIGNING_KEY_KEY]: kp });
+/** Persist this device's Ed25519 signing keypair for this vault. */
+export async function storeSigningKey(kp: SigningKeypair, ctx: SyncVaultCtx): Promise<void> {
+	await api.storage.local.set({ [keyFor(SIGNING_KEY_KEY, ctx)]: kp });
 }
 
 const GROUP_KEY = "sync.group";
@@ -72,15 +100,16 @@ export interface GroupConfig {
 	roster: RosterPayload;
 }
 
-/** This device's group config, or null if it isn't in a group yet. */
-export async function getStoredGroup(): Promise<GroupConfig | null> {
-	const g = (await api.storage.local.get(GROUP_KEY))[GROUP_KEY] as GroupConfig | undefined;
+/** This vault's group config, or null if it isn't in a group yet. */
+export async function getStoredGroup(ctx: SyncVaultCtx): Promise<GroupConfig | null> {
+	const key = keyFor(GROUP_KEY, ctx);
+	const g = (await api.storage.local.get(key))[key] as GroupConfig | undefined;
 	return g?.groupKey ? g : null;
 }
 
-/** Persist the group config (e.g. after merging a peer's roster). */
-export async function storeGroup(group: GroupConfig): Promise<void> {
-	await api.storage.local.set({ [GROUP_KEY]: group });
+/** Persist this vault's group config (e.g. after merging a peer's roster). */
+export async function storeGroup(group: GroupConfig, ctx: SyncVaultCtx): Promise<void> {
+	await api.storage.local.set({ [keyFor(GROUP_KEY, ctx)]: group });
 }
 
 const RELAY_KEY = "sync.relay";

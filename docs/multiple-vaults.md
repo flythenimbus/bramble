@@ -331,15 +331,26 @@ becomes per-vault: it shows the active vault's roster, not a global device list.
 Each step keeps existing single-vault sync working (the grandfather keys and the
 primary-vault default mean an un-migrated install behaves exactly as before).
 
-**Shipped ahead of increment 3 (stopgap).** Steps 1-2 landed. Because the panel
-still reads the flat, device-global `sync.group` and the background still syncs the
-primary blob, a second vault in the same browser profile showed the primary vault's
-paired devices and could start an enrollment the background would never keep syncing.
-Until increment 3 lands, `SyncConnectSection` is gated to the primary vault
-(`vaults.length <= 1 || activeId === primaryId`); any other vault shows a short
-"sync applies to your primary vault, per-vault sync coming soon" note. This gate is
-removed by increment 3. It touches live sync data and can only be verified on a real
-two-device pairing, so do increment 3 with the two-profile + local-relay rig, not blind.
+**Increment 3 landed (extension).** Steps 1-3 are done: `syncKey`/`syncKeyFor`
+namespaces the five per-vault keys (`sync.group`, `sync.lastSyncedAt`,
+`sync.deviceId`, `sync.deviceKeypair`, `sync.signingKey`); `sync.relay` /
+`sync.iceUrl` stay device-global. The extension background resolves the active vault
+(`resolveSyncVault`: the session-recorded active vault, else the primary) and threads
+it through the enrollment handlers, `maybeStartSync`, the merge port, and the four
+bridge functions, and reads/writes that vault's blob. The unlock paths await
+`setActiveVault` **before** the crypto unwrap, so the sync that kicks off on unlock
+targets the right vault (the timing gotcha). Switch = lock (stopSync) + unlock
+(maybeStartSync for the new vault), so no separate restart is needed. The legacy
+vault keeps flat keys, so existing single-vault pairings are byte-identical.
+
+Mobile is still primary-only (its `sync-manager` reads flat keys). To avoid a
+half-wired enrollment there, the `perVaultSync` capability is extension-only, and
+`SyncConnectSection` shows the "sync applies to your primary vault, coming soon" note
+for a non-primary vault where `!perVaultSync`. Mobile parity is increment 6.
+
+Verify on the two-profile + local-relay rig: pair vault 1 across two profiles, make a
+vault 2 in both, pair vault 2, edit each independently, and confirm each vault's
+devices/last-synced are its own and neither pairing disturbs the other.
 
 ## Mobile autofill and biometric
 

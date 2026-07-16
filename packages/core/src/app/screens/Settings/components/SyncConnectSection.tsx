@@ -65,14 +65,14 @@ export function SyncConnectSection() {
 	const canCameraScan = useCan("cameraScan");
 	const { inviteDevice, joinGroup, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
-	const { activeId, primaryId, vaults } = useVaultRegistry();
+	const { activeId, primaryId, vaults, syncKey } = useVaultRegistry();
+	const canPerVaultSync = useCan("perVaultSync");
 	const { t } = useLingui();
-	// Sync state (group + this device's sync identity) is still stored in device-global flat
-	// `sync.*` keys, and the background engine syncs the primary vault. So only the primary
-	// vault's panel reflects real sync; any other vault would otherwise show the primary's
-	// devices and let you start a half-wired enrollment. Gate to the primary vault until
-	// per-vault sync lands (docs/multiple-vaults.md, "Sync"); this whole branch is removed then.
-	const syncOwnedByThisVault = vaults.length <= 1 || activeId === primaryId;
+	// Where the background sync engine is per-vault (the extension) every vault syncs on its own.
+	// Where it still binds to the primary vault (mobile), a non-primary vault would otherwise show
+	// the primary's devices and let you start a half-wired enrollment, so show a short "coming soon"
+	// note instead. See docs/multiple-vaults.md ("Sync").
+	const syncManagedOnPrimary = !canPerVaultSync && vaults.length > 1 && activeId !== primaryId;
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
@@ -111,12 +111,12 @@ export function SyncConnectSection() {
 
 	const refreshGroup = useCallback(async () => {
 		const [g, pub] = await Promise.all([
-			storage.getMeta<SyncGroup>("sync.group"),
+			storage.getMeta<SyncGroup>(syncKey("sync.group")),
 			shell.syncDevicePublicKey().catch(() => null),
 		]);
 		setGroup(g ?? null);
 		setMyPub(pub);
-	}, [storage, shell]);
+	}, [storage, syncKey, shell]);
 
 	useEffect(() => {
 		void refreshGroup();
@@ -161,11 +161,11 @@ export function SyncConnectSection() {
 	// storage change events (the background writes it). No-op subscription on mobile, where the
 	// onSyncEvent "synced" tick above carries updates instead.
 	useEffect(() => {
-		const read = () =>
-			void storage.getMeta<number>(SYNC_LAST_SYNCED_KEY).then((v) => setLastSynced(v ?? null));
+		const key = syncKey(SYNC_LAST_SYNCED_KEY);
+		const read = () => void storage.getMeta<number>(key).then((v) => setLastSynced(v ?? null));
 		read();
-		return storage.subscribeMeta?.(SYNC_LAST_SYNCED_KEY, read);
-	}, [storage]);
+		return storage.subscribeMeta?.(key, read);
+	}, [storage, syncKey]);
 
 	// Stream transport status into the log for the panel's lifetime so enrollment
 	// progress shows on both sides. The inviter's connection happens after its pairing
@@ -278,7 +278,7 @@ export function SyncConnectSection() {
 			note("✅ Disconnected — this device is now offline-only.");
 		});
 
-	if (!syncOwnedByThisVault) {
+	if (syncManagedOnPrimary) {
 		return (
 			<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
 				<p className="text-xs text-muted-foreground leading-relaxed">

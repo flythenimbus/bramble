@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { ShellAdapter } from "../adapters/shell";
+import type { StorageAdapter } from "../adapters/storage";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	addDevice,
@@ -66,6 +67,11 @@ async function admissionSign(
 
 /** Shared vault internals the enrollment ops need from VaultProvider. */
 export interface SyncEnrollmentDeps {
+	/** Storage bound to the active vault: its blob methods address the active vault, and its
+	 * metadata passes through. Combined with `syncKey`, that scopes enrollment to the active vault. */
+	storage: StorageAdapter;
+	/** Namespace a flat sync key (e.g. `syncKey("sync.group")`) to the active vault. See useVaultRegistry. */
+	syncKey: (flatKey: string) => string;
 	ensureClock: () => Promise<HybridClock>;
 	/** Mint a fresh device id (clears the persisted id + cached clock). Called before a join so a
 	 * re-added device never reuses an id that may be tombstoned in the group (B1). */
@@ -87,6 +93,8 @@ type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup" | "removeDevic
  */
 export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	const {
+		storage,
+		syncKey,
 		ensureClock,
 		rotateDeviceId,
 		readDecodedBlob,
@@ -94,14 +102,14 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		finishWebauthnUnlock,
 		readEntriesPayload,
 	} = deps;
-	const { storage, shell } = usePlatform();
+	const { shell } = usePlatform();
 	// Unsubscribe for the inviter's enrolled-device listener (adds the joiner to the roster).
 	const enrollUnsubRef = useRef<(() => void) | null>(null);
 
 	// The group key is stable (the room + the group identity); generated once with a
 	// roster seeded by this device, then reused. This vault's VEK is the group VEK.
 	const ensureGroup = useCallback(async (): Promise<string> => {
-		const existing = await storage.getMeta<{ groupKey: string }>("sync.group");
+		const existing = await storage.getMeta<{ groupKey: string }>(syncKey("sync.group"));
 		if (existing?.groupKey) return existing.groupKey;
 		const inviterPub = await shell.syncDevicePublicKey();
 		const clock = await ensureClock();
@@ -115,9 +123,9 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			hlc,
 		});
 		const roster = addDevice(emptyRoster(), entry);
-		await storage.setMeta("sync.group", { groupKey, roster });
+		await storage.setMeta(syncKey("sync.group"), { groupKey, roster });
 		return groupKey;
-	}, [storage, shell, ensureClock]);
+	}, [storage, syncKey, shell, ensureClock]);
 
 	// Publish this device's admission key on its own roster entry, derived from the re-entered master
 	// password + this device's password-slot salt (Item A rogue-injection close), and return the
@@ -136,7 +144,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			const saltB64 = bytesToBase64(pwSlot.salt);
 			const admissionKey = await shell.syncAdmissionPublicKey(password, saltB64);
 			const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
-				"sync.group",
+				syncKey("sync.group"),
 			);
 			const own = group?.roster.devices.find((d) => d.publicKey === inviterPub);
 			if (!group || !own) return null;
@@ -145,14 +153,14 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			if (own.admissionKey !== admissionKey) {
 				const hlc = (await ensureClock()).send();
 				const updated = await signOwnEntry(shell, { ...own, admissionKey, hlc });
-				await storage.setMeta("sync.group", {
+				await storage.setMeta(syncKey("sync.group"), {
 					groupKey: group.groupKey,
 					roster: addDevice(group.roster, updated),
 				});
 			}
 			return { password, saltB64, adminId: own.id };
 		},
-		[shell, storage, ensureClock],
+		[shell, storage, syncKey, ensureClock],
 	);
 
 	// Generate a fresh one-time pairing code and start listening for a device to
@@ -179,7 +187,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			// Publish this device's admission key (from the re-entered password) and keep the context to
 			// admission-sign the joiner. Reads the group AFTER this, so `roster` ships the admissionKey.
 			const admit = await publishAdmissionKey(inviterPub, password, pwSlot);
-			const group = await storage.getMeta<{ roster: RosterPayload }>("sync.group");
+			const group = await storage.getMeta<{ roster: RosterPayload }>(syncKey("sync.group"));
 			const roster = group?.roster ?? emptyRoster();
 			// When the device finishes joining, admission-sign then add its entry to ours (symmetric rosters).
 			enrollUnsubRef.current?.();
@@ -194,10 +202,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				void (async () => {
 					const admitted = await admissionSign(shell, admit, entry);
 					const cur = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
-						"sync.group",
+						syncKey("sync.group"),
 					);
 					if (!cur) return;
-					await storage.setMeta("sync.group", {
+					await storage.setMeta(syncKey("sync.group"), {
 						groupKey: cur.groupKey,
 						roster: addDevice(cur.roster, admitted),
 					});
@@ -224,7 +232,15 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				iceUrl: iceUrl || undefined,
 			});
 		},
-		[ensureGroup, shell, storage, readEntriesPayload, readDecodedBlob, publishAdmissionKey],
+		[
+			ensureGroup,
+			shell,
+			storage,
+			syncKey,
+			readEntriesPayload,
+			readDecodedBlob,
+			publishAdmissionKey,
+		],
 	);
 
 	// Join from a pairing code: the offscreen runs the handshake and rebuilds the
@@ -295,7 +311,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				throw e;
 			}
 			await storage.writeVaultBlob(base64ToBytes(vaultBlobB64));
-			await storage.setMeta("sync.group", {
+			await storage.setMeta(syncKey("sync.group"), {
 				groupKey: code.groupKey,
 				roster: addDevice(roster, ownEntry),
 			});
@@ -313,7 +329,16 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				await unlock(method.password);
 			}
 		},
-		[shell, storage, ensureClock, rotateDeviceId, unlock, finishWebauthnUnlock, readDecodedBlob],
+		[
+			shell,
+			storage,
+			syncKey,
+			ensureClock,
+			rotateDeviceId,
+			unlock,
+			finishWebauthnUnlock,
+			readDecodedBlob,
+		],
 	);
 
 	// Revoke a device: a roster tombstone that ongoing sync gossips to peers (so it
@@ -321,16 +346,16 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	const removeDevice = useCallback(
 		async (deviceId: string): Promise<void> => {
 			const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
-				"sync.group",
+				syncKey("sync.group"),
 			);
 			if (!group) return;
 			const hlc = (await ensureClock()).send();
-			await storage.setMeta("sync.group", {
+			await storage.setMeta(syncKey("sync.group"), {
 				groupKey: group.groupKey,
 				roster: revokeDevice(group.roster, deviceId, hlc),
 			});
 		},
-		[storage, ensureClock],
+		[storage, syncKey, ensureClock],
 	);
 
 	return { inviteDevice, joinGroup, removeDevice };

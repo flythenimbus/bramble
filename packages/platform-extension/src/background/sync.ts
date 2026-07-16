@@ -18,6 +18,7 @@ import {
 	SYNC_LAST_SYNCED_KEY,
 	type VaultSyncPort,
 } from "@core/sync";
+import { syncKeyFor } from "@core/sync/sync-keys";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { setSyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
@@ -38,7 +39,9 @@ import {
 	getStoredKeypair,
 	getStoredRelay,
 	getStoredSigningKey,
+	resolveSyncVault,
 	type SigningKeypair,
+	type SyncVaultCtx,
 	storeGroup,
 	storeKeypair,
 	storeSigningKey,
@@ -70,17 +73,26 @@ on(
 	extensionOnly((message) => sendToOffscreen(message)),
 );
 
-// Device identity lives here (chrome.storage); the offscreen only generates the keypair.
+// Per-vault sync identity: which vault this device is enrolling/syncing (the active one).
+async function requireSyncVault(): Promise<SyncVaultCtx> {
+	const ctx = await resolveSyncVault();
+	if (!ctx) throw new Error("no active vault");
+	return ctx;
+}
+
+// Device identity lives here (chrome.storage); the offscreen only generates the keypair. Keyed
+// to the active vault so each vault gets its own device identity in its own group.
 on(
 	"SYNC_DEVICE_PUBKEY",
 	extensionOnly(async () => {
-		let kp = await getStoredKeypair();
+		const ctx = await requireSyncVault();
+		let kp = await getStoredKeypair(ctx);
 		if (!kp) {
 			const res = await sendToOffscreen({ type: "SYNC_GENERATE_KEYPAIR" });
 			if (!res.ok || !res.data)
 				return { ok: false, error: res.error ?? "keypair generation failed" };
 			kp = res.data as DeviceKeypair;
-			await storeKeypair(kp);
+			await storeKeypair(kp, ctx);
 		}
 		return { ok: true, data: kp.publicKey };
 	}),
@@ -90,7 +102,7 @@ const withDeviceKey = async (message: {
 	type: string;
 	payload?: Record<string, unknown>;
 }): Promise<MessageEnvelope> => {
-	const kp = await getStoredKeypair();
+	const kp = await getStoredKeypair(await requireSyncVault());
 	if (!kp) return { ok: false, error: "no device key — create a group first" };
 	return sendToOffscreen({
 		...message,
@@ -105,13 +117,14 @@ on("SYNC_ENROLL_JOIN", extensionOnly(withDeviceKey));
 on(
 	"SYNC_SIGNING_PUBKEY",
 	extensionOnly(async () => {
-		let kp = await getStoredSigningKey();
+		const ctx = await requireSyncVault();
+		let kp = await getStoredSigningKey(ctx);
 		if (!kp) {
 			const res = await sendToOffscreen({ type: "SYNC_GENERATE_SIGNING_KEY" });
 			if (!res.ok || !res.data)
 				return { ok: false, error: res.error ?? "signing key generation failed" };
 			kp = res.data as SigningKeypair;
-			await storeSigningKey(kp);
+			await storeSigningKey(kp, ctx);
 		}
 		return { ok: true, data: kp.publicKey };
 	}),
@@ -119,7 +132,7 @@ on(
 on(
 	"SYNC_SIGN_ENTRY",
 	extensionOnly(async (message) => {
-		const kp = await getStoredSigningKey();
+		const kp = await getStoredSigningKey(await requireSyncVault());
 		if (!kp) return { ok: false, error: "no signing key — create or join a group first" };
 		const { canonical } = RosterSignEntryMsgSchema.parse(message.payload);
 		return sendToOffscreen({
@@ -167,10 +180,12 @@ const syncHostSuspends = typeof api.offscreen === "undefined";
 // lifetime (after a suspend) resets it, so a woken event page reconnects.
 let syncRunning = false;
 
-/** Start the roster-sync host if this device is enrolled. Caller ensures unlocked. */
+/** Start the roster-sync host if the active vault is enrolled. Caller ensures unlocked. */
 export async function maybeStartSync(): Promise<void> {
-	const group = await getStoredGroup();
-	const kp = await getStoredKeypair();
+	const ctx = await resolveSyncVault();
+	if (!ctx) return;
+	const group = await getStoredGroup(ctx);
+	const kp = await getStoredKeypair(ctx);
 	if (!group || !kp) return;
 	if (syncRunning) return;
 	syncRunning = true;
@@ -192,10 +207,12 @@ export async function stopSync(): Promise<void> {
 	await sendToOffscreen({ type: "SYNC_DISCONNECT" }).catch(() => {});
 }
 
-// Read + decrypt the local outer blob. Returns the blob (for its slots, carried
+// Read + decrypt the active vault's outer blob. Returns the blob (for its slots, carried
 // forward on write) alongside the decrypted payload (empty for a fresh vault).
-async function readLocalState(): Promise<{ blob: VaultBlob; payload: EntriesPayload }> {
-	const blob = await readAndDecodeVault();
+async function readLocalState(
+	ctx: SyncVaultCtx,
+): Promise<{ blob: VaultBlob; payload: EntriesPayload }> {
+	const blob = await readAndDecodeVault(ctx.vaultId);
 	if (blob.entriesCiphertext.length === 0) return { blob, payload: emptyEntriesPayload() };
 	const dec = await sendToOffscreen({
 		type: "CRYPTO_DECRYPT_OUTER",
@@ -211,11 +228,11 @@ async function readLocalState(): Promise<{ blob: VaultBlob; payload: EntriesPayl
 // The host side of the merge seam: read/witness/re-seal happen here (storage + the
 // offscreen's VEK); applyRemotePayload owns the order. readLocal runs before
 // writeMerged, so the slots captured there are current.
-function makeVaultSyncPort(): VaultSyncPort {
+function makeVaultSyncPort(ctx: SyncVaultCtx): VaultSyncPort {
 	let slots: VaultBlob["slots"] = [];
 	return {
 		async readLocal() {
-			const { blob, payload } = await readLocalState();
+			const { blob, payload } = await readLocalState(ctx);
 			slots = blob.slots;
 			return payload;
 		},
@@ -232,7 +249,7 @@ function makeVaultSyncPort(): VaultSyncPort {
 				entriesIv: base64ToBytes(iv),
 				entriesCiphertext: base64ToBytes(ciphertext),
 			});
-			await writeVault(newBlob);
+			await writeVault(newBlob, ctx.vaultId);
 			await broadcastVaultChanged();
 		},
 	};
@@ -243,43 +260,58 @@ function makeVaultSyncPort(): VaultSyncPort {
 // document messages the background) and handed to the in-process bridge (Firefox:
 // the host runs in this event page). See offscreen-core SyncBridge.
 
-/** Our current payload, to send to peers. */
+/** The active vault's current payload, to send to peers. */
 async function syncLocalPayload(): Promise<string> {
-	const { payload } = await readLocalState();
+	const ctx = await resolveSyncVault();
+	if (!ctx) return encodeEntriesPayload(emptyEntriesPayload());
+	const { payload } = await readLocalState(ctx);
 	return encodeEntriesPayload(payload);
 }
 
 let lastSyncStampAt = 0;
 
-/** A peer's payload arrived: merge into the local vault. Returns whether it changed. */
+/** A peer's payload arrived: merge into the active vault. Returns whether it changed. */
 async function syncApplyRemote(payloadJson: string): Promise<boolean> {
+	const ctx = await resolveSyncVault();
+	if (!ctx) return false;
 	const remote = decodeEntriesPayload(payloadJson);
-	const { changed } = await applyRemotePayload(makeVaultSyncPort(), remote);
+	const { changed } = await applyRemotePayload(makeVaultSyncPort(ctx), remote);
 	// Every reconcile (changed or no-op) means "we're up to date with a peer". Peers rebroadcast
 	// every few seconds, so throttle the stamp to ~30s to avoid churn (each write wakes the Sync
-	// UI via storage.onChanged). The UI live-reads this via subscribeMeta.
+	// UI via storage.onChanged). The UI live-reads this via subscribeMeta. Per-vault so each vault's
+	// "last synced" is its own.
 	const now = Date.now();
 	if (now - lastSyncStampAt >= 30_000) {
 		lastSyncStampAt = now;
-		await extensionStorage.setMeta(SYNC_LAST_SYNCED_KEY, now);
+		await extensionStorage.setMeta(
+			syncKeyFor(SYNC_LAST_SYNCED_KEY, ctx.vaultId, ctx.legacyBlobVaultId),
+			now,
+		);
 	}
 	return changed;
 }
 
-/** Our roster, to gossip alongside entries. */
+/** The active vault's roster, to gossip alongside entries. */
 async function syncLocalRoster(): Promise<string> {
-	const group = await getStoredGroup();
+	const ctx = await resolveSyncVault();
+	if (!ctx) return "";
+	const group = await getStoredGroup(ctx);
 	return group ? encodeRoster(group.roster) : "";
 }
 
 /** A peer's roster arrived: merge revocations/additions, persist, and nudge the popup. */
 async function syncApplyRoster(rosterJson: string): Promise<void> {
-	const group = await getStoredGroup();
+	const ctx = await resolveSyncVault();
+	if (!ctx) return;
+	const group = await getStoredGroup(ctx);
 	if (!group) return;
-	await storeGroup({
-		groupKey: group.groupKey,
-		roster: mergeRemoteRoster(group.roster, decodeRoster(rosterJson)),
-	});
+	await storeGroup(
+		{
+			groupKey: group.groupKey,
+			roster: mergeRemoteRoster(group.roster, decodeRoster(rosterJson)),
+		},
+		ctx,
+	);
 	api.runtime
 		.sendMessage({ type: "SYNC_EVENT", payload: { kind: "roster" } satisfies SyncEventMsg })
 		.catch(() => {});

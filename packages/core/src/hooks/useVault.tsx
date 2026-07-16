@@ -286,6 +286,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		activeId,
 		ready: registryReady,
 		vaults,
+		syncKey,
 		createRecord,
 		dropActiveRecord,
 	} = useVaultRegistry();
@@ -327,17 +328,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const stampsRef = useRef<Map<string, Hlc>>(new Map());
 	const tombstonesRef = useRef<Map<string, Hlc>>(new Map());
 
-	/** Lazily load this device's id and build its clock. */
+	/** Lazily load this device's id and build its clock. The device id is per-vault (each vault
+	 * is its own sync group with its own roster membership), so read/write it under the active
+	 * vault's namespaced key. */
 	const ensureClock = useCallback(async (): Promise<HybridClock> => {
 		if (!clockRef.current) {
 			const id = await ensureDeviceId(
-				(k) => storage.getMeta<string>(k),
-				(k, v) => storage.setMeta<string>(k, v),
+				() => storage.getMeta<string>(syncKey(DEVICE_ID_KEY)),
+				(_k, v) => storage.setMeta<string>(syncKey(DEVICE_ID_KEY), v),
 			);
 			clockRef.current = makeClock(id);
 		}
 		return clockRef.current;
-	}, [storage]);
+	}, [storage, syncKey]);
 
 	/** Mint a fresh device id for a (re)join. A device id is stable and persisted, and a tombstoned id
 	 * stays dead forever (sticky revocation, B1) — so a device re-added after being revoked must NOT
@@ -345,9 +348,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * peers can't see it). Clearing the id + cached clock makes the next ensureClock() generate a new
 	 * one, so the joiner enters as a genuinely new member. See docs/p2p-sync-revocation-hardening.md. */
 	const rotateDeviceId = useCallback(async (): Promise<void> => {
-		await storage.removeMeta(DEVICE_ID_KEY);
+		await storage.removeMeta(syncKey(DEVICE_ID_KEY));
 		clockRef.current = null;
-	}, [storage]);
+	}, [storage, syncKey]);
 
 	/** Read+decode the vault, falling back to the backup snapshot on decode failure. */
 	const readDecodedBlob = useCallback(async () => {
@@ -523,6 +526,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
 			}
 			if (!slot) throw new Error("This vault has no password set.");
+			// Record the active vault BEFORE the unwrap: the background starts sync the moment the
+			// unwrap succeeds (session.ts cryptoHandler), and reads this to pick which vault to sync.
+			// Awaited so the write lands first; otherwise the first sync targets the previous vault.
+			await shell.setActiveVault?.(activeId ?? null);
 			const ok = await crypto.unwrapVekPassword({
 				password,
 				saltB64: bytesToBase64(slot.salt),
@@ -538,7 +545,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// Commit any corner-prompt capture parked while locked, now that the VEK is live.
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell],
+		[readDecodedBlob, crypto, loadEntries, shell, activeId],
 	);
 
 	/** Lock the vault: clear the VEK, autofill index, and decrypted state. */
@@ -567,6 +574,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// the create() ceremony at security-key enrollment): unwrap the VEK, mark unlocked.
 	const finishWebauthnUnlock = useCallback(
 		async (slot: WebauthnSlot, hmacSecret: Uint8Array): Promise<void> => {
+			// See unlock(): record the active vault before the unwrap so sync-on-unlock targets it.
+			await shell.setActiveVault?.(activeId ?? null);
 			const ok = await crypto.unwrapVekWebauthn({
 				hmacSecretB64: bytesToBase64(hmacSecret),
 				slotIdB64: bytesToBase64(slot.slotId),
@@ -580,7 +589,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[crypto, loadEntries, shell],
+		[crypto, loadEntries, shell, activeId],
 	);
 
 	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
@@ -906,6 +915,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
 			}
 			if (slots.length === 0) throw new Error("This vault has no recovery code.");
+			// See unlock(): record the active vault before the unwrap so sync-on-unlock targets it.
+			await shell.setActiveVault?.(activeId ?? null);
 			const normalized = normalizeRecoveryCode(code);
 			let opened = false;
 			for (const slot of slots) {
@@ -928,7 +939,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell],
+		[readDecodedBlob, crypto, loadEntries, shell, activeId],
 	);
 
 	// Re-probe the gate's availability + enabled state. Called on mount and whenever the
@@ -989,6 +1000,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.
 	const { inviteDevice, joinGroup, removeDevice } = useSyncEnrollment({
+		storage,
+		syncKey,
 		ensureClock,
 		rotateDeviceId,
 		readDecodedBlob,

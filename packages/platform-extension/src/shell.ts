@@ -237,9 +237,11 @@ export const extensionShell: ShellAdapter = {
 	},
 	setActiveVault(vaultId) {
 		// Shared with the background via chrome.storage.session, which reads it to sync the active
-		// vault and clears it on lock (background/session.ts). The id is not secret.
-		if (vaultId === null) void api.storage.session.remove(ACTIVE_VAULT_SESSION_KEY);
-		else void api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: vaultId });
+		// vault and clears it on lock (background/session.ts). The id is not secret. Returns the
+		// write promise so unlock can await it before the crypto unwrap triggers maybeStartSync.
+		return vaultId === null
+			? api.storage.session.remove(ACTIVE_VAULT_SESSION_KEY)
+			: api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: vaultId });
 	},
 	async getActiveVault() {
 		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);

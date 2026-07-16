@@ -75,6 +75,22 @@ describe("VaultRegistryProvider", () => {
 		expect(get().activeId).toBeUndefined();
 	});
 
+	it("syncKey grandfathers the legacy vault and namespaces the others", async () => {
+		const { get } = mount(two);
+		await act(async () => {});
+		// No active vault yet: falls back to the primary (the legacy vault) -> flat key.
+		expect(get().legacyBlobVaultId).toBe("a");
+		expect(get().syncKey("sync.group")).toBe("sync.group");
+		await act(async () => {
+			get().selectVault("b");
+		});
+		expect(get().syncKey("sync.group")).toBe("sync.group:b");
+		await act(async () => {
+			get().selectVault("a");
+		});
+		expect(get().syncKey("sync.group")).toBe("sync.group");
+	});
+
 	it("selectVault and clearSelection move the active vault", async () => {
 		const { get } = mount(two);
 		await act(async () => {});

@@ -137,9 +137,10 @@ export interface ShellAdapter {
 	 * Optional: platforms with no local sync state may omit it. */
 	resetSyncState?(): Promise<void>;
 	/** Record the active/unlocked vault id so the background can target it for sync (rather than the
-	 * primary vault). Written on unlock, cleared on lock. Optional: single-context hosts (mobile)
+	 * primary vault). Written on unlock, cleared on lock. Awaitable so a caller can guarantee the
+	 * background sees it before it kicks off sync on unlock. Optional: single-context hosts (mobile)
 	 * read the active vault directly and can omit it. See docs/multiple-vaults.md (Sync). */
-	setActiveVault?(vaultId: string | null): void;
+	setActiveVault?(vaultId: string | null): void | Promise<void>;
 	/** Read back the active/unlocked vault id (whatever setActiveVault stored), so a reopened UI
 	 * can restore the unlocked vault and skip the picker. Optional; mobile omits it (it locks on
 	 * background, so a reopen is always locked). See docs/multiple-vaults.md (Sync). */
