@@ -39,7 +39,8 @@ export async function launchExtensionContext(): Promise<{
 
 /** Single-device fixture: `context` + `extensionId` for tests that only need one browser. */
 export const test = base.extend<{ context: BrowserContext; extensionId: string }>({
-	context: async (_, use) => {
+	// biome-ignore lint/correctness/noEmptyPattern: Playwright requires the fixtures destructuring param.
+	context: async ({}, use) => {
 		const { context, profileDir } = await launchExtensionContext();
 		await use(context);
 		await context.close();
