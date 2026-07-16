@@ -20,7 +20,7 @@ import {
 import { sendToOffscreen } from "./offscreen-client";
 import { appendNeverSaveSite, getNeverSaveSites, getOfferToSavePref } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
-import { vaultLocked } from "./session";
+import { requireActiveVaultId, vaultLocked } from "./session";
 import { nextStamp } from "./sync-clock";
 import {
 	broadcastVaultChanged,
@@ -120,10 +120,15 @@ async function commitCornerSave(
 	capture: PendingCapture,
 	editedUsername: string | undefined,
 ): Promise<void> {
-	const blob = await readAndDecodeVault();
+	// The active vault: read/write ITS blob and tag every crypto op with it, so a save while the
+	// active vault isn't the primary can't seal an entry under the active VEK into the primary's
+	// blob. See docs/multiple-vaults.md "Latent cross-vault callers".
+	const vaultId = requireActiveVaultId();
+	const blob = await readAndDecodeVault(vaultId);
 	const plaintext = newLoginPlaintext(capture, editedUsername);
 	const encryptedEntryResp = await sendToOffscreen({
 		type: "CRYPTO_ENCRYPT",
+		vaultId,
 		payload: { plaintextJson: plaintext },
 	});
 	if (!encryptedEntryResp.ok || !encryptedEntryResp.data) {
@@ -132,13 +137,17 @@ async function commitCornerSave(
 	const encEntry = encryptedEntryResp.data as Omit<EncryptedEntry, "id" | "hlc">;
 	const id = globalThis.crypto.randomUUID();
 	const newEnc: EncryptedEntry = { id, ...encEntry, hlc: await nextStamp() };
-	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => [...entries, newEnc]);
+	const outer = await reencryptOuterWithEntryChange(
+		blob,
+		async (entries) => [...entries, newEnc],
+		vaultId,
+	);
 	const newBlob: VaultBlob = {
 		slots: blob.slots,
 		entriesIv: outer.entriesIv,
 		entriesCiphertext: outer.entriesCiphertext,
 	};
-	await writeVault(encodeVaultBlob(newBlob));
+	await writeVault(encodeVaultBlob(newBlob), vaultId);
 
 	const username = editedUsername ?? capture.username;
 	await addLoginEntry({
@@ -163,47 +172,54 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 	if (!hostnameMatches(indexEntry, capture.hostname)) {
 		throw new Error("update target is not offered on this origin");
 	}
-	const blob = await readAndDecodeVault();
-	const outer = await reencryptOuterWithEntryChange(blob, async (entries) => {
-		const next: EncryptedEntry[] = [];
-		for (const enc of entries) {
-			if (enc.id !== chosenEntryId) {
-				next.push(enc);
-				continue;
+	const vaultId = requireActiveVaultId();
+	const blob = await readAndDecodeVault(vaultId);
+	const outer = await reencryptOuterWithEntryChange(
+		blob,
+		async (entries) => {
+			const next: EncryptedEntry[] = [];
+			for (const enc of entries) {
+				if (enc.id !== chosenEntryId) {
+					next.push(enc);
+					continue;
+				}
+				const dec = await sendToOffscreen({
+					type: "CRYPTO_DECRYPT",
+					vaultId,
+					payload: {
+						ciphertext: enc.ciphertext,
+						iv: enc.iv,
+						wrappedDek: enc.wrappedDek,
+						dekIv: enc.dekIv,
+					},
+				});
+				if (!dec.ok || typeof dec.data !== "string") {
+					throw new Error(`decrypt entry failed: ${dec.error ?? "no data"}`);
+				}
+				const parsed = JSON.parse(dec.data);
+				parsed.username = capture.username;
+				parsed.password = capture.password;
+				const reenc = await sendToOffscreen({
+					type: "CRYPTO_ENCRYPT",
+					vaultId,
+					payload: { plaintextJson: JSON.stringify(parsed) },
+				});
+				if (!reenc.ok || !reenc.data) {
+					throw new Error(`reencrypt entry failed: ${reenc.error ?? "no data"}`);
+				}
+				const fresh = reenc.data as Omit<EncryptedEntry, "id" | "hlc">;
+				next.push({ id: enc.id, ...fresh, hlc: await nextStamp() });
 			}
-			const dec = await sendToOffscreen({
-				type: "CRYPTO_DECRYPT",
-				payload: {
-					ciphertext: enc.ciphertext,
-					iv: enc.iv,
-					wrappedDek: enc.wrappedDek,
-					dekIv: enc.dekIv,
-				},
-			});
-			if (!dec.ok || typeof dec.data !== "string") {
-				throw new Error(`decrypt entry failed: ${dec.error ?? "no data"}`);
-			}
-			const parsed = JSON.parse(dec.data);
-			parsed.username = capture.username;
-			parsed.password = capture.password;
-			const reenc = await sendToOffscreen({
-				type: "CRYPTO_ENCRYPT",
-				payload: { plaintextJson: JSON.stringify(parsed) },
-			});
-			if (!reenc.ok || !reenc.data) {
-				throw new Error(`reencrypt entry failed: ${reenc.error ?? "no data"}`);
-			}
-			const fresh = reenc.data as Omit<EncryptedEntry, "id" | "hlc">;
-			next.push({ id: enc.id, ...fresh, hlc: await nextStamp() });
-		}
-		return next;
-	});
+			return next;
+		},
+		vaultId,
+	);
 	const newBlob: VaultBlob = {
 		slots: blob.slots,
 		entriesIv: outer.entriesIv,
 		entriesCiphertext: outer.entriesCiphertext,
 	};
-	await writeVault(encodeVaultBlob(newBlob));
+	await writeVault(encodeVaultBlob(newBlob), vaultId);
 	updateLoginCredentials(chosenEntryId, capture.username, capture.password);
 	await broadcastVaultChanged();
 }

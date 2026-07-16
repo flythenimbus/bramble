@@ -23,7 +23,7 @@ import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
-import { vaultLocked } from "./session";
+import { getActiveVaultId, vaultLocked } from "./session";
 
 // Reset the SW idle timer while an interactive auth is pending (under the 30s cutoff).
 function keepAlive(): () => void {
@@ -31,9 +31,14 @@ function keepAlive(): () => void {
 	return () => clearInterval(id);
 }
 
-// VEK-wrap the refresh token via the offscreen crypto host (same shape as useBackup.wrap).
+// VEK-wrap the refresh token via the offscreen crypto host (same shape as useBackup.wrap). Tag
+// the active vault so decryptSecrets can find the wrapping vek (it tries the active vault first).
 async function wrapSecret(plaintext: string): Promise<WrappedCreds> {
-	const res = await sendToOffscreen({ type: "CRYPTO_ENCRYPT_OUTER", payload: { plaintext } });
+	const res = await sendToOffscreen({
+		type: "CRYPTO_ENCRYPT_OUTER",
+		vaultId: getActiveVaultId() ?? undefined,
+		payload: { plaintext },
+	});
 	if (!res.ok || !res.data || typeof res.data !== "object") {
 		throw new Error("Couldn't secure the credentials.");
 	}

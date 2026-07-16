@@ -20,7 +20,7 @@ import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
-import { scheduleAutoLock, vaultLocked } from "./session";
+import { getActiveVaultId, scheduleAutoLock, vaultLocked } from "./session";
 import { bytesToBase64, readAndDecodeVault } from "./vault-io";
 
 const HOSTNAMES_KEY = "autofill.knownHostnames";
@@ -190,14 +190,19 @@ function authorizeFill(entryId: string, pageHostname: string): void {
 export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 	if (autofillIndex !== null) return true;
 	if (vaultLocked()) return false;
+	// Rebuild from the ACTIVE vault's blob + VEK (not the primary's): autofill serves whichever
+	// vault is unlocked now. See docs/multiple-vaults.md "Autofill".
+	const vaultId = getActiveVaultId();
+	if (vaultId === null) return false;
 	try {
-		const blob = await readAndDecodeVault();
+		const blob = await readAndDecodeVault(vaultId);
 		if (blob.entriesCiphertext.length === 0) {
 			autofillIndex = new Map();
 			return true;
 		}
 		const outerResp = await sendToOffscreen({
 			type: "CRYPTO_DECRYPT_OUTER",
+			vaultId,
 			payload: {
 				iv: bytesToBase64(blob.entriesIv),
 				ciphertext: bytesToBase64(blob.entriesCiphertext),
@@ -209,6 +214,7 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 		for (const enc of encryptedEntries) {
 			const dec = await sendToOffscreen({
 				type: "CRYPTO_DECRYPT",
+				vaultId,
 				payload: {
 					ciphertext: enc.ciphertext,
 					iv: enc.iv,

@@ -224,6 +224,7 @@ async function readLocalState(
 	if (blob.entriesCiphertext.length === 0) return { blob, payload: emptyEntriesPayload() };
 	const dec = await sendToOffscreen({
 		type: "CRYPTO_DECRYPT_OUTER",
+		vaultId: ctx.vaultId,
 		payload: {
 			iv: bytesToBase64(blob.entriesIv),
 			ciphertext: bytesToBase64(blob.entriesCiphertext),
@@ -248,6 +249,7 @@ function makeVaultSyncPort(ctx: SyncVaultCtx): VaultSyncPort {
 		async writeMerged(merged) {
 			const enc = await sendToOffscreen({
 				type: "CRYPTO_ENCRYPT_OUTER",
+				vaultId: ctx.vaultId,
 				payload: { plaintext: encodeEntriesPayload(merged) },
 			});
 			if (!enc.ok || !enc.data) throw new Error(enc.error ?? "outer encrypt failed");

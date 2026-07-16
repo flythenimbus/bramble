@@ -26,6 +26,20 @@ export function getActiveVaultId(): string | null {
 	return vekStore.getActiveVaultId();
 }
 
+/** The active vault id, or throw when locked. Background writers (corner-prompt, passkey-store)
+ * use it for both blob I/O and crypto, so the two can never disagree on which vault they touch. */
+export function requireActiveVaultId(): string {
+	const id = vekStore.getActiveVaultId();
+	if (id === null) throw new Error("vault locked");
+	return id;
+}
+
+/** Every currently-unlocked vault id, most-recently-unlocked first. Used by backup to retry a
+ * device-global target's VEK-wrapped creds across resident vaults. */
+export function unlockedVaultIds(): string[] {
+	return vekStore.unlockedMru();
+}
+
 // Await the vek-store rehydration (per-vault VEK map + MRU + active id, rebuilt from
 // chrome.storage.session on a service-worker restart) and drop any decrypted index a previous
 // build left in session. Awaited (with the index hydration) before any handler runs.

@@ -28,10 +28,13 @@ export async function writeVault(blob: Uint8Array, vaultId?: string): Promise<vo
 	await extensionStorage.writeVaultBlob(blob, vaultId);
 }
 
-/** Decrypt, mutate, re-encrypt the outer entry list via offscreen so plaintext never leaves it. */
+/** Decrypt, mutate, re-encrypt the outer entry list via offscreen so plaintext never leaves it.
+ * `vaultId` tags the outer crypto ops so they use that vault's VEK (matching the blob read/write);
+ * omitted resolves to the active vault. */
 export async function reencryptOuterWithEntryChange(
 	currentBlob: VaultBlob,
 	mutate: (entries: EncryptedEntry[]) => Promise<EncryptedEntry[]>,
+	vaultId?: string,
 ): Promise<{ entriesIv: Uint8Array; entriesCiphertext: Uint8Array; entryCount: number }> {
 	let payload: EntriesPayload;
 	if (currentBlob.entriesCiphertext.length === 0) {
@@ -39,6 +42,7 @@ export async function reencryptOuterWithEntryChange(
 	} else {
 		const decrypted = await sendToOffscreen({
 			type: "CRYPTO_DECRYPT_OUTER",
+			vaultId,
 			payload: {
 				iv: bytesToBase64(currentBlob.entriesIv),
 				ciphertext: bytesToBase64(currentBlob.entriesCiphertext),
@@ -57,6 +61,7 @@ export async function reencryptOuterWithEntryChange(
 	const json = encodeEntriesPayload({ entries: mutated, tombstones: payload.tombstones });
 	const encrypted = await sendToOffscreen({
 		type: "CRYPTO_ENCRYPT_OUTER",
+		vaultId,
 		payload: { plaintext: json },
 	});
 	if (!encrypted.ok || !encrypted.data || typeof encrypted.data !== "object") {

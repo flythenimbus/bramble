@@ -21,7 +21,7 @@ import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
-import { vaultLocked } from "./session";
+import { getActiveVaultId, unlockedVaultIds, vaultLocked } from "./session";
 
 export const BACKUP_ALARM = "backup:scheduled";
 // A cheap poke; the handler no-ops unless a target is due + changed + unlocked.
@@ -37,15 +37,25 @@ export async function scheduleBackups(): Promise<void> {
 	}
 }
 
-// Unwrap a target's VEK-wrapped credentials via the offscreen crypto host. The
-// cached VEK is auto-reinjected there if the offscreen was killed.
+// Unwrap a target's VEK-wrapped credentials via the offscreen crypto host. Backup targets are
+// device-global but their creds were VEK-wrapped under whichever vault was active when the target
+// was created; with several veks now resident, try the active vault first, then each other
+// unlocked vault (bounded). The durable fix (wrap under a device key, not a vault VEK) is deferred;
+// see docs/multiple-vaults.md "Backup cred decrypt".
 async function decryptSecrets(creds: WrappedCreds): Promise<BackupSecrets> {
-	const dec = await sendToOffscreen({
-		type: "CRYPTO_DECRYPT_OUTER",
-		payload: { iv: creds.iv, ciphertext: creds.ciphertext },
-	});
-	if (!dec.ok || typeof dec.data !== "string") throw new Error("Couldn't unlock credentials.");
-	return JSON.parse(dec.data) as BackupSecrets;
+	const active = getActiveVaultId();
+	const candidates = [active, ...unlockedVaultIds().filter((id) => id !== active)].filter(
+		(id): id is string => id !== null,
+	);
+	for (const vaultId of candidates) {
+		const dec = await sendToOffscreen({
+			type: "CRYPTO_DECRYPT_OUTER",
+			vaultId,
+			payload: { iv: creds.iv, ciphertext: creds.ciphertext },
+		});
+		if (dec.ok && typeof dec.data === "string") return JSON.parse(dec.data) as BackupSecrets;
+	}
+	throw new Error("Couldn't unlock credentials.");
 }
 
 let running = false;
