@@ -927,9 +927,10 @@ behavior, clobbers included); the fix is real once 3 lands.
   pairing code + master password and calls `useVault.startJoin`, which dedups by `groupKey`, else
   `createRecord` + `setActiveVault` + runs `joinGroup` in the new vault's context via a deferred
   effect (the join is active-vault-scoped and the captured `joinGroup` holds the old id - the
-  binding trap), landing you inside the joined vault unlocked. FOLLOW-UP: the raw `joinGroup`
-  behind Settings "Join with a pairing code" still id-less-writes the ACTIVE vault (overwrites it
-  if non-empty); switch that entry to `startJoin` or drop it, since setup is now the safe path.**
+  binding trap), landing you inside the joined vault unlocked. The Settings "Join with a pairing
+  code" entry (which id-less-wrote / overwrote the ACTIVE vault) was REMOVED (commit 454a2d99);
+  the not-in-a-group panel keeps invite + points to "Add a vault -> Join a device". The raw
+  `joinGroup` action stays for the "join into the active vault" primitive but has no UI entry.**
 - **Backup target-cred device-key wrap.** Backup target credentials are VEK-wrapped under
   whichever vault created the target. Per-vault VEK ships a mitigation (try the active
   vault's vek, then each other unlocked vault's); the durable fix wraps target config
