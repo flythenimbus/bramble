@@ -355,7 +355,6 @@ msgstr "Trennung bestätigen"
 msgid "Confirm it's you"
 msgstr "Bestätigen Sie Ihre Identität"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Confirm master password"
 msgstr "Master-Passwort bestätigen"
@@ -782,6 +781,10 @@ msgstr "Zum Tresor gehen"
 msgid "Have a backup? Open a .bramble file instead"
 msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
+msgstr "Haben Sie einen Pairing-Code von einem anderen Gerät? Fügen Sie einen Tresor hinzu und wählen Sie \\"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
 msgstr "Verborgen"
@@ -884,8 +887,8 @@ msgid "Items ({0})"
 msgstr "Elemente ({0})"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Join"
-msgstr "Beitreten"
+#~ msgid "Join"
+#~ msgstr "Beitreten"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
@@ -897,8 +900,8 @@ msgid "Join vault"
 msgstr "Tresor beitreten"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Join with a pairing code"
-msgstr "Mit einem Kopplungscode beitreten"
+#~ msgid "Join with a pairing code"
+#~ msgstr "Mit einem Kopplungscode beitreten"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Keep the invite open on your other device while the vault transfers."
@@ -1002,8 +1005,8 @@ msgid "Master password"
 msgstr "Master-Passwort"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Master password for this device"
-msgstr "Master-Passwort für dieses Gerät"
+#~ msgid "Master password for this device"
+#~ msgstr "Master-Passwort für dieses Gerät"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Master password set."
@@ -1129,8 +1132,8 @@ msgid "Offer to save logins"
 msgstr "Angebot zur Speicherung von Anmeldungen"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
-msgstr "Nach der Registrierung synchronisieren sich die Geräte automatisch im Hintergrund, solange diese entsperrt sind. Kein Button oder Fenster ist nötig."
+#~ msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
+#~ msgstr "Nach der Registrierung synchronisieren sich die Geräte automatisch im Hintergrund, solange diese entsperrt sind. Kein Button oder Fenster ist nötig."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
@@ -1195,7 +1198,6 @@ msgstr "Optional (z. B. Arbeit)"
 msgid "Pair with another device"
 msgstr "Mit einem anderen Gerät koppeln"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Kopplungscode"
@@ -1252,13 +1254,12 @@ msgid "passwords don't match"
 msgstr "Die Passwörter stimmen nicht überein"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Passwords don't match"
 msgstr "Die Passwörter stimmen nicht überein"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
-msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
+#~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
+#~ msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Paste the code from your other device's \"Add a device\" screen"
@@ -1490,8 +1491,8 @@ msgid "Scan authenticator QR code from current webpage"
 msgstr "Scannen Sie den Authentifikator-QR-Code von der aktuellen Webseite"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Scan QR code"
-msgstr "Scannen Sie den QR-Code"
+#~ msgid "Scan QR code"
+#~ msgstr "Scannen Sie den QR-Code"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan QR code from current webpage"
@@ -1523,7 +1524,6 @@ msgid "Security"
 msgstr "Sicherheit"
 
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Security key"
 msgstr "Sicherheitsschlüssel"
 
@@ -2060,8 +2060,8 @@ msgstr "Sie werden diesen Code nicht wieder sehen."
 #~ msgstr "Sie melden sich in einem neuen Fenster bei {name} an und lassen Bramble verschlüsselte Sicherungen in Ihr Konto hochladen. Bramble lädt ausschließlich Chiffretext hoch."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "You'll tap your security key when you press Join. No master password is set on this device."
-msgstr "Wenn Sie auf „Beitreten“ klicken, tippen Sie Ihren Sicherheitsschlüssel. Es ist kein Master-Passwort auf diesem Gerät festgelegt."
+#~ msgid "You'll tap your security key when you press Join. No master password is set on this device."
+#~ msgstr "Wenn Sie auf „Beitreten“ klicken, tippen Sie Ihren Sicherheitsschlüssel. Es ist kein Master-Passwort auf diesem Gerät festgelegt."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."

@@ -14,7 +14,6 @@ import {
 } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { formatDate } from "../../../../util/format-date";
-import { isWebauthnAvailable } from "../../../../vault/webauthn-ceremony";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
@@ -24,13 +23,6 @@ const inputClass =
 	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50";
 const btnClass =
 	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50";
-const toggleClass = (active: boolean) =>
-	`px-3 py-1.5 text-xs rounded-lg border transition-all ${
-		active
-			? "border-primary/50 bg-primary/10 text-foreground"
-			: "border-border text-muted-foreground"
-	}`;
-
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 interface SyncGroup {
@@ -62,8 +54,7 @@ const relativeTime = (ms: number): string => {
  */
 export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
-	const canCameraScan = useCan("cameraScan");
-	const { inviteDevice, joinGroup, removeDevice, verifyMasterPassword } = useVaultActions();
+	const { inviteDevice, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
 	const { activeId, primaryId, vaults, syncKey } = useVaultRegistry();
 	const canPerVaultSync = useCan("perVaultSync");
@@ -78,14 +69,6 @@ export function SyncConnectSection() {
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
-	const [joinCode, setJoinCode] = useState("");
-	const [joinPassword, setJoinPassword] = useState("");
-	const [joinPasswordConfirm, setJoinPasswordConfirm] = useState("");
-	// Join failure (e.g. password doesn't match the other device), shown as an inline
-	// validation error under the password field. The debug status log is hidden, so
-	// this is the only user-facing surface for a failed join.
-	const [joinError, setJoinError] = useState<string | null>(null);
-	const [joinMethod, setJoinMethod] = useState<"password" | "securityKey">("password");
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	// Master-password gate before adding a device: the re-entered password admission-signs the new
@@ -97,10 +80,6 @@ export function SyncConnectSection() {
 	const [gateBusy, setGateBusy] = useState(false);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
-	// Security-key pairing only where WebAuthn keys actually work: the extension.
-	// Mobile webviews expose PublicKeyCredential but can't use security keys (no prf
-	// on iOS, NFC-blocked on Android), so the join there is master-password only.
-	const canUseSecurityKey = useCan("securityKeys") && isWebauthnAvailable();
 
 	// Group membership (source of truth for "are we paired, and with whom"). undefined
 	// while loading so we don't flash the onboarding UI over an existing group.
@@ -229,37 +208,6 @@ export function SyncConnectSection() {
 			setGateBusy(false);
 		}
 	};
-	const join = () =>
-		run("joining…", async () => {
-			setJoinError(null);
-			try {
-				await joinGroup(
-					joinCode,
-					joinMethod === "securityKey"
-						? { kind: "securityKey" }
-						: { kind: "password", password: joinPassword },
-				);
-			} catch (e) {
-				// Surface the reason (e.g. "doesn't match your other device") visibly, then
-				// rethrow so run() still logs it to the hidden diagnostics.
-				setJoinError((e as Error).message);
-				throw e;
-			}
-			// joinGroup resolves once the vault bundle has transferred and been written;
-			// the "relay disconnected" status before this is normal teardown, not failure.
-			note("✅ Synced — your entries are now on this device.");
-			setJoinCode("");
-			setJoinPassword("");
-			setJoinPasswordConfirm("");
-			await refreshGroup();
-		});
-	// Camera scan of the inviter's pairing QR (mobile only).
-	const scanForJoinCode = () =>
-		run("scanning…", async () => {
-			const code = await shell.scanQrFromActiveTab();
-			if (code) setJoinCode(code);
-			else note("no code scanned");
-		});
 	const remove = async (d: RosterEntry) => {
 		setRemovingId(null);
 		try {
@@ -445,92 +393,11 @@ export function SyncConnectSection() {
 						</button>
 					</Row>
 
-					<Row
-						icon={<Wifi className="w-4 h-4 text-primary" />}
-						title={t`Join with a pairing code`}
-						subtitle={t`Paste the code from your other device to sync this one to it. Replaces this profile's vault.`}
-					>
-						<button
-							type="button"
-							onClick={() => void join()}
-							disabled={
-								!joinCode.trim() ||
-								(joinMethod === "password" &&
-									(!joinPassword || joinPassword !== joinPasswordConfirm))
-							}
-							className={btnClass}
-						>
-							<Trans>Join</Trans>
-						</button>
-					</Row>
-
-					<div className="ml-12 mt-1 space-y-4">
-						<TextField
-							label={t`Pairing code`}
-							value={joinCode}
-							onChange={(e) => setJoinCode(e.target.value)}
-						/>
-						{canCameraScan && (
-							<button type="button" onClick={() => void scanForJoinCode()} className={btnClass}>
-								<Trans>Scan QR code</Trans>
-							</button>
-						)}
-						<div className="space-y-4">
-							{canUseSecurityKey && (
-								<div className="flex gap-2">
-									<button
-										type="button"
-										onClick={() => setJoinMethod("password")}
-										className={toggleClass(joinMethod === "password")}
-									>
-										<Trans>Master password</Trans>
-									</button>
-									<button
-										type="button"
-										onClick={() => setJoinMethod("securityKey")}
-										className={toggleClass(joinMethod === "securityKey")}
-									>
-										<Trans>Security key</Trans>
-									</button>
-								</div>
-							)}
-							{joinMethod === "password" ? (
-								<div className="space-y-4">
-									<PasswordField
-										label={t`Master password for this device`}
-										value={joinPassword}
-										onChange={(e) => {
-											setJoinPassword(e.target.value);
-											setJoinError(null);
-										}}
-										error={joinError ?? undefined}
-									/>
-									<PasswordField
-										label={t`Confirm master password`}
-										value={joinPasswordConfirm}
-										onChange={(e) => setJoinPasswordConfirm(e.target.value)}
-										error={
-											joinPasswordConfirm.length > 0 && joinPassword !== joinPasswordConfirm
-												? t`Passwords don't match`
-												: undefined
-										}
-									/>
-								</div>
-							) : (
-								<p className="text-xs text-muted-foreground">
-									<Trans>
-										You'll tap your security key when you press Join. No master password is set on
-										this device.
-									</Trans>
-								</p>
-							)}
-						</div>
-					</div>
-
 					<p className="ml-12 text-xs text-muted-foreground">
 						<Trans>
-							Once enrolled, devices sync automatically in the background while unlocked, no button
-							or window needed.
+							Have a pairing code from another device? Add a vault and choose "Join a device" to
+							sync its vault onto this one. Once enrolled, devices sync automatically in the
+							background while unlocked, no button or window needed.
 						</Trans>
 					</p>
 				</>
