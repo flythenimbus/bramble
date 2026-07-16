@@ -55,6 +55,17 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
+describe("isSyncGroupKey", () => {
+	it("matches the flat and namespaced group keys, not the device keypair or relay", async () => {
+		const { isSyncGroupKey } = await loadConfig();
+		expect(isSyncGroupKey("sync.group")).toBe(true);
+		expect(isSyncGroupKey("sync.group:abc-123")).toBe(true);
+		expect(isSyncGroupKey("sync.deviceKeypair")).toBe(false);
+		expect(isSyncGroupKey("sync.groupthing")).toBe(false);
+		expect(isSyncGroupKey("sync.relay")).toBe(false);
+	});
+});
+
 describe("resolveSyncVault", () => {
 	it("targets the session-recorded active vault", async () => {
 		stubChrome(regSeed, { [ACTIVE_VAULT_SESSION_KEY]: "b" });

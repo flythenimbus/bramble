@@ -17,6 +17,7 @@ import "./theme";
 import "./webauthn-proxy-init";
 import "./webauthn-content-transport";
 import { isVaultBlobKey } from "../storage";
+import { isSyncGroupKey } from "../sync/sync-config";
 import { indexHydration } from "./autofill-index";
 import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
@@ -139,6 +140,13 @@ api.storage.onChanged.addListener((changes, area) => {
 			await maybeStartSync();
 			await sendToOffscreen({ type: "SYNC_BROADCAST_NOW" }).catch(() => {});
 		})();
+	}
+	// A group appearing (a fresh invite) or its roster growing (a device just enrolled) means this
+	// vault should be syncing. Start the ongoing-sync host now instead of waiting for the first local
+	// edit or the keepalive tick, so a freshly paired vault reconciles promptly. maybeStartSync is a
+	// no-op if already running (its own guard), so a roster gossip write can't restart-loop it.
+	if (Object.keys(changes).some(isSyncGroupKey) && !vaultLocked()) {
+		void maybeStartSync();
 	}
 	// Re-arm or clear the backup poke when the target list or a schedule changes.
 	if (changes[BACKUP_TARGETS_KEY]) void scheduleBackups();

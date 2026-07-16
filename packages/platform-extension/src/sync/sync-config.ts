@@ -94,6 +94,13 @@ export async function storeSigningKey(kp: SigningKeypair, ctx: SyncVaultCtx): Pr
 
 const GROUP_KEY = "sync.group";
 
+/** True for any vault's group key: the flat legacy key or a namespaced `sync.group:<id>` key. The
+ * blob-change watcher uses this to (re)start ongoing sync the moment a group is created (an invite)
+ * or its roster changes (a device enrolled), instead of waiting for a blob change or the alarm. */
+export function isSyncGroupKey(key: string): boolean {
+	return key === GROUP_KEY || key.startsWith(`${GROUP_KEY}:`);
+}
+
 /** The group config written by useVault (createGroup/join): the shared key + roster. */
 export interface GroupConfig {
 	groupKey: string;
