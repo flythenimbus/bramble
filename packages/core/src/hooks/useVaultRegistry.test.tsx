@@ -99,11 +99,14 @@ describe("VaultRegistryProvider", () => {
 		expect(v.activeId).toBeUndefined();
 	});
 
-	it("rename updates a vault's label", async () => {
+	it("rename renames the active vault", async () => {
 		const { get } = mount(two);
 		await act(async () => {});
 		await act(async () => {
-			await get().rename("b", "Family");
+			get().selectVault("b");
+		});
+		await act(async () => {
+			await get().rename("Family");
 		});
 		expect(get().vaults.find((v) => v.id === "b")?.label).toBe("Family");
 	});
@@ -117,7 +120,7 @@ describe("VaultRegistryProvider", () => {
 		expect(get().primaryId).toBe("b");
 	});
 
-	it("remove deletes the blob + record and deselects the active vault", async () => {
+	it("remove deletes the active vault's blob + record and deselects it", async () => {
 		const { get, deleteVaultBlob } = mount(two);
 		await act(async () => {});
 		await act(async () => {
@@ -125,11 +128,25 @@ describe("VaultRegistryProvider", () => {
 		});
 		expect(get().activeId).toBe("b");
 		await act(async () => {
-			await get().remove("b");
+			await get().remove();
 		});
 		expect(deleteVaultBlob).toHaveBeenCalledWith("b");
 		expect(get().vaults.map((v) => v.id)).toEqual(["a"]);
 		expect(get().activeId).toBeUndefined();
+	});
+
+	it("rename and remove do nothing when no vault is active (can't target another)", async () => {
+		const { get, deleteVaultBlob } = mount(two);
+		await act(async () => {});
+		expect(get().activeId).toBeUndefined();
+		await act(async () => {
+			await get().rename("Nope");
+		});
+		await act(async () => {
+			await get().remove();
+		});
+		expect(get().vaults.map((v) => v.id)).toEqual(["a", "b"]);
+		expect(deleteVaultBlob).not.toHaveBeenCalled();
 	});
 });
 

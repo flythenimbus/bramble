@@ -34,12 +34,14 @@ export interface VaultRegistryValue {
 	clearSelection: () => void;
 	/** Register a new empty vault record and select it; returns its id. The blob is written separately. */
 	createRecord: (label?: string) => Promise<string>;
-	/** Rename a vault (write-through to storage). */
-	rename: (id: string, label: string) => Promise<void>;
-	/** Make a vault the primary (write-through). */
+	// rename/remove take no target id: they only ever act on the active vault, so a vault
+	// can never rename or delete another vault.
+	/** Rename the active vault (write-through to storage). */
+	rename: (label: string) => Promise<void>;
+	/** Make a vault the primary (write-through). Mobile-only concept (autofill/biometric target). */
 	setPrimaryVault: (id: string) => Promise<void>;
-	/** Delete a vault: its blob and registry record. Deselects it if it was active. */
-	remove: (id: string) => Promise<void>;
+	/** Delete the active vault: its blob and registry record, then deselect it. */
+	remove: () => Promise<void>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
 }
@@ -108,23 +110,25 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 		},
 		[registry, persist],
 	);
+	// rename/remove only ever act on the active vault (no target id), so a vault can never
+	// rename or delete another vault.
 	const rename = useCallback(
-		(id: string, label: string) => persist(renameVault(registry, id, label)),
-		[registry, persist],
+		async (label: string) => {
+			if (activeId) await persist(renameVault(registry, activeId, label));
+		},
+		[registry, persist, activeId],
 	);
 	const setPrimaryVault = useCallback(
 		(id: string) => persist(setPrimary(registry, id)),
 		[registry, persist],
 	);
-	const remove = useCallback(
-		async (id: string) => {
-			// Best-effort blob cleanup; an orphaned encrypted blob is harmless if it fails.
-			await storage.deleteVaultBlob(id).catch(() => {});
-			await persist(removeVault(registry, id));
-			setActiveId((cur) => (cur === id ? undefined : cur));
-		},
-		[registry, persist, storage],
-	);
+	const remove = useCallback(async () => {
+		if (!activeId) return;
+		// Best-effort blob cleanup; an orphaned encrypted blob is harmless if it fails.
+		await storage.deleteVaultBlob(activeId).catch(() => {});
+		await persist(removeVault(registry, activeId));
+		setActiveId(undefined);
+	}, [registry, persist, storage, activeId]);
 
 	const value = useMemo<VaultRegistryValue>(
 		() => ({

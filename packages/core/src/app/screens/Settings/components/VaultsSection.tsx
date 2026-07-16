@@ -37,7 +37,7 @@ export function VaultsSection() {
 	// picker (or setup, if it was the last vault).
 	const deleteThisVault = async () => {
 		await lock();
-		await remove(activeId);
+		await remove();
 	};
 
 	return (
@@ -46,7 +46,7 @@ export function VaultsSection() {
 				<form
 					onSubmit={(e) => {
 						e.preventDefault();
-						void rename(activeId, draft.trim()).then(() => setRenaming(false));
+						void rename(draft.trim()).then(() => setRenaming(false));
 					}}
 					className="flex items-center gap-2"
 				>
