@@ -15,7 +15,8 @@ import {
 	toProviderConfig,
 	type WrappedCreds,
 } from "@core/backup/config";
-import { runScheduledBackups } from "@core/backup/run";
+import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
+import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
@@ -49,6 +50,49 @@ async function decryptSecrets(creds: WrappedCreds): Promise<BackupSecrets> {
 let running = false;
 
 /** Run any due+changed backup headlessly while unlocked. No-op if locked or nothing due. */
+/** Every registered vault's sealed blob. Backups copy the encrypted blob (no VEK needed), so a
+ * locked non-active vault is still backed up. A registered vault with no readable blob is skipped. */
+async function readVaults(): Promise<VaultBackup[]> {
+	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY));
+	const out: VaultBackup[] = [];
+	for (const v of reg.vaults) {
+		try {
+			out.push({
+				id: v.id,
+				blob: await extensionStorage.readVaultBlob(v.id),
+				legacy: v.id === reg.legacyBlobVaultId,
+			});
+		} catch {}
+	}
+	return out;
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+	const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+	let off = 0;
+	for (const p of parts) {
+		out.set(p, off);
+		off += p.length;
+	}
+	return out;
+}
+
+/** One fingerprint over all vaults; id-tagged + sorted so add/remove/edit any vault changes it. */
+async function hashVaults(vaults: VaultBackup[]): Promise<string> {
+	const enc = new TextEncoder();
+	const parts = [...vaults]
+		.sort((a, b) => a.id.localeCompare(b.id))
+		.flatMap((v) => [enc.encode(`${v.id}:`), v.blob]);
+	return sha256Hex(concatBytes(parts));
+}
+
+/** Where a vault's snapshots live at a target: the legacy vault keeps the un-suffixed prefix (so
+ * existing backups continue); every other vault gets a sibling `<prefix>-<id>/` folder. A sibling
+ * avoids the legacy folder's prefix listing sweeping up other vaults' files during retention. */
+function vaultBackupPrefix(t: BackupTargetConfig, v: VaultBackup): string {
+	return v.legacy ? backupPrefix(t) : `${backupPrefix(t)}-${v.id}`;
+}
+
 export async function runDueBackups(): Promise<void> {
 	if (running || vaultLocked()) return;
 	running = true;
@@ -58,12 +102,15 @@ export async function runDueBackups(): Promise<void> {
 				loadTargets: async () =>
 					(await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY)) ?? [],
 				saveTargets: (targets) => extensionStorage.setMeta(BACKUP_TARGETS_KEY, targets),
-				readBlob: () => extensionStorage.readVaultBlob(),
-				hashBlob: (blob) => sha256Hex(blob),
+				readVaults,
+				hashVaults,
 				decryptSecrets,
-				upload: async (t, secrets, blob) => {
+				upload: async (t, secrets, vaults) => {
 					const target = createTarget(toProviderConfig(t, secrets));
-					await runBackup(target, blob, { prefix: backupPrefix(t), keep: t.keep });
+					// Sequential per vault: the offscreen crypto host is shared and can't race.
+					for (const v of vaults) {
+						await runBackup(target, v.blob, { prefix: vaultBackupPrefix(t, v), keep: t.keep });
+					}
 				},
 			},
 			Date.now(),

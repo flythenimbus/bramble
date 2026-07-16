@@ -6,13 +6,25 @@ import { isDue, selectDueTargets } from "./schedule";
  * a browser, storage, crypto host, or network. The extension wires real ones; tests
  * pass fakes.
  */
+/** One vault to back up: its id, its sealed blob, and whether it's the legacy (primary) vault
+ * whose snapshots stay at the un-suffixed prefix so existing backups keep going. */
+export interface VaultBackup {
+	id: string;
+	blob: Uint8Array;
+	legacy: boolean;
+}
+
 export interface ScheduledBackupDeps {
 	loadTargets(): Promise<BackupTargetConfig[]>;
 	saveTargets(targets: BackupTargetConfig[]): Promise<void>;
-	readBlob(): Promise<Uint8Array>;
-	hashBlob(blob: Uint8Array): Promise<string>;
+	/** Every local vault's sealed blob. Backups copy the encrypted blob (no VEK), so all vaults
+	 * can be backed up regardless of which one is unlocked. */
+	readVaults(): Promise<VaultBackup[]>;
+	/** A single fingerprint over all vaults, so an unchanged set skips re-upload. */
+	hashVaults(vaults: VaultBackup[]): Promise<string>;
 	decryptSecrets(creds: WrappedCreds): Promise<BackupSecrets>;
-	upload(target: BackupTargetConfig, secrets: BackupSecrets, blob: Uint8Array): Promise<void>;
+	/** Upload every vault to `target` (each to its own per-vault key namespace). */
+	upload(target: BackupTargetConfig, secrets: BackupSecrets, vaults: VaultBackup[]): Promise<void>;
 }
 
 export interface ScheduledBackupResult {
@@ -24,11 +36,12 @@ export interface ScheduledBackupResult {
 const EMPTY: ScheduledBackupResult = { attempted: 0, succeeded: [], failed: [] };
 
 /**
- * Back up every target that is due and whose vault changed since its last run.
- * Reads the vault once, unwraps + uploads each target sequentially, then folds the
+ * Back up every target that is due and whose vaults changed since its last run.
+ * Reads all vaults once, unwraps + uploads each target sequentially, then folds the
  * per-target success/failure back into the stored list. A failed target keeps its
  * old lastBackupAt (stays due, retries next trigger); a success advances it and
- * clears any error. See docs/cloud-storage-backups.md.
+ * clears any error. The change fingerprint covers every vault, so a due target
+ * re-uploads all of them whenever any one changes. See docs/cloud-storage-backups.md.
  */
 export async function runScheduledBackups(
 	deps: ScheduledBackupDeps,
@@ -37,17 +50,17 @@ export async function runScheduledBackups(
 	const targets = await deps.loadTargets();
 	if (!targets.some((t) => isDue(t, now))) return EMPTY;
 
-	const blob = await deps.readBlob();
-	const hash = await deps.hashBlob(blob);
+	const vaults = await deps.readVaults();
+	const hash = await deps.hashVaults(vaults);
 	const toRun = selectDueTargets(targets, now, hash);
-	if (toRun.length === 0) return EMPTY; // every due target already holds this vault
+	if (toRun.length === 0) return EMPTY; // every due target already holds these vaults
 
 	const outcome = new Map<string, { hash?: string; error?: string }>();
 	// Sequential: callers back a shared crypto host whose key injection can't race.
 	for (const t of toRun) {
 		try {
 			const secrets = await deps.decryptSecrets(t.creds);
-			await deps.upload(t, secrets, blob);
+			await deps.upload(t, secrets, vaults);
 			outcome.set(t.id, { hash });
 		} catch (e) {
 			outcome.set(t.id, { error: (e as Error).message });

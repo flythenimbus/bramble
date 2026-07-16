@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BackupFrequency, BackupTargetConfig } from "./config";
-import { runScheduledBackups, type ScheduledBackupDeps } from "./run";
+import { runScheduledBackups, type ScheduledBackupDeps, type VaultBackup } from "./run";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1_700_000_000_000;
@@ -22,29 +22,38 @@ function target(
 }
 
 // In-memory fakes. `uploadFail`/`decryptFail` are keyed by target id.
+const ONE_VAULT: VaultBackup[] = [{ id: "v1", blob: new Uint8Array([1, 2, 3]), legacy: true }];
+
 function harness(
 	initial: BackupTargetConfig[],
-	opts: { hash?: string; uploadFail?: Set<string>; decryptFail?: Set<string> } = {},
+	opts: {
+		hash?: string;
+		vaults?: VaultBackup[];
+		uploadFail?: Set<string>;
+		decryptFail?: Set<string>;
+	} = {},
 ) {
 	let store = initial;
 	const uploaded: string[] = [];
+	let lastVaults: VaultBackup[] = [];
 	const deps: ScheduledBackupDeps = {
 		loadTargets: async () => store,
 		saveTargets: async (t) => {
 			store = t;
 		},
-		readBlob: async () => new Uint8Array([1, 2, 3]),
-		hashBlob: async () => opts.hash ?? "CUR",
+		readVaults: async () => opts.vaults ?? ONE_VAULT,
+		hashVaults: async () => opts.hash ?? "CUR",
 		decryptSecrets: async (creds) => {
 			if (opts.decryptFail?.has(creds.iv)) throw new Error("bad creds");
 			return { accessKeyId: "k", secretAccessKey: "s" };
 		},
-		upload: async (t) => {
+		upload: async (t, _secrets, vaults) => {
 			if (opts.uploadFail?.has(t.id)) throw new Error("upload boom");
 			uploaded.push(t.id);
+			lastVaults = vaults;
 		},
 	};
-	return { deps, uploaded, current: () => store };
+	return { deps, uploaded, current: () => store, uploadedVaults: () => lastVaults };
 }
 
 describe("runScheduledBackups", () => {
@@ -57,6 +66,16 @@ describe("runScheduledBackups", () => {
 		expect(saved?.lastBackupAt).toBe(NOW);
 		expect(saved?.lastVaultHash).toBe("CUR");
 		expect(saved?.lastError).toBeUndefined();
+	});
+
+	it("hands every vault to the target's upload (not just the primary)", async () => {
+		const vaults: VaultBackup[] = [
+			{ id: "a", blob: new Uint8Array([1]), legacy: true },
+			{ id: "b", blob: new Uint8Array([2]), legacy: false },
+		];
+		const h = harness([target("t", "daily", { lastVaultHash: "OLD" })], { hash: "CUR", vaults });
+		await runScheduledBackups(h.deps, NOW);
+		expect(h.uploadedVaults().map((v) => v.id)).toEqual(["a", "b"]);
 	});
 
 	it("does nothing when no target is due", async () => {

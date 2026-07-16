@@ -503,8 +503,18 @@ Each phase is independently shippable.
 - **Phase 3: mobile autofill + biometric.** Primary-vault selector in Settings; push
   the primary vault's bundle; confirm the arming-requires-unlock question. (Fast
   follow: full multi-vault autofill with per-vault native caches.)
-- **Phase 4: per-vault backups + restore choice.** Namespace `backup.*`; each vault
-  backs up independently; the restore destination flow.
+- **Phase 4: per-vault backups + restore choice.** DONE. The restore-destination flow
+  landed earlier (existing vault -> add a new one, never overwrite). Scheduled backups
+  now cover **every** vault, not just the primary: `runScheduledBackups` reads all
+  registered vaults (the sealed blob needs no VEK) and uploads each as its own file to
+  each target. Backup *targets* stay device-global (one config backs up all vaults);
+  the legacy vault keeps the un-suffixed `<prefix>/` folder so existing backups continue,
+  and every other vault gets a sibling `<prefix>-<id>/` folder (a sibling, so the legacy
+  folder's prefix listing can't sweep up other vaults during keep-N retention). A single
+  combined change-hash over all vaults gates re-upload (so an unchanged set is skipped),
+  which means any one vault changing re-snapshots them all — per-vault change tracking to
+  avoid that redundancy is a deferred optimization (needs a target-format change). Each
+  backup file is still a standalone VLT1 blob, so restore opens one file -> one vault.
 
 ## Decisions (settled)
 
