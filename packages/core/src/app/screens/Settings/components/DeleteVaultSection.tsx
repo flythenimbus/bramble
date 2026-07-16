@@ -2,7 +2,6 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { KeyRound, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
-import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Section } from "./primitives";
 
@@ -12,31 +11,26 @@ const cancelBtn =
 	"px-4 py-2 text-sm rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50";
 
 /**
- * Delete the current vault, gated on re-auth. Uses the master password when the vault has one
- * (the primary method); otherwise a security-key tap. Invariant B guarantees one of the two.
+ * Delete the current vault. All the re-auth + erase logic lives in useVault.deleteVault, which
+ * verifies then deletes atomically; this component only collects the credential. deleteVault
+ * uses the master password when the vault has one, otherwise a security-key tap.
  */
 export function DeleteVaultSection() {
-	const { hasPasswordSlot, verifyMasterPassword, verifyWithSecurityKey, lock } = useVault();
-	const { remove } = useVaultRegistry();
+	const { hasPasswordSlot, deleteVault } = useVault();
 	const { t } = useLingui();
 	const [confirming, setConfirming] = useState(false);
 	const [password, setPassword] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Lock then remove; the router guards route on to the picker (or setup, if it was the last).
-	const doDelete = async () => {
-		await lock();
-		await remove();
-	};
-
+	// A false return means the credential didn't verify (nothing was deleted); a throw means the
+	// security-key ceremony errored. On success the vault is gone and the guards route us away.
 	const withPassword = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
 		setBusy(true);
 		try {
-			if (await verifyMasterPassword(password)) await doDelete();
-			else setError(t`That password is incorrect.`);
+			if (!(await deleteVault({ password }))) setError(t`That password is incorrect.`);
 		} catch (err) {
 			setError((err as Error).message);
 		} finally {
@@ -48,8 +42,8 @@ export function DeleteVaultSection() {
 		setError(null);
 		setBusy(true);
 		try {
-			if (await verifyWithSecurityKey()) await doDelete();
-			else setError(t`Couldn't verify your security key.`);
+			if (!(await deleteVault({ securityKey: true })))
+				setError(t`Couldn't verify your security key.`);
 		} catch (err) {
 			setError((err as Error).message);
 		} finally {

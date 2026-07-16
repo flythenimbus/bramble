@@ -140,6 +140,9 @@ export type JoinUnlock =
 	| { kind: "password"; password: string }
 	| { kind: "securityKey"; label?: string };
 
+/** Re-auth for deleting a vault: the master password, or a security-key tap. */
+export type DeleteVaultAuth = { password: string } | { securityKey: true };
+
 import {
 	DEVICE_ID_KEY,
 	decodeEntriesPayload,
@@ -220,6 +223,13 @@ export interface VaultActions {
 	lock(): Promise<void>;
 	/** Creates a new vault (parallel to any existing ones) and returns its initial plaintext recovery code (shown once). */
 	createVault(password: string, label?: string): Promise<string>;
+	/**
+	 * Delete the active vault after re-auth (master password, or a security-key tap). This is the
+	 * only in-app path that erases a vault's blob: it re-verifies, then erases the bytes and forgets
+	 * the record. Returns false if the credential is wrong (nothing is deleted); throws if the
+	 * security-key ceremony errors.
+	 */
+	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	exportVault(): Promise<void>;
 	addEntry(data: EntryData): Promise<void>;
@@ -272,7 +282,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const { storage: platformStorage, crypto, autofill, shell, biometric } = usePlatform();
 	// The app operates on one vault at a time; bind its id so this provider's blob reads and
 	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
-	const { activeId, ready: registryReady, vaults, createRecord } = useVaultRegistry();
+	const {
+		activeId,
+		ready: registryReady,
+		vaults,
+		createRecord,
+		dropActiveRecord,
+	} = useVaultRegistry();
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
 		[platformStorage, activeId],
@@ -1025,6 +1041,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		],
 	);
 
+	/** Delete the active vault after re-auth. The single in-app path that erases a vault's blob:
+	 * verification and deletion are inseparable here, so no caller can delete without re-authing. */
+	const deleteVault = useCallback(
+		async (auth: DeleteVaultAuth): Promise<boolean> => {
+			const ok =
+				"password" in auth
+					? await verifyMasterPassword(auth.password)
+					: await verifyWithSecurityKey();
+			if (!ok || !activeId) return false;
+			await lock();
+			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
+			await storage.deleteVaultBlob(activeId).catch(() => {});
+			await dropActiveRecord();
+			return true;
+		},
+		[verifyMasterPassword, verifyWithSecurityKey, activeId, lock, storage, dropActiveRecord],
+	);
+
 	// Every action is referentially stable (state reads route through latestRef), so this
 	// memo builds once: the actions value never changes and useVaultActions never re-renders.
 	const actions = useMemo<VaultActions>(
@@ -1032,6 +1066,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			unlock,
 			lock,
 			createVault,
+			deleteVault,
 			exportVault,
 			addEntry,
 			importEntries,
@@ -1060,6 +1095,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			unlock,
 			lock,
 			createVault,
+			deleteVault,
 			exportVault,
 			addEntry,
 			importEntries,

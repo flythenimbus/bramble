@@ -120,7 +120,7 @@ describe("VaultRegistryProvider", () => {
 		expect(get().primaryId).toBe("b");
 	});
 
-	it("remove deletes the active vault's blob + record and deselects it", async () => {
+	it("dropActiveRecord forgets the active vault's record and deselects it (no blob delete)", async () => {
 		const { get, deleteVaultBlob } = mount(two);
 		await act(async () => {});
 		await act(async () => {
@@ -128,25 +128,26 @@ describe("VaultRegistryProvider", () => {
 		});
 		expect(get().activeId).toBe("b");
 		await act(async () => {
-			await get().remove();
+			await get().dropActiveRecord();
 		});
-		expect(deleteVaultBlob).toHaveBeenCalledWith("b");
+		// State only: the record is gone and it's deselected, but the blob is left for
+		// useVault.deleteVault to erase (after re-auth).
+		expect(deleteVaultBlob).not.toHaveBeenCalled();
 		expect(get().vaults.map((v) => v.id)).toEqual(["a"]);
 		expect(get().activeId).toBeUndefined();
 	});
 
-	it("rename and remove do nothing when no vault is active (can't target another)", async () => {
-		const { get, deleteVaultBlob } = mount(two);
+	it("rename and dropActiveRecord do nothing when no vault is active (can't target another)", async () => {
+		const { get } = mount(two);
 		await act(async () => {});
 		expect(get().activeId).toBeUndefined();
 		await act(async () => {
 			await get().rename("Nope");
 		});
 		await act(async () => {
-			await get().remove();
+			await get().dropActiveRecord();
 		});
 		expect(get().vaults.map((v) => v.id)).toEqual(["a", "b"]);
-		expect(deleteVaultBlob).not.toHaveBeenCalled();
 	});
 });
 

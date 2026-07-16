@@ -40,8 +40,12 @@ export interface VaultRegistryValue {
 	rename: (label: string) => Promise<void>;
 	/** Make a vault the primary (write-through). Mobile-only concept (autofill/biometric target). */
 	setPrimaryVault: (id: string) => Promise<void>;
-	/** Delete the active vault: its blob and registry record, then deselect it. */
-	remove: () => Promise<void>;
+	// Low-level state cleanup, NOT a delete: forget the active vault's registry record and
+	// deselect it. It does not erase the blob and does not re-authenticate. The only place a
+	// vault is actually deleted is useVault.deleteVault(), which re-auths, erases the blob,
+	// then calls this. Do not call it directly to delete a vault.
+	/** Forget the active vault's registry record (state only; no blob delete, no re-auth). */
+	dropActiveRecord: () => Promise<void>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
 }
@@ -59,7 +63,7 @@ const DEFAULT: VaultRegistryValue = {
 	createRecord: async () => "",
 	rename: async () => {},
 	setPrimaryVault: async () => {},
-	remove: async () => {},
+	dropActiveRecord: async () => {},
 	refresh: async () => {},
 };
 
@@ -122,13 +126,13 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 		(id: string) => persist(setPrimary(registry, id)),
 		[registry, persist],
 	);
-	const remove = useCallback(async () => {
+	// State only: forget the active vault's record and deselect it. The blob is erased by
+	// useVault.deleteVault() (after re-auth), which then calls this. Not a standalone delete.
+	const dropActiveRecord = useCallback(async () => {
 		if (!activeId) return;
-		// Best-effort blob cleanup; an orphaned encrypted blob is harmless if it fails.
-		await storage.deleteVaultBlob(activeId).catch(() => {});
 		await persist(removeVault(registry, activeId));
 		setActiveId(undefined);
-	}, [registry, persist, storage, activeId]);
+	}, [registry, persist, activeId]);
 
 	const value = useMemo<VaultRegistryValue>(
 		() => ({
@@ -141,7 +145,7 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			createRecord,
 			rename,
 			setPrimaryVault,
-			remove,
+			dropActiveRecord,
 			refresh,
 		}),
 		[
@@ -153,7 +157,7 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			createRecord,
 			rename,
 			setPrimaryVault,
-			remove,
+			dropActiveRecord,
 			refresh,
 		],
 	);
