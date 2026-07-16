@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ArrowRightLeft, Check, Pencil, Plus, Trash2, Vault, X } from "lucide-react";
+import { Check, Pencil, Trash2, Vault, X } from "lucide-react";
 import { useState } from "react";
-import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { displayLabel } from "../../../../vault/vault-registry";
@@ -9,14 +8,11 @@ import { Section } from "./primitives";
 
 const iconBtn =
 	"p-2 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-foreground disabled:opacity-40 transition-all";
-const actionBtn =
-	"px-3 py-2 text-sm rounded-lg border border-border hover:bg-primary/5 flex items-center gap-2";
 
-/** Manage the current vault only: rename it, delete it, or move to another. A vault never acts on other vaults. */
+/** Manage the current vault only: rename it or delete it. A vault never acts on other vaults. */
 export function VaultsSection() {
-	const { vaults, activeId, rename, remove, clearSelection } = useVaultRegistry();
+	const { vaults, activeId, rename, remove } = useVaultRegistry();
 	const { lock } = useVault();
-	const { shell } = usePlatform();
 	const { t } = useLingui();
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState("");
@@ -25,14 +21,9 @@ export function VaultsSection() {
 	const index = vaults.findIndex((v) => v.id === activeId);
 	const current = index >= 0 ? vaults[index] : undefined;
 	// Settings is only reachable while a vault is unlocked, so this is defensive.
-	if (!current || !activeId) return null;
+	if (!current) return null;
 	const label = displayLabel(current.label, index);
 
-	// Leave the current vault locked, then return to the picker.
-	const switchVault = async () => {
-		await lock();
-		clearSelection();
-	};
 	// Delete this vault: lock it, then drop its blob + record. The guards route on to the
 	// picker (or setup, if it was the last vault).
 	const deleteThisVault = async () => {
@@ -95,19 +86,6 @@ export function VaultsSection() {
 					</button>
 				</div>
 			)}
-
-			<div className="flex flex-wrap gap-2">
-				<button type="button" onClick={() => void shell.openSetup()} className={actionBtn}>
-					<Plus className="w-4 h-4" />
-					<Trans>Create new vault</Trans>
-				</button>
-				{vaults.length > 1 && (
-					<button type="button" onClick={() => void switchVault()} className={actionBtn}>
-						<ArrowRightLeft className="w-4 h-4" />
-						<Trans>Switch vault</Trans>
-					</button>
-				)}
-			</div>
 
 			{confirming ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
