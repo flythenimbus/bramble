@@ -13,6 +13,8 @@ test("create a vault, then lock and unlock it", async ({ context, extensionId })
 	await expect(popup.getByText(/Your vault is empty/i)).toBeVisible();
 
 	await lock(popup);
+	// The unlock screen names the vault it's unlocking, in the top-left.
+	await expect(popup.getByTestId("active-vault-label")).toHaveText("Vault 1");
 	// Wrong password is rejected.
 	await popup.locator('input[type="password"]').first().fill("not-the-password");
 	await popup.getByRole("button", { name: "Unlock Vault" }).click();

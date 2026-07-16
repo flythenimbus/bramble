@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
+import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
@@ -32,8 +33,13 @@ export function Auth() {
 	} = useVault();
 	const { shell } = usePlatform();
 	// Clearing the selection returns to the picker (the auth guard redirects to /select).
-	const { vaults, clearSelection } = useVaultRegistry();
+	const { vaults, activeId, clearSelection } = useVaultRegistry();
 	const multipleVaults = vaults.length > 1;
+	// The vault this screen is unlocking, named in the top-left (mirrors the unlocked header).
+	// Absent on first run, when there's no vault yet.
+	const activeIndex = vaults.findIndex((v) => v.id === activeId);
+	const vaultLabel =
+		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
 	const canSecurityKeys = useCan("securityKeys");
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
@@ -152,6 +158,14 @@ export function Auth() {
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">
+			{vaultLabel && (
+				<div
+					data-testid="active-vault-label"
+					className="absolute top-3 left-4 z-10 flex h-8 max-w-[60%] items-center text-sm text-muted-foreground"
+				>
+					<span className="truncate">{vaultLabel}</span>
+				</div>
+			)}
 			{onPopOut && (
 				<button
 					type="button"

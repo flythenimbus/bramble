@@ -69,17 +69,22 @@ export function AppLayout() {
 								aria-label={t`Go to vault`}
 							>
 								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
-								<div className="flex flex-col items-start leading-tight min-w-0">
+								<div className="flex items-center gap-2 min-w-0">
 									<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
 										{shell.appName}
 									</h1>
 									{vaultLabel && (
-										<span
-											data-testid="active-vault-label"
-											className="max-w-[11rem] truncate text-xs text-muted-foreground"
-										>
-											{vaultLabel}
-										</span>
+										<>
+											<span aria-hidden="true" className="text-muted-foreground/40">
+												·
+											</span>
+											<span
+												data-testid="active-vault-label"
+												className="max-w-[11rem] truncate text-sm text-muted-foreground"
+											>
+												{vaultLabel}
+											</span>
+										</>
 									)}
 								</div>
 							</button>
