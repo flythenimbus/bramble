@@ -331,6 +331,16 @@ becomes per-vault: it shows the active vault's roster, not a global device list.
 Each step keeps existing single-vault sync working (the grandfather keys and the
 primary-vault default mean an un-migrated install behaves exactly as before).
 
+**Shipped ahead of increment 3 (stopgap).** Steps 1-2 landed. Because the panel
+still reads the flat, device-global `sync.group` and the background still syncs the
+primary blob, a second vault in the same browser profile showed the primary vault's
+paired devices and could start an enrollment the background would never keep syncing.
+Until increment 3 lands, `SyncConnectSection` is gated to the primary vault
+(`vaults.length <= 1 || activeId === primaryId`); any other vault shows a short
+"sync applies to your primary vault, per-vault sync coming soon" note. This gate is
+removed by increment 3. It touches live sync data and can only be verified on a real
+two-device pairing, so do increment 3 with the two-profile + local-relay rig, not blind.
+
 ## Mobile autofill and biometric
 
 Autofill reads out of process from a fixed location (iOS App Group keys
