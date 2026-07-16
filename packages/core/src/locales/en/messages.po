@@ -1156,6 +1156,10 @@ msgstr "Opening…"
 msgid "Optic ID"
 msgstr "Optic ID"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Optional (e.g. Restored)"
+msgstr "Optional (e.g. Restored)"
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Optional (e.g. Work)"
@@ -1377,6 +1381,11 @@ msgstr "Resetting invalidates your old code."
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Restore"
 msgstr "Restore"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouched. Enter its master password."
+msgstr "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouched. Enter its master password."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restore a backup"
@@ -1723,8 +1732,8 @@ msgstr "This removes the vault from this device. Synced copies on your other dev
 
 #. placeholder {0}: picked.name
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
-msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
-msgstr "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
+#~ msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
+#~ msgstr "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #~ msgid "This vault"
@@ -1886,6 +1895,11 @@ msgstr "Value"
 #~ msgid "Vault"
 #~ msgstr "Vault"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Vault added"
+msgstr "Vault added"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
@@ -2009,6 +2023,10 @@ msgstr "Your backup is now the vault on this device."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Your backup is now the vault on this device. You can close this tab and use the {0} popup."
 msgstr "Your backup is now the vault on this device. You can close this tab and use the {0} popup."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup was added as a new vault. Open it from the vault list and unlock it with its master password."
+msgstr "Your backup was added as a new vault. Open it from the vault list and unlock it with its master password."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."

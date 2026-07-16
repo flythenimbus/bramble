@@ -1156,6 +1156,10 @@ msgstr "Abrindo…"
 msgid "Optic ID"
 msgstr "Optic ID"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Optional (e.g. Restored)"
+msgstr "Opcional (ex.: Restaurado)"
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Opcional (ex.: Trabalho)"
@@ -1377,6 +1381,11 @@ msgstr "A redefinição invalida seu código antigo."
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Restore"
 msgstr "Restaurar"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouched. Enter its master password."
+msgstr "Restaurar <0>{0}</0> como um novo cofre. Seus cofres existentes permanecem intactos. Insira sua senha mestra."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restore a backup"
@@ -1723,8 +1732,8 @@ msgstr "Isso remove o cofre deste dispositivo. Cópias sincronizadas em seus out
 
 #. placeholder {0}: picked.name
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
-msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
-msgstr "Isso substitui o cofre atualmente neste dispositivo por <0>{0}</0>. Insira a senha mestra desse backup para abri-lo."
+#~ msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
+#~ msgstr "Isso substitui o cofre atualmente neste dispositivo por <0>{0}</0>. Insira a senha mestra desse backup para abri-lo."
 
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #~ msgid "This vault"
@@ -1886,6 +1895,11 @@ msgstr "Valor"
 #~ msgid "Vault"
 #~ msgstr "Cofre"
 
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Vault added"
+msgstr "Cofre adicionado"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Vault name"
@@ -2009,6 +2023,10 @@ msgstr "Seu backup agora é o cofre neste dispositivo."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Your backup is now the vault on this device. You can close this tab and use the {0} popup."
 msgstr "Seu backup agora é o cofre neste dispositivo. Você pode fechar esta guia e usar o pop-up do {0}."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup was added as a new vault. Open it from the vault list and unlock it with its master password."
+msgstr "Seu backup foi adicionado como um novo cofre. Abra-o na lista de cofres e desbloqueie-o com sua senha mestra."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."

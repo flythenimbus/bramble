@@ -196,19 +196,23 @@ A new `VaultRegistryProvider` sits above `VaultProvider` and owns the vault list
 
 ## Restore destination
 
-Reachable from the locked / picker screen via the "Restore from backup" row. After
-the backup password is verified (non-destructively, as today), ask for a
-destination:
+Reachable from the setup flow and from Settings -> Data -> "Restore from backup". After
+the backup password is verified (non-destructively, as today):
 
-- **Replace an existing vault** (choose which; the default when only one exists), or
-- **Add as a new vault** (enter a label -> `createVaultRecord`).
+- **0 vaults (true first run):** restore fills the first vault and unlocks it in place
+  (the un-suffixed legacy blob), with an optional label. Unchanged.
+- **A vault already exists:** restore is added as a **new** vault (`createRecord(label)` +
+  `writeVaultBlob(bytes, newId)`), created **locked**; the user opens it from the picker
+  with the backup's password. It never overwrites an existing vault, and its sync identity
+  is empty (namespaced keys don't exist yet), so no `resetSyncState` is called and other
+  vaults' sync state is untouched.
 
-Replacing a vault resets **that vault's** sync identity (today's restore calls
-`resetSyncState`; scope it to the one vault), so its paired devices diverge and
-re-reconcile: warn before doing it. At 0 vaults (true first run) there is no
-destination question; restore just creates the first vault and asks only for a
-label. Backup files carry no identity (no in-blob id), so the user's explicit choice
-is the matching mechanism, which is fine.
+**Shipped this way (safe subset).** The earlier plan offered "replace an existing vault
+(choose which)" as an option; that destructive path is intentionally dropped for now, since
+a stray restore silently overwriting the on-device vault was a real data-loss footgun (the
+old `restore()` did an id-less `writeVaultBlob` -> primary + a wildcard `resetSyncState`).
+"Replace a specific vault" can come back later as an explicit, warned choice. Backup files
+carry no identity (no in-blob id), so the user's explicit action is the matching mechanism.
 
 ## Sync
 
