@@ -18,8 +18,9 @@ test("create a vault, then lock and unlock it", async ({ context, extensionId })
 	await popup.getByRole("button", { name: "Unlock Vault" }).click();
 	await expect(popup.getByText(/Incorrect master password/i)).toBeVisible();
 
-	// The real password unlocks.
+	// The real password unlocks, and the header names the (only) vault.
 	await unlock(popup);
+	await expect(popup.getByTestId("active-vault-label")).toHaveText("Vault 1");
 });
 
 // Regression: an unlocked vault must land on its home screen, not the vault picker. Creating a

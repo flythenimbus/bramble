@@ -18,14 +18,12 @@ export function AppLayout() {
 	const { shell } = usePlatform();
 	const { t } = useLingui();
 
-	// Show which vault is open next to the brand, but only when there's more than one (a single
-	// vault needs no label). Falls back to "Vault N" for an unnamed vault, matching the picker.
+	// Show which vault is open next to the brand. Falls back to "Vault N" for an unnamed vault,
+	// matching the picker.
 	const { activeId, vaults } = useVaultRegistry();
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
 	const vaultLabel =
-		vaults.length > 1 && activeIndex >= 0
-			? displayLabel(vaults[activeIndex]!.label, activeIndex)
-			: null;
+		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
 
 	// Back prefers real history (so Edit-from-list returns to the list) and falls
 	// back to the route's staticData.back when there's none (a popped-out window
