@@ -918,9 +918,13 @@ behavior, clobbers included); the fix is real once 3 lands.
 
 ## Still open
 
-- **Per-vault VEK (extension).** The whole [Per-vault VEK](#per-vault-vek) plan is
-  designed but **not yet implemented**. It is the current priority (it fixes the
-  create-time `aead::Error` corruption) and must land before multi-vault ships.
+- ~~**Per-vault VEK (extension).**~~ **LANDED 2026-07** (all 6 increments + the clean-slate
+  lock fix; see [Per-vault VEK](#per-vault-vek)). Fixed the create-time `aead::Error`
+  corruption. Not yet runtime-verified on the two-view rig at the time of writing, but the
+  build/lock/unlock and sync-isolation e2e are green.
+- **Join = add a vault** (sync increment 5). `joinGroup` still id-less-writes the active
+  vault's blob, so joining a group overwrites the active vault instead of adding a new record
+  with `groupKey` dedup. The multi-vault sync story is incomplete until this lands.
 - **Backup target-cred device-key wrap.** Backup target credentials are VEK-wrapped under
   whichever vault created the target. Per-vault VEK ships a mitigation (try the active
   vault's vek, then each other unlocked vault's); the durable fix wraps target config
