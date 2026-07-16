@@ -486,10 +486,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		};
 	}, [registryReady, storage, crypto, loadEntries, shell, refreshSlotMetadata]);
 
-	// Record which vault is active/unlocked so the background can target it for sync (Phase 2):
-	// the active vault when unlocked, null when locked. No-op on single-context hosts (mobile).
+	// Record which vault is unlocked so the background can target it for sync and a reopened popup
+	// can restore it. Only WRITE it while unlocked; never clear it here. The background clears it on
+	// lock (clearSession). Clearing it on the initially-locked mount (isLocked starts true, before
+	// the VEK hydrates) would wipe the id before useVaultRegistry can restore it, dropping a
+	// reopened popup onto the picker instead of the unlocked vault. No-op on mobile (setActiveVault
+	// is absent there).
 	useEffect(() => {
-		shell.setActiveVault?.(isLocked ? null : (activeId ?? null));
+		if (!isLocked && activeId) void shell.setActiveVault?.(activeId);
 	}, [isLocked, activeId, shell]);
 
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state

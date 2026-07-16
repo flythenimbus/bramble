@@ -2,6 +2,7 @@ import { expect, test } from "./fixtures";
 import {
 	backgroundWorker,
 	createVault,
+	expectUnlocked,
 	gotoSync,
 	localStorageKeys,
 	lockToPicker,
@@ -30,10 +31,9 @@ test("a second vault has its own, independent sync state", async ({ context, ext
 
 	const popup = await context.newPage();
 	await openPopup(popup, extensionId);
-	await expect(popup.getByRole("heading", { name: /Choose a vault/i })).toBeVisible();
-
-	// Vault 2's panel is in the onboarding state - it does NOT show vault 1's group.
-	await selectVault(popup, /Vault 2/);
+	// Vault 2 was just created + unlocked, so the popup opens straight on it (not the picker). Its
+	// panel is in the onboarding state - it does NOT show vault 1's group.
+	await expectUnlocked(popup);
 	await gotoSync(popup);
 	await expect(popup.getByRole("button", { name: /Add a device/i })).toBeVisible();
 	await expect(popup.getByRole("button", { name: /Disconnect/i })).toHaveCount(0);
