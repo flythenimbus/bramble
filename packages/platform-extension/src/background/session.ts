@@ -102,26 +102,19 @@ export async function clearSession(): Promise<void> {
 	void broadcastLockState(true);
 }
 
-/** Per-vault lock (a view's Lock action): forget just that vault's key. If it was the active vault,
- * tear down its singleton services and return to the picker. Any OTHER unlocked vault stays cached
- * (it opens directly when picked) rather than one silently taking over the view; when nothing is
- * left unlocked, this is the full walk-away teardown. */
+/** Per-vault lock (a view's Lock action). One vault is active in the UI at a time (the popup and
+ * pop-out share its lock state), so locking it is a CLEAN SLATE: clear every cached vek and return
+ * to the picker, exactly like a walk-away lock. A stray non-active vek (e.g. left cached from
+ * creating a vault while another was open) is dropped too, so "lock" never leaves a vault openable
+ * without re-auth. The per-vault map still holds several veks transiently (during a create), which
+ * is what fixes the build-time corruption; it just isn't a persistent multi-view unlocked state. */
 async function lockVault(vaultId: string): Promise<void> {
-	const wasActive = vekStore.getActiveVaultId() === vaultId;
-	await vekStore.removeVek(vaultId);
-	if (!wasActive) {
-		// A non-active vault (open in another view) locked: nothing singleton to move.
-		return;
-	}
-	if (vekStore.unlockedMru().length === 0) {
+	if (vekStore.getActiveVaultId() === vaultId) {
 		await clearSession();
 		return;
 	}
-	void stopSync();
-	clearIndex();
-	await removeHandoffKeys();
-	await vekStore.setActiveVaultId(null);
-	void broadcastLockState(true);
+	// Defensive: a non-active vault id isn't reachable in today's single-view UX; lock just it.
+	await vekStore.removeVek(vaultId);
 }
 
 /**

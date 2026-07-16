@@ -677,14 +677,17 @@ background keeps an MRU list of unlocked vault ids (`vault.unlockedMru`) next to
 a successful unlock or an explicit `setActiveVault` moves that id to the front; a
 per-vault lock removes its entry.
 
-- **Per-vault lock** (the Lock action in a view; `CRYPTO_LOCK` with a vault id): drop that
-  vault's map entry and session key. If it was the active vault: stop sync, clear the autofill
-  index and the corner/popout handoff keys, then **clear the active id (back to the picker)**.
-  Any OTHER unlocked vault stays cached and opens directly when picked; when nothing is left
-  unlocked, fall back to the full teardown. (An earlier draft **promoted the MRU head** to
-  active instead, but that silently hijacked the locked view into another vault and broke the
-  lock-to-picker flow, so it was dropped: locking is an explicit "I'm done here", and the user
-  chooses what to open next.)
+- **Per-vault lock** (the Lock action in a view; `CRYPTO_LOCK` with a vault id): because one vault
+  is active in the UI at a time (the popup and the singleton pop-out share its lock state, so two
+  different vaults are never open in two views at once), locking is a **clean slate** = the full
+  `clearSession` teardown: clear EVERY cached vek, the index, sync, handoffs, and the active id,
+  back to the picker. A stray non-active vek left cached from creating a vault while another was
+  open is dropped too, so "lock" never leaves a vault openable without re-auth. The per-vault map
+  still holds several veks **transiently** during a create (that is what fixes the build-time
+  corruption); it is not a persistent multi-view unlocked state. (Two earlier drafts - promote the
+  MRU head, then clear-active-but-keep-others-cached - were dropped: the first hijacked the locked
+  view into another vault; the second left a "locked" vault openable, contradicting "locking locks
+  everything".)
 - **Walk-away locks stay global**: the idle auto-lock alarm, the `lock-vault` command, OS
   screen-lock, and view-lock's last-view-close (Immediate mode) clear the entire map,
   every `vault.vek:*` key, the MRU, and the active id, exactly like today's
