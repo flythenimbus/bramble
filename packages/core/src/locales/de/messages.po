@@ -1395,6 +1395,10 @@ msgstr "Ein Backup wiederherstellen"
 msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
 msgstr "Stellen Sie ein verschlüsseltes .bramble-Backup wieder her. Dies ersetzt den Tresor auf diesem Gerät."
 
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Restore from backup"
+msgstr "Aus Backup wiederherstellen"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restore vault"
 msgstr "Tresor wiederherstellen"

@@ -7,9 +7,13 @@ interface ModeTabsProps {
 	disabled?: boolean;
 	/** Borderless pill tabs (no container background or shadow); used on mobile. */
 	pill?: boolean;
+	/** Adding a vault (vaults already exist): swap the first-run "Open existing vault" tab for a
+	 * "Restore from backup" one that opens the .bramble flow (which adds a new vault). The create
+	 * tab is the only real content, so it stays active; the restore tab is a nav action. */
+	onRestore?: () => void;
 }
 
-export function ModeTabs({ mode, onChange, disabled, pill }: ModeTabsProps) {
+export function ModeTabs({ mode, onChange, disabled, pill, onRestore }: ModeTabsProps) {
 	const Btn = pill ? PillTab : Tab;
 	return (
 		<div
@@ -19,12 +23,22 @@ export function ModeTabs({ mode, onChange, disabled, pill }: ModeTabsProps) {
 					: "flex gap-2 mb-4 p-1 rounded-lg bg-muted/40 border border-border/50"
 			}
 		>
-			<Btn active={mode === "create"} disabled={disabled} onClick={() => onChange("create")}>
+			<Btn
+				active={onRestore ? true : mode === "create"}
+				disabled={disabled}
+				onClick={() => onChange("create")}
+			>
 				<Trans>Create new vault</Trans>
 			</Btn>
-			<Btn active={mode === "open"} disabled={disabled} onClick={() => onChange("open")}>
-				<Trans>Open existing vault</Trans>
-			</Btn>
+			{onRestore ? (
+				<Btn active={false} disabled={disabled} onClick={onRestore}>
+					<Trans>Restore from backup</Trans>
+				</Btn>
+			) : (
+				<Btn active={mode === "open"} disabled={disabled} onClick={() => onChange("open")}>
+					<Trans>Open existing vault</Trans>
+				</Btn>
+			)}
 		</div>
 	);
 }

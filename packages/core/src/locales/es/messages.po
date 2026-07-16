@@ -1395,6 +1395,10 @@ msgstr "Restaurar una copia de seguridad"
 msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
 msgstr "Restaure una copia de seguridad .bramble cifrada. Esto reemplaza la bóveda de este dispositivo."
 
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Restore from backup"
+msgstr "Restaurar desde la copia de seguridad"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restore vault"
 msgstr "Restaurar bóveda"

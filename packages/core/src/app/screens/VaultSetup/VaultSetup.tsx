@@ -67,8 +67,19 @@ export function VaultSetup({
 		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			<div className="w-full max-w-xl">
 				<SetupHeader mode={effectiveMode} mobile={mobile} adding={adding} />
-				{!adding && (
+				{!adding ? (
 					<ModeTabs mode={mode} onChange={handleModeChange} disabled={busy} pill={mobile} />
+				) : (
+					// Adding a vault: create fresh, or restore a .bramble backup as a new vault.
+					onOpenFile && (
+						<ModeTabs
+							mode="create"
+							onChange={() => {}}
+							onRestore={onOpenFile}
+							disabled={busy}
+							pill={mobile}
+						/>
+					)
 				)}
 				<PasswordCard
 					mode={effectiveMode}

@@ -42,3 +42,17 @@ test("restoring a backup when a vault exists adds a new vault, never overwrites"
 	});
 	expect(vaultCount).toBe(2);
 });
+
+// The "Add a vault" screen (shown once a vault exists) offers restoring a .bramble backup as a
+// new vault, via a tab that opens the restore flow.
+test("the Add-a-vault screen offers restoring a backup", async ({ context, extensionId }) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+
+	const page = await context.newPage();
+	await page.goto(optionsUrl(extensionId));
+	await expect(page.getByRole("heading", { name: /Add a vault/i })).toBeVisible();
+	await page.getByRole("button", { name: /Restore from backup/i }).click();
+	// The restore flow opened (its file picker is present).
+	await expect(page.locator('input[type="file"]')).toBeAttached();
+});

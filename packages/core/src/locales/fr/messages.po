@@ -1395,6 +1395,10 @@ msgstr "Restaurer une sauvegarde"
 msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
 msgstr "Restaurer une sauvegarde .bramble chiffrée. Cela remplace le coffre sur cet appareil."
 
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Restore from backup"
+msgstr "Restaurer à partir d'une sauvegarde"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restore vault"
 msgstr "Restaurer le coffre"
