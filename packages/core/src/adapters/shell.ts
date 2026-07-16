@@ -136,6 +136,10 @@ export interface ShellAdapter {
 	 * vault starts as an un-enrolled device — sync identity belongs to the vault, not the browser.
 	 * Optional: platforms with no local sync state may omit it. */
 	resetSyncState?(): Promise<void>;
+	/** Record the active/unlocked vault id so the background can target it for sync (rather than the
+	 * primary vault). Written on unlock, cleared on lock. Optional: single-context hosts (mobile)
+	 * read the active vault directly and can omit it. See docs/multiple-vaults.md (Sync). */
+	setActiveVault?(vaultId: string | null): void;
 	/** Enrollment (inviter): listen on the group's relay room and hand the joiner the bundle (roster + entries; the VEK is added in the offscreen). */
 	startEnrollInvite(opts: {
 		relayUrl: string;

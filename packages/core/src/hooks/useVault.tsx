@@ -483,6 +483,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		};
 	}, [registryReady, storage, crypto, loadEntries, shell, refreshSlotMetadata]);
 
+	// Record which vault is active/unlocked so the background can target it for sync (Phase 2):
+	// the active vault when unlocked, null when locked. No-op on single-context hosts (mobile).
+	useEffect(() => {
+		shell.setActiveVault?.(isLocked ? null : (activeId ?? null));
+	}, [isLocked, activeId, shell]);
+
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
 	// so the guard redirects to the unlock screen.
 	useEffect(() => {

@@ -6,6 +6,7 @@ import { extractHostname } from "@core/vault/autofill-index";
 import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
 import { hostnameMatches } from "./dedupe";
 import { api } from "./platform-api";
+import { ACTIVE_VAULT_SESSION_KEY } from "./session-keys";
 import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
@@ -233,6 +234,12 @@ export const extensionShell: ShellAdapter = {
 		const all = await api.storage.local.get(null);
 		const keys = Object.keys(all).filter((k) => k.startsWith("sync."));
 		if (keys.length) await api.storage.local.remove(keys);
+	},
+	setActiveVault(vaultId) {
+		// Shared with the background via chrome.storage.session, which reads it to sync the active
+		// vault and clears it on lock (background/session.ts). The id is not secret.
+		if (vaultId === null) void api.storage.session.remove(ACTIVE_VAULT_SESSION_KEY);
+		else void api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: vaultId });
 	},
 	async startEnrollInvite(opts) {
 		await syncStart("SYNC_ENROLL_INVITE", opts);

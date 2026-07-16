@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import { api } from "../platform-api";
+import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
 import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX, CORNER_HANDOFF_KEY } from "./corner-prompt";
@@ -27,6 +28,18 @@ export function getVek(): string | null {
 /** Authoritative lock signal: a missing index only means "not hydrated yet". */
 export function vaultLocked(): boolean {
 	return cachedVek === null;
+}
+
+/** The active/unlocked vault id the UI recorded (chrome.storage.session), or null when locked or
+ * unset. The background reads this to target the active vault for sync (Phase 2). */
+export async function getActiveVaultId(): Promise<string | null> {
+	try {
+		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
+		const v = r[ACTIVE_VAULT_SESSION_KEY];
+		return typeof v === "string" ? v : null;
+	} catch {
+		return null;
+	}
 }
 
 // Load the cached VEK and drop any decrypted index left in session storage by a
@@ -98,7 +111,12 @@ export async function clearSession(): Promise<void> {
 	void stopSync();
 	try {
 		const all = await api.storage.session.get(null);
-		const toRemove: string[] = [VEK_KEY, POPOUT_HANDOFF_KEY, CORNER_HANDOFF_KEY];
+		const toRemove: string[] = [
+			VEK_KEY,
+			POPOUT_HANDOFF_KEY,
+			CORNER_HANDOFF_KEY,
+			ACTIVE_VAULT_SESSION_KEY,
+		];
 		for (const key of Object.keys(all)) {
 			if (key.startsWith(CAPTURE_KEY_PREFIX)) toRemove.push(key);
 		}
