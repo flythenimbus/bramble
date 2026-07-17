@@ -4,11 +4,6 @@ import { CAPABILITIES, can, type Target } from "./flags";
 const TARGETS: Target[] = ["chromium", "firefox", "android", "ios"];
 
 describe("can()", () => {
-	it("resolves a bare-boolean capability the same on every target", () => {
-		// `restore` is `true` everywhere.
-		for (const t of TARGETS) expect(can("restore", t)).toBe(true);
-	});
-
 	it("resolves an { extension, mobile } capability by surface", () => {
 		// `cloudBackup` is extension-only.
 		expect(can("cloudBackup", "chromium")).toBe(true);

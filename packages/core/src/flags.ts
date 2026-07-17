@@ -37,7 +37,6 @@ type Capability =
 	| { chromium: boolean; firefox: boolean; android: boolean; ios: boolean };
 
 export const CAPABILITIES = {
-	restore: true,
 	popOut: { extension: true, mobile: false },
 	cameraScan: { extension: false, mobile: true },
 	// Not shipped on mobile yet.

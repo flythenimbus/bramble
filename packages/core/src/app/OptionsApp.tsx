@@ -2,7 +2,7 @@ import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
-import { useCan, usePlatform } from "../context/PlatformContext";
+import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
@@ -24,18 +24,10 @@ const ImportShell = lazy(() =>
 // the terminal done screen is shown as before.
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
-	const canRestore = useCan("restore");
 	const { createVault, startJoin, joining, joinError } = useVault();
 	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
-	// "Join a device": pair to pull a vault onto this device. Always offered - join is just
-	// "create a vault + pair into it", and creating a parallel vault is already allowed here, so
-	// gating join specifically was inconsistent. On mobile the joined vault is single-active like any
-	// other (only the active vault syncs; it goes quiet in the background when you switch away) - a UX
-	// caveat, not a breakage. The perVaultSync flag now only describes simultaneous multi-vault sync
-	// (extension), it no longer hides this tab. See docs/multiple-vaults.md.
-	const canJoin = true;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	// "added" = a backup was restored into a new, locked vault (vaults already existed).
 	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
@@ -99,27 +91,19 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password, label));
 			}}
-			onJoin={
-				canJoin
-					? async (pairingCode, password) => {
-							// startJoin creates a new vault and pairs into it, unlocking on success; then
-							// land on the terminal screen (or hand back to the mobile host).
-							await startJoin(pairingCode, { kind: "password", password });
-							if (onComplete) onComplete();
-							else setDone("opened");
-						}
-					: undefined
-			}
+			onJoin={async (pairingCode, password) => {
+				// startJoin creates a new vault and pairs into it, unlocking on success; then
+				// land on the terminal screen (or hand back to the mobile host).
+				await startJoin(pairingCode, { kind: "password", password });
+				if (onComplete) onComplete();
+				else setDone("opened");
+			}}
 			joining={joining}
 			joinError={joinError}
-			onRestore={
-				canRestore
-					? ({ addedNew }) => {
-							if (onComplete) onComplete();
-							else setDone(addedNew ? "added" : "opened");
-						}
-					: undefined
-			}
+			onRestore={({ addedNew }) => {
+				if (onComplete) onComplete();
+				else setDone(addedNew ? "added" : "opened");
+			}}
 		/>
 	);
 }

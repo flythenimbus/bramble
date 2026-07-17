@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArchiveRestore, DatabaseBackup, Download, Upload } from "lucide-react";
-import { useCan, usePlatform } from "../../../../context/PlatformContext";
+import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Section } from "./primitives";
 
@@ -10,22 +10,19 @@ const rowBtn =
 /** Import & backup: restore a .bramble, export a .bramble, or import from another manager. */
 export function DataSection() {
 	const { shell } = usePlatform();
-	const canRestore = useCan("restore");
 	const { exportVault } = useVault();
 	const { t } = useLingui();
 	return (
 		<Section icon={<DatabaseBackup className="w-4 h-4 text-primary" />} title={t`Import & backup`}>
-			{canRestore && (
-				<Row
-					icon={<ArchiveRestore className="w-4 h-4 text-primary" />}
-					title={t`Import a backup`}
-					subtitle={t`Restore an encrypted .bramble backup. This replaces the vault on this device.`}
-				>
-					<button type="button" onClick={() => void shell.openSetup("restore")} className={rowBtn}>
-						<Trans>Restore</Trans>
-					</button>
-				</Row>
-			)}
+			<Row
+				icon={<ArchiveRestore className="w-4 h-4 text-primary" />}
+				title={t`Import a backup`}
+				subtitle={t`Restore an encrypted .bramble backup. This replaces the vault on this device.`}
+			>
+				<button type="button" onClick={() => void shell.openSetup("restore")} className={rowBtn}>
+					<Trans>Restore</Trans>
+				</button>
+			</Row>
 			{shell.exportBytes && (
 				<Row
 					icon={<Download className="w-4 h-4 text-primary" />}
