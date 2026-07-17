@@ -17,13 +17,9 @@ export function SetupHeader({ mode, mobile, adding }: SetupHeaderProps) {
 			? t`Enter the pairing code from your other device to sync its vault onto this one.`
 			: adding
 				? t`Create a new vault alongside your existing ones, with its own master password.`
-				: mode === "create"
-					? mobile
-						? t`Pick a master password to protect your vault.`
-						: t`Choose where to store your encrypted vault and pick a master password.`
-					: mobile
-						? t`Enter your master password to unlock your vault.`
-						: t`Point at your existing vault file and enter your master password.`;
+				: mobile
+					? t`Pick a master password to protect your vault.`
+					: t`Choose where to store your encrypted vault and pick a master password.`;
 	return (
 		<div className="text-center mb-6">
 			<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
@@ -32,10 +28,8 @@ export function SetupHeader({ mode, mobile, adding }: SetupHeaderProps) {
 					<Trans>Join a device</Trans>
 				) : adding ? (
 					<Trans>Add a vault</Trans>
-				) : mode === "create" ? (
-					<Trans>Set up your vault</Trans>
 				) : (
-					<Trans>Open your vault</Trans>
+					<Trans>Set up your vault</Trans>
 				)}
 			</h1>
 			<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>{subtitle}</p>

@@ -673,8 +673,8 @@ msgid "Enter your current password"
 msgstr "Inserisci la tua password attuale"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Enter your master password"
-msgstr "Inserisci la password principale"
+#~ msgid "Enter your master password"
+#~ msgstr "Inserisci la password principale"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
@@ -685,8 +685,8 @@ msgid "Enter your master password to unlock your vault"
 msgstr "Inserisca la password principale per sbloccare il suo caveau."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Enter your master password to unlock your vault."
-msgstr "Inserisca la password principale per sbloccare il suo vault."
+#~ msgid "Enter your master password to unlock your vault."
+#~ msgstr "Inserisca la password principale per sbloccare il suo vault."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -778,8 +778,8 @@ msgid "Go to vault"
 msgstr "Vai al vault"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Have a backup? Open a .bramble file instead"
-msgstr "Ha un backup? Apri invece un file .bramble"
+#~ msgid "Have a backup? Open a .bramble file instead"
+#~ msgstr "Ha un backup? Apri invece un file .bramble"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -1149,8 +1149,8 @@ msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Apri <0>{0}</0> come archivio su questo dispositivo. Inserisci la sua password principale."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Open a backup file instead"
-msgstr "Apri invece un file di backup"
+#~ msgid "Open a backup file instead"
+#~ msgstr "Apri invece un file di backup"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
@@ -1165,8 +1165,8 @@ msgid "Open database"
 msgstr "Apri database"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-msgid "Open existing vault"
-msgstr "Apri vault esistente"
+#~ msgid "Open existing vault"
+#~ msgstr "Apri vault esistente"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1174,8 +1174,8 @@ msgid "Open in window"
 msgstr "Apri nella finestra"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Open your vault"
-msgstr "Apri il tuo vault"
+#~ msgid "Open your vault"
+#~ msgstr "Apri il tuo vault"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
@@ -1290,8 +1290,8 @@ msgid "Please enter your master password"
 msgstr "Si prega di inserire la password principale"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Point at your existing vault file and enter your master password."
-msgstr "Indicare il vostro file vault esistente e inserire la password principale."
+#~ msgid "Point at your existing vault file and enter your master password."
+#~ msgstr "Indicare il vostro file vault esistente e inserire la password principale."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1853,8 +1853,8 @@ msgid "Unlock"
 msgstr "Sbloccare"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Unlock vault"
-msgstr "Sbloccare il caveau"
+#~ msgid "Unlock vault"
+#~ msgstr "Sbloccare il caveau"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -1898,7 +1898,6 @@ msgstr "Sblocchiate la vostra cassaforte con la chiave di sicurezza."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Unlocking…"
 msgstr "Sblocco…"
 
@@ -2085,8 +2084,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Il suo browser potrebbe richiedere l'accesso al file del caveau quando lo sblocca."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Your master password"
-msgstr "La sua password principale"
+#~ msgid "Your master password"
+#~ msgstr "La sua password principale"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

@@ -673,8 +673,8 @@ msgid "Enter your current password"
 msgstr "Insira sua senha atual"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Enter your master password"
-msgstr "Insira sua senha mestra"
+#~ msgid "Enter your master password"
+#~ msgstr "Insira sua senha mestra"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
@@ -685,8 +685,8 @@ msgid "Enter your master password to unlock your vault"
 msgstr "Insira sua senha mestra para desbloquear o cofre."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Enter your master password to unlock your vault."
-msgstr "Insira sua senha mestra para desbloquear seu cofre."
+#~ msgid "Enter your master password to unlock your vault."
+#~ msgstr "Insira sua senha mestra para desbloquear seu cofre."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -778,8 +778,8 @@ msgid "Go to vault"
 msgstr "Acessar o cofre"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Have a backup? Open a .bramble file instead"
-msgstr "Tem um backup? Abra um arquivo .bramble"
+#~ msgid "Have a backup? Open a .bramble file instead"
+#~ msgstr "Tem um backup? Abra um arquivo .bramble"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -1149,8 +1149,8 @@ msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Abra <0>{0}</0> como o cofre neste dispositivo. Insira sua senha mestra."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Open a backup file instead"
-msgstr "Abrir um arquivo de backup em vez disso"
+#~ msgid "Open a backup file instead"
+#~ msgstr "Abrir um arquivo de backup em vez disso"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
@@ -1165,8 +1165,8 @@ msgid "Open database"
 msgstr "Abrir banco de dados"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-msgid "Open existing vault"
-msgstr "Abrir cofre existente"
+#~ msgid "Open existing vault"
+#~ msgstr "Abrir cofre existente"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1174,8 +1174,8 @@ msgid "Open in window"
 msgstr "Abrir na janela"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Open your vault"
-msgstr "Abrir seu cofre"
+#~ msgid "Open your vault"
+#~ msgstr "Abrir seu cofre"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
@@ -1290,8 +1290,8 @@ msgid "Please enter your master password"
 msgstr "Por favor, insira sua senha mestra"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Point at your existing vault file and enter your master password."
-msgstr "Aponte para o arquivo de cofre existente e insira sua senha mestra."
+#~ msgid "Point at your existing vault file and enter your master password."
+#~ msgstr "Aponte para o arquivo de cofre existente e insira sua senha mestra."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1853,8 +1853,8 @@ msgid "Unlock"
 msgstr "Desbloquear"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Unlock vault"
-msgstr "Desbloquear cofre"
+#~ msgid "Unlock vault"
+#~ msgstr "Desbloquear cofre"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -1898,7 +1898,6 @@ msgstr "Desbloqueie seu cofre com a chave de segurança"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Unlocking…"
 msgstr "Desbloqueando…"
 
@@ -2085,8 +2084,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Seu navegador pode solicitar acesso ao arquivo do cofre ao desbloquear."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Your master password"
-msgstr "Sua senha mestra"
+#~ msgid "Your master password"
+#~ msgstr "Sua senha mestra"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

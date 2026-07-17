@@ -15,7 +15,6 @@ interface VaultSetupProps {
 	mode: VaultSetupMode;
 	onModeChange: (mode: VaultSetupMode) => void;
 	onCreate: (password: string, label: string) => Promise<void>;
-	onUnlock: (password: string) => Promise<void>;
 	/** Create a new vault by pairing to another device with its invite code (both first-run and
 	 * adding). Resolves when the join completes; the parent drives the terminal screen. Absent
 	 * (no join tab) where per-vault sync isn't supported (mobile, for now). */
@@ -24,13 +23,14 @@ interface VaultSetupProps {
 	joining?: boolean;
 	/** The last join failure, surfaced in the join form. */
 	joinError?: string | null;
-	/** Open a .bramble backup file instead of the on-device vault (extension restore flow).
-	 * Shown only in "open" mode; absent where restore isn't supported (mobile). */
+	/** Open a .bramble backup file (becomes the vault on first-run, adds a vault when others exist):
+	 * the "Restore from backup" tab. This is the single "bring an existing vault" path in both views.
+	 * Absent where restore isn't supported (mobile). */
 	onOpenFile?: () => void;
 	/** Compact presentation for the single-window mobile host. */
 	mobile?: boolean;
-	/** Adding a parallel vault (vaults already exist): create or join, with a name field, and no
-	 * "open existing" path (that is a first-run concept). See docs/multiple-vaults.md. */
+	/** Adding a parallel vault (vaults already exist): shows a name field and the "Add a vault"
+	 * heading. Create/restore/join are offered the same way as first-run. See docs/multiple-vaults.md. */
 	adding?: boolean;
 }
 
@@ -40,7 +40,6 @@ export function VaultSetup({
 	mode,
 	onModeChange,
 	onCreate,
-	onUnlock,
 	onJoin,
 	joining,
 	joinError,
@@ -53,17 +52,15 @@ export function VaultSetup({
 	const form = useForm<VaultSetupFormValues>({
 		defaultValues: { masterPassword: "", confirmPassword: "", label: "" },
 	});
-	// Adding a vault can't "open existing" (that is a first-run path), but it can create or join.
-	// If join isn't available (no onJoin), fall a stray join mode back to create.
-	const effectiveMode: VaultSetupMode =
-		(adding && mode === "open") || (mode === "join" && !onJoin) ? "create" : mode;
+	// The only tab modes are create + join; opening an existing vault is the "Restore from backup"
+	// action (onOpenFile), not a tab. Fall a stray join mode back to create when join isn't available.
+	const effectiveMode: VaultSetupMode = mode === "join" && !onJoin ? "create" : mode;
 
-	const handleSubmit = async ({ masterPassword, label }: VaultSetupFormValues) => {
+	const handleCreate = async ({ masterPassword, label }: VaultSetupFormValues) => {
 		setSubmitError(null);
 		setBusy(true);
 		try {
-			if (effectiveMode === "create") await onCreate(masterPassword, label);
-			else await onUnlock(masterPassword);
+			await onCreate(masterPassword, label);
 		} catch (e) {
 			setSubmitError((e as Error).message);
 		} finally {
@@ -106,36 +103,20 @@ export function VaultSetup({
 					onChange={handleModeChange}
 					disabled={busy}
 					pill={mobile}
-					showOpen={!adding}
 					showJoin={!!onJoin}
-					onRestore={adding && onOpenFile ? onOpenFile : undefined}
+					onRestore={onOpenFile}
 				/>
 				{effectiveMode === "join" && onJoin ? (
 					<JoinCard onJoin={onJoin} busy={!!joining} error={joinError ?? null} mobile={mobile} />
 				) : (
 					<PasswordCard
-						mode={effectiveMode}
 						form={form}
 						busy={busy}
 						submitError={submitError}
-						onSubmit={handleSubmit}
+						onSubmit={handleCreate}
 						mobile={mobile}
 						showName={adding}
 					/>
-				)}
-				{!adding && effectiveMode !== "join" && onOpenFile && (
-					<button
-						type="button"
-						onClick={onOpenFile}
-						disabled={busy}
-						className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-					>
-						{effectiveMode === "create" ? (
-							<Trans>Have a backup? Open a .bramble file instead</Trans>
-						) : (
-							<Trans>Open a backup file instead</Trans>
-						)}
-					</button>
 				)}
 			</div>
 		</div>

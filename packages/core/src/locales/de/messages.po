@@ -673,8 +673,8 @@ msgid "Enter your current password"
 msgstr "Geben Sie Ihr aktuelles Passwort ein"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Enter your master password"
-msgstr "Geben Sie Ihr Master-Passwort ein"
+#~ msgid "Enter your master password"
+#~ msgstr "Geben Sie Ihr Master-Passwort ein"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
@@ -685,8 +685,8 @@ msgid "Enter your master password to unlock your vault"
 msgstr "Geben Sie Ihr Master-Passwort ein, um den Tresor zu entsperren"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Enter your master password to unlock your vault."
-msgstr "Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren."
+#~ msgid "Enter your master password to unlock your vault."
+#~ msgstr "Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -778,8 +778,8 @@ msgid "Go to vault"
 msgstr "Zum Tresor gehen"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Have a backup? Open a .bramble file instead"
-msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
+#~ msgid "Have a backup? Open a .bramble file instead"
+#~ msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -1149,8 +1149,8 @@ msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Master-Passwort ein."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Open a backup file instead"
-msgstr "Stattdessen eine Sicherungsdatei öffnen"
+#~ msgid "Open a backup file instead"
+#~ msgstr "Stattdessen eine Sicherungsdatei öffnen"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
@@ -1165,8 +1165,8 @@ msgid "Open database"
 msgstr "Datenbank öffnen"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-msgid "Open existing vault"
-msgstr "Bestehenden Tresor öffnen"
+#~ msgid "Open existing vault"
+#~ msgstr "Bestehenden Tresor öffnen"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1174,8 +1174,8 @@ msgid "Open in window"
 msgstr "Im Fenster öffnen"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Open your vault"
-msgstr "Ihren Tresor öffnen"
+#~ msgid "Open your vault"
+#~ msgstr "Ihren Tresor öffnen"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
@@ -1290,8 +1290,8 @@ msgid "Please enter your master password"
 msgstr "Bitte geben Sie Ihr Master-Passwort ein"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Point at your existing vault file and enter your master password."
-msgstr "Zeigen Sie auf Ihre bestehende Tresordatei und geben Sie Ihr Master-Passwort ein."
+#~ msgid "Point at your existing vault file and enter your master password."
+#~ msgstr "Zeigen Sie auf Ihre bestehende Tresordatei und geben Sie Ihr Master-Passwort ein."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1853,8 +1853,8 @@ msgid "Unlock"
 msgstr "Entsperren"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Unlock vault"
-msgstr "Tresor entsperren"
+#~ msgid "Unlock vault"
+#~ msgstr "Tresor entsperren"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -1898,7 +1898,6 @@ msgstr "Mit Sicherheitsschlüssel entsperren"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Unlocking…"
 msgstr "Entsperren…"
 
@@ -2085,8 +2084,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Ihr Browser kann beim Entsperren nach Zugriff auf die Tresordatei fragen."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Your master password"
-msgstr "Ihr Master-Passwort"
+#~ msgid "Your master password"
+#~ msgstr "Ihr Master-Passwort"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

@@ -7,25 +7,15 @@ interface ModeTabsProps {
 	disabled?: boolean;
 	/** Borderless pill tabs (no container background or shadow); used on mobile. */
 	pill?: boolean;
-	/** Adding a vault (vaults already exist): a "Restore from backup" nav action that opens the
-	 * .bramble flow (which adds a new vault), shown in place of the first-run "Open existing" tab. */
+	/** A "Restore from backup" nav action that opens the .bramble flow (which becomes/adds a vault).
+	 * Shown in place of a distinct "open existing" tab in both first-run and adding views, so the two
+	 * offer the same "bring an existing vault" experience. See docs/multiple-vaults.md. */
 	onRestore?: () => void;
-	/** First-run only: show the "Open existing vault" tab (adding a parallel vault never opens the
-	 * existing one). */
-	showOpen?: boolean;
 	/** Show the "Join a device" tab (gated to where per-vault sync is supported). */
 	showJoin?: boolean;
 }
 
-export function ModeTabs({
-	mode,
-	onChange,
-	disabled,
-	pill,
-	onRestore,
-	showOpen,
-	showJoin,
-}: ModeTabsProps) {
+export function ModeTabs({ mode, onChange, disabled, pill, onRestore, showJoin }: ModeTabsProps) {
 	const Btn = pill ? PillTab : Tab;
 	return (
 		<div
@@ -38,15 +28,11 @@ export function ModeTabs({
 			<Btn active={mode === "create"} disabled={disabled} onClick={() => onChange("create")}>
 				<Trans>Create new vault</Trans>
 			</Btn>
-			{onRestore ? (
+			{onRestore && (
 				<Btn active={false} disabled={disabled} onClick={onRestore}>
 					<Trans>Restore from backup</Trans>
 				</Btn>
-			) : showOpen ? (
-				<Btn active={mode === "open"} disabled={disabled} onClick={() => onChange("open")}>
-					<Trans>Open existing vault</Trans>
-				</Btn>
-			) : null}
+			)}
 			{showJoin && (
 				<Btn active={mode === "join"} disabled={disabled} onClick={() => onChange("join")}>
 					<Trans>Join a device</Trans>

@@ -1,4 +1,4 @@
-export type VaultSetupMode = "create" | "open" | "join";
+export type VaultSetupMode = "create" | "join";
 
 export interface VaultSetupFormValues {
 	masterPassword: string;

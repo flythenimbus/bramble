@@ -27,7 +27,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const canRestore = useCan("restore");
 	// Join-a-device (add a vault by pairing) rides per-vault sync; hidden where that's unsupported.
 	const canJoin = useCan("perVaultSync");
-	const { createVault, unlock, startJoin, joining, joinError } = useVault();
+	const { createVault, startJoin, joining, joinError } = useVault();
 	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
@@ -98,11 +98,6 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			onCreate={async (password, label) => {
 				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password, label));
-			}}
-			onUnlock={async (password) => {
-				await unlock(password);
-				if (onComplete) onComplete();
-				else setDone("opened");
 			}}
 			onJoin={
 				canJoin

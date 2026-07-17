@@ -673,8 +673,8 @@ msgid "Enter your current password"
 msgstr "Introduzca su contraseña actual"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Enter your master password"
-msgstr "Introduzca su contraseña maestra"
+#~ msgid "Enter your master password"
+#~ msgstr "Introduzca su contraseña maestra"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
@@ -685,8 +685,8 @@ msgid "Enter your master password to unlock your vault"
 msgstr "Introduzca la contraseña maestra para desbloquear su bóveda"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Enter your master password to unlock your vault."
-msgstr "Introduzca su contraseña maestra para desbloquear su bóveda."
+#~ msgid "Enter your master password to unlock your vault."
+#~ msgstr "Introduzca su contraseña maestra para desbloquear su bóveda."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -778,8 +778,8 @@ msgid "Go to vault"
 msgstr "Ir al bóveda"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Have a backup? Open a .bramble file instead"
-msgstr "¿Tiene una copia de seguridad? Abra un archivo .bramble en su lugar"
+#~ msgid "Have a backup? Open a .bramble file instead"
+#~ msgstr "¿Tiene una copia de seguridad? Abra un archivo .bramble en su lugar"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -1149,8 +1149,8 @@ msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Abra <0>{0}</0> como la bóveda en este dispositivo. Ingrese su contraseña maestra."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Open a backup file instead"
-msgstr "Abrir un archivo de respaldo en su lugar"
+#~ msgid "Open a backup file instead"
+#~ msgstr "Abrir un archivo de respaldo en su lugar"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
@@ -1165,8 +1165,8 @@ msgid "Open database"
 msgstr "Abrir base de datos"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-msgid "Open existing vault"
-msgstr "Abrir bóveda existente"
+#~ msgid "Open existing vault"
+#~ msgstr "Abrir bóveda existente"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1174,8 +1174,8 @@ msgid "Open in window"
 msgstr "Abrir en ventana"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Open your vault"
-msgstr "Abrir su bóveda"
+#~ msgid "Open your vault"
+#~ msgstr "Abrir su bóveda"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
@@ -1290,8 +1290,8 @@ msgid "Please enter your master password"
 msgstr "Por favor, introduzca su contraseña maestra"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Point at your existing vault file and enter your master password."
-msgstr "Señale su archivo de bóveda existente e introduzca la contraseña maestra."
+#~ msgid "Point at your existing vault file and enter your master password."
+#~ msgstr "Señale su archivo de bóveda existente e introduzca la contraseña maestra."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1853,8 +1853,8 @@ msgid "Unlock"
 msgstr "Desbloquear"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Unlock vault"
-msgstr "Desbloquear bóveda"
+#~ msgid "Unlock vault"
+#~ msgstr "Desbloquear bóveda"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -1898,7 +1898,6 @@ msgstr "Desbloquee su bóveda con su llave de seguridad"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Unlocking…"
 msgstr "Desbloqueando…"
 
@@ -2085,8 +2084,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Su navegador puede solicitar acceso al archivo de la bóveda cuando usted desbloquee."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Your master password"
-msgstr "Contraseña maestra"
+#~ msgid "Your master password"
+#~ msgstr "Contraseña maestra"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

@@ -673,8 +673,8 @@ msgid "Enter your current password"
 msgstr "Entrez votre mot de passe actuel"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Enter your master password"
-msgstr "Entrez votre mot de passe maître"
+#~ msgid "Enter your master password"
+#~ msgstr "Entrez votre mot de passe maître"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
@@ -685,8 +685,8 @@ msgid "Enter your master password to unlock your vault"
 msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Enter your master password to unlock your vault."
-msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort."
+#~ msgid "Enter your master password to unlock your vault."
+#~ msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -778,8 +778,8 @@ msgid "Go to vault"
 msgstr "Aller au coffre"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Have a backup? Open a .bramble file instead"
-msgstr "Vous avez une sauvegarde ? Ouvrez plutôt un fichier .bramble"
+#~ msgid "Have a backup? Open a .bramble file instead"
+#~ msgstr "Vous avez une sauvegarde ? Ouvrez plutôt un fichier .bramble"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -1149,8 +1149,8 @@ msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Ouvrir <0>{0}</0> comme coffre sur cet appareil. Saisissez son mot de passe principal."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Open a backup file instead"
-msgstr "Ouvrir un fichier de sauvegarde à la place"
+#~ msgid "Open a backup file instead"
+#~ msgstr "Ouvrir un fichier de sauvegarde à la place"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
@@ -1165,8 +1165,8 @@ msgid "Open database"
 msgstr "Ouvrir la base de données"
 
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-msgid "Open existing vault"
-msgstr "Ouvrir le coffre-fort existant"
+#~ msgid "Open existing vault"
+#~ msgstr "Ouvrir le coffre-fort existant"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1174,8 +1174,8 @@ msgid "Open in window"
 msgstr "Ouvrir dans la fenêtre"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Open your vault"
-msgstr "Ouvrir votre coffre-fort"
+#~ msgid "Open your vault"
+#~ msgstr "Ouvrir votre coffre-fort"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
@@ -1290,8 +1290,8 @@ msgid "Please enter your master password"
 msgstr "Veuillez saisir votre mot de passe maître"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Point at your existing vault file and enter your master password."
-msgstr "Indiquez votre fichier de coffre-fort existant et entrez votre mot de passe maître."
+#~ msgid "Point at your existing vault file and enter your master password."
+#~ msgstr "Indiquez votre fichier de coffre-fort existant et entrez votre mot de passe maître."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1853,8 +1853,8 @@ msgid "Unlock"
 msgstr "Déverrouiller"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Unlock vault"
-msgstr "Déverrouiller le coffre-fort"
+#~ msgid "Unlock vault"
+#~ msgstr "Déverrouiller le coffre-fort"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -1898,7 +1898,6 @@ msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Unlocking…"
 msgstr "Déverrouillage..."
 
@@ -2085,8 +2084,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Votre navigateur peut demander l'accès à votre fichier de coffre lors du déverrouillage."
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-msgid "Your master password"
-msgstr "Mot de passe maître"
+#~ msgid "Your master password"
+#~ msgstr "Mot de passe maître"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

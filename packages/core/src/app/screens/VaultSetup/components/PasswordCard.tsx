@@ -9,10 +9,9 @@ import {
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { PasswordField } from "../../../components/ui/password-field";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
-import type { VaultSetupFormValues, VaultSetupMode } from "../types";
+import type { VaultSetupFormValues } from "../types";
 
 interface PasswordCardProps {
-	mode: VaultSetupMode;
 	form: UseFormReturn<VaultSetupFormValues>;
 	busy: boolean;
 	submitError: string | null;
@@ -23,9 +22,9 @@ interface PasswordCardProps {
 	showName?: boolean;
 }
 
-/** Master-password form card for vault setup, gating weak passwords on create only. */
+/** Master-password form card for creating a vault; gates weak passwords behind an explicit opt-in.
+ * Opening an existing vault is the separate "Restore from backup" flow, not this card. */
 export function PasswordCard({
-	mode,
 	form,
 	busy,
 	submitError,
@@ -40,11 +39,9 @@ export function PasswordCard({
 		watch,
 		formState: { errors },
 	} = form;
-	const isCreate = mode === "create";
 	const pw = watch("masterPassword");
-	// Weak (but allowed) passwords warn + require an explicit opt-in, only on
-	// creation. Unlock never gates an existing password.
-	const weakWarning = isCreate ? masterPasswordWarning(pw ?? "") : undefined;
+	// Weak (but allowed) passwords warn + require an explicit opt-in before creation.
+	const weakWarning = masterPasswordWarning(pw ?? "");
 	const [acceptedWeak, setAcceptedWeak] = useState(false);
 	const blockedByWeak = !!weakWarning && !acceptedWeak;
 
@@ -54,11 +51,11 @@ export function PasswordCard({
 				<div className="px-5 py-3 border-b border-border/50">
 					<h3 className={`flex items-center gap-2 ${mobile ? "text-base" : "text-sm"}`}>
 						<Shield className="w-4 h-4 text-primary" />
-						{isCreate ? <Trans>Master password</Trans> : <Trans>Your master password</Trans>}
+						<Trans>Master password</Trans>
 					</h3>
 				</div>
 				<div className="p-5 space-y-4">
-					{showName && isCreate && (
+					{showName && (
 						<div>
 							<label htmlFor="vault-name" className="block text-sm mb-1.5">
 								<Trans>Vault name</Trans>
@@ -78,25 +75,21 @@ export function PasswordCard({
 							label={t`Master password`}
 							error={errors.masterPassword?.message}
 							{...register("masterPassword", {
-								required: isCreate ? t`Choose a master password` : t`Enter your master password`,
-								// Only the hard floor (too short) blocks creation; weakness is a
-								// warning below. Unlock skips it entirely: existing vaults may
-								// predate any policy.
-								validate: isCreate ? masterPasswordHardError : undefined,
+								required: t`Choose a master password`,
+								// Only the hard floor (too short) blocks creation; weakness is a warning below.
+								validate: masterPasswordHardError,
 							})}
 						/>
-						{isCreate && <MasterPasswordMeter value={pw ?? ""} />}
+						<MasterPasswordMeter value={pw ?? ""} />
 					</div>
-					{isCreate && (
-						<PasswordField
-							label={t`Confirm master password`}
-							error={errors.confirmPassword?.message}
-							{...register("confirmPassword", {
-								required: t`Re-enter the password`,
-								validate: (v) => v === pw || t`passwords don't match`,
-							})}
-						/>
-					)}
+					<PasswordField
+						label={t`Confirm master password`}
+						error={errors.confirmPassword?.message}
+						{...register("confirmPassword", {
+							required: t`Re-enter the password`,
+							validate: (v) => v === pw || t`passwords don't match`,
+						})}
+					/>
 					{weakWarning && (
 						<WeakPasswordNotice
 							message={weakWarning}
@@ -104,7 +97,7 @@ export function PasswordCard({
 							onAccept={setAcceptedWeak}
 						/>
 					)}
-					{isCreate && <NoRecoveryWarning />}
+					<NoRecoveryWarning />
 				</div>
 
 				<div
@@ -127,17 +120,12 @@ export function PasswordCard({
 							mobile ? "w-full px-5 py-3 text-base" : "px-5 py-2 text-sm"
 						}`}
 					>
-						<SubmitLabel mode={mode} busy={busy} />
+						{busy ? <Trans>Creating…</Trans> : <Trans>Create vault</Trans>}
 					</button>
 				</div>
 			</div>
 		</form>
 	);
-}
-
-function SubmitLabel({ mode, busy }: { mode: VaultSetupMode; busy: boolean }) {
-	if (busy) return <>{mode === "create" ? <Trans>Creating…</Trans> : <Trans>Unlocking…</Trans>}</>;
-	return <>{mode === "create" ? <Trans>Create vault</Trans> : <Trans>Unlock vault</Trans>}</>;
 }
 
 function NoRecoveryWarning() {
