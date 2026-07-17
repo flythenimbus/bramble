@@ -394,13 +394,18 @@ export function SyncConnectSection() {
 						</button>
 					</Row>
 
-					<p className="ml-12 text-xs text-muted-foreground">
-						<Trans>
-							Have a pairing code from another device? Add a vault and choose "Join a device" to
-							sync its vault onto this one. Once enrolled, devices sync automatically in the
-							background while unlocked, no button or window needed.
-						</Trans>
-					</p>
+					{/* Joining another group when a vault already exists means adding a parallel vault,
+					    which only per-vault-sync hosts (the extension) support; on single-active mobile
+					    the join path is the first-run setup, so don't point there from here. */}
+					{canPerVaultSync && (
+						<p className="ml-12 text-xs text-muted-foreground">
+							<Trans>
+								Have a pairing code from another device? Add a vault and choose "Join a device" to
+								sync its vault onto this one. Once enrolled, devices sync automatically in the
+								background while unlocked, no button or window needed.
+							</Trans>
+						</p>
+					)}
 				</>
 			)}
 

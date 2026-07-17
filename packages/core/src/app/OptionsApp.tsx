@@ -25,12 +25,15 @@ const ImportShell = lazy(() =>
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
 	const canRestore = useCan("restore");
-	// Join-a-device (add a vault by pairing) rides per-vault sync; hidden where that's unsupported.
-	const canJoin = useCan("perVaultSync");
 	const { createVault, startJoin, joining, joinError } = useVault();
 	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
+	// "Join a device": pair to pull a vault onto this device. On the extension it rides per-vault sync
+	// (join = add a vault). Mobile is single-active, so join-as-add-a-vault stays gated - but joining
+	// as the FIRST vault (a fresh phone pulling a desktop's group) is fully supported and is mobile's
+	// most-wanted case, so offer it whenever there's no vault yet. See docs/multiple-vaults.md.
+	const canJoin = useCan("perVaultSync") || !adding;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	// "added" = a backup was restored into a new, locked vault (vaults already existed).
 	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
