@@ -218,6 +218,38 @@ old `restore()` did an id-less `writeVaultBlob` -> primary + a wildcard `resetSy
 "Replace a specific vault" can come back later as an explicit, warned choice. Backup files
 carry no identity (no in-blob id), so the user's explicit action is the matching mechanism.
 
+## Setup shell: one tabbed flow (create / restore / join)
+
+`VaultSetup` (driven by `OptionsApp.SetupShell`) is a single tabbed flow used for BOTH first-run
+(0 vaults) and add-a-vault (1+). The tabs are the same in both views - **Create new vault /
+Restore from backup / Join a device** - and the only difference when adding is a vault-name field
+and an "Add a vault" heading (`adding = vaults.length > 0`). Each tab renders its panel inline,
+driven by a plain callback prop (`onCreate` / `onRestore` / `onJoin`); none swaps the page.
+
+- **Dropped the old first-run "Open existing vault" tab.** It was a master-password form that
+  decrypted the on-device blob (`unlock`), but it only ever appeared with 0 vaults - with 1+ the
+  shell is already the add-a-vault view, which never had that tab - and with 0 vaults there is
+  nothing on-device to unlock (`readDecodedBlob` just fails). The real "bring an existing vault"
+  path is the `.bramble` restore. `VaultSetupMode` is now `"create" | "restore" | "join"` (no
+  `"open"`); the dead `onUnlock` plumbing and `PasswordCard`'s unlock branches were removed. The
+  "Point at your existing vault file" copy was misleading - `unlock` never picked a file. (a7f0a2b5)
+- **"Restore from backup" is a real tab, not a page swap.** Its panel is an embedded `RestoreShell`
+  rendered inline (an `embedded` prop drops the full-screen wrapper + its own header; `SetupHeader`
+  supplies the title), so the header + tabs stay put - matching Create and Join. On success it
+  bubbles `onRestored({ addedNew })` so the setup flow owns the terminal (a new "Vault added"
+  screen for a restored-into-new locked vault, else "Vault unlocked"), consistent with
+  create -> recovery-code and join -> connecting. `RestoreShell` is imported directly (not `lazy`):
+  it only decodes a `.bramble` blob with deps already in this bundle, so a lazy fetch would just lag
+  the primary tab; only the genuinely-heavy `ImportShell` (kdbx/csv parsers) stays lazy. The
+  standalone `?screen=restore` path (Settings -> Data -> Restore) is unchanged - still full-screen
+  with its own done screen. (e94c8827)
+- **"Join a device"** is a tab gated to the `perVaultSync` capability (extension). See
+  [Join adds a vault instead of overwriting](#join-adds-a-vault-instead-of-overwriting).
+- **Auth screen.** The "New to {app}? / Create new vault" prompt under the unlock form is hidden
+  when `vaults.length > 1`: with multiple vaults the pre-unlock picker owns "create another vault",
+  so the link there is redundant. Still shown for a single vault (no picker to fall back on).
+  (20b9be96)
+
 ## Sync
 
 The sync **engine** is already vault-agnostic and needs no change: signaling rooms
@@ -937,8 +969,13 @@ behavior, clobbers included); the fix is real once 3 lands.
 
 - ~~**Per-vault VEK (extension).**~~ **LANDED 2026-07** (all 6 increments + the clean-slate
   lock fix; see [Per-vault VEK](#per-vault-vek)). Fixed the create-time `aead::Error`
-  corruption. Not yet runtime-verified on the two-view rig at the time of writing, but the
-  build/lock/unlock and sync-isolation e2e are green.
+  corruption. Runtime-verified by the user across multiple vaults in multiple targets
+  (Vivaldi + Firefox), each syncing on its own connection; build/lock/unlock and
+  sync-isolation e2e are green.
+- ~~**Setup shell UX** (create / restore / join tabs).~~ **LANDED 2026-07.** One tabbed flow for
+  first-run + add-a-vault; dropped the dead "Open existing vault" master-password tab; "Restore
+  from backup" is an inline tab (embedded `RestoreShell`, not a page swap); Auth hides "Create new
+  vault" when `vaults > 1`. See [Setup shell](#setup-shell-one-tabbed-flow-create--restore--join).
 - ~~**Join = add a vault** (sync increment 5).~~ **LANDED via the setup shell (2026-07, commit
   8b3e4030): a "Join a device" tab (first-run + add-a-vault, gated to `perVaultSync`) collects a
   pairing code + master password and calls `useVault.startJoin`, which dedups by `groupKey`, else
@@ -961,7 +998,11 @@ behavior, clobbers included); the fix is real once 3 lands.
   reversal is extension-only.)
 - **Firefox.** The per-vault namespacing and active-vault session switching also have
   to land in the Firefox event-page transport, which is mid-port
-  ([firefox-port.md](firefox-port.md)).
+  ([firefox-port.md](firefox-port.md)). The Firefox-as-inviter roster fix (host-side enrolled-
+  roster add, commit 57944af1; see [The enrolled device is rostered in the host, not just the
+  popup](#the-enrolled-device-is-rostered-in-the-host-not-just-the-popup)) is committed but still
+  needs real-Firefox-inviter verification (invite from Firefox, join from a Chromium target);
+  Playwright can't cover it (extension automation is Chromium-only).
 - **Full multi-vault autofill / per-vault biometric** (search all vaults, per-vault
   Keychain / Keystore items) remains a post-v1 native follow-up.
 
