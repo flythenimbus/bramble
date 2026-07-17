@@ -23,9 +23,18 @@ object BrambleAutofill {
     const val SESSION_PREF_AT = "vek_at"
 
     // Capacitor storage: the encrypted VLT1 blob (Filesystem Directory.Data = getFilesDir)
-    // and the metadata prefs (Preferences default group), both written by the webview.
+    // and the metadata prefs (Preferences default group), both written by the webview. Every
+    // vault is namespaced `vault-<id>.vlt1`; VAULT_FILE is the pre-namespacing fixed path the
+    // one-time migration retires (still read as a fallback until the app next runs it).
     const val VAULT_FILE = "vault.vlt1"
     const val CAPACITOR_PREFS = "CapacitorStorage"
+
+    // The single-active vault + the registry the webview writes via storage.ts setMeta (JSON-encoded
+    // under a "meta:" prefix). The service reads them to target the same vault the app is in.
+    // active-vault is a JSON string ("<id>"); vault.registry is `{"vaults":[{"id":...}]}`. Mirrors
+    // ACTIVE_VAULT_KEY / VAULT_REGISTRY_KEY (sync-manager activeVaultId, storage.ts blobFileFor).
+    const val PREF_ACTIVE_VAULT = "meta:active-vault"
+    const val PREF_VAULT_REGISTRY = "meta:vault.registry"
 
     // Preference keys (usePrefs.tsx), stored under a "meta:" prefix as JSON by storage.ts.
     const val PREF_AUTOLOCK_MINUTES = "meta:pref.autoLockMinutes"

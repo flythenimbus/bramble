@@ -27,12 +27,15 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-// Local Capacitor plugin: caches the vault VEK behind an OS-enforced biometric gate.
+// Local Capacitor plugin: caches each vault's VEK behind an OS-enforced biometric gate.
 // A Keystore AES-256-GCM key created setUserAuthenticationRequired + invalidated-by-
 // enrollment wraps the VEK; BiometricPrompt with a CryptoObject is the only way to run
 // the cipher, so the OS itself enforces the fingerprint/face check and drops the key if
 // the enrolled set changes. The wrapped blob lives in private prefs (safe: undecryptable
-// without the gated key). We never run Argon2 here. See docs/mobile-port.md (Phase 2).
+// without the gated key). Each vault gets its own alias + prefs (suffixed :<vaultId>) so
+// enabling biometric on one vault never overwrites another's cached VEK; the autofill
+// service (BiometricUnlock.kt) reads the same per-vault keys for the active vault. We never
+// run Argon2 here. See docs/mobile-port.md (Phase 2).
 @CapacitorPlugin(name = "BiometricVault")
 public class BiometricVaultPlugin extends Plugin {
     private static final String KEYSTORE = "AndroidKeyStore";
@@ -42,6 +45,10 @@ public class BiometricVaultPlugin extends Plugin {
     private static final String PREF_IV = "vek_iv";
     private static final int GCM_TAG_BITS = 128;
     private static final int AUTHENTICATORS = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+
+    private static String aliasFor(String vaultId) { return KEY_ALIAS + ":" + vaultId; }
+    private static String ctKey(String vaultId) { return PREF_CIPHERTEXT + ":" + vaultId; }
+    private static String ivKey(String vaultId) { return PREF_IV + ":" + vaultId; }
 
     @PluginMethod
     public void isAvailable(PluginCall call) {
@@ -55,8 +62,13 @@ public class BiometricVaultPlugin extends Plugin {
 
     @PluginMethod
     public void hasSecret(PluginCall call) {
+        String vaultId = call.getString("vaultId");
+        if (vaultId == null) {
+            call.reject("Missing vaultId");
+            return;
+        }
         SharedPreferences prefs = prefs();
-        boolean present = prefs.contains(PREF_CIPHERTEXT) && prefs.contains(PREF_IV);
+        boolean present = prefs.contains(ctKey(vaultId)) && prefs.contains(ivKey(vaultId));
         JSObject ret = new JSObject();
         ret.put("value", present);
         call.resolve(ret);
@@ -64,15 +76,20 @@ public class BiometricVaultPlugin extends Plugin {
 
     @PluginMethod
     public void setSecret(final PluginCall call) {
+        final String vaultId = call.getString("vaultId");
+        if (vaultId == null) {
+            call.reject("Missing vaultId");
+            return;
+        }
         final String secret = call.getString("secret");
         if (secret == null) {
             call.reject("Missing secret");
             return;
         }
         try {
-            // Fresh key each enable, so the cache binds to the current biometric set.
-            deleteKey();
-            SecretKey key = generateKey();
+            // Fresh key each enable, so this vault's cache binds to the current biometric set.
+            deleteKey(aliasFor(vaultId));
+            SecretKey key = generateKey(aliasFor(vaultId));
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, key);
             authenticate(call, cipher, "Enable biometric unlock", new AuthAction() {
@@ -80,8 +97,8 @@ public class BiometricVaultPlugin extends Plugin {
                 public void run(Cipher authed) throws Exception {
                     byte[] ct = authed.doFinal(secret.getBytes(StandardCharsets.UTF_8));
                     SharedPreferences.Editor e = prefs().edit();
-                    e.putString(PREF_CIPHERTEXT, Base64.encodeToString(ct, Base64.NO_WRAP));
-                    e.putString(PREF_IV, Base64.encodeToString(authed.getIV(), Base64.NO_WRAP));
+                    e.putString(ctKey(vaultId), Base64.encodeToString(ct, Base64.NO_WRAP));
+                    e.putString(ivKey(vaultId), Base64.encodeToString(authed.getIV(), Base64.NO_WRAP));
                     e.apply();
                     call.resolve();
                 }
@@ -93,9 +110,14 @@ public class BiometricVaultPlugin extends Plugin {
 
     @PluginMethod
     public void getSecret(final PluginCall call) {
+        final String vaultId = call.getString("vaultId");
+        if (vaultId == null) {
+            call.reject("Missing vaultId");
+            return;
+        }
         SharedPreferences prefs = prefs();
-        String ctB64 = prefs.getString(PREF_CIPHERTEXT, null);
-        String ivB64 = prefs.getString(PREF_IV, null);
+        String ctB64 = prefs.getString(ctKey(vaultId), null);
+        String ivB64 = prefs.getString(ivKey(vaultId), null);
         if (ctB64 == null || ivB64 == null) {
             call.reject("No biometric secret stored", "no-secret");
             return;
@@ -103,9 +125,9 @@ public class BiometricVaultPlugin extends Plugin {
         final byte[] ct = Base64.decode(ctB64, Base64.NO_WRAP);
         byte[] iv = Base64.decode(ivB64, Base64.NO_WRAP);
         try {
-            SecretKey key = loadKey();
+            SecretKey key = loadKey(aliasFor(vaultId));
             if (key == null) {
-                clearSecret();
+                clearSecret(vaultId);
                 call.reject("No biometric secret stored", "no-secret");
                 return;
             }
@@ -123,7 +145,7 @@ public class BiometricVaultPlugin extends Plugin {
         } catch (KeyPermanentlyInvalidatedException e) {
             // The enrolled biometric set changed; the cache is dead. Drop it so the UI
             // falls back to the password screen and offers re-enabling.
-            clearSecret();
+            clearSecret(vaultId);
             call.reject("Biometric set changed; unlock cache cleared", "invalidated");
         } catch (Exception e) {
             call.reject("Couldn't read the stored secret: " + e.getMessage(), "auth-failed");
@@ -132,7 +154,12 @@ public class BiometricVaultPlugin extends Plugin {
 
     @PluginMethod
     public void deleteSecret(PluginCall call) {
-        clearSecret();
+        String vaultId = call.getString("vaultId");
+        if (vaultId == null) {
+            call.reject("Missing vaultId");
+            return;
+        }
+        clearSecret(vaultId);
         call.resolve();
     }
 
@@ -187,17 +214,17 @@ public class BiometricVaultPlugin extends Plugin {
         return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private void clearSecret() {
-        prefs().edit().remove(PREF_CIPHERTEXT).remove(PREF_IV).apply();
+    private void clearSecret(String vaultId) {
+        prefs().edit().remove(ctKey(vaultId)).remove(ivKey(vaultId)).apply();
         try {
-            deleteKey();
+            deleteKey(aliasFor(vaultId));
         } catch (Exception ignored) {
         }
     }
 
-    private SecretKey generateKey() throws Exception {
+    private SecretKey generateKey(String alias) throws Exception {
         KeyGenerator gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE);
-        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(KEY_ALIAS,
+        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(alias,
                 KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -209,17 +236,17 @@ public class BiometricVaultPlugin extends Plugin {
         return gen.generateKey();
     }
 
-    private SecretKey loadKey() throws Exception {
+    private SecretKey loadKey(String alias) throws Exception {
         KeyStore ks = KeyStore.getInstance(KEYSTORE);
         ks.load(null);
-        return (SecretKey) ks.getKey(KEY_ALIAS, null);
+        return (SecretKey) ks.getKey(alias, null);
     }
 
-    private void deleteKey() throws Exception {
+    private void deleteKey(String alias) throws Exception {
         KeyStore ks = KeyStore.getInstance(KEYSTORE);
         ks.load(null);
-        if (ks.containsAlias(KEY_ALIAS)) {
-            ks.deleteEntry(KEY_ALIAS);
+        if (ks.containsAlias(alias)) {
+            ks.deleteEntry(alias);
         }
     }
 }

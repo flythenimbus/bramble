@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.io.File
 import uniffi.vault_crypto.decryptEntry
 import uniffi.vault_crypto.decryptWithVek
@@ -38,13 +39,51 @@ class StoredPasskey(
 // loaded (biometric cache or master password). Nothing here is readable until unlock.
 object VaultReader {
 
-    fun vaultFile(context: Context): File =
-        File(context.filesDir, BrambleAutofill.VAULT_FILE)
+    /**
+     * The blob file to fill from: the active vault's namespaced file `vault-<id>.vlt1`, falling back
+     * to the pre-namespacing fixed `vault.vlt1` (the app runs the one-time migration on its next
+     * launch, but the service can fire before that). Null when nothing is stored yet. Single-active:
+     * the service fills whichever vault the app is in (activeVaultId), mirroring readVaultBlob.
+     */
+    fun vaultFile(context: Context): File? {
+        activeVaultId(context)?.let { id ->
+            val f = File(context.filesDir, blobFileName(id))
+            if (f.exists()) return f
+        }
+        val flat = File(context.filesDir, BrambleAutofill.VAULT_FILE)
+        return if (flat.exists()) flat else null
+    }
 
-    fun hasVault(context: Context): Boolean = vaultFile(context).exists()
+    private fun blobFileName(id: String): String = "vault-$id.vlt1"
+
+    /**
+     * The vault the app is currently in (single-active), read from the same Capacitor prefs the
+     * webview writes: `meta:active-vault` (a JSON string) else the first registered vault. Mirrors
+     * sync-manager's activeVaultId. Null on a pre-migration install (no registry yet), so callers
+     * fall back to the fixed blob path.
+     */
+    fun activeVaultId(context: Context): String? {
+        val prefs = context.getSharedPreferences(BrambleAutofill.CAPACITOR_PREFS, Context.MODE_PRIVATE)
+        prefs.getString(BrambleAutofill.PREF_ACTIVE_VAULT, null)?.let { raw ->
+            val v = try { JSONTokener(raw).nextValue() } catch (e: Exception) { null }
+            if (v is String && v.isNotEmpty()) return v
+        }
+        val regRaw = prefs.getString(BrambleAutofill.PREF_VAULT_REGISTRY, null) ?: return null
+        return try {
+            JSONObject(regRaw).optJSONArray("vaults")?.optJSONObject(0)?.optString("id", "")
+                ?.ifEmpty { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun hasVault(context: Context): Boolean = vaultFile(context) != null
 
     /** Decode the VLT1 container (slots + encrypted entries blob). No secrets revealed. */
-    fun decode(context: Context): VaultBlob = decodeVaultBlob(vaultFile(context).readBytes())
+    fun decode(context: Context): VaultBlob {
+        val f = vaultFile(context) ?: throw IllegalStateException("no vault stored")
+        return decodeVaultBlob(f.readBytes())
+    }
 
     /**
      * Decrypt every login. The caller MUST have loaded the VEK into the core first

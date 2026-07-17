@@ -422,14 +422,52 @@ devices/last-synced are its own and neither pairing disturbs the other.
 
 ## Mobile autofill and biometric
 
-Autofill reads out of process from a fixed location (iOS App Group keys
-`autofill.bundle` / `autofill.slot` in `BrambleConstants.swift`; Android
-`filesDir/vault.vlt1` via `VaultReader.kt`), and biometric caches exactly one VEK
-globally (iOS one Keychain item, Android one Keystore alias). Nothing in the fill
-request carries a vault id, so a provider cannot know which of several vaults to
-search.
+**LANDED (2026-07): per-vault biometric + active-vault-aware autofill blob read.** There is no
+primary vault; autofill and biometric follow the **active** (single-active) vault, resolved the same
+way sync does (`activeVaultId`: the app-recorded `meta:active-vault`, else the first registered
+vault). What shipped:
 
-v1 keeps this single-source shape by serving the **primary vault** only:
+- **Per-vault biometric cache.** The device biometric gate held one VEK, so enabling biometric on a
+  second vault silently overwrote the first's cached VEK. Now keyed by vault id end to end: the core
+  `BiometricUnlock` interface takes a `vaultId` on every op; iOS stores each VEK under Keychain
+  account `vek:<vaultId>` (`BiometricVault.swift`); Android under Keystore alias
+  `bramble.biometric.vek:<vaultId>` + prefs `vek_ct:<vaultId>`/`vek_iv:<vaultId>`
+  (`BiometricVaultPlugin.java`).
+- **Migration blocker fixed (Android).** The namespacing migration (below) copies the flat
+  `vault.vlt1` to `vault-<id>.vlt1` and **deletes the flat file** - but the AOSP autofill service read
+  `filesDir/vault.vlt1` directly (`VaultReader.kt`), so every migrated Android install would fill
+  nothing. `VaultReader` now resolves the active vault and reads `vault-<id>.vlt1`, with a flat
+  pre-migration fallback (the service can fire before the app runs its one-time migration). It reads
+  `meta:active-vault` / `meta:vault.registry` from the same `CapacitorStorage` prefs the webview
+  writes (same UID, cross-process).
+- **Autofill biometric read is per-vault (Android).** `BiometricUnlock.kt` (the service's read path)
+  resolves the active vault and reads that vault's per-vault Keystore alias + prefs. No mirror is
+  needed: the service runs in-app and can resolve the active vault. iOS *does* need a mirror - the
+  extension runs out-of-process and can't resolve the active vault - so `setSecret` also writes the
+  active vault's VEK to the un-suffixed `vek` account the extension reads (autofill follows the active
+  vault); `deleteSecret` clears it.
+
+Compat: existing biometric users re-enable once after this update (the old fixed-key cache is orphaned,
+not migrated - re-keying a biometric-gated secret needs a live prompt). The existing stale-cache UX
+handles this: biometric shows unavailable, they unlock with the master password, then re-enable.
+
+**Device-verify still required** (Kotlin/Java/Swift are not built in CI here): per-vault
+enable/unlock/disable on both platforms, autofill fill after a migration, and biometric autofill for
+the active vault.
+
+Full multi-vault autofill (search all vaults, label results by vault) is still a **Tier 2**
+fast-follow - this is single-active (the service fills whichever vault the app is in), not
+multi-vault-at-once.
+
+---
+
+The original v1 plan is kept below for context (superseded: active-vault, not primary-vault). Autofill
+reads out of process from a fixed location (iOS App Group keys `autofill.bundle` / `autofill.slot` in
+`BrambleConstants.swift`; Android `filesDir/vault.vlt1` via `VaultReader.kt`), and biometric cached
+exactly one VEK globally. Nothing in the fill request carries a vault id, so a provider cannot know
+which of several vaults to search.
+
+v1 was originally scoped to keep this single-source shape by serving the **primary vault** only:
 
 - Mobile autofill serves the primary vault. The app pushes the primary vault's
   bundle to the App Group (iOS) / keeps it at `vault.vlt1` (Android), as it does
