@@ -1017,22 +1017,31 @@ behavior, clobbers included); the fix is real once 3 lands.
   [Namespacing](#namespacing-every-vault-by-id-one-time-copy-migration). **Needs device-verify** on
   a real pre-migration profile (open + sync intact) before shipping - see the checklist handed off
   with the change.
-- **Mobile multi-vault, Tier 1 (single-active, switchable).** Mobile already *stores* multiple
-  vaults - `mobileStorage` namespaces the blob + crash-backup per vault id (`blobFileFor`),
-  defaulting to the first vault, and restore-adds-a-vault works - but the *runtime* is hardwired to
-  that one vault: the mobile shell has no `setActiveVault`/`getActiveVault`, the crypto has no
-  `withVault`, and `sync-manager`, `biometric.ts`, and `autofill.ts` all read `readVaultBlob()` ->
-  the first vault. Tier 1 =
-  (a) an **active-vault pointer** replacing the id-omitted (first-vault) default across those reads;
-  (b) the **shared picker wired to switch** - select -> lock current -> unlock the chosen vault via
-  `readVaultBlob(activeId)`;
-  (c) `sync-manager` pointed at the **active vault's namespaced keys** + per-vault device identity
-  in secure-store (this is [increment 6, "mobile parity"](#increment-order)).
-  Mobile does **not** need the extension's per-vault VEK map: that fixed a cross-context
-  (popup+popout) race on the shared offscreen VEK, and mobile is a single webview / one wasm
-  instance, so `createVault`'s build can't interleave - **single-active-unlock with lock-on-switch**
-  is correct and simpler. Per-vault biometric (Keychain/Keystore aliases) and multi-vault autofill
-  are the out-of-process **Tier 2** that follows (the two mobile items below).
+- **Mobile multi-vault, Tier 1 (single-active, switchable) - core LANDED 2026-07, needs
+  device-verify.** Mobile always stored multiple vaults (namespaced blobs); the runtime is now
+  active-vault-aware:
+  (a) ~~active-vault pointer~~ **DONE** - `mobileShell.setActiveVault`/`getActiveVault` persist the
+  active vault in Preferences (no session store on mobile); unlock records it, the registry restores
+  it on reopen (commit 55c2769e).
+  (b) **picker + switch already worked** via shared router guards (`router.tsx` `/select`,
+  `VaultPicker`, `Auth`'s "Choose a different vault" -> `clearSelection`); it's **locked-only** (the
+  guards gate it behind `isLocked`), which is correct because there's no per-vault VEK on mobile -
+  `lock()` drops the single native VEK before another vault is picked. An *unlocked* "switch vault"
+  button would just `lock()` then route to `/select`; not built yet (nicety).
+  (c) ~~sync targets the active vault~~ **DONE** - `sync-manager` resolves the active vault and
+  reads/writes its namespaced `sync.group`/`sync.deviceId`/`sync.lastSyncedAt` + blob; the HLC clock
+  re-seeds per vault on teardown. This also **fixed a regression the namespacing change introduced**:
+  the app's enrollment writes namespaced `sync.group:<id>` but `sync-manager` had read flat, so
+  mobile sync was silently broken on this branch. The Noise/Ed25519 keypairs stay device-global in
+  secure storage (the migration deliberately skips them); per-vault device identity is a later
+  hardening.
+  Mobile does **not** need the extension's per-vault VEK map (single webview, lock-on-switch).
+  **Still open:** `resetSyncState` clears device-global keys on `createVault`, which is fine for
+  first-vault create but would disturb a sibling vault if a *second* vault is created on mobile
+  (rare today; refine when 2nd-vault-create is a real flow). Per-vault biometric (Keychain/Keystore
+  aliases) and multi-vault autofill are the out-of-process **Tier 2** that follows (the two mobile
+  items below). **All of the above is unverified on device** - mobile sync (edit propagates) and
+  two-vault switching must be run on a phone.
 - **Autofill arming (Phase 3, mobile).** Whether the mobile autofill vault's bundle can
   be repackaged from the sealed blob without the VEK. If not, switching the mobile
   autofill vault to a never-opened vault needs a one-time unlock to arm. (Mobile still
