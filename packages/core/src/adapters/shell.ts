@@ -159,6 +159,13 @@ export interface ShellAdapter {
 		/** This device's recovery slot(s) (base64), forwarded so the joiner shares the group's
 		 * recovery code; omitted when this device has no recovery code. */
 		recoverySlots?: WireRecoverySlot[];
+		/** This device's admission material (re-entered password + slot salt + admitter id) so the
+		 * sync HOST can admission-sign the joiner's entry and add it to the roster itself. The host
+		 * is kept alive through the enroll, whereas the popup that would otherwise do this can be
+		 * closed when the joiner finishes (Firefox's event page) — losing the add and starving the
+		 * joiner ("not in roster"). Idempotent with the UI write (deterministic Ed25519). Omitted
+		 * when this device can't admit (security-key-only). See docs/multiple-vaults.md. */
+		admission?: { password: string; saltB64: string; adminId: string };
 	}): Promise<void>;
 	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
 	startEnrollJoin(opts: {

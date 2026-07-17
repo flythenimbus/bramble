@@ -16,6 +16,7 @@ import type {
 	VekEncrypted,
 } from "@core/adapters/crypto";
 import { buildCryptoAdapter } from "@core/adapters/crypto-wasm";
+import { canonicalRosterEntry, encodeRoster, RosterEntrySchema } from "@core/sync/roster";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
@@ -39,6 +40,7 @@ import { api } from "./platform-api";
 import {
 	AdmissionPubkeyMsgSchema,
 	AdmissionSignHostMsgSchema,
+	type EnrollInviteMsg,
 	EnrollInviteMsgSchema,
 	EnrollJoinMsgSchema,
 	RosterSignHostMsgSchema,
@@ -358,6 +360,39 @@ async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
 }
 
 /**
+ * Inviter, host-side: admission-sign a freshly-joined device's entry and add it to the LOCAL roster,
+ * in the same host that runs the ongoing sync. The popup does this too (useSyncEnrollment), but on
+ * Firefox the event page is kept alive through the enroll while the popup can be gone when enrollment
+ * finishes — so its add is lost and the joiner is rejected ("not in roster") when it reconnects for
+ * ongoing sync. Doing it here makes the roster write reliable and popup-independent. Idempotent with
+ * the UI write (deterministic Ed25519, same canonical entry). Merges as a CRDT union, so it never
+ * revokes existing devices. See docs/multiple-vaults.md and docs/p2p-sync-revocation-hardening.md.
+ * Exported for tests.
+ */
+export async function addEnrolledToLocalRoster(
+	bridge: SyncBridge,
+	admission: { password: string; saltB64: string; adminId: string } | undefined,
+	entryJson: string,
+): Promise<void> {
+	try {
+		const entry = RosterEntrySchema.parse(JSON.parse(entryJson));
+		let admitted = entry;
+		if (admission) {
+			const w = await getWasm();
+			const sig = w.roster_admission_sign(
+				admission.password,
+				admission.saltB64,
+				canonicalRosterEntry(entry),
+			);
+			admitted = { ...entry, admission: { by: admission.adminId, sig } };
+		}
+		await bridge.pushRemoteRoster(encodeRoster({ devices: [admitted], revoked: [] }));
+	} catch (err) {
+		console.warn("[offscreen] host-side roster add failed", err);
+	}
+}
+
+/**
  * Handle one host message (clipboard / sync / crypto / QR) and return the host response.
  * Sync messages use the registered SyncBridge for their storage round-trips. Never
  * throws — failures come back as `{ ok: false, error }`.
@@ -436,6 +471,8 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					role === "inviter"
 						? EnrollInviteMsgSchema.parse(payload)
 						: EnrollJoinMsgSchema.parse(payload);
+				// Inviter-only: the material for the host to admission-sign + roster the joiner itself.
+				const admission = role === "inviter" ? (opts as EnrollInviteMsg).admission : undefined;
 				enrollSession?.stop();
 				enrollSession = await startEnroll(role, {
 					...opts,
@@ -443,7 +480,12 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					report: reportSyncStatus,
 					onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
 					onJoinError: (msg) => broadcastSyncEvent({ kind: "join-error", message: msg }),
-					onEnrolled: (entryJson) => broadcastSyncEvent({ kind: "enrolled", entryJson }),
+					onEnrolled: (entryJson) => {
+						// Add to the roster in the host (reliable) AND notify the popup (updates its UI +
+						// upgrades the same entry). See addEnrolledToLocalRoster.
+						void addEnrolledToLocalRoster(bridge, admission, entryJson);
+						broadcastSyncEvent({ kind: "enrolled", entryJson });
+					},
 				});
 				return { ok: true };
 			}

@@ -233,6 +233,9 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				entries,
 				passwordCheck,
 				recoverySlots,
+				// Let the sync HOST admission-sign + roster the joiner itself; the enrolled-event handler
+				// above does the same, but the host is reliable when the popup has closed (Firefox).
+				admission: admit ?? undefined,
 			});
 			// Omit iceUrl from the code when empty (the joiner then derives it from the relay).
 			return encodePairingCode({

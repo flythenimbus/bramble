@@ -47,6 +47,12 @@ export const EnrollInviteMsgSchema = z.object({
 			}),
 		)
 		.optional(),
+	// The inviter's admission material so the HOST can admission-sign the joiner and add it to the
+	// local roster itself (reliable on Firefox, where the popup can be gone when enrollment finishes).
+	// See offscreen-core `addEnrolledToLocalRoster` and docs/multiple-vaults.md.
+	admission: z
+		.object({ password: z.string(), saltB64: z.string(), adminId: z.string() })
+		.optional(),
 });
 export type EnrollInviteMsg = z.infer<typeof EnrollInviteMsgSchema>;
 
