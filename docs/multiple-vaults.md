@@ -991,6 +991,22 @@ behavior, clobbers included); the fix is real once 3 lands.
   under a device key rather than any vault VEK, which is separate work.
 - **`primaryId` removal.** Now dead except as a storage/sync fallback default; remove
   once those fallbacks resolve the active vault instead.
+- **Mobile multi-vault, Tier 1 (single-active, switchable).** Mobile already *stores* multiple
+  vaults - `mobileStorage` namespaces the blob + crash-backup per vault id (`blobFileFor`),
+  defaulting to `reg.primaryId`, and restore-adds-a-vault works - but the *runtime* is hardwired to
+  the primary: the mobile shell has no `setActiveVault`/`getActiveVault`, the crypto has no
+  `withVault`, and `sync-manager`, `biometric.ts`, and `autofill.ts` all read `readVaultBlob()` ->
+  primary. Tier 1 =
+  (a) an **active-vault pointer** replacing the `primaryId` default across those reads;
+  (b) the **shared picker wired to switch** - select -> lock current -> unlock the chosen vault via
+  `readVaultBlob(activeId)`;
+  (c) `sync-manager` pointed at the **active vault's namespaced keys** + per-vault device identity
+  in secure-store (this is [increment 6, "mobile parity"](#increment-order)).
+  Mobile does **not** need the extension's per-vault VEK map: that fixed a cross-context
+  (popup+popout) race on the shared offscreen VEK, and mobile is a single webview / one wasm
+  instance, so `createVault`'s build can't interleave - **single-active-unlock with lock-on-switch**
+  is correct and simpler. Per-vault biometric (Keychain/Keystore aliases) and multi-vault autofill
+  are the out-of-process **Tier 2** that follows (the two mobile items below).
 - **Autofill arming (Phase 3, mobile).** Whether the mobile autofill vault's bundle can
   be repackaged from the sealed blob without the VEK. If not, switching the mobile
   autofill vault to a never-opened vault needs a one-time unlock to arm. (Mobile still
