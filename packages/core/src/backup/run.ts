@@ -6,12 +6,12 @@ import { isDue, selectDueTargets } from "./schedule";
  * a browser, storage, crypto host, or network. The extension wires real ones; tests
  * pass fakes.
  */
-/** One vault to back up: its id, its sealed blob, and whether it's the legacy (primary) vault
+/** One vault to back up: its id, its sealed blob, and whether it's the default (first) vault
  * whose snapshots stay at the un-suffixed prefix so existing backups keep going. */
 export interface VaultBackup {
 	id: string;
 	blob: Uint8Array;
-	legacy: boolean;
+	isDefault: boolean;
 }
 
 export interface ScheduledBackupDeps {

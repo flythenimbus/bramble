@@ -39,7 +39,7 @@ async function loadConfig() {
 	return import("./sync-config");
 }
 
-// Two vaults: "a" is the primary/legacy (flat keys), "b" is namespaced.
+// Two vaults, both addressed by id; "a" is the first (fallback) vault.
 const two: VaultRegistry = addVault(
 	addVault(EMPTY_REGISTRY, { id: "a", label: "", createdAt: 1 }),
 	{
@@ -70,13 +70,13 @@ describe("resolveSyncVault", () => {
 	it("targets the session-recorded active vault", async () => {
 		stubChrome(regSeed, { [ACTIVE_VAULT_SESSION_KEY]: "b" });
 		const { resolveSyncVault } = await loadConfig();
-		expect(await resolveSyncVault()).toEqual({ vaultId: "b", legacyBlobVaultId: "a" });
+		expect(await resolveSyncVault()).toEqual({ vaultId: "b" });
 	});
 
-	it("falls back to the primary vault when no active vault is recorded", async () => {
+	it("falls back to the first vault when no active vault is recorded", async () => {
 		stubChrome(regSeed, {});
 		const { resolveSyncVault } = await loadConfig();
-		expect(await resolveSyncVault()).toEqual({ vaultId: "a", legacyBlobVaultId: "a" });
+		expect(await resolveSyncVault()).toEqual({ vaultId: "a" });
 	});
 
 	it("returns null when no vault exists yet", async () => {
@@ -86,57 +86,55 @@ describe("resolveSyncVault", () => {
 	});
 });
 
-describe("per-vault sync keys (grandfather the legacy vault)", () => {
-	const legacyCtx = { vaultId: "a", legacyBlobVaultId: "a" };
-	const otherCtx = { vaultId: "b", legacyBlobVaultId: "a" };
+describe("per-vault sync keys", () => {
+	const ctxA = { vaultId: "a" };
+	const ctxB = { vaultId: "b" };
 	const group = { groupKey: "gk", roster: { devices: [], revoked: [] } };
 	const kp = { privateKey: "priv", publicKey: "pub" };
 	const sig = { secretKey: "sec", publicKey: "vpub" };
 
-	it("stores the legacy vault's group under the flat key", async () => {
+	it("stores a vault's group under its namespaced key", async () => {
 		const { local } = stubChrome(regSeed);
 		const { storeGroup, getStoredGroup } = await loadConfig();
-		await storeGroup(group, legacyCtx);
-		expect(local["sync.group"]).toEqual(group);
-		expect(local["sync.group:a"]).toBeUndefined();
-		expect(await getStoredGroup(legacyCtx)).toEqual(group);
+		await storeGroup(group, ctxA);
+		expect(local["sync.group:a"]).toEqual(group);
+		expect(local["sync.group"]).toBeUndefined();
+		expect(await getStoredGroup(ctxA)).toEqual(group);
 	});
 
-	it("namespaces a non-legacy vault's group by id", async () => {
+	it("namespaces another vault's group by id", async () => {
 		const { local } = stubChrome(regSeed);
 		const { storeGroup, getStoredGroup } = await loadConfig();
-		await storeGroup(group, otherCtx);
+		await storeGroup(group, ctxB);
 		expect(local["sync.group:b"]).toEqual(group);
-		expect(local["sync.group"]).toBeUndefined();
-		expect(await getStoredGroup(otherCtx)).toEqual(group);
+		expect(await getStoredGroup(ctxB)).toEqual(group);
 	});
 
 	it("keeps two vaults' groups isolated (no cross-read)", async () => {
 		stubChrome(regSeed);
 		const { storeGroup, getStoredGroup } = await loadConfig();
-		await storeGroup(group, legacyCtx);
-		// Vault "b" has no group of its own even though the legacy vault does.
-		expect(await getStoredGroup(otherCtx)).toBeNull();
+		await storeGroup(group, ctxA);
+		// Vault "b" has no group of its own even though vault "a" does.
+		expect(await getStoredGroup(ctxB)).toBeNull();
 	});
 
 	it("namespaces the device keypair and signing key per vault", async () => {
 		const { local } = stubChrome(regSeed);
 		const { storeKeypair, getStoredKeypair, storeSigningKey, getStoredSigningKey } =
 			await loadConfig();
-		await storeKeypair(kp, otherCtx);
-		await storeSigningKey(sig, otherCtx);
+		await storeKeypair(kp, ctxB);
+		await storeSigningKey(sig, ctxB);
 		expect(local["sync.deviceKeypair:b"]).toEqual(kp);
 		expect(local["sync.signingKey:b"]).toEqual(sig);
-		expect(local["sync.deviceKeypair"]).toBeUndefined();
-		expect(await getStoredKeypair(otherCtx)).toEqual(kp);
-		expect(await getStoredSigningKey(otherCtx)).toEqual(sig);
-		// The legacy vault sees none of the namespaced keys.
-		expect(await getStoredKeypair(legacyCtx)).toBeNull();
+		expect(await getStoredKeypair(ctxB)).toEqual(kp);
+		expect(await getStoredSigningKey(ctxB)).toEqual(sig);
+		// Vault "a" sees none of vault "b"'s keys.
+		expect(await getStoredKeypair(ctxA)).toBeNull();
 	});
 
 	it("returns null for a malformed/partial stored value", async () => {
 		stubChrome({ ...regSeed, "sync.group:b": { roster: { devices: [], revoked: [] } } });
 		const { getStoredGroup } = await loadConfig();
-		expect(await getStoredGroup(otherCtx)).toBeNull(); // no groupKey
+		expect(await getStoredGroup(ctxB)).toBeNull(); // no groupKey
 	});
 });

@@ -132,8 +132,8 @@ api.storage.onChanged.addListener((changes, area) => {
 	// A vault-blob change (a local edit, or a remote merge that actually changed state — the merge
 	// skips the write otherwise, so this can't echo) pushes to peers now instead of waiting for the
 	// rebroadcast tick. Matters most on Firefox, whose event page suspends between ticks; the write
-	// itself wakes it. Match the active vault's blob whether it lives at the flat legacy key or a
-	// namespaced `vault-blob-b64:<id>` key (only the unlocked vault changes while unlocked).
+	// itself wakes it. Match any vault's namespaced `vault-blob-b64:<id>` key (only the unlocked
+	// vault changes while unlocked).
 	// Best-effort. See docs/p2p-sync.md.
 	if (Object.keys(changes).some(isVaultBlobKey) && !vaultLocked()) {
 		void (async () => {

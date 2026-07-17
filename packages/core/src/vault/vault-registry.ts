@@ -15,22 +15,16 @@ export const VaultRecordSchema = z.object({
 });
 export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 
+// Every vault is addressed by id: its blob is at `<base>:<id>` and its sync keys at `<key>:<id>`.
+// (Older `primaryId` / `legacyBlobVaultId` fields are Zod-stripped on parse; the storage adapter's
+// one-time migration copies a pre-namespacing vault's flat data to its `:<id>` keys. See storage.ts
+// and docs/multiple-vaults.md.)
 export const VaultRegistrySchema = z.object({
 	vaults: z.array(VaultRecordSchema),
-	// The vault whose blob lives at the un-suffixed (legacy) storage location, and the fallback
-	// "default vault" when a caller omits an id or no active vault is selected (single-vault callers,
-	// a woken background before the UI set the session, and mobile's out-of-process autofill /
-	// biometric). Transitional: the first vault stays put so no bytes move during the multi-vault
-	// migration, while later vaults are namespaced by id; a future phase moves it into the uniform
-	// namespace and clears this. (An older `primaryId` field is Zod-stripped on parse - no migration.)
-	legacyBlobVaultId: z.string().nullable(),
 });
 export type VaultRegistry = z.infer<typeof VaultRegistrySchema>;
 
-export const EMPTY_REGISTRY: VaultRegistry = {
-	vaults: [],
-	legacyBlobVaultId: null,
-};
+export const EMPTY_REGISTRY: VaultRegistry = { vaults: [] };
 
 /** Parse a stored registry, falling back to an empty one when absent or corrupt. */
 export function parseRegistry(raw: unknown): VaultRegistry {
@@ -39,24 +33,17 @@ export function parseRegistry(raw: unknown): VaultRegistry {
 	return parsed.success ? parsed.data : EMPTY_REGISTRY;
 }
 
-/** Add a vault. The first vault added takes the legacy (un-suffixed) blob slot. */
+/** Add a vault. */
 export function addVault(reg: VaultRegistry, record: VaultRecord): VaultRegistry {
 	if (reg.vaults.some((v) => v.id === record.id)) {
 		throw new Error(`vault id already registered: ${record.id}`);
 	}
-	const first = reg.vaults.length === 0;
-	return {
-		vaults: [...reg.vaults, record],
-		legacyBlobVaultId: reg.legacyBlobVaultId ?? (first ? record.id : null),
-	};
+	return { vaults: [...reg.vaults, record] };
 }
 
-/** Remove a vault. Clears the legacy-blob pointer if it was the one removed. */
+/** Remove a vault. */
 export function removeVault(reg: VaultRegistry, id: string): VaultRegistry {
-	return {
-		vaults: reg.vaults.filter((v) => v.id !== id),
-		legacyBlobVaultId: reg.legacyBlobVaultId === id ? null : reg.legacyBlobVaultId,
-	};
+	return { vaults: reg.vaults.filter((v) => v.id !== id) };
 }
 
 /** Rename a vault. A blank label falls back to "Vault N" at display time (see displayLabel). */

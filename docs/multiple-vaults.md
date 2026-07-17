@@ -92,10 +92,10 @@ correct as vaults are added and removed.
 Everything that belongs to a vault is namespaced by its id. Everything that is a
 device setting stays global.
 
-| Key (today) | Multi-vault | Scope |
+| Key (pre-namespacing) | Multi-vault | Scope |
 |---|---|---|
-| `vault-blob-b64` / `vault.vlt1` | `vault-blob-b64:<id>` / `vault.vlt1.<id>` | per vault |
-| `vault-blob-backup-b64` / `vault.vlt1.bak` | `...:<id>` | per vault |
+| `vault-blob-b64` / `vault.vlt1` | `vault-blob-b64:<id>` / `vault-<id>.vlt1` | per vault |
+| `vault-blob-backup-b64` / `vault.vlt1.bak` | `...:<id>` / `vault-<id>.vlt1.bak` | per vault |
 | `sync.group` | `sync.group:<id>` | per vault |
 | `sync.deviceKeypair` | `sync.deviceKeypair:<id>` | per vault |
 | `sync.signingKey` | `sync.signingKey:<id>` | per vault |
@@ -308,16 +308,27 @@ vault's roster) but are stored flat today (extension: plaintext `chrome.storage.
 mobile: `deviceKeypair`/`signingKey` in the Keychain/Keystore secure store, the rest in
 Preferences). `sync.relay` / `sync.iceUrl` stay flat.
 
-### Namespacing: grandfather the legacy vault, no migration
+### Namespacing: every vault by id, one-time copy migration
 
-Same trick as the blob (`legacyBlobVaultId`): the pre-existing synced vault keeps the
-**flat** `sync.*` keys, so its pairing survives with zero key movement; every other vault
-uses `sync.<base>:<vaultId>`. A single helper, `syncKeyFor(flatKey, vaultId,
-legacyBlobVaultId)` (`packages/core/src/sync/sync-keys.ts`), returns the flat key when
-`vaultId === legacyBlobVaultId` and the namespaced key otherwise. This is safest for
-existing pairings (no bytes move on the wire or on disk), and it matches where the flat
-keys already live (Phase 0 never touched them). On mobile, the two secure-store keys need
-a parallel per-vault alias scheme.
+**Every** vault is addressed by id: its blob at `<base>:<id>`, its five `sync.*` keys at
+`<base>:<id>`. `syncKeyFor(flatKey, vaultId)` (`packages/core/src/sync/sync-keys.ts`) always
+returns `<flatKey>:<vaultId>`; `blobKeyFor(id)` always returns `<base>:<id>`. There is no
+"legacy vault" special case and no `legacyBlobVaultId` in the registry.
+
+A pre-namespacing single vault (blob + `sync.*` keys at the un-suffixed locations) is brought
+into the namespace by a **one-time copy migration** in the storage adapter's `runMigration`
+(`storage.ts` extension, `adapters/storage.ts` mobile). It **copies** the flat blob, its recovery
+snapshot, and the five sync keys to their `:<id>` names, then writes the registry (the cutover),
+then deletes the flat keys. A copy, never a move, so it is crash-safe under MV3's ~30s
+service-worker deaths: an interrupt before the cutover just re-runs (the flat data is still
+authoritative); after it, the flat keys are unread orphans that best-effort cleanup removes. It is
+concurrency-safe (`copyFlatVaultToNamespaced` copies only values that still exist, so a racing
+context can't clobber a namespaced key with null) and value-preserving (byte-identical sync keys →
+the device's Noise static / roster id / groupKey are unchanged → **peers keep recognizing it, no
+re-pair**). An install already on the transitional layout is detected by raw-reading the retired
+`legacyBlobVaultId` pointer (Zod strips it on a normal parse) and migrating the vault it names.
+Runs identically on the extension (`chrome.storage.local`) and mobile (native filesystem +
+Preferences). See the migration tests in `storage.test.ts` on both platforms.
 
 ### The active vault must reach the background
 
@@ -441,9 +452,16 @@ Keychain items / Keystore aliases) is a native fast-follow, not v1.
 
 ## Migration
 
+**LANDED (2026-07) as a single one-pass copy migration** - the whole build namespaces every
+reader, so `runMigration` copies the pre-namespacing vault's blob + `sync.*` keys to their `:<id>`
+names in one shot, cuts over, and cleans up. See
+[Namespacing](#namespacing-every-vault-by-id-one-time-copy-migration). The staged reasoning below is
+the original plan (when the per-vault readers were expected to land phase by phase); it is kept for
+the rationale on why the moves are re-pair-free.
+
 End state: **everything in the namespaced layout** (uniform, no permanent legacy
-special-case), sync identity preserved so nobody has to re-pair. But the migration is
-**staged across the phases, not done in one pass**, because moving a stored key
+special-case), sync identity preserved so nobody has to re-pair. The migration was
+originally planned **staged across the phases**, because moving a stored key
 requires its readers to already be per-vault, and those land phase by phase. Moving
 the `sync.*` keys before the sync code reads the namespaced keys (Phase 2) would break
 the very pairing the migration is meant to preserve. So each phase migrates only what
@@ -461,9 +479,9 @@ storage keys, and that is invisible to the sync wire protocol. Rooms key off the
 `groupKey`, peer authentication is the device's Noise / Ed25519 identity, and the
 roster is a stored value; all are preserved by moving the key, not its value. So a
 migrated device and a not-yet-updated device keep syncing, cross-device update skew is
-a non-issue, and no re-pair fires. Every stage is idempotent (write the namespaced key
-before deleting the legacy one, so a crash re-migrates) and must never call
-`resetSyncState` (that would discard the identity being preserved). This mirrors the
+a non-issue, and no re-pair fires. The migration is idempotent (it COPIES to the namespaced key
+and cuts over via the registry write before deleting the un-suffixed one, so a crash re-migrates)
+and must never call `resetSyncState` (that would discard the identity being preserved). This mirrors the
 gesture-safe legacy File System Access migration in [storage.md](storage.md).
 
 The stages:
@@ -989,15 +1007,23 @@ behavior, clobbers included); the fix is real once 3 lands.
   whichever vault created the target. Per-vault VEK ships a mitigation (try the active
   vault's vek, then each other unlocked vault's); the durable fix wraps target config
   under a device key rather than any vault VEK, which is separate work.
-- **`primaryId` removal.** Now dead except as a storage/sync fallback default; remove
-  once those fallbacks resolve the active vault instead.
+- ~~**`primaryId` removal.**~~ **DONE (2026-07, commit `94802182`).** The user-reassignable
+  primary pointer is gone from the registry (Zod strips a stored one); the storage/sync fallbacks
+  resolve the first/only vault instead. Mobile's out-of-process autofill still serves that fallback
+  vault until Tier 1 adds a designated-autofill-vault.
+- ~~**Uniform namespacing (retire `legacyBlobVaultId`).**~~ **DONE (2026-07).** Every vault is
+  addressed by id on both platforms; the pre-namespacing vault is brought in by a crash-safe,
+  value-preserving one-time **copy** migration (no re-pair). See
+  [Namespacing](#namespacing-every-vault-by-id-one-time-copy-migration). **Needs device-verify** on
+  a real pre-migration profile (open + sync intact) before shipping - see the checklist handed off
+  with the change.
 - **Mobile multi-vault, Tier 1 (single-active, switchable).** Mobile already *stores* multiple
   vaults - `mobileStorage` namespaces the blob + crash-backup per vault id (`blobFileFor`),
-  defaulting to `reg.primaryId`, and restore-adds-a-vault works - but the *runtime* is hardwired to
-  the primary: the mobile shell has no `setActiveVault`/`getActiveVault`, the crypto has no
+  defaulting to the first vault, and restore-adds-a-vault works - but the *runtime* is hardwired to
+  that one vault: the mobile shell has no `setActiveVault`/`getActiveVault`, the crypto has no
   `withVault`, and `sync-manager`, `biometric.ts`, and `autofill.ts` all read `readVaultBlob()` ->
-  primary. Tier 1 =
-  (a) an **active-vault pointer** replacing the `primaryId` default across those reads;
+  the first vault. Tier 1 =
+  (a) an **active-vault pointer** replacing the id-omitted (first-vault) default across those reads;
   (b) the **shared picker wired to switch** - select -> lock current -> unlock the chosen vault via
   `readVaultBlob(activeId)`;
   (c) `sync-manager` pointed at the **active vault's namespaced keys** + per-vault device identity

@@ -17,9 +17,13 @@ test("restoring a backup when a vault exists adds a new vault, never overwrites"
 	// A .bramble backup is just a VLT1 blob. Reuse vault 1's own blob as the backup file (same
 	// password), written to a temp .bramble the file picker can accept.
 	const sw = await backgroundWorker(context);
-	const b64 = await sw.evaluate(
-		async () => (await chrome.storage.local.get("vault-blob-b64"))["vault-blob-b64"] as string,
-	);
+	const b64 = await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults: { id: string }[];
+		};
+		const key = `vault-blob-b64:${reg.vaults[0]!.id}`;
+		return (await chrome.storage.local.get(key))[key] as string;
+	});
 	const dir = mkdtempSync(path.join(tmpdir(), "bramble-backup-"));
 	const file = path.join(dir, "backup.bramble");
 	writeFileSync(file, Buffer.from(b64, "base64"));

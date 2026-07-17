@@ -56,15 +56,15 @@ export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
-	const { activeId, legacyBlobVaultId, vaults, syncKey } = useVaultRegistry();
+	const { activeId, vaults, syncKey } = useVaultRegistry();
 	const canPerVaultSync = useCan("perVaultSync");
 	const { t } = useLingui();
 	// Where the background sync engine is per-vault (the extension) every vault syncs on its own.
 	// Where it still binds to the one default vault (mobile, which reads the id-omitted blob = the
-	// legacy vault), a non-default vault would otherwise show the default's devices and let you start
+	// first vault), a non-default vault would otherwise show the default's devices and let you start
 	// a half-wired enrollment, so show a short "coming soon" note instead. See docs/multiple-vaults.md.
 	const syncBoundToDefaultVault =
-		!canPerVaultSync && vaults.length > 1 && activeId !== legacyBlobVaultId;
+		!canPerVaultSync && vaults.length > 1 && activeId !== vaults[0]?.id;
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));

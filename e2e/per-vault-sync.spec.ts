@@ -14,20 +14,26 @@ import {
 // second, independent vault as un-synced (the bug this feature fixed: vault 2 showed vault 1's
 // paired devices). Drives the real popup UI (picker + Settings) and inspects real background storage.
 test("a second vault has its own, independent sync state", async ({ context, extensionId }) => {
-	// Two vaults. The first owns the flat (legacy) blob + sync keys; the second is namespaced.
+	// Two vaults, each addressed by id (sync keys namespaced `<key>:<id>`).
 	const setup = await context.newPage();
 	await createVault(setup, extensionId);
 	const setup2 = await context.newPage();
 	await createVault(setup2, extensionId);
 
-	// Put the FIRST vault into a "synced" state by seeding its group at the flat key (what an
-	// enrollment writes), without needing a second real device. syncKeyFor maps it to "sync.group".
+	// Put the FIRST vault into a "synced" state by seeding its group at its namespaced key (what an
+	// enrollment writes), without needing a second real device.
 	const sw = await backgroundWorker(context);
-	await sw.evaluate(() =>
-		chrome.storage.local.set({
-			"sync.group": { groupKey: "dGVzdC1ncm91cA==", roster: { devices: [], revoked: [] } },
-		}),
-	);
+	await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults: { id: string }[];
+		};
+		await chrome.storage.local.set({
+			[`sync.group:${reg.vaults[0]!.id}`]: {
+				groupKey: "dGVzdC1ncm91cA==",
+				roster: { devices: [], revoked: [] },
+			},
+		});
+	});
 
 	const popup = await context.newPage();
 	await openPopup(popup, extensionId);
@@ -44,11 +50,11 @@ test("a second vault has its own, independent sync state", async ({ context, ext
 	await gotoSync(popup);
 	await expect(popup.getByRole("button", { name: /Disconnect/i })).toBeVisible();
 
-	// Storage confirms the isolation: vault 1's group is at the flat key, and no namespaced group
-	// key exists for vault 2 (it never synced). Both vaults are registered.
+	// Storage confirms the isolation: exactly one vault (vault 1) has a namespaced group key, vault 2
+	// never synced, and there is no flat group key. Both vaults are registered.
 	const keys = await localStorageKeys(context);
-	expect(keys).toContain("sync.group");
-	expect(keys.filter((k) => k.startsWith("sync.group:"))).toEqual([]);
+	expect(keys).not.toContain("sync.group");
+	expect(keys.filter((k) => k.startsWith("sync.group:"))).toHaveLength(1);
 	const vaultCount = await sw.evaluate(async () => {
 		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
 			vaults?: unknown[];

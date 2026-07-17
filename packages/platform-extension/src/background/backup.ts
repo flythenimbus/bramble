@@ -71,7 +71,7 @@ async function readVaults(): Promise<VaultBackup[]> {
 			out.push({
 				id: v.id,
 				blob: await extensionStorage.readVaultBlob(v.id),
-				legacy: v.id === reg.legacyBlobVaultId,
+				isDefault: v.id === reg.vaults[0]?.id,
 			});
 		} catch {}
 	}
@@ -113,7 +113,7 @@ export async function runDueBackups(): Promise<void> {
 					const target = createTarget(toProviderConfig(t, secrets));
 					// Sequential per vault: the offscreen crypto host is shared and can't race.
 					for (const v of vaults) {
-						const prefix = vaultBackupPrefix(backupPrefix(t), v.id, v.legacy);
+						const prefix = vaultBackupPrefix(backupPrefix(t), v.id, v.isDefault);
 						await runBackup(target, v.blob, { prefix, keep: t.keep });
 					}
 				},

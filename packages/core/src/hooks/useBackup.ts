@@ -38,7 +38,7 @@ const newId = () => globalThis.crypto.randomUUID();
 export function useBackup() {
 	const { storage, crypto, shell } = usePlatform();
 	// "Back up now" backs up the vault the user is currently in, to that vault's own folder.
-	const { activeId, legacyBlobVaultId } = useVaultRegistry();
+	const { activeId, vaults } = useVaultRegistry();
 	// undefined = still loading.
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
 	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -165,10 +165,10 @@ export function useBackup() {
 			const list = targets ?? [];
 			const toRun = id ? list.filter((t) => t.id === id) : list;
 			if (toRun.length === 0) return;
-			// The active vault (fall back to the primary before one resolves). Read its blob and
+			// The active vault (fall back to the first vault before one resolves). Read its blob and
 			// place snapshots in its own folder, matching where scheduled backups put this vault.
-			const vaultId = activeId ?? legacyBlobVaultId ?? undefined;
-			const isLegacy = vaultId == null || vaultId === legacyBlobVaultId;
+			const vaultId = activeId ?? vaults[0]?.id ?? undefined;
+			const isDefault = vaultId == null || vaultId === vaults[0]?.id;
 			const blob = await storage.readVaultBlob(vaultId);
 			setRunningIds(new Set(toRun.map((t) => t.id)));
 			const results = await Promise.all(
@@ -178,7 +178,7 @@ export function useBackup() {
 							await crypto.decryptWithVek(t.creds.iv, t.creds.ciphertext),
 						) as BackupSecrets;
 						const bt = createTarget(toProviderConfig(t, secrets));
-						const prefix = vaultBackupPrefix(backupPrefix(t), vaultId ?? "", isLegacy);
+						const prefix = vaultBackupPrefix(backupPrefix(t), vaultId ?? "", isDefault);
 						const r = await runBackup(bt, blob, { prefix, keep: t.keep });
 						return {
 							id: t.id,
@@ -203,7 +203,7 @@ export function useBackup() {
 			);
 			setRunningIds(new Set());
 		},
-		[targets, storage, crypto, persist, activeId, legacyBlobVaultId],
+		[targets, storage, crypto, persist, activeId, vaults],
 	);
 
 	return {

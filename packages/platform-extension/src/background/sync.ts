@@ -303,10 +303,7 @@ async function syncApplyRemote(payloadJson: string): Promise<boolean> {
 	const now = Date.now();
 	if (now - lastSyncStampAt >= 30_000) {
 		lastSyncStampAt = now;
-		await extensionStorage.setMeta(
-			syncKeyFor(SYNC_LAST_SYNCED_KEY, ctx.vaultId, ctx.legacyBlobVaultId),
-			now,
-		);
+		await extensionStorage.setMeta(syncKeyFor(SYNC_LAST_SYNCED_KEY, ctx.vaultId), now);
 	}
 	return changed;
 }

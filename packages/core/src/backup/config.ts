@@ -72,14 +72,14 @@ export function backupPrefix(cfg: BackupTargetConfig): string {
 }
 
 /**
- * Where one vault's snapshots live under a target's base prefix. The legacy (primary) vault keeps
+ * Where one vault's snapshots live under a target's base prefix. The default (first) vault keeps
  * the un-suffixed base so existing backups keep going; every other vault gets a SIBLING
  * `<base>-<id>` namespace — a sibling, not a `<base>/<id>` subfolder, so the base's prefix listing
  * (`<base>/`) can't sweep up other vaults' files during keep-N retention. Used by both the manual
  * "Back up now" (active vault) and the scheduled all-vaults run, so their files land in the same place.
  */
-export function vaultBackupPrefix(base: string, vaultId: string, isLegacy: boolean): string {
-	return isLegacy ? base : `${base}-${vaultId}`;
+export function vaultBackupPrefix(base: string, vaultId: string, isDefault: boolean): string {
+	return isDefault ? base : `${base}-${vaultId}`;
 }
 
 /**

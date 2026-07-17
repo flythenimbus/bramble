@@ -25,16 +25,13 @@ export interface VaultRegistryValue {
 	/** True once the registry has been read from storage. */
 	ready: boolean;
 	vaults: VaultRecord[];
-	/** The vault at the flat blob slot (grandfathered, no id suffix on its blob or sync keys); also
-	 * the fallback "default vault" before an active vault is selected. Null when none exists yet. */
-	legacyBlobVaultId: string | null;
-	/** The vault the app currently operates on, or undefined before it resolves (falls back to the
-	 * legacy/default vault). */
+	/** The vault the app currently operates on, or undefined before it resolves (callers that omit an
+	 * id then fall back to the first/only vault). */
 	activeId: string | undefined;
 	/**
-	 * The per-vault storage key for a flat sync key (e.g. `"sync.group"`), namespaced to the
-	 * active vault. The legacy vault keeps the flat key (no migration); others get `<key>:<id>`.
-	 * Resolves against the active vault, falling back to the legacy vault before one is selected.
+	 * The per-vault storage key for a flat sync key (e.g. `"sync.group"`), namespaced to the active
+	 * vault as `<key>:<id>`. Resolves against the active vault, falling back to the first vault
+	 * before one is selected.
 	 */
 	syncKey: (flatKey: string) => string;
 	/** Select which vault to operate on (one vault is active at a time). */
@@ -63,7 +60,6 @@ export interface VaultRegistryValue {
 const DEFAULT: VaultRegistryValue = {
 	ready: true,
 	vaults: [],
-	legacyBlobVaultId: null,
 	activeId: undefined,
 	syncKey: (k) => k,
 	selectVault: () => {},
@@ -108,14 +104,14 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	const selectVault = useCallback((id: string) => setActiveId(id), []);
 	const clearSelection = useCallback(() => setActiveId(undefined), []);
 
-	// Namespace a flat sync key to the active vault (fallback: the legacy/default vault, before one
-	// is selected). The legacy vault keeps the flat key so its pairing survives with no migration.
+	// Namespace a flat sync key to the active vault (fallback: the first/only vault, before one is
+	// selected). Every vault's sync value lives at `<key>:<id>`.
 	const syncKey = useCallback(
 		(flatKey: string) => {
-			const v = activeId ?? registry.legacyBlobVaultId;
-			return v ? syncKeyFor(flatKey, v, registry.legacyBlobVaultId) : flatKey;
+			const v = activeId ?? registry.vaults[0]?.id;
+			return v ? syncKeyFor(flatKey, v) : flatKey;
 		},
-		[activeId, registry.legacyBlobVaultId],
+		[activeId, registry.vaults],
 	);
 
 	// Write a new registry to storage and reflect it in state.
@@ -156,7 +152,6 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 		() => ({
 			ready,
 			vaults: registry.vaults,
-			legacyBlobVaultId: registry.legacyBlobVaultId,
 			activeId,
 			syncKey,
 			selectVault,

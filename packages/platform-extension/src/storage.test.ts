@@ -14,17 +14,24 @@ vi.mock("./storage-legacy", () => ({ getLegacyHandle, clearLegacyHandle }));
 
 const VAULT_KEY = "vault-blob-b64";
 const BACKUP_KEY = "vault-blob-backup-b64";
+const nk = (id: string) => `${VAULT_KEY}:${id}`; // namespaced blob key
 
-// Minimal in-memory chrome.storage.local, stubbed as the `chrome` global that platform-api reads.
-function stubChrome(seed: Record<string, unknown> = {}) {
-	const local: Record<string, unknown> = { ...seed };
+// In-memory chrome.storage.local (array- and string-keyed), stubbed as the `chrome` global that
+// platform-api reads. `local` is used by reference so a test can re-stub the SAME store on reload
+// (simulating a second service-worker context) via `stubChrome(local)`.
+function stubChrome(local: Record<string, unknown> = {}) {
+	const pick = (keys: string | string[]) => {
+		const out: Record<string, unknown> = {};
+		for (const k of Array.isArray(keys) ? keys : [keys]) if (k in local) out[k] = local[k];
+		return out;
+	};
 	vi.stubGlobal("chrome", {
 		storage: {
 			local: {
-				get: async (key: string) => (key in local ? { [key]: local[key] } : {}),
+				get: async (keys: string | string[]) => pick(keys),
 				set: async (obj: Record<string, unknown>) => Object.assign(local, obj),
-				remove: async (key: string) => {
-					delete local[key];
+				remove: async (keys: string | string[]) => {
+					for (const k of Array.isArray(keys) ? keys : [keys]) delete local[k];
 				},
 			},
 		},
@@ -45,11 +52,15 @@ function fakeHandle(bytes: Uint8Array, perm: PermissionState = "granted") {
 	};
 }
 
-// Import after the mocks/globals are in place; reset the module so each test's chrome stub sticks.
+// Import after the mocks/globals are in place; reset the module so each test's chrome stub sticks
+// and the migration memo is fresh (a fresh module = a fresh service-worker context).
 async function loadStorage() {
 	vi.resetModules();
 	return (await import("./storage")).extensionStorage;
 }
+
+const reg = (local: Record<string, unknown>) => local[VAULT_REGISTRY_KEY] as VaultRegistry;
+const firstId = (local: Record<string, unknown>) => reg(local).vaults[0]!.id;
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -58,17 +69,19 @@ afterEach(() => {
 });
 
 describe("extensionStorage.readVaultBlob", () => {
-	it("returns the local blob directly and never touches the legacy handle", async () => {
+	it("migrates the pre-namespacing blob to its namespaced key and returns it", async () => {
 		const bytes = new Uint8Array([1, 2, 3]);
-		const b64 = bytesToBase64(bytes);
-		stubChrome({ [VAULT_KEY]: b64 });
+		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(bytes) });
 		const storage = await loadStorage();
 
 		expect(await storage.readVaultBlob()).toEqual(bytes);
 		expect(getLegacyHandle).not.toHaveBeenCalled();
+		// Copied to `<base>:<id>` and the flat key removed.
+		expect(local[nk(firstId(local))]).toBe(bytesToBase64(bytes));
+		expect(local[VAULT_KEY]).toBeUndefined();
 	});
 
-	it("throws when there is no local blob and no legacy handle", async () => {
+	it("throws when there is no blob and no legacy handle", async () => {
 		stubChrome();
 		getLegacyHandle.mockResolvedValue(null);
 		const storage = await loadStorage();
@@ -76,8 +89,8 @@ describe("extensionStorage.readVaultBlob", () => {
 	});
 });
 
-describe("legacy FSA -> local migration", () => {
-	it("migrates the file into local storage, drops the handle, and returns the bytes", async () => {
+describe("legacy FSA -> local materialisation", () => {
+	it("materialises the file at the vault's namespaced key, drops the handle, returns the bytes", async () => {
 		const bytes = new Uint8Array([9, 8, 7, 6]);
 		const local = stubChrome(); // no local vault yet
 		const { handle } = fakeHandle(bytes);
@@ -87,17 +100,16 @@ describe("legacy FSA -> local migration", () => {
 		const out = await storage.readVaultBlob();
 
 		expect(out).toEqual(bytes);
-		// Copied into local storage under the vault key.
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(bytes));
-		// Handle dropped only after the local write, and the file is only read (never written).
+		// Written under the vault's namespaced key (never the flat key), handle dropped after.
+		expect(local[nk(firstId(local))]).toBe(bytesToBase64(bytes));
+		expect(local[VAULT_KEY]).toBeUndefined();
 		expect(clearLegacyHandle).toHaveBeenCalledTimes(1);
 		expect(handle.getFile).toHaveBeenCalledTimes(1);
 	});
 
 	it("requests permission when it isn't already granted", async () => {
-		const bytes = new Uint8Array([5]);
 		stubChrome();
-		const { handle, requestPermission } = fakeHandle(bytes, "prompt");
+		const { handle, requestPermission } = fakeHandle(new Uint8Array([5]), "prompt");
 		getLegacyHandle.mockResolvedValue(handle);
 		const storage = await loadStorage();
 
@@ -105,7 +117,7 @@ describe("legacy FSA -> local migration", () => {
 		expect(requestPermission).toHaveBeenCalledOnce();
 	});
 
-	it("throws and does not write local storage when permission is denied", async () => {
+	it("throws and writes nothing when permission is denied", async () => {
 		const local = stubChrome();
 		const { handle, requestPermission } = fakeHandle(new Uint8Array([5]), "prompt");
 		requestPermission.mockResolvedValue("denied");
@@ -113,7 +125,7 @@ describe("legacy FSA -> local migration", () => {
 		const storage = await loadStorage();
 
 		await expect(storage.readVaultBlob()).rejects.toThrow(/permission denied/);
-		expect(local[VAULT_KEY]).toBeUndefined();
+		expect(local[nk(firstId(local))]).toBeUndefined();
 		expect(clearLegacyHandle).not.toHaveBeenCalled();
 	});
 
@@ -126,110 +138,209 @@ describe("legacy FSA -> local migration", () => {
 });
 
 describe("extensionStorage.writeVaultBlob + restore", () => {
-	it("snapshots the previous bytes to the backup key before overwriting", async () => {
+	it("snapshots the previous bytes to the namespaced backup key before overwriting", async () => {
 		const prev = new Uint8Array([1, 1]);
 		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(prev) });
 		const storage = await loadStorage();
+		await storage.readVaultBlob(); // migrate the pre-namespacing vault
+		const id = firstId(local);
 
 		await storage.writeVaultBlob(new Uint8Array([2, 2]));
-		expect(local[BACKUP_KEY]).toBe(bytesToBase64(prev));
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(new Uint8Array([2, 2])));
+		expect(local[`${BACKUP_KEY}:${id}`]).toBe(bytesToBase64(prev));
+		expect(local[nk(id)]).toBe(bytesToBase64(new Uint8Array([2, 2])));
 
 		expect(await storage.restoreVaultFromBackup()).toBe(true);
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(prev));
+		expect(local[nk(id)]).toBe(bytesToBase64(prev));
 	});
 
 	it("clears any stale backup on the first write (nothing to recover)", async () => {
-		const local = stubChrome({ [BACKUP_KEY]: "stale" });
+		const local = stubChrome();
 		const storage = await loadStorage();
 		await storage.writeVaultBlob(new Uint8Array([2]));
-		expect(local[BACKUP_KEY]).toBeUndefined();
+		const id = firstId(local);
+		expect(local[`${BACKUP_KEY}:${id}`]).toBeUndefined();
 		expect(await storage.restoreVaultFromBackup()).toBe(false);
 	});
 });
 
-describe("multi-vault registry", () => {
-	it("registers an existing single vault on first access without moving its blob", async () => {
-		const bytes = new Uint8Array([7, 7, 7]);
-		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(bytes) });
+describe("one-time namespacing migration", () => {
+	it("fresh install: writes an empty registry, no vault", async () => {
+		const local = stubChrome();
 		const storage = await loadStorage();
-
-		expect(await storage.readVaultBlob()).toEqual(bytes);
-
-		const reg = local[VAULT_REGISTRY_KEY] as VaultRegistry;
-		expect(reg.vaults).toHaveLength(1);
-		// The one vault keeps the legacy blob key: no bytes moved.
-		expect(reg.legacyBlobVaultId).toBe(reg.vaults[0]!.id);
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(bytes));
+		await storage.hasVaultHandle();
+		expect(reg(local).vaults).toEqual([]);
 	});
 
-	it("bootstraps the first vault at the legacy key on a fresh install write", async () => {
+	it("copies a pre-namespacing vault's blob AND sync keys to `:<id>`, then deletes the flat keys", async () => {
+		const blob = bytesToBase64(new Uint8Array([7, 7, 7]));
+		const group = { groupKey: "gk", roster: { devices: [], revoked: [] } };
+		const keypair = { privateKey: "priv", publicKey: "pub" };
+		const local = stubChrome({
+			[VAULT_KEY]: blob,
+			"sync.group": group,
+			"sync.deviceKeypair": keypair,
+			"sync.deviceId": "dev-1",
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle(); // trigger the migration
+
+		const id = firstId(local);
+		expect(reg(local).vaults).toHaveLength(1);
+		// Blob + every sync key copied byte-for-byte (preserved values => the device stays paired).
+		expect(local[nk(id)]).toBe(blob);
+		expect(local[`sync.group:${id}`]).toEqual(group);
+		expect(local[`sync.deviceKeypair:${id}`]).toEqual(keypair);
+		expect(local[`sync.deviceId:${id}`]).toBe("dev-1");
+		// Flat keys deleted; the retired pointer is not written.
+		expect(local[VAULT_KEY]).toBeUndefined();
+		expect(local["sync.group"]).toBeUndefined();
+		expect(local["sync.deviceKeypair"]).toBeUndefined();
+		expect("legacyBlobVaultId" in reg(local)).toBe(false);
+	});
+
+	it("raw-reads a stored legacyBlobVaultId to finish namespacing an existing multi-vault install", async () => {
+		const blob = bytesToBase64(new Uint8Array([4, 2]));
+		const group = { groupKey: "gk" };
+		const local = stubChrome({
+			// A registry from the grandfather era: names the flat vault via legacyBlobVaultId.
+			[VAULT_REGISTRY_KEY]: {
+				vaults: [{ id: "vault-legacy", label: "Personal", createdAt: 1 }],
+				legacyBlobVaultId: "vault-legacy",
+			},
+			[VAULT_KEY]: blob,
+			"sync.group": group,
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(local[nk("vault-legacy")]).toBe(blob);
+		expect(local[`sync.group:vault-legacy`]).toEqual(group);
+		expect(local[VAULT_KEY]).toBeUndefined();
+		expect(local["sync.group"]).toBeUndefined();
+		expect("legacyBlobVaultId" in reg(local)).toBe(false);
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["vault-legacy"]);
+	});
+
+	it("is idempotent: re-running on the already-namespaced registry changes nothing", async () => {
+		const blob = bytesToBase64(new Uint8Array([1, 2]));
+		const local = stubChrome({ [VAULT_KEY]: blob, "sync.group": { groupKey: "gk" } });
+		let storage = await loadStorage();
+		await storage.hasVaultHandle();
+		const snapshot = structuredClone(local);
+
+		// A second service-worker context re-runs the migration over the same store.
+		stubChrome(local);
+		storage = await loadStorage();
+		await storage.hasVaultHandle();
+		expect(local).toEqual(snapshot);
+	});
+
+	it("crash before cutover (blob copied, registry still points flat): re-run completes cleanly", async () => {
+		const blob = bytesToBase64(new Uint8Array([5, 5]));
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: {
+				vaults: [{ id: "v", label: "", createdAt: 0 }],
+				legacyBlobVaultId: "v",
+			},
+			[VAULT_KEY]: blob, // flat still present (delete never ran)
+			[nk("v")]: blob, // namespaced already copied (copy ran)
+			"sync.group": { groupKey: "gk" },
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(local[nk("v")]).toBe(blob);
+		expect(local[`sync.group:v`]).toEqual({ groupKey: "gk" });
+		expect(local[VAULT_KEY]).toBeUndefined();
+		expect("legacyBlobVaultId" in reg(local)).toBe(false);
+	});
+
+	it("never clobbers a namespaced blob with null when the flat data is already gone (race guard)", async () => {
+		const good = bytesToBase64(new Uint8Array([1, 1, 1]));
+		const local = stubChrome({
+			// Another context already migrated + deleted the flat blob, but this context still sees the
+			// old pointer (its registry read raced ahead of the cutover).
+			[VAULT_REGISTRY_KEY]: {
+				vaults: [{ id: "v", label: "", createdAt: 0 }],
+				legacyBlobVaultId: "v",
+			},
+			[nk("v")]: good, // the good namespaced blob the other context wrote
+			// no flat VAULT_KEY
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		// The namespaced blob is untouched (not overwritten with an empty flat value).
+		expect(local[nk("v")]).toBe(good);
+		expect("legacyBlobVaultId" in reg(local)).toBe(false);
+	});
+});
+
+describe("multi-vault registry", () => {
+	it("bootstraps the first vault at a namespaced key on a fresh install write", async () => {
 		const local = stubChrome();
 		const storage = await loadStorage();
 
 		await storage.writeVaultBlob(new Uint8Array([1]));
 
-		const reg = local[VAULT_REGISTRY_KEY] as VaultRegistry;
-		expect(reg.vaults).toHaveLength(1);
-		expect(reg.legacyBlobVaultId).toBe(reg.vaults[0]!.id);
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(new Uint8Array([1])));
+		const id = firstId(local);
+		expect(reg(local).vaults).toHaveLength(1);
+		expect(local[nk(id)]).toBe(bytesToBase64(new Uint8Array([1])));
+		expect(local[VAULT_KEY]).toBeUndefined();
 		expect(await storage.readVaultBlob()).toEqual(new Uint8Array([1]));
 	});
 
-	it("stores a second vault under a namespaced key, isolated from the primary", async () => {
-		const primaryBytes = new Uint8Array([1, 1]);
-		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(primaryBytes) });
+	it("stores a second vault under its own namespaced key, isolated from the first", async () => {
+		const firstBytes = new Uint8Array([1, 1]);
+		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(firstBytes) });
 		const storage = await loadStorage();
 
-		// Trigger migration so the primary vault is registered, then register a second vault.
-		await storage.readVaultBlob();
-		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
-		const withSecond = addVault(reg, { id: "vault-b", label: "Work", createdAt: 0 });
+		await storage.readVaultBlob(); // migrate + register the first vault (namespaced)
+		const id1 = firstId(local);
+		const withSecond = addVault(reg(local), { id: "vault-b", label: "Work", createdAt: 0 });
 		await storage.setMeta(VAULT_REGISTRY_KEY, withSecond);
 
 		const secondBytes = new Uint8Array([2, 2]);
 		await storage.writeVaultBlob(secondBytes, "vault-b");
 
-		// The second vault lands at a namespaced key; the primary blob is untouched.
-		expect(local[`${VAULT_KEY}:vault-b`]).toBe(bytesToBase64(secondBytes));
-		expect(local[VAULT_KEY]).toBe(bytesToBase64(primaryBytes));
-		// Reads route to the right vault: no id -> the legacy/default vault, explicit id -> that vault.
-		expect(await storage.readVaultBlob()).toEqual(primaryBytes);
+		expect(local[nk("vault-b")]).toBe(bytesToBase64(secondBytes));
+		expect(local[nk(id1)]).toBe(bytesToBase64(firstBytes));
+		// Reads route to the right vault: no id -> the first vault, explicit id -> that vault.
+		expect(await storage.readVaultBlob()).toEqual(firstBytes);
 		expect(await storage.readVaultBlob("vault-b")).toEqual(secondBytes);
 	});
 
-	it("deleteVaultBlob removes a vault's blob without touching the primary", async () => {
+	it("deleteVaultBlob removes a vault's blob without touching the first", async () => {
 		const local = stubChrome({ [VAULT_KEY]: bytesToBase64(new Uint8Array([1])) });
 		const storage = await loadStorage();
-		await storage.readVaultBlob(); // migrate + register the primary
-		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
+		await storage.readVaultBlob();
+		const id1 = firstId(local);
 		await storage.setMeta(
 			VAULT_REGISTRY_KEY,
-			addVault(reg, { id: "vault-b", label: "", createdAt: 0 }),
+			addVault(reg(local), { id: "vault-b", label: "", createdAt: 0 }),
 		);
 		await storage.writeVaultBlob(new Uint8Array([2]), "vault-b");
-		expect(local[`${VAULT_KEY}:vault-b`]).toBeDefined();
+		expect(local[nk("vault-b")]).toBeDefined();
 
 		await storage.deleteVaultBlob("vault-b");
-		expect(local[`${VAULT_KEY}:vault-b`]).toBeUndefined();
-		expect(local[VAULT_KEY]).toBeDefined();
+		expect(local[nk("vault-b")]).toBeUndefined();
+		expect(local[nk(id1)]).toBeDefined();
 	});
 
 	it("reports vault existence for a specific id and for any vault", async () => {
-		stubChrome();
+		const local = stubChrome();
 		const storage = await loadStorage();
 		expect(await storage.hasVaultHandle()).toBe(false);
 
 		await storage.writeVaultBlob(new Uint8Array([9]));
-		const reg = (await storage.getMeta<VaultRegistry>(VAULT_REGISTRY_KEY))!;
 		expect(await storage.hasVaultHandle()).toBe(true);
-		expect(await storage.hasVaultHandle(reg.legacyBlobVaultId!)).toBe(true);
+		expect(await storage.hasVaultHandle(firstId(local))).toBe(true);
 		expect(await storage.hasVaultHandle("nonexistent")).toBe(false);
 	});
 });
 
 describe("isVaultBlobKey", () => {
-	it("matches the legacy flat key and any namespaced vault blob key", () => {
+	it("matches the un-suffixed key (transient during migration) and any namespaced vault blob key", () => {
 		expect(isVaultBlobKey("vault-blob-b64")).toBe(true);
 		expect(isVaultBlobKey("vault-blob-b64:abc-123")).toBe(true);
 	});

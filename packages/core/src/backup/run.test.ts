@@ -22,7 +22,7 @@ function target(
 }
 
 // In-memory fakes. `uploadFail`/`decryptFail` are keyed by target id.
-const ONE_VAULT: VaultBackup[] = [{ id: "v1", blob: new Uint8Array([1, 2, 3]), legacy: true }];
+const ONE_VAULT: VaultBackup[] = [{ id: "v1", blob: new Uint8Array([1, 2, 3]), isDefault: true }];
 
 function harness(
 	initial: BackupTargetConfig[],
@@ -70,8 +70,8 @@ describe("runScheduledBackups", () => {
 
 	it("hands every vault to the target's upload (not just the primary)", async () => {
 		const vaults: VaultBackup[] = [
-			{ id: "a", blob: new Uint8Array([1]), legacy: true },
-			{ id: "b", blob: new Uint8Array([2]), legacy: false },
+			{ id: "a", blob: new Uint8Array([1]), isDefault: true },
+			{ id: "b", blob: new Uint8Array([2]), isDefault: false },
 		];
 		const h = harness([target("t", "daily", { lastVaultHash: "OLD" })], { hash: "CUR", vaults });
 		await runScheduledBackups(h.deps, NOW);

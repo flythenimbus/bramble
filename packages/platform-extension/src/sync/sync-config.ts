@@ -6,15 +6,14 @@ import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
 
-// Which vault the background is syncing: the active (unlocked) vault, resolved so its group and
-// device-identity keys namespace correctly (the legacy vault keeps flat keys, others get `:<id>`).
-// One vault is unlocked at a time, so a single ctx scopes the whole sync/enrollment path.
+// Which vault the background is syncing: the active (unlocked) vault, whose group and device-identity
+// keys are namespaced `<key>:<id>`. One vault is unlocked at a time, so a single ctx scopes the whole
+// sync/enrollment path.
 export interface SyncVaultCtx {
 	vaultId: string;
-	legacyBlobVaultId: string | null;
 }
 
-/** Resolve the vault to sync: the active vault the UI recorded in session, else the primary
+/** Resolve the vault to sync: the active vault the UI recorded in session, else the first vault
  * (covers a service-worker resume before any UI ran). Null only when no vault exists yet. */
 export async function resolveSyncVault(): Promise<SyncVaultCtx | null> {
 	const reg = parseRegistry((await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY]);
@@ -23,14 +22,14 @@ export async function resolveSyncVault(): Promise<SyncVaultCtx | null> {
 		const s = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
 		if (typeof s[ACTIVE_VAULT_SESSION_KEY] === "string") active = s[ACTIVE_VAULT_SESSION_KEY];
 	} catch {}
-	const vaultId = active ?? reg.legacyBlobVaultId;
+	const vaultId = active ?? reg.vaults[0]?.id;
 	if (!vaultId) return null;
-	return { vaultId, legacyBlobVaultId: reg.legacyBlobVaultId };
+	return { vaultId };
 }
 
 /** The per-vault storage key for a flat sync key under this ctx. */
 function keyFor(flat: string, ctx: SyncVaultCtx): string {
-	return syncKeyFor(flat, ctx.vaultId, ctx.legacyBlobVaultId);
+	return syncKeyFor(flat, ctx.vaultId);
 }
 
 // Device-local sync identity storage. The device's Noise static keypair (used for

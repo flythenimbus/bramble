@@ -306,7 +306,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		createRecord,
 		dropActiveRecord,
 		selectVault,
-		legacyBlobVaultId,
 	} = useVaultRegistry();
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
@@ -1067,9 +1066,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const code = decodePairingCode(pairingCode.trim()); // validate before creating anything
 			// Dedup: if a vault already syncs this group, open it instead of adding a duplicate.
 			for (const v of vaults) {
-				const g = await storage.getMeta<{ groupKey?: string }>(
-					syncKeyFor("sync.group", v.id, legacyBlobVaultId),
-				);
+				const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
 				if (g?.groupKey === code.groupKey) {
 					selectVault(v.id);
 					return;
@@ -1082,7 +1079,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				setPendingJoin({ code: pairingCode, method, targetId: newId });
 			});
 		},
-		[vaults, storage, legacyBlobVaultId, createRecord, shell, selectVault],
+		[vaults, storage, createRecord, shell, selectVault],
 	);
 
 	// Run the deferred join once the new vault is active (joinGroup is now scoped to it). One-shot.

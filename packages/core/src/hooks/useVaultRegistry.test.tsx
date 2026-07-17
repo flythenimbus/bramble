@@ -59,7 +59,6 @@ describe("VaultRegistryProvider", () => {
 		await act(async () => {});
 		const v = get();
 		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
-		expect(v.legacyBlobVaultId).toBe("a");
 		expect(v.activeId).toBeUndefined();
 	});
 
@@ -75,12 +74,11 @@ describe("VaultRegistryProvider", () => {
 		expect(get().activeId).toBeUndefined();
 	});
 
-	it("syncKey grandfathers the legacy vault and namespaces the others", async () => {
+	it("syncKey namespaces the sync key by the active (or first) vault", async () => {
 		const { get } = mount(two);
 		await act(async () => {});
-		// No active vault yet: falls back to the legacy vault -> flat key.
-		expect(get().legacyBlobVaultId).toBe("a");
-		expect(get().syncKey("sync.group")).toBe("sync.group");
+		// No active vault yet: falls back to the first vault.
+		expect(get().syncKey("sync.group")).toBe("sync.group:a");
 		await act(async () => {
 			get().selectVault("b");
 		});
@@ -88,7 +86,7 @@ describe("VaultRegistryProvider", () => {
 		await act(async () => {
 			get().selectVault("a");
 		});
-		expect(get().syncKey("sync.group")).toBe("sync.group");
+		expect(get().syncKey("sync.group")).toBe("sync.group:a");
 	});
 
 	it("selectVault and clearSelection move the active vault", async () => {
@@ -117,7 +115,9 @@ describe("VaultRegistryProvider", () => {
 		expect(v.activeId).toBe(newId);
 		expect(setMeta).toHaveBeenCalledWith(
 			VAULT_REGISTRY_KEY,
-			expect.objectContaining({ legacyBlobVaultId: "a" }),
+			expect.objectContaining({
+				vaults: expect.arrayContaining([expect.objectContaining({ id: "a" })]),
+			}),
 		);
 	});
 
@@ -127,7 +127,6 @@ describe("VaultRegistryProvider", () => {
 		const v = get();
 		expect(v.ready).toBe(true);
 		expect(v.vaults).toEqual([]);
-		expect(v.legacyBlobVaultId).toBeNull();
 		expect(v.activeId).toBeUndefined();
 	});
 
@@ -211,7 +210,7 @@ describe("makeVaultScopedStorage", () => {
 		expect(await scoped.getMeta("k")).toBe("meta");
 	});
 
-	it("passes undefined (primary) when no vault id is bound", async () => {
+	it("passes undefined (the default vault) when no vault id is bound", async () => {
 		const read = vi.fn(async () => new Uint8Array());
 		const base = { readVaultBlob: read } as unknown as StorageAdapter;
 		await makeVaultScopedStorage(base, undefined).readVaultBlob();

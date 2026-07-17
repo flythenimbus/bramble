@@ -13,16 +13,14 @@ import {
 const rec = (id: string, label = "", createdAt = 0) => ({ id, label, createdAt });
 
 describe("addVault", () => {
-	it("gives the first vault the legacy blob slot", () => {
+	it("appends a vault record", () => {
 		const reg = addVault(EMPTY_REGISTRY, rec("a"));
 		expect(reg.vaults.map((v) => v.id)).toEqual(["a"]);
-		expect(reg.legacyBlobVaultId).toBe("a");
 	});
 
-	it("does not move the legacy slot when adding later vaults", () => {
+	it("keeps existing vaults when adding later ones", () => {
 		const reg = addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b"));
 		expect(reg.vaults.map((v) => v.id)).toEqual(["a", "b"]);
-		expect(reg.legacyBlobVaultId).toBe("a");
 	});
 
 	it("rejects a duplicate id", () => {
@@ -38,16 +36,10 @@ describe("removeVault", () => {
 		expect(reg.vaults.map((v) => v.id)).toEqual(["b"]);
 	});
 
-	it("clears the legacy slot when the last vault is removed", () => {
+	it("is empty once the last vault is removed", () => {
 		let reg = addVault(EMPTY_REGISTRY, rec("a"));
 		reg = removeVault(reg, "a");
 		expect(reg).toEqual(EMPTY_REGISTRY);
-	});
-
-	it("clears legacyBlobVaultId when that vault is removed", () => {
-		let reg = addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b"));
-		reg = removeVault(reg, "a");
-		expect(reg.legacyBlobVaultId).toBeNull();
 	});
 });
 
@@ -82,20 +74,18 @@ describe("parseRegistry", () => {
 	});
 
 	it("round-trips a valid registry", () => {
-		const reg: VaultRegistry = {
-			vaults: [rec("a", "Personal", 1)],
-			legacyBlobVaultId: "a",
-		};
+		const reg: VaultRegistry = { vaults: [rec("a", "Personal", 1)] };
 		expect(parseRegistry(reg)).toEqual(reg);
 	});
 
-	it("strips a legacy primaryId field (no migration needed)", () => {
+	it("strips the retired primaryId / legacyBlobVaultId fields (no migration needed)", () => {
 		const parsed = parseRegistry({
 			vaults: [rec("a", "Personal", 1)],
 			primaryId: "a",
 			legacyBlobVaultId: "a",
 		});
-		expect(parsed).toEqual({ vaults: [rec("a", "Personal", 1)], legacyBlobVaultId: "a" });
+		expect(parsed).toEqual({ vaults: [rec("a", "Personal", 1)] });
 		expect("primaryId" in parsed).toBe(false);
+		expect("legacyBlobVaultId" in parsed).toBe(false);
 	});
 });
