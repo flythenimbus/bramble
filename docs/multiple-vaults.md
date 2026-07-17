@@ -1012,13 +1012,23 @@ behavior, clobbers included); the fix is real once 3 lands.
   autofill vault to a never-opened vault needs a one-time unlock to arm. (Mobile still
   designates an autofill vault because its provider runs out of process; the "no primary"
   reversal is extension-only.)
-- **Firefox.** The per-vault namespacing and active-vault session switching also have
-  to land in the Firefox event-page transport, which is mid-port
-  ([firefox-port.md](firefox-port.md)). The Firefox-as-inviter roster fix (host-side enrolled-
-  roster add, commit 57944af1; see [The enrolled device is rostered in the host, not just the
-  popup](#the-enrolled-device-is-rostered-in-the-host-not-just-the-popup)) is committed but still
-  needs real-Firefox-inviter verification (invite from Firefox, join from a Chromium target);
-  Playwright can't cover it (extension automation is Chromium-only).
+- ~~**Firefox multi-vault (event-page transport).**~~ **DONE - runs on Firefox unchanged**
+  (verified by the user's multi-vault-on-Vivaldi+Firefox testing + a code survey, 2026-07).
+  `resolveSyncVault` reads the active vault from `storage.session` (`sync/sync-config.ts:23`; the
+  Firefox manifest floor is FF 128, above the FF 115 `storage.session` landing). The
+  [vek-store](#mechanism-the-vek-rides-with-the-op) **persists each VEK to `storage.session`**
+  (`background/vek-store.ts` `setVek`/`removeVek`/`clearAllVeks`), so it survives an event-page
+  suspend/resume, rehydrates via `vekStoreHydration`, and re-injects per-op; `sendToOffscreen` calls
+  `handleHostMessage` in-process on Firefox (`background/offscreen-client.ts:57`) with the same
+  per-vault inject/strip seam as Chrome. Every FF-specific branch (`syncHostSuspends` keepalive
+  alarm, `keepEventPageAlive`, the in-process `setSyncBridge`) is event-page *lifetime* only and
+  resolves the vault per-vault. No FF-specific single-vault/`primaryId` assumption remains; the
+  blob-change and `sync.group` change watchers both match the namespaced key variants.
+- **Firefox-inviter roster fix: verify on device.** The host-side enrolled-roster add (commit
+  57944af1; see [The enrolled device is rostered in the host, not just the
+  popup](#the-enrolled-device-is-rostered-in-the-host-not-just-the-popup)) is committed but not yet
+  crossed live: invite from Firefox, join from a Chromium target, confirm no `not in roster` +
+  convergence. Playwright can't cover it (extension automation is Chromium-only).
 - **Full multi-vault autofill / per-vault biometric** (search all vaults, per-vault
   Keychain / Keystore items) remains a post-v1 native follow-up.
 
