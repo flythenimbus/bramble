@@ -363,7 +363,9 @@ export function Auth() {
 						</div>
 					)}
 
-					{!firstRun && !couldNotRead && (
+					{/* With several vaults, creating another is delegated to the vault picker, so the
+					    unlock screen drops the "New to Bramble? Create new vault" prompt. */}
+					{!firstRun && !couldNotRead && !multipleVaults && (
 						<div className="mt-6 text-center space-y-3">
 							<div className="flex items-center gap-4 text-xs text-muted-foreground">
 								<div className="flex-1 h-px bg-border/50"></div>
