@@ -4,6 +4,7 @@ import type { AutofillAdapter } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, findPasswordSlot, verifierPrefix } from "@core/vault-format";
 import { inlineSuggestionsSupported } from "../autofill-caps";
+import { ACTIVE_VAULT_KEY } from "../sync/sync-manager";
 import { mobileCrypto } from "./crypto";
 import { mobileStorage } from "./storage";
 
@@ -82,12 +83,17 @@ function normalizeHost(h: string): string {
 const Bridge = registerPlugin<AutofillBridgePlugin>("AutofillBridge");
 const isIos = Capacitor.getPlatform() === "ios";
 
-// The primary password slot from the vault header, so the extension can run Argon2id
-// and unwrap the VEK from the master password. Non-secret (the wrappedVek stays
+// The password slot from the ACTIVE vault's header, so the extension can run Argon2id and
+// unwrap the VEK from the master password. Must be the active vault: setIndex pushes the
+// active vault's entries (encrypted under its VEK), so the slot the extension derives the
+// VEK from has to belong to the same vault, else master-password unlock yields the wrong
+// VEK and can't decrypt the bundle. (readVaultBlob(undefined) falls back to the first/only
+// vault, matching sync-manager's activeVaultId.) Non-secret (the wrappedVek stays
 // AES-encrypted). Returns undefined for a passwordless vault or an unreadable blob.
 async function readPasswordSlot(): Promise<SlotPayload | undefined> {
 	try {
-		const slot = findPasswordSlot(decodeVaultBlob(await mobileStorage.readVaultBlob()));
+		const activeId = await mobileStorage.getMeta<string>(ACTIVE_VAULT_KEY);
+		const slot = findPasswordSlot(decodeVaultBlob(await mobileStorage.readVaultBlob(activeId)));
 		if (!slot) return undefined;
 		return {
 			saltB64: bytesToBase64(slot.salt),
