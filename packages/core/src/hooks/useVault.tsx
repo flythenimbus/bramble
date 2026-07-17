@@ -306,6 +306,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		createRecord,
 		dropActiveRecord,
 		selectVault,
+		refresh: refreshRegistry,
 	} = useVaultRegistry();
 	const storage = useMemo(
 		() => makeVaultScopedStorage(platformStorage, activeId),
@@ -480,6 +481,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				setHasVault(has);
 				if (!has) return;
 
+				// A pre-namespacing vault is registered lazily by the storage migration that
+				// hasVaultHandle just ran. If the registry was still empty when useVaultRegistry read it
+				// (a released single-vault user: flat blob, no registry), re-read it now so the vault is
+				// selected and `storage`/`crypto` re-bind to its id - otherwise the unlock is mis-scoped.
+				// The re-read flips `activeId`, which re-runs this effect with the right scoping.
+				if (vaults.length === 0) {
+					await refreshRegistry();
+					return;
+				}
+
 				await refreshSlotMetadata();
 
 				const locked = await crypto.isLocked();
@@ -509,7 +520,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [registryReady, storage, crypto, loadEntries, shell, refreshSlotMetadata]);
+	}, [
+		registryReady,
+		storage,
+		crypto,
+		loadEntries,
+		shell,
+		refreshSlotMetadata,
+		vaults.length,
+		refreshRegistry,
+	]);
 
 	// Record which vault is unlocked so the background can target it for sync and a reopened popup
 	// can restore it. Only WRITE it while unlocked; never clear it here. The background clears it on
