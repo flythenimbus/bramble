@@ -242,7 +242,9 @@ driven by a plain callback prop (`onCreate` / `onRestore` / `onJoin`); none swap
   it only decodes a `.bramble` blob with deps already in this bundle, so a lazy fetch would just lag
   the primary tab; only the genuinely-heavy `ImportShell` (kdbx/csv parsers) stays lazy. The
   standalone `?screen=restore` path (Settings -> Data -> Restore) is unchanged - still full-screen
-  with its own done screen. (e94c8827)
+  with its own done screen. (e94c8827) The always-true `restore` capability that gated the setup
+  `onRestore` prop + the Settings "Import a backup" row was removed as dead indirection (both are now
+  unconditional; commit a04bcfc1).
 - **"Join a device"** is a tab shown in every circumstance, on every platform (`canJoin = true`).
   Join is just "create a vault + pair into it", and creating a parallel vault is already offered, so
   gating join alone was inconsistent. On mobile the joined vault is single-active like any other
@@ -451,6 +453,15 @@ vault). What shipped:
   extension runs out-of-process and can't resolve the active vault - so `setSecret` also writes the
   active vault's VEK to the un-suffixed `vek` account the extension reads (autofill follows the active
   vault); `deleteSecret` clears it.
+- **iOS active-vault slot fix (commit 6b322b5c).** iOS autofill isn't hit by the Android blob-path
+  blocker (its out-of-process extension reads the App Group *bundle* the app pushes via
+  `mobileAutofill.setIndex`, not `vault.vlt1`), and the bundle entries + QuickType + biometric VEK
+  already follow the active vault. The one gap: `readPasswordSlot()` (`adapters/autofill.ts`) read
+  `readVaultBlob()` with no id -> defaulted to `vaults[0]`, so a multi-vault user whose active vault
+  wasn't first got the active bundle paired with the *wrong* vault's slot -> master-password autofill
+  unlock derived the wrong VEK (biometric still worked via the mirror). Now reads
+  `getMeta(ACTIVE_VAULT_KEY)`; race-free because every unlock path awaits `shell.setActiveVault`
+  before `loadEntries()`/`setIndex` (`useVault.tsx:581`). TS, so it's typechecked + built here.
 
 Compat: existing biometric users re-enable once after this update (the old fixed-key cache is orphaned,
 not migrated - re-keying a biometric-gated secret needs a live prompt). The existing stale-cache UX
@@ -1038,7 +1049,8 @@ behavior, clobbers included); the fix is real once 3 lands.
   from backup" is an inline tab (embedded `RestoreShell`, not a page swap); Auth hides "Create new
   vault" when `vaults > 1`. See [Setup shell](#setup-shell-one-tabbed-flow-create--restore--join).
 - ~~**Join = add a vault** (sync increment 5).~~ **LANDED via the setup shell (2026-07, commit
-  8b3e4030): a "Join a device" tab (first-run + add-a-vault, gated to `perVaultSync`) collects a
+  8b3e4030): a "Join a device" tab (shown in every circumstance since commit 5b9c0b1c - `canJoin =
+  true`; originally gated to `perVaultSync`) collects a
   pairing code + master password and calls `useVault.startJoin`, which dedups by `groupKey`, else
   `createRecord` + `setActiveVault` + runs `joinGroup` in the new vault's context via a deferred
   effect (the join is active-vault-scoped and the captured `joinGroup` holds the old id - the
@@ -1081,15 +1093,16 @@ behavior, clobbers included); the fix is real once 3 lands.
   Mobile does **not** need the extension's per-vault VEK map (single webview, lock-on-switch).
   **Still open:** `resetSyncState` clears device-global keys on `createVault`, which is fine for
   first-vault create but would disturb a sibling vault if a *second* vault is created on mobile
-  (rare today; refine when 2nd-vault-create is a real flow). Per-vault biometric (Keychain/Keystore
-  aliases) and multi-vault autofill are the out-of-process **Tier 2** that follows (the two mobile
-  items below). **All of the above is unverified on device** - mobile sync (edit propagates) and
-  two-vault switching must be run on a phone.
-- **Autofill arming (Phase 3, mobile).** Whether the mobile autofill vault's bundle can
-  be repackaged from the sealed blob without the VEK. If not, switching the mobile
-  autofill vault to a never-opened vault needs a one-time unlock to arm. (Mobile still
-  designates an autofill vault because its provider runs out of process; the "no primary"
-  reversal is extension-only.)
+  (rare today; refine when 2nd-vault-create is a real flow). Per-vault biometric + active-vault
+  autofill **have since LANDED** (see [Mobile autofill and biometric](#mobile-autofill-and-biometric));
+  only *simultaneous* multi-vault autofill (search all vaults) remains **Tier 2**. **All of the above
+  is unverified on device** - mobile sync (edit propagates) and two-vault switching must be run on a
+  phone.
+- ~~**Autofill arming (Phase 3, mobile).**~~ **Moot - autofill follows the active vault on both
+  platforms** (no designated autofill vault). Android reads the active vault's blob directly; iOS
+  pushes the active vault's bundle on unlock (`setIndex`, built from the decrypted entries + slot,
+  so it self-arms as you unlock). Switching the autofill target is just switching (unlocking) the
+  vault. See [Mobile autofill and biometric](#mobile-autofill-and-biometric).
 - ~~**Firefox multi-vault (event-page transport).**~~ **DONE - runs on Firefox unchanged**
   (verified by the user's multi-vault-on-Vivaldi+Firefox testing + a code survey, 2026-07).
   `resolveSyncVault` reads the active vault from `storage.session` (`sync/sync-config.ts:23`; the
@@ -1107,8 +1120,12 @@ behavior, clobbers included); the fix is real once 3 lands.
   popup](#the-enrolled-device-is-rostered-in-the-host-not-just-the-popup)) is committed but not yet
   crossed live: invite from Firefox, join from a Chromium target, confirm no `not in roster` +
   convergence. Playwright can't cover it (extension automation is Chromium-only).
-- **Full multi-vault autofill / per-vault biometric** (search all vaults, per-vault
-  Keychain / Keystore items) remains a post-v1 native follow-up.
+- ~~**Per-vault biometric** (per-vault Keychain / Keystore items).~~ **LANDED 2026-07** (core + iOS
+  + Android; commits 492418ef, aa7809a9). Device-verify pending. See
+  [Mobile autofill and biometric](#mobile-autofill-and-biometric).
+- **Full multi-vault autofill** (search *all* vaults at once, label results by vault) remains a
+  post-v1 native follow-up. Today's autofill is single-active: the provider fills whichever vault the
+  app is in, one at a time.
 
 ## Confirmed unaffected
 
