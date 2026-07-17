@@ -16,7 +16,6 @@ import {
 	parseRegistry,
 	removeVault,
 	renameVault,
-	setPrimary,
 	VAULT_REGISTRY_KEY,
 	type VaultRecord,
 	type VaultRegistry,
@@ -26,15 +25,16 @@ export interface VaultRegistryValue {
 	/** True once the registry has been read from storage. */
 	ready: boolean;
 	vaults: VaultRecord[];
-	primaryId: string | null;
-	/** The vault at the flat blob slot (grandfathered, no id suffix on its blob or sync keys), or null. */
+	/** The vault at the flat blob slot (grandfathered, no id suffix on its blob or sync keys); also
+	 * the fallback "default vault" before an active vault is selected. Null when none exists yet. */
 	legacyBlobVaultId: string | null;
-	/** The vault the app currently operates on, or undefined before it resolves (falls back to the primary). */
+	/** The vault the app currently operates on, or undefined before it resolves (falls back to the
+	 * legacy/default vault). */
 	activeId: string | undefined;
 	/**
 	 * The per-vault storage key for a flat sync key (e.g. `"sync.group"`), namespaced to the
 	 * active vault. The legacy vault keeps the flat key (no migration); others get `<key>:<id>`.
-	 * Resolves against the active vault, falling back to the primary before one is selected.
+	 * Resolves against the active vault, falling back to the legacy vault before one is selected.
 	 */
 	syncKey: (flatKey: string) => string;
 	/** Select which vault to operate on (one vault is active at a time). */
@@ -47,8 +47,6 @@ export interface VaultRegistryValue {
 	// can never rename or delete another vault.
 	/** Rename the active vault (write-through to storage). */
 	rename: (label: string) => Promise<void>;
-	/** Make a vault the primary (write-through). Mobile-only concept (autofill/biometric target). */
-	setPrimaryVault: (id: string) => Promise<void>;
 	// Low-level state cleanup, NOT a delete: forget the active vault's registry record and
 	// deselect it. It does not erase the blob and does not re-authenticate. The only place a
 	// vault is actually deleted is useVault.deleteVault(), which re-auths, erases the blob,
@@ -60,12 +58,11 @@ export interface VaultRegistryValue {
 }
 
 // Value when no provider is mounted (e.g. isolated hook tests): the registry is "ready"
-// and empty with no active id, so consumers resolve to the single/primary vault via the
+// and empty with no active id, so consumers resolve to the single/default vault via the
 // storage adapter's id-omitted path. Keeps VaultProvider usable without this provider.
 const DEFAULT: VaultRegistryValue = {
 	ready: true,
 	vaults: [],
-	primaryId: null,
 	legacyBlobVaultId: null,
 	activeId: undefined,
 	syncKey: (k) => k,
@@ -73,7 +70,6 @@ const DEFAULT: VaultRegistryValue = {
 	clearSelection: () => {},
 	createRecord: async () => "",
 	rename: async () => {},
-	setPrimaryVault: async () => {},
 	dropActiveRecord: async () => {},
 	refresh: async () => {},
 };
@@ -112,14 +108,14 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 	const selectVault = useCallback((id: string) => setActiveId(id), []);
 	const clearSelection = useCallback(() => setActiveId(undefined), []);
 
-	// Namespace a flat sync key to the active vault (fallback: the primary, before one is
-	// selected). The legacy vault keeps the flat key so its pairing survives with no migration.
+	// Namespace a flat sync key to the active vault (fallback: the legacy/default vault, before one
+	// is selected). The legacy vault keeps the flat key so its pairing survives with no migration.
 	const syncKey = useCallback(
 		(flatKey: string) => {
-			const v = activeId ?? registry.primaryId;
+			const v = activeId ?? registry.legacyBlobVaultId;
 			return v ? syncKeyFor(flatKey, v, registry.legacyBlobVaultId) : flatKey;
 		},
-		[activeId, registry.primaryId, registry.legacyBlobVaultId],
+		[activeId, registry.legacyBlobVaultId],
 	);
 
 	// Write a new registry to storage and reflect it in state.
@@ -148,10 +144,6 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 		},
 		[registry, persist, activeId],
 	);
-	const setPrimaryVault = useCallback(
-		(id: string) => persist(setPrimary(registry, id)),
-		[registry, persist],
-	);
 	// State only: forget the active vault's record and deselect it. The blob is erased by
 	// useVault.deleteVault() (after re-auth), which then calls this. Not a standalone delete.
 	const dropActiveRecord = useCallback(async () => {
@@ -164,7 +156,6 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 		() => ({
 			ready,
 			vaults: registry.vaults,
-			primaryId: registry.primaryId,
 			legacyBlobVaultId: registry.legacyBlobVaultId,
 			activeId,
 			syncKey,
@@ -172,7 +163,6 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			clearSelection,
 			createRecord,
 			rename,
-			setPrimaryVault,
 			dropActiveRecord,
 			refresh,
 		}),
@@ -185,7 +175,6 @@ export function VaultRegistryProvider({ children }: { children: ReactNode }) {
 			clearSelection,
 			createRecord,
 			rename,
-			setPrimaryVault,
 			dropActiveRecord,
 			refresh,
 		],

@@ -23,7 +23,7 @@ export async function resolveSyncVault(): Promise<SyncVaultCtx | null> {
 		const s = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
 		if (typeof s[ACTIVE_VAULT_SESSION_KEY] === "string") active = s[ACTIVE_VAULT_SESSION_KEY];
 	} catch {}
-	const vaultId = active ?? reg.primaryId;
+	const vaultId = active ?? reg.legacyBlobVaultId;
 	if (!vaultId) return null;
 	return { vaultId, legacyBlobVaultId: reg.legacyBlobVaultId };
 }

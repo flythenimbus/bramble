@@ -73,7 +73,7 @@ export const mobileStorage: StorageAdapter = {
 	async readVaultBlob(vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
-		const targetId = vaultId ?? reg.primaryId;
+		const targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) throw new Error("no vault stored");
 		const r = await Filesystem.readFile({ path: blobFileFor(targetId, reg), directory: DIR });
 		return base64ToBytes(r.data as string);
@@ -81,7 +81,7 @@ export const mobileStorage: StorageAdapter = {
 	async writeVaultBlob(blob, vaultId) {
 		await ensureMigrated();
 		let reg = await readRegistry();
-		let targetId = vaultId ?? reg.primaryId;
+		let targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) {
 			targetId = crypto.randomUUID();
 			reg = addVault(reg, { id: targetId, label: "", createdAt: Date.now() });
@@ -103,7 +103,7 @@ export const mobileStorage: StorageAdapter = {
 	async restoreVaultFromBackup(vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
-		const targetId = vaultId ?? reg.primaryId;
+		const targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) return false;
 		const bakPath = backupFileFor(targetId, reg);
 		if (!(await fileExists(bakPath))) return false;

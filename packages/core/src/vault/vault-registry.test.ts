@@ -7,24 +7,21 @@ import {
 	parseRegistry,
 	removeVault,
 	renameVault,
-	setPrimary,
 	type VaultRegistry,
 } from "./vault-registry";
 
 const rec = (id: string, label = "", createdAt = 0) => ({ id, label, createdAt });
 
 describe("addVault", () => {
-	it("makes the first vault primary and gives it the legacy blob slot", () => {
+	it("gives the first vault the legacy blob slot", () => {
 		const reg = addVault(EMPTY_REGISTRY, rec("a"));
 		expect(reg.vaults.map((v) => v.id)).toEqual(["a"]);
-		expect(reg.primaryId).toBe("a");
 		expect(reg.legacyBlobVaultId).toBe("a");
 	});
 
-	it("does not move the primary or legacy slot when adding later vaults", () => {
+	it("does not move the legacy slot when adding later vaults", () => {
 		const reg = addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b"));
 		expect(reg.vaults.map((v) => v.id)).toEqual(["a", "b"]);
-		expect(reg.primaryId).toBe("a");
 		expect(reg.legacyBlobVaultId).toBe("a");
 	});
 
@@ -35,20 +32,13 @@ describe("addVault", () => {
 });
 
 describe("removeVault", () => {
-	it("reassigns the primary to the first remaining vault when the primary is removed", () => {
+	it("removes the vault, leaving the rest", () => {
 		let reg = addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b"));
 		reg = removeVault(reg, "a");
 		expect(reg.vaults.map((v) => v.id)).toEqual(["b"]);
-		expect(reg.primaryId).toBe("b");
 	});
 
-	it("leaves the primary alone when a non-primary vault is removed", () => {
-		let reg = setPrimary(addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b")), "b");
-		reg = removeVault(reg, "a");
-		expect(reg.primaryId).toBe("b");
-	});
-
-	it("clears primary and legacy slot when the last vault is removed", () => {
+	it("clears the legacy slot when the last vault is removed", () => {
 		let reg = addVault(EMPTY_REGISTRY, rec("a"));
 		reg = removeVault(reg, "a");
 		expect(reg).toEqual(EMPTY_REGISTRY);
@@ -61,17 +51,12 @@ describe("removeVault", () => {
 	});
 });
 
-describe("renameVault / setPrimary", () => {
+describe("renameVault", () => {
 	it("renames only the target vault", () => {
 		let reg = addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b"));
 		reg = renameVault(reg, "b", "Work");
 		expect(findVault(reg, "b")?.label).toBe("Work");
 		expect(findVault(reg, "a")?.label).toBe("");
-	});
-
-	it("setPrimary throws on an unknown id", () => {
-		const reg = addVault(EMPTY_REGISTRY, rec("a"));
-		expect(() => setPrimary(reg, "nope")).toThrow(/unknown vault id/);
 	});
 });
 
@@ -99,9 +84,18 @@ describe("parseRegistry", () => {
 	it("round-trips a valid registry", () => {
 		const reg: VaultRegistry = {
 			vaults: [rec("a", "Personal", 1)],
-			primaryId: "a",
 			legacyBlobVaultId: "a",
 		};
 		expect(parseRegistry(reg)).toEqual(reg);
+	});
+
+	it("strips a legacy primaryId field (no migration needed)", () => {
+		const parsed = parseRegistry({
+			vaults: [rec("a", "Personal", 1)],
+			primaryId: "a",
+			legacyBlobVaultId: "a",
+		});
+		expect(parsed).toEqual({ vaults: [rec("a", "Personal", 1)], legacyBlobVaultId: "a" });
+		expect("primaryId" in parsed).toBe(false);
 	});
 });

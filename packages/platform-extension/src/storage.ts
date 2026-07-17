@@ -135,7 +135,7 @@ export const extensionStorage: StorageAdapter = {
 	async readVaultBlob(vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
-		const targetId = vaultId ?? reg.primaryId;
+		const targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) throw new Error("no vault stored");
 		const bytes = await blobAt(blobKeyFor(targetId, reg));
 		if (bytes !== null) return bytes;
@@ -151,7 +151,7 @@ export const extensionStorage: StorageAdapter = {
 	async writeVaultBlob(blob, vaultId) {
 		await ensureMigrated();
 		let reg = await readRegistry();
-		let targetId = vaultId ?? reg.primaryId;
+		let targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) {
 			targetId = crypto.randomUUID();
 			reg = addVault(reg, { id: targetId, label: "", createdAt: Date.now() });
@@ -166,7 +166,7 @@ export const extensionStorage: StorageAdapter = {
 	async restoreVaultFromBackup(vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
-		const targetId = vaultId ?? reg.primaryId;
+		const targetId = vaultId ?? reg.legacyBlobVaultId;
 		if (targetId == null) return false;
 		const backupKey = backupKeyFor(targetId, reg);
 		const r = await api.storage.local.get(backupKey);

@@ -59,7 +59,7 @@ describe("VaultRegistryProvider", () => {
 		await act(async () => {});
 		const v = get();
 		expect(v.vaults.map((r) => r.id)).toEqual(["a", "b"]);
-		expect(v.primaryId).toBe("a");
+		expect(v.legacyBlobVaultId).toBe("a");
 		expect(v.activeId).toBeUndefined();
 	});
 
@@ -78,7 +78,7 @@ describe("VaultRegistryProvider", () => {
 	it("syncKey grandfathers the legacy vault and namespaces the others", async () => {
 		const { get } = mount(two);
 		await act(async () => {});
-		// No active vault yet: falls back to the primary (the legacy vault) -> flat key.
+		// No active vault yet: falls back to the legacy vault -> flat key.
 		expect(get().legacyBlobVaultId).toBe("a");
 		expect(get().syncKey("sync.group")).toBe("sync.group");
 		await act(async () => {
@@ -117,7 +117,7 @@ describe("VaultRegistryProvider", () => {
 		expect(v.activeId).toBe(newId);
 		expect(setMeta).toHaveBeenCalledWith(
 			VAULT_REGISTRY_KEY,
-			expect.objectContaining({ primaryId: "a" }),
+			expect.objectContaining({ legacyBlobVaultId: "a" }),
 		);
 	});
 
@@ -127,7 +127,7 @@ describe("VaultRegistryProvider", () => {
 		const v = get();
 		expect(v.ready).toBe(true);
 		expect(v.vaults).toEqual([]);
-		expect(v.primaryId).toBeNull();
+		expect(v.legacyBlobVaultId).toBeNull();
 		expect(v.activeId).toBeUndefined();
 	});
 
@@ -141,15 +141,6 @@ describe("VaultRegistryProvider", () => {
 			await get().rename("Family");
 		});
 		expect(get().vaults.find((v) => v.id === "b")?.label).toBe("Family");
-	});
-
-	it("setPrimaryVault changes the primary", async () => {
-		const { get } = mount(two);
-		await act(async () => {});
-		await act(async () => {
-			await get().setPrimaryVault("b");
-		});
-		expect(get().primaryId).toBe("b");
 	});
 
 	it("dropActiveRecord forgets the active vault's record and deselects it (no blob delete)", async () => {

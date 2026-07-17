@@ -17,19 +17,18 @@ export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 
 export const VaultRegistrySchema = z.object({
 	vaults: z.array(VaultRecordSchema),
-	/** The primary vault: what mobile autofill serves, what biometric arms, and what the picker defaults to. */
-	primaryId: z.string().nullable(),
-	// The vault whose blob lives at the un-suffixed (legacy) storage location. Transitional:
-	// the first vault stays put so no bytes move during the multi-vault migration, while later
-	// vaults are namespaced by id. A future phase moves it into the uniform namespace and clears
-	// this. It is independent of primaryId, which the user can reassign.
+	// The vault whose blob lives at the un-suffixed (legacy) storage location, and the fallback
+	// "default vault" when a caller omits an id or no active vault is selected (single-vault callers,
+	// a woken background before the UI set the session, and mobile's out-of-process autofill /
+	// biometric). Transitional: the first vault stays put so no bytes move during the multi-vault
+	// migration, while later vaults are namespaced by id; a future phase moves it into the uniform
+	// namespace and clears this. (An older `primaryId` field is Zod-stripped on parse - no migration.)
 	legacyBlobVaultId: z.string().nullable(),
 });
 export type VaultRegistry = z.infer<typeof VaultRegistrySchema>;
 
 export const EMPTY_REGISTRY: VaultRegistry = {
 	vaults: [],
-	primaryId: null,
 	legacyBlobVaultId: null,
 };
 
@@ -40,7 +39,7 @@ export function parseRegistry(raw: unknown): VaultRegistry {
 	return parsed.success ? parsed.data : EMPTY_REGISTRY;
 }
 
-/** Add a vault. The first vault added becomes primary and takes the legacy blob slot. */
+/** Add a vault. The first vault added takes the legacy (un-suffixed) blob slot. */
 export function addVault(reg: VaultRegistry, record: VaultRecord): VaultRegistry {
 	if (reg.vaults.some((v) => v.id === record.id)) {
 		throw new Error(`vault id already registered: ${record.id}`);
@@ -48,17 +47,14 @@ export function addVault(reg: VaultRegistry, record: VaultRecord): VaultRegistry
 	const first = reg.vaults.length === 0;
 	return {
 		vaults: [...reg.vaults, record],
-		primaryId: reg.primaryId ?? record.id,
 		legacyBlobVaultId: reg.legacyBlobVaultId ?? (first ? record.id : null),
 	};
 }
 
-/** Remove a vault, reassigning the primary to the first remaining vault if it was primary. */
+/** Remove a vault. Clears the legacy-blob pointer if it was the one removed. */
 export function removeVault(reg: VaultRegistry, id: string): VaultRegistry {
-	const vaults = reg.vaults.filter((v) => v.id !== id);
 	return {
-		vaults,
-		primaryId: reg.primaryId === id ? (vaults[0]?.id ?? null) : reg.primaryId,
+		vaults: reg.vaults.filter((v) => v.id !== id),
 		legacyBlobVaultId: reg.legacyBlobVaultId === id ? null : reg.legacyBlobVaultId,
 	};
 }
@@ -66,12 +62,6 @@ export function removeVault(reg: VaultRegistry, id: string): VaultRegistry {
 /** Rename a vault. A blank label falls back to "Vault N" at display time (see displayLabel). */
 export function renameVault(reg: VaultRegistry, id: string, label: string): VaultRegistry {
 	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, label } : v)) };
-}
-
-/** Set the primary vault. Throws on an unknown id. */
-export function setPrimary(reg: VaultRegistry, id: string): VaultRegistry {
-	if (!reg.vaults.some((v) => v.id === id)) throw new Error(`unknown vault id: ${id}`);
-	return { ...reg, primaryId: id };
 }
 
 /** Look up a vault record by id. */
