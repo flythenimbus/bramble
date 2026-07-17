@@ -243,7 +243,12 @@ driven by a plain callback prop (`onCreate` / `onRestore` / `onJoin`); none swap
   the primary tab; only the genuinely-heavy `ImportShell` (kdbx/csv parsers) stays lazy. The
   standalone `?screen=restore` path (Settings -> Data -> Restore) is unchanged - still full-screen
   with its own done screen. (e94c8827)
-- **"Join a device"** is a tab gated to the `perVaultSync` capability (extension). See
+- **"Join a device"** is a tab shown in every circumstance, on every platform (`canJoin = true`).
+  Join is just "create a vault + pair into it", and creating a parallel vault is already offered, so
+  gating join alone was inconsistent. On mobile the joined vault is single-active like any other
+  (only the active vault syncs; it goes quiet in the background after a switch) - a UX caveat, not a
+  breakage. The `perVaultSync` flag no longer hides this tab; it now only describes simultaneous
+  multi-vault sync (extension). See
   [Join adds a vault instead of overwriting](#join-adds-a-vault-instead-of-overwriting).
 - **Auth screen.** The "New to {app}? / Create new vault" prompt under the unlock form is hidden
   when `vaults.length > 1`: with multiple vaults the pre-unlock picker owns "create another vault",

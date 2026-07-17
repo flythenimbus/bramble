@@ -29,11 +29,13 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
-	// "Join a device": pair to pull a vault onto this device. On the extension it rides per-vault sync
-	// (join = add a vault). Mobile is single-active, so join-as-add-a-vault stays gated - but joining
-	// as the FIRST vault (a fresh phone pulling a desktop's group) is fully supported and is mobile's
-	// most-wanted case, so offer it whenever there's no vault yet. See docs/multiple-vaults.md.
-	const canJoin = useCan("perVaultSync") || !adding;
+	// "Join a device": pair to pull a vault onto this device. Always offered - join is just
+	// "create a vault + pair into it", and creating a parallel vault is already allowed here, so
+	// gating join specifically was inconsistent. On mobile the joined vault is single-active like any
+	// other (only the active vault syncs; it goes quiet in the background when you switch away) - a UX
+	// caveat, not a breakage. The perVaultSync flag now only describes simultaneous multi-vault sync
+	// (extension), it no longer hides this tab. See docs/multiple-vaults.md.
+	const canJoin = true;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
 	// "added" = a backup was restored into a new, locked vault (vaults already existed).
 	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
@@ -42,7 +44,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 
 	if (recoveryCode) {
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+			<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 				<div className="w-full max-w-xl rounded-xl border border-border bg-card/50 backdrop-blur-sm p-6">
 					<RecoveryCodeDisplay
 						code={recoveryCode}
@@ -59,9 +61,9 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 
 	if (done) {
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+			<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 				<div className="w-full max-w-xl text-center">
-					<div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-4">
+					<div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-primary to-primary/80 mb-4">
 						<Check className="w-9 h-9 text-primary-foreground" />
 					</div>
 					<h1 className="text-2xl mb-2">
