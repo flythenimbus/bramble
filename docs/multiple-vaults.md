@@ -317,6 +317,23 @@ before creating a record, scan existing vaults' `sync.group` values for a matchi
 per-vault (rotate the joining vault's `sync.deviceId:<newId>`), and the join must not call
 `resetSyncState` (which would wipe other vaults' sync).
 
+### The enrolled device is rostered in the host, not just the popup
+
+The inviter adds a freshly-joined device to its **local** roster in the sync **host**
+(`offscreen-core.ts` `addEnrolledToLocalRoster`, on `onEnrolled`), not only in the popup
+(`useSyncEnrollment`'s enrolled handler). The popup path is fragile on **Firefox**: the sync
+host runs in the background event page, kept alive through the enroll, but the popup closes
+on focus loss and drops the `SYNC_EVENT('enrolled')` — so the roster write never lands where
+the ongoing sync (also the event page) reads it via `syncLocalRoster`, and the reconnecting
+joiner is rejected `not in roster` (`roster-sync.ts` `inRoster`), which then times out its
+handshake. Chromium's persistent offscreen + reliably-open popup masked it. The host signs
+the joiner's entry with the inviter's admission material (rides the invite as
+`EnrollInviteMsg.admission`; the password already ships for the same-password check) and
+merges it as a CRDT union, so it never revokes existing devices. It is idempotent with the
+popup write (deterministic Ed25519 over the same canonical entry), which stays as the
+UI-refresh path. Security-key inviters (no admission material) add the joiner unsigned,
+tolerated through the phase-1 rollout. Landed `57944af1`.
+
 ### resetSyncState, per-vault
 
 The extension's `resetSyncState` (`shell.ts:230`) wildcard-removes every `sync.*` key;
