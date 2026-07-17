@@ -21,9 +21,11 @@ import {
 	type SyncEvent,
 	type WireRecoverySlot,
 } from "@core/index";
+import { syncKeyFor } from "@core/sync/sync-keys";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
+import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { mobileCrypto } from "../adapters/crypto";
 import { mobileStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
@@ -35,6 +37,18 @@ const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
 const RELAY_KEY = "sync.relay";
 const ICE_KEY = "sync.iceUrl";
+/** Which vault the app is currently in, persisted by the shell's setActiveVault (single-active). */
+export const ACTIVE_VAULT_KEY = "active-vault";
+
+// The vault sync targets: the active (unlocked) vault the app recorded, else the first/only vault.
+// Its group + roster + device id live at namespaced `<key>:<id>` (the app's enrollment writes them
+// via syncKey()); `sync.relay` / `sync.iceUrl` stay device-global and are NOT namespaced.
+async function activeVaultId(): Promise<string | undefined> {
+	const active = await mobileStorage.getMeta<string>(ACTIVE_VAULT_KEY);
+	if (active) return active;
+	const reg = parseRegistry(await mobileStorage.getMeta(VAULT_REGISTRY_KEY));
+	return reg.vaults[0]?.id;
+}
 
 interface GroupConfig {
 	groupKey: string;
@@ -237,9 +251,12 @@ let clockPromise: Promise<HybridClock> | null = null;
 function getClock(): Promise<HybridClock> {
 	if (!clockPromise) {
 		clockPromise = (async () => {
+			// The device's roster node id is per-vault (it's in the vault's roster), so namespace it.
+			const vaultId = await activeVaultId();
+			const ns = (k: string) => (vaultId ? syncKeyFor(k, vaultId) : k);
 			const id = await ensureDeviceId(
-				(k) => mobileStorage.getMeta<string>(k),
-				(k, v) => mobileStorage.setMeta<string>(k, v),
+				(k) => mobileStorage.getMeta<string>(ns(k)),
+				(k, v) => mobileStorage.setMeta<string>(ns(k), v),
 			);
 			return makeClock(id);
 		})();
@@ -252,7 +269,9 @@ function getClock(): Promise<HybridClock> {
 const blobStore = createEntriesBlobStore({
 	crypto: mobileCrypto,
 	storage: mobileStorage,
-	readDecodedBlob: async () => ({ blob: decodeVaultBlob(await mobileStorage.readVaultBlob()) }),
+	readDecodedBlob: async () => ({
+		blob: decodeVaultBlob(await mobileStorage.readVaultBlob(await activeVaultId())),
+	}),
 });
 
 let rosterSession: MeshSession | null = null;
@@ -260,7 +279,10 @@ let rosterSession: MeshSession | null = null;
 let lastSyncStampAt = 0;
 
 async function startRoster(): Promise<void> {
-	const group = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+	const vaultId = await activeVaultId();
+	if (!vaultId) return; // no vault
+	const groupMetaKey = syncKeyFor(GROUP_KEY, vaultId);
+	const group = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
 	if (!group?.groupKey) return; // not enrolled in a group yet
 	const { privateKey, publicKey } = await deviceKeypair();
 	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
@@ -277,13 +299,13 @@ async function startRoster(): Promise<void> {
 		wasm,
 		report,
 		fetchLocalRoster: async () => {
-			const g = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+			const g = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
 			return g ? encodeRoster(g.roster) : "";
 		},
 		pushRemoteRoster: async (rosterJson) => {
-			const g = await mobileStorage.getMeta<GroupConfig>(GROUP_KEY);
+			const g = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
 			if (!g) return;
-			await mobileStorage.setMeta(GROUP_KEY, {
+			await mobileStorage.setMeta(groupMetaKey, {
 				...g,
 				roster: mergeRemoteRoster(g.roster, decodeRoster(rosterJson)),
 			});
@@ -306,7 +328,7 @@ async function startRoster(): Promise<void> {
 			const at = Date.now();
 			if (at - lastSyncStampAt >= 30_000) {
 				lastSyncStampAt = at;
-				await mobileStorage.setMeta(SYNC_LAST_SYNCED_KEY, at);
+				await mobileStorage.setMeta(syncKeyFor(SYNC_LAST_SYNCED_KEY, vaultId), at);
 				emit({ kind: "synced", at });
 			}
 		},
@@ -325,6 +347,9 @@ async function maybeStartRosterSync(): Promise<void> {
 function stopRosterSync(): void {
 	rosterSession?.stop();
 	rosterSession = null;
+	// Re-seed the HLC clock from the active vault's (per-vault) device id on the next unlock, so a
+	// vault switch (lock -> pick another -> unlock) doesn't carry the previous vault's node id.
+	clockPromise = null;
 }
 
 /** Wire ongoing roster sync to the vault lock state: run while unlocked + enrolled,

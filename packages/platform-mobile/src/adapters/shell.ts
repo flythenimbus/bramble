@@ -9,6 +9,7 @@ import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pend
 import { scanQrNative } from "../qr-scanner";
 import { scanQrCode } from "../scan";
 import {
+	ACTIVE_VAULT_KEY,
 	onSyncEvent,
 	onSyncStatus,
 	resetSyncState,
@@ -21,6 +22,7 @@ import {
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/sync-manager";
+import { mobileStorage } from "./storage";
 
 // Single-window in-app navigation to the setup/create-vault and import flows. The
 // root (main.tsx) registers a handler that swaps the mounted view; `openSetup`
@@ -107,6 +109,16 @@ export const mobileShell: ShellAdapter = {
 			);
 		}
 	},
+
+	// Record / read which vault is active (unlocked). Mobile has no session store, so it rides in
+	// Preferences; sync-manager reads it to target the active vault's namespaced keys, and the
+	// registry restores it on reopen. Written on unlock, left in place on lock (overwritten by the
+	// next unlock). See sync-manager `activeVaultId`.
+	setActiveVault: (vaultId) =>
+		vaultId == null
+			? mobileStorage.removeMeta(ACTIVE_VAULT_KEY)
+			: mobileStorage.setMeta(ACTIVE_VAULT_KEY, vaultId),
+	getActiveVault: async () => (await mobileStorage.getMeta<string>(ACTIVE_VAULT_KEY)) ?? null,
 
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
 	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.

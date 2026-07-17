@@ -62,10 +62,13 @@ describe("mobile one-time namespacing migration", () => {
 		expect(reg().vaults).toEqual([]);
 	});
 
-	it("copies a pre-namespacing vault's blob file AND sync keys to `:<id>`, then deletes the flat ones", async () => {
+	it("copies the blob file + Preferences sync keys to `:<id>`, but leaves the secure-store device keys alone", async () => {
 		const blob = bytesToBase64(new Uint8Array([7, 7, 7]));
 		files.set(VAULT_FILE, blob);
 		prefs.set("meta:sync.group", JSON.stringify({ groupKey: "gk" }));
+		prefs.set("meta:sync.deviceId", JSON.stringify("dev-1"));
+		// A legacy plaintext keypair copy: the migration must NOT touch it (sync-manager migrates it
+		// into secure storage on next read; deleting it would lose the device identity).
 		prefs.set("meta:sync.deviceKeypair", JSON.stringify({ privateKey: "p", publicKey: "P" }));
 
 		const storage = await loadStorage();
@@ -74,14 +77,17 @@ describe("mobile one-time namespacing migration", () => {
 		const id = firstId();
 		expect(files.get(nf(id))).toBe(blob);
 		expect(prefs.get(`meta:sync.group:${id}`)).toBe(JSON.stringify({ groupKey: "gk" }));
-		expect(prefs.get(`meta:sync.deviceKeypair:${id}`)).toBe(
-			JSON.stringify({ privateKey: "p", publicKey: "P" }),
-		);
-		// Flat file + keys removed.
+		expect(prefs.get(`meta:sync.deviceId:${id}`)).toBe(JSON.stringify("dev-1"));
+		// Flat blob + migrated Preferences keys removed.
 		expect(files.has(VAULT_FILE)).toBe(false);
 		expect(prefs.has("meta:sync.group")).toBe(false);
+		expect(prefs.has("meta:sync.deviceId")).toBe(false);
+		// The device keypair is left exactly where it was - not namespaced, not deleted.
+		expect(prefs.get("meta:sync.deviceKeypair")).toBe(
+			JSON.stringify({ privateKey: "p", publicKey: "P" }),
+		);
+		expect(prefs.has("meta:sync.deviceKeypair:" + id)).toBe(false);
 		expect("legacyBlobVaultId" in reg()).toBe(false);
-		// The blob reads back through the vault's id.
 		expect(bytesToBase64(await storage.readVaultBlob())).toBe(blob);
 	});
 

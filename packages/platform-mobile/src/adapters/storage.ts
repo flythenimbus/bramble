@@ -1,7 +1,6 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
 import type { StorageAdapter } from "@core/index";
-import { PER_VAULT_SYNC_KEYS } from "@core/sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
 import {
 	addVault,
@@ -31,6 +30,12 @@ function backupFileFor(id: string): string {
 function syncMetaKey(base: string, id: string): string {
 	return `meta:${base}:${id}`;
 }
+
+// The per-vault sync keys stored in Preferences that the migration namespaces. NOT the full
+// PER_VAULT_SYNC_KEYS: on mobile the Noise/Ed25519 keypairs (`sync.deviceKeypair`/`sync.signingKey`)
+// live in secure storage (Keychain/Keystore), device-global, so they're left alone here - namespacing
+// or deleting a legacy plaintext copy would break sync-manager's secure-store migration + the pairing.
+const MOBILE_PER_VAULT_META_KEYS = ["sync.group", "sync.lastSyncedAt", "sync.deviceId"] as const;
 
 async function fileExists(path: string): Promise<boolean> {
 	try {
@@ -95,7 +100,7 @@ async function copyFileIfExists(from: string, to: string): Promise<void> {
 async function copyFlatVaultToNamespaced(id: string): Promise<void> {
 	await copyFileIfExists(VAULT_FILE, blobFileFor(id));
 	await copyFileIfExists(BACKUP_FILE, backupFileFor(id));
-	for (const base of PER_VAULT_SYNC_KEYS) {
+	for (const base of MOBILE_PER_VAULT_META_KEYS) {
 		const v = (await Preferences.get({ key: `meta:${base}` })).value;
 		if (v != null) await Preferences.set({ key: syncMetaKey(base, id), value: v });
 	}
@@ -108,7 +113,7 @@ async function deleteFlatVaultKeys(): Promise<void> {
 		await Filesystem.deleteFile({ path: VAULT_FILE, directory: DIR });
 	if (await fileExists(BACKUP_FILE))
 		await Filesystem.deleteFile({ path: BACKUP_FILE, directory: DIR });
-	for (const base of PER_VAULT_SYNC_KEYS) await Preferences.remove({ key: `meta:${base}` });
+	for (const base of MOBILE_PER_VAULT_META_KEYS) await Preferences.remove({ key: `meta:${base}` });
 }
 
 export const mobileStorage: StorageAdapter = {
