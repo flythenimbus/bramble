@@ -14,12 +14,14 @@ export interface BiometricUnlock {
 	isAvailable(): Promise<boolean>;
 	/** Which modality is enrolled, for labelling the unlock UI. Defaults to "biometric". */
 	biometryType?(): Promise<BiometryType>;
-	/** A VEK is currently cached behind the biometric gate on this device. */
-	isEnabled(): Promise<boolean>;
-	/** Cache the VEK (base64) behind the biometric gate. Call once with the vault unlocked. */
-	enable(vekB64: string): Promise<void>;
-	/** Biometric-prompt, then return the cached VEK (base64). Rejects on cancel/lockout/invalidation. */
-	unlock(): Promise<string>;
-	/** Remove the cached VEK from this device. */
-	disable(): Promise<void>;
+	// Each vault's VEK is a distinct OS-gated item, keyed by vault id, so enabling biometric on one
+	// vault never overwrites another's cached VEK. (`vaultId` = the active vault's local id.)
+	/** A VEK is currently cached behind the biometric gate for this vault. */
+	isEnabled(vaultId: string): Promise<boolean>;
+	/** Cache the vault's VEK (base64) behind the biometric gate. Call once with the vault unlocked. */
+	enable(vekB64: string, vaultId: string): Promise<void>;
+	/** Biometric-prompt, then return this vault's cached VEK (base64). Rejects on cancel/lockout/invalidation. */
+	unlock(vaultId: string): Promise<string>;
+	/** Remove this vault's cached VEK from the device. */
+	disable(vaultId: string): Promise<void>;
 }

@@ -13,6 +13,8 @@ vi.mock("@capacitor/core", () => ({ registerPlugin: () => native }));
 
 const { mobileBiometric } = await import("./biometric");
 
+const VID = "vault-1";
+
 beforeEach(() => {
 	vi.clearAllMocks();
 });
@@ -44,41 +46,41 @@ describe("mobileBiometric availability probes swallow errors", () => {
 
 	it("isEnabled reflects whether a secret is cached", async () => {
 		native.hasSecret.mockResolvedValue({ value: true });
-		expect(await mobileBiometric.isEnabled()).toBe(true);
+		expect(await mobileBiometric.isEnabled(VID)).toBe(true);
 	});
 
 	it("isEnabled returns false when the native call rejects", async () => {
 		native.hasSecret.mockRejectedValue(new Error("boom"));
-		expect(await mobileBiometric.isEnabled()).toBe(false);
+		expect(await mobileBiometric.isEnabled(VID)).toBe(false);
 	});
 });
 
 describe("mobileBiometric actions propagate errors", () => {
 	it("enable hands the VEK to the native cache", async () => {
 		native.setSecret.mockResolvedValue(undefined);
-		await mobileBiometric.enable("VEK_B64");
-		expect(native.setSecret).toHaveBeenCalledWith({ secret: "VEK_B64" });
+		await mobileBiometric.enable("VEK_B64", VID);
+		expect(native.setSecret).toHaveBeenCalledWith({ vaultId: VID, secret: "VEK_B64" });
 	});
 
 	it("enable surfaces a native failure rather than swallowing it", async () => {
 		native.setSecret.mockRejectedValue(new Error("keychain store failed"));
-		await expect(mobileBiometric.enable("VEK_B64")).rejects.toThrow("keychain store failed");
+		await expect(mobileBiometric.enable("VEK_B64", VID)).rejects.toThrow("keychain store failed");
 	});
 
 	it("unlock returns the gated VEK and passes a prompt reason", async () => {
 		native.getSecret.mockResolvedValue({ secret: "GATED_VEK" });
-		expect(await mobileBiometric.unlock()).toBe("GATED_VEK");
-		expect(native.getSecret).toHaveBeenCalledWith({ reason: expect.any(String) });
+		expect(await mobileBiometric.unlock(VID)).toBe("GATED_VEK");
+		expect(native.getSecret).toHaveBeenCalledWith({ vaultId: VID, reason: expect.any(String) });
 	});
 
 	it("unlock surfaces a cancel rather than swallowing it", async () => {
 		native.getSecret.mockRejectedValue(new Error("Cancelled"));
-		await expect(mobileBiometric.unlock()).rejects.toThrow("Cancelled");
+		await expect(mobileBiometric.unlock(VID)).rejects.toThrow("Cancelled");
 	});
 
 	it("disable clears the native cache", async () => {
 		native.deleteSecret.mockResolvedValue(undefined);
-		await mobileBiometric.disable();
+		await mobileBiometric.disable(VID);
 		expect(native.deleteSecret).toHaveBeenCalledTimes(1);
 	});
 });

@@ -26,13 +26,15 @@ function fakeBiometric(over: Partial<BiometricUnlock> = {}): BiometricUnlock {
 	};
 }
 
+const VID = "vault-1";
+
 describe("enableBiometricUnlock", () => {
-	it("exports the live VEK and hands it to the biometric cache", async () => {
+	it("exports the live VEK and hands it to the biometric cache keyed by vault id", async () => {
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric();
-		await enableBiometricUnlock(crypto, biometric);
+		await enableBiometricUnlock(crypto, biometric, VID);
 		expect(crypto.exportVek).toHaveBeenCalledTimes(1);
-		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64");
+		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID);
 	});
 
 	it("does not cache anything if the VEK export fails (vault locked)", async () => {
@@ -42,7 +44,7 @@ describe("enableBiometricUnlock", () => {
 			}),
 		});
 		const biometric = fakeBiometric();
-		await expect(enableBiometricUnlock(crypto, biometric)).rejects.toThrow("locked");
+		await expect(enableBiometricUnlock(crypto, biometric, VID)).rejects.toThrow("locked");
 		expect(biometric.enable).not.toHaveBeenCalled();
 	});
 });
@@ -51,8 +53,8 @@ describe("unlockVekWithBiometric", () => {
 	it("reads the gated VEK and loads it into the crypto session", async () => {
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric({ unlock: vi.fn(async () => "GATED_VEK") });
-		await unlockVekWithBiometric(crypto, biometric);
-		expect(biometric.unlock).toHaveBeenCalledTimes(1);
+		await unlockVekWithBiometric(crypto, biometric, VID);
+		expect(biometric.unlock).toHaveBeenCalledWith(VID);
 		expect(crypto.unlockWithVek).toHaveBeenCalledWith("GATED_VEK");
 	});
 
@@ -63,7 +65,7 @@ describe("unlockVekWithBiometric", () => {
 				throw new Error("cancelled");
 			}),
 		});
-		await expect(unlockVekWithBiometric(crypto, biometric)).rejects.toThrow("cancelled");
+		await expect(unlockVekWithBiometric(crypto, biometric, VID)).rejects.toThrow("cancelled");
 		expect(crypto.unlockWithVek).not.toHaveBeenCalled();
 	});
 });
@@ -74,7 +76,7 @@ describe("biometricUnlockFlow", () => {
 		const biometric = fakeBiometric({ unlock: vi.fn(async () => "GATED") });
 		const loadEntries = vi.fn(async () => {});
 		const onStaleCache = vi.fn();
-		await biometricUnlockFlow({ crypto, biometric, loadEntries, onStaleCache });
+		await biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache });
 		expect(crypto.unlockWithVek).toHaveBeenCalledWith("GATED");
 		expect(loadEntries).toHaveBeenCalledTimes(1);
 		expect(onStaleCache).not.toHaveBeenCalled();
@@ -90,7 +92,7 @@ describe("biometricUnlockFlow", () => {
 		});
 		const onStaleCache = vi.fn();
 		await expect(
-			biometricUnlockFlow({ crypto, biometric, loadEntries, onStaleCache }),
+			biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache }),
 		).rejects.toThrow(/out of date/i);
 		// The gate's VEK was loaded, then the bad cache was torn down.
 		expect(crypto.unlockWithVek).toHaveBeenCalled();
@@ -106,7 +108,7 @@ describe("biometricUnlockFlow", () => {
 			throw new Error("zod: invalid payload internals");
 		});
 		await expect(
-			biometricUnlockFlow({ crypto, biometric, loadEntries, onStaleCache: vi.fn() }),
+			biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache: vi.fn() }),
 		).rejects.not.toThrow(/zod/i);
 	});
 });

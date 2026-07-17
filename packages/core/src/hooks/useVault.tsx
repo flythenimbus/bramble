@@ -1004,7 +1004,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		try {
 			const [available, enabled, type] = await Promise.all([
 				biometric.isAvailable(),
-				biometric.isEnabled(),
+				// Biometric is keyed per vault; without a selected vault there's nothing to probe.
+				activeId ? biometric.isEnabled(activeId) : Promise.resolve(false),
 				biometric.biometryType?.() ?? Promise.resolve<BiometryType>("biometric"),
 			]);
 			setBiometricAvailable(available);
@@ -1013,7 +1014,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		} catch (e) {
 			console.error("[vault] biometric state probe failed:", e);
 		}
-	}, [biometric]);
+	}, [biometric, activeId]);
 
 	useEffect(() => {
 		void refreshBiometric();
@@ -1024,32 +1025,35 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
 		if (latestRef.current.isLocked)
 			throw new Error("Unlock the vault before enabling biometric unlock.");
-		await enableBiometricUnlock(crypto, biometric);
+		if (!activeId) throw new Error("No vault is selected.");
+		await enableBiometricUnlock(crypto, biometric, activeId);
 		setBiometricEnabled(true);
-	}, [biometric, crypto]);
+	}, [biometric, crypto, activeId]);
 
-	/** Forget the device's biometric-cached VEK. */
+	/** Forget this vault's biometric-cached VEK. */
 	const disableBiometric = useCallback(async () => {
-		if (!biometric) return;
-		await biometric.disable();
+		if (!biometric || !activeId) return;
+		await biometric.disable(activeId);
 		setBiometricEnabled(false);
-	}, [biometric]);
+	}, [biometric, activeId]);
 
 	/** Biometric-prompt, unwrap the cached VEK, and unlock. A stale cache (the VEK no
 	 * longer decrypts this vault, e.g. after a reset) disables itself and surfaces a
 	 * fall-back-to-password error. */
 	const unlockWithBiometric = useCallback(async () => {
 		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
+		if (!activeId) throw new Error("No vault is selected.");
 		setError(null);
 		await biometricUnlockFlow({
 			crypto,
 			biometric,
+			vaultId: activeId,
 			loadEntries,
 			onStaleCache: () => setBiometricEnabled(false),
 		});
 		setIsLocked(false);
 		void shell.flushPendingCornerCapture().catch(() => {});
-	}, [biometric, crypto, loadEntries, shell]);
+	}, [biometric, crypto, loadEntries, shell, activeId]);
 
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.

@@ -23,8 +23,21 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	// service / account / accessGroup live in BrambleVault (shared with the AutoFill
 	// extension and the keychain-access-groups entitlement). See docs/mobile-port.md.
 
-	// The biometric VEK item identity (service + account, no access group).
-	private static func identity() -> [String: Any] {
+	// The biometric VEK item identity for one vault (service + per-vault account, no access group).
+	// Each vault gets its own item (account `vek:<vaultId>`), so enabling biometric on one vault
+	// never overwrites another's cached VEK - the in-app unlock is per-vault.
+	private static func identity(_ vaultId: String) -> [String: Any] {
+		[
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: "\(BrambleVault.vekAccount):\(vaultId)",
+		]
+	}
+
+	// The un-suffixed item the AutoFill extension reads: it runs out-of-process and can't know the
+	// app's active vault id, so setSecret mirrors the (active) vault's VEK here and deleteSecret
+	// clears it. Effectively autofill follows the active vault; per-vault autofill data is Tier 2.
+	private static func autofillIdentity() -> [String: Any] {
 		[
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
@@ -76,10 +89,14 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	// Presence check that never triggers a biometric prompt: ask only for attributes
 	// (not the protected data) and skip the auth UI.
 	@objc func hasSecret(_ call: CAPPluginCall) {
+		guard let vaultId = call.getString("vaultId") else {
+			call.reject("Missing vaultId")
+			return
+		}
 		// UIFail (not UISkip): report the .userPresence item as existing via
 		// errSecInteractionNotAllowed instead of silently skipping it (which returns
 		// errSecItemNotFound and made the toggle revert). Neither prompts for Face ID.
-		let query = Self.identity().merging([
+		let query = Self.identity(vaultId).merging([
 			kSecReturnData as String: false,
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
 			kSecMatchLimit as String: kSecMatchLimitOne,
@@ -95,14 +112,33 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		call.resolve(["value": present])
 	}
 
+	// Store `data` under `identity`, behind the biometric access control. Replaces any prior copy in
+	// either group; prefers the shared group (extension-readable), falling back to the app's default
+	// group when the shared-group entitlement isn't usable (errSecMissingEntitlement, -34018).
+	// Writing the protected item does not require a biometric prompt; only reading does.
+	private static func store(_ identity: [String: Any], data: Data, access: SecAccessControl)
+		-> OSStatus
+	{
+		for q in groupVariants(identity) { SecItemDelete(q as CFDictionary) }
+		var add = identity
+		add[kSecValueData as String] = data
+		add[kSecAttrAccessControl as String] = access
+		var status = SecItemAdd(withAccessGroup(add) as CFDictionary, nil)
+		if status == errSecMissingEntitlement {
+			status = SecItemAdd(add as CFDictionary, nil)
+		}
+		return status
+	}
+
 	@objc func setSecret(_ call: CAPPluginCall) {
+		guard let vaultId = call.getString("vaultId") else {
+			call.reject("Missing vaultId")
+			return
+		}
 		guard let secret = call.getString("secret"), let data = secret.data(using: .utf8) else {
 			call.reject("Missing secret")
 			return
 		}
-		// Replace any prior (possibly invalidated) copy in either group.
-		for q in Self.groupVariants(Self.identity()) { SecItemDelete(q as CFDictionary) }
-
 		var acError: Unmanaged<CFError>?
 		guard
 			let access = SecAccessControlCreateWithFlags(
@@ -118,17 +154,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Couldn't create the biometric access control")
 			return
 		}
-		var add = Self.identity()
-		add[kSecValueData as String] = data
-		add[kSecAttrAccessControl as String] = access
-		// Writing the protected item does not require a biometric prompt; only reading does. Prefer
-		// the shared group (extension can read it); fall back to the app's default group when the
-		// shared-group entitlement isn't usable on this build (errSecMissingEntitlement, -34018), so
-		// in-app biometric unlock still works.
-		var status = SecItemAdd(Self.withAccessGroup(add) as CFDictionary, nil)
-		if status == errSecMissingEntitlement {
-			status = SecItemAdd(add as CFDictionary, nil)
-		}
+		// Per-vault item (the in-app unlock reads this) + the shared un-suffixed mirror the AutoFill
+		// extension reads. The per-vault write is authoritative; the mirror is best-effort.
+		let status = Self.store(Self.identity(vaultId), data: data, access: access)
+		_ = Self.store(Self.autofillIdentity(), data: data, access: access)
 		if status == errSecSuccess {
 			call.resolve()
 		} else {
@@ -137,6 +166,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	@objc func getSecret(_ call: CAPPluginCall) {
+		guard let vaultId = call.getString("vaultId") else {
+			call.reject("Missing vaultId")
+			return
+		}
 		let reason = call.getString("reason") ?? "Unlock your vault"
 		let context = LAContext()
 		// Authenticate once, then read the protected item reusing that authenticated
@@ -153,7 +186,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 				}
 				return
 			}
-			let query = Self.identity().merging([
+			let query = Self.identity(vaultId).merging([
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: context,
@@ -180,13 +213,20 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	@objc func deleteSecret(_ call: CAPPluginCall) {
-		// Remove the item from both groups so no copy lingers.
+		guard let vaultId = call.getString("vaultId") else {
+			call.reject("Missing vaultId")
+			return
+		}
+		// Remove this vault's per-vault item AND the shared autofill mirror, from both groups so no
+		// copy lingers. Clearing the mirror stops autofill until biometric is re-enabled (re-armed).
 		var lastStatus: OSStatus = errSecItemNotFound
 		var ok = false
-		for q in Self.groupVariants(Self.identity()) {
-			let status = SecItemDelete(q as CFDictionary)
-			lastStatus = status
-			if status == errSecSuccess || status == errSecItemNotFound { ok = true }
+		for identity in [Self.identity(vaultId), Self.autofillIdentity()] {
+			for q in Self.groupVariants(identity) {
+				let status = SecItemDelete(q as CFDictionary)
+				lastStatus = status
+				if status == errSecSuccess || status == errSecItemNotFound { ok = true }
+			}
 		}
 		if ok {
 			call.resolve()

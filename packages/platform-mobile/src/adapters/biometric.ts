@@ -6,12 +6,14 @@ import type { BiometricUnlock, BiometryType } from "@core/index";
 // .biometryCurrentSet access control + Secure Enclave; Android a Keystore AES key created
 // setUserAuthenticationRequired + setInvalidatedByBiometricEnrollment. The OS itself
 // triggers Face ID / fingerprint on getSecret; we never run the Argon2 KDF here.
+// Each vault's VEK is a distinct native item, keyed by `vaultId` (the item's Keychain account /
+// Keystore alias includes it), so enabling biometric on one vault can't overwrite another's.
 interface BiometricVaultPlugin {
 	isAvailable(): Promise<{ available: boolean; biometryType?: string }>;
-	hasSecret(): Promise<{ value: boolean }>;
-	setSecret(options: { secret: string }): Promise<void>;
-	getSecret(options: { reason: string }): Promise<{ secret: string }>;
-	deleteSecret(): Promise<void>;
+	hasSecret(options: { vaultId: string }): Promise<{ value: boolean }>;
+	setSecret(options: { vaultId: string; secret: string }): Promise<void>;
+	getSecret(options: { vaultId: string; reason: string }): Promise<{ secret: string }>;
+	deleteSecret(options: { vaultId: string }): Promise<void>;
 }
 
 const Native = registerPlugin<BiometricVaultPlugin>("BiometricVault");
@@ -35,20 +37,20 @@ export const mobileBiometric: BiometricUnlock = {
 			return "biometric";
 		}
 	},
-	async isEnabled() {
+	async isEnabled(vaultId) {
 		try {
-			return (await Native.hasSecret()).value;
+			return (await Native.hasSecret({ vaultId })).value;
 		} catch {
 			return false;
 		}
 	},
-	async enable(vekB64) {
-		await Native.setSecret({ secret: vekB64 });
+	async enable(vekB64, vaultId) {
+		await Native.setSecret({ vaultId, secret: vekB64 });
 	},
-	async unlock() {
-		return (await Native.getSecret({ reason: "Unlock your vault" })).secret;
+	async unlock(vaultId) {
+		return (await Native.getSecret({ vaultId, reason: "Unlock your vault" })).secret;
 	},
-	async disable() {
-		await Native.deleteSecret();
+	async disable(vaultId) {
+		await Native.deleteSecret({ vaultId });
 	},
 };
