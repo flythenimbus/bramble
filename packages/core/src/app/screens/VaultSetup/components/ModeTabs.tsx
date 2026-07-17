@@ -7,15 +7,14 @@ interface ModeTabsProps {
 	disabled?: boolean;
 	/** Borderless pill tabs (no container background or shadow); used on mobile. */
 	pill?: boolean;
-	/** A "Restore from backup" nav action that opens the .bramble flow (which becomes/adds a vault).
-	 * Shown in place of a distinct "open existing" tab in both first-run and adding views, so the two
-	 * offer the same "bring an existing vault" experience. See docs/multiple-vaults.md. */
-	onRestore?: () => void;
+	/** Show the "Restore from backup" tab; its panel is the .bramble restore flow rendered inline
+	 * (not a page swap), so the tabs stay put. Same experience in first-run and adding views. */
+	showRestore?: boolean;
 	/** Show the "Join a device" tab (gated to where per-vault sync is supported). */
 	showJoin?: boolean;
 }
 
-export function ModeTabs({ mode, onChange, disabled, pill, onRestore, showJoin }: ModeTabsProps) {
+export function ModeTabs({ mode, onChange, disabled, pill, showRestore, showJoin }: ModeTabsProps) {
 	const Btn = pill ? PillTab : Tab;
 	return (
 		<div
@@ -28,8 +27,8 @@ export function ModeTabs({ mode, onChange, disabled, pill, onRestore, showJoin }
 			<Btn active={mode === "create"} disabled={disabled} onClick={() => onChange("create")}>
 				<Trans>Create new vault</Trans>
 			</Btn>
-			{onRestore && (
-				<Btn active={false} disabled={disabled} onClick={onRestore}>
+			{showRestore && (
+				<Btn active={mode === "restore"} disabled={disabled} onClick={() => onChange("restore")}>
 					<Trans>Restore from backup</Trans>
 				</Btn>
 			)}

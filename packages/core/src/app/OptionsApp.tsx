@@ -9,14 +9,14 @@ import { RecoveryCodeDisplay } from "./components/RecoveryCodeDisplay";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ThemeProvider } from "./hooks/useTheme";
 import { LocaleGate } from "./LocaleGate";
+import { RestoreShell } from "./screens/Restore/RestoreShell";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
-// Lazy: the import pipeline + parsers load as an on-demand chunk, off the popup's main bundle.
+// Lazy: the import pipeline + parsers (kdbx/csv) are heavy, so load them on demand. RestoreShell,
+// by contrast, only decodes a .bramble blob with deps already in this bundle, so it's imported
+// directly - it's the primary "Restore from backup" setup tab and a lazy fetch would lag the click.
 const ImportShell = lazy(() =>
 	import("./screens/Import/ImportShell").then((m) => ({ default: m.ImportShell })),
-);
-const RestoreShell = lazy(() =>
-	import("./screens/Restore/RestoreShell").then((m) => ({ default: m.RestoreShell })),
 );
 
 // `onComplete` lets a single-window host (mobile) return to its main UI instead of
@@ -32,27 +32,10 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
-	const [done, setDone] = useState<null | "created" | "opened">(null);
+	// "added" = a backup was restored into a new, locked vault (vaults already existed).
+	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
 	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
-	// "Open existing vault" -> open a .bramble file: reuse the restore flow (extension only).
-	const [openingFile, setOpeningFile] = useState(false);
-
-	if (openingFile) {
-		return (
-			<Suspense fallback={null}>
-				<RestoreShell
-					mobile={mobile}
-					onClose={() => setOpeningFile(false)}
-					onRestored={() => {
-						setOpeningFile(false);
-						if (onComplete) onComplete();
-						else setDone("opened");
-					}}
-				/>
-			</Suspense>
-		);
-	}
 
 	if (recoveryCode) {
 		return (
@@ -79,10 +62,22 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 						<Check className="w-9 h-9 text-primary-foreground" />
 					</div>
 					<h1 className="text-2xl mb-2">
-						{done === "created" ? <Trans>Vault ready</Trans> : <Trans>Vault unlocked</Trans>}
+						{done === "created" ? (
+							<Trans>Vault ready</Trans>
+						) : done === "added" ? (
+							<Trans>Vault added</Trans>
+						) : (
+							<Trans>Vault unlocked</Trans>
+						)}
 					</h1>
 					<p className="text-sm text-muted-foreground">
-						<Trans>You can close this tab and use the {shell.appName} popup.</Trans>
+						{done === "added" ? (
+							<Trans>
+								Open it from the {shell.appName} popup and unlock it with its master password.
+							</Trans>
+						) : (
+							<Trans>You can close this tab and use the {shell.appName} popup.</Trans>
+						)}
 					</p>
 				</div>
 			</div>
@@ -112,7 +107,14 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			}
 			joining={joining}
 			joinError={joinError}
-			onOpenFile={canRestore ? () => setOpeningFile(true) : undefined}
+			onRestore={
+				canRestore
+					? ({ addedNew }) => {
+							if (onComplete) onComplete();
+							else setDone(addedNew ? "added" : "opened");
+						}
+					: undefined
+			}
 		/>
 	);
 }
@@ -143,9 +145,7 @@ export default function OptionsApp({
 									<ImportShell onClose={onComplete} />
 								</Suspense>
 							) : active === "restore" ? (
-								<Suspense fallback={null}>
-									<RestoreShell onClose={onComplete} mobile={mobile} />
-								</Suspense>
+								<RestoreShell onClose={onComplete} mobile={mobile} />
 							) : (
 								<SetupShell onComplete={onComplete} mobile={mobile} />
 							)}

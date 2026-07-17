@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { RestoreShell } from "../Restore/RestoreShell";
 import { JoinCard } from "./components/JoinCard";
 import { ModeTabs } from "./components/ModeTabs";
 import { PasswordCard } from "./components/PasswordCard";
@@ -23,10 +24,10 @@ interface VaultSetupProps {
 	joining?: boolean;
 	/** The last join failure, surfaced in the join form. */
 	joinError?: string | null;
-	/** Open a .bramble backup file (becomes the vault on first-run, adds a vault when others exist):
-	 * the "Restore from backup" tab. This is the single "bring an existing vault" path in both views.
-	 * Absent where restore isn't supported (mobile). */
-	onOpenFile?: () => void;
+	/** Restore a .bramble backup (the "Restore from backup" tab; rendered inline like the others).
+	 * Called on success so the parent drives the terminal screen; `addedNew` marks a restored-into-new
+	 * locked vault vs the first vault unlocked in place. Absent where restore isn't supported (mobile). */
+	onRestore?: (result: { addedNew: boolean }) => void;
 	/** Compact presentation for the single-window mobile host. */
 	mobile?: boolean;
 	/** Adding a parallel vault (vaults already exist): shows a name field and the "Add a vault"
@@ -34,8 +35,8 @@ interface VaultSetupProps {
 	adding?: boolean;
 }
 
-/** Vault setup: pick create / open / join, then set/enter the master password (or paste a pairing
- * code). The vault lives in the platform's own storage, so there is no file-location step. */
+/** Vault setup: pick create / restore / join, then set the master password (or restore a .bramble
+ * backup / paste a pairing code). The vault lives in the platform's own storage, no file-location step. */
 export function VaultSetup({
 	mode,
 	onModeChange,
@@ -43,7 +44,7 @@ export function VaultSetup({
 	onJoin,
 	joining,
 	joinError,
-	onOpenFile,
+	onRestore,
 	mobile,
 	adding,
 }: VaultSetupProps) {
@@ -52,9 +53,9 @@ export function VaultSetup({
 	const form = useForm<VaultSetupFormValues>({
 		defaultValues: { masterPassword: "", confirmPassword: "", label: "" },
 	});
-	// The only tab modes are create + join; opening an existing vault is the "Restore from backup"
-	// action (onOpenFile), not a tab. Fall a stray join mode back to create when join isn't available.
-	const effectiveMode: VaultSetupMode = mode === "join" && !onJoin ? "create" : mode;
+	// Fall a tab back to create when its panel isn't available (no join / no restore on this host).
+	const effectiveMode: VaultSetupMode =
+		(mode === "join" && !onJoin) || (mode === "restore" && !onRestore) ? "create" : mode;
 
 	const handleCreate = async ({ masterPassword, label }: VaultSetupFormValues) => {
 		setSubmitError(null);
@@ -95,7 +96,7 @@ export function VaultSetup({
 	}
 
 	return (
-		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-start justify-center p-6">
 			<div className="w-full max-w-xl">
 				<SetupHeader mode={effectiveMode} mobile={mobile} adding={adding} />
 				<ModeTabs
@@ -103,10 +104,12 @@ export function VaultSetup({
 					onChange={handleModeChange}
 					disabled={busy}
 					pill={mobile}
+					showRestore={!!onRestore}
 					showJoin={!!onJoin}
-					onRestore={onOpenFile}
 				/>
-				{effectiveMode === "join" && onJoin ? (
+				{effectiveMode === "restore" && onRestore ? (
+					<RestoreShell embedded mobile={mobile} onRestored={onRestore} />
+				) : effectiveMode === "join" && onJoin ? (
 					<JoinCard onJoin={onJoin} busy={!!joining} error={joinError ?? null} mobile={mobile} />
 				) : (
 					<PasswordCard

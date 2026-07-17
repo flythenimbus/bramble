@@ -16,8 +16,18 @@ import { PasswordField } from "../../components/ui/password-field";
 // Above any realistic vault; guards against OOM from a hostile/corrupt file.
 const MAX_RESTORE_MB = 100;
 
-function Wrapper({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+function Wrapper({
+	children,
+	onClose,
+	embedded,
+}: {
+	children: React.ReactNode;
+	onClose?: () => void;
+	/** Setup-tab embedding: render bare so the parent's header + tabs stay visible. */
+	embedded?: boolean;
+}) {
 	const { t } = useLingui();
+	if (embedded) return <>{children}</>;
 	return (
 		<div className="relative min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			{onClose && (
@@ -46,15 +56,20 @@ export function RestoreShell({
 	onClose,
 	onRestored,
 	mobile,
+	embedded,
 }: {
 	onClose?: () => void;
-	/** Called after a successful restore+unlock instead of showing the terminal "Vault restored"
-	 * screen. Used when embedded in the setup flow, which owns the post-unlock screen. */
-	onRestored?: () => void;
+	/** Called after a successful restore instead of showing the terminal "Vault restored/added"
+	 * screen. Used when embedded in the setup flow, which owns the post-restore screen. `addedNew`
+	 * distinguishes a new locked vault (vaults already existed) from the first vault unlocked in place. */
+	onRestored?: (result: { addedNew: boolean }) => void;
 	/** Loosen the file `accept` so the native mobile document picker doesn't grey out .bramble
 	 * (no UTType/MIME is registered for the custom extension). */
 	mobile?: boolean;
-} = {}) {
+	/** Render as an inline panel (no full-screen wrapper or own header) for the setup "Restore from
+	 * backup" tab, so clicking the tab keeps the tabs/header visible. Standalone otherwise. */
+	embedded?: boolean;
+}) {
 	const { unlock } = useVault();
 	const { createRecord } = useVaultRegistry();
 	const { shell, crypto, storage } = usePlatform();
@@ -145,14 +160,17 @@ export function RestoreShell({
 				// picker with the backup's password. See docs/multiple-vaults.md (Restore destination).
 				const newId = await createRecord(label.trim());
 				await storage.writeVaultBlob(picked.bytes, newId);
-				setAddedNew(true);
-				setDone(true);
+				if (onRestored) onRestored({ addedNew: true });
+				else {
+					setAddedNew(true);
+					setDone(true);
+				}
 			} else {
 				// First/only vault on this device: fill it in place and unlock.
 				await storage.writeVaultBlob(picked.bytes); // snapshots the previous vault first
 				await shell.resetSyncState?.(); // fresh sync identity; the restored vault isn't enrolled
 				await unlock(password); // reads the freshly-written blob and loads its VEK
-				if (onRestored) onRestored();
+				if (onRestored) onRestored({ addedNew: false });
 				else setDone(true);
 			}
 		} catch (e) {
@@ -202,18 +220,20 @@ export function RestoreShell({
 	}
 
 	return (
-		<Wrapper onClose={onClose}>
-			<div className="text-center mb-6">
-				<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-3">
-					<ArchiveRestore className="w-7 h-7 text-primary-foreground" />
+		<Wrapper onClose={onClose} embedded={embedded}>
+			{!embedded && (
+				<div className="text-center mb-6">
+					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 mb-3">
+						<ArchiveRestore className="w-7 h-7 text-primary-foreground" />
+					</div>
+					<h1 className="text-2xl">
+						<Trans>Restore a backup</Trans>
+					</h1>
+					<p className="text-sm text-muted-foreground mt-1">
+						<Trans>Open an encrypted .bramble backup and make it the vault on this device.</Trans>
+					</p>
 				</div>
-				<h1 className="text-2xl">
-					<Trans>Restore a backup</Trans>
-				</h1>
-				<p className="text-sm text-muted-foreground mt-1">
-					<Trans>Open an encrypted .bramble backup and make it the vault on this device.</Trans>
-				</p>
-			</div>
+			)}
 
 			{!picked ? (
 				<>

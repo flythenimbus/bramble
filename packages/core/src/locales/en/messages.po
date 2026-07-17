@@ -1153,6 +1153,7 @@ msgstr "Open <0>{0}</0> as the vault on this device. Enter its master password."
 #~ msgstr "Open a backup file instead"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Open an encrypted .bramble backup and make it the vault on this device."
 
@@ -1172,6 +1173,11 @@ msgstr "Open database"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Open in window"
 msgstr "Open in window"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Open it from the {0} popup and unlock it with its master password."
+msgstr "Open it from the {0} popup and unlock it with its master password."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Open your vault"
@@ -1429,6 +1435,7 @@ msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouche
 msgstr "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouched. Enter its master password."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Restore a backup"
 msgstr "Restore a backup"
 
@@ -1946,6 +1953,7 @@ msgstr "Value"
 #~ msgid "Vault"
 #~ msgstr "Vault"
 
+#: packages/core/src/app/OptionsApp.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Vault added"
 msgstr "Vault added"

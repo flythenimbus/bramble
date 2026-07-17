@@ -1153,6 +1153,7 @@ msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Ma
 #~ msgstr "Stattdessen eine Sicherungsdatei öffnen"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Öffnen Sie ein verschlüsseltes .bramble-Backup und machen Sie es zum Tresor auf diesem Gerät."
 
@@ -1172,6 +1173,11 @@ msgstr "Datenbank öffnen"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Open in window"
 msgstr "Im Fenster öffnen"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Open it from the {0} popup and unlock it with its master password."
+msgstr "Öffnen Sie es aus dem {0}-Popup und entsperren Sie es mit seinem Master-Passwort."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Open your vault"
@@ -1429,6 +1435,7 @@ msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouche
 msgstr "Stellen Sie <0>{0}</0> als neuen Tresor wieder her. Ihre vorhandenen Tresore bleiben unberührt. Geben Sie dessen Master-Passwort ein."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Restore a backup"
 msgstr "Ein Backup wiederherstellen"
 
@@ -1946,6 +1953,7 @@ msgstr "Wert"
 #~ msgid "Vault"
 #~ msgstr "Tresor"
 
+#: packages/core/src/app/OptionsApp.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Vault added"
 msgstr "Tresor hinzugefügt"

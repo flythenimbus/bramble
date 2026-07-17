@@ -1153,6 +1153,7 @@ msgstr "Abra <0>{0}</0> como la bóveda en este dispositivo. Ingrese su contrase
 #~ msgstr "Abrir un archivo de respaldo en su lugar"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Abra una copia de seguridad .bramble cifrada y conviértala en la bóveda de este dispositivo."
 
@@ -1172,6 +1173,11 @@ msgstr "Abrir base de datos"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Open in window"
 msgstr "Abrir en ventana"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Open it from the {0} popup and unlock it with its master password."
+msgstr "Ábralo desde la ventana emergente de {0} y desbloquéelo con su contraseña maestra."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Open your vault"
@@ -1429,6 +1435,7 @@ msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouche
 msgstr "Restaurar <0>{0}</0> como una nueva bóveda. Sus bóvedas existentes no se modifican. Ingrese su contraseña maestra."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Restore a backup"
 msgstr "Restaurar una copia de seguridad"
 
@@ -1946,6 +1953,7 @@ msgstr "Valor"
 #~ msgid "Vault"
 #~ msgstr "Depósito"
 
+#: packages/core/src/app/OptionsApp.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Vault added"
 msgstr "Bóveda añadida"

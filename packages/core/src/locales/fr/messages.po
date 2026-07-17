@@ -1153,6 +1153,7 @@ msgstr "Ouvrir <0>{0}</0> comme coffre sur cet appareil. Saisissez son mot de pa
 #~ msgstr "Ouvrir un fichier de sauvegarde à la place"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Ouvrir une sauvegarde .bramble chiffrée et en faire le coffre sur cet appareil."
 
@@ -1172,6 +1173,11 @@ msgstr "Ouvrir la base de données"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Open in window"
 msgstr "Ouvrir dans la fenêtre"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Open it from the {0} popup and unlock it with its master password."
+msgstr "Ouvrez-le depuis la fenêtre contextuelle {0} et déverrouillez-le avec son mot de passe principal."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Open your vault"
@@ -1429,6 +1435,7 @@ msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouche
 msgstr "Restaurer <0>{0}</0> en tant que nouveau coffre. Vos coffres existants restent inchangés. Saisissez son mot de passe principal."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Restore a backup"
 msgstr "Restaurer une sauvegarde"
 
@@ -1946,6 +1953,7 @@ msgstr "Valeur"
 #~ msgid "Vault"
 #~ msgstr "Coffre"
 
+#: packages/core/src/app/OptionsApp.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Vault added"
 msgstr "Coffre ajouté"
