@@ -1039,6 +1039,26 @@ behavior, clobbers included); the fix is real once 3 lands.
 
 ## Still open
 
+**Device-verification status (2026-07-18).** Most of the mobile work was verified on Android (Pixel,
+debug build) this session; the remaining gap is mostly iOS + a few new mobile affordances. **Verified
+on Android:** the native Kotlin/Java compiles (per-vault biometric + active-vault autofill); the
+namespacing migration on real pre-migration data (flat `vault.vlt1` -> `vault-<id>.vlt1`, flat
+deleted, master-password unlock opens the migrated vault, all entries intact); the active-vault
+pointer; and sync (edit propagation, user-confirmed "works as expected", incl. a non-first vault).
+**Still to verify:**
+- **iOS** - the whole mobile suite (migration, unlock, per-vault biometric, autofill fill); only Android was on hand.
+- **Per-vault biometric** - enable on two vaults, confirm no VEK overwrite (code deployed, not yet exercised).
+- **Mobile-as-inviter** - newly exposed once the stale "primary vault" sync-panel gate was removed; invite from mobile -> another device joins + syncs.
+- **Two-vault switching** on mobile (lock -> picker -> unlock the other).
+- **QR-code scan** in the mobile Join flow (restored this session).
+- **Android back gesture** (github #15) + the setup-shell back button.
+- **Extension** - the namespacing migration on a real pre-migration profile.
+- **Firefox-inviter roster fix** - invite from Firefox, join from a Chromium target.
+
+**Remaining build work (all non-blocking):** backup target-cred device-key wrap (below; a mitigation
+ships), the unlocked "switch vault" button (mobile nicety), per-vault device identity (mobile
+hardening), and full multi-vault autofill Tier 2 (search all vaults; post-v1). Details below.
+
 - ~~**Per-vault VEK (extension).**~~ **LANDED 2026-07** (all 6 increments + the clean-slate
   lock fix; see [Per-vault VEK](#per-vault-vek)). Fixed the create-time `aead::Error`
   corruption. Runtime-verified by the user across multiple vaults in multiple targets
