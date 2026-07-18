@@ -5,6 +5,7 @@ import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
+import { setAppBackHandler } from "./android-back";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
@@ -71,6 +72,19 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 	useEffect(() => {
 		void router.invalidate();
 	}, [router, vault, registry]);
+
+	// Android hardware back (driven by the mobile host's Root listener): step the memory-history
+	// router when it can, else report "nowhere to go" so the host minimizes. No-op on the extension.
+	useEffect(() => {
+		setAppBackHandler(() => {
+			if (router.history.canGoBack()) {
+				router.history.back();
+				return true;
+			}
+			return false;
+		});
+		return () => setAppBackHandler(null);
+	}, [router]);
 
 	// Autofill save handoff: once the vault is unlocked, seed the create-entry form with
 	// the captured credential and route to it. Deferred past unlock so the form actually

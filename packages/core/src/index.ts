@@ -7,6 +7,7 @@ export * from "./adapters/messaging";
 export * from "./adapters/shell";
 export * from "./adapters/storage";
 export { default as App, type PendingLogin } from "./app/App";
+export * from "./app/android-back";
 export { default as OptionsApp } from "./app/OptionsApp";
 export * from "./context/PlatformContext";
 export * from "./flags";

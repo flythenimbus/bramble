@@ -2,7 +2,14 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Device } from "@capacitor/device";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
-import { App, OptionsApp, type PendingLogin, type Platform, PlatformProvider } from "@core/index";
+import {
+	App,
+	OptionsApp,
+	type PendingLogin,
+	type Platform,
+	PlatformProvider,
+	tryAppBack,
+} from "@core/index";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@core/styles/index.css";
@@ -58,14 +65,13 @@ function Root() {
 		[],
 	);
 
-	// Android hardware / gesture back (github #15): close an open setup/import/restore overlay,
-	// else step the router history, else background the app (Android's back-at-root norm). iOS has
-	// no hardware back, so backButton never fires there.
+	// Android hardware / gesture back (github #15): close an open setup/import/restore overlay, else
+	// let the app step its (memory-history) router via tryAppBack, else background the app (Android's
+	// back-at-root norm). iOS has no hardware back, so backButton never fires there.
 	useEffect(() => {
-		const sub = CapacitorApp.addListener("backButton", ({ canGoBack }) => {
+		const sub = CapacitorApp.addListener("backButton", () => {
 			if (viewRef.current !== "app") setView("app");
-			else if (canGoBack) window.history.back();
-			else void CapacitorApp.minimizeApp();
+			else if (!tryAppBack()) void CapacitorApp.minimizeApp();
 		});
 		return () => {
 			void sub.then((h) => h.remove());
