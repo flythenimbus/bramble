@@ -56,15 +56,13 @@ export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
-	const { activeId, vaults, syncKey } = useVaultRegistry();
+	const { syncKey } = useVaultRegistry();
 	const canPerVaultSync = useCan("perVaultSync");
 	const { t } = useLingui();
-	// Where the background sync engine is per-vault (the extension) every vault syncs on its own.
-	// Where it still binds to the one default vault (mobile, which reads the id-omitted blob = the
-	// first vault), a non-default vault would otherwise show the default's devices and let you start
-	// a half-wired enrollment, so show a short "coming soon" note instead. See docs/multiple-vaults.md.
-	const syncBoundToDefaultVault =
-		!canPerVaultSync && vaults.length > 1 && activeId !== vaults[0]?.id;
+	// The panel is active-vault-scoped on every platform: refreshGroup, inviteDevice, and the
+	// background sync-manager all read/write this vault's namespaced `sync.group`, so the devices,
+	// invite, and disconnect shown here all act on the active vault (single-active on mobile, one of
+	// several on the extension). See docs/multiple-vaults.md.
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
@@ -228,19 +226,6 @@ export function SyncConnectSection() {
 			await refreshGroup();
 			note("✅ Disconnected — this device is now offline-only.");
 		});
-
-	if (syncBoundToDefaultVault) {
-		return (
-			<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
-				<p className="text-xs text-muted-foreground leading-relaxed">
-					<Trans>
-						Device sync currently applies to your primary vault. Independent sync for each vault is
-						coming soon.
-					</Trans>
-				</p>
-			</Section>
-		);
-	}
 
 	return (
 		<Section icon={<Wifi className="w-4 h-4 text-primary" />} title={t`Device sync`}>
