@@ -1082,6 +1082,10 @@ msgstr "Nessun elemento importabile è stato trovato in questo file."
 msgid "No items found matching your search."
 msgstr "Nessun elemento trovato che corrisponda alla sua ricerca."
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "No QR code detected. Try again, or paste the code."
+msgstr "Nessun codice QR rilevato. Riprovi o incolli il codice."
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "No recovery code yet. Generate one as a backup way in."
 msgstr "Nessun codice di recupero ancora. Generatene uno come metodo di backup."
@@ -1497,9 +1501,9 @@ msgstr "Salvataggio in corso..."
 msgid "Scan authenticator QR code from current webpage"
 msgstr "Scansiona il codice QR dell'autenticatore dalla pagina web corrente"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Scan QR code"
-#~ msgstr "Scansiona il codice QR"
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code"
+msgstr "Scansiona il codice QR"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan QR code from current webpage"
@@ -1512,6 +1516,10 @@ msgstr "Scansiona il QR sulla pagina di 2FA di un sito, oppure incolla un URI ot
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
 msgstr "Scansioni questo sul suo altro dispositivo o copi il codice qui sotto. Non ci sono segreti del vault al suo interno."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scanning…"
+msgstr "Scansione in corso…"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Search vault"

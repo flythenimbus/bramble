@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Users } from "lucide-react";
+import { QrCode, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { PasswordField } from "../../../components/ui/password-field";
 
 interface JoinCardProps {
@@ -17,10 +18,29 @@ interface JoinCardProps {
  * existing one and syncing its vault over. See docs/multiple-vaults.md. */
 export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 	const { t } = useLingui();
+	const { shell } = usePlatform();
+	// Camera scan of the inviter's pairing QR. Mobile-only: on iOS it's the native QrScanner
+	// plugin, on Android a getUserMedia + jsQR overlay (shell.scanQrFromActiveTab dispatches).
+	const canScan = useCan("cameraScan");
 	const [code, setCode] = useState("");
 	const [password, setPassword] = useState("");
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const [scanning, setScanning] = useState(false);
+
+	const scan = async () => {
+		setLocalError(null);
+		setScanning(true);
+		try {
+			const scanned = await shell.scanQrFromActiveTab();
+			if (scanned) setCode(scanned);
+			else setLocalError(t`No QR code detected. Try again, or paste the code.`);
+		} catch (err) {
+			setLocalError((err as Error).message);
+		} finally {
+			setScanning(false);
+		}
+	};
 
 	const submit = async (e: FormEvent) => {
 		e.preventDefault();
@@ -43,7 +63,7 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 		}
 	};
 
-	const disabled = busy || submitting;
+	const disabled = busy || submitting || scanning;
 	const shownError = error ?? localError;
 
 	return (
@@ -70,6 +90,17 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 							spellCheck={false}
 							className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary/50"
 						/>
+						{canScan && (
+							<button
+								type="button"
+								onClick={() => void scan()}
+								disabled={disabled}
+								className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
+							>
+								<QrCode className="w-4 h-4 text-primary" />
+								{scanning ? <Trans>Scanning…</Trans> : <Trans>Scan QR code</Trans>}
+							</button>
+						)}
 					</div>
 					<PasswordField
 						label={t`Master password`}
