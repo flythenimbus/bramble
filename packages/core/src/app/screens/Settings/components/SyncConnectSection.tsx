@@ -222,7 +222,9 @@ export function SyncConnectSection() {
 		run("disconnecting…", async () => {
 			setConfirmDisconnect(false);
 			await shell.stopSyncSpike(); // halt enrollment + ongoing sync on this host
-			await storage.removeMeta("sync.group"); // leave the group: nothing to resume
+			// Remove THIS vault's group (namespaced), matching what refreshGroup + the sync engine
+			// read; removing the flat "sync.group" left the namespaced key so the panel stayed "Synced".
+			await storage.removeMeta(syncKey("sync.group")); // leave the group: nothing to resume
 			await refreshGroup();
 			note("✅ Disconnected — this device is now offline-only.");
 		});
