@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { BackButton } from "../../components/ui/back-button";
 import { RestoreShell } from "../Restore/RestoreShell";
 import { JoinCard } from "./components/JoinCard";
 import { ModeTabs } from "./components/ModeTabs";
@@ -33,6 +34,9 @@ interface VaultSetupProps {
 	/** Adding a parallel vault (vaults already exist): shows a name field and the "Add a vault"
 	 * heading. Create/restore/join are offered the same way as first-run. See docs/multiple-vaults.md. */
 	adding?: boolean;
+	/** Dismiss the setup shell and return to the main app. Shown as a top-left back button. Absent
+	 * on first run (0 vaults) - there's nowhere to go back to yet. Single-window mobile only. */
+	onBack?: () => void;
 }
 
 /** Vault setup: pick create / restore / join, then set the master password (or restore a .bramble
@@ -47,6 +51,7 @@ export function VaultSetup({
 	onRestore,
 	mobile,
 	adding,
+	onBack,
 }: VaultSetupProps) {
 	const [busy, setBusy] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
@@ -98,6 +103,7 @@ export function VaultSetup({
 	return (
 		<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-start justify-center p-6">
 			<div className="w-full max-w-xl">
+				{onBack && <BackButton onClick={onBack} className="mb-3" />}
 				<SetupHeader mode={effectiveMode} mobile={mobile} adding={adding} />
 				<ModeTabs
 					mode={effectiveMode}

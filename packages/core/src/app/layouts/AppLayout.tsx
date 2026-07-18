@@ -1,12 +1,13 @@
 import { useLingui } from "@lingui/react/macro";
 import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
+import { ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
 import { displayLabel } from "../../vault/vault-registry";
 import { BrambleGlyph } from "../components/BrambleGlyph";
 import { PasskeySavedToast } from "../components/PasskeySavedToast";
+import { BackButton } from "../components/ui/back-button";
 import { usePopOut } from "../hooks/usePopOut";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
@@ -51,17 +52,7 @@ export function AppLayout() {
 				<div className="max-w-5xl mx-auto px-4 py-3">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3">
-							{onBack && (
-								<button
-									type="button"
-									onClick={onBack}
-									className="flex items-center justify-center w-9 h-9 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.95] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									aria-label={t`Go back`}
-									title={t`Go back`}
-								>
-									<ArrowLeft className="w-4 h-4" />
-								</button>
-							)}
+							{onBack && <BackButton onClick={onBack} />}
 							<button
 								type="button"
 								onClick={() => navigate({ to: "/vault" })}

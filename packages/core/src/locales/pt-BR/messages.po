@@ -769,7 +769,7 @@ msgstr "Gerar senha"
 msgid "Generate strong password"
 msgstr "Gerar senha forte"
 
-#: packages/core/src/app/layouts/AppLayout.tsx
+#: packages/core/src/app/components/ui/back-button.tsx
 msgid "Go back"
 msgstr "Voltar"
 

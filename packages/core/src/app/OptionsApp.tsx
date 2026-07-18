@@ -87,6 +87,9 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			mode={mode}
 			onModeChange={setMode}
 			adding={adding}
+			// Back to the main app, but only when there's one to return to (adding a vault on a
+			// single-window host). First run has no back target; the extension closes the tab instead.
+			onBack={adding && onComplete ? onComplete : undefined}
 			onCreate={async (password, label) => {
 				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password, label));
