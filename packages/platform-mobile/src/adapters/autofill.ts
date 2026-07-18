@@ -184,11 +184,8 @@ export const mobileAutofill: AutofillAdapter = {
 		await Bridge.setKeepUnlocked({ minutes });
 	},
 	async inlineSuggestionsAvailable() {
-		// Show the "Keyboard suggestions" toggle wherever the OS can render inline autofill: always on
-		// iOS (QuickType), and on Android 11+ (API 30, where the inline API exists). We no longer gate
-		// it on a runtime keyboard probe - that hid the toggle until you'd autofilled once, and stayed
-		// hidden if the probe missed the keyboard's request (github #19). If the active keyboard can't
-		// render inline the toggle is simply inert, which is far better than being undiscoverable.
+		// Gate on OS support, not the active keyboard (iOS always; Android 11+ has the inline API).
+		// An inert toggle on a non-inline keyboard beats an undiscoverable one - github #19.
 		if (isIos) return true;
 		try {
 			return ((await Device.getInfo()).androidSDKVersion ?? 0) >= 30;

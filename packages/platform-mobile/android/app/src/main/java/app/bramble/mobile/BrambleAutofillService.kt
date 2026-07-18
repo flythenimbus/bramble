@@ -41,11 +41,9 @@ class BrambleAutofillService : AutofillService() {
         cancellationSignal: CancellationSignal,
         callback: FillCallback,
     ) {
-        // Record whether the active keyboard offers inline suggestions, so Settings can hide
-        // the keyboard-suggestions toggle on keyboards that can't show them (e.g. AOSP).
+        // Whether the keyboard asked for inline suggestions (diagnostic log only).
         val inlineRequested =
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && request.inlineSuggestionsRequest != null
-        AutofillCaps.recordInlineSupport(this, inlineRequested)
 
         val structure = request.fillContexts.lastOrNull()?.structure
         if (structure == null || isOwnApp(structure) || !VaultReader.hasVault(this)) {
