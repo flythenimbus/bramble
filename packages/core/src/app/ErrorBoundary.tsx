@@ -2,6 +2,7 @@ import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { BrambleGlyph } from "./components/BrambleGlyph";
+import { Button } from "./components/ui/button";
 
 interface Props {
 	children: ReactNode;
@@ -44,26 +45,30 @@ export class ErrorBoundary extends Component<Props, State> {
 							msg`Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app.`,
 						)}
 					</p>
-					<button
-						type="button"
+					<Button
+						variant="primary"
+						size="lg"
+						fullWidth
 						onClick={() => {
 							// Drop the caught error first so an in-place remount can recover without a
 							// full reload; if the error recurs, the reload button below is the fallback.
 							this.setState({ error: null });
 						}}
-						className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all mb-2"
+						className="text-sm mb-2"
 					>
 						{i18n._(msg`Try again`)}
-					</button>
-					<button
-						type="button"
+					</Button>
+					<Button
+						variant="secondary"
+						size="lg"
+						fullWidth
 						onClick={() => {
 							if (typeof location !== "undefined") location.reload();
 						}}
-						className="w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 active:scale-[0.98] transition-all"
+						className="text-sm"
 					>
 						{i18n._(msg`Reload`)}
-					</button>
+					</Button>
 					{error.message && (
 						<pre className="mt-4 text-left text-xs text-muted-foreground bg-card/50 border border-border/50 rounded-lg p-3 overflow-auto max-h-32 whitespace-pre-wrap break-words">
 							{error.message}

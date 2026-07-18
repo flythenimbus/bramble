@@ -33,9 +33,6 @@ import { TextField } from "../../../components/ui/text-field";
 import { cn } from "../../../components/ui/utils";
 import { Section } from "./primitives";
 
-const primaryBtnClass =
-	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50";
-
 // s3/webdav fill in credentials; oauth is one-click sign-in via shell.connectBackupOAuth.
 type Kind = "s3" | "webdav" | "oauth";
 type IconComponent = ComponentType<{ className?: string }>;
@@ -265,9 +262,9 @@ function OneClickPanel({
 						under "Bring your own storage".
 					</Trans>
 				</p>
-				<button type="button" disabled className={primaryBtnClass}>
+				<Button variant="primary" size="none" fullWidth disabled className="px-3 py-2 text-sm">
 					<Trans>Coming soon</Trans>
-				</button>
+				</Button>
 			</>
 		);
 	}
@@ -298,14 +295,16 @@ function OneClickPanel({
 					{error}
 				</p>
 			)}
-			<button
-				type="button"
+			<Button
+				variant="primary"
+				size="none"
+				fullWidth
 				onClick={() => void connect()}
 				disabled={connecting}
-				className={primaryBtnClass}
+				className="px-3 py-2 text-sm"
 			>
 				{connecting ? <Trans>Connecting…</Trans> : <Trans>Connect {name}</Trans>}
-			</button>
+			</Button>
 		</>
 	);
 }
