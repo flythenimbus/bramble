@@ -103,7 +103,6 @@ export function VaultSetup({
 					mode={effectiveMode}
 					onChange={handleModeChange}
 					disabled={busy}
-					pill={mobile}
 					showRestore={!!onRestore}
 					showJoin={!!onJoin}
 				/>
