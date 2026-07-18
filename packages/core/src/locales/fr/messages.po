@@ -339,6 +339,10 @@ msgstr "Fermer l'importation"
 msgid "Cloud backups"
 msgstr "Sauvegardes dans le cloud"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Code scanned"
+msgstr "Code scanné"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Coming soon"
 msgstr "Bientôt disponible"
@@ -1267,6 +1271,10 @@ msgstr "Les mots de passe ne correspondent pas"
 msgid "Passwords don't match"
 msgstr "Les mots de passe ne correspondent pas"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste code instead"
+msgstr "Coller le code à la place"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 #~ msgstr "Collez le code de l'autre appareil pour la synchronisation. Ceci remplace le coffre de ce profil."
@@ -1302,6 +1310,10 @@ msgstr "Veuillez saisir votre mot de passe maître"
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Point at your existing vault file and enter your master password."
 #~ msgstr "Indiquez votre fichier de coffre-fort existant et entrez votre mot de passe maître."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Point your camera at the code on your other device"
+msgstr "Pointez votre appareil photo vers le code sur votre autre appareil"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1509,6 +1521,10 @@ msgstr "Scanner le code QR"
 msgid "Scan QR code from current webpage"
 msgstr "Scannez le code QR depuis la page web actuelle"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code instead"
+msgstr "Scanner le code QR à la place"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
 msgstr "Scannez le QR sur la page de double authentification (2FA) d'un site, ou collez une URI otpauth:// ou la clé de configuration."
@@ -1714,6 +1730,10 @@ msgstr "Système"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Tapotez une clé de sécurité pour déverrouiller au lieu de saisir le mot de passe maître."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Tap to scan again"
+msgstr "Appuyez pour scanner à nouveau"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx

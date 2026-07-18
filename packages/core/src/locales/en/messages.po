@@ -339,6 +339,10 @@ msgstr "Close import"
 msgid "Cloud backups"
 msgstr "Cloud backups"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Code scanned"
+msgstr "Code scanned"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Coming soon"
 msgstr "Coming soon"
@@ -1267,6 +1271,10 @@ msgstr "passwords don't match"
 msgid "Passwords don't match"
 msgstr "Passwords don't match"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste code instead"
+msgstr "Paste code instead"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 #~ msgstr "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
@@ -1302,6 +1310,10 @@ msgstr "Please enter your master password"
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Point at your existing vault file and enter your master password."
 #~ msgstr "Point at your existing vault file and enter your master password."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Point your camera at the code on your other device"
+msgstr "Point your camera at the code on your other device"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1509,6 +1521,10 @@ msgstr "Scan QR code"
 msgid "Scan QR code from current webpage"
 msgstr "Scan QR code from current webpage"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code instead"
+msgstr "Scan QR code instead"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
 msgstr "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
@@ -1714,6 +1730,10 @@ msgstr "System"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Tap a security key to unlock instead of typing the master password."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Tap to scan again"
+msgstr "Tap to scan again"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx

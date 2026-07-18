@@ -339,6 +339,10 @@ msgstr "Import schließen"
 msgid "Cloud backups"
 msgstr "Cloud-Backups"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Code scanned"
+msgstr "Code gescannt"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Coming soon"
 msgstr "Demnächst verfügbar"
@@ -1267,6 +1271,10 @@ msgstr "Die Passwörter stimmen nicht überein"
 msgid "Passwords don't match"
 msgstr "Die Passwörter stimmen nicht überein"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste code instead"
+msgstr "Code stattdessen einfügen"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 #~ msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
@@ -1302,6 +1310,10 @@ msgstr "Bitte geben Sie Ihr Master-Passwort ein"
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Point at your existing vault file and enter your master password."
 #~ msgstr "Zeigen Sie auf Ihre bestehende Tresordatei und geben Sie Ihr Master-Passwort ein."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Point your camera at the code on your other device"
+msgstr "Richten Sie Ihre Kamera auf den Code auf Ihrem anderen Gerät"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1509,6 +1521,10 @@ msgstr "Scannen Sie den QR-Code"
 msgid "Scan QR code from current webpage"
 msgstr "Scannen Sie den QR-Code von der aktuellen Webseite"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code instead"
+msgstr "Stattdessen QR-Code scannen"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
 msgstr "Scannen Sie den QR-Code auf der 2FA-Seite einer Website oder fügen Sie eine otpauth:// URI oder einen Einrichtungsschlüssel ein."
@@ -1714,6 +1730,10 @@ msgstr "System"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Entsperren Sie mit einem Sicherheitsschlüssel, anstatt das Master-Passwort einzugeben."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Tap to scan again"
+msgstr "Tippen Sie, um erneut zu scannen"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx

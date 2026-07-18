@@ -25,13 +25,11 @@ const ImportShell = lazy(() =>
 function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: boolean }) {
 	const { shell } = usePlatform();
 	const { createVault, startJoin, joining, joinError } = useVault();
-	// Adding a parallel vault when one already exists: create-only, named, no open/restore paths.
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
-	// "added" = a backup was restored into a new, locked vault (vaults already existed).
+	// "added" = a backup was restored isnto a new, locked vault (vaults already existed).
 	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
-	// One-time recovery code shown after creation; cleared on continue, never persisted in plaintext.
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
 
 	if (recoveryCode) {
@@ -91,12 +89,9 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			// single-window host). First run has no back target; the extension closes the tab instead.
 			onBack={adding && onComplete ? onComplete : undefined}
 			onCreate={async (password, label) => {
-				// createVault returns the one-time recovery code to display first.
 				setRecoveryCode(await createVault(password, label));
 			}}
 			onJoin={async (pairingCode, password) => {
-				// startJoin creates a new vault and pairs into it, unlocking on success; then
-				// land on the terminal screen (or hand back to the mobile host).
 				await startJoin(pairingCode, { kind: "password", password });
 				if (onComplete) onComplete();
 				else setDone("opened");
@@ -121,7 +116,6 @@ export default function OptionsApp({
 	mobile?: boolean;
 	/** Force a screen (single-window hosts pass this); otherwise read from `?screen=`. */
 	screen?: OptionsScreen;
-	/** Host-detected locale tag (mobile passes Capacitor Device); else navigator.language. */
 	preferredLocale?: string;
 } = {}) {
 	// `?screen=import` (from Settings) routes to the import flow instead of setup.

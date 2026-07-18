@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { QrCode, Users } from "lucide-react";
+import { Check, QrCode, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -19,14 +19,15 @@ interface JoinCardProps {
 export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 	const { t } = useLingui();
 	const { shell } = usePlatform();
-	// Camera scan of the inviter's pairing QR. Mobile-only: on iOS it's the native QrScanner
-	// plugin, on Android a getUserMedia + jsQR overlay (shell.scanQrFromActiveTab dispatches).
+	// Camera scan of the pairing QR (mobile only; extension pastes).
 	const canScan = useCan("cameraScan");
 	const [code, setCode] = useState("");
 	const [password, setPassword] = useState("");
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [scanning, setScanning] = useState(false);
+	// Scan-first on mobile, paste-only on the extension (no camera).
+	const [showPaste, setShowPaste] = useState(!canScan);
 
 	const scan = async () => {
 		setLocalError(null);
@@ -77,29 +78,69 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 				</div>
 				<div className="p-5 space-y-4">
 					<div>
-						<label htmlFor="pairing-code" className="block text-sm mb-1.5">
-							<Trans>Pairing code</Trans>
-						</label>
-						<textarea
-							id="pairing-code"
-							value={code}
-							onChange={(e) => setCode(e.target.value)}
-							placeholder={t`Paste the code from your other device's "Add a device" screen`}
-							rows={3}
-							autoComplete="off"
-							spellCheck={false}
-							className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary/50"
-						/>
-						{canScan && (
-							<button
-								type="button"
-								onClick={() => void scan()}
-								disabled={disabled}
-								className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
-							>
-								<QrCode className="w-4 h-4 text-primary" />
-								{scanning ? <Trans>Scanning…</Trans> : <Trans>Scan QR code</Trans>}
-							</button>
+						{canScan && !showPaste ? (
+							<>
+								<button
+									type="button"
+									onClick={() => void scan()}
+									disabled={disabled}
+									className="w-full flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border px-4 py-6 hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
+								>
+									{code ? (
+										<Check className="w-7 h-7 text-emerald-500" />
+									) : (
+										<QrCode className="w-7 h-7 text-primary" />
+									)}
+									<span className="text-sm font-medium">
+										{scanning ? (
+											<Trans>Scanning…</Trans>
+										) : code ? (
+											<Trans>Code scanned</Trans>
+										) : (
+											<Trans>Scan QR code</Trans>
+										)}
+									</span>
+									<span className="text-xs text-muted-foreground">
+										{code ? (
+											<Trans>Tap to scan again</Trans>
+										) : (
+											<Trans>Point your camera at the code on your other device</Trans>
+										)}
+									</span>
+								</button>
+								<button
+									type="button"
+									onClick={() => setShowPaste(true)}
+									className="mt-2 w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+								>
+									<Trans>Paste code instead</Trans>
+								</button>
+							</>
+						) : (
+							<>
+								<label htmlFor="pairing-code" className="block text-sm mb-1.5">
+									<Trans>Pairing code</Trans>
+								</label>
+								<textarea
+									id="pairing-code"
+									value={code}
+									onChange={(e) => setCode(e.target.value)}
+									placeholder={t`Paste the code from your other device's "Add a device" screen`}
+									rows={3}
+									autoComplete="off"
+									spellCheck={false}
+									className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary/50"
+								/>
+								{canScan && (
+									<button
+										type="button"
+										onClick={() => setShowPaste(false)}
+										className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+									>
+										<QrCode className="w-3.5 h-3.5" /> <Trans>Scan QR code instead</Trans>
+									</button>
+								)}
+							</>
 						)}
 					</div>
 					<PasswordField

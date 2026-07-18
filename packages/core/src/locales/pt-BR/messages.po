@@ -339,6 +339,10 @@ msgstr "Fechar importação"
 msgid "Cloud backups"
 msgstr "Backups na nuvem"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Code scanned"
+msgstr "Código escaneado"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Coming soon"
 msgstr "Em breve"
@@ -1267,6 +1271,10 @@ msgstr "As senhas não coincidem"
 msgid "Passwords don't match"
 msgstr "As senhas não coincidem"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste code instead"
+msgstr "Cole o código em vez disso"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
 #~ msgstr "Cole o código do seu outro dispositivo para sincronizá-lo com ele. Isso substitui o cofre deste perfil."
@@ -1302,6 +1310,10 @@ msgstr "Por favor, insira sua senha mestra"
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 #~ msgid "Point at your existing vault file and enter your master password."
 #~ msgstr "Aponte para o arquivo de cofre existente e insira sua senha mestra."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Point your camera at the code on your other device"
+msgstr "Aponte a câmera para o código em seu outro dispositivo"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -1509,6 +1521,10 @@ msgstr "Escanear código QR"
 msgid "Scan QR code from current webpage"
 msgstr "Escanear o código QR da página atual"
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code instead"
+msgstr "Escanear código QR em vez disso"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
 msgstr "Escanear o QR na página de 2FA de um site, ou colar um URI otpauth:// ou a chave de configuração."
@@ -1714,6 +1730,10 @@ msgstr "Sistema"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Toque uma chave de segurança para desbloquear em vez de digitar a senha mestra."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Tap to scan again"
+msgstr "Toque para escanear novamente"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
