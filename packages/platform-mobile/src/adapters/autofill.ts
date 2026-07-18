@@ -1,9 +1,9 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Device } from "@capacitor/device";
 import { PREF_AUTOFILL_QUICKTYPE } from "@core/hooks/usePrefs";
 import type { AutofillAdapter } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { decodeVaultBlob, findPasswordSlot, verifierPrefix } from "@core/vault-format";
-import { inlineSuggestionsSupported } from "../autofill-caps";
 import { ACTIVE_VAULT_KEY } from "../sync/sync-manager";
 import { mobileCrypto } from "./crypto";
 import { mobileStorage } from "./storage";
@@ -184,10 +184,17 @@ export const mobileAutofill: AutofillAdapter = {
 		await Bridge.setKeepUnlocked({ minutes });
 	},
 	async inlineSuggestionsAvailable() {
-		// iOS QuickType is always available; on Android it depends on the keyboard, recorded
-		// by the native provider. Lets Settings hide the toggle where it can't work.
+		// Show the "Keyboard suggestions" toggle wherever the OS can render inline autofill: always on
+		// iOS (QuickType), and on Android 11+ (API 30, where the inline API exists). We no longer gate
+		// it on a runtime keyboard probe - that hid the toggle until you'd autofilled once, and stayed
+		// hidden if the probe missed the keyboard's request (github #19). If the active keyboard can't
+		// render inline the toggle is simply inert, which is far better than being undiscoverable.
 		if (isIos) return true;
-		return inlineSuggestionsSupported();
+		try {
+			return ((await Device.getInfo()).androidSDKVersion ?? 0) >= 30;
+		} catch {
+			return true;
+		}
 	},
 	async query() {
 		// The in-webview UI never serves OS autofill; the native provider does.

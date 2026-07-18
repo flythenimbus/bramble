@@ -56,9 +56,9 @@ export function GeneralSection() {
 		if (loaded) void autofill.setKeepUnlocked?.(keepUnlockedWindow(prefs.autoLockMinutes));
 	}, [loaded, prefs.autoLockMinutes, autofill]);
 
-	// Inline keyboard suggestions only work on a keyboard that supports them (always on iOS;
-	// keyboard-dependent on Android). Hide the toggle where they can't render so we don't
-	// surface a dead control. Starts hidden until the capability resolves.
+	// Show the toggle wherever the OS supports inline autofill (iOS always; Android 11+). It's not
+	// gated on the active keyboard anymore - that hid it until you'd autofilled once and could stay
+	// hidden (github #19); an inert toggle beats an undiscoverable one. Starts hidden until resolved.
 	const [inlineAvailable, setInlineAvailable] = useState(false);
 	useEffect(() => {
 		let cancelled = false;
