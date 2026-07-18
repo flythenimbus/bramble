@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, QrCode, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
+import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
 
 interface JoinCardProps {
@@ -80,11 +81,13 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 					<div>
 						{canScan && !showPaste ? (
 							<>
-								<button
-									type="button"
+								<Button
+									variant="secondary"
+									size="none"
+									fullWidth
 									onClick={() => void scan()}
 									disabled={disabled}
-									className="w-full flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border px-4 py-6 hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
+									className="flex flex-col gap-1.5 border-2 border-dashed px-4 py-6"
 								>
 									{code ? (
 										<Check className="w-7 h-7 text-emerald-500" />
@@ -107,14 +110,16 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 											<Trans>Point your camera at the code on your other device</Trans>
 										)}
 									</span>
-								</button>
-								<button
-									type="button"
+								</Button>
+								<Button
+									variant="link"
+									size="none"
+									fullWidth
 									onClick={() => setShowPaste(true)}
-									className="mt-2 w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+									className="mt-2 text-xs"
 								>
 									<Trans>Paste code instead</Trans>
-								</button>
+								</Button>
 							</>
 						) : (
 							<>
@@ -132,13 +137,15 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 									className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary/50"
 								/>
 								{canScan && (
-									<button
-										type="button"
+									<Button
+										variant="link"
+										size="none"
+										fullWidth
 										onClick={() => setShowPaste(false)}
-										className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+										className="mt-2 gap-1.5 text-xs"
 									>
 										<QrCode className="w-3.5 h-3.5" /> <Trans>Scan QR code instead</Trans>
-									</button>
+									</Button>
 								)}
 							</>
 						)}
@@ -168,15 +175,15 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 							{shownError}
 						</p>
 					)}
-					<button
+					<Button
 						type="submit"
+						variant="primary"
+						size={mobile ? "lg" : "md"}
+						fullWidth={mobile}
 						disabled={disabled}
-						className={`rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-							mobile ? "w-full px-5 py-3 text-base" : "px-5 py-2 text-sm"
-						}`}
 					>
 						{disabled ? <Trans>Connecting…</Trans> : <Trans>Join vault</Trans>}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</form>

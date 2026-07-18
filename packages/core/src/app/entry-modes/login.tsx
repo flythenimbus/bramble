@@ -25,6 +25,7 @@ import { usePlatform } from "../../context/PlatformContext";
 import type { LoginEntry, LoginEntryData, PasskeyCredential } from "../../hooks/useVault";
 import { formatDate } from "../../util/format-date";
 import { parseTotp, totpAt } from "../../util/totp";
+import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -133,14 +134,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					<span className="block text-sm">
 						<Trans>Websites</Trans>
 					</span>
-					<button
-						type="button"
+					<Button
+						variant="secondary"
+						size="none"
 						onClick={() => appendUrl({ value: "" })}
-						className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+						className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md"
 					>
 						<Plus className="w-3 h-3" />
 						<Trans>Add URL</Trans>
-					</button>
+					</Button>
 				</div>
 
 				{urlFields.length > 0 ? (
@@ -155,14 +157,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 										{...register(`urls.${index}.value`)}
 									/>
 								</div>
-								<button
-									type="button"
+								<Button
+									variant="ghost"
+									size="icon"
 									onClick={() => removeUrl(index)}
-									className="mt-2 p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
+									className="mt-2 shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
 									aria-label={t`Remove URL`}
 								>
 									<X className="w-4 h-4" />
-								</button>
+								</Button>
 							</div>
 						))}
 					</div>
@@ -189,18 +192,20 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					autoComplete="off"
 					endAdornment={
 						<>
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="none"
 								onClick={generatePassword}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								className="p-1.5 rounded-md"
 								aria-label={t`Generate password`}
 							>
 								<RefreshCw className="w-3.5 h-3.5" />
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="ghost"
+								size="none"
 								onClick={() => setShowPassword(!showPassword)}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								className="p-1.5 rounded-md"
 								aria-label={showPassword ? t`Hide password` : t`Show password`}
 							>
 								{showPassword ? (
@@ -208,7 +213,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								) : (
 									<Eye className="w-3.5 h-3.5" />
 								)}
-							</button>
+							</Button>
 						</>
 					}
 					{...register("password")}
@@ -241,14 +246,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					</div>
 				)}
 
-				<button
-					type="button"
+				<Button
+					variant="secondary"
+					size="none"
 					onClick={generatePassword}
-					className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-primary/50 bg-primary/5 text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
+					className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
 				>
 					<Sparkles className="w-3.5 h-3.5" />
 					<Trans>Generate strong password</Trans>
-				</button>
+				</Button>
 			</div>
 
 			<div>
@@ -258,11 +264,12 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					autoComplete="off"
 					endAdornment={
 						<>
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="none"
 								onClick={scanTotp}
 								disabled={totpScan === "scanning"}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all disabled:opacity-50"
+								className="p-1.5 rounded-md"
 								aria-label={t`Scan QR code from current webpage`}
 								title={t`Scan authenticator QR code from current webpage`}
 							>
@@ -271,15 +278,16 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								) : (
 									<Camera className="w-3.5 h-3.5" />
 								)}
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="ghost"
+								size="none"
 								onClick={() => setShowTotp((v) => !v)}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								className="p-1.5 rounded-md"
 								aria-label={showTotp ? t`Hide authenticator key` : t`Show authenticator key`}
 							>
 								{showTotp ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-							</button>
+							</Button>
 						</>
 					}
 					{...register("totp")}
@@ -316,14 +324,15 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 										{pk.createdAt ? ` · ${formatDate(pk.createdAt)}` : ""}
 									</div>
 								</div>
-								<button
-									type="button"
+								<Button
+									variant="ghost"
+									size="icon"
 									onClick={() => removePasskey(pk.credentialId)}
-									className="p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
+									className="shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
 									aria-label={t`Remove passkey`}
 								>
 									<X className="w-4 h-4" />
-								</button>
+								</Button>
 							</div>
 						))}
 					</div>
@@ -336,10 +345,11 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 			<TextArea label={t`Notes (optional)`} rows={3} {...register("notes")} />
 
 			<div>
-				<button
-					type="button"
+				<Button
+					variant="link"
+					size="none"
 					onClick={() => setAdvancedOpen((o) => !o)}
-					className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
+					className="flex items-center gap-1.5 text-xs active:scale-[0.98]"
 					aria-expanded={advancedOpen}
 				>
 					{advancedOpen ? (
@@ -348,7 +358,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 						<ChevronRight className="w-3.5 h-3.5" />
 					)}
 					<Trans>Advanced</Trans>
-				</button>
+				</Button>
 				{advancedOpen && (
 					<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
 						<ToggleRow
@@ -465,14 +475,15 @@ function TotpField({
 				</div>
 				<div className="flex items-center gap-3">
 					<CountdownRing remaining={secondsRemaining} period={parsed.totp.period} />
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={() => copy("totp", code)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={t`Copy verification code`}
 					>
 						{matched ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>
@@ -559,14 +570,15 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="password"
 				onCopy={() => copy("password", login.password)}
 				extraAction={
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={() => setShowPassword((v) => !v)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={showPassword ? t`Hide password` : t`Show password`}
 					>
 						{showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-					</button>
+					</Button>
 				}
 			>
 				<span className="text-sm font-mono truncate">

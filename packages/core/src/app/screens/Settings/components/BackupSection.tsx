@@ -25,6 +25,7 @@ import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
 import { NextCloud } from "../../../components/icons/NextCloud";
 import { Wasabi } from "../../../components/icons/Wasabi";
+import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { SelectField } from "../../../components/ui/select-field";
@@ -32,8 +33,6 @@ import { TextField } from "../../../components/ui/text-field";
 import { cn } from "../../../components/ui/utils";
 import { Section } from "./primitives";
 
-const btnClass =
-	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50";
 const primaryBtnClass =
 	"w-full px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50";
 
@@ -174,10 +173,11 @@ function formatWhen(ms: number): string {
 function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void }) {
 	const Icon = def.Icon;
 	return (
-		<button
-			type="button"
+		<Button
+			variant="secondary"
+			size="none"
 			onClick={onClick}
-			className="flex items-start gap-2.5 rounded-lg border border-border p-3 text-left hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98] transition-all"
+			className="flex items-start justify-start gap-2.5 p-3 text-left"
 		>
 			<div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 shrink-0">
 				<Icon className={cn("w-4 h-4", def.accent)} />
@@ -186,7 +186,7 @@ function ProviderTile({ def, onClick }: { def: ProviderDef; onClick: () => void 
 				<p className="text-sm truncate">{def.name}</p>
 				<p className="text-xs text-muted-foreground mt-0.5">{def.blurb}</p>
 			</div>
-		</button>
+		</Button>
 	);
 }
 
@@ -223,14 +223,15 @@ function ProviderModalHeader({ def, onClose }: { def: ProviderDef; onClose: () =
 				<h2 className="text-base font-medium truncate">{def.name}</h2>
 				<p className="text-xs text-muted-foreground truncate">{def.blurb}</p>
 			</div>
-			<button
-				type="button"
+			<Button
+				variant="link"
+				size="none"
 				onClick={onClose}
 				aria-label={t`Close`}
-				className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+				className="ml-auto transition-colors"
 			>
 				<X className="w-4 h-4" />
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -381,21 +382,22 @@ function TargetCard({
 			</div>
 			<div className="flex items-center gap-3">
 				{onReconnect ? (
-					<button type="button" onClick={onReconnect} className={btnClass}>
+					<Button variant="secondary" size="sm" onClick={onReconnect}>
 						<Trans>Reconnect</Trans>
-					</button>
+					</Button>
 				) : (
-					<button type="button" onClick={onEdit} className={btnClass}>
+					<Button variant="secondary" size="sm" onClick={onEdit}>
 						<Trans>Edit</Trans>
-					</button>
+					</Button>
 				)}
-				<button
-					type="button"
+				<Button
+					variant="link"
+					size="none"
 					onClick={onRemove}
-					className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
+					className="text-xs hover:text-red-500 transition-colors"
 				>
 					<Trans>Remove</Trans>
-				</button>
+				</Button>
 			</div>
 		</div>
 	);
@@ -569,22 +571,23 @@ export function BackupSection() {
 					</div>
 
 					<div className="flex flex-wrap items-center gap-3">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => setModal({ step: "grid" })}
-							className={cn(btnClass, "inline-flex items-center gap-1.5")}
+							className="gap-1.5"
 						>
 							<Plus className="w-3.5 h-3.5" />
 							<Trans>Add another target</Trans>
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => void backup.backupNow().catch(() => {})}
 							disabled={runningIds.size > 0}
-							className={btnClass}
 						>
 							<Trans>Back up now</Trans>
-						</button>
+						</Button>
 						{runningIds.size > 0 && (
 							<span className="text-xs text-muted-foreground">
 								<Trans>Backing up {runningIds.size}…</Trans>
@@ -609,14 +612,15 @@ export function BackupSection() {
 							<h2 className="text-base font-medium">
 								<Trans>Add a backup target</Trans>
 							</h2>
-							<button
-								type="button"
+							<Button
+								variant="link"
+								size="none"
 								onClick={() => setModal(null)}
 								aria-label={t`Close`}
-								className="text-muted-foreground hover:text-foreground transition-colors"
+								className="transition-colors"
 							>
 								<X className="w-4 h-4" />
-							</button>
+							</Button>
 						</div>
 						<ProviderGrid onPick={pickProvider} />
 					</div>
@@ -700,11 +704,12 @@ export function BackupSection() {
 							)}
 
 							<div>
-								<button
-									type="button"
+								<Button
+									variant="link"
+									size="none"
 									onClick={() => setAdvancedOpen((o) => !o)}
 									aria-expanded={advancedOpen}
-									className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-all"
+									className="gap-1.5 text-xs"
 								>
 									{advancedOpen ? (
 										<ChevronDown className="w-3.5 h-3.5" />
@@ -712,7 +717,7 @@ export function BackupSection() {
 										<ChevronRight className="w-3.5 h-3.5" />
 									)}
 									<Trans>Advanced</Trans>
-								</button>
+								</Button>
 								{advancedOpen && (
 									<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
 										{modalDef.kind === "s3" ? (
@@ -755,12 +760,12 @@ export function BackupSection() {
 							</div>
 
 							<div className="flex justify-end gap-2 pt-1">
-								<button type="button" onClick={() => setModal(null)} className={btnClass}>
+								<Button variant="secondary" size="sm" onClick={() => setModal(null)}>
 									<Trans>Cancel</Trans>
-								</button>
-								<button type="submit" disabled={!canSave || saving} className={btnClass}>
+								</Button>
+								<Button type="submit" variant="secondary" size="sm" disabled={!canSave || saving}>
 									<Trans>Save</Trans>
-								</button>
+								</Button>
 							</div>
 						</form>
 					)

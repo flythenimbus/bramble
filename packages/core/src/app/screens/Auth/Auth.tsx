@@ -7,6 +7,7 @@ import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
 
@@ -167,15 +168,16 @@ export function Auth() {
 				</div>
 			)}
 			{onPopOut && (
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="icon"
 					onClick={onPopOut}
-					className="absolute top-3 right-3 z-10 p-2 rounded-lg border border-transparent text-muted-foreground hover:bg-primary/10 hover:border-border hover:text-foreground active:scale-[0.95] transition-all"
+					className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-foreground"
 					aria-label={t`Open in window`}
 					title={t`Open in window`}
 				>
 					<ExternalLink className="w-4 h-4" />
-				</button>
+				</Button>
 			)}
 			<div className="px-6 py-6">
 				<div className="w-full max-w-md mx-auto">
@@ -198,30 +200,34 @@ export function Auth() {
 					</div>
 
 					{firstRun && (
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="lg"
+							fullWidth
 							onClick={handleOpenSetup}
 							disabled={busy}
-							className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="text-sm"
 						>
 							<Plus className="w-4 h-4" />
 							{busy ? t`Opening…` : t`Create your vault`}
-						</button>
+						</Button>
 					)}
 
 					{!firstRun && (
 						<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 							{showBiometric && (
 								<div className={showPasswordForm || securityKeyAvailable ? "p-6 pb-0" : "p-6"}>
-									<button
-										type="button"
+									<Button
+										variant="primary"
+										size="lg"
+										fullWidth
 										onClick={handleBiometric}
 										disabled={busy}
-										className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+										className="text-sm"
 									>
 										<BiometricIcon className="w-4 h-4" />
 										{busy ? t`Verifying…` : biometricLabel}
-									</button>
+									</Button>
 								</div>
 							)}
 							{showPasswordForm && (
@@ -235,14 +241,13 @@ export function Auth() {
 										})}
 									/>
 
-									<button
+									<Button
 										type="submit"
+										variant={showBiometric ? "secondary" : "primary"}
+										size="lg"
+										fullWidth
 										disabled={busy}
-										className={
-											showBiometric
-												? "w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-												: "w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-										}
+										className="text-sm"
 									>
 										<Asterisk className="w-4 h-4" />
 										{busy
@@ -250,25 +255,23 @@ export function Auth() {
 											: securityKeyAvailable || showBiometric
 												? t`Unlock with master password`
 												: t`Unlock Vault`}
-									</button>
+									</Button>
 								</form>
 							)}
 
 							{securityKeyAvailable && (
 								<div className={showPasswordForm ? "px-6 pb-6 -mt-3" : "p-6"}>
-									<button
-										type="button"
+									<Button
+										variant={showPasswordForm ? "secondary" : "primary"}
+										size="lg"
+										fullWidth
 										onClick={handleSecurityKey}
 										disabled={busy}
-										className={
-											showPasswordForm
-												? "w-full px-5 py-3 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-												: "w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-										}
+										className="text-sm"
 									>
 										<KeyRound className="w-4 h-4" />
 										{busy ? t`Waiting for your key…` : t`Unlock with security key`}
-									</button>
+									</Button>
 								</div>
 							)}
 						</div>
@@ -308,40 +311,42 @@ export function Auth() {
 									/>
 									{recoveryError && <p className="text-xs text-destructive">{recoveryError}</p>}
 									<div className="flex gap-2">
-										<button
+										<Button
 											type="submit"
+											variant="primary"
+											size="sm"
 											disabled={busy || !recoveryCode.trim()}
-											className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
 										>
 											{busy ? t`Unlocking…` : t`Unlock`}
-										</button>
-										<button
-											type="button"
+										</Button>
+										<Button
+											variant="secondary"
+											size="sm"
 											onClick={() => {
 												setShowRecovery(false);
 												setRecoveryCode("");
 												setRecoveryError(null);
 											}}
 											disabled={busy}
-											className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
 										>
 											<Trans>Cancel</Trans>
-										</button>
+										</Button>
 									</div>
 								</form>
 							) : (
 								<div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
 									{recoveryAvailable && (
-										<button
-											type="button"
+										<Button
+											variant="link"
+											size="none"
 											onClick={() => {
 												setRecoveryError(null);
 												setShowRecovery(true);
 											}}
-											className="text-xs hover:text-foreground transition-colors"
+											className="text-xs transition-colors"
 										>
 											<Trans>Unlock with recovery code</Trans>
-										</button>
+										</Button>
 									)}
 									{recoveryAvailable && showDifferentVault && (
 										<span aria-hidden="true" className="text-muted-foreground/50">
@@ -349,14 +354,15 @@ export function Auth() {
 										</span>
 									)}
 									{showDifferentVault && (
-										<button
-											type="button"
+										<Button
+											variant="link"
+											size="none"
 											onClick={() => clearSelection()}
 											disabled={busy}
-											className="text-xs hover:text-foreground transition-colors disabled:opacity-50"
+											className="text-xs transition-colors"
 										>
 											<Trans>Choose a different vault</Trans>
-										</button>
+										</Button>
 									)}
 								</div>
 							)}
@@ -375,14 +381,15 @@ export function Auth() {
 								<div className="flex-1 h-px bg-border/50"></div>
 							</div>
 
-							<button
-								type="button"
+							<Button
+								variant="link"
+								size="none"
 								onClick={handleOpenSetup}
 								disabled={busy}
-								className="text-sm text-foreground hover:text-primary active:scale-[0.98] transition-all disabled:opacity-50"
+								className="text-sm text-foreground hover:text-primary active:scale-[0.98]"
 							>
 								<Trans>Create new vault</Trans>
-							</button>
+							</Button>
 						</div>
 					)}
 

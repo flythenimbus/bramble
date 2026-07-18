@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { X } from "lucide-react";
+import { Button } from "../../../components/ui/button";
 
 /** Page chrome shared by every import state. `onClose` shows a close affordance for
  * single-window hosts (mobile) that return to the app; the extension opens import in
@@ -9,14 +10,15 @@ export function Shell({ children, onClose }: { children: React.ReactNode; onClos
 	return (
 		<div className="relative min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			{onClose && (
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="icon"
 					onClick={onClose}
 					aria-label={t`Close import`}
-					className="absolute top-4 right-4 z-10 p-2 rounded-lg border border-transparent text-muted-foreground hover:bg-primary/10 hover:border-border hover:text-foreground active:scale-[0.95] transition-all"
+					className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground"
 				>
 					<X className="w-4 h-4" />
-				</button>
+				</Button>
 			)}
 			<div className="w-full max-w-xl">{children}</div>
 		</div>

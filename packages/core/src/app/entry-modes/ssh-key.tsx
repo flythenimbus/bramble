@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { SshKeyEntry, SshKeyEntryData } from "../../hooks/useVault";
 import { deriveKeyType, sshFingerprint } from "../../util/ssh";
+import { Button } from "../components/ui/button";
 import { SecretArea } from "../components/ui/secret-area";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -52,14 +53,15 @@ function SshKeyFields() {
 				type={showPassphrase ? "text" : "password"}
 				autoComplete="off"
 				endAdornment={
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={() => setShowPassphrase((v) => !v)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={showPassphrase ? t`Hide passphrase` : t`Show passphrase`}
 					>
 						{showPassphrase ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-					</button>
+					</Button>
 				}
 				{...register("passphrase")}
 			/>
@@ -89,19 +91,21 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 				<p className="text-xs text-muted-foreground">{label}</p>
 				<div className="flex items-center gap-1">
 					{secret && (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="none"
 							onClick={() => setRevealed((v) => !v)}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							className="p-1.5 rounded-md"
 							aria-label={revealed ? t`Hide private key` : t`Show private key`}
 						>
 							{revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-						</button>
+						</Button>
 					)}
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={onCopy}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={t`Copy ${label.toLowerCase()}`}
 					>
 						{copied === copyName ? (
@@ -109,7 +113,7 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 						) : (
 							<Copy className="w-3.5 h-3.5" />
 						)}
-					</button>
+					</Button>
 				</div>
 			</div>
 			<pre className="text-xs font-mono whitespace-pre-wrap break-all rounded-md border border-border/50 p-3 max-h-48 overflow-auto">
@@ -163,10 +167,11 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					copyName="passphrase"
 					onCopy={() => copy("passphrase", key.passphrase ?? "")}
 					extraAction={
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="none"
 							onClick={() => setShowPassphrase((v) => !v)}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							className="p-1.5 rounded-md"
 							aria-label={showPassphrase ? t`Hide passphrase` : t`Show passphrase`}
 						>
 							{showPassphrase ? (
@@ -174,7 +179,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 							) : (
 								<Eye className="w-3.5 h-3.5" />
 							)}
-						</button>
+						</Button>
 					}
 				>
 					<span className="text-sm font-mono truncate">

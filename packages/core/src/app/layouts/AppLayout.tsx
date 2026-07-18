@@ -8,6 +8,7 @@ import { displayLabel } from "../../vault/vault-registry";
 import { BrambleGlyph } from "../components/BrambleGlyph";
 import { PasskeySavedToast } from "../components/PasskeySavedToast";
 import { BackButton } from "../components/ui/back-button";
+import { Button } from "../components/ui/button";
 import { usePopOut } from "../hooks/usePopOut";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
@@ -53,10 +54,11 @@ export function AppLayout() {
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3">
 							{onBack && <BackButton onClick={onBack} />}
-							<button
-								type="button"
+							<Button
+								variant="link"
+								size="none"
 								onClick={() => navigate({ to: "/vault" })}
-								className="flex items-center gap-2.5 rounded-lg active:scale-[0.98] transition-all"
+								className="flex items-center gap-2.5 rounded-lg active:scale-[0.98]"
 								aria-label={t`Go to vault`}
 							>
 								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
@@ -78,39 +80,39 @@ export function AppLayout() {
 										</>
 									)}
 								</div>
-							</button>
+							</Button>
 						</div>
 						<div className="flex items-center gap-1.5">
 							{canPopOut && (
-								<button
-									type="button"
+								<Button
+									variant="ghost"
+									size="icon"
 									onClick={popOut}
-									className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
 									aria-label={t`Open in window`}
 									title={t`Open in window`}
 								>
 									<ExternalLink className="w-4 h-4" />
-								</button>
+								</Button>
 							)}
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={() => {
 									void lock();
 								}}
-								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
 								aria-label={t`Lock vault`}
 								title={t`Lock vault`}
 							>
 								<Lock className="w-4 h-4" />
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={() => navigate({ to: "/settings" })}
-								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
 								aria-label={t`Settings`}
 							>
 								<SettingsIcon className="w-4 h-4" />
-							</button>
+							</Button>
 						</div>
 					</div>
 				</div>

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CardEntryData } from "../../hooks/useVault";
 import { cardBrand } from "../../util/card";
+import { Button } from "../components/ui/button";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
@@ -55,14 +56,15 @@ function CardFields() {
 				autoComplete="off"
 				className="font-mono"
 				endAdornment={
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={() => setShowNumber((v) => !v)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={showNumber ? t`Hide card number` : t`Show card number`}
 					>
 						{showNumber ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-					</button>
+					</Button>
 				}
 				{...register("number")}
 			/>
@@ -91,14 +93,15 @@ function CardFields() {
 					autoComplete="off"
 					maxLength={4}
 					endAdornment={
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="none"
 							onClick={() => setShowCvv((v) => !v)}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							className="p-1.5 rounded-md"
 							aria-label={showCvv ? t`Hide CVV` : t`Show CVV`}
 						>
 							{showCvv ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-						</button>
+						</Button>
 					}
 					{...register("cvv")}
 				/>
@@ -133,14 +136,15 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="card number"
 				onCopy={() => copy("card number", card.number)}
 				extraAction={
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						onClick={() => setShowNumber((v) => !v)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={showNumber ? t`Hide card number` : t`Show card number`}
 					>
 						{showNumber ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-					</button>
+					</Button>
 				}
 			>
 				<span className="text-sm font-mono truncate">
@@ -164,14 +168,15 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					copyName="CVV"
 					onCopy={() => copy("CVV", card.cvv)}
 					extraAction={
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="none"
 							onClick={() => setShowCvv((v) => !v)}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							className="p-1.5 rounded-md"
 							aria-label={showCvv ? t`Hide CVV` : t`Show CVV`}
 						>
 							{showCvv ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-						</button>
+						</Button>
 					}
 				>
 					<span className="text-sm font-mono truncate">

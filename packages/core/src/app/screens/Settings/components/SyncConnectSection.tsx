@@ -14,6 +14,7 @@ import {
 } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { formatDate } from "../../../../util/format-date";
+import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
@@ -21,8 +22,6 @@ import { Row, Section } from "./primitives";
 
 const inputClass =
 	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50";
-const btnClass =
-	"px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50";
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 interface SyncGroup {
@@ -305,14 +304,15 @@ export function SyncConnectSection() {
 											</button>
 										</span>
 									) : (
-										<button
-											type="button"
+										<Button
+											variant="link"
+											size="none"
 											onClick={() => setRemovingId(d.id)}
 											aria-label={t`Remove ${d.label || "device"}`}
-											className="shrink-0 p-1 text-muted-foreground hover:text-red-500 transition-colors"
+											className="shrink-0 p-1 hover:text-red-500 transition-colors"
 										>
 											<Trash2 className="w-4 h-4" />
-										</button>
+										</Button>
 									))}
 							</div>
 						))}
@@ -325,38 +325,27 @@ export function SyncConnectSection() {
 					)}
 
 					<div className="flex flex-wrap items-center gap-2">
-						<button
-							type="button"
-							onClick={beginAddDevice}
-							className={`${btnClass} inline-flex items-center gap-1.5`}
-						>
+						<Button variant="secondary" size="sm" onClick={beginAddDevice} className="gap-1.5">
 							<Plus className="w-3.5 h-3.5" /> <Trans>Add another device</Trans>
-						</button>
+						</Button>
 						{confirmDisconnect ? (
 							<span className="inline-flex items-center gap-2">
-								<button
-									type="button"
-									onClick={() => void disconnect()}
-									className="px-3 py-1.5 text-xs rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 active:scale-[0.98] transition-all"
-								>
+								<Button variant="destructiveOutline" size="sm" onClick={() => void disconnect()}>
 									<Trans>Confirm disconnect</Trans>
-								</button>
-								<button
-									type="button"
-									onClick={() => setConfirmDisconnect(false)}
-									className={btnClass}
-								>
+								</Button>
+								<Button variant="secondary" size="sm" onClick={() => setConfirmDisconnect(false)}>
 									<Trans>Cancel</Trans>
-								</button>
+								</Button>
 							</span>
 						) : (
-							<button
-								type="button"
+							<Button
+								variant="secondary"
+								size="sm"
 								onClick={() => setConfirmDisconnect(true)}
-								className={`${btnClass} inline-flex items-center gap-1.5 text-muted-foreground`}
+								className="gap-1.5 text-muted-foreground"
 							>
 								<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
-							</button>
+							</Button>
 						)}
 					</div>
 					{confirmDisconnect && (
@@ -376,9 +365,9 @@ export function SyncConnectSection() {
 						title={t`Add a device`}
 						subtitle={t`Generate a one-time pairing code and listen for a device to join. No vault secrets in the code.`}
 					>
-						<button type="button" onClick={beginAddDevice} className={btnClass}>
+						<Button variant="secondary" size="sm" onClick={beginAddDevice}>
 							<Trans>Add a device</Trans>
-						</button>
+						</Button>
 					</Row>
 
 					{/* Joining another group when a vault already exists means adding a parallel vault,
@@ -431,19 +420,24 @@ export function SyncConnectSection() {
 						error={gateError ?? undefined}
 					/>
 					<div className="flex justify-end gap-2">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								setPwGateOpen(false);
 								setGatePassword("");
 							}}
-							className={btnClass}
 						>
 							<Trans>Cancel</Trans>
-						</button>
-						<button type="submit" disabled={!gatePassword || gateBusy} className={btnClass}>
+						</Button>
+						<Button
+							type="submit"
+							variant="secondary"
+							size="sm"
+							disabled={!gatePassword || gateBusy}
+						>
 							<Trans>Continue</Trans>
-						</button>
+						</Button>
 					</div>
 				</form>
 			</Modal>
@@ -460,14 +454,15 @@ export function SyncConnectSection() {
 							<h2 className="text-base font-medium">
 								<Trans>Add a device</Trans>
 							</h2>
-							<button
-								type="button"
+							<Button
+								variant="link"
+								size="none"
 								onClick={() => setPairingCode(null)}
 								aria-label={t`Close`}
-								className="text-muted-foreground hover:text-foreground transition-colors"
+								className="transition-colors"
 							>
 								<X className="w-4 h-4" />
-							</button>
+							</Button>
 						</div>
 						<p className="text-xs text-muted-foreground">
 							<Trans>
@@ -484,23 +479,24 @@ export function SyncConnectSection() {
 								onFocus={(e) => e.currentTarget.select()}
 								className={`${inputClass} flex-1`}
 							/>
-							<button
-								type="button"
+							<Button
+								variant="secondary"
+								size="sm"
 								onClick={() => void navigator.clipboard?.writeText(pairingCode)}
-								className={btnClass}
 							>
 								<Trans>Copy</Trans>
-							</button>
+							</Button>
 						</div>
 					</div>
 				)}
 			</Modal>
 
 			<div>
-				<button
-					type="button"
+				<Button
+					variant="link"
+					size="none"
 					onClick={() => setAdvancedOpen((o) => !o)}
-					className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground active:scale-[0.98] transition-all"
+					className="gap-1.5 text-xs active:scale-[0.98]"
 					aria-expanded={advancedOpen}
 				>
 					{advancedOpen ? (
@@ -509,7 +505,7 @@ export function SyncConnectSection() {
 						<ChevronRight className="w-3.5 h-3.5" />
 					)}
 					<Trans>Advanced</Trans>
-				</button>
+				</Button>
 				{advancedOpen && (
 					<div className="mt-3 space-y-5 pl-4 border-l border-border/40">
 						<div className="space-y-1.5">

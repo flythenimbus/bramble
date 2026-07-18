@@ -3,6 +3,7 @@ import { ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { EntryType } from "../../hooks/useVault";
 import { modeList } from "../entry-modes";
+import { Button } from "./ui/button";
 
 interface AddDropdownProps {
 	onCreate: (type: EntryType) => void;
@@ -30,17 +31,18 @@ export function AddDropdown({ onCreate }: AddDropdownProps) {
 
 	return (
 		<div className="relative" ref={dropdownRef}>
-			<button
-				type="button"
+			<Button
+				variant="primary"
+				size="none"
 				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center gap-2 px-4 py-2 h-full rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+				className="flex items-center gap-2 px-4 py-2 h-full"
 			>
 				<Plus className="w-4 h-4" />
 				<span className="text-sm">
 					<Trans>Add New</Trans>
 				</span>
 				<ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-			</button>
+			</Button>
 
 			{isOpen && (
 				<div className="absolute right-0 mt-2 w-64 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">

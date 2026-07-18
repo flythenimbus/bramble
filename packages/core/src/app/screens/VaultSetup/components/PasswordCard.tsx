@@ -6,6 +6,7 @@ import {
 	masterPasswordHardError,
 	masterPasswordWarning,
 } from "../../../../util/master-password-strength";
+import { Button } from "../../../components/ui/button";
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { PasswordField } from "../../../components/ui/password-field";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
@@ -113,15 +114,15 @@ export function PasswordCard({
 							{submitError}
 						</p>
 					)}
-					<button
+					<Button
 						type="submit"
+						variant="primary"
+						size={mobile ? "lg" : "md"}
+						fullWidth={mobile}
 						disabled={busy || blockedByWeak}
-						className={`rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-							mobile ? "w-full px-5 py-3 text-base" : "px-5 py-2 text-sm"
-						}`}
 					>
 						{busy ? <Trans>Creating…</Trans> : <Trans>Create vault</Trans>}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</form>

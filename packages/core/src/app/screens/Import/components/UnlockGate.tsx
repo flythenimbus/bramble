@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { useState } from "react";
+import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
@@ -37,13 +38,16 @@ export function UnlockGate({ onUnlock }: { onUnlock: (pw: string) => Promise<voi
 					onChange={(e) => setPassword(e.target.value)}
 					error={error ?? undefined}
 				/>
-				<button
+				<Button
 					type="submit"
+					variant="primary"
+					size="none"
+					fullWidth
 					disabled={busy || !password}
-					className="w-full px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
+					className="px-5 py-2.5 text-sm"
 				>
 					{busy ? t`Unlocking…` : t`Unlock`}
-				</button>
+				</Button>
 			</form>
 		</Shell>
 	);

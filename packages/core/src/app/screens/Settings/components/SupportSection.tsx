@@ -3,6 +3,7 @@ import { Bitcoin, Check, Coins, Copy, Heart, type LucideIcon } from "lucide-reac
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
+import { Button } from "../../../components/ui/button";
 import { cn } from "../../../components/ui/utils";
 import { Section } from "./primitives";
 
@@ -104,9 +105,10 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			{wallet.methods.length > 1 && (
 				<div className="flex rounded-md border border-border p-0.5">
 					{wallet.methods.map((m, i) => (
-						<button
+						<Button
 							key={m.label}
-							type="button"
+							variant="link"
+							size="none"
 							onClick={() => {
 								setSelected(i);
 								setCopied(false);
@@ -114,17 +116,19 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 							className={toggleBtn(i === selected)}
 						>
 							{m.label}
-						</button>
+						</Button>
 					))}
 				</div>
 			)}
 			<p className="break-all text-center font-mono text-[11px] text-muted-foreground">
 				{method.address}
 			</p>
-			<button
-				type="button"
+			<Button
+				variant="secondary"
+				size="sm"
+				fullWidth
 				onClick={() => void copy()}
-				className="mt-auto inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs transition-all hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98]"
+				className="mt-auto gap-1.5"
 			>
 				{copied ? (
 					<>
@@ -137,7 +141,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 						<Trans>Copy address</Trans>
 					</>
 				)}
-			</button>
+			</Button>
 		</div>
 	);
 }

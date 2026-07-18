@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { bytesToBase64 } from "../../../../util/bytes";
+import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
@@ -67,19 +68,21 @@ export function KdbxUnlock({
 					/>
 				</label>
 				<div className="flex items-center justify-between gap-3">
-					<button
-						type="button"
+					<Button
+						variant="secondary"
+						size="none"
 						onClick={onBack}
 						disabled={busy}
-						className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+						className="px-4 py-2 text-sm hover:bg-background/50"
 					>
 						<ArrowLeft className="w-3.5 h-3.5" />
 						<Trans>Back</Trans>
-					</button>
-					<button
+					</Button>
+					<Button
 						type="submit"
+						variant="primary"
+						size="md"
 						disabled={busy || (!password && !keyfile)}
-						className="flex items-center gap-2 px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 					>
 						{busy ? (
 							<>
@@ -89,7 +92,7 @@ export function KdbxUnlock({
 						) : (
 							t`Open database`
 						)}
-					</button>
+					</Button>
 				</div>
 			</form>
 		</Shell>

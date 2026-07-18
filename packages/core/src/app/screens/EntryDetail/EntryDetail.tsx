@@ -3,6 +3,7 @@ import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
+import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
 import { CustomFieldsDetail } from "../../entry-modes/custom-fields";
 
@@ -83,24 +84,25 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 							{subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
 						</div>
 						<div className="flex items-center gap-1 shrink-0">
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={onEdit}
-								className="p-2 rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
 								aria-label={t`Edit entry`}
 								title={t`Edit`}
 							>
 								<Pencil className="w-4 h-4" />
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={() => setConfirmDelete(true)}
-								className="p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all"
+								className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
 								aria-label={t`Delete entry`}
 								title={t`Delete`}
 							>
 								<Trash2 className="w-4 h-4" />
-							</button>
+							</Button>
 						</div>
 					</div>
 
@@ -116,22 +118,18 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 						<p className="flex-1 text-xs text-destructive">
 							<Trans>Delete this entry permanently?</Trans>
 						</p>
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="none"
 							onClick={() => setConfirmDelete(false)}
 							disabled={deleting}
-							className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+							className="px-4 py-2 text-sm hover:bg-background/50 hover:border-border"
 						>
 							<Trans>Cancel</Trans>
-						</button>
-						<button
-							type="button"
-							onClick={handleDelete}
-							disabled={deleting}
-							className="px-5 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
-						>
+						</Button>
+						<Button variant="destructive" size="md" onClick={handleDelete} disabled={deleting}>
 							{deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
-						</button>
+						</Button>
 					</div>
 				)}
 			</div>

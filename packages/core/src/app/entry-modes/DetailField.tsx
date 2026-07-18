@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { Check, Copy } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "../components/ui/button";
 
 interface DetailFieldProps {
 	label: string;
@@ -31,10 +32,11 @@ export function DetailField({
 			<div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/50">
 				<div className="flex-1 min-w-0">{children}</div>
 				{extraAction}
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="none"
 					onClick={onCopy}
-					className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+					className="p-1.5 rounded-md"
 					aria-label={t`Copy ${label.toLowerCase()}`}
 				>
 					{matched ? (
@@ -42,7 +44,7 @@ export function DetailField({
 					) : (
 						<Copy className="w-3.5 h-3.5" />
 					)}
-				</button>
+				</Button>
 			</div>
 		</div>
 	);

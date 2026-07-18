@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
 import { type ComponentProps, forwardRef, useId, useState } from "react";
+import { Button } from "./button";
 import { cn } from "./utils";
 
 interface SecretAreaProps extends Omit<ComponentProps<"textarea">, "id" | "placeholder"> {
@@ -46,14 +47,15 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 					)}
 					{...props}
 				/>
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="none"
 					onClick={() => setRevealed((v) => !v)}
-					className="absolute right-2 top-2 z-10 p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+					className="absolute right-2 top-2 z-10 p-1.5 rounded-md"
 					aria-label={revealed ? t`Hide value` : t`Show value`}
 				>
 					{revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-				</button>
+				</Button>
 				<fieldset
 					aria-hidden
 					className={cn(

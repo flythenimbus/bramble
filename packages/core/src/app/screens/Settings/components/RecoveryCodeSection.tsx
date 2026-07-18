@@ -3,6 +3,7 @@ import { LifeBuoy } from "lucide-react";
 import { useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { RecoveryCodeDisplay } from "../../../components/RecoveryCodeDisplay";
+import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Row } from "./primitives";
@@ -78,14 +79,9 @@ export function RecoveryCodeSection() {
 				}
 			>
 				{!gating && (
-					<button
-						type="button"
-						onClick={() => void begin()}
-						disabled={busy}
-						className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all disabled:opacity-50"
-					>
+					<Button variant="secondary" size="sm" onClick={() => void begin()} disabled={busy}>
 						{busy && !hasPasswordSlot ? t`Tap your key…` : hasRecoveryCode ? t`Reset` : t`Generate`}
-					</button>
+					</Button>
 				)}
 			</Row>
 
@@ -112,25 +108,21 @@ export function RecoveryCodeSection() {
 						disabled={busy}
 					/>
 					<div className="flex gap-2">
-						<button
-							type="submit"
-							disabled={busy || !password}
-							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
-						>
+						<Button type="submit" variant="primary" size="sm" disabled={busy || !password}>
 							{busy ? t`Working…` : t`Confirm`}
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								setGating(false);
 								setPassword("");
 								setError(null);
 							}}
 							disabled={busy}
-							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
 						>
 							<Trans>Cancel</Trans>
-						</button>
+						</Button>
 					</div>
 				</form>
 			)}

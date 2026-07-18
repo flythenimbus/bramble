@@ -11,6 +11,7 @@ import {
 	type PasswordSlot,
 	verifierPrefix,
 } from "../../../vault-format";
+import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 
 // Above any realistic vault; guards against OOM from a hostile/corrupt file.
@@ -31,14 +32,15 @@ function Wrapper({
 	return (
 		<div className="relative min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 			{onClose && (
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="icon"
 					onClick={onClose}
 					aria-label={t`Close`}
-					className="absolute top-4 right-4 z-10 p-2 rounded-lg border border-transparent text-muted-foreground hover:bg-primary/10 hover:border-border hover:text-foreground active:scale-[0.95] transition-all"
+					className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground"
 				>
 					<X className="w-4 h-4" />
-				</button>
+				</Button>
 			)}
 			<div className="w-full max-w-xl">{children}</div>
 		</div>
@@ -206,13 +208,9 @@ export function RestoreShell({
 						)}
 					</p>
 					{onClose && (
-						<button
-							type="button"
-							onClick={onClose}
-							className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
-						>
+						<Button variant="primary" size="none" onClick={onClose} className="px-5 py-2.5 text-sm">
 							<Trans>Done</Trans>
-						</button>
+						</Button>
 					)}
 				</div>
 			</Wrapper>
@@ -319,24 +317,21 @@ export function RestoreShell({
 						error={error ?? undefined}
 					/>
 					<div className="flex items-center justify-between gap-3">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="none"
 							onClick={() => {
 								setPicked(null);
 								setPassword("");
 								setError(null);
 							}}
 							disabled={busy}
-							className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+							className="px-4 py-2 text-sm hover:bg-background/50"
 						>
 							<ArrowLeft className="w-3.5 h-3.5" />
 							<Trans>Choose another file</Trans>
-						</button>
-						<button
-							type="submit"
-							disabled={busy || !password}
-							className="flex items-center gap-2 px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
-						>
+						</Button>
+						<Button type="submit" variant="primary" size="md" disabled={busy || !password}>
 							{busy ? (
 								<>
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -345,7 +340,7 @@ export function RestoreShell({
 							) : (
 								<Trans>Restore vault</Trans>
 							)}
-						</button>
+						</Button>
 					</div>
 				</form>
 			)}

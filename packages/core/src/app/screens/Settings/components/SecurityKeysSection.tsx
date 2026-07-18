@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
+import { Button } from "../../../components/ui/button";
 import { Row } from "./primitives";
 
 export function SecurityKeysSection() {
@@ -44,16 +45,16 @@ export function SecurityKeysSection() {
 				subtitle={t`Tap a security key to unlock instead of typing the master password.`}
 			>
 				{!adding ? (
-					<button
-						type="button"
+					<Button
+						variant="secondary"
+						size="sm"
 						onClick={() => {
 							setError(null);
 							setAdding(true);
 						}}
-						className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
 					>
 						<Trans>Add</Trans>
-					</button>
+					</Button>
 				) : null}
 			</Row>
 
@@ -65,15 +66,16 @@ export function SecurityKeysSection() {
 							className="flex items-center justify-between gap-3 text-xs rounded-md border border-border/40 px-3 py-1.5"
 						>
 							<span className="truncate">{k.label}</span>
-							<button
-								type="button"
+							<Button
+								variant="link"
+								size="none"
 								onClick={() => void handleRevoke(k.slotIdB64)}
-								className="text-muted-foreground hover:text-destructive transition-colors"
+								className="hover:text-destructive transition-colors"
 								aria-label={t`Remove ${k.label}`}
 								title={t`Remove ${k.label}`}
 							>
 								×
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>
@@ -91,25 +93,21 @@ export function SecurityKeysSection() {
 						disabled={busy}
 					/>
 					<div className="flex gap-2">
-						<button
-							type="submit"
-							disabled={busy}
-							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 disabled:opacity-50"
-						>
+						<Button type="submit" variant="primary" size="sm" disabled={busy}>
 							{busy ? t`Tap your key…` : t`Register`}
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => {
 								setAdding(false);
 								setLabel("");
 								setError(null);
 							}}
 							disabled={busy}
-							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50"
 						>
 							<Trans>Cancel</Trans>
-						</button>
+						</Button>
 					</div>
 				</form>
 			)}

@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
 import { type ComponentProps, forwardRef, useState } from "react";
+import { Button } from "./button";
 import { TextField } from "./text-field";
 
 // A TextField that masks its value with a show/hide toggle, so every password entry
@@ -25,17 +26,18 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
 				autoCapitalize="none"
 				spellCheck={false}
 				endAdornment={
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="none"
 						// Reveal is a convenience, not a form control: keep it out of the tab order
 						// so Tab moves between password + confirm fields, not onto the eye.
 						tabIndex={-1}
 						onClick={() => setShow((s) => !s)}
-						className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+						className="p-1.5 rounded-md"
 						aria-label={show ? t`Hide password` : t`Show password`}
 					>
 						{show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-					</button>
+					</Button>
 				}
 			/>
 		);

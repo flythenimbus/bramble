@@ -14,6 +14,7 @@ import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { toAutofillIndex } from "../../../../vault/autofill-index";
+import { Button } from "../../../components/ui/button";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
 import { Row, Section, Toggle } from "./primitives";
@@ -237,21 +238,22 @@ export function GeneralSection() {
 				>
 					<div className="flex flex-wrap gap-1.5 justify-end max-w-[12rem]">
 						{prefs.neverSaveSites.map((host) => (
-							<button
+							<Button
 								key={host}
-								type="button"
+								variant="secondary"
+								size="none"
 								onClick={() =>
 									void update(
 										"neverSaveSites",
 										prefs.neverSaveSites.filter((h) => h !== host),
 									)
 								}
-								className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+								className="gap-1 px-2 py-0.5 text-[11px] rounded-md"
 								title={t`Remove ${host} from never-save list`}
 							>
 								{host}
 								<span aria-hidden>×</span>
-							</button>
+							</Button>
 						))}
 					</div>
 				</Row>

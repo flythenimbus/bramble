@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useEffect, useState } from "react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import type { BreachStatus, EntryData, EntryType } from "../../../hooks/useVault";
+import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
 import {
 	CUSTOM_FIELDS_NAME,
@@ -104,26 +105,23 @@ export function EntryForm({
 						</div>
 
 						<div className="px-5 py-3 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
-							<button
-								type="button"
+							<Button
+								variant="secondary"
+								size="none"
 								onClick={onBack}
 								disabled={busy}
-								className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+								className="px-4 py-2 text-sm hover:bg-background/50 hover:border-border"
 							>
 								<Trans>Cancel</Trans>
-							</button>
+							</Button>
 							{saveError && (
 								<p className="flex-1 text-xs text-destructive truncate" title={saveError}>
 									{saveError}
 								</p>
 							)}
-							<button
-								type="submit"
-								disabled={busy}
-								className="px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-							>
+							<Button type="submit" variant="primary" size="md" disabled={busy}>
 								{busy ? t`Saving…` : label}
-							</button>
+							</Button>
 						</div>
 					</div>
 				</form>

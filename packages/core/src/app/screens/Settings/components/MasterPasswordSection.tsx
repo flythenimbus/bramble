@@ -7,6 +7,7 @@ import {
 	masterPasswordHardError,
 	masterPasswordWarning,
 } from "../../../../util/master-password-strength";
+import { Button } from "../../../components/ui/button";
 import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -148,18 +149,19 @@ export function MasterPasswordSection() {
 					<span className="truncate text-muted-foreground">
 						<Trans>Change your master password</Trans>
 					</span>
-					<button
-						type="button"
+					<Button
+						variant="secondary"
+						size="none"
 						onClick={() => {
 							reset();
 							setFormError(null);
 							setPwSuccess(null);
 							setFormMode("change");
 						}}
-						className="px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+						className="rounded-md px-2.5 py-1 text-xs"
 					>
 						<Trans>Change</Trans>
-					</button>
+					</Button>
 				</div>
 			)}
 
@@ -225,25 +227,27 @@ export function MasterPasswordSection() {
 						/>
 					)}
 					<div className="flex items-center justify-end gap-2">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={closeForm}
 							disabled={isSubmitting}
-							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+							className="hover:bg-background/50"
 						>
 							<Trans>Cancel</Trans>
-						</button>
-						<button
+						</Button>
+						<Button
 							type="submit"
+							variant="primary"
+							size="sm"
 							disabled={isSubmitting || blockedByWeak}
-							className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
 						>
 							{isSubmitting
 								? t`Saving…`
 								: formMode === "change"
 									? t`Update password`
 									: t`Set password`}
-						</button>
+						</Button>
 					</div>
 				</form>
 			)}
@@ -269,22 +273,23 @@ export function MasterPasswordSection() {
 					</div>
 					{disableError && <p className="text-xs text-destructive">{disableError}</p>}
 					<div className="flex items-center justify-end gap-2">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="sm"
 							onClick={() => setConfirmingDisable(false)}
 							disabled={disabling}
-							className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background/50 disabled:opacity-50"
+							className="hover:bg-background/50"
 						>
 							<Trans>Cancel</Trans>
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="destructive"
+							size="sm"
 							onClick={() => void confirmDisable()}
 							disabled={disabling}
-							className="px-3 py-1.5 text-xs rounded-lg bg-destructive text-white border border-destructive/20 hover:bg-destructive/90 disabled:opacity-50"
 						>
 							{disabling ? t`Disabling…` : t`Disable master password`}
-						</button>
+						</Button>
 					</div>
 				</div>
 			</Modal>

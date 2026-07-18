@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
+import { Button } from "./ui/button";
 
 interface EntryRowProps {
 	name: string;
@@ -150,10 +151,11 @@ export function EntryRow({
 				<div className="row-start-1 col-start-1 justify-self-end self-center flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
 					{copyItems.length > 0 && (
 						<div className="relative" ref={copyRef}>
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="none"
 								onClick={() => setCopyOpen((o) => !o)}
-								className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+								className="p-1.5 rounded-md"
 								aria-label={copied ? t`Copied ${copied}` : t`Copy`}
 								title={copied ? t`Copied ${copied}` : t`Copy`}
 							>
@@ -162,7 +164,7 @@ export function EntryRow({
 								) : (
 									<Copy className="w-3.5 h-3.5" />
 								)}
-							</button>
+							</Button>
 							{copyOpen && (
 								<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
 									{copyItems.map((item) => (
@@ -180,18 +182,19 @@ export function EntryRow({
 					)}
 
 					<div className="relative" ref={moreRef}>
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="none"
 							onClick={() => {
 								setMoreOpen((o) => !o);
 								setConfirmingDelete(false);
 							}}
-							className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+							className="p-1.5 rounded-md"
 							aria-label={t`More options`}
 							aria-expanded={moreOpen}
 						>
 							<MoreVertical className="w-3.5 h-3.5" />
-						</button>
+						</Button>
 						{moreOpen && (
 							<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
 								{confirmingDelete ? (
@@ -200,22 +203,24 @@ export function EntryRow({
 											<Trans>Delete this entry?</Trans>
 										</p>
 										<div className="flex items-center gap-2">
-											<button
-												type="button"
+											<Button
+												variant="secondary"
+												size="none"
 												onClick={() => setConfirmingDelete(false)}
 												disabled={deleting}
-												className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+												className="flex-1 px-3 py-1.5 text-xs rounded-md hover:bg-background/50 hover:border-border"
 											>
 												<Trans>Cancel</Trans>
-											</button>
-											<button
-												type="button"
+											</Button>
+											<Button
+												variant="destructive"
+												size="none"
 												onClick={handleDelete}
 												disabled={deleting}
-												className="flex-1 px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground border border-destructive/20 hover:bg-destructive/90 active:scale-[0.98] transition-all disabled:opacity-50"
+												className="flex-1 px-3 py-1.5 text-xs rounded-md"
 											>
 												{deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
-											</button>
+											</Button>
 										</div>
 									</div>
 								) : (

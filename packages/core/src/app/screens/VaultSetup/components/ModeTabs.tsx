@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { Button } from "../../../components/ui/button";
 import type { VaultSetupMode } from "../types";
 
 interface ModeTabsProps {
@@ -44,8 +45,9 @@ interface TabProps {
 // neatly stacked rather than a lopsided pill.
 function Tab({ active, disabled, onClick, children }: TabProps) {
 	return (
-		<button
-			type="button"
+		<Button
+			variant="link"
+			size="none"
 			onClick={onClick}
 			disabled={disabled}
 			className={`flex-1 px-3 py-2 text-sm leading-tight text-center rounded-md transition-all disabled:opacity-50 ${
@@ -55,6 +57,6 @@ function Tab({ active, disabled, onClick, children }: TabProps) {
 			}`}
 		>
 			{children}
-		</button>
+		</Button>
 	);
 }

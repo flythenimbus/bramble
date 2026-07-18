@@ -3,6 +3,7 @@ import { Eye, EyeOff, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { CustomField } from "../../hooks/useVault";
+import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
@@ -64,14 +65,15 @@ export function CustomFieldsEditor() {
 				<span className="block text-sm">
 					<Trans>Custom fields</Trans>
 				</span>
-				<button
-					type="button"
+				<Button
+					variant="secondary"
+					size="none"
 					onClick={() => append({ key: "", value: "", type: "text" })}
-					className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all"
+					className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md"
 				>
 					<Plus className="w-3 h-3" />
 					<Trans>Add field</Trans>
-				</button>
+				</Button>
 			</div>
 
 			{fields.length > 0 ? (
@@ -98,14 +100,15 @@ export function CustomFieldsEditor() {
 											<option value="password">{t`Hidden`}</option>
 										</SelectField>
 									</div>
-									<button
-										type="button"
+									<Button
+										variant="ghost"
+										size="icon"
 										onClick={() => remove(index)}
-										className="mt-2 p-2 rounded-lg border border-transparent hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 active:scale-[0.95] transition-all shrink-0"
+										className="mt-2 shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
 										aria-label={t`Remove field`}
 									>
 										<X className="w-4 h-4" />
-									</button>
+									</Button>
 								</div>
 								<TextField
 									label={t`Value`}
@@ -113,10 +116,11 @@ export function CustomFieldsEditor() {
 									autoComplete="off"
 									endAdornment={
 										type === "password" ? (
-											<button
-												type="button"
+											<Button
+												variant="ghost"
+												size="none"
 												onClick={() => setShown((s) => ({ ...s, [field.id]: !isShown }))}
-												className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+												className="p-1.5 rounded-md"
 												aria-label={isShown ? t`Hide value` : t`Show value`}
 											>
 												{isShown ? (
@@ -124,7 +128,7 @@ export function CustomFieldsEditor() {
 												) : (
 													<Eye className="w-3.5 h-3.5" />
 												)}
-											</button>
+											</Button>
 										) : undefined
 									}
 									{...register(`${CUSTOM_FIELDS_NAME}.${index}.value`)}
@@ -170,14 +174,15 @@ export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailP
 						onCopy={() => copy(field.key, field.value)}
 						extraAction={
 							field.hidden ? (
-								<button
-									type="button"
+								<Button
+									variant="ghost"
+									size="none"
 									onClick={() => setShown((s) => ({ ...s, [index]: !isShown }))}
-									className="p-1.5 rounded-md border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] transition-all"
+									className="p-1.5 rounded-md"
 									aria-label={isShown ? t`Hide value` : t`Show value`}
 								>
 									{isShown ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-								</button>
+								</Button>
 							) : undefined
 						}
 					>

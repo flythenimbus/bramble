@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, Download, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
+import { Button } from "./ui/button";
 
 interface RecoveryCodeDisplayProps {
 	code: string;
@@ -89,31 +90,29 @@ export function RecoveryCodeDisplay({
 			</div>
 
 			<div className="flex gap-2">
-				<button
-					type="button"
+				<Button
+					variant="secondary"
+					size="none"
 					onClick={copy}
-					className="flex-1 px-4 py-2.5 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+					className="flex-1 px-4 py-2.5 text-sm"
 				>
 					{copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
 					{copied ? <Trans>Copied</Trans> : <Trans>Copy</Trans>}
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					variant="secondary"
+					size="none"
 					onClick={download}
-					className="flex-1 px-4 py-2.5 text-sm rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+					className="flex-1 px-4 py-2.5 text-sm"
 				>
 					<Download className="w-4 h-4" />
 					<Trans>Download</Trans>
-				</button>
+				</Button>
 			</div>
 
-			<button
-				type="button"
-				onClick={onContinue}
-				className="w-full px-5 py-3 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
-			>
+			<Button variant="primary" size="lg" fullWidth onClick={onContinue} className="text-sm">
 				{continueText}
-			</button>
+			</Button>
 		</div>
 	);
 }

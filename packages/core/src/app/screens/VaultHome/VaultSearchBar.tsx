@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { ArrowUpDown, ChevronDown, Search } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "../../components/ui/button";
 import { TextField } from "../../components/ui/text-field";
 import type { SortKey, TypeFilter, VaultSearch } from "./vault-search";
 
@@ -54,9 +55,10 @@ export function VaultSearchBar({ search, onChange, trailing }: VaultSearchBarPro
 					{typeChips.map((chip) => {
 						const active = search.type === chip.value;
 						return (
-							<button
+							<Button
 								key={chip.value}
-								type="button"
+								variant="link"
+								size="none"
 								onClick={() => onChange({ type: chip.value })}
 								aria-pressed={active}
 								className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
@@ -66,7 +68,7 @@ export function VaultSearchBar({ search, onChange, trailing }: VaultSearchBarPro
 								}`}
 							>
 								{chip.label}
-							</button>
+							</Button>
 						);
 					})}
 				</fieldset>

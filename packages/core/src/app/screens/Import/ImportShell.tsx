@@ -12,6 +12,7 @@ import {
 	parseImport,
 } from "../../../import";
 import { bytesToBase64 } from "../../../util/bytes";
+import { Button } from "../../components/ui/button";
 import { Header } from "./components/Header";
 import { KdbxUnlock } from "./components/KdbxUnlock";
 import { Shell } from "./components/Shell";
@@ -61,13 +62,14 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 					<p className="text-sm text-muted-foreground">
 						<Trans>Set up your {shell.appName} vault first, then come back to import.</Trans>
 					</p>
-					<button
-						type="button"
+					<Button
+						variant="primary"
+						size="none"
 						onClick={() => window.location.assign(window.location.pathname)}
-						className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+						className="px-5 py-2.5 text-sm"
 					>
 						<Trans>Set up a vault</Trans>
-					</button>
+					</Button>
 				</div>
 			</Shell>
 		);
@@ -92,13 +94,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						</Trans>
 					</p>
 					{onClose && (
-						<button
-							type="button"
-							onClick={onClose}
-							className="px-5 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
-						>
+						<Button variant="primary" size="none" onClick={onClose} className="px-5 py-2.5 text-sm">
 							<Trans>Done</Trans>
-						</button>
+						</Button>
 					)}
 				</div>
 			</Shell>
@@ -205,25 +203,21 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						{error && <p className="text-xs text-destructive">{error}</p>}
 					</div>
 					<div className="p-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
-						<button
-							type="button"
+						<Button
+							variant="secondary"
+							size="none"
 							onClick={() => {
 								setResult(null);
 								setProvider(null);
 								setError(null);
 							}}
 							disabled={busy}
-							className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border hover:bg-background/50 active:scale-[0.98] transition-all disabled:opacity-50"
+							className="px-4 py-2 text-sm hover:bg-background/50"
 						>
 							<ArrowLeft className="w-3.5 h-3.5" />
 							<Trans>Choose another file</Trans>
-						</button>
-						<button
-							type="button"
-							onClick={runImport}
-							disabled={busy}
-							className="flex items-center gap-2 px-5 py-2 text-sm rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
-						>
+						</Button>
+						<Button variant="primary" size="md" onClick={runImport} disabled={busy}>
 							{busy ? (
 								<>
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -232,7 +226,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							) : (
 								<Trans>Import {result.imported.length} items</Trans>
 							)}
-						</button>
+						</Button>
 					</div>
 				</div>
 			</Shell>

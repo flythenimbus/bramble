@@ -5,6 +5,7 @@ import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { formatDate } from "../../../util/format-date";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { Button } from "../../components/ui/button";
 
 /** Up-to-two-letter avatar initials for a vault label. */
 function initials(label: string): string {
@@ -35,11 +36,13 @@ export function VaultPicker() {
 						{vaults.map((v, i) => {
 							const label = displayLabel(v.label, i);
 							return (
-								<button
+								<Button
 									key={v.id}
-									type="button"
+									variant="secondary"
+									size="none"
+									fullWidth
 									onClick={() => selectVault(v.id)}
-									className="group w-full flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm p-4 text-left hover:border-primary/50 hover:bg-primary/5 active:scale-[0.99] transition-all"
+									className="group flex gap-3 rounded-xl border-border/60 bg-card/50 backdrop-blur-sm p-4 text-left hover:bg-primary/5 active:scale-[0.99]"
 								>
 									<span className="flex-none w-11 h-11 rounded-full bg-primary/10 text-primary text-sm font-medium flex items-center justify-center">
 										{initials(label)}
@@ -51,14 +54,16 @@ export function VaultPicker() {
 										</span>
 									</span>
 									<ChevronRight className="flex-none w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-								</button>
+								</Button>
 							);
 						})}
 
-						<button
-							type="button"
+						<Button
+							variant="link"
+							size="none"
+							fullWidth
 							onClick={() => void shell.openSetup()}
-							className="w-full flex items-center gap-3 rounded-xl border border-dashed border-border/70 p-4 text-left text-muted-foreground hover:border-primary/50 hover:text-foreground active:scale-[0.99] transition-all"
+							className="flex gap-3 rounded-xl border border-dashed border-border/70 p-4 text-left hover:border-primary/50 active:scale-[0.99]"
 						>
 							<span className="flex-none w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center">
 								<Plus className="w-5 h-5" />
@@ -66,7 +71,7 @@ export function VaultPicker() {
 							<span className="flex-1 text-sm">
 								<Trans>Create new vault</Trans>
 							</span>
-						</button>
+						</Button>
 					</div>
 				</div>
 			</div>
