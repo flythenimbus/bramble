@@ -1091,13 +1091,16 @@ behavior, clobbers included); the fix is real once 3 lands.
   secure storage (the migration deliberately skips them); per-vault device identity is a later
   hardening.
   Mobile does **not** need the extension's per-vault VEK map (single webview, lock-on-switch).
-  **Still open:** `resetSyncState` clears device-global keys on `createVault`, which is fine for
-  first-vault create but would disturb a sibling vault if a *second* vault is created on mobile
-  (rare today; refine when 2nd-vault-create is a real flow). Per-vault biometric + active-vault
-  autofill **have since LANDED** (see [Mobile autofill and biometric](#mobile-autofill-and-biometric));
-  only *simultaneous* multi-vault autofill (search all vaults) remains **Tier 2**. **All of the above
-  is unverified on device** - mobile sync (edit propagates) and two-vault switching must be run on a
-  phone.
+  ~~`resetSyncState` would disturb a sibling vault on 2nd-vault-create.~~ **Not an issue - both
+  callers already guard it:** `createVault` only resets when `isFirst` (`useVault.tsx`), and
+  `RestoreShell` only resets in the `!hasVault` (first/only vault) branch; `startJoin` never resets.
+  So creating, restoring, or joining a second vault leaves the sibling's sync untouched. Pinned by
+  `useVault.createVault.test.tsx` (resets with 0 vaults, does not with 1). The device-global
+  keypairs are the only shared sync state left (see per-vault device identity, below). Per-vault
+  biometric + active-vault autofill **have since LANDED** (see
+  [Mobile autofill and biometric](#mobile-autofill-and-biometric)); only *simultaneous* multi-vault
+  autofill (search all vaults) remains **Tier 2**. **The mobile runtime is still unverified on
+  device** - mobile sync (edit propagates) and two-vault switching must be run on a phone.
 - ~~**Autofill arming (Phase 3, mobile).**~~ **Moot - autofill follows the active vault on both
   platforms** (no designated autofill vault). Android reads the active vault's blob directly; iOS
   pushes the active vault's bundle on unlock (`setIndex`, built from the decrypted entries + slot,
