@@ -1,9 +1,11 @@
 # P2P sync: revocation hardening (design note)
 
-Status: **Item A implemented** - roster-entry signing + password-authority admission producer,
-device-tested on browsers + iOS; *enforcement* is still deferred (verify-if-present today, gated on
-the feature flags + the `admissionKey`-pinning prerequisite below). **Item B (group-key rotation)
-deferred** (accept the metadata residual). The design/threat sections below are the original scoping;
+Status: **Item A implemented + phase-1 shipped 2026-07-09** - roster-entry signing + password-authority
+admission producer, device-tested on browsers + iOS; *enforcement* is still deferred (verify-if-present
+today, gated on the feature flags + the `admissionKey`-pinning prerequisite below). The phase-2 flip is
+NOT done; see [Phase-1 rollout status: the migration clock](#phase-1-rollout-status-the-migration-clock-as-of-2026-07-17)
+for ship dates + the flip prerequisites. **Item B (group-key rotation) deferred** (accept the metadata
+residual). The design/threat sections below are the original scoping;
 the "Producer + verify-side status", "Decisions & residuals", and transport-fix sections at the end
 record the built state + open follow-ups. Assumes the reader knows [p2p-sync.md](p2p-sync.md).
 
@@ -421,3 +423,39 @@ Not audit findings, but P2P bugs found while device-testing the admission work; 
   skips the write, so it can't echo), so a local edit doesn't wait for the rebroadcast tick.
 - **Mobile `resetSyncState`.** The mobile shell now implements it, so a new vault wipes group + device
   keys + relay + the live mesh instead of inheriting the old group (the extension already did).
+
+## Phase-1 rollout status: the migration clock (as of 2026-07-17)
+
+The phase-1 producer - devices **emit** roster signatures + password-authority admission but do NOT
+enforce (`rosterRequireSignatures` / `rosterRequireAdmission` both `false` = verify-if-present) -
+shipped **2026-07-09**:
+
+- **Chromium 1.5.0** (`4de9f6fa`), **Firefox 1.2.0** (`9a1f6656`), **Android 0.6.0** (`378102ce`) -
+  all cut 2026-07-09, and all contain the signing/admission producers (`3fe00816`, `0bfc7eee`,
+  `667e4a46`) + the cross-language phase flags (`e196703b`).
+- **iOS**: the producer landed 2026-07-09 (`667e4a46`) but shipped in **iOS 1.2.0** (`1d802887`, cut
+  2026-07-13, build 206070081), which reaches users only after App Store review + phased rollout - so
+  iOS trails the others by several days.
+
+**Clock as of 2026-07-17: ~8 days on extension + Android, ~4 days (+ review lag) on iOS.**
+
+**The effective clock is longer than the release date.** Migration is passive: a device re-signs its
+own roster entry only the *next time it re-emits* one (re-enroll / roster mutation), and store/APK
+uptake rolls out over days-to-weeks (Android is a manual GitHub APK). So "every entry in a group is
+signed" trails 2026-07-09 by well more than the raw day count.
+
+### Do not flip phase-2 yet - the flip is capability-gated, not timed
+
+Checklist before flipping `rosterRequireSignatures` / `rosterRequireAdmission` -> `true`:
+
+1. [ ] Broad uptake of the >= 2026-07-09 build confirmed on all four targets (iOS especially, given
+   review + rollout lag). The `hello` capability bit is the runtime signal that a group is fully
+   signing-capable.
+2. [ ] **`admissionKey` pinned** (the flip prerequisite above): anchor the admission key to
+   first-seen. Inert in phase 1, so it did not block the producer release, but it MUST land WITH the
+   `rosterRequireAdmission` flip + a multi-device test pass, NOT before.
+3. [ ] Mixed-version device matrix re-run: an old unsigned entry is rejected post-flip; an
+   upgraded-and-re-emitted entry is accepted; a new-id-via-gossip is rejected.
+4. [ ] `rosterRequireSignatures` may flip before `rosterRequireAdmission` (`sigKey` pinning is already
+   done, so that flip is sound as coded) - but on its own it closes impersonation only, not
+   rogue-injection. `rosterRequireAdmission` is the one with teeth.
