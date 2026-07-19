@@ -35,7 +35,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 	const darkMode = themeMode === "system" ? systemDark : themeMode === "dark";
 
 	useEffect(() => {
-		document.documentElement.classList.toggle("dark", darkMode);
+		const root = document.documentElement;
+		root.classList.toggle("dark", darkMode);
+		// Disarm the pre-mount OS-scheme background (theme.css); the .dark class now owns it.
+		root.classList.add("theme-ready");
 	}, [darkMode]);
 
 	const setThemeMode = (mode: ThemeMode) => {

@@ -1,5 +1,16 @@
 @custom-variant dark (&:is(.dark *));
 
+/* Pre-mount paint: before React reads the stored theme and toggles `.dark`, match the OS scheme
+   so a dark-mode user never gets a white flash. useTheme stamps `.theme-ready` on first mount,
+   which turns this off and hands the background back to the `.dark` class (so an explicit
+   light/dark override still wins, just after first paint). Value mirrors `.dark { --background }`. */
+@media (prefers-color-scheme: dark) {
+  html:not(.theme-ready),
+  html:not(.theme-ready) body {
+    background-color: oklch(20.5% 0 0);
+  }
+}
+
 :root {
   --font-size: 16px;
   --background: oklch(98.5% 0 0);
