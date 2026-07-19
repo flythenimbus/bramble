@@ -69,13 +69,18 @@ function clickIsOnAnchor(target: Node): boolean {
 	return false;
 }
 
+/** Match the field width for a bold, integrated look; floored so it stays substantial
+ *  on narrow fields and capped so very wide fields don't sprawl. */
+function pickerWidth(fieldWidth: number): number {
+	return Math.min(Math.max(fieldWidth, 300), 440);
+}
+
 /** Anchor a host below `field` via a compositor-friendly transform (no layout). */
 function positionHostElement(el: HTMLElement, field: HTMLInputElement): void {
 	const rect = field.getBoundingClientRect();
 	const x = rect.left + window.scrollX;
 	const y = rect.bottom + window.scrollY + 2;
-	// One third of the field, floored at 240px for readability on narrow fields.
-	const width = `${Math.max(rect.width / 3, 240)}px`;
+	const width = `${pickerWidth(rect.width)}px`;
 	// translate (compositor-only) instead of top/left (layout) so the per-frame
 	// tracker doesn't thrash layout; write only on change.
 	const transform = `translate3d(${x}px, ${y}px, 0)`;
@@ -113,7 +118,7 @@ function startPositionTracking(): void {
 		const rect = anchorField.getBoundingClientRect();
 		const x = rect.left + window.scrollX;
 		const y = rect.bottom + window.scrollY + 2;
-		const width = Math.max(rect.width / 3, 240);
+		const width = pickerWidth(rect.width);
 		// New field or first frame: re-baseline without treating it as a scroll.
 		const rebaseline = Number.isNaN(lastX) || anchorField !== lastAnchor;
 		const moved = !rebaseline && (x !== lastX || y !== lastY || width !== lastWidth);
@@ -467,7 +472,7 @@ window.addEventListener("message", (e) => {
 			break;
 		case "UI_RESIZE":
 			if (iframeEl) {
-				iframeEl.style.height = `${Math.max(0, Math.min(360, Number(msg.height) || 0))}px`;
+				iframeEl.style.height = `${Math.max(0, Math.min(400, Number(msg.height) || 0))}px`;
 			}
 			break;
 		case "UI_PICK":

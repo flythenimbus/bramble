@@ -77,54 +77,54 @@ function colorForName(name: string): string {
 
 const STYLE = `
 	.tp-list {
-		/* Solid fill: backdrop-filter can't frost the page from a cross-origin iframe. */
-		background: #1c1c1e;
-		border: 1px solid rgba(255, 255, 255, 0.06);
-		border-radius: 14px;
-		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.3);
+		/* Opaque gradient: backdrop-filter can't frost the page from a cross-origin iframe. */
+		background: linear-gradient(135deg, #26262b 0%, #141416 100%);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 16px;
+		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 		font-size: 13px;
 		color: #fff;
 		text-align: left;
-		max-height: 320px;
+		max-height: 360px;
 		overflow-y: auto;
-		padding: 4px;
+		padding: 6px;
 		box-sizing: border-box;
 	}
 	.tp-item {
-		padding: 6px 8px;
+		padding: 10px 12px;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		border-radius: 10px;
-		transition: background 0.1s ease;
+		border-radius: 12px;
+		transition: background 0.12s ease;
 	}
-	.tp-item:hover { background: rgba(255, 255, 255, 0.08); }
-	.tp-item.tp-active { background: rgba(255, 255, 255, 0.12); }
-	.tp-locked { cursor: default; }
-	.tp-locked:hover { background: transparent; }
+	.tp-item:hover { background: rgba(255, 255, 255, 0.1); }
+	.tp-item.tp-active { background: rgba(255, 255, 255, 0.14); }
 	.tp-avatar {
 		width: 40px;
 		height: 40px;
-		border-radius: 10px;
+		border-radius: 11px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 14px;
-		font-weight: 600;
+		font-size: 15px;
+		font-weight: 700;
 		color: #fff;
 		flex-shrink: 0;
-		letter-spacing: 0.5px;
+		letter-spacing: 0.3px;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.14);
 	}
 	.tp-avatar-locked {
-		background: rgba(255, 255, 255, 0.08);
-		color: rgba(255, 255, 255, 0.6);
-		font-size: 18px;
+		background: rgba(255, 255, 255, 0.1);
+		color: rgba(255, 255, 255, 0.85);
 	}
+	.tp-avatar-locked svg { width: 20px; height: 20px; }
 	.tp-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 	.tp-name {
 		font-weight: 600;
+		font-size: 15px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -132,14 +132,23 @@ const STYLE = `
 		line-height: 1.3;
 	}
 	.tp-user {
-		color: rgba(235, 235, 245, 0.55);
-		font-size: 12px;
+		color: rgba(235, 235, 245, 0.6);
+		font-size: 13px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		margin-top: 2px;
 		line-height: 1.3;
 	}
+	.tp-launch {
+		margin-left: auto;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		color: rgba(235, 235, 245, 0.45);
+		transition: color 0.12s ease;
+	}
+	.tp-item:hover .tp-launch { color: rgba(235, 235, 245, 0.85); }
 `;
 
 function matchRow(m: MatchSummary): string {
@@ -166,11 +175,16 @@ function t(key: string): string {
 function lockedRow(): string {
 	return html`
 		<div class="tp-item tp-locked" data-tp-popout="1">
-			<div class="tp-avatar tp-avatar-locked">🔒</div>
+			<div class="tp-avatar tp-avatar-locked">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2.4"></rect><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path></svg>
+			</div>
 			<div class="tp-text">
 				<span class="tp-name">${t("vaultLocked")}</span>
 				<span class="tp-user">${t("vaultLockedUnlockHint")}</span>
 			</div>
+			<span class="tp-launch">
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4l-8.5 8.5"></path><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"></path></svg>
+			</span>
 		</div>
 	`;
 }
