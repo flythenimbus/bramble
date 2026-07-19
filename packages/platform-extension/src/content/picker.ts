@@ -529,6 +529,8 @@ export const picker = {
 	// the original's removeDropdown-vs-removeActiveUi distinction at its call sites.
 	removeDropdown,
 	activeHost,
+	/** The page field the visible picker is anchored to (the field its row belongs to). */
+	anchorField: () => anchorField,
 	clickIsOnAnchor,
 	handleKey: handleDropdownKey,
 	/** Fired with (entryId, otpOnly) when the user picks a match. */

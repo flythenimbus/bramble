@@ -30,6 +30,10 @@ let cachedResult: QueryResult | null = null;
 // Set when the user explicitly closes the popover; suppresses redisplay from
 // re-queries until they re-engage (focus, type, or mousedown on a field).
 let silenceAutoOpen = false;
+// Field to re-surface on the next query response even if it isn't focused. Set when the vault
+// unlocks while a "Vault locked" picker is open: unlocking via the toolbar/pop-out moves focus
+// off the page, so focusedCandidate() is null. See issue #20.
+let reshowField: HTMLInputElement | null = null;
 let lastCheck = 0;
 
 /** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
@@ -74,28 +78,34 @@ function handleResult(result: QueryResult | undefined): void {
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
 	// they re-engage. cachedResult is still updated so the next focus sees fresh data.
-	if (silenceAutoOpen) return;
-
-	const focused = focusedCandidate();
-	if (!focused) return;
-
-	if (result.locked) {
-		picker.showLocked(focused);
+	if (silenceAutoOpen) {
+		reshowField = null;
 		return;
 	}
 
-	const kind = kindOf(getPageFields(), focused);
+	// Prefer the focused field; fall back to a pending re-show target (a post-unlock refresh
+	// whose field lost focus to the popup). Consume the target either way.
+	const target = focusedCandidate() ?? (reshowField?.isConnected ? reshowField : null);
+	reshowField = null;
+	if (!target) return;
+
+	if (result.locked) {
+		picker.showLocked(target);
+		return;
+	}
+
+	const kind = kindOf(getPageFields(), target);
 	if (kind === "card") {
-		if (result.cards.length > 0) picker.showMatches(result.cards, focused);
+		if (result.cards.length > 0) picker.showMatches(result.cards, target);
 		return;
 	}
 	if (kind === "otp") {
 		const otps = result.otps ?? [];
-		if (otps.length > 0) picker.showMatches(otps, focused, { otpOnly: true });
+		if (otps.length > 0) picker.showMatches(otps, target, { otpOnly: true });
 		return;
 	}
 	// login
-	if (result.logins.length > 0) picker.showMatches(result.logins, focused);
+	if (result.logins.length > 0) picker.showMatches(result.logins, target);
 }
 
 /** Asks the background what's available for this page, but only if a fillable field exists. */
@@ -213,13 +223,23 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		// stale "Vault locked" row clears on unlock (and stale matches hide on lock).
 		const locked = (message.payload as { locked?: boolean } | undefined)?.locked === true;
 		if (cachedResult) cachedResult.locked = locked;
-		const focused = focusedCandidate();
-		if (picker.activeHost() && focused) {
+		if (picker.activeHost()) {
+			const focused = focusedCandidate();
 			if (locked) {
-				picker.showLocked(focused);
+				// Locked: swap to the "Vault locked" row on the focused field, or hide stale
+				// matches when focus has left (don't pop the locked prompt on an idle field).
+				if (focused) picker.showLocked(focused);
+				else picker.remove();
 			} else {
+				// Unlocked: the row belongs to the picker's anchor field, which may no longer be
+				// focused (unlocking via the toolbar/pop-out moves focus off the page). Re-query and
+				// re-surface matches on that field so the stale "Vault locked" row is replaced in place.
+				const field = focused ?? picker.anchorField();
 				picker.remove();
-				queryAutofill();
+				if (field) {
+					reshowField = field;
+					queryAutofill();
+				}
 			}
 		}
 		sendResponse({ ok: true });
