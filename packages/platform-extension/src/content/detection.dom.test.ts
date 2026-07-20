@@ -303,11 +303,40 @@ describe("otpInputs", () => {
 		expect(fields[0]?.getAttribute("name")).toBe("passcode");
 	});
 
-	it("card detection beats OTP for ambiguous 'verification-code' naming", () => {
-		// CC_CSC_RE claims "verification-code" as CVV over OTP; locks the tradeoff.
+	it("treats a bare 'verification-code' field as OTP, not a CVV", () => {
+		// "verification code" without card context is a 2FA/OTP label, not a CVV
+		// (real CVVs use cc-csc / CVV / CVC / security code / card verification).
 		loadHTML(`<input name="verification-code" />`);
-		expect(otpInputs()).toEqual([]);
-		expect(detectCardFields().cvv?.getAttribute("name")).toBe("verification-code");
+		expect(detectCardFields().cvv).toBeNull();
+		expect(otpInputs().map((f) => f.getAttribute("name"))).toEqual(["verification-code"]);
+	});
+
+	it("classifies GitHub's 2FA field as OTP, not a card (real markup)", () => {
+		// The label reads "Enter the verification code" and the input carries no
+		// one-time-code token (autocomplete="off"); it must still be an OTP field,
+		// never a credit-card slot. Regression for showing card suggestions in 2FA.
+		loadHTML(`
+			<form action="/sessions/two-factor" method="post">
+				<input type="hidden" name="authenticity_token" value="x" />
+				<label id="session-otp-input-label" class="sr-only" for="app_totp">Enter the verification code</label>
+				<input
+					type="text"
+					name="app_otp"
+					id="app_totp"
+					aria-labelledby="session-otp-input-label"
+					autocomplete="off"
+					class="js-verification-code-input-auto-submit input-code-verification-2fa app_totp"
+					inputmode="numeric"
+					pattern="([0-9]{6})|([0-9a-fA-F]{5}-?[0-9a-fA-F]{5})"
+					placeholder="XXXXXX"
+				/>
+				<button type="submit">Verify</button>
+			</form>
+		`);
+		const el = document.getElementById("app_totp") as HTMLInputElement;
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+		expect(otpInputs()).toContain(el);
+		expect(candidateKind(el)).toBe("otp");
 	});
 
 	it("gathers a segmented widget when the seed has maxLength=1", () => {

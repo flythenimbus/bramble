@@ -168,8 +168,10 @@ export const CC_NAME_RE = /cardholder|name.?on.?card|cc.?name/i;
 export const CC_EXP_RE = /expir(y|ation)/i;
 export const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
 export const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
-export const CC_CSC_RE =
-	/\bcvv\b|\bcvc\b|\bcsc\b|security.?code|card.?code|verification.?(no|number|code)/i;
+// "verification code/number" alone is far more often a 2FA/OTP label than a CVV
+// (e.g. GitHub's 2FA field: label "Enter the verification code"), so the CVV
+// match requires card context (card verification value/code/number, or cvn).
+export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|security.?code|card.?code|card.?verif/i;
 
 /** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
 export function ccByToken(token: string, doc: Document = document): HTMLInputElement | null {
