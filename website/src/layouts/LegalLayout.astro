@@ -1,0 +1,83 @@
+---
+import Footer from "@/components/Footer.astro";
+import Header from "@/components/Header.astro";
+import Layout from "@/layouts/Layout.astro";
+
+interface Props {
+	title: string;
+	description?: string;
+	path?: string;
+	/** Optional line under the heading, e.g. "Effective date: 23 June 2026". */
+	meta?: string;
+}
+
+const { title, description, path, meta } = Astro.props;
+---
+
+<Layout title={title} description={description} path={path}>
+	<Header />
+	<main class="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
+		<header class="mb-10">
+			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+			{meta && <p class="mt-3 text-sm text-muted-foreground">{meta}</p>}
+		</header>
+		<article class="legal">
+			<slot />
+		</article>
+	</main>
+	<Footer />
+</Layout>
+
+<style is:global>
+	.legal {
+		color: var(--foreground);
+		line-height: 1.75;
+	}
+	.legal > * + * {
+		margin-top: 1.25rem;
+	}
+	.legal h2 {
+		margin-top: 2.5rem;
+		font-size: 1.25rem;
+		font-weight: 600;
+		line-height: 1.4;
+		letter-spacing: -0.01em;
+	}
+	.legal h2:first-child {
+		margin-top: 0;
+	}
+	.legal p,
+	.legal li {
+		color: var(--muted-foreground);
+	}
+	.legal .lead {
+		font-size: 1.125rem;
+	}
+	.legal strong {
+		color: var(--foreground);
+		font-weight: 600;
+	}
+	.legal a {
+		color: var(--foreground);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		text-decoration-color: var(--border);
+	}
+	.legal a:hover {
+		text-decoration-color: var(--foreground);
+	}
+	.legal ul {
+		list-style: disc;
+		padding-left: 1.5rem;
+	}
+	.legal ul > li + li {
+		margin-top: 0.5rem;
+	}
+	.legal code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.875em;
+		background: var(--muted);
+		padding: 0.15em 0.4em;
+		border-radius: 0.375rem;
+	}
+</style>

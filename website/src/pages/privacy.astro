@@ -1,0 +1,165 @@
+---
+import LegalLayout from "@/layouts/LegalLayout.astro";
+import { SITE } from "@/consts";
+---
+
+<LegalLayout
+	title="Privacy Policy"
+	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its only network use is two optional, off-by-default features you control: a password breach check and peer-to-peer sync between your own devices."
+	path="/privacy.html"
+	meta="Effective date: 23 June 2026"
+>
+	<p class="lead">
+		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
+		browser extension and as mobile apps. It does not collect, sell, or share any of your data.
+		There is no account and no Bramble server that holds your vault. Everything stays on your
+		device, encrypted. Bramble makes network connections only for two optional features that are
+		off by default and that you turn on yourself: a password breach check, and peer-to-peer sync
+		between your own devices. Neither one ever sends your passwords or your vault to us or to anyone
+		else. Details below.
+	</p>
+
+	<h2>What data Bramble handles</h2>
+	<p>
+		Bramble stores the data you choose to save in it, such as login usernames and passwords,
+		payment cards, secure notes, SSH keys, and two-factor (TOTP) seeds, together with your own app
+		preferences. This data is created and used only to provide the password-manager features you
+		asked for (saving, searching, and autofilling your credentials).
+	</p>
+
+	<h2>Where it is stored</h2>
+	<p>
+		Your vault is stored only on your devices. In the browser extension that means your browser's
+		local extension storage and/or a vault file you pick on your own computer. In the mobile apps
+		it means the app's private on-device storage, with a small number of secrets (the key that
+		protects your vault) held in the OS keystore. Bramble has no vault server and no cloud, so your
+		data is never stored anywhere off your devices.
+	</p>
+
+	<h2>How it is protected</h2>
+	<p>
+		Your vault is encrypted. The key that protects it is derived from your master password using
+		Argon2id, and individual entries are encrypted with AES-256-GCM. Encryption and decryption
+		happen locally on your device. Your master password and the keys derived from it are never
+		stored in plaintext and never leave your device.
+	</p>
+
+	<h2>What Bramble does not do</h2>
+	<ul>
+		<li>No data collection, tracking, analytics, telemetry, or advertising.</li>
+		<li>No accounts, sign-up, or login to any service.</li>
+		<li>
+			No vault server and no cloud. Bramble never uploads your vault, and no copy of it is held off
+			your devices.
+		</li>
+		<li>No selling, renting, or sharing of your data with anyone.</li>
+		<li>No use of your data for any purpose other than the features you use.</li>
+	</ul>
+
+	<h2>Network connections, in full</h2>
+	<p>
+		Bramble works entirely offline by default. There are exactly two features that make network
+		connections, both optional and both off until you turn them on: the password breach check and
+		device sync. They are described next. Bramble makes no other network requests.
+	</p>
+
+	<h2>Password breach check (optional)</h2>
+	<p>
+		Bramble can tell you whether one of your saved passwords has appeared in a known data breach.
+		This feature is off by default; you turn it on in Settings.
+	</p>
+	<p>
+		When it is on, Bramble checks a password using the Have I Been Pwned "Pwned Passwords" service
+		with a privacy-preserving method called k-anonymity: it computes a SHA-1 hash of the password
+		and sends only the first five characters of that hash to its API (api.pwnedpasswords.com). The
+		service returns a list of possible matches and Bramble compares them on your device. Your
+		password, and even its full hash, never leave your device, and Have I Been Pwned cannot tell
+		which password you checked. Bramble also asks the service to pad its response so the amount of
+		data returned reveals nothing about your query.
+	</p>
+	<p>
+		Have I Been Pwned is operated by a third party under its own privacy policy:{" "}
+		<a href="https://haveibeenpwned.com/Privacy">haveibeenpwned.com/Privacy</a>.
+	</p>
+
+	<h2>Syncing across your own devices (optional)</h2>
+	<p>
+		Bramble can sync one vault across your own devices (for example between two browsers, or between
+		a browser and a phone). This is optional and off until you set it up by linking a device, and
+		it is strictly personal: only your own devices, only your own vault. There is no shared network,
+		and there is no Bramble server that stores or relays your vault.
+	</p>
+	<p>How it works, and what each part can see:</p>
+	<ul>
+		<li>
+			<strong>The vault transfer is device-to-device.</strong> Your devices connect directly to
+			each other over your local network and exchange the vault over that direct, encrypted
+			connection. The vault stays end-to-end encrypted under a key that only your devices hold.
+		</li>
+		<li>
+			<strong>A signaling relay only helps your devices find each other.</strong> To set up the
+			direct connection, your devices exchange brief connection details through a relay (a WebSocket
+			server). By default this is a relay we run, but you can point Bramble at your own relay or at
+			any public relay that speaks the same protocol. The relay never receives your vault, your
+			passwords, your master password, or any key that could decrypt them.
+		</li>
+		<li>
+			<strong>The relay sees only opaque data and basic metadata.</strong> The signaling messages
+			it passes along are themselves encrypted with a key it does not have, and the "room" your
+			devices meet in is addressed by an unguessable value derived from that key, so the relay
+			cannot tie it to you. The most it can observe is that two network addresses connected, and
+			when. The direct channel between your devices is mutually authenticated, so a dishonest relay
+			cannot read, alter, or impersonate either device; it can at most refuse to help, in which case
+			you can link devices by scanning a QR code instead.
+		</li>
+	</ul>
+
+	<h2>Autofill</h2>
+	<p>
+		In the browser extension, Bramble's content script runs on web pages and looks at the structure
+		of forms on the page (for example, whether a field is a username, password, or one-time-code
+		field) so it can offer to fill saved credentials. This happens entirely on your device. Bramble
+		does not read, collect, or transmit the content of the pages you visit, and it only fills a
+		credential when you explicitly choose one.
+	</p>
+	<p>
+		On mobile, autofill uses the operating system's own AutoFill framework. When you pick Bramble to
+		fill a login, the system hands Bramble the app or website you are filling so it can find a
+		matching entry. Bramble's autofill runs in a separate, locked component that reads your vault
+		only after you authenticate (with biometrics, your device passcode, or your master password) and
+		then decrypt it; nothing in your vault is readable before that.
+	</p>
+
+	<h2>Recovery and lost access</h2>
+	<p>
+		Bramble has no copy of your master password or the keys derived from it, so it cannot recover
+		your vault or reset your password for you. If you set up a recovery code or a security key, you
+		can use those to regain access. If you lose your master password and every recovery method you
+		set up, your vault cannot be decrypted by you, by us, or by anyone. That is the trade-off for
+		there being no backdoor.
+	</p>
+
+	<h2>Data retention and deletion</h2>
+	<p>
+		Because your data lives only on your devices, you are in control of it. Removing the extension
+		or the app, deleting your vault file, and clearing the app's or extension's storage removes your
+		data. Bramble retains nothing on your behalf because it holds nothing about you anywhere else.
+	</p>
+
+	<h2>Children</h2>
+	<p>
+		Bramble is a general-purpose tool, not directed at children, and collects no information from
+		anyone.
+	</p>
+
+	<h2>Changes to this policy</h2>
+	<p>
+		If this policy changes, the updated version will be posted here with a new effective date.
+	</p>
+
+	<h2>Contact</h2>
+	<p>
+		Questions about this policy or your privacy? Email{" "}
+		<a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+	</p>
+</LegalLayout>

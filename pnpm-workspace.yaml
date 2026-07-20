@@ -1,7 +1,9 @@
 packages:
+  - packages/theme
   - packages/core
   - packages/platform-extension
   - packages/platform-mobile
+  - website
   - nostr-relay/cf-worker
 
 # Build scripts the cf-worker's wrangler toolchain needs to fetch its platform

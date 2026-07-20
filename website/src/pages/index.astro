@@ -1,0 +1,675 @@
+---
+import BrandAndroid from "@tabler/icons/outline/brand-android.svg";
+import BrandApple from "@tabler/icons/outline/brand-apple.svg";
+import BrandChrome from "@tabler/icons/outline/brand-chrome.svg";
+import BrandFirefox from "@tabler/icons/outline/brand-firefox.svg";
+import BrandGithub from "@tabler/icons/outline/brand-github.svg";
+import Check from "@tabler/icons/outline/check.svg";
+import CloudLock from "@tabler/icons/outline/cloud-lock.svg";
+import DeviceLaptop from "@tabler/icons/outline/device-laptop.svg";
+import Fingerprint from "@tabler/icons/outline/fingerprint.svg";
+import Key from "@tabler/icons/outline/key.svg";
+import Puzzle from "@tabler/icons/outline/puzzle.svg";
+import Route from "@tabler/icons/outline/route.svg";
+import ServerOff from "@tabler/icons/outline/server-off.svg";
+import ShieldCheck from "@tabler/icons/outline/shield-check.svg";
+import ShieldLock from "@tabler/icons/outline/shield-lock.svg";
+import ArrowsExchange from "@tabler/icons/outline/arrows-exchange.svg";
+import BrandDropbox from "@tabler/icons/outline/brand-dropbox.svg";
+import Bucket from "@tabler/icons/outline/bucket.svg";
+import FileExport from "@tabler/icons/outline/file-export.svg";
+import Router from "@tabler/icons/outline/router.svg";
+import Server2 from "@tabler/icons/outline/server-2.svg";
+import ServerCog from "@tabler/icons/outline/server-cog.svg";
+import Codeberg from "@/assets/codeberg.svg";
+
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/starwind/accordion";
+import { Badge } from "@/components/starwind/badge";
+import { Button } from "@/components/starwind/button";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/starwind/card";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/starwind/tabs";
+import Footer from "@/components/Footer.astro";
+import Header from "@/components/Header.astro";
+import ScreenshotGallery from "@/components/ScreenshotGallery.astro";
+import { LINKS, SITE } from "@/consts";
+import Layout from "@/layouts/Layout.astro";
+
+const trust = [
+    "No account",
+    "No tracking, ever",
+    "End-to-end encrypted",
+    "Open source",
+];
+
+const features = [
+    {
+        icon: ShieldLock,
+        title: "Encrypted on your device",
+        body: "Your master password derives the key with Argon2id, and every entry is sealed with AES-256-GCM. Encryption happens locally and derived keys are wiped after use.",
+    },
+    {
+        icon: ServerOff,
+        title: "No account, no server",
+        body: "Nothing to sign up for and no server holding your vault. There is no Bramble account to leak and no central database to breach.",
+    },
+    {
+        icon: Route,
+        title: "Peer-to-peer sync",
+        body: "Share one vault across your devices directly, device-to-device, end-to-end encrypted. A relay only helps them find each other; it never sees your data.",
+    },
+    {
+        icon: DeviceLaptop,
+        title: "Autofill everywhere",
+        body: "Detects login fields on the page in the browser, and registers as a native credential provider on iOS and Android so your logins show up in the keyboard.",
+    },
+    {
+        icon: Key,
+        title: "Passkeys built in",
+        body: "Create and sign in with passkeys. They are stored as ordinary vault entries, so they sync between your devices along with everything else.",
+    },
+    {
+        icon: Fingerprint,
+        title: "Biometric unlock",
+        body: "Unlock with Face ID, Touch ID, or Android biometrics, gated by the OS keystore, or fall back to your master password or a recovery code.",
+    },
+    {
+        icon: ShieldCheck,
+        title: "Breach check",
+        body: "Optionally check a password against Have I Been Pwned using k-anonymity, so only a partial hash ever leaves the device. Off by default.",
+    },
+    {
+        icon: CloudLock,
+        title: "Encrypted backups",
+        body: "Export an encrypted .bramble file any time, or point Bramble at Dropbox, any S3-compatible bucket, or your own WebDAV server. Only ciphertext ever leaves.",
+    },
+];
+
+const faqs = [
+    {
+        q: "Is Bramble really free?",
+        a: "Yes. Bramble is free and open source. There is no paid tier, no subscription, and no account to create.",
+    },
+    {
+        q: "What happens if I forget my master password?",
+        a: "Bramble holds no copy of your master password or the keys derived from it, so it cannot reset it for you. If you set up a recovery code or a security key you can use those to regain access. If you lose your master password and every recovery method, the vault cannot be decrypted by you, by us, or by anyone. That is the trade-off for there being no backdoor.",
+    },
+    {
+        q: "Where is my data stored?",
+        a: "Only on your devices. In the browser that means your browser's private extension storage and/or a vault file you pick. On mobile it means the app's private, encrypted-at-rest storage. There is no Bramble cloud.",
+    },
+    {
+        q: "Does anything get sent to your servers?",
+        a: "By default, nothing. Two optional features make network connections when you turn them on: the breach check (which sends only a partial password hash via k-anonymity) and device sync (whose signaling relay only helps your devices connect and never receives your vault, passwords, or keys).",
+    },
+    {
+        q: "How does sync work without a cloud?",
+        a: "Your devices connect directly to each other and exchange the vault over an encrypted, mutually authenticated channel. A signaling relay passes brief connection details so they can find each other, but the vault stays end-to-end encrypted under a key only your devices hold.",
+    },
+    {
+        q: "Is it open source?",
+        a: "Yes, the whole thing. The code lives on GitHub and Codeberg, so you can read it, build it yourself, or point sync at your own relay.",
+    },
+];
+---
+
+<Layout>
+    <Header />
+
+    <main>
+        {/* Hero */}
+        <section class="relative overflow-hidden">
+            <div
+                class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_50%_0%,var(--muted)_0%,transparent_70%)]"
+            >
+            </div>
+            <div
+                class="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28"
+            >
+                <div class="mx-auto mb-6 flex w-fit items-center gap-2">
+                    <Badge variant="outline" size="md"
+                        >Local-first password manager</Badge
+                    >
+                </div>
+                <h1
+                    class="mx-auto max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
+                >
+                    Your passwords never leave your devices.
+                </h1>
+                <p
+                    class="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground text-pretty"
+                >
+                    {SITE.description}
+                </p>
+
+                <div
+                    class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
+                >
+                    <Button
+                        href={LINKS.chrome}
+                        data-install-browser
+                        target="_blank"
+                        rel="noopener"
+                        size="lg"
+                    >
+                        <Puzzle />
+                        <span data-install-label>Add to your browser</span>
+                    </Button>
+                    <Button
+                        href={LINKS.ios}
+                        target="_blank"
+                        rel="noopener"
+                        variant="outline"
+                        size="lg"
+                    >
+                        <BrandApple />
+                        Get the iOS app
+                    </Button>
+                    <Button
+                        href={LINKS.android}
+                        target="_blank"
+                        rel="noopener"
+                        variant="outline"
+                        size="lg"
+                    >
+                        <BrandAndroid />
+                        Get the Android app
+                    </Button>
+                </div>
+
+                <p class="mt-4 text-sm text-muted-foreground">
+                    Works in Chrome, Brave, Arc, Vivaldi, Firefox, LibreWolf,
+                    and Waterfox, plus iOS and Android.
+                </p>
+
+                <ul
+                    class="mx-auto mt-9 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2"
+                >
+                    {
+                        trust.map((item) => (
+                            <li class="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                <Check class="size-4 text-foreground" />
+                                {item}
+                            </li>
+                        ))
+                    }
+                </ul>
+            </div>
+        </section>
+
+        {/* Screenshots */}
+        <ScreenshotGallery />
+
+        {/* Features */}
+        <section
+            id="features"
+            class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24"
+        >
+            <div class="mx-auto max-w-6xl px-4 sm:px-6">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-semibold tracking-tight sm:text-4xl"
+                    >
+                        Everything a password manager should do. Nothing it
+                        shouldn't.
+                    </h2>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        The same encrypted vault and the same Rust crypto core
+                        sit behind the browser extension and the mobile apps.
+                    </p>
+                </div>
+
+                <div class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {
+                        features.map((feature) => {
+                            const Icon = feature.icon;
+                            return (
+                                <Card class="h-full">
+                                    <CardHeader>
+                                        <div class="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
+                                            <Icon class="size-5" />
+                                        </div>
+                                        <CardTitle class="text-base">
+                                            {feature.title}
+                                        </CardTitle>
+                                        <CardDescription class="text-pretty">
+                                            {feature.body}
+                                        </CardDescription>
+                                    </CardHeader>
+                                </Card>
+                            );
+                        })
+                    }
+                </div>
+            </div>
+        </section>
+
+        {/* Sync */}
+        <section class="border-t border-border/60 py-20 sm:py-24">
+            <div class="mx-auto max-w-6xl px-4 sm:px-6">
+                <div class="mx-auto max-w-2xl text-center">
+                    <Badge variant="secondary" size="md" class="mb-4">Private sync</Badge>
+                    <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+                        Your devices sync straight to each other.
+                    </h2>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        No cloud, no account, no middleman holding a copy of your vault. Pair two
+                        devices and they connect directly, exchanging the vault over an encrypted,
+                        mutually authenticated channel. The infrastructure that helps them find each
+                        other is yours to replace.
+                    </p>
+                </div>
+
+                <div class="mt-14 grid gap-4 sm:grid-cols-3">
+                    {
+                        [
+                            {
+                                icon: ArrowsExchange,
+                                title: "Direct and end-to-end encrypted",
+                                body: "Your devices talk to each other over a direct, mutually authenticated channel. The vault stays encrypted under a key only they hold, so nothing readable ever crosses the wire.",
+                            },
+                            {
+                                icon: ServerCog,
+                                title: "Swap the signaling relay",
+                                body: "Devices meet through a Nostr relay that only ever sees ciphertext and can't link it to you. Use the default, run your own, or point at any public relay that speaks the protocol.",
+                            },
+                            {
+                                icon: Router,
+                                title: "Bring your own TURN",
+                                body: "When a direct link is blocked, a STUN/TURN server relays the still-encrypted channel. Configure your own ICE servers, or stay strictly direct-only. Your call.",
+                            },
+                        ].map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <Card class="h-full">
+                                    <CardHeader>
+                                        <div class="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
+                                            <Icon class="size-5" />
+                                        </div>
+                                        <CardTitle class="text-base">{item.title}</CardTitle>
+                                        <CardDescription class="text-pretty">
+                                            {item.body}
+                                        </CardDescription>
+                                    </CardHeader>
+                                </Card>
+                            );
+                        })
+                    }
+                </div>
+            </div>
+        </section>
+
+        {/* Backups */}
+        <section class="border-t border-border/60 py-20 sm:py-24">
+            <div
+                class="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center"
+            >
+                <div>
+                    <Badge variant="secondary" size="md" class="mb-4">Backups</Badge>
+                    <h2
+                        class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
+                    >
+                        Backups you keep, on storage you already own.
+                    </h2>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        Nobody else holds a copy of your vault, so keeping a backup is up to you, and
+                        Bramble makes it painless. Export an encrypted file by hand, or have it drop
+                        scheduled backups into storage you already run. Only ciphertext ever leaves
+                        your device, so the destination stores something it can't read and a stolen
+                        backup is useless without your master password.
+                    </p>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        Self-hosting? Point it at your own{" "}
+                        <strong class="font-medium text-foreground">Nextcloud</strong> over WebDAV and
+                        your vault history never touches anyone else's servers.
+                    </p>
+                </div>
+
+                <Card>
+                    <CardContent class="divide-y divide-border/60 py-0">
+                        {
+                            [
+                                {
+                                    icon: BrandDropbox,
+                                    title: "Dropbox",
+                                    body: "Sign in once and let Bramble keep encrypted snapshots there on the schedule you pick.",
+                                },
+                                {
+                                    icon: Bucket,
+                                    title: "Any S3-compatible bucket",
+                                    body: "Backblaze B2, Cloudflare R2, Storj, Wasabi, MinIO, and friends.",
+                                },
+                                {
+                                    icon: Server2,
+                                    title: "WebDAV, including Nextcloud",
+                                    body: "Your own Nextcloud, ownCloud, or Fastmail. Self-hosted, and answering only to you.",
+                                },
+                                {
+                                    icon: FileExport,
+                                    title: "Or export by hand",
+                                    body: "Save an encrypted .bramble file anywhere: another drive, a USB stick, wherever you like.",
+                                },
+                            ].map((item) => {
+                                const Icon = item.icon;
+                                return (
+                                    <div class="flex items-start gap-3 py-4 first:pt-6 last:pb-6">
+                                        <Icon class="mt-0.5 size-5 shrink-0 text-foreground" />
+                                        <div>
+                                            <p class="font-medium">{item.title}</p>
+                                            <p class="text-sm text-muted-foreground text-pretty">
+                                                {item.body}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        }
+                    </CardContent>
+                </Card>
+            </div>
+        </section>
+
+        {/* Platforms */}
+        <section
+            id="platforms"
+            class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24"
+        >
+            <div class="mx-auto max-w-6xl px-4 sm:px-6">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-semibold tracking-tight sm:text-4xl"
+                    >
+                        Bramble runs where you do.
+                    </h2>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        One vault, three platforms, syncing directly to each
+                        other with no cloud in the middle.
+                    </p>
+                </div>
+
+                <Tabs defaultValue="browser" class="mx-auto mt-12 max-w-3xl">
+                    <TabsList class="mx-auto w-fit">
+                        <TabsTrigger value="browser">
+                            <BrandChrome class="size-4" />
+                            Browser
+                        </TabsTrigger>
+                        <TabsTrigger value="ios">
+                            <BrandApple class="size-4" />
+                            iOS
+                        </TabsTrigger>
+                        <TabsTrigger value="android">
+                            <BrandAndroid class="size-4" />
+                            Android
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="browser">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Browser extension</CardTitle>
+                                <CardDescription>
+                                    For Chromium browsers (Brave, Vivaldi,
+                                    Chrome, Arc, and friends) and Firefox forks
+                                    like Zen and Waterfox. Install it and you
+                                    are up and running in a minute, with
+                                    autofill on the pages you visit and
+                                    one-click copy for passwords and one-time
+                                    codes.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent class="flex flex-wrap gap-3">
+                                <Button
+                                    href={LINKS.chrome}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    <BrandChrome />
+                                    Chrome Web Store
+                                </Button>
+                                <Button
+                                    href={LINKS.firefox}
+                                    target="_blank"
+                                    rel="noopener"
+                                    variant="outline"
+                                >
+                                    <BrandFirefox />
+                                    Firefox Add-ons
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="ios">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>iOS app</CardTitle>
+                                <CardDescription>
+                                    System AutoFill across apps and browsers,
+                                    Face ID and Touch ID unlock, and passkeys.
+                                    The vault lives in encrypted on-device
+                                    storage, and everything cryptographic runs
+                                    in the same native Rust core.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button
+                                    href={LINKS.ios}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    <BrandApple />
+                                    Download on the App Store
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="android">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Android app</CardTitle>
+                                <CardDescription>
+                                    A native autofill service, biometric unlock,
+                                    and passkeys, with no Google Play Services
+                                    required. Released as signed APKs on GitHub
+                                    so you always know exactly what you are
+                                    installing.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button
+                                    href={LINKS.android}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    <BrandAndroid />
+                                    Get the APK from Releases
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </section>
+
+        {/* Security */}
+        <section
+            id="security"
+            class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24"
+        >
+            <div
+                class="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center"
+            >
+                <div>
+                    <Badge variant="secondary" size="md" class="mb-4"
+                        >One Rust crypto core</Badge
+                    >
+                    <h2
+                        class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
+                    >
+                        Serious cryptography, no backdoor.
+                    </h2>
+                    <p class="mt-4 text-muted-foreground text-pretty">
+                        Key derivation, encryption, and decryption all happen
+                        inside a single Rust core, compiled to WebAssembly in
+                        the browser and to a native library on iOS and Android.
+                        Because nobody else holds a copy of your vault, no one
+                        else can be compelled to hand it over.
+                    </p>
+                    <div class="mt-8 flex flex-wrap gap-3">
+                        <Button
+                            href={LINKS.github}
+                            target="_blank"
+                            rel="noopener"
+                            variant="outline"
+                        >
+                            <BrandGithub />
+                            Read the source
+                        </Button>
+                        <Button
+                            href={LINKS.codeberg}
+                            target="_blank"
+                            rel="noopener"
+                            variant="ghost"
+                        >
+                            <Codeberg />
+                            Mirror on Codeberg
+                        </Button>
+                    </div>
+                </div>
+
+                <Card>
+                    <CardContent class="divide-y divide-border/60 py-0">
+                        {
+                            [
+                                [
+                                    "Argon2id",
+                                    "Memory-hard key derivation from your master password.",
+                                ],
+                                [
+                                    "AES-256-GCM",
+                                    "Authenticated encryption for every entry in the vault.",
+                                ],
+                                [
+                                    "Keys wiped after use",
+                                    "Derived keys are cleared from memory once the work is done.",
+                                ],
+                                [
+                                    "Encrypted at rest",
+                                    "On mobile the vault lives on the native filesystem, encrypted, not in a webview database.",
+                                ],
+                                [
+                                    "End-to-end sync",
+                                    "Devices authenticate each other; a dishonest relay can't read or alter anything.",
+                                ],
+                            ].map(([term, desc]) => (
+                                <div class="flex items-start gap-3 py-4 first:pt-6 last:pb-6">
+                                    <ShieldCheck class="mt-0.5 size-5 shrink-0 text-foreground" />
+                                    <div>
+                                        <p class="font-medium">{term}</p>
+                                        <p class="text-sm text-muted-foreground text-pretty">
+                                            {desc}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        }
+                    </CardContent>
+                </Card>
+            </div>
+        </section>
+
+        {/* FAQ */}
+        <section
+            id="faq"
+            class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24"
+        >
+            <div class="mx-auto max-w-3xl px-4 sm:px-6">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-semibold tracking-tight sm:text-4xl"
+                    >
+                        Questions, answered.
+                    </h2>
+                </div>
+                <Accordion type="single" class="mt-10">
+                    {
+                        faqs.map((faq, i) => (
+                            <AccordionItem value={`faq-${i}`}>
+                                <AccordionTrigger>{faq.q}</AccordionTrigger>
+                                <AccordionContent class="text-pretty">
+                                    {faq.a}
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))
+                    }
+                </Accordion>
+            </div>
+        </section>
+
+        {/* Final CTA */}
+        <section class="border-t border-border/60 py-20 sm:py-24">
+            <div class="mx-auto max-w-4xl px-4 text-center sm:px-6">
+                <img
+                    src="/icon-512.png"
+                    alt=""
+                    width="56"
+                    height="56"
+                    class="mx-auto mb-6 size-14 rounded-xl"
+                />
+                <h2
+                    class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
+                >
+                    Take your passwords back.
+                </h2>
+                <p
+                    class="mx-auto mt-4 max-w-xl text-muted-foreground text-pretty"
+                >
+                    You hold the vault, you hold the password, and that's it.
+                    Free, open source, and yours.
+                </p>
+                <div
+                    class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
+                >
+                    <Button
+                        href={LINKS.chrome}
+                        data-install-browser
+                        target="_blank"
+                        rel="noopener"
+                        size="lg"
+                    >
+                        <Puzzle />
+                        <span data-install-label>Add to your browser</span>
+                    </Button>
+                    <Button
+                        href={LINKS.github}
+                        target="_blank"
+                        rel="noopener"
+                        variant="ghost"
+                        size="lg"
+                    >
+                        <BrandGithub />
+                        Star it on GitHub
+                    </Button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <Footer />
+</Layout>

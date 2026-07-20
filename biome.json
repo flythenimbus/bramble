@@ -14,6 +14,8 @@
 			"!packages/core-rust/target",
 			"!packages/platform-extension/public/wasm",
 			"!packages/platform-extension/src/fixtures/imports",
+			"!website/src/components/starwind",
+			"!website/dist",
 			"!icon",
 			"!**/*.lockb"
 		]

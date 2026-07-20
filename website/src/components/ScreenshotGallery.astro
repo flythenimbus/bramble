@@ -1,0 +1,194 @@
+---
+import ChevronLeft from "@tabler/icons/outline/chevron-left.svg";
+import ChevronRight from "@tabler/icons/outline/chevron-right.svg";
+import X from "@tabler/icons/outline/x.svg";
+import { Image, getImage } from "astro:assets";
+
+// The screenshots live in the repo's docs/ folder (single source of truth, also
+// used by the README). Astro optimizes them into hashed webp at build time.
+const modules = import.meta.glob<{ default: ImageMetadata }>(
+	"../../../docs/screenshots/*.png",
+	{ eager: true },
+);
+
+const LABELS: Record<string, string> = {
+	main: "Your vault",
+	autofill: "Autofill on a page",
+	"login-edit": "Editing an entry",
+	"settings-general": "Settings",
+	"settings-appearance": "Dark mode",
+	"settings-sync": "Device sync",
+	"login-save": "Save a login",
+	"passkey-save": "Create a passkey",
+	"passkey-use": "Sign in with a passkey",
+};
+const ORDER = Object.keys(LABELS);
+
+const raw = Object.entries(modules)
+	.map(([path, mod]) => ({
+		key: path.split("/").pop()?.replace(/\.png$/, "") ?? path,
+		img: mod.default,
+	}))
+	.sort((a, b) => {
+		const ia = ORDER.indexOf(a.key);
+		const ib = ORDER.indexOf(b.key);
+		return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+	});
+
+const shots = await Promise.all(
+	raw.map(async ({ key, img }) => {
+		const alt = LABELS[key] ?? key;
+		// A larger, capped webp for the lightbox (no upscaling past the source).
+		const full = await getImage({
+			src: img,
+			width: Math.min(img.width, 1600),
+			format: "webp",
+		});
+		return { key, img, alt, full: full.src };
+	}),
+);
+---
+
+<section id="screenshots" class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24">
+	<div class="mx-auto max-w-6xl px-4 sm:px-6">
+		<div class="mx-auto max-w-2xl text-center">
+			<h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">See it in action.</h2>
+			<p class="mt-4 text-muted-foreground text-pretty">
+				A look around Bramble. Open any shot, then use the arrows or your keyboard to browse.
+			</p>
+		</div>
+
+		<ul
+			class="mt-12 flex snap-x gap-4 overflow-x-auto pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]"
+		>
+			{
+				shots.map((s) => (
+					<li class="shrink-0 snap-start">
+						<button
+							type="button"
+							data-ss-thumb
+							data-full={s.full}
+							data-alt={s.alt}
+							aria-label={`Open screenshot: ${s.alt}`}
+							class="block overflow-hidden rounded-xl border border-border bg-muted/40 transition-colors hover:border-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+						>
+							<Image
+								src={s.img}
+								alt={s.alt}
+								height={520}
+								format="webp"
+								loading="lazy"
+								class="h-56 w-auto max-w-none sm:h-64"
+							/>
+						</button>
+						<p class="mt-2 px-1 text-center text-xs text-muted-foreground">{s.alt}</p>
+					</li>
+				))
+			}
+		</ul>
+	</div>
+
+	{/* Lightbox */}
+	<dialog
+		id="ss-lightbox"
+		aria-label="Screenshot viewer"
+		class="fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-black/85"
+	>
+		<div data-ss-backdrop class="flex h-full w-full items-center justify-center p-4 sm:p-10">
+			<figure data-ss-stage class="relative m-0 flex max-h-full flex-col items-center">
+				<img
+					data-ss-img
+					src=""
+					alt=""
+					class="max-h-[82vh] w-auto rounded-lg object-contain shadow-2xl"
+				/>
+				<figcaption class="mt-3 flex items-center gap-3 text-sm text-white/90">
+					<span data-ss-caption></span>
+					<span class="text-white/40" data-ss-counter></span>
+				</figcaption>
+			</figure>
+
+			<button
+				type="button"
+				data-ss-prev
+				aria-label="Previous screenshot"
+				class="absolute top-1/2 left-3 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20 sm:left-6"
+			>
+				<ChevronLeft class="size-6" />
+			</button>
+			<button
+				type="button"
+				data-ss-next
+				aria-label="Next screenshot"
+				class="absolute top-1/2 right-3 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20 sm:right-6"
+			>
+				<ChevronRight class="size-6" />
+			</button>
+			<button
+				type="button"
+				data-ss-close
+				aria-label="Close"
+				class="absolute top-3 right-3 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20 sm:top-6 sm:right-6"
+			>
+				<X class="size-5" />
+			</button>
+		</div>
+	</dialog>
+</section>
+
+<script>
+	const dialog = document.getElementById("ss-lightbox") as HTMLDialogElement | null;
+	if (dialog) {
+		const imgEl = dialog.querySelector<HTMLImageElement>("[data-ss-img]")!;
+		const captionEl = dialog.querySelector<HTMLElement>("[data-ss-caption]")!;
+		const counterEl = dialog.querySelector<HTMLElement>("[data-ss-counter]")!;
+		const backdrop = dialog.querySelector<HTMLElement>("[data-ss-backdrop]")!;
+		const thumbs = Array.from(document.querySelectorAll<HTMLElement>("[data-ss-thumb]"));
+		const items = thumbs.map((t) => ({
+			full: t.dataset.full ?? "",
+			alt: t.dataset.alt ?? "",
+		}));
+		let idx = 0;
+
+		const show = (i: number) => {
+			idx = (i + items.length) % items.length;
+			const it = items[idx];
+			imgEl.src = it.full;
+			imgEl.alt = it.alt;
+			captionEl.textContent = it.alt;
+			counterEl.textContent = `${idx + 1} / ${items.length}`;
+			// Preload the neighbors so left/right feels instant.
+			for (const j of [idx + 1, idx - 1]) {
+				const n = items[(j + items.length) % items.length];
+				new Image().src = n.full;
+			}
+		};
+
+		const open = (i: number) => {
+			show(i);
+			if (!dialog.open) dialog.showModal();
+			document.documentElement.style.overflow = "hidden";
+		};
+
+		thumbs.forEach((t, i) => t.addEventListener("click", () => open(i)));
+		dialog.querySelector("[data-ss-prev]")!.addEventListener("click", () => show(idx - 1));
+		dialog.querySelector("[data-ss-next]")!.addEventListener("click", () => show(idx + 1));
+		dialog.querySelector("[data-ss-close]")!.addEventListener("click", () => dialog.close());
+		dialog.addEventListener("keydown", (e) => {
+			if (e.key === "ArrowRight") {
+				e.preventDefault();
+				show(idx + 1);
+			} else if (e.key === "ArrowLeft") {
+				e.preventDefault();
+				show(idx - 1);
+			}
+		});
+		// Click the dark area outside the image to dismiss.
+		backdrop.addEventListener("click", (e) => {
+			if (e.target === backdrop) dialog.close();
+		});
+		dialog.addEventListener("close", () => {
+			document.documentElement.style.overflow = "";
+		});
+	}
+</script>

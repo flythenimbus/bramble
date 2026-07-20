@@ -1,0 +1,30 @@
+{
+	"name": "@vault/website",
+	"type": "module",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"dev": "astro dev",
+		"start": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
+		"typecheck": "astro check"
+	},
+	"dependencies": {
+		"@tabler/icons": "^3.45.0",
+		"@tailwindcss/forms": "^0.5.11",
+		"@vault/theme": "workspace:*",
+		"astro": "^7.1.1",
+		"clsx": "^2.1.1",
+		"tailwind-merge": "^3.6.0",
+		"tailwind-variants": "^3.2.2"
+	},
+	"devDependencies": {
+		"@astrojs/check": "^0.9.9",
+		"@tailwindcss/vite": "^4",
+		"sharp": "^0.34.5",
+		"tailwindcss": "^4",
+		"tw-animate-css": "^1",
+		"typescript": "^5.5.0"
+	}
+}

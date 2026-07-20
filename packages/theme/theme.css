@@ -1,0 +1,138 @@
+/* Shared Bramble design tokens.
+   Single source of truth for the color/radius scale used by every surface:
+   the browser extension, the mobile app, and the marketing website. Import
+   this AFTER `@import "tailwindcss"` so the `@theme inline` block can map the
+   CSS variables onto Tailwind's color utilities. */
+
+@custom-variant dark (&:is(.dark *));
+
+/* Pre-mount paint: before an app reads the stored theme and toggles `.dark`, match the OS scheme
+   so a dark-mode user never gets a white flash. The app stamps `.theme-ready` on first mount,
+   which turns this off and hands the background back to the `.dark` class (so an explicit
+   light/dark override still wins, just after first paint). Value mirrors `.dark { --background }`. */
+@media (prefers-color-scheme: dark) {
+  html:not(.theme-ready),
+  html:not(.theme-ready) body {
+    background-color: oklch(20.5% 0 0);
+  }
+}
+
+:root {
+  --font-size: 16px;
+  --background: oklch(98.5% 0 0);
+  --foreground: oklch(20.5% 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(20.5% 0 0);
+  --popover: #ffffff;
+  --popover-foreground: oklch(20.5% 0 0);
+  --primary: oklch(20.5% 0 0);
+  --primary-foreground: #ffffff;
+  --secondary: oklch(97% 0 0);
+  --secondary-foreground: oklch(20.5% 0 0);
+  --muted: oklch(97% 0 0);
+  --muted-foreground: oklch(55.6% 0 0);
+  --accent: oklch(20.5% 0 0);
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: oklch(87% 0 0);
+  --input: transparent;
+  --input-background: oklch(97% 0 0);
+  --switch-background: oklch(87% 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(20.5% 0 0);
+  --foreground: oklch(97% 0 0);
+  --card: oklch(26.9% 0 0);
+  --card-foreground: oklch(97% 0 0);
+  --popover: oklch(26.9% 0 0);
+  --popover-foreground: oklch(97% 0 0);
+  --primary: oklch(97% 0 0);
+  --primary-foreground: oklch(20.5% 0 0);
+  --secondary: oklch(26.9% 0 0);
+  --secondary-foreground: oklch(97% 0 0);
+  --muted: oklch(26.9% 0 0);
+  --muted-foreground: oklch(70.8% 0 0);
+  --accent: oklch(97% 0 0);
+  --accent-foreground: oklch(20.5% 0 0);
+  --destructive: #f87171;
+  --destructive-foreground: #450a0a;
+  --border: oklch(37.1% 0 0);
+  --input: oklch(26.9% 0 0);
+  --input-background: oklch(26.9% 0 0);
+  --ring: oklch(43.9% 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: var(--radius);
+  --radius-xl: 12px;
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}

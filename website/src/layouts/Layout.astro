@@ -1,0 +1,126 @@
+---
+import "@/styles/starwind.css";
+import { LINKS, SITE } from "@/consts";
+
+interface Props {
+	title?: string;
+	description?: string;
+	/** Page path for the canonical URL, e.g. "/privacy.html". */
+	path?: string;
+}
+
+const {
+	title,
+	description = SITE.description,
+	path = "/",
+} = Astro.props;
+
+const pageTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} · ${SITE.tagline}`;
+const canonical = new URL(path, SITE.url).href;
+const ogImage = new URL("/icon-512.png", SITE.url).href;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" href="/favicon.ico" sizes="any" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<link rel="canonical" href={canonical} />
+		<meta name="generator" content={Astro.generator} />
+
+		<title>{pageTitle}</title>
+		<meta name="description" content={description} />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={SITE.name} />
+		<meta property="og:title" content={pageTitle} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={ogImage} />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content={pageTitle} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+
+		<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#242424" media="(prefers-color-scheme: dark)" />
+
+		{/* Set the theme before first paint so there is no light/dark flash. Mirrors
+		    the extension's behavior and reads the same `colorTheme` key the Starwind
+		    ThemeToggle writes. `theme-ready` hands the background to the .dark class. */}
+		<script is:inline>
+			(function () {
+				try {
+					var stored = localStorage.getItem("colorTheme");
+					var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+					var dark = stored
+						? stored === "dark" || (stored === "system" && prefersDark)
+						: prefersDark;
+					document.documentElement.classList.toggle("dark", dark);
+				} catch (e) {}
+				document.documentElement.classList.add("theme-ready");
+			})();
+		</script>
+	</head>
+	<body class="min-h-screen antialiased">
+		<slot />
+
+		{/* Personalize the "Add to your browser" buttons: point them at the right store
+		    and, where the browser is nameable, relabel to "Add to <Browser>". The markup
+		    defaults to the Chrome Web Store and a generic label, so with JS off or an
+		    unknown browser it degrades cleanly. Gecko browsers (Firefox, Zen, Waterfox,
+		    LibreWolf) go to Firefox Add-ons; the rest of the Chromium family stays on the
+		    Chrome Web Store. */}
+		<script is:inline define:vars={{ chromeHref: LINKS.chrome, firefoxHref: LINKS.firefox }}>
+			(function () {
+				var ua = navigator.userAgent;
+
+				function apply(name, href) {
+					for (const el of document.querySelectorAll("[data-install-browser]")) {
+						el.setAttribute("href", href);
+					}
+					if (name) {
+						for (const el of document.querySelectorAll("[data-install-label]")) {
+							el.textContent = "Add to " + name;
+						}
+					}
+				}
+
+				// Gecko family -> Firefox Add-ons (Zen reports a plain Firefox UA).
+				if (/\bFirefox\/\d/.test(ua) && !/Seamonkey\//i.test(ua)) {
+					var gecko = /Waterfox\//i.test(ua)
+						? "Waterfox"
+						: /LibreWolf\//i.test(ua)
+							? "LibreWolf"
+							: "Firefox";
+					return apply(gecko, firefoxHref);
+				}
+
+				// Chromium family -> Chrome Web Store (already the default href).
+				if (/Vivaldi\//.test(ua)) return apply("Vivaldi", chromeHref);
+				if (/\bEdg(?:e|A|iOS)?\//.test(ua)) return apply("Edge", chromeHref);
+				if (/\bOPR\//.test(ua)) return apply("Opera", chromeHref);
+
+				// Brave hides itself from the UA and exposes navigator.brave instead.
+				if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+					navigator.brave
+						.isBrave()
+						.then(function (isBrave) {
+							apply(isBrave ? "Brave" : "Chrome", chromeHref);
+						})
+						.catch(function () {
+							apply("Chrome", chromeHref);
+						});
+					return;
+				}
+
+				if (/\bChrome\//.test(ua)) return apply("Chrome", chromeHref);
+
+				// Unknown browser (e.g. Arc, Safari): keep the generic label + Chrome default.
+			})();
+		</script>
+	</body>
+</html>

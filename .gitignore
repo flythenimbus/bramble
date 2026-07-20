@@ -2,6 +2,10 @@ node_modules/
 dist/
 dist-chromium/
 dist-firefox/
+
+# Astro build cache
+.astro/
+website/.astro/
 web-ext-artifacts/
 bramble*.zip
 bramble*.crx

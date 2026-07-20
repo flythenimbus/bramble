@@ -1,0 +1,35 @@
+{
+  "Starwind UI Theme Toggle": {
+    "prefix": "starwind-theme-toggle",
+    "description": "Starwind UI theme initialization script for the document head",
+    "scope": "astro,typescript",
+    "body": [
+      "<script is:inline>",
+      "  function initTheme() {",
+      "    const colorTheme = localStorage.getItem(\"colorTheme\");",
+      "    if (!colorTheme) {",
+      "      if (window.matchMedia && window.matchMedia(\"(prefers-color-scheme: dark)\").matches) {",
+      "        document.documentElement.classList.add(\"dark\");",
+      "        localStorage.setItem(\"colorTheme\", \"dark\");",
+      "      } else {",
+      "        document.documentElement.classList.remove(\"dark\");",
+      "        localStorage.setItem(\"colorTheme\", \"light\");",
+      "      }",
+      "    } else {",
+      "      if (colorTheme === \"dark\") {",
+      "        document.documentElement.classList.add(\"dark\");",
+      "      } else if (colorTheme === \"light\") {",
+      "        document.documentElement.classList.remove(\"dark\");",
+      "      } else if (colorTheme === \"system\") {",
+      "        const prefersDark = window.matchMedia(\"(prefers-color-scheme: dark)\").matches;",
+      "        document.documentElement.classList.toggle(\"dark\", prefersDark);",
+      "      }",
+      "    }",
+      "  }",
+      "",
+      "  initTheme();",
+      "  document.addEventListener(\"astro:after-swap\", initTheme);",
+      "</script>"
+    ]
+  }
+}

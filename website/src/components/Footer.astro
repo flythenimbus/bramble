@@ -1,0 +1,100 @@
+---
+import BrandGithub from "@tabler/icons/outline/brand-github.svg";
+import Codeberg from "@/assets/codeberg.svg";
+import { Separator } from "@/components/starwind/separator";
+import { LINKS, SITE } from "@/consts";
+
+const year = new Date().getFullYear();
+
+const columns = [
+	{
+		title: "Get Bramble",
+		links: [
+			{ label: "Chrome & Brave", href: LINKS.chrome },
+			{ label: "Firefox", href: LINKS.firefox },
+			{ label: "iOS", href: LINKS.ios },
+			{ label: "Android", href: LINKS.android },
+		],
+	},
+	{
+		title: "Project",
+		links: [
+			{ label: "Source on GitHub", href: LINKS.github },
+			{ label: "Source on Codeberg", href: LINKS.codeberg },
+			{ label: "Releases", href: LINKS.android },
+		],
+	},
+	{
+		title: "Legal & help",
+		links: [
+			{ label: "Privacy policy", href: "/privacy.html" },
+			{ label: "Support", href: "/support.html" },
+			{ label: "Contact", href: `mailto:${SITE.contactEmail}` },
+		],
+	},
+];
+---
+
+<footer class="border-t border-border/60 bg-muted/30">
+	<div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+		<div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+			<div class="lg:col-span-1">
+				<a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight">
+					<img src="/icon-512.png" alt="" width="28" height="28" class="size-7 rounded-md" />
+					<span class="text-lg">{SITE.name}</span>
+				</a>
+				<p class="mt-3 max-w-xs text-sm text-muted-foreground">
+					A local-first password manager. Your secrets stay encrypted on your own devices.
+				</p>
+			</div>
+
+			{
+				columns.map((col) => (
+					<div>
+						<h2 class="text-sm font-semibold">{col.title}</h2>
+						<ul class="mt-3 flex flex-col gap-2">
+							{col.links.map((link) => (
+								<li>
+									<a
+										href={link.href}
+										class="text-sm text-muted-foreground transition-colors hover:text-foreground"
+									>
+										{link.label}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				))
+			}
+		</div>
+
+		<Separator class="my-8" />
+
+		<div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+			<p class="text-sm text-muted-foreground">
+				&copy; {year} {SITE.name}. Free and open source.
+			</p>
+			<div class="flex items-center gap-4">
+				<a
+					href={LINKS.github}
+					target="_blank"
+					rel="noopener"
+					class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<BrandGithub class="size-4" />
+					<span>GitHub</span>
+				</a>
+				<a
+					href={LINKS.codeberg}
+					target="_blank"
+					rel="noopener"
+					class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<Codeberg class="size-4" />
+					<span>Codeberg</span>
+				</a>
+			</div>
+		</div>
+	</div>
+</footer>
