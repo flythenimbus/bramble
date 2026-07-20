@@ -1,5 +1,7 @@
 import { Trans } from "@lingui/react/macro";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { type LucideIcon, TrendingDown, TrendingUp } from "lucide-react";
+import { useRef } from "react";
 import type { EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
@@ -54,6 +56,19 @@ export function VaultHome({
 	const atRisk = items.filter((item) => item.leaked).length;
 	const strong = items.filter((item) => item.type === "login" && !item.leaked).length;
 
+	// Virtualize the row list so a large vault (1000+ entries) mounts only the
+	// visible rows, not every EntryRow at once (the main open-time render cost).
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const rowVirtualizer = useVirtualizer({
+		count: filtered.length,
+		getScrollElement: () => scrollRef.current,
+		// Rows are a uniform ~56px; +4 folds in the gap that was `space-y-1`.
+		// measureElement corrects any drift from the real rendered height.
+		estimateSize: () => 60,
+		overscan: 8,
+		getItemKey: (index) => filtered[index]?.id ?? index,
+	});
+
 	return (
 		<main className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto px-4 py-5">
 			<VaultSearchBar
@@ -104,24 +119,37 @@ export function VaultHome({
 						<Trans>Items ({filtered.length})</Trans>
 					</h3>
 				</div>
-				<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+				<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2">
 					{filtered.length > 0 ? (
-						filtered.map((item) => (
-							<EntryRow
-								key={item.id}
-								name={item.name}
-								secondary={item.secondary}
-								icon={item.icon}
-								initials={item.initials}
-								leaked={item.leaked}
-								copyItems={item.copyItems}
-								onSelect={() => onSelectEntry(item.id)}
-								onEdit={() => onEditEntry(item.id)}
-								onDelete={() => onDeleteEntry(item.id)}
-								onUse={() => onUseEntry(item.id)}
-								highlighted={matchedIds?.has(item.id)}
-							/>
-						))
+						<div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+							{rowVirtualizer.getVirtualItems().map((row) => {
+								const item = filtered[row.index];
+								if (!item) return null;
+								return (
+									<div
+										key={row.key}
+										data-index={row.index}
+										ref={rowVirtualizer.measureElement}
+										className="absolute top-0 left-0 w-full pb-1"
+										style={{ transform: `translateY(${row.start}px)` }}
+									>
+										<EntryRow
+											name={item.name}
+											secondary={item.secondary}
+											icon={item.icon}
+											initials={item.initials}
+											leaked={item.leaked}
+											copyItems={item.copyItems}
+											onSelect={() => onSelectEntry(item.id)}
+											onEdit={() => onEditEntry(item.id)}
+											onDelete={() => onDeleteEntry(item.id)}
+											onUse={() => onUseEntry(item.id)}
+											highlighted={matchedIds?.has(item.id)}
+										/>
+									</div>
+								);
+							})}
+						</div>
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
 							{items.length === 0 ? (

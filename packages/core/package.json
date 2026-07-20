@@ -12,8 +12,9 @@
 	"dependencies": {
 		"@lingui/core": "^6.4.0",
 		"@lingui/react": "^6.4.0",
-		"@vault/theme": "workspace:*",
 		"@tanstack/react-router": "^1.170.6",
+		"@tanstack/react-virtual": "^3.14.6",
+		"@vault/theme": "workspace:*",
 		"check-password-strength": "^3.0.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
