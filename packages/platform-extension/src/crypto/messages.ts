@@ -45,6 +45,17 @@ export const CryptoDecryptSchema = z.object({
 	dekIv: z.string(),
 	...vekInject,
 });
+export const CryptoDecryptBatchSchema = z.object({
+	entries: z.array(
+		z.object({
+			ciphertext: z.string(),
+			iv: z.string(),
+			wrappedDek: z.string(),
+			dekIv: z.string(),
+		}),
+	),
+	...vekInject,
+});
 export const CryptoEncryptOuterSchema = z.object({ plaintext: z.string(), ...vekInject });
 export const CryptoDecryptOuterSchema = z.object({
 	iv: z.string(),
@@ -78,6 +89,7 @@ export type CryptoUnwrapWebauthnSlot = z.infer<typeof CryptoUnwrapWebauthnSlotSc
 export type CryptoVerifyWebauthnSlot = z.infer<typeof CryptoVerifyWebauthnSlotSchema>;
 export type CryptoEncrypt = z.infer<typeof CryptoEncryptSchema>;
 export type CryptoDecrypt = z.infer<typeof CryptoDecryptSchema>;
+export type CryptoDecryptBatch = z.infer<typeof CryptoDecryptBatchSchema>;
 export type CryptoEncryptOuter = z.infer<typeof CryptoEncryptOuterSchema>;
 export type CryptoDecryptOuter = z.infer<typeof CryptoDecryptOuterSchema>;
 export type CryptoOpenKdbx = z.infer<typeof CryptoOpenKdbxSchema>;

@@ -21,6 +21,7 @@ import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
 import {
+	CryptoDecryptBatchSchema,
 	CryptoDecryptOuterSchema,
 	CryptoDecryptSchema,
 	CryptoEncryptOuterSchema,
@@ -217,6 +218,15 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const w = (await getWasm()) as unknown as SyncVek;
 			return withVek(w, p.vekB64, (w) =>
 				w.decrypt_entry(p.ciphertext, p.iv, p.wrappedDek, p.dekIv),
+			);
+		}
+		case "CRYPTO_DECRYPT_BATCH": {
+			// The whole array decrypts inside one withVek section: load the vek once,
+			// decrypt every entry, clear once. One offscreen round-trip for the vault.
+			const p = CryptoDecryptBatchSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				p.entries.map((e) => w.decrypt_entry(e.ciphertext, e.iv, e.wrappedDek, e.dekIv)),
 			);
 		}
 		case "CRYPTO_ENCRYPT_OUTER": {

@@ -111,6 +111,8 @@ export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 			return { ok: true, data: '{"entries":[],"tombstones":[]}' };
 		case "CRYPTO_DECRYPT":
 			return { ok: true, data: "{}" };
+		case "CRYPTO_DECRYPT_BATCH":
+			return { ok: true, data: [] };
 		case "CLIPBOARD_CLEAR":
 			return { ok: true, data: null };
 		default:

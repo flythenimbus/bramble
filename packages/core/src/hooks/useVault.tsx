@@ -452,18 +452,21 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		const clock = await ensureClock();
 		for (const e of payload.entries) clock.witness(e.hlc);
 		for (const t of payload.tombstones) clock.witness(t.hlc);
-		const decrypted: Entry[] = await Promise.all(
-			payload.entries.map(async (enc) => {
-				const plaintext = await crypto.decryptEntry({
-					ciphertext: enc.ciphertext,
-					iv: enc.iv,
-					wrappedDek: enc.wrappedDek,
-					dekIv: enc.dekIv,
-				});
-				const data = normalizeEntryData(JSON.parse(plaintext));
-				return { id: enc.id, ...data };
-			}),
+		// One decrypt call for the whole vault: on the extension that is a single
+		// offscreen round-trip instead of one per entry (~1s -> a fraction on large
+		// vaults). Plaintexts come back in the same order as the entries.
+		const plaintexts = await crypto.decryptEntries(
+			payload.entries.map((enc) => ({
+				ciphertext: enc.ciphertext,
+				iv: enc.iv,
+				wrappedDek: enc.wrappedDek,
+				dekIv: enc.dekIv,
+			})),
 		);
+		const decrypted: Entry[] = payload.entries.map((enc, i) => {
+			const data = normalizeEntryData(JSON.parse(plaintexts[i] as string));
+			return { id: enc.id, ...data };
+		});
 		setEntries(decrypted);
 		await autofill.setIndex(toAutofillIndex(decrypted));
 	}, [readDecodedBlob, crypto, autofill, ensureClock]);

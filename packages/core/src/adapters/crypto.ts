@@ -124,6 +124,10 @@ export interface CryptoAdapter {
 
 	encryptEntry(plaintextJson: string): Promise<EncryptedPayload>;
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
+	// Decrypt many entries in one call. On the extension this is a single offscreen
+	// round-trip (vs one per entry), which dominates open time on large vaults.
+	// Returns plaintexts in the same order as `payloads`.
+	decryptEntries(payloads: EncryptedPayload[]): Promise<string[]>;
 	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
 	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 

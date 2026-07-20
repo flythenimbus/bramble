@@ -18,6 +18,7 @@ import type {
 } from "@core/adapters/crypto";
 import type {
 	CryptoDecrypt,
+	CryptoDecryptBatch,
 	CryptoDecryptOuter,
 	CryptoEncrypt,
 	CryptoEncryptOuter,
@@ -163,6 +164,8 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 		encryptEntry: (plaintextJson) =>
 			send<EncryptedPayload>("CRYPTO_ENCRYPT", { plaintextJson } satisfies CryptoEncrypt),
 		decryptEntry: (payload) => send<string>("CRYPTO_DECRYPT", payload satisfies CryptoDecrypt),
+		decryptEntries: (payloads) =>
+			send<string[]>("CRYPTO_DECRYPT_BATCH", { entries: payloads } satisfies CryptoDecryptBatch),
 		encryptWithVek: (plaintext) =>
 			send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext } satisfies CryptoEncryptOuter),
 		decryptWithVek: (iv, ciphertext) =>
