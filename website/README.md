@@ -36,36 +36,48 @@ Starwind components under `src/components/starwind/` are vendored source; add or
 update them with `pnpm dlx starwind@latest add <name>`. They are excluded from
 Biome so `starwind update` stays clean.
 
-## Deploying (Cloudflare Pages)
+## Deploying (Cloudflare Pages via GitHub Actions)
 
-The site deploys to **Cloudflare Pages** (the old GitHub Actions Pages workflow
-was removed). It is a fully static Astro build, so no Cloudflare adapter is
-needed. `wrangler.jsonc` names the project (`bramble-website`) and points at the
-`dist` output.
+`.github/workflows/deploy-website.yml` builds the static Astro site and deploys
+`website/dist` to **Cloudflare Pages** with `wrangler pages deploy`, using an API
+token (Cloudflare's GitHub integration is deliberately not used). It is a fully
+static build, so no Cloudflare adapter is needed. `wrangler.jsonc` supplies the
+project name (`bramble-website`) and the `dist` output dir.
 
-### One-time setup (Cloudflare dashboard)
+### One-time setup
 
-Create the Pages project once, connecting this GitHub repo, with these build
-settings (it is a pnpm monorepo, so build from the repo root):
+1. **Create the Pages project** (Direct Upload), authenticated locally once:
 
-| Setting | Value |
-| --- | --- |
-| Production branch | `main` |
-| Root directory | *(repo root, leave empty)* |
-| Build command | `pnpm --filter @vault/website build` |
-| Build output directory | `website/dist` |
-| Environment variable | `NODE_VERSION` = `22` (Astro 7 needs ≥ 22.12) |
+   ```sh
+   pnpm --filter @vault/website exec wrangler pages project create bramble-website \
+     --production-branch main
+   ```
 
-Cloudflare auto-detects pnpm from `pnpm-lock.yaml`. Add the custom domain
-`bramble.sh` under the project's **Custom domains** tab (point the DNS record at
-the Pages project). After that, every push to `main` builds and deploys.
+   (Or in the dashboard: Workers & Pages -> Create -> Pages -> Direct Upload.)
+
+2. **Create the API token.** Cloudflare dashboard -> **My Profile -> API Tokens**
+   -> **Create Token**. Use the **Cloudflare Pages** template, or a Custom token
+   with permission **Account -> Cloudflare Pages -> Edit** scoped to your account.
+   Copy it (shown only once).
+
+3. **Find your Account ID.** Workers & Pages -> the ID in the right sidebar, or
+   run `wrangler whoami`.
+
+4. **Add the repo secrets** (GitHub -> Settings -> Secrets and variables ->
+   Actions -> New repository secret):
+   - `CLOUDFLARE_API_TOKEN` - the token from step 2
+   - `CLOUDFLARE_ACCOUNT_ID` - the ID from step 3
+
+5. **Custom domain.** Add `bramble.sh` under the Pages project's **Custom domains**
+   tab and point its DNS at the project.
+
+After that, every push to `main` touching `website/**` (or `packages/theme/**`)
+builds and deploys; you can also run it from the Actions tab (workflow_dispatch).
 
 ### Manual deploy
 
-Authenticate wrangler once (`wrangler login` or a `CLOUDFLARE_API_TOKEN`), then:
-
 ```sh
-pnpm --filter @vault/website deploy   # astro build && wrangler pages deploy
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… pnpm --filter @vault/website deploy
 ```
 
 ### Cut-over note
