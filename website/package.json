@@ -8,7 +8,8 @@
 		"start": "astro dev",
 		"build": "astro build",
 		"preview": "astro preview",
-		"typecheck": "astro check"
+		"typecheck": "astro check",
+		"deploy": "astro build && wrangler pages deploy"
 	},
 	"dependencies": {
 		"@tabler/icons": "^3.45.0",
@@ -25,6 +26,7 @@
 		"sharp": "^0.34.5",
 		"tailwindcss": "^4",
 		"tw-animate-css": "^1",
-		"typescript": "^5.5.0"
+		"typescript": "^5.5.0",
+		"wrangler": "^4.103.0"
 	}
 }

@@ -36,22 +36,41 @@ Starwind components under `src/components/starwind/` are vendored source; add or
 update them with `pnpm dlx starwind@latest add <name>`. They are excluded from
 Biome so `starwind update` stays clean.
 
-## Deploying (cut-over note)
+## Deploying (Cloudflare Pages)
 
-`.github/workflows/pages.yml` currently publishes the raw `website/` folder,
-which still serves the legacy `index.html` privacy policy at the root. To go live
-with this Astro site, change that workflow to build and publish `website/dist`:
+The site deploys to **Cloudflare Pages** (the old GitHub Actions Pages workflow
+was removed). It is a fully static Astro build, so no Cloudflare adapter is
+needed. `wrangler.jsonc` names the project (`bramble-website`) and points at the
+`dist` output.
 
-```yaml
-- uses: pnpm/action-setup@v4
-- uses: actions/setup-node@v4
-  with: { node-version: 22, cache: pnpm }
-- run: pnpm install --frozen-lockfile
-- run: pnpm --filter @vault/website build
-- uses: actions/upload-pages-artifact@v3
-  with: { path: website/dist }
+### One-time setup (Cloudflare dashboard)
+
+Create the Pages project once, connecting this GitHub repo, with these build
+settings (it is a pnpm monorepo, so build from the repo root):
+
+| Setting | Value |
+| --- | --- |
+| Production branch | `main` |
+| Root directory | *(repo root, leave empty)* |
+| Build command | `pnpm --filter @vault/website build` |
+| Build output directory | `website/dist` |
+| Environment variable | `NODE_VERSION` = `22` (Astro 7 needs ≥ 22.12) |
+
+Cloudflare auto-detects pnpm from `pnpm-lock.yaml`. Add the custom domain
+`bramble.sh` under the project's **Custom domains** tab (point the DNS record at
+the Pages project). After that, every push to `main` builds and deploys.
+
+### Manual deploy
+
+Authenticate wrangler once (`wrangler login` or a `CLOUDFLARE_API_TOKEN`), then:
+
+```sh
+pnpm --filter @vault/website deploy   # astro build && wrangler pages deploy
 ```
 
-After the cut-over the privacy policy moves from `/` to `/privacy.html`, so update
-the privacy-policy URL in the Chrome/Firefox/App Store listings (or add a redirect).
-The old `website/index.html` and `website/support.html` are left in place until then.
+### Cut-over note
+
+The privacy policy now lives at `/privacy.html` instead of the root, so update
+the privacy-policy URL in the Chrome / Firefox / App Store listings if any point
+at `bramble.sh/`. The legacy static `website/index.html` and `website/support.html`
+are no longer served (Cloudflare publishes `dist/`) but are left in place.

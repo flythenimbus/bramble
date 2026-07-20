@@ -6,6 +6,9 @@ dist-firefox/
 # Astro build cache
 .astro/
 website/.astro/
+
+# Wrangler local state
+.wrangler/
 web-ext-artifacts/
 bramble*.zip
 bramble*.crx
