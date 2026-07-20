@@ -7,6 +7,7 @@ import {
 	Outlet,
 	redirect,
 } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import type { UseVault } from "../hooks/useVault";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
@@ -164,6 +165,17 @@ const routeTree = rootRoute.addChildren([
 	]),
 ]);
 
+// Shown only when a lazy route's chunk stays pending past defaultPendingMs (1s);
+// local chunks resolve in ms, so in practice this never renders — it's the
+// graceful fallback for a genuinely slow load rather than blanking the app.
+function RoutePending() {
+	return (
+		<div className="flex-1 min-h-0 flex items-center justify-center">
+			<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+		</div>
+	);
+}
+
 /**
  * Build a fresh memory-history router. `initialPath` seeds the route so a
  * popped-out window resumes where the user left (default "/").
@@ -173,6 +185,7 @@ export function createAppRouter(initialPath = "/") {
 		routeTree,
 		history: createMemoryHistory({ initialEntries: [initialPath] }),
 		context: { vault: undefined, registry: undefined },
+		defaultPendingComponent: RoutePending,
 	});
 }
 
