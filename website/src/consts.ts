@@ -17,6 +17,12 @@ export const LINKS = {
 	android: "https://github.com/flythenimbus/bramble/releases",
 } as const;
 
+export const BUTTONDOWN = {
+	// Buttondown username (Settings -> Embedding). The newsletter form POSTs to
+	// buttondown.com/api/emails/embed-subscribe/<username>.
+	username: "bramble.sh",
+} as const;
+
 export const NAV = [
 	{ label: "Screenshots", href: "/#screenshots" },
 	{ label: "Features", href: "/#features" },
