@@ -123,9 +123,12 @@ export function buildCryptoAdapter(
 			return (await getWasm()).decrypt_entry(p.ciphertext, p.iv, p.wrappedDek, p.dekIv);
 		},
 		async decryptEntries(ps) {
-			// In-process (wasm/native): no IPC to batch away, so just loop. Promise.all
-			// normalizes the sync-wasm and async-native module shapes.
 			const m = await getWasm();
+			// Native (mobile) exposes a batch that loops in-process and returns every
+			// entry in a single bridge call — the big win over one call per entry. The
+			// wasm module has no such method, so fall back to a per-entry loop; it runs
+			// in-process there anyway, so there are no round-trips to save.
+			if (m.decrypt_entries) return m.decrypt_entries(ps);
 			return Promise.all(ps.map((p) => m.decrypt_entry(p.ciphertext, p.iv, p.wrappedDek, p.dekIv)));
 		},
 		async encryptWithVek(plaintext) {

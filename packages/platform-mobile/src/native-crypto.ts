@@ -74,6 +74,9 @@ interface NativeCryptoPlugin {
 		wrappedDek: string;
 		dekIv: string;
 	}): Promise<{ value: string }>;
+	decryptEntries(o: {
+		entries: { ciphertext: string; iv: string; wrappedDek: string; dekIv: string }[];
+	}): Promise<{ values: string[] }>;
 	encryptWithVek(o: { plaintext: string }): Promise<VekEncrypted>;
 	decryptWithVek(o: { ivB64: string; ciphertextB64: string }): Promise<{ value: string }>;
 	passkeyMakeCredential(o: { rpId: string; userVerified: boolean }): Promise<PasskeyRegistration>;
@@ -227,6 +230,7 @@ const nativeModule: VaultCrypto = {
 	encrypt_entry: (plaintextJson) => Native.encryptEntry({ plaintextJson }),
 	decrypt_entry: async (ciphertext, iv, wrappedDek, dekIv) =>
 		(await Native.decryptEntry({ ciphertext, iv, wrappedDek, dekIv })).value,
+	decrypt_entries: async (entries) => (await Native.decryptEntries({ entries })).values,
 	encrypt_with_vek: (plaintext) => Native.encryptWithVek({ plaintext }),
 	decrypt_with_vek: async (iv, ciphertext) =>
 		(await Native.decryptWithVek({ ivB64: iv, ciphertextB64: ciphertext })).value,

@@ -29,6 +29,7 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "verifyWebauthnSlot", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "encryptEntry", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptEntry", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "decryptEntries", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "encryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
@@ -215,6 +216,27 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 			let wd = str(call, "wrappedDek"), let di = str(call, "dekIv") else { return }
 		do {
 			call.resolve(["value": try App.decryptEntry(ciphertext: ct, iv: iv, wrappedDek: wd, dekIv: di)])
+		} catch { fail(call, error) }
+	}
+
+	// Decrypt the whole vault in one bridge call: loop over the entries natively
+	// (each uniffi call is in-process) instead of crossing the bridge per entry.
+	@objc func decryptEntries(_ call: CAPPluginCall) {
+		let entries = call.getArray("entries") ?? []
+		do {
+			var values: [String] = []
+			values.reserveCapacity(entries.count)
+			for item in entries {
+				guard let d = item as? [String: Any],
+					let ct = d["ciphertext"] as? String, let iv = d["iv"] as? String,
+					let wd = d["wrappedDek"] as? String, let di = d["dekIv"] as? String
+				else {
+					call.reject("Malformed entry in decryptEntries")
+					return
+				}
+				values.append(try App.decryptEntry(ciphertext: ct, iv: iv, wrappedDek: wd, dekIv: di))
+			}
+			call.resolve(["values": values])
 		} catch { fail(call, error) }
 	}
 

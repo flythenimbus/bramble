@@ -90,6 +90,31 @@ describe("buildCryptoAdapter", () => {
 		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", "hash", false);
 	});
 
+	it("decryptEntries falls back to a per-entry loop when the module has no batch", async () => {
+		const wasm = fakeWasm(); // no decrypt_entries (wasm module)
+		const a = buildCryptoAdapter(asWasm(wasm));
+		const entries = [
+			{ ciphertext: "c1", iv: "i1", wrappedDek: "w1", dekIv: "d1" },
+			{ ciphertext: "c2", iv: "i2", wrappedDek: "w2", dekIv: "d2" },
+		];
+		expect(await a.decryptEntries(entries)).toEqual(["plain", "plain"]);
+		expect(wasm.decrypt_entry).toHaveBeenCalledTimes(2);
+	});
+
+	it("decryptEntries uses the module batch (one call) when present", async () => {
+		const wasm = { ...fakeWasm(), decrypt_entries: vi.fn(() => ["a", "b"]) };
+		const a = buildCryptoAdapter(asWasm(wasm));
+		const entries = [
+			{ ciphertext: "c1", iv: "i1", wrappedDek: "w1", dekIv: "d1" },
+			{ ciphertext: "c2", iv: "i2", wrappedDek: "w2", dekIv: "d2" },
+		];
+		expect(await a.decryptEntries(entries)).toEqual(["a", "b"]);
+		expect(wasm.decrypt_entries).toHaveBeenCalledTimes(1);
+		expect(wasm.decrypt_entries).toHaveBeenCalledWith(entries);
+		// The batch path must not also fall back to the per-entry call.
+		expect(wasm.decrypt_entry).not.toHaveBeenCalled();
+	});
+
 	it("decodes base64 inputs for openKdbx", async () => {
 		const wasm = fakeWasm();
 		const a = buildCryptoAdapter(asWasm(wasm));

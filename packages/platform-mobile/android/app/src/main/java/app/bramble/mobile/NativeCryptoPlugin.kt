@@ -219,6 +219,33 @@ class NativeCryptoPlugin : Plugin() {
         }
     }
 
+    // Decrypt the whole vault in one bridge call: loop over the entries natively
+    // (each uniffi call is in-process) instead of crossing the JS<->native boundary
+    // per entry. runCrypto (off the main thread) rejects if any entry fails.
+    @PluginMethod
+    fun decryptEntries(call: PluginCall) {
+        val entries = call.getArray("entries")
+        if (entries == null) {
+            call.reject("Missing entries")
+            return
+        }
+        call.runCrypto {
+            val values = JSArray()
+            for (i in 0 until entries.length()) {
+                val e = entries.getJSONObject(i)
+                values.put(
+                    uniffi.vault_crypto.decryptEntry(
+                        e.getString("ciphertext"),
+                        e.getString("iv"),
+                        e.getString("wrappedDek"),
+                        e.getString("dekIv"),
+                    ),
+                )
+            }
+            call.resolve(JSObject().put("values", values))
+        }
+    }
+
     @PluginMethod
     fun encryptWithVek(call: PluginCall) {
         val pt = str(call, "plaintext") ?: return
