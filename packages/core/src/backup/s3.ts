@@ -27,7 +27,14 @@ export function createS3Target(cfg: S3Config): BackupTarget {
 			headers: contentType ? { "content-type": contentType } : undefined,
 			credentials: creds,
 		});
-		const res = await fetch(url, { method, body: body as BodyInit | undefined, headers });
+		// credentials: "omit" for the same reason as WebDAV: a self-hosted endpoint
+		// (MinIO, Garage) may sit behind a cookie session that outranks our signature.
+		const res = await fetch(url, {
+			method,
+			body: body as BodyInit | undefined,
+			headers,
+			credentials: "omit",
+		});
 		if (!res.ok) throw new Error(`S3 ${method} failed (${res.status})`);
 		return res;
 	}

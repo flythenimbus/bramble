@@ -185,6 +185,10 @@ msgstr "Realizando copia de seguridad…"
 #~ msgid "Backup failed"
 #~ msgstr "La copia de seguridad falló"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backup folder (optional)"
+msgstr "Carpeta de respaldo (opcional)"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Backup's master password"
 msgstr "Contraseña maestra de la copia de seguridad"
@@ -1291,8 +1295,8 @@ msgid "Paste the pairing code from your other device."
 msgstr "Pegue el código de emparejamiento de su otro dispositivo."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Path (optional)"
-msgstr "Ruta (opcional)"
+#~ msgid "Path (optional)"
+#~ msgstr "Ruta (opcional)"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Path prefix (optional)"

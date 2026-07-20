@@ -185,6 +185,10 @@ msgstr "Sicherung läuft…"
 #~ msgid "Backup failed"
 #~ msgstr "Sicherung fehlgeschlagen"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backup folder (optional)"
+msgstr "Sicherungsordner (optional)"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Backup's master password"
 msgstr "Master-Passwort des Backups"
@@ -1291,8 +1295,8 @@ msgid "Paste the pairing code from your other device."
 msgstr "Fügen Sie den Pairing-Code von Ihrem anderen Gerät ein."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Path (optional)"
-msgstr "Pfad (optional)"
+#~ msgid "Path (optional)"
+#~ msgstr "Pfad (optional)"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Path prefix (optional)"

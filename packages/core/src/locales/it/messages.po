@@ -185,6 +185,10 @@ msgstr "Backup in corso…"
 #~ msgid "Backup failed"
 #~ msgstr "Backup non riuscito"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backup folder (optional)"
+msgstr "Cartella di backup (opzionale)"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Backup's master password"
 msgstr "Password principale del backup"
@@ -1291,8 +1295,8 @@ msgid "Paste the pairing code from your other device."
 msgstr "Incollare il codice di abbinamento dall'altro dispositivo."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Path (optional)"
-msgstr "Percorso (opzionale)"
+#~ msgid "Path (optional)"
+#~ msgstr "Percorso (opzionale)"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Path prefix (optional)"

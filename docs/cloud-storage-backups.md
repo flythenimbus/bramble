@@ -152,6 +152,12 @@ Any vault edit re-randomizes the whole ciphertext, so a backup is a whole opaque
 blob with no byte-level delta to sync. Objects are named
 `<prefix>/bramble-<ISO-timestamp>-<shorthash>.bramble`. Retention is keep-last-N,
 computed deterministically from the sorted listing; deletes are idempotent.
+
+`<prefix>` is the user's own folder field (`prefix` on S3, `path` on WebDAV),
+defaulting to `bramble`. WebDAV's folder is deliberately *not* baked into the base
+URL: doing so nested snapshots one level deeper than asked (a `path` of `bramble`
+produced `bramble/bramble/`). Dropbox is the exception, since its `path` is a
+container folder inside the app folder and keeps the `bramble` subfolder.
 Grandfather-father-son retention (hourly / daily / weekly / monthly) is a
 possible later refinement.
 

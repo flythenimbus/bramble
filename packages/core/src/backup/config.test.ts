@@ -1,5 +1,66 @@
 import { describe, expect, it } from "vitest";
-import { normalizeS3 } from "./config";
+import type { BackupTargetConfig } from "./config";
+import { backupPrefix, normalizeS3, toProviderConfig } from "./config";
+
+const TARGET = {
+	id: "t1",
+	providerId: "nextcloud",
+	frequency: "daily",
+	keep: 30,
+	creds: { iv: "", ciphertext: "" },
+} satisfies Omit<BackupTargetConfig, "provider">;
+
+describe("backupPrefix", () => {
+	it("uses the WebDAV folder as the key prefix, not a nested subfolder", () => {
+		const cfg: BackupTargetConfig = { ...TARGET, provider: "webdav", path: "backups" };
+		expect(backupPrefix(cfg)).toBe("backups");
+	});
+
+	it("strips surrounding slashes from the WebDAV folder", () => {
+		const cfg: BackupTargetConfig = { ...TARGET, provider: "webdav", path: "/backups/" };
+		expect(backupPrefix(cfg)).toBe("backups");
+	});
+
+	it("falls back to bramble when the WebDAV folder is blank", () => {
+		const cfg: BackupTargetConfig = { ...TARGET, provider: "webdav", path: "  " };
+		expect(backupPrefix(cfg)).toBe("bramble");
+	});
+
+	it("still uses prefix for S3 and ignores path", () => {
+		const cfg: BackupTargetConfig = {
+			...TARGET,
+			provider: "s3",
+			prefix: "vaults",
+			path: "ignored",
+		};
+		expect(backupPrefix(cfg)).toBe("vaults");
+	});
+
+	// Dropbox keeps `path` as a container folder inside the app folder, so it must
+	// not become the key prefix the way WebDAV's does.
+	it("leaves Dropbox on the bramble subfolder", () => {
+		const cfg: BackupTargetConfig = { ...TARGET, provider: "dropbox", path: "Sub" };
+		expect(backupPrefix(cfg)).toBe("bramble");
+	});
+});
+
+describe("toProviderConfig", () => {
+	it("does not bake the folder into the WebDAV base url", () => {
+		const cfg: BackupTargetConfig = {
+			...TARGET,
+			provider: "webdav",
+			serverUrl: "http://localhost:8080/remote.php/dav/files/admin/",
+			path: "backups",
+		};
+		const out = toProviderConfig(cfg, { username: "admin", password: "pw" });
+		expect(out).toEqual({
+			kind: "webdav",
+			serverUrl: "http://localhost:8080/remote.php/dav/files/admin/",
+			username: "admin",
+			password: "pw",
+		});
+	});
+});
 
 describe("normalizeS3", () => {
 	it("passes a plain bucket + endpoint through", () => {

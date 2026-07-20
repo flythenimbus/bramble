@@ -9,9 +9,20 @@ function joinUrl(a: string, b: string): string {
 	return right ? `${left}/${right}` : `${left}/`;
 }
 
+// The server's own explanation for a failed request, appended to the thrown error.
+// Sabre-based servers (Nextcloud, ownCloud) put it in <d:error><s:message>.
+async function reason(res: Response): Promise<string> {
+	try {
+		const msg = xml.parse(await res.text())?.error?.message;
+		return typeof msg === "string" && msg.trim() ? `: ${msg.trim()}` : "";
+	} catch {
+		return "";
+	}
+}
+
 /** A WebDAV BackupTarget (Nextcloud, ownCloud, Fastmail, pCloud, Koofr, ...). */
 export function createWebdavTarget(cfg: WebdavConfig): BackupTarget {
-	const base = joinUrl(cfg.serverUrl, cfg.path ?? "");
+	const base = joinUrl(cfg.serverUrl, "");
 	const basePath = new URL(base).pathname;
 	const auth = `Basic ${btoa(`${cfg.username}:${cfg.password}`)}`;
 	const fileUrl = (key: string) => joinUrl(base, key);
@@ -20,23 +31,31 @@ export function createWebdavTarget(cfg: WebdavConfig): BackupTarget {
 		const res = await fetch(url, {
 			...init,
 			method,
+			// Never send ambient cookies: a browser session for the same host (e.g. the
+			// Nextcloud web UI in another tab) outranks our Basic header server-side and
+			// then fails the server's CSRF check, turning valid credentials into a 401.
+			credentials: "omit",
 			headers: { Authorization: auth, ...(init?.headers as Record<string, string>) },
 		});
-		if (!res.ok) throw new Error(`WebDAV ${method} failed (${res.status})`);
+		if (!res.ok) throw new Error(`WebDAV ${method} failed (${res.status})${await reason(res)}`);
 		return res;
 	}
 
-	// Best-effort MKCOL of the collection holding this key; a failure (e.g. it
-	// already exists) is ignored and the PUT surfaces any real problem.
+	// Best-effort MKCOL of the collections holding this key, outermost first: MKCOL
+	// does not create intermediates, and the key prefix is now the user's own folder,
+	// which may be nested. A failure (e.g. it already exists) is ignored and the PUT
+	// surfaces any real problem.
 	async function ensureParent(key: string): Promise<void> {
-		const slash = key.lastIndexOf("/");
-		if (slash < 0) return;
-		try {
-			await fetch(joinUrl(base, key.slice(0, slash)), {
-				method: "MKCOL",
-				headers: { Authorization: auth },
-			});
-		} catch {}
+		const segs = key.split("/").filter(Boolean).slice(0, -1);
+		for (let i = 1; i <= segs.length; i++) {
+			try {
+				await fetch(joinUrl(base, segs.slice(0, i).join("/")), {
+					method: "MKCOL",
+					credentials: "omit",
+					headers: { Authorization: auth },
+				});
+			} catch {}
+		}
 	}
 
 	// Turn a PROPFIND href into a key relative to base, so it round-trips with put/remove.

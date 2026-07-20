@@ -739,7 +739,7 @@ export function BackupSection() {
 											</>
 										) : (
 											<TextField
-												label={t`Path (optional)`}
+												label={t`Backup folder (optional)`}
 												value={davPath}
 												onChange={(e) => setDavPath(e.target.value)}
 											/>

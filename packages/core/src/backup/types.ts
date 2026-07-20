@@ -28,7 +28,8 @@ export interface S3Config {
 export interface WebdavConfig {
 	kind: "webdav";
 	serverUrl: string; // e.g. https://host/remote.php/dav/files/me/
-	path?: string;
+	// No folder field: the user's folder is the object-key prefix (see backupPrefix),
+	// so it arrives in the keys rather than being baked into the base URL.
 	username: string;
 	password: string;
 }
