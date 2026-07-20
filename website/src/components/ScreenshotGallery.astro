@@ -13,14 +13,18 @@ const modules = import.meta.glob<{ default: ImageMetadata }>(
 
 const LABELS: Record<string, string> = {
 	main: "Your vault",
+	"multi-vault": "Pick a vault",
 	autofill: "Autofill on a page",
+	"login-new": "Save a new login",
+	"login-update": "Update an existing login",
 	"login-edit": "Editing an entry",
-	"settings-general": "Settings",
-	"settings-appearance": "Dark mode",
-	"settings-sync": "Device sync",
-	"login-save": "Save a login",
 	"passkey-save": "Create a passkey",
 	"passkey-use": "Sign in with a passkey",
+	"settings-general": "Settings",
+	"settings-security": "Unlock methods",
+	"settings-backup-pre": "Backups and import",
+	"settings-backup-setup": "Scheduled cloud backups",
+	"settings-sync": "Device sync",
 };
 const ORDER = Object.keys(LABELS);
 

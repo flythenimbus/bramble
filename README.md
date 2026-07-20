@@ -19,10 +19,12 @@ The same encrypted vault and the same Rust crypto core sit behind all three, and
 
 ## Screenshots
 
-| <img src="docs/screenshots/main.png" width="260" alt="Your vault"><br>**Your vault** | <img src="docs/screenshots/autofill.png" width="260" alt="Autofill on a page"><br>**Autofill on a page** | <img src="docs/screenshots/login-edit.png" width="260" alt="Editing an entry"><br>**Editing an entry** |
+| <img src="docs/screenshots/main.png" width="260" alt="Your vault"><br>**Your vault** | <img src="docs/screenshots/multi-vault.png" width="260" alt="Pick a vault"><br>**Pick a vault** | <img src="docs/screenshots/autofill.png" width="260" alt="Autofill on a page"><br>**Autofill on a page** |
 |:--:|:--:|:--:|
-| <img src="docs/screenshots/settings-general.png" width="260" alt="Settings"><br>**Settings** | <img src="docs/screenshots/settings-appearance.png" width="260" alt="Dark mode"><br>**Dark mode** | <img src="docs/screenshots/settings-sync.png" width="260" alt="Device sync"><br>**Device sync** |
-| <img src="docs/screenshots/login-save.png" width="260" alt="Save a login"><br>**Save a login** | <img src="docs/screenshots/passkey-save.png" width="260" alt="Create a passkey"><br>**Create a passkey** | <img src="docs/screenshots/passkey-use.png" width="260" alt="Sign in with a passkey"><br>**Sign in with a passkey** |
+| <img src="docs/screenshots/login-new.png" width="260" alt="Save a new login"><br>**Save a new login** | <img src="docs/screenshots/login-update.png" width="260" alt="Update an existing login"><br>**Update an existing login** | <img src="docs/screenshots/login-edit.png" width="260" alt="Editing an entry"><br>**Editing an entry** |
+| <img src="docs/screenshots/passkey-save.png" width="260" alt="Create a passkey"><br>**Create a passkey** | <img src="docs/screenshots/passkey-use.png" width="260" alt="Sign in with a passkey"><br>**Sign in with a passkey** | <img src="docs/screenshots/settings-general.png" width="260" alt="Settings"><br>**Settings** |
+| <img src="docs/screenshots/settings-security.png" width="260" alt="Unlock methods"><br>**Unlock methods** | <img src="docs/screenshots/settings-backup-pre.png" width="260" alt="Backups and import"><br>**Backups and import** | <img src="docs/screenshots/settings-backup-setup.png" width="260" alt="Scheduled cloud backups"><br>**Scheduled cloud backups** |
+| <img src="docs/screenshots/settings-sync.png" width="260" alt="Device sync"><br>**Device sync** |
 
 ## What it does
 
@@ -69,8 +71,9 @@ The iOS and Android apps are versioned and released independently of the extensi
 - **Peer-to-peer sync.** Mirror your vault directly between your own devices over an end-to-end encrypted connection. No cloud, no relay holding your data.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine.
 - **Auto-lock.** Locks after idle time by default (configurable).
-- **Import from KeePass.** Bring your KDBX4 database over, key files included.
+- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, or KeePass, KDBX4 key files included.
 - **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, biometrics, or your recovery code can each unlock the same vault.
+- **Multiple vaults.** Keep more than one vault side by side and pick which to unlock when you open Bramble. Handy for sharing a device, or walling off separate sets of logins behind their own master passwords.
 
 ## Why this beats the cloud managers
 
@@ -134,7 +137,6 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 ## What's coming next
 
 - **Cloud backups on mobile.** The browser extension backs up to Dropbox, S3, and WebDAV on a schedule today; bringing those scheduled uploads to the iOS and Android apps is next (mobile can already restore from a backup file).
-- **Multiple vaults.** Keep more than one vault side by side and pick which to open when you launch the app. Handy for sharing a device between people, or walling off separate sets of logins behind their own master passwords.
 
 ## Contributing
 
