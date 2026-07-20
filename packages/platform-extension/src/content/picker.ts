@@ -193,7 +193,9 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	root.style.cssText = "position: absolute; top: 0; left: 0; z-index: 2147483647;";
 	// Closed: page gets `root.shadowRoot === null`. Listener attaches to the returned shadow.
 	const shadow = root.attachShadow({ mode: "closed" });
-	shadow.innerHTML = dropdownStyles + bodyHtml;
+	// Box styling lives on the inner .tp-dropdown (not :host) so the host page's
+	// CSS reset can't reach it across the shadow boundary.
+	shadow.innerHTML = `${dropdownStyles}<div class="tp-dropdown">${bodyHtml}</div>`;
 
 	dropdownEl = root;
 	document.body.appendChild(dropdownEl);

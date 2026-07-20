@@ -4,6 +4,8 @@ export const dropdownStyles = html`
 		<style>
 			:host {
 				display: block;
+			}
+			.tp-dropdown {
 				background: linear-gradient(135deg, rgba(40, 40, 45, 0.94), rgba(16, 16, 18, 0.94));
 				-webkit-backdrop-filter: saturate(180%) blur(20px);
 				backdrop-filter: saturate(180%) blur(20px);
@@ -14,8 +16,6 @@ export const dropdownStyles = html`
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				font-size: 13px;
 				color: #fff;
-				/* Reset inherited text props so a centered/RTL host page (e.g. Apple's
-				   account page) can't bleed alignment into the dropdown. */
 				text-align: left;
 				letter-spacing: normal;
 				text-transform: none;
@@ -23,6 +23,7 @@ export const dropdownStyles = html`
 				text-indent: 0;
 				max-height: 360px;
 				overflow-y: auto;
+				margin: 0;
 				padding: 6px;
 				box-sizing: border-box;
 			}

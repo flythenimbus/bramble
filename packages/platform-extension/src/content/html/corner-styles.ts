@@ -4,6 +4,9 @@ import { brambleGlyphDataUrl } from "./bramble-glyph-data";
 export const cornerStyles = html`
 		<style>
 			:host {
+				display: block;
+			}
+			.tp-card {
 				background: linear-gradient(120deg, rgba(44, 44, 48, 0.9), rgba(14, 14, 16, 0.9));
 				-webkit-backdrop-filter: saturate(180%) blur(20px);
 				backdrop-filter: saturate(180%) blur(20px);
@@ -16,13 +19,12 @@ export const cornerStyles = html`
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				font-size: 13px;
 				color: #fff;
-				/* Reset inherited text props so a centered/RTL host page can't bleed
-				   alignment into the card. */
 				text-align: left;
 				letter-spacing: normal;
 				text-transform: none;
 				font-style: normal;
 				text-indent: 0;
+				margin: 0;
 				padding: 20px;
 				box-sizing: border-box;
 				width: 360px;

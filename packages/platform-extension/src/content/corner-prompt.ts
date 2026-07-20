@@ -241,7 +241,9 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 			locked: payload.locked,
 		});
 	}
-	shadow.innerHTML = cornerStyles + body;
+	// The card's box styling lives on the inner .tp-card (not :host) so a host
+	// page's CSS reset can't reach it; the shadow boundary keeps it encapsulated.
+	shadow.innerHTML = `${cornerStyles}<div class="tp-card">${body}</div>`;
 	shadow.addEventListener("click", handleCornerCardClick, true);
 
 	cornerPromptEl = root;
