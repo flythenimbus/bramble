@@ -1,4 +1,6 @@
+import { Trans } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
@@ -18,7 +20,7 @@ export function VaultHomeRoute() {
 		type: raw.type ?? DEFAULT_SEARCH.type,
 		sort: raw.sort ?? DEFAULT_SEARCH.sort,
 	};
-	const { entries, deleteEntry, touchEntry } = useVault();
+	const { entries, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
 	const { prefs } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
@@ -77,6 +79,19 @@ export function VaultHomeRoute() {
 	// replace: typing shouldn't stack history entries.
 	const onSearchChange = (patch: Partial<VaultSearch>) =>
 		navigate({ to: "/vault", search: (prev) => ({ ...prev, ...patch }), replace: true });
+
+	// Until the vault has finished decrypting, `entries` is []; showing VaultHome
+	// here would flash "Your vault is empty" on a large vault. Show a loader instead.
+	if (!ready) {
+		return (
+			<main className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+				<Loader2 className="w-6 h-6 animate-spin" />
+				<p className="text-sm">
+					<Trans>Opening…</Trans>
+				</p>
+			</main>
+		);
+	}
 
 	return (
 		<VaultHome
