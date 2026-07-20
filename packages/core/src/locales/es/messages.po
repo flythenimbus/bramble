@@ -493,6 +493,9 @@ msgid "Create and store passkeys for other sites. While on, Bramble handles all 
 msgstr "Cree y almacene claves de acceso para otros sitios. Mientras esté activado, Bramble gestiona todas las indicaciones de claves de acceso en este navegador."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create another vault"
+msgstr "Crear otra bóveda"
+
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Create new vault"
@@ -1067,8 +1070,8 @@ msgid "New password"
 msgstr "Nueva contraseña"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
-msgid "New to {appName}?"
-msgstr "¿Nuevo en {appName}?"
+#~ msgid "New to {appName}?"
+#~ msgstr "¿Nuevo en {appName}?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."

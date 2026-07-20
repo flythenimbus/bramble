@@ -369,17 +369,12 @@ export function Auth() {
 						</div>
 					)}
 
-					{/* With several vaults, creating another is delegated to the vault picker, so the
-					    unlock screen drops the "New to Bramble? Create new vault" prompt. */}
+					{/* Exactly one existing vault: a plain divider + "create another". With several
+					    vaults, creating another is delegated to the vault picker, so the unlock
+					    screen drops this prompt entirely. */}
 					{!firstRun && !couldNotRead && !multipleVaults && (
 						<div className="mt-6 text-center space-y-3">
-							<div className="flex items-center gap-4 text-xs text-muted-foreground">
-								<div className="flex-1 h-px bg-border/50"></div>
-								<span>
-									<Trans>New to {appName}?</Trans>
-								</span>
-								<div className="flex-1 h-px bg-border/50"></div>
-							</div>
+							<div className="h-px bg-border/50"></div>
 
 							<Button
 								variant="link"
@@ -388,7 +383,7 @@ export function Auth() {
 								disabled={busy}
 								className="text-sm text-foreground hover:text-primary active:scale-[0.98]"
 							>
-								<Trans>Create new vault</Trans>
+								<Trans>Create another vault</Trans>
 							</Button>
 						</div>
 					)}
