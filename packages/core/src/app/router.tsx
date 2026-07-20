@@ -3,20 +3,39 @@ import {
 	createRootRouteWithContext,
 	createRoute,
 	createRouter,
+	lazyRouteComponent,
 	Outlet,
 	redirect,
 } from "@tanstack/react-router";
 import type { UseVault } from "../hooks/useVault";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
-import { CreateEntryRoute } from "./routes/CreateEntryRoute";
-import { EntryDetailRoute } from "./routes/EntryDetailRoute";
-import { EntryEditRoute } from "./routes/EntryEditRoute";
-import { SelectVaultRoute } from "./routes/SelectVaultRoute";
-import { SettingsRoute } from "./routes/SettingsRoute";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 import { settingsSearchSchema } from "./screens/Settings/settings-search";
 import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
+
+// Code-split the routes that aren't on the first-paint path (Settings pulls in
+// backup/sync/import/restore; the entry forms pull in every field editor). The
+// unlock screen, the app shell, and the vault list stay eager so opening the app
+// needs no extra chunk fetch. Navigating to these shows the current view until
+// the chunk resolves (TanStack Router's pending behavior), so no blank flash.
+const SelectVaultRoute = lazyRouteComponent(
+	() => import("./routes/SelectVaultRoute"),
+	"SelectVaultRoute",
+);
+const CreateEntryRoute = lazyRouteComponent(
+	() => import("./routes/CreateEntryRoute"),
+	"CreateEntryRoute",
+);
+const EntryDetailRoute = lazyRouteComponent(
+	() => import("./routes/EntryDetailRoute"),
+	"EntryDetailRoute",
+);
+const EntryEditRoute = lazyRouteComponent(
+	() => import("./routes/EntryEditRoute"),
+	"EntryEditRoute",
+);
+const SettingsRoute = lazyRouteComponent(() => import("./routes/SettingsRoute"), "SettingsRoute");
 
 // Slice of vault state route guards read; injected via RouterProvider context.
 // Stays `undefined` until React fills it, so guards treat missing vault as
