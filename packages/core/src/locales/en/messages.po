@@ -1198,6 +1198,7 @@ msgstr "Open it from the {0} popup and unlock it with its master password."
 #~ msgid "Open your vault"
 #~ msgstr "Open your vault"
 
+#: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Opening…"
@@ -1214,6 +1215,10 @@ msgstr "Optional (e.g. Restored)"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Optional (e.g. Work)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Overview"
+msgstr "Overview"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pair with another device"

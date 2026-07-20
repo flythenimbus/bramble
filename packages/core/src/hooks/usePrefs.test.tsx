@@ -41,8 +41,8 @@ describe("usePrefs shared provider", () => {
 		);
 		await act(async () => {});
 
-		// One load of the 8 pref keys total, not one load per consumer (the old plain-hook bug).
-		expect(storage.getMeta).toHaveBeenCalledTimes(8);
+		// One load of the 9 pref keys total, not one load per consumer (the old plain-hook bug).
+		expect(storage.getMeta).toHaveBeenCalledTimes(9);
 	});
 
 	it("propagates an update from one consumer to another", async () => {

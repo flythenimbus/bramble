@@ -22,7 +22,7 @@ export function VaultHomeRoute() {
 	};
 	const { entries, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
-	const { prefs } = usePrefs();
+	const { prefs, update } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
 	const showBreaches = prefs.breachCheckEnabled;
 
@@ -104,6 +104,8 @@ export function VaultHomeRoute() {
 			onEditEntry={(entryId) => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
 			onDeleteEntry={deleteEntry}
 			onUseEntry={(entryId) => void touchEntry(entryId)}
+			statsCollapsed={prefs.statsCollapsed}
+			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
 		/>
 	);
 }

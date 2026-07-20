@@ -26,6 +26,9 @@ export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 // On by default (a screen-lock is a reasonable security floor); turned off to stay unlocked
 // on a trusted device even under "Never". See issue #6.
 export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
+// Home screen: whether the Total / At Risk / Strong stats row is collapsed.
+// Persisted so the user's choice sticks across opens.
+export const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -37,6 +40,7 @@ export const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 export const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
+export const DEFAULT_STATS_COLLAPSED = false;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -52,6 +56,8 @@ export interface Prefs {
 	passkeyProviderEnabled: boolean;
 	// Extension: also lock when the OS screen locks, regardless of the timeout.
 	lockOnScreenLock: boolean;
+	// Home: collapse the Total / At Risk / Strong stats row.
+	statsCollapsed: boolean;
 }
 
 const DEFAULT_PREFS: Prefs = {
@@ -63,6 +69,7 @@ const DEFAULT_PREFS: Prefs = {
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
+	statsCollapsed: DEFAULT_STATS_COLLAPSED,
 };
 
 export interface UsePrefs {
@@ -86,7 +93,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g, h] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -95,6 +102,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
+				storage.getMeta<boolean>(PREF_STATS_COLLAPSED),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -106,6 +114,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				autofillQuickType: typeof f === "boolean" ? f : DEFAULT_AUTOFILL_QUICKTYPE,
 				passkeyProviderEnabled: typeof g === "boolean" ? g : DEFAULT_PASSKEY_PROVIDER,
 				lockOnScreenLock: typeof h === "boolean" ? h : DEFAULT_LOCK_ON_SCREEN_LOCK,
+				statsCollapsed: typeof i === "boolean" ? i : DEFAULT_STATS_COLLAPSED,
 			});
 			setLoaded(true);
 		})();
@@ -132,7 +141,9 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 										? PREF_AUTOFILL_QUICKTYPE
 										: key === "passkeyProviderEnabled"
 											? PREF_PASSKEY_PROVIDER
-											: PREF_LOCK_ON_SCREEN_LOCK;
+											: key === "lockOnScreenLock"
+												? PREF_LOCK_ON_SCREEN_LOCK
+												: PREF_STATS_COLLAPSED;
 			await storage.setMeta(metaKey, value);
 		},
 		[storage],

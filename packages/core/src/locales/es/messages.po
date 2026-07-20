@@ -1198,6 +1198,7 @@ msgstr "Ábralo desde la ventana emergente de {0} y desbloquéelo con su contras
 #~ msgid "Open your vault"
 #~ msgstr "Abrir su bóveda"
 
+#: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Opening…"
@@ -1214,6 +1215,10 @@ msgstr "Opcional (p. ej., Restaurado)"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Opcional (p. ej., Trabajo)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Overview"
+msgstr "Resumen"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pair with another device"

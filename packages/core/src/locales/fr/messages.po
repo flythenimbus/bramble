@@ -1198,6 +1198,7 @@ msgstr "Ouvrez-le depuis la fenêtre contextuelle {0} et déverrouillez-le avec 
 #~ msgid "Open your vault"
 #~ msgstr "Ouvrir votre coffre-fort"
 
+#: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Opening…"
@@ -1214,6 +1215,10 @@ msgstr "Optionnel (p. ex. Restauré)"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Facultatif (p. ex. Travail)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Overview"
+msgstr "Aperçu"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pair with another device"
