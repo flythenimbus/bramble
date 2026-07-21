@@ -89,7 +89,7 @@ describe("mobile one-time namespacing migration", () => {
 		expect(prefs.get("meta:sync.deviceKeypair")).toBe(
 			JSON.stringify({ privateKey: "p", publicKey: "P" }),
 		);
-		expect(prefs.has("meta:sync.deviceKeypair:" + id)).toBe(false);
+		expect(prefs.has(`meta:sync.deviceKeypair:${id}`)).toBe(false);
 		expect("legacyBlobVaultId" in reg()).toBe(false);
 		expect(bytesToBase64(await storage.readVaultBlob())).toBe(blob);
 	});

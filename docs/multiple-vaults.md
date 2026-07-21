@@ -330,7 +330,11 @@ then deletes the flat keys. A copy, never a move, so it is crash-safe under MV3'
 service-worker deaths: an interrupt before the cutover just re-runs (the flat data is still
 authoritative); after it, the flat keys are unread orphans that best-effort cleanup removes. It is
 concurrency-safe (`copyFlatVaultToNamespaced` copies only values that still exist, so a racing
-context can't clobber a namespaced key with null) and value-preserving (byte-identical sync keys →
+context can't clobber a namespaced key with null; and on the extension, where two UI documents can
+race the first-run migration with separate per-context memos, every no-registry cutover write
+re-checks for a registry a racing context published first and adopts it, so concurrent migrations
+converge on one vault id instead of the loser clobbering the winner's registry - pinned by
+deterministic racing-context tests in `storage.test.ts`) and value-preserving (byte-identical sync keys →
 the device's Noise static / roster id / groupKey are unchanged → **peers keep recognizing it, no
 re-pair**). An install already on the transitional layout is detected by raw-reading the retired
 `legacyBlobVaultId` pointer (Zod strips it on a normal parse) and migrating the vault it names.
