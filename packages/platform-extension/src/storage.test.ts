@@ -175,11 +175,14 @@ describe("one-time namespacing migration", () => {
 		const blob = bytesToBase64(new Uint8Array([7, 7, 7]));
 		const group = { groupKey: "gk", roster: { devices: [], revoked: [] } };
 		const keypair = { privateKey: "priv", publicKey: "pub" };
+		const signingKey = { secretKey: "sec", publicKey: "vpub" };
 		const local = stubChrome({
 			[VAULT_KEY]: blob,
 			"sync.group": group,
 			"sync.deviceKeypair": keypair,
+			"sync.signingKey": signingKey,
 			"sync.deviceId": "dev-1",
+			"sync.lastSyncedAt": 1_700_000_000_000,
 		});
 		const storage = await loadStorage();
 		await storage.hasVaultHandle(); // trigger the migration
@@ -190,11 +193,15 @@ describe("one-time namespacing migration", () => {
 		expect(local[nk(id)]).toBe(blob);
 		expect(local[`sync.group:${id}`]).toEqual(group);
 		expect(local[`sync.deviceKeypair:${id}`]).toEqual(keypair);
+		expect(local[`sync.signingKey:${id}`]).toEqual(signingKey);
 		expect(local[`sync.deviceId:${id}`]).toBe("dev-1");
+		expect(local[`sync.lastSyncedAt:${id}`]).toBe(1_700_000_000_000);
 		// Flat keys deleted; the retired pointer is not written.
 		expect(local[VAULT_KEY]).toBeUndefined();
 		expect(local["sync.group"]).toBeUndefined();
 		expect(local["sync.deviceKeypair"]).toBeUndefined();
+		expect(local["sync.signingKey"]).toBeUndefined();
+		expect(local["sync.lastSyncedAt"]).toBeUndefined();
 		expect("legacyBlobVaultId" in reg(local)).toBe(false);
 	});
 
@@ -253,6 +260,97 @@ describe("one-time namespacing migration", () => {
 		expect(local[`sync.group:v`]).toEqual({ groupKey: "gk" });
 		expect(local[VAULT_KEY]).toBeUndefined();
 		expect("legacyBlobVaultId" in reg(local)).toBe(false);
+	});
+
+	// Two UI documents (popup + options/pop-out) can each run the no-registry migration with their
+	// own memo. The gated stub freezes context B on a chosen storage read while context A migrates
+	// to completion, pinning the convergence guard: B must adopt A's published registry, never
+	// clobber it (with EMPTY or with its own differently-id'd registry).
+	function stubChromeGated(local: Record<string, unknown>, gateKey: string, gateCall: number) {
+		const counts = new Map<string, number>();
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		let onReached!: () => void;
+		const reached = new Promise<void>((r) => (onReached = r));
+		const pick = (keys: string | string[]) => {
+			const out: Record<string, unknown> = {};
+			for (const k of Array.isArray(keys) ? keys : [keys]) if (k in local) out[k] = local[k];
+			return out;
+		};
+		vi.stubGlobal("chrome", {
+			storage: {
+				local: {
+					get: async (keys: string | string[]) => {
+						const label = Array.isArray(keys) ? keys.join() : keys;
+						const n = (counts.get(label) ?? 0) + 1;
+						counts.set(label, n);
+						if (label === gateKey && n === gateCall) {
+							onReached();
+							await gate;
+						}
+						return pick(keys);
+					},
+					set: async (obj: Record<string, unknown>) => Object.assign(local, obj),
+					remove: async (keys: string | string[]) => {
+						for (const k of Array.isArray(keys) ? keys : [keys]) delete local[k];
+					},
+				},
+			},
+		});
+		return { release, reached };
+	}
+
+	it("no-registry race: a loser that finds the flat data already migrated adopts the winner's registry", async () => {
+		const blob = bytesToBase64(new Uint8Array([3, 3]));
+		const local: Record<string, unknown> = { [VAULT_KEY]: blob, "sync.group": { groupKey: "gk" } };
+		// Context B saw "no registry", then freezes on its flat-blob read.
+		const { release, reached } = stubChromeGated(local, VAULT_KEY, 1);
+		const contextB = await loadStorage();
+		const bRun = contextB.hasVaultHandle();
+		await reached;
+
+		// Context A runs the whole migration while B is frozen.
+		const contextA = await loadStorage();
+		await contextA.hasVaultHandle();
+		const winnerId = firstId(local);
+		expect(local[nk(winnerId)]).toBe(blob);
+
+		release();
+		await bRun;
+
+		// B resumed into "no flat blob, no FSA" but must NOT write EMPTY over A's registry.
+		expect(reg(local).vaults.map((v) => v.id)).toEqual([winnerId]);
+		expect(local[nk(winnerId)]).toBe(blob);
+		expect(local[`sync.group:${winnerId}`]).toEqual({ groupKey: "gk" });
+	});
+
+	it("no-registry race: a loser that already copied under its own id drops those copies", async () => {
+		const blob = bytesToBase64(new Uint8Array([4, 4]));
+		const local: Record<string, unknown> = { [VAULT_KEY]: blob, "sync.group": { groupKey: "gk" } };
+		// Context B copies under its own uuid, then freezes on the pre-cutover registry re-check
+		// (its 2nd registry read: the 1st returned "no registry").
+		const { release, reached } = stubChromeGated(local, VAULT_REGISTRY_KEY, 2);
+		const contextB = await loadStorage();
+		const bRun = contextB.hasVaultHandle();
+		await reached;
+		const loserId = Object.keys(local)
+			.find((k) => k.startsWith(`${VAULT_KEY}:`))!
+			.slice(VAULT_KEY.length + 1);
+
+		const contextA = await loadStorage();
+		await contextA.hasVaultHandle();
+		const winnerId = firstId(local);
+		expect(winnerId).not.toBe(loserId);
+
+		release();
+		await bRun;
+
+		// One vault, the winner's; the loser's unpublished copies are cleaned up, not orphaned.
+		expect(reg(local).vaults.map((v) => v.id)).toEqual([winnerId]);
+		expect(local[nk(winnerId)]).toBe(blob);
+		expect(local[`sync.group:${winnerId}`]).toEqual({ groupKey: "gk" });
+		expect(local[nk(loserId)]).toBeUndefined();
+		expect(local[`sync.group:${loserId}`]).toBeUndefined();
 	});
 
 	it("never clobbers a namespaced blob with null when the flat data is already gone (race guard)", async () => {

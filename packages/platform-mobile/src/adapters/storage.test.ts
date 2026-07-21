@@ -67,6 +67,7 @@ describe("mobile one-time namespacing migration", () => {
 		files.set(VAULT_FILE, blob);
 		prefs.set("meta:sync.group", JSON.stringify({ groupKey: "gk" }));
 		prefs.set("meta:sync.deviceId", JSON.stringify("dev-1"));
+		prefs.set("meta:sync.lastSyncedAt", JSON.stringify(1_700_000_000_000));
 		// A legacy plaintext keypair copy: the migration must NOT touch it (sync-manager migrates it
 		// into secure storage on next read; deleting it would lose the device identity).
 		prefs.set("meta:sync.deviceKeypair", JSON.stringify({ privateKey: "p", publicKey: "P" }));
@@ -78,10 +79,12 @@ describe("mobile one-time namespacing migration", () => {
 		expect(files.get(nf(id))).toBe(blob);
 		expect(prefs.get(`meta:sync.group:${id}`)).toBe(JSON.stringify({ groupKey: "gk" }));
 		expect(prefs.get(`meta:sync.deviceId:${id}`)).toBe(JSON.stringify("dev-1"));
+		expect(prefs.get(`meta:sync.lastSyncedAt:${id}`)).toBe(JSON.stringify(1_700_000_000_000));
 		// Flat blob + migrated Preferences keys removed.
 		expect(files.has(VAULT_FILE)).toBe(false);
 		expect(prefs.has("meta:sync.group")).toBe(false);
 		expect(prefs.has("meta:sync.deviceId")).toBe(false);
+		expect(prefs.has("meta:sync.lastSyncedAt")).toBe(false);
 		// The device keypair is left exactly where it was - not namespaced, not deleted.
 		expect(prefs.get("meta:sync.deviceKeypair")).toBe(
 			JSON.stringify({ privateKey: "p", publicKey: "P" }),

@@ -83,7 +83,9 @@ async function writeRegistry(reg: VaultRegistry): Promise<void> {
 // data stays authoritative until the copy is done and the registry cut over), then deletes the flat
 // keys. Crash-safe (copy -> registry cutover -> delete: an interrupt before the cutover just re-runs;
 // after it, the flat keys are harmless orphans) and concurrency-safe (copyFlatVaultToNamespaced only
-// writes flat values that still exist, so a racing context can't clobber a namespaced key with null).
+// writes flat values that still exist, so a racing context can't clobber a namespaced key with null;
+// and every no-registry cutover write re-checks for a registry a racing context published first and
+// adopts it, so two UI documents migrating at once converge on one vault id).
 // Memoised so it runs once per context. See docs/multiple-vaults.md.
 let migration: Promise<void> | null = null;
 function ensureMigrated(): Promise<void> {
@@ -111,13 +113,31 @@ async function runMigration(): Promise<void> {
 	const hasLocal = (await blobAt(VAULT_BLOB_KEY)) !== null;
 	const hasFsa = !hasLocal && (await getLegacyHandle()) !== null;
 	if (!hasLocal && !hasFsa) {
-		await writeRegistry(EMPTY_REGISTRY);
+		// Empty flat state is ambiguous: fresh install, OR a racing context (two UI documents opened
+		// together) migrated and deleted the flat keys since our registry read. The racer publishes
+		// its registry before deleting, so re-check and adopt it; writing EMPTY here would clobber
+		// it and strand the migrated vault ("create a vault" over real data).
+		if (!(await registryExists())) await writeRegistry(EMPTY_REGISTRY);
 		return;
 	}
 	const id = crypto.randomUUID();
 	await copyFlatVaultToNamespaced(id); // FSA vaults have no flat blob; they materialise namespaced on unlock
+	if (await registryExists()) {
+		// A racing context won the cutover under its own id; drop this context's unpublished copies.
+		await api.storage.local.remove([
+			blobKeyFor(id),
+			backupKeyFor(id),
+			...PER_VAULT_SYNC_KEYS.map((k) => syncKeyFor(k, id)),
+		]);
+		return;
+	}
 	await writeRegistry(addVault(EMPTY_REGISTRY, { id, label: "", createdAt: Date.now() }));
 	await deleteFlatVaultKeys();
+}
+
+/** True when a registry has been published (possibly by a racing context, mid-migration). */
+async function registryExists(): Promise<boolean> {
+	return (await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY] != null;
 }
 
 /** Copy a pre-namespacing vault's flat storage (blob, recovery snapshot, and the per-vault sync keys)

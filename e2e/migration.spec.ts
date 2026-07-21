@@ -82,6 +82,7 @@ async function assertMigrated(sw: Worker, expectedId?: string): Promise<void> {
 			keypair: all[`sync.deviceKeypair:${id}`],
 			signingKey: all[`sync.signingKey:${id}`],
 			deviceId: all[`sync.deviceId:${id}`],
+			lastSyncedAt: all[`sync.lastSyncedAt:${id}`],
 		};
 	});
 	if (expectedId) expect(s.id).toBe(expectedId); // a transitional install keeps the vault's id
@@ -95,6 +96,7 @@ async function assertMigrated(sw: Worker, expectedId?: string): Promise<void> {
 	expect(s.keypair).toEqual(FLAT_SYNC["sync.deviceKeypair"]);
 	expect(s.signingKey).toEqual(FLAT_SYNC["sync.signingKey"]);
 	expect(s.deviceId).toBe(FLAT_SYNC["sync.deviceId"]);
+	expect(s.lastSyncedAt).toBe(FLAT_SYNC["sync.lastSyncedAt"]);
 }
 
 test("migrates a released single-vault install (flat blob, no registry) and still unlocks", async ({
