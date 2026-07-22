@@ -37,14 +37,14 @@
 		"react-dom": "^19.2.6"
 	},
 	"devDependencies": {
-		"@capacitor/cli": "^8.4.1",
+		"@capacitor/cli": "^8.4.2",
 		"@lingui/babel-plugin-lingui-macro": "^6.4.0",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/react": "^19.2.15",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.2",
 		"concurrently": "^9.1.0",
-		"sharp": "^0.34.5",
+		"sharp": "^0.35.3",
 		"tailwindcss": "^4.3.0",
 		"tw-animate-css": "^1.0.0",
 		"typescript": "^5.5.0",

@@ -63,14 +63,14 @@
 		"@types/node": "^24.0.0",
 		"crx3": "^2.0.0",
 		"vite-plugin-babel": "^1.7.3",
-		"web-ext": "^10.4.0",
-		"ws": "^8.18.0"
+		"web-ext": "^10.5.0",
+		"ws": "^8.21.1"
 	},
 	"pnpm": {
 		"overrides": {
-			"esbuild": "^0.28.1",
-			"ws": "^8.21.0",
-			"adm-zip": "^0.6.0"
+			"adm-zip": "^0.6.0",
+			"shell-quote": "^1.9.0",
+			"sharp": "^0.35.0"
 		}
 	}
 }
