@@ -44,7 +44,7 @@
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.2",
 		"concurrently": "^9.1.0",
-		"sharp": "^0.34.5",
+		"sharp": "^0.35.0",
 		"tailwindcss": "^4.3.0",
 		"tw-animate-css": "^1.0.0",
 		"typescript": "^5.5.0",
