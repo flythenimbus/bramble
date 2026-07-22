@@ -6,7 +6,9 @@ import { defineConfig } from "astro/config";
 export default defineConfig({
 	site: "https://bramble.sh",
 	// Emit flat files (/privacy.html, /support.html) rather than directories, so
-	// the existing bramble.sh/support.html URL keeps working after the cut-over.
+	// the legacy bramble.sh/support.html URL keeps working. public/_redirects then
+	// serves those files at the clean /privacy and /support paths (the canonical
+	// URLs; see the page `path` props and Footer links).
 	build: { format: "file" },
 	vite: {
 		plugins: [tailwindcss()],

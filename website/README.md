@@ -10,11 +10,13 @@ is visually identical to the product.
 ## Pages
 
 - `/`: landing page (`src/pages/index.astro`)
-- `/privacy.html`: privacy policy (`src/pages/privacy.astro`)
-- `/support.html`: support / FAQ (`src/pages/support.astro`)
+- `/privacy`: privacy policy (`src/pages/privacy.astro`)
+- `/support`: support / FAQ (`src/pages/support.astro`)
 
-Pages are emitted as flat `.html` files (`build.format: "file"`) so the existing
-`bramble.sh/support.html` URL keeps working.
+Pages are emitted as flat `.html` files (`build.format: "file"`), and
+`public/_redirects` serves them at the clean `/privacy` and `/support` paths
+(the canonical URLs). The legacy `bramble.sh/privacy.html` and
+`bramble.sh/support.html` URLs keep working too.
 
 ## Commands
 
@@ -82,7 +84,9 @@ CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… pnpm --filter @vault/website 
 
 ### Cut-over note
 
-The privacy policy now lives at `/privacy.html` instead of the root, so update
-the privacy-policy URL in the Chrome / Firefox / App Store listings if any point
-at `bramble.sh/`. The legacy static `website/index.html` and `website/support.html`
-are no longer served (Cloudflare publishes `dist/`) but are left in place.
+The privacy policy now lives at `/privacy` (was the root), and support at
+`/support`, so update the privacy-policy and support URLs in the Chrome /
+Firefox / App Store listings if any still point at `bramble.sh/` or at the old
+`flythenimbus.github.io/bramble/` pages. The legacy static `website/index.html`
+and `website/support.html` are no longer served (Cloudflare publishes `dist/`)
+but are left in place.

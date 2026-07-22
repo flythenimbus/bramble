@@ -5,25 +5,27 @@ import { SITE } from "@/consts";
 
 <LegalLayout
 	title="Privacy Policy"
-	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its only network use is two optional, off-by-default features you control: a password breach check and peer-to-peer sync between your own devices."
-	path="/privacy.html"
-	meta="Effective date: 23 June 2026"
+	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control: a password breach check, peer-to-peer sync between your own devices, and encrypted backups to a storage provider you choose."
+	path="/privacy"
+	meta="Effective date: 21 July 2026"
 >
 	<p class="lead">
 		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
 		browser extension and as mobile apps. It does not collect, sell, or share any of your data.
 		There is no account and no Bramble server that holds your vault. Everything stays on your
-		device, encrypted. Bramble makes network connections only for two optional features that are
-		off by default and that you turn on yourself: a password breach check, and peer-to-peer sync
-		between your own devices. Neither one ever sends your passwords or your vault to us or to anyone
-		else. Details below.
+		device, encrypted. Bramble makes network connections only for a few optional features that are
+		off by default and that you turn on yourself: a password breach check, peer-to-peer sync between
+		your own devices, and encrypted backups to a storage provider you choose. None of them ever
+		exposes your passwords or your vault in a form that Bramble, a provider, or anyone else could
+		read. Details below.
 	</p>
 
 	<h2>What data Bramble handles</h2>
 	<p>
 		Bramble stores the data you choose to save in it, such as login usernames and passwords,
-		payment cards, secure notes, SSH keys, and two-factor (TOTP) seeds, together with your own app
-		preferences. This data is created and used only to provide the password-manager features you
+		passkeys, payment cards, secure notes, SSH keys, and two-factor (TOTP) seeds, together with
+		your own app preferences. This data is created and used only to provide the password-manager
+		features you
 		asked for (saving, searching, and autofilling your credentials).
 	</p>
 
@@ -32,8 +34,9 @@ import { SITE } from "@/consts";
 		Your vault is stored only on your devices. In the browser extension that means your browser's
 		local extension storage and/or a vault file you pick on your own computer. In the mobile apps
 		it means the app's private on-device storage, with a small number of secrets (the key that
-		protects your vault) held in the OS keystore. Bramble has no vault server and no cloud, so your
-		data is never stored anywhere off your devices.
+		protects your vault) held in the OS keystore. Bramble has no vault server, so your data is not
+		stored off your devices unless you turn on cloud backups (below), which keep an encrypted copy
+		with a storage provider you choose.
 	</p>
 
 	<h2>How it is protected</h2>
@@ -49,8 +52,9 @@ import { SITE } from "@/consts";
 		<li>No data collection, tracking, analytics, telemetry, or advertising.</li>
 		<li>No accounts, sign-up, or login to any service.</li>
 		<li>
-			No vault server and no cloud. Bramble never uploads your vault, and no copy of it is held off
-			your devices.
+			No Bramble vault server or cloud. Bramble runs no server that stores your vault. If you turn
+			on backups, only an encrypted copy goes to a storage provider you choose and control (see
+			"Cloud backups" below); the ciphertext is all that ever leaves your device.
 		</li>
 		<li>No selling, renting, or sharing of your data with anyone.</li>
 		<li>No use of your data for any purpose other than the features you use.</li>
@@ -58,9 +62,9 @@ import { SITE } from "@/consts";
 
 	<h2>Network connections, in full</h2>
 	<p>
-		Bramble works entirely offline by default. There are exactly two features that make network
-		connections, both optional and both off until you turn them on: the password breach check and
-		device sync. They are described next. Bramble makes no other network requests.
+		Bramble works entirely offline by default. There are three features that make network
+		connections, all optional and all off until you turn them on: the password breach check, device
+		sync, and cloud backups. They are described next. Bramble makes no other network requests.
 	</p>
 
 	<h2>Password breach check (optional)</h2>
@@ -114,6 +118,34 @@ import { SITE } from "@/consts";
 		</li>
 	</ul>
 
+	<h2>Cloud backups (optional)</h2>
+	<p>
+		Bramble can keep an encrypted backup of your vault with a storage provider you choose. This is
+		optional and off until you set it up, and you can turn it off or remove your backups at any
+		time.
+	</p>
+	<p>What this does and does not expose:</p>
+	<ul>
+		<li>
+			<strong>Only ciphertext leaves your device.</strong> A backup is the same
+			client-side-encrypted blob as a local export: it can be opened only with your master password.
+			Encryption happens on your device before anything is uploaded, so the provider stores opaque
+			data and never sees your passwords, your vault, or any key that could decrypt them.
+		</li>
+		<li>
+			<strong>You pick the destination, and Bramble has no server in the middle.</strong> Bramble
+			uploads directly to the storage you configure: Dropbox (which you connect with a normal
+			sign-in), or any S3-compatible or WebDAV storage, including services you self-host. Bramble
+			runs no backup server of its own and keeps no copy.
+		</li>
+		<li>
+			<strong>The provider is a third party under its own terms.</strong> Whatever storage you
+			choose receives the encrypted file and the account or connection details needed to store it,
+			and handles them under its own privacy policy. Because the file is encrypted, that is all it
+			can see.
+		</li>
+	</ul>
+
 	<h2>Autofill</h2>
 	<p>
 		In the browser extension, Bramble's content script runs on web pages and looks at the structure
@@ -130,6 +162,80 @@ import { SITE } from "@/consts";
 		then decrypt it; nothing in your vault is readable before that.
 	</p>
 
+	<h2>Passkeys and security keys</h2>
+	<p>
+		Bramble can act as a passkey provider (and, in the browser extension, a security-key provider)
+		for the sites and apps you sign in to. When a site asks you to create or use a passkey, your
+		browser or device can offer Bramble: the passkey's private key is generated and kept in your
+		encrypted vault, stored as an ordinary vault entry, and never leaves it. Bramble only signs the
+		challenge the site sends, and only after you approve. In Chromium browsers this uses the
+		browser's Web Authentication proxy; on mobile it uses the operating system's passkey framework.
+		No passkey material is ever sent to Bramble.
+	</p>
+
+	<h2>On mobile: unlocking, key storage, and keyboard suggestions</h2>
+	<ul>
+		<li>
+			<strong>Biometric unlock.</strong> If you turn it on, Bramble caches your vault key behind a
+			hardware-backed biometric gate provided by the operating system (the iOS Keychain and Secure
+			Enclave, or the Android Keystore). The key is released only after a successful biometric or
+			device-passcode check, and the system invalidates it if your enrolled biometrics change. This
+			is a convenience built on the operating system's own protection; it stays on your device.
+		</li>
+		<li>
+			<strong>Shared storage with the autofill component.</strong> So that AutoFill can work, its
+			autofill component reads your logins from encrypted, app-private storage on the device. That
+			storage is protected with your vault key and is not readable without unlocking, and nothing in
+			it ever leaves the device.
+		</li>
+		<li>
+			<strong>Keyboard suggestions (iOS, off by default).</strong> On iOS you can optionally let
+			Bramble show matching logins as suggestions above the keyboard. Turning this on provides your
+			saved usernames and the websites they belong to (but never your passwords) to iOS, so the
+			system can show those suggestions even before you unlock Bramble. It is off by default
+			precisely because it makes those usernames visible to the operating system before
+			authentication; you can turn it off at any time.
+		</li>
+		<li>
+			<strong>Camera.</strong> Bramble can scan QR codes (to link a device for sync, or to add a
+			TOTP secret) using your camera. The scanning happens on your device and the camera images are
+			not stored or transmitted.
+		</li>
+	</ul>
+
+	<h2>Browser extension permissions, in plain language</h2>
+	<ul>
+		<li>Access to websites: to detect login fields and offer autofill.</li>
+		<li>Storage: to keep your encrypted vault and preferences on your device.</li>
+		<li>Clipboard: to copy a password and clear it after a timeout.</li>
+		<li>
+			Alarms and idle: to lock the vault automatically after inactivity or when your screen locks.
+		</li>
+		<li>Offscreen: to run the encryption module.</li>
+		<li>
+			Web authentication: to let you use Bramble as a passkey or security-key provider for websites
+			(Chromium browsers).
+		</li>
+		<li>
+			Identity: to run the provider's sign-in screen when you connect a cloud-backup account such as
+			Dropbox.
+		</li>
+	</ul>
+
+	<h2>Clipboard</h2>
+	<p>
+		When you copy a password, Bramble writes it to your clipboard and, after a short timeout, clears
+		the clipboard to reduce the chance of a secret lingering there. This is done locally and the
+		copied value is never sent anywhere.
+	</p>
+
+	<h2>Importing other password files</h2>
+	<p>
+		If you import a vault from another manager (for example a KeePass .kdbx file), Bramble reads that
+		file locally to add its entries to your vault. The file and its contents are processed only on
+		your device and are not transmitted anywhere.
+	</p>
+
 	<h2>Recovery and lost access</h2>
 	<p>
 		Bramble has no copy of your master password or the keys derived from it, so it cannot recover
@@ -143,7 +249,9 @@ import { SITE } from "@/consts";
 	<p>
 		Because your data lives only on your devices, you are in control of it. Removing the extension
 		or the app, deleting your vault file, and clearing the app's or extension's storage removes your
-		data. Bramble retains nothing on your behalf because it holds nothing about you anywhere else.
+		data. Bramble retains nothing on your behalf because it holds nothing about you anywhere else. If
+		you turned on cloud backups, delete the encrypted backup files from your storage provider too,
+		since those live in your account there, not with Bramble.
 	</p>
 
 	<h2>Children</h2>
