@@ -1,8 +1,0 @@
-# Clean URLs for the legal/support pages. The build emits flat files
-# (/privacy.html, /support.html) via astro.config build.format:"file"; these
-# rules serve them at extensionless paths with no redirect (200 = rewrite), so
-# /privacy and /support are the canonical URLs. The legacy /privacy.html and
-# /support.html keep working (the files still exist, and Cloudflare Pages maps
-# the .html form to the clean path).
-/privacy    /privacy.html    200
-/support    /support.html    200

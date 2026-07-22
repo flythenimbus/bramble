@@ -13,10 +13,10 @@ is visually identical to the product.
 - `/privacy`: privacy policy (`src/pages/privacy.astro`)
 - `/support`: support / FAQ (`src/pages/support.astro`)
 
-Pages are emitted as flat `.html` files (`build.format: "file"`), and
-`public/_redirects` serves them at the clean `/privacy` and `/support` paths
-(the canonical URLs). The legacy `bramble.sh/privacy.html` and
-`bramble.sh/support.html` URLs keep working too.
+Pages are emitted as flat `.html` files (`build.format: "file"`). Cloudflare
+Pages serves them at the clean `/privacy` and `/support` paths (the canonical
+URLs) and redirects the legacy `bramble.sh/privacy.html` /
+`bramble.sh/support.html` URLs to them, so both keep working.
 
 ## Commands
 
