@@ -50,6 +50,68 @@ import { SITE } from "@/consts";
 		read entirely on your device and is never uploaded anywhere.
 	</p>
 
+	<h2>Syncing across your devices</h2>
+	<p>
+		Bramble can keep one vault in step across all of your own devices, browsers and phones alike,
+		with no account and no server holding your data. Your devices form a small personal mesh: you
+		link each one once, and after that they sync directly to each other, peer to peer, whenever they
+		are unlocked. It is optional and stays off until you set it up.
+	</p>
+	<p>A few things worth knowing before you start:</p>
+	<ul>
+		<li>
+			<strong>It is a group, not a pair.</strong> Add as many devices as you like. Any device
+			already in the group can add the next one, so you never have to link every pair by hand.
+		</li>
+		<li>
+			<strong>It syncs in the background.</strong> Once devices are linked they reconcile
+			automatically while unlocked. There is no sync button to press and no window to keep open.
+		</li>
+		<li>
+			<strong>Both devices need to be awake at the same time.</strong> Sync is live and
+			device-to-device, with no server holding a copy in between, so a device that was offline
+			catches up the next time it is unlocked alongside another.
+		</li>
+		<li>
+			<strong>Same network or not, your vault stays private.</strong> Devices on one network connect
+			directly; on different networks they still connect. Either way the vault stays end-to-end
+			encrypted, and the relay that helps them find each other never sees it (see the{" "}
+			<a href="/privacy">Privacy Policy</a>).
+		</li>
+	</ul>
+	<p>To link a device, one device shows a one-time code and the other joins with it:</p>
+	<ol>
+		<li>
+			On a device that already has your vault, open <strong>Settings &rarr; Sync</strong>, then under{" "}
+			<strong>Device sync</strong> choose <strong>Add a device</strong>. Enter your master password
+			when prompted; this confirms the request is really from you, not just an unlocked device.
+		</li>
+		<li>
+			Bramble shows a QR code and a matching text code, then waits for a device to join. The code
+			holds no vault secrets.
+		</li>
+		<li>
+			On the device you are adding, open Bramble and choose to join: on a fresh install, pick{" "}
+			<strong>Join a device</strong> during setup; in the browser extension, add a vault and choose{" "}
+			<strong>Join a device</strong>. Then scan the QR code, or paste the text code.
+		</li>
+		<li>
+			Give the new device its own unlock method (a master password, plus biometrics if you want). It
+			joins the group and pulls in your vault, and from then on the devices sync on their own.
+		</li>
+	</ol>
+	<p>
+		Repeat the first step on any device already in the group to add more. To review the group, open{" "}
+		<strong>Settings &rarr; Sync</strong>: it lists every device and when each last synced, and lets
+		you remove a device or disconnect this one. Disconnecting stops syncing and keeps this device's
+		entries on it; your other devices are not affected.
+	</p>
+	<p>
+		<strong>Advanced.</strong> Under <strong>Settings &rarr; Sync &rarr; Advanced</strong> you can
+		point Bramble at your own signaling relay or your own TURN/ICE servers instead of the hosted
+		defaults. Most people never need to touch this.
+	</p>
+
 	<h2>If you lose your master password</h2>
 	<p>
 		Bramble keeps no copy of your master password or your keys, so it cannot reset them for you. If

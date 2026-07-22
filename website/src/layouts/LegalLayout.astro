@@ -70,7 +70,12 @@ const { title, description, path, meta } = Astro.props;
 		list-style: disc;
 		padding-left: 1.5rem;
 	}
-	.legal ul > li + li {
+	.legal ol {
+		list-style: decimal;
+		padding-left: 1.5rem;
+	}
+	.legal ul > li + li,
+	.legal ol > li + li {
 		margin-top: 0.5rem;
 	}
 	.legal code {
