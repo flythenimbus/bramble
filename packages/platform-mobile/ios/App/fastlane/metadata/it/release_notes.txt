@@ -1,9 +1,11 @@
 Novità di questa versione:
 
-- Importare un vault esistente aprendo un backup .bramble crittografato, direttamente dalla schermata di configurazione o dalle Impostazioni.
+- Bramble ora supporta più di un vault. Mantenete vault separati, ad esempio uno per gli accessi personali e uno per il lavoro, ciascuno con la propria password, e passate dall'uno all'altro quando preferite.
+- Sincronizzate un vault tra i vostri dispositivi. Il vostro telefono, tablet e computer rimangono aggiornati collegandosi direttamente tra loro, in modo privato, senza che nulla venga mai conservato su un server. Abbinate un nuovo dispositivo scansionando un codice QR.
+- Importate un vault esistente aprendo un backup .bramble crittografato, direttamente dalla schermata di configurazione o dalle Impostazioni.
 - Le Impostazioni sono state riorganizzate in schede, per rendere le opzioni più facili da trovare.
-- Mostrare o nascondere la password mentre la si digita, per individuare un errore di battitura prima di sbloccare, creare o modificare un vault.
-- Bramble non consente più a iOS di compilare automaticamente o salvare la Sua password principale. Rimane solo Sua da digitare.
-- Supportare lo sviluppo di Bramble dalle nuove opzioni nella scheda Informazioni.
+- Mostrate o nascondete la vostra password mentre la digitate, per individuare un errore di battitura prima di sbloccare, creare o modificare un vault.
+- Bramble non consente più a iOS di compilare automaticamente o salvare la vostra password principale. Rimane solo vostra da digitare.
+- Supportate lo sviluppo di Bramble dalle nuove opzioni nella scheda Informazioni.
 
-Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui vostri dispositivi.

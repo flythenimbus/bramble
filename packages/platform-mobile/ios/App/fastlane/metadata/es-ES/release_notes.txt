@@ -1,9 +1,11 @@
 Novedades de esta versión:
 
-- Importe una bóveda existente abriendo una copia de seguridad .bramble cifrada directamente desde la pantalla de configuración o Ajustes.
-- Los ajustes se han reorganizado en pestañas para que las opciones sean más fáciles de encontrar.
-- Muestre u oculte su contraseña mientras la escribe, para detectar un error tipográfico antes de desbloquear, crear o cambiar una bóveda.
-- Bramble ya no permite que iOS autocomplete o guarde su contraseña maestra. Sigue siendo solo suya para escribirla.
+- Bramble ahora admite más de una bóveda. Mantenga bóvedas separadas, por ejemplo, una para accesos personales y otra para el trabajo, cada una con su propia contraseña, y cambie entre ellas cuando lo desee.
+- Sincronice una bóveda entre sus dispositivos. Su teléfono, tableta y computadora se mantienen actualizados conectándose directamente entre sí, de forma privada, sin que nada se almacene en un servidor. Vincule un nuevo dispositivo escaneando un código QR.
+- Importe una bóveda existente abriendo una copia de seguridad cifrada .bramble, directamente desde la pantalla de configuración o Ajustes.
+- Ajustes se ha reorganizado en pestañas para que las opciones sean más fáciles de encontrar.
+- Muestre u oculte su contraseña mientras la escribe para detectar un error tipográfico antes de desbloquear, crear o cambiar una bóveda.
+- Bramble ya no permite que iOS autocomplete o guarde su contraseña maestra. Sigue siendo solo suya para escribir.
 - Apoye el desarrollo de Bramble desde las nuevas opciones en la pestaña Acerca de.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.
