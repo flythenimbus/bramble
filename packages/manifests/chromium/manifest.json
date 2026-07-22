@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Bramble",
-	"version": "1.7.0",
+	"version": "1.8.0",
 	"default_locale": "en",
 	"description": "__MSG_extDescription__",
 	"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4N/lWLPnAJuka+v+iu3z4CjfVsr5C1IwFv8qNfpbBDxlk8xzjdhnyVpWssM+W7vGh5hDA/TI2ve1MbZoUbPJKlYR32mEbYsuKYcz3iyP/f3QG17t8Eqd4j3MzO3uJac8heHgxMHNyMoqN1i2ArZdzYzzhwNhHEVQK3xuFcXNniqWvMJbReXYrlY/S0cwDgRzwLyKXQld7jSqUdbPrkEESPxtfgu9u6FiOBdXG9QScJgUrRCBPb+Z8g585hcgHGM22hh3HksqfA0ixa6MbEoXgCjVKmvrQLFYs3FqroB/cQ3s5H1yhNQfFBlU9KuaxQmmqFnNNxjNNnMD0TruKnmeBQIDAQAB",
