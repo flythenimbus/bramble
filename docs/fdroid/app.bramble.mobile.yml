@@ -21,7 +21,7 @@ Builds:
       - apt-get update
       - apt-get install -y curl xz-utils build-essential pkg-config libssl-dev
       - install -d /opt/node
-      - curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
+      - curl -fsSL https://nodejs.org/dist/v22.23.1/node-v22.23.1-linux-x64.tar.xz
         | tar -xJ --strip-components=1 -C /opt/node
       - ln -sf /opt/node/bin/node /opt/node/bin/npm /opt/node/bin/npx /usr/local/bin/
       - /opt/node/bin/npm install -g pnpm@10.33.0
