@@ -6,74 +6,19 @@ The whole job is a **build recipe that compiles from source on F-Droid's Debian 
 as a merge request to [fdroiddata](https://gitlab.com/fdroid/fdroiddata).
 
 The canonical, ready-to-submit recipe is [`fdroid/app.bramble.mobile.yml`](fdroid/app.bramble.mobile.yml).
-It is reproduced below for reference; that file is the copy to submit.
 
 ## The build recipe
 
-Lands as `metadata/app.bramble.mobile.yml` in fdroiddata:
-
-```yaml
-Categories:
-  - Security
-License: GPL-3.0-only
-AuthorName: Webvana Inc.
-WebSite: https://bramble.sh
-SourceCode: https://github.com/flythenimbus/bramble
-IssueTracker: https://github.com/flythenimbus/bramble/issues
-Changelog: https://github.com/flythenimbus/bramble/releases
-
-AutoName: Bramble
-# No Summary/Description here on purpose: fdroiddata policy is that they come from the upstream
-# fastlane metadata (fastlane/metadata/android/<locale>/), maintained in this repo.
-
-RepoType: git
-Repo: https://github.com/flythenimbus/bramble.git
-
-Builds:
-  - versionName: 0.9.0
-    versionCode: 206844021
-    commit: 0.9.0-android
-    subdir: packages/platform-mobile/android/app
-    sudo:
-      - apt-get update
-      # build-essential + pkg-config + libssl-dev are needed to `cargo install` the tooling below
-      # (buildserver usually has them, but declare them to be safe)
-      - apt-get install -y curl xz-utils build-essential pkg-config libssl-dev
-      # Node.js (current LTS) — official FLOSS binary; adjust the version as needed
-      - install -d /opt/node
-      - curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz | tar -xJ --strip-components=1 -C /opt/node
-      - ln -sf /opt/node/bin/node /opt/node/bin/npm /opt/node/bin/npx /usr/local/bin/
-      - /opt/node/bin/npm install -g pnpm@10.33.0
-      - ln -sf /opt/node/bin/pnpm /usr/local/bin/pnpm
-    ndk: 27.1.12297006
-    prebuild:
-      # Rust as the build user (rust-toolchain.toml pins 1.95.0), + Android targets + cargo tooling
-      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-      - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
-      - . $HOME/.cargo/env && cargo install cargo-ndk wasm-pack
-      # Build web (WASM + Vite) + Rust jniLibs (uniffi) + sync into the Android project
-      - cd ../../../.. && pnpm install --frozen-lockfile
-      - cd ../../../.. && . $HOME/.cargo/env && pnpm run core:build
-      - cd ../../../.. && . $HOME/.cargo/env && ANDROID_NDK_HOME=$$NDK$$ pnpm run ffi:build:android
-      - cd ../../../.. && pnpm --filter @vault/platform-mobile exec cap sync android
-    gradle:
-      - yes
-    output: build/outputs/apk/release/*.apk
-
-AutoUpdateMode: Version
-UpdateCheckMode: Tags ^[0-9.]+-android$
-CurrentVersion: 0.9.0
-CurrentVersionCode: 206844021
-```
-
-The build entry above targets `0.9.0-android`. Per [Reproducible builds](#reproducible-builds-must-be-enabled-in-the-first-mr)
-it must be retargeted to the first release that carries the deterministic versionCode before submission.
+The recipe lives at [`fdroid/app.bramble.mobile.yml`](fdroid/app.bramble.mobile.yml) and lands as
+`metadata/app.bramble.mobile.yml` in fdroiddata. It is kept only in that file, not inlined here, so the
+two copies cannot drift; read it for the current build entry, signing key and toolchain steps.
 
 Notes on the fields:
 - `subdir` is the app module; `prebuild`/`gradle` run relative to it, so `cd ../../../..` reaches the
   monorepo root for pnpm. `gradle: yes` finds `gradlew` one level up at `.../android/`.
 - With no `ANDROID_KEYSTORE_FILE` in the env, `assembleRelease` yields `app-release-unsigned.apk`
-  (`android/app/build.gradle:28-41`); F-Droid signs it with its own key. `output:` globs for it.
+  (`android/app/build.gradle:28-41`), which `output:` globs for. With reproducible builds enabled
+  F-Droid compares that build against the published APK and ships ours, rather than signing its own.
 - F-Droid's build allows network access (npm/cargo/gradle fetch), so the committed `pnpm-lock.yaml` +
   `--frozen-lockfile` gives a deterministic install without airgapping.
 
