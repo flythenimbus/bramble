@@ -36,7 +36,7 @@ Builds:
       - . $HOME/.cargo/env
       - rustup target add aarch64-linux-android armv7-linux-androideabi
       - rustup target add x86_64-linux-android i686-linux-android
-      - cargo install cargo-ndk wasm-pack
+      - cargo install cargo-ndk@4.1.2 wasm-pack@0.15.0 --locked
       - cd ../../../..
       - pnpm install --frozen-lockfile
       - pnpm run core:build

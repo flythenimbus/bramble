@@ -73,11 +73,20 @@ change and cannot reproduce. Add to the build entry:
 AllowedAPKSigningKeys: 464f5e913c22d580f58a4667a3adb2b720e6fcce05f7c0605cb45602fb97ece1
 ```
 
-The prerequisite, a deterministic versionCode, is **done**: `android/app/build.gradle` carries a committed
-`versionCode` rather than one computed from the build clock, and `pnpm run release android` bumps it to
-seconds-since-2020 (`max(prev+1, now)`, so it stays monotonic and ≥ the last shipped ~206.8M) and commits
-it with the tag. Rebuilding a tag therefore yields the same versionCode. This holds from the next release
-onward only.
+Two build inputs have to match F-Droid's Linux buildserver exactly, or the compiled Rust artifacts
+(the four `libvault_crypto.so` and `vault_crypto_bg.wasm`) diverge:
+
+- **A deterministic versionCode** — done: `android/app/build.gradle` carries a committed `versionCode`
+  (not one computed from the build clock), and `pnpm run release android` bumps it to seconds-since-2020
+  (`max(prev+1, now)`, monotonic, ≥ the last shipped ~206.8M) and commits it with the tag.
+- **The build host** — the NDK's clang and the wasm-bindgen-cli bake host details into the binaries, so
+  a macOS build can never match. `pnpm run release android` therefore builds in the
+  `android-repro` container (docker-compose), which mirrors the buildserver (Debian, amd64, Node 22.23.1
+  from nodejs.org, Rust 1.95.0, cargo-ndk 4.1.2, wasm-pack 0.15.0, NDK r27b), and signs the container's
+  unsigned APK on the host with the YubiKey. The recipe pins the same cargo-ndk/wasm-pack versions so
+  F-Droid installs identical tools. Verified: the container's APK is byte-identical to F-Droid's build.
+
+Both hold from the release that ships these changes onward; `0.9.0`–`0.9.3` predate them.
 
 ## Submitting the merge request
 

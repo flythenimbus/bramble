@@ -17,7 +17,9 @@
 // never builds or signs). chromium packs a locally-signed .crx; firefox uploads to AMO and
 // attaches the Mozilla-signed .xpi it returns. ios has no GitHub release: the binary goes to
 // TestFlight via fastlane, and you submit for App Store review manually in App Store Connect.
-// Signing setup lives in docs/release-signing.md.
+// android is special: it builds in the F-Droid-matching container (docker-compose android-repro,
+// needs Docker) so the APK is byte-reproducible, then signs the container's unsigned output on the
+// host with the YubiKey. Signing setup lives in docs/release-signing.md.
 
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -272,7 +274,11 @@ function releaseFirefox(version: string) {
 function releaseAndroid(version: string) {
 	const ANDROID = "packages/platform-mobile/android";
 	const BUILD_GRADLE = `${ANDROID}/app/build.gradle`;
-	const APK = `${ANDROID}/app/build/outputs/apk/release/app-release.apk`;
+	// The reproducible build runs in the F-Droid-matching container (docker-compose android-repro)
+	// and drops an UNSIGNED apk here; we sign it on the host below. Building on macOS instead would
+	// bake in host toolchain details (NDK clang, wasm-bindgen-cli) that F-Droid's Linux rebuild can't
+	// reproduce, so its reproducible-build check would reject the published APK. See docker/.
+	const UNSIGNED = "build-fdroid/app-release-unsigned.apk";
 
 	// versionName is the marketing version; 1-3 dot-separated ints (matches bump:mobile).
 	if (!/^\d+(\.\d+){0,2}$/.test(version))
@@ -282,12 +288,10 @@ function releaseAndroid(version: string) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
-	// Signing inputs. The keystore is age+YubiKey encrypted (docs/release-signing.md). Passwords
-	// resolve from the env first (CI / one-off), then the macOS login Keychain, so nothing plaintext
-	// lands in the repo OR your shell history. Store them once with:
+	// Signing inputs (host-side; the container never sees the key). The keystore is age+YubiKey
+	// encrypted; passwords resolve from the env first, then the macOS login Keychain. Store them once:
 	//   security add-generic-password -s bramble-android-keystore -a "$USER" -w
-	//   security add-generic-password -s bramble-android-key       -a "$USER" -w   (only if the key
-	//                                                                                password differs)
+	//   security add-generic-password -s bramble-android-key       -a "$USER" -w   (only if it differs)
 	const ksAge =
 		process.env.ANDROID_KEYSTORE_AGE ?? join(HOME, ".config/bramble/android-release-keystore.age");
 	const storePassword =
@@ -303,16 +307,18 @@ function releaseAndroid(version: string) {
 	const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "bramble";
 	const keyPassword =
 		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key") ?? storePassword;
-	for (const bin of ["age", "age-plugin-yubikey"])
+	for (const bin of ["age", "age-plugin-yubikey", "docker"])
 		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	const apksigner =
+		findApksigner() ??
+		fail("apksigner not found (Android SDK build-tools); see docs/release-signing.md");
 	const java21 = resolveJava21();
 
 	gate();
 
-	// Bump versionName, and write a deterministic versionCode into the source (not computed at build)
-	// so F-Droid's reproducible build matches the published APK. seconds-since-2020 (like the iOS
-	// build number) always exceeds the prior code; max() guards a backwards clock. Committed with the
-	// release, so rebuilding the tag yields the same code.
+	// Bump versionName + a deterministic, committed versionCode (seconds-since-2020, kept monotonic),
+	// snapshot the changelogs, and COMMIT. This exact commit is what both the container and F-Droid
+	// build, so the versionCode and every other input line up.
 	const before = readFileSync(BUILD_GRADLE, "utf8");
 	const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
 	const versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
@@ -331,88 +337,96 @@ function releaseAndroid(version: string) {
 	if (replacedCode !== 1)
 		fail(`expected exactly one versionCode in ${BUILD_GRADLE}, found ${replacedCode}`);
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
-	const bumped = after !== before;
-	if (bumped) writeFileSync(BUILD_GRADLE, after);
+	writeFileSync(BUILD_GRADLE, after);
+	const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
+	run(`git add ${[BUILD_GRADLE, ...changelogFiles].join(" ")}`);
+	run(`git commit -m ${JSON.stringify(`chore(release): android ${version}`)}`);
+	const commit = capture("git rev-parse HEAD");
 
-	// Build native inputs, then a signed release APK. The keystore is decrypted into a 0700
-	// temp dir and wiped in finally; the plaintext keystore never touches the repo.
+	// Reproducible build in the container, then host-sign. Any failure before the push rewinds the
+	// release commit so the tree is clean for a retry (the bump + changelogs regenerate next run).
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-android-"));
-	const ksFile = join(tmp, "release.jks");
-	const idFile = join(tmp, "id.txt");
+	const apkName = `bramble_android_${version}.apk`;
+	const apkAsset = join(stage, apkName);
 	try {
-		run("pnpm run core:build");
-		run("pnpm run ffi:build:android");
-		run("pnpm --filter @vault/platform-mobile exec cap sync android");
+		rmSync(UNSIGNED, { force: true });
+		console.log(
+			`\nbuilding ${commit.slice(0, 9)} in the reproducible container (slow; emulated amd64)…`,
+		);
+		run("docker compose build android-repro");
+		run(`docker compose run --rm android-repro ${commit}`);
+		if (!existsSync(UNSIGNED)) fail(`container did not produce ${UNSIGNED}`);
 
+		// Sign on the host: decrypt the keystore into a 0700 dir, apksigner-sign the container's
+		// unsigned apk (content-preserving, so it still matches F-Droid's build), then wipe the key.
+		const ksFile = join(tmp, "release.jks");
+		const idFile = join(tmp, "id.txt");
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
 		notifyYubiKeyTouch("decrypt the Android signing keystore");
 		execFileSync("age", ["-d", "-i", idFile, "-o", ksFile, ksAge], { stdio: "inherit" });
 		execFileSync(
-			join(ANDROID, "gradlew"),
-			["-p", ANDROID, "assembleRelease", `-Porg.gradle.java.installations.paths=${java21}`],
+			apksigner,
+			[
+				"sign",
+				"--ks",
+				ksFile,
+				"--ks-key-alias",
+				keyAlias,
+				"--ks-pass",
+				"env:BR_KS_PASS",
+				"--key-pass",
+				"env:BR_KEY_PASS",
+				"--out",
+				apkAsset,
+				UNSIGNED,
+			],
 			{
 				stdio: "inherit",
 				env: {
 					...process.env,
 					JAVA_HOME: java21,
-					ANDROID_KEYSTORE_FILE: ksFile,
-					ANDROID_KEYSTORE_PASSWORD: storePassword,
-					ANDROID_KEY_ALIAS: keyAlias,
-					ANDROID_KEY_PASSWORD: keyPassword,
+					BR_KS_PASS: storePassword,
+					BR_KEY_PASS: keyPassword,
 				},
 			},
 		);
 	} catch (e) {
 		rmSync(tmp, { recursive: true, force: true });
+		rmSync(stage, { recursive: true, force: true });
+		run("git reset --hard HEAD~1");
 		fail(
-			`build/signing failed (${(e as Error).message}); \`git checkout ${BUILD_GRADLE}\` to undo`,
+			`build/sign failed (${(e as Error).message}); rewound the release commit — fix and re-run`,
 		);
 	}
 	rmSync(tmp, { recursive: true, force: true });
-	if (!existsSync(APK)) fail(`expected a signed APK at ${APK} (did signing apply?)`);
 
-	// Confirm the built APK carries the versionCode we wrote (guards the gradle wiring), then snapshot
-	// the release notes into changelogs keyed by it so the F-Droid listing shows "what's new".
-	const outMeta = `${ANDROID}/app/build/outputs/apk/release/output-metadata.json`;
-	const builtCode = JSON.parse(readFileSync(outMeta, "utf8"))?.elements?.[0]?.versionCode;
-	if (builtCode !== versionCode)
-		fail(`built versionCode ${builtCode} != expected ${versionCode} (check ${outMeta})`);
-	const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
+	// Confirm the signed apk's cert before publishing (versionCode is what we committed).
+	const certOut = execFileSync(apksigner, ["verify", "--print-certs", apkAsset], {
+		encoding: "utf8",
+	});
+	const cert = certOut.match(/SHA-256 digest:\s*([0-9a-f]{64})/i)?.[1];
+	console.log(`\nAPK signing cert SHA-256: ${cert ?? "(unknown)"}  |  versionCode ${versionCode}`);
 
-	// Print the signing cert SHA-256 so you can confirm it matches the published pin.
-	const apksigner = findApksigner();
-	if (apksigner) {
-		const out = execFileSync(apksigner, ["verify", "--print-certs", APK], { encoding: "utf8" });
-		const m = out.match(/SHA-256 digest:\s*([0-9a-f]{64})/i);
-		console.log(`\nAPK signing cert SHA-256: ${m?.[1] ?? "(run apksigner verify --print-certs)"}`);
-	}
-
-	// Stage the asset under its release name + a SHA256SUMS for integrity checks.
-	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
-	const apkName = `bramble_android_${version}.apk`;
-	const apkAsset = join(stage, apkName);
 	const sumsAsset = join(stage, "SHA256SUMS");
-	copyFileSync(APK, apkAsset);
 	writeFileSync(
 		sumsAsset,
-		`${createHash("sha256").update(readFileSync(APK)).digest("hex")}  ${apkName}\n`,
+		`${createHash("sha256").update(readFileSync(apkAsset)).digest("hex")}  ${apkName}\n`,
 	);
 
-	// Commit the versionName + versionCode bump alongside the new versionCode-keyed changelogs (new
-	// files every build), so the tag F-Droid reads carries this build's release notes.
-	commitTagPush(
-		bumped || changelogFiles.length > 0,
-		[BUILD_GRADLE, ...changelogFiles],
-		`chore(release): android ${version}`,
-		tag,
-		branch,
-	);
+	// Push the release commit + tag, then publish (release.yml verifies the artifact on publish).
+	run(`git tag ${tag}`);
+	run(`git push origin ${branch}`);
+	run(`git push origin ${tag}`);
 	try {
 		publish(tag, `Android ${version}`, [apkAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
-	console.log(`\nreleased ${tag}: signed ${apkName} + SHA256SUMS attached to the release.`);
+	console.log(
+		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): reproducible build, host-signed as ${apkName}.` +
+			`\nNext: retarget docs/fdroid/app.bramble.mobile.yml -> versionCode ${versionCode}, commit ${commit}.`,
+	);
 }
 
 // Snapshot each present changelogs/current.txt to changelogs/<versionCode>.txt so the F-Droid
