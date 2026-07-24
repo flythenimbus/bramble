@@ -1,5 +1,3 @@
-# Ready-to-submit fdroiddata recipe for Bramble. Copy to metadata/app.bramble.mobile.yml in a
-# fork of https://gitlab.com/fdroid/fdroiddata and open a merge request. See ../fdroid-inclusion.md.
 Categories:
   - Security
 License: GPL-3.0-only
@@ -10,43 +8,43 @@ IssueTracker: https://github.com/flythenimbus/bramble/issues
 Changelog: https://github.com/flythenimbus/bramble/releases
 
 AutoName: Bramble
-# No Summary/Description here on purpose: fdroiddata policy is that they come from the upstream
-# fastlane metadata (fastlane/metadata/android/<locale>/) so you maintain the copy in your own repo.
 
 RepoType: git
 Repo: https://github.com/flythenimbus/bramble.git
-
-# Reproducible builds: F-Droid rebuilds the tag and, if the output matches the published APK below,
-# publishes OUR signed binary instead of one signed with F-Droid's key. Must be enabled in the first
-# MR; F-Droid's signing choice is permanent once merged without it.
-AllowedAPKSigningKeys: 464f5e913c22d580f58a4667a3adb2b720e6fcce05f7c0605cb45602fb97ece1
 
 Builds:
   - versionName: 0.9.1
     versionCode: 207020253
     commit: 0.9.1-android
-    binary: https://github.com/flythenimbus/bramble/releases/download/%v-android/bramble_android_%v.apk
     subdir: packages/platform-mobile/android/app
     sudo:
       - apt-get update
       - apt-get install -y curl xz-utils build-essential pkg-config libssl-dev
       - install -d /opt/node
-      - curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz | tar -xJ --strip-components=1 -C /opt/node
+      - curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
+        | tar -xJ --strip-components=1 -C /opt/node
       - ln -sf /opt/node/bin/node /opt/node/bin/npm /opt/node/bin/npx /usr/local/bin/
       - /opt/node/bin/npm install -g pnpm@10.33.0
       - ln -sf /opt/node/bin/pnpm /usr/local/bin/pnpm
-    ndk: 27.1.12297006
-    prebuild:
-      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-      - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
-      - . $HOME/.cargo/env && cargo install cargo-ndk wasm-pack
-      - cd ../../../.. && pnpm install --frozen-lockfile
-      - cd ../../../.. && . $HOME/.cargo/env && pnpm run core:build
-      - cd ../../../.. && . $HOME/.cargo/env && ANDROID_NDK_HOME=$$NDK$$ pnpm run ffi:build:android
-      - cd ../../../.. && pnpm --filter @vault/platform-mobile exec cap sync android
     gradle:
       - yes
     output: build/outputs/apk/release/*.apk
+    binary: 
+      https://github.com/flythenimbus/bramble/releases/download/%v-android/bramble_android_%v.apk
+    prebuild:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile
+        minimal --default-toolchain 1.95.0
+      - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi
+        x86_64-linux-android i686-linux-android
+      - . $HOME/.cargo/env && cargo install cargo-ndk wasm-pack
+      - cd ../../../.. && pnpm install --frozen-lockfile
+      - cd ../../../.. && . $HOME/.cargo/env && pnpm run core:build
+      - cd ../../../.. && . $HOME/.cargo/env && ANDROID_NDK_HOME=$$NDK$$ pnpm run
+        ffi:build:android
+      - cd ../../../.. && pnpm --filter @vault/platform-mobile exec cap sync android
+    ndk: 27.1.12297006
+
+AllowedAPKSigningKeys: 464f5e913c22d580f58a4667a3adb2b720e6fcce05f7c0605cb45602fb97ece1
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^[0-9.]+-android$
