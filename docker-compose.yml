@@ -37,5 +37,33 @@ services:
       - bramble-nextcloud-data:/var/www/html
     restart: unless-stopped
 
+  # Reproducible Android build environment mirroring F-Droid's buildserver. Building a
+  # release here (instead of on macOS) makes the compiled Rust artifacts byte-identical
+  # to what fdroiddata CI produces, so F-Droid publishes OUR signed APK rather than one
+  # signed with its own key. See docker/android-repro.Dockerfile for the why (esp. amd64)
+  # and scripts/fdroid-repro-build.sh for the steps. NOT part of the app.
+  #
+  #   docker compose build android-repro          # one-time; ~10 min (SDK/NDK/rust)
+  #   docker compose run --rm android-repro 0.9.4-android
+  #   # -> unsigned APK in ./build-fdroid/; sign it on the host with the YubiKey keystore
+  #
+  # First run is slow (emulated amd64 + a full 4-ABI Rust compile); the named-volume
+  # caches below make repeat runs faster without affecting output (cargo verifies hashes).
+  android-repro:
+    build:
+      context: .
+      dockerfile: docker/android-repro.Dockerfile
+    platform: linux/amd64
+    entrypoint: ["bash", "/src/scripts/fdroid-repro-build.sh"]
+    volumes:
+      - .:/src:ro                        # repo as a clean git source (built in a throwaway clone)
+      - ./build-fdroid:/out              # the unsigned APK lands here
+      - bramble-repro-cargo:/opt/cargo/registry
+      - bramble-repro-pnpm:/pnpm-store
+      - bramble-repro-gradle:/root/.gradle
+
 volumes:
   bramble-nextcloud-data:
+  bramble-repro-cargo:
+  bramble-repro-pnpm:
+  bramble-repro-gradle:

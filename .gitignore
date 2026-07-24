@@ -41,3 +41,6 @@ bramble-502002-*.json
 test-results/
 playwright-report/
 .playwright/
+
+# Unsigned APKs from the reproducible-build container (docker-compose android-repro)
+build-fdroid/
