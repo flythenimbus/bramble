@@ -12,11 +12,13 @@
 # still nightly-only as of Cargo 1.95, hence doing it via RUSTFLAGS.
 set -euo pipefail
 
-# The sysroot is remapped too, and it must be resolved via `rustc --print sysroot`
-# rather than hardcoded: it ends in the HOST triple (…/1.95.0-aarch64-apple-darwin vs
-# …-x86_64-unknown-linux-gnu), so only the resolved path collapses both to one value.
+# std paths need care. A toolchain WITHOUT the rust-src component (a plain CI install)
+# already emits the canonical /rustc/<commit-hash>/library/..., but one WITH rust-src
+# installed emits the local <sysroot>/lib/rustlib/src/rust/library/... instead. Remap the
+# latter onto the former so both hosts agree, rather than inventing a third form.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cargo_home="${CARGO_HOME:-$HOME/.cargo}"
-sysroot="$(rustc --print sysroot)"
-printf -- '--remap-path-prefix=%s=/bramble --remap-path-prefix=%s=/cargo --remap-path-prefix=%s=/rustup' \
-	"$root" "$cargo_home" "$sysroot"
+rust_src="$(rustc --print sysroot)/lib/rustlib/src/rust"
+commit="$(rustc --version --verbose | sed -n 's/^commit-hash: //p')"
+printf -- '--remap-path-prefix=%s=/bramble --remap-path-prefix=%s=/cargo --remap-path-prefix=%s=/rustc/%s' \
+	"$root" "$cargo_home" "$rust_src" "$commit"

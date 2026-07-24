@@ -52,10 +52,10 @@ gen_lang() {
   local feats="$2"
   local outdir="${3:-$out/$lang}"
   echo "==> building host cdylib ($feats) for $lang bindgen -> $outdir"
-  ( cd "$crate" && cargo build $feats --lib )
+  ( cd "$crate" && cargo build --locked $feats --lib )
   local dylib="$crate/target/debug/lib${lib_name}.dylib"
   [ -f "$dylib" ] || dylib="$crate/target/debug/lib${lib_name}.so"
-  ( cd "$crate" && cargo run -q $feats --features uniffi/cli --bin uniffi-bindgen -- \
+  ( cd "$crate" && cargo run -q --locked $feats --features uniffi/cli --bin uniffi-bindgen -- \
       generate --library "$dylib" --language "$lang" --no-format --out-dir "$outdir" )
 }
 
@@ -82,7 +82,7 @@ build_ios() {
     echo "==> cargo build --release ($t)"
     # iOS carries webrtc (its WebView lacks RTCPeerConnection); the swift glue is
     # generated from the same feature set in gen_bindings, so the symbols line up.
-    ( cd "$crate" && cargo build --release $ffi_ios --lib --target "$t" )
+    ( cd "$crate" && cargo build --locked --release $ffi_ios --lib --target "$t" )
   done
   local rel="$crate/target"
   # Fat simulator staticlib (arm64 + x86_64).
@@ -127,7 +127,7 @@ build_android() {
   ( cd "$crate" && cargo ndk \
       -t arm64-v8a -t armeabi-v7a -t x86_64 -t x86 \
       -o "$out/android/jniLibs" \
-      build --release $ffi --lib )
+      build --locked --release $ffi --lib )
   # Install into the committed Android project: jniLibs (AGP auto-bundles) + the
   # uniffi Kotlin glue into its package source dir.
   mkdir -p "$and_jni" "$and_kt"

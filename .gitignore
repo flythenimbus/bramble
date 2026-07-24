@@ -18,7 +18,9 @@ bramble*.xpi
 
 # Rust / WASM
 packages/core-rust/target/
-packages/core-rust/Cargo.lock
+# Cargo.lock IS committed: this crate ships compiled artifacts (jniLibs + wasm) in the
+# released apps, so the dependency graph must be pinned. Without it F-Droid's rebuild of
+# a tag resolves newer patch releases and no longer matches the published binary.
 packages/platform-extension/public/wasm/
 
 # Signing keys must never be committed (see docs/release-signing.md)
