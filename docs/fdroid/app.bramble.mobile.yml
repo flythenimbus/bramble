@@ -44,8 +44,14 @@ Builds:
       - pnpm --filter @vault/platform-mobile exec cap sync android
     scanignore:
       - node_modules/.pnpm
+      - packages/platform-mobile/android/app/src/main/jniLibs
+      - packages/platform-mobile/android/app/src/main/assets/public/wasm
     scandelete:
       - packages/core-rust/target
+      - packages/platform-mobile/native-build
+      - packages/platform-mobile/public/wasm
+      - packages/platform-mobile/dist
+      - packages/platform-extension/src/fixtures/imports/protonpass.zip
     ndk: 27.1.12297006
 
 AllowedAPKSigningKeys: 464f5e913c22d580f58a4667a3adb2b720e6fcce05f7c0605cb45602fb97ece1
