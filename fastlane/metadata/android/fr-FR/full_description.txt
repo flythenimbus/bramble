@@ -1,0 +1,19 @@
+Bramble est un gestionnaire de mots de passe local-first. Vos mots de passe résident dans un coffre chiffré sur votre appareil, et non sur un serveur tiers. Aucun compte à créer et aucune communication sortante.
+
+L'ensemble des opérations cryptographiques repose sur un noyau Rust : Argon2id dérive votre clé, AES-256-GCM chiffre vos données, et le chiffrement par enveloppe attribue une clé unique à chaque entrée. Les noms de sites, identifiants et notes sont tous chiffrés, et les secrets sont effacés de la mémoire après utilisation.
+
+FONCTIONNALITÉS
+- Saisie automatique des mots de passe et codes à usage unique dans les applications et votre navigateur.
+- Passkeys : créez et connectez-vous avec des passkeys, en utilisant Bramble comme votre propre authentificateur, pour les sites et applications compatibles.
+- Déverrouillage par empreinte digitale ou reconnaissance faciale, par mot de passe principal, ou par code de récupération.
+- Stockage des identifiants, cartes de paiement, notes sécurisées et clés SSH, chacun avec ses propres champs.
+- Générateur de mots de passe forts intégré.
+- TOTP / 2FA : ajoutez un URI otpauth ou un secret, et Bramble génère les codes à six chiffres.
+- Importation depuis KeePass (KDBX4), fichiers de clés inclus.
+- Code de récupération : une sauvegarde imprimable à haute entropie qui déverrouille votre coffre indépendamment de votre mot de passe principal.
+- Vérification facultative des fuites via k-anonymat, sans qu'aucune information sur votre mot de passe ne quitte votre appareil.
+- Verrouillage automatique après inactivité.
+- Synchronisation pair-à-pair entre vos propres appareils. Pas de cloud, pas de relais détenant vos données.
+
+CONFIDENTIALITÉ
+Bramble ne nécessite aucun compte, aucun abonnement et ne collecte aucune télémétrie. Votre coffre ne quitte jamais votre contrôle, et le code s'exécute entièrement sur votre appareil.

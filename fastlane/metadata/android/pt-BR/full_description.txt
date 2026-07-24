@@ -1,0 +1,19 @@
+Bramble é um gerenciador de senhas local-first. Suas senhas residem em um cofre criptografado no seu dispositivo, não no servidor de terceiros. Não é necessário criar conta e nada envia dados para fora.
+
+Toda a parte criptográfica é executada em um núcleo Rust: Argon2id deriva sua chave, AES-256-GCM criptografa seus dados, e a criptografia envelope concede uma chave própria para cada entrada. Nomes de sites, nomes de usuário e anotações são todos criptografados, e os segredos são apagados da memória após o uso.
+
+RECURSOS
+- Preenchimento automático de senhas e códigos de uso único em aplicativos e no navegador.
+- Chaves de acesso: crie e faça login com chaves de acesso, usando o Bramble como seu próprio autenticador, para sites e aplicativos que as suportam.
+- Desbloqueie com sua impressão digital ou rosto, sua senha mestra ou um código de recuperação.
+- Armazene logins, cartões de pagamento, anotações seguras e chaves SSH, cada um com seus próprios campos.
+- Gerador de senhas fortes integrado.
+- TOTP / 2FA: adicione um URI otpauth ou segredo e o Bramble gera os códigos de seis dígitos.
+- Importação do KeePass (KDBX4), incluindo arquivos de chave.
+- Código de recuperação: um backup imprimível e de alta entropia que desbloqueia seu cofre independentemente da sua senha mestra.
+- Verificação opcional de violações usando k-anonimato, para que nada sobre sua senha saia do seu dispositivo.
+- Bloqueio automático após inatividade.
+- Sincronização ponto a ponto entre seus próprios dispositivos. Sem nuvem, sem retransmissão armazenando seus dados.
+
+PRIVACIDADE
+O Bramble não possui conta, assinatura nem telemetria. Seu cofre nunca sai do seu controle, e o código é executado inteiramente no seu dispositivo.

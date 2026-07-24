@@ -20,6 +20,12 @@ export const repo = (...p) => resolve(ROOT, ...p);
 // Per-surface source locations.
 export const PO_CATALOG = (code) => repo(`packages/core/src/locales/${code}/messages.po`);
 export const FASTLANE_DIR = repo("packages/platform-mobile/ios/App/fastlane/metadata");
+// Android (F-Droid) fastlane metadata. MUST stay at the repo root: fdroidserver only scans
+// `<root>/fastlane/metadata/android/<locale>/` and `<root>/src/<flavor>/fastlane/...`
+// (update.py), so a nested path leaves the F-Droid listing with no name/summary/description.
+// Locale dirs reuse the iOS `appStore` codes; en-US is hand-authored and the rest are
+// AI-translated from it, see scripts/i18n/android-fastlane.mjs.
+export const ANDROID_FASTLANE_DIR = repo("fastlane/metadata/android");
 // Chrome extension _locales dir (bundled from public/). Chrome locale codes use
 // underscores (pt_BR), unlike the App Store's hyphens.
 export const CHROME_LOCALES_DIR = repo("packages/platform-extension/public/_locales");

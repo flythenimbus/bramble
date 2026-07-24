@@ -1,0 +1,48 @@
+# Ready-to-submit fdroiddata recipe for Bramble. Copy to metadata/app.bramble.mobile.yml in a
+# fork of https://gitlab.com/fdroid/fdroiddata and open a merge request. See ../fdroid-inclusion.md.
+Categories:
+  - Security
+License: GPL-3.0-only
+AuthorName: Webvana Inc.
+WebSite: https://bramble.sh
+SourceCode: https://github.com/flythenimbus/bramble
+IssueTracker: https://github.com/flythenimbus/bramble/issues
+Changelog: https://github.com/flythenimbus/bramble/releases
+
+AutoName: Bramble
+# No Summary/Description here on purpose: fdroiddata policy is that they come from the upstream
+# fastlane metadata (fastlane/metadata/android/<locale>/) so you maintain the copy in your own repo.
+
+RepoType: git
+Repo: https://github.com/flythenimbus/bramble.git
+
+Builds:
+  - versionName: 0.9.0
+    versionCode: 206844021
+    commit: 0.9.0-android
+    subdir: packages/platform-mobile/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y curl xz-utils build-essential pkg-config libssl-dev
+      - install -d /opt/node
+      - curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz | tar -xJ --strip-components=1 -C /opt/node
+      - ln -sf /opt/node/bin/node /opt/node/bin/npm /opt/node/bin/npx /usr/local/bin/
+      - /opt/node/bin/npm install -g pnpm@10.33.0
+      - ln -sf /opt/node/bin/pnpm /usr/local/bin/pnpm
+    ndk: 27.1.12297006
+    prebuild:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+      - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+      - . $HOME/.cargo/env && cargo install cargo-ndk wasm-pack
+      - cd ../../../.. && pnpm install --frozen-lockfile
+      - cd ../../../.. && . $HOME/.cargo/env && pnpm run core:build
+      - cd ../../../.. && . $HOME/.cargo/env && ANDROID_NDK_HOME=$$NDK$$ pnpm run ffi:build:android
+      - cd ../../../.. && pnpm --filter @vault/platform-mobile exec cap sync android
+    gradle:
+      - yes
+    output: build/outputs/apk/release/*.apk
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^[0-9.]+-android$
+CurrentVersion: 0.9.0
+CurrentVersionCode: 206844021

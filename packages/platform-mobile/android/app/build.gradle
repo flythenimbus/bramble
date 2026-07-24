@@ -12,8 +12,9 @@ android {
         applicationId "app.bramble.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionCode: seconds since 2020-01-01 UTC (mirrors the iOS build number; monotonic, computed at build).
-        versionCode(((System.currentTimeMillis() / 1000L) - 1577836800L) as int)
+        // versionCode is committed (not computed at build) so F-Droid's reproducible build matches
+        // the published APK. `pnpm run release android` bumps it to seconds-since-2020, kept monotonic.
+        versionCode 206844021
         versionName "0.9.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

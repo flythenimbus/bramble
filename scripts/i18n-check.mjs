@@ -14,6 +14,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+	ANDROID_FASTLANE_DIR,
 	ANDROID_RES,
 	FASTLANE_DIR,
 	LOCALES,
@@ -95,10 +96,27 @@ if (existsSync(srcDir)) {
 	}
 }
 
+// --- Android fastlane (F-Droid): each locale has the copy, within caps ---
+const ANDROID_STORE_LIMITS = { "title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000 };
+for (const { appStore } of [{ appStore: "en-US" }, ...LOCALES]) {
+	const dir = join(ANDROID_FASTLANE_DIR, appStore);
+	for (const [f, limit] of Object.entries(ANDROID_STORE_LIMITS)) {
+		const path = join(dir, f);
+		if (!existsSync(path)) {
+			note(`android-fastlane[${appStore}]: missing ${f} (run pnpm i18n:native)`);
+			continue;
+		}
+		const len = readFileSync(path, "utf8").trim().length;
+		if (len > limit) note(`android-fastlane[${appStore}/${f}]: ${len} > ${limit} char cap`);
+	}
+}
+
 if (problems.length) {
 	console.error(`\n✗ i18n check failed (${problems.length} issue(s)):`);
 	for (const p of problems) console.error(`  - ${p}`);
 	console.error("\nRun `pnpm i18n` (web) and/or `pnpm i18n:native` (mobile/store) to fill gaps.");
 	process.exit(1);
 }
-console.log("✓ i18n check passed: all locales complete across po, android, xcstrings, fastlane");
+console.log(
+	"✓ i18n check passed: all locales complete across po, android, xcstrings, fastlane (iOS + Android)",
+);

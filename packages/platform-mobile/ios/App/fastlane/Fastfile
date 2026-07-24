@@ -63,8 +63,10 @@ platform :ios do
     # `pnpm run release ios` precomputes the same value and passes it via BRAMBLE_IOS_BUILD so the
     # git tag it cuts matches this uploaded build; a bare `fastlane beta` computes its own.
     next_build = (ENV["BRAMBLE_IOS_BUILD"] || (Time.now.to_i - 1_577_836_800)).to_i
-    # Override CURRENT_PROJECT_VERSION at build time (both the app + extension consume it)
-    # instead of mutating the pbxproj, so the working tree stays clean.
+    # Pin CURRENT_PROJECT_VERSION at build time (both the app + extension consume it). `pnpm run
+    # release ios` commits this same number to the pbxproj (mirroring the Android versionCode), so
+    # the xcarg just guarantees the built binary matches what was passed in, and keeps a bare
+    # `fastlane beta` working when nothing was committed.
     build_app(
       project: "App.xcodeproj",
       scheme: "App",

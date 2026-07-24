@@ -1,0 +1,19 @@
+Bramble is a local-first password manager. Your passwords live in an encrypted vault on your device, not on someone else's server. There is no account to create and nothing phoning home.
+
+Everything cryptographic runs in a Rust core: Argon2id derives your key, AES-256-GCM encrypts your data, and envelope encryption gives every entry its own key. Site names, usernames, and notes are all encrypted, and secrets are wiped from memory after use.
+
+FEATURES
+- AutoFill passwords and one-time codes into apps and your browser.
+- Passkeys: create and sign in with passkeys, with Bramble as your own authenticator, for sites and apps that support them.
+- Unlock with your fingerprint or face, your master password, or a recovery code.
+- Store logins, payment cards, secure notes, and SSH keys, each with their own fields.
+- Built-in strong password generator.
+- TOTP / 2FA: add an otpauth URI or secret and Bramble generates the six-digit codes.
+- Import from KeePass (KDBX4), key files included.
+- Recovery code: a printable, high-entropy backup that unlocks your vault independently of your master password.
+- Optional breach check using k-anonymity, so nothing about your password leaves your device.
+- Auto-lock after inactivity.
+- Sync between your own devices peer-to-peer. No cloud, no relay holding your data.
+
+PRIVACY
+Bramble has no account, no subscription, and no telemetry. Your vault never leaves your control, and the code runs entirely on your device.

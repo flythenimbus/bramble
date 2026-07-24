@@ -309,15 +309,27 @@ function releaseAndroid(version: string) {
 
 	gate();
 
-	// Bump versionName (the build-time versionCode timestamp is untouched).
+	// Bump versionName, and write a deterministic versionCode into the source (not computed at build)
+	// so F-Droid's reproducible build matches the published APK. seconds-since-2020 (like the iOS
+	// build number) always exceeds the prior code; max() guards a backwards clock. Committed with the
+	// release, so rebuilding the tag yields the same code.
 	const before = readFileSync(BUILD_GRADLE, "utf8");
-	let replaced = 0;
-	const after = before.replace(/versionName "[^"]*"/, () => {
-		replaced++;
+	const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
+	const versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
+	let replacedName = 0;
+	let replacedCode = 0;
+	let after = before.replace(/versionName "[^"]*"/, () => {
+		replacedName++;
 		return `versionName "${version}"`;
 	});
-	if (replaced !== 1)
-		fail(`expected exactly one versionName in ${BUILD_GRADLE}, found ${replaced}`);
+	after = after.replace(/versionCode \d+/, () => {
+		replacedCode++;
+		return `versionCode ${versionCode}`;
+	});
+	if (replacedName !== 1)
+		fail(`expected exactly one versionName in ${BUILD_GRADLE}, found ${replacedName}`);
+	if (replacedCode !== 1)
+		fail(`expected exactly one versionCode in ${BUILD_GRADLE}, found ${replacedCode}`);
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
 	const bumped = after !== before;
 	if (bumped) writeFileSync(BUILD_GRADLE, after);
@@ -359,6 +371,14 @@ function releaseAndroid(version: string) {
 	rmSync(tmp, { recursive: true, force: true });
 	if (!existsSync(APK)) fail(`expected a signed APK at ${APK} (did signing apply?)`);
 
+	// Confirm the built APK carries the versionCode we wrote (guards the gradle wiring), then snapshot
+	// the release notes into changelogs keyed by it so the F-Droid listing shows "what's new".
+	const outMeta = `${ANDROID}/app/build/outputs/apk/release/output-metadata.json`;
+	const builtCode = JSON.parse(readFileSync(outMeta, "utf8"))?.elements?.[0]?.versionCode;
+	if (builtCode !== versionCode)
+		fail(`built versionCode ${builtCode} != expected ${versionCode} (check ${outMeta})`);
+	const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
+
 	// Print the signing cert SHA-256 so you can confirm it matches the published pin.
 	const apksigner = findApksigner();
 	if (apksigner) {
@@ -378,13 +398,40 @@ function releaseAndroid(version: string) {
 		`${createHash("sha256").update(readFileSync(APK)).digest("hex")}  ${apkName}\n`,
 	);
 
-	commitTagPush(bumped, BUILD_GRADLE, `chore(release): android ${version}`, tag, branch);
+	// Commit the versionName + versionCode bump alongside the new versionCode-keyed changelogs (new
+	// files every build), so the tag F-Droid reads carries this build's release notes.
+	commitTagPush(
+		bumped || changelogFiles.length > 0,
+		[BUILD_GRADLE, ...changelogFiles],
+		`chore(release): android ${version}`,
+		tag,
+		branch,
+	);
 	try {
 		publish(tag, `Android ${version}`, [apkAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(`\nreleased ${tag}: signed ${apkName} + SHA256SUMS attached to the release.`);
+}
+
+// Snapshot each present changelogs/current.txt to changelogs/<versionCode>.txt so the F-Droid
+// listing shows release notes for this build. current.txt is hand-authored under the Android en-US
+// fastlane (the client falls back to en-US for other locales). Returns the written paths (committed
+// with the release).
+function snapshotAndroidChangelogs(versionCode: string): string[] {
+	// Repo root, not the android project: fdroidserver only scans <root>/fastlane/metadata/android.
+	const base = "fastlane/metadata/android";
+	if (!existsSync(base)) return [];
+	const written: string[] = [];
+	for (const locale of readdirSync(base)) {
+		const cur = join(base, locale, "changelogs", "current.txt");
+		if (!existsSync(cur)) continue;
+		const out = join(base, locale, "changelogs", `${versionCode}.txt`);
+		copyFileSync(cur, out);
+		written.push(out);
+	}
+	return written;
 }
 
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
@@ -397,10 +444,6 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	if (!/^\d+(\.\d+){0,2}$/.test(version))
 		fail(`invalid version "${version}". want 1-3 ints (e.g. 1.1 or 1.1.0)`);
 
-	// TestFlight build number = seconds since 2020, computed here (not in the lane) so the number
-	// logged and the uploaded build agree. Unique per run, so re-uploading a marketing version
-	// just gets a fresh build number.
-	const build = Math.floor(Date.now() / 1000) - 1_577_836_800;
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 
 	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
@@ -415,16 +458,26 @@ function releaseIos(version: string, ipaOnly: boolean) {
 
 	if (!ipaOnly) gate(); // a dry run only tests build + signing, so skip the slow CI gate
 
-	// Bump MARKETING_VERSION across ALL build configs. The app + AutoFillProbe extension must
-	// share a version or App Store validation rejects the upload, so replace every occurrence.
-	// The build number is left to the `beta` lane's monotonic timestamp.
+	// Bump MARKETING_VERSION + CURRENT_PROJECT_VERSION across ALL build configs. The app + the
+	// AutoFillProbe extension must share both or App Store validation rejects the upload, so replace
+	// every occurrence. Mirrors the Android versionCode: the build number is committed to source
+	// (seconds since 2020, `max(prev+1, now)` so a backwards clock can't emit a non-increasing build,
+	// which App Store Connect rejects) and passed to the lane below so the two always agree.
 	const before = readFileSync(PBXPROJ, "utf8");
-	let replaced = 0;
-	const after = before.replace(/MARKETING_VERSION = [^;]+;/g, () => {
-		replaced++;
+	const prevBuild = Number(before.match(/CURRENT_PROJECT_VERSION = (\d+);/)?.[1] ?? 0);
+	const build = Math.max(prevBuild + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
+	let replacedVersion = 0;
+	let replacedBuild = 0;
+	let after = before.replace(/MARKETING_VERSION = [^;]+;/g, () => {
+		replacedVersion++;
 		return `MARKETING_VERSION = ${version};`;
 	});
-	if (replaced === 0) fail(`no MARKETING_VERSION found in ${PBXPROJ}`);
+	after = after.replace(/CURRENT_PROJECT_VERSION = \d+;/g, () => {
+		replacedBuild++;
+		return `CURRENT_PROJECT_VERSION = ${build};`;
+	});
+	if (replacedVersion === 0) fail(`no MARKETING_VERSION found in ${PBXPROJ}`);
+	if (replacedBuild === 0) fail(`no CURRENT_PROJECT_VERSION found in ${PBXPROJ}`);
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
 	const bumped = after !== before;
 	if (bumped) writeFileSync(PBXPROJ, after);
@@ -583,16 +636,19 @@ function gate() {
 
 function commitTagPush(
 	bumped: boolean,
-	file: string,
+	files: string | string[],
 	message: string,
 	tag: string,
 	branch: string,
 ) {
+	const list = Array.isArray(files) ? files : [files];
 	if (bumped) {
-		run(`git add ${file}`);
+		for (const f of list) run(`git add ${f}`);
 		run(`git commit -m ${JSON.stringify(message)}`);
 	} else {
-		console.log(`${file} already at this version; tagging current commit without a release commit`);
+		console.log(
+			`${list[0]} already at this version; tagging current commit without a release commit`,
+		);
 	}
 	run(`git tag ${tag}`);
 	run(`git push origin ${branch}`);
