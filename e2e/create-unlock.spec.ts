@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { createVault, expectUnlocked, lock, openPopup, unlock } from "./helpers";
+import { backgroundWorker, createVault, expectUnlocked, lock, openPopup, unlock } from "./helpers";
 
 // Increment 3: the common path through the real UI - create a vault, then lock and unlock it.
 test("create a vault, then lock and unlock it", async ({ context, extensionId }) => {
@@ -88,4 +88,72 @@ test("the reveal button doesn't leave a gap in the master-password border", asyn
 		.first()
 		.click();
 	expect(await state()).toEqual({ notchOpen: true, labelFloated: true });
+});
+
+// A detached pop-out lives in its own popup-type window whose only tab is the extension page,
+// so `tabs.query({currentWindow:true})` finds no web page and every site-aware feature (the
+// current-site float-to-top, the new-entry URL prefill) silently went dead there - which also
+// made a just-saved login impossible to spot in a long list. It must fall back to the active
+// tab of a normal window.
+test("a detached pop-out still floats the current site to the top", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+
+	const addLogin = async (name: string, url: string) => {
+		await popup.getByRole("button", { name: /Add New/i }).click();
+		await popup.getByRole("button", { name: /Add a new login/i }).click();
+		await popup.getByLabel("Name", { exact: true }).fill(name);
+		await popup.getByRole("button", { name: /Add URL/i }).click();
+		await popup.getByLabel("Website URL", { exact: true }).fill(url);
+		await popup.getByLabel("Username or email", { exact: true }).fill("user@example.com");
+		await popup.getByLabel("Password", { exact: true }).fill("pw-123456");
+		await popup.getByRole("button", { name: /Save Login/i }).click();
+		await expect(popup.getByText(name)).toBeVisible();
+	};
+	// "Zebra" sorts last under Name A-Z, so it can only lead by matching the current tab.
+	await addLogin("Aaa Other", "https://other.test");
+	await addLogin("Zebra Example", "https://example.com");
+
+	// The page the user is actually on, in a normal browser window.
+	const site = await context.newPage();
+	await site
+		.context()
+		.route(/example\.com/, (r) =>
+			r.fulfill({ body: "<h1>site</h1>", headers: { "content-type": "text/html" } }),
+		);
+	await site.goto("https://example.com/");
+	await site.bringToFront();
+
+	// Pop out exactly as the background does (windows.create, popup type).
+	const sw = await backgroundWorker(context);
+	await sw.evaluate(async (id) => {
+		await chrome.windows.create({
+			url: `chrome-extension://${id}/popup.html?detached=1`,
+			type: "popup",
+			focused: true,
+			width: 500,
+			height: 600,
+		});
+	}, extensionId);
+
+	await expect
+		.poll(
+			async () => {
+				const pop = context.pages().find((p) => p.url().includes("detached=1"));
+				if (!pop) return null;
+				return pop.evaluate(() =>
+					Array.from(document.querySelectorAll("li, [role='listitem'], button"))
+						.map((e) => (e.textContent ?? "").trim())
+						.filter((t) => t.includes("Zebra Example") || t.includes("Aaa Other"))
+						.map((t) => (t.includes("Zebra") ? "Zebra" : "Aaa"))
+						.slice(0, 2),
+				);
+			},
+			{ timeout: 15_000 },
+		)
+		.toEqual(["Zebra", "Aaa"]);
 });

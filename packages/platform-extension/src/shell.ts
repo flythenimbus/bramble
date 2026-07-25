@@ -10,6 +10,18 @@ import { ACTIVE_VAULT_SESSION_KEY } from "./session-keys";
 import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
+
+/** A tab's http(s) origin, or null for extension pages, about:blank, files, and unparseable urls. */
+function webOrigin(tab: chrome.tabs.Tab | undefined): string | null {
+	if (!tab?.url) return null;
+	try {
+		const url = new URL(tab.url);
+		return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+	} catch {
+		return null;
+	}
+}
+
 // Where the normal popup stashes its current route so a close+reopen (session still
 // unlocked) resumes where it was. chrome.storage.session clears on browser restart, so a
 // stale route never outlives the session that could unlock into it.
@@ -76,11 +88,22 @@ export const extensionShell: ShellAdapter = {
 	},
 	async getCurrentTabOrigin() {
 		try {
-			const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-			if (!tab?.url) return null;
-			const url = new URL(tab.url);
-			if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-			return url.origin;
+			// Toolbar popup: the page we're acting on is our own window's active tab.
+			const [own] = await api.tabs.query({ active: true, currentWindow: true });
+			const ownOrigin = webOrigin(own);
+			if (ownOrigin) return ownOrigin;
+			// Detached pop-out: it lives in its own popup-type window, whose only tab is this
+			// extension page, so the query above finds no web page and site-aware features
+			// (matchCurrentTab's float-to-top, the new-entry URL prefill) silently went dead.
+			// Fall back to the active tab of a normal browser window - the page behind us.
+			// With several normal windows open the first web tab wins; there's no API for
+			// "focused before ours", and any of them beats no match at all.
+			const tabs = await api.tabs.query({ active: true, windowType: "normal" });
+			for (const tab of tabs) {
+				const origin = webOrigin(tab);
+				if (origin) return origin;
+			}
+			return null;
 		} catch {
 			return null;
 		}
