@@ -996,6 +996,11 @@ msgstr "Sperren bei Bildschirmsperre"
 msgid "Login"
 msgstr "Login"
 
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Login saved for {0}"
+msgstr "Login für {0} gespeichert"
+
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Logins"
 msgstr "Anmeldedaten"
@@ -1274,6 +1279,11 @@ msgstr "Passwort wurde in einem bekannten Datenleck gefunden"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Password strength"
 msgstr "Passwortstärke"
+
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Password updated for {0}"
+msgstr "Passwort für {0} aktualisiert"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "passwords don't match"

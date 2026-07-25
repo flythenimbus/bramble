@@ -174,7 +174,7 @@ export interface CornerPromptResponse {
 	action: CornerPromptResponseAction;
 	/** For `update`: which candidate the user chose. */
 	chosenEntryId?: string;
-	/** For `save`: the user can edit the username before saving. */
+	/** For `save` / `save-unlock-first`: the user can edit the username before saving. */
 	editedUsername?: string;
 }
 

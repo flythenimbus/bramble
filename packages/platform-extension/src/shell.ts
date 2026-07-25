@@ -154,6 +154,15 @@ export const extensionShell: ShellAdapter = {
 		api.runtime.onMessage.addListener(handler);
 		return () => api.runtime.onMessage.removeListener(handler);
 	},
+	onCornerSaved(callback) {
+		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {
+			if (msg?.type === "CORNER_SAVED" && msg.payload) {
+				callback(msg.payload as Parameters<typeof callback>[0]);
+			}
+		};
+		api.runtime.onMessage.addListener(handler);
+		return () => api.runtime.onMessage.removeListener(handler);
+	},
 	async flushPendingCornerCapture() {
 		const res = (await api.runtime.sendMessage({ type: "CORNER_FLUSH_HANDOFF" })) as
 			| { ok: boolean; data?: boolean }

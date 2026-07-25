@@ -996,6 +996,11 @@ msgstr "Bloquear al bloquear la pantalla"
 msgid "Login"
 msgstr "Inicio de sesión"
 
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Login saved for {0}"
+msgstr "Se ha guardado el inicio de sesión para {0}"
+
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Logins"
 msgstr "Credenciales"
@@ -1274,6 +1279,11 @@ msgstr "Contraseña encontrada en una violación de datos conocida"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Password strength"
 msgstr "Fortaleza de la contraseña"
+
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Password updated for {0}"
+msgstr "Se ha actualizado la contraseña para {0}"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "passwords don't match"

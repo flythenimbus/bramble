@@ -86,6 +86,23 @@ export async function resolveActiveVaultId(): Promise<string | null> {
 	}
 }
 
+/**
+ * Re-read the active vault id from session INTO the in-memory mirror, so a synchronous
+ * activeVaultLocked() taken right after an unlock isn't answered from a stale mirror (the UI
+ * writes the key and the onChanged event can still be in flight). A failed read leaves the
+ * mirror alone rather than clobbering a good value with null.
+ */
+export async function refreshActiveVaultId(): Promise<string | null> {
+	try {
+		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
+		const v = r[ACTIVE_VAULT_SESSION_KEY];
+		activeId = typeof v === "string" ? v : null;
+	} catch {
+		// Keep the current mirror; the caller's lock check is no worse off than before.
+	}
+	return activeId;
+}
+
 /** True when the ACTIVE vault has no cached VEK: the lock predicate the singleton services
  * (autofill, corner-prompt, backup, storage-change listeners) mean by "the vault is locked". */
 export function activeVaultLocked(): boolean {

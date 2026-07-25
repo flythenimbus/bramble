@@ -34,6 +34,11 @@ export function requireActiveVaultId(): string {
 	return id;
 }
 
+/** Refresh the active-vault mirror from session before a lock check that races an unlock. */
+export async function refreshActiveVaultId(): Promise<string | null> {
+	return vekStore.refreshActiveVaultId();
+}
+
 /** Every currently-unlocked vault id, most-recently-unlocked first. Used by backup to retry a
  * device-global target's VEK-wrapped creds across resident vaults. */
 export function unlockedVaultIds(): string[] {

@@ -29,6 +29,13 @@ export interface PasskeySavedInfo {
 	created: boolean;
 }
 
+/** A corner-prompt capture the background committed after an unlock, for a confirmation toast. */
+export interface CornerSavedInfo {
+	/** "save" created a new login; "update" rotated an existing one's password. */
+	kind: "save" | "update";
+	hostname: string;
+}
+
 export interface ShellAdapter {
 	/** Host extension's display name, read from its manifest. Single source of truth for the user-facing brand. */
 	appName: string;
@@ -94,6 +101,12 @@ export interface ShellAdapter {
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */
 	onPasskeySaved?(callback: (info: PasskeySavedInfo) => void): () => void;
+	/**
+	 * Subscribe to corner-prompt captures committed by the background after an "Unlock & save"
+	 * (extension only). The card is gone by then, so the UI that just unlocked confirms it.
+	 * Returns an unsubscribe.
+	 */
+	onCornerSaved?(callback: (info: CornerSavedInfo) => void): () => void;
 	/**
 	 * Mobile only: drain passkeys the native credential provider minted during a sign-in
 	 * registration and return them decrypted, so the app can persist them into the vault (the

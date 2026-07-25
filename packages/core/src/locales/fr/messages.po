@@ -996,6 +996,11 @@ msgstr "Verrouiller lorsque l'écran se verrouille"
 msgid "Login"
 msgstr "Connexion"
 
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Login saved for {0}"
+msgstr "Identifiant enregistré pour {0}"
+
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Logins"
 msgstr "Identifiants"
@@ -1274,6 +1279,11 @@ msgstr "Mot de passe trouvé dans une fuite de données connue"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Password strength"
 msgstr "Force du mot de passe"
+
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Password updated for {0}"
+msgstr "Mot de passe mis à jour pour {0}"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "passwords don't match"

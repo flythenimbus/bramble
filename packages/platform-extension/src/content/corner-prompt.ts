@@ -168,11 +168,16 @@ function handleCornerCardClick(e: Event): void {
 	}
 	if (action === "save-unlock-first") {
 		// Pass chosenEntryId if picked: the locked-flow commit re-runs dedupe but
-		// honors an explicit choice when present.
+		// honors an explicit choice when present. The username field is editable on the
+		// save card, so carry an edit through the unlock too (parity with "save").
 		const radio = cornerShadow.querySelector<HTMLInputElement>(
 			'input[name="tp-update-target"]:checked',
 		);
-		sendCornerResponse("save-unlock-first", radio ? { chosenEntryId: radio.value } : undefined);
+		const editedUsername = cornerShadow.querySelector<HTMLInputElement>("#tp-username")?.value;
+		sendCornerResponse("save-unlock-first", {
+			...(radio ? { chosenEntryId: radio.value } : {}),
+			...(editedUsername !== undefined ? { editedUsername } : {}),
+		});
 		removeCornerPrompt();
 		return;
 	}

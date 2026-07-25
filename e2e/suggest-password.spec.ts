@@ -258,6 +258,61 @@ test("offers the suggestion while the vault is locked (fills, then prompts Unloc
 	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });
 
+test("Unlock & Save commits the new login after unlocking, and confirms it with a toast", async ({
+	context,
+	extensionId,
+}) => {
+	// Locked vault -> suggestion -> "Unlock & Save" -> unlock in the pop-out. The capture is
+	// parked as a handoff and must be committed on unlock (and shown), not silently dropped.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await lock(popup);
+
+	const page = await context.newPage();
+	await serve(page, SIGNUP);
+	await page.goto("https://example.com/");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+
+	// The locked card offers "Unlock & Save"; click it (bottom-left of the card).
+	const card = page.locator("#titanpass-corner-prompt");
+	await expect(card).toBeAttached({ timeout: 10_000 });
+	const cardBox = await card.boundingBox();
+	expect(cardBox).not.toBeNull();
+	await page.mouse.click(cardBox!.x + 92, cardBox!.y + 245);
+	// The capture is parked for the unlock to pick up.
+	await expect
+		.poll(
+			async () => {
+				const sw = await backgroundWorker(context);
+				return sw.evaluate(async () => {
+					const r = await chrome.storage.session.get("cornerPrompt.handoff");
+					return !!r["cornerPrompt.handoff"];
+				});
+			},
+			{ timeout: 10_000 },
+		)
+		.toBe(true);
+
+	// Unlock: the parked capture commits, a toast confirms it, and the entry lands in the vault.
+	await popup.bringToFront();
+	await unlock(popup);
+	// Toast first: it auto-dismisses after a few seconds.
+	await expect(popup.getByRole("status")).toHaveText(/Login saved for example\.com/, {
+		timeout: 10_000,
+	});
+	// The saved login is really in the vault (the toast alone could lie).
+	await expect(popup.getByText("Items (1)")).toBeVisible({ timeout: 10_000 });
+});
+
 test("click-to-unlock re-surfaces the matches in place, without refocusing (issue b)", async ({
 	context,
 	extensionId,

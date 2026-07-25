@@ -6,6 +6,7 @@ import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { setAppBackHandler } from "./android-back";
+import { CornerSavedToast } from "./components/CornerSavedToast";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
@@ -119,6 +120,10 @@ export default function App({
 			<LocaleGate preferredLocale={preferredLocale}>
 				<ThemeProvider>
 					<ToastProvider>
+						{/* Mounted here, not in AppLayout: the background commits an "Unlock & save"
+						    DURING unlock, before the app chrome renders, so a listener scoped to the
+						    unlocked layout would miss the broadcast. */}
+						<CornerSavedToast />
 						<VaultRegistryProvider>
 							<VaultProvider>
 								<PrefsProvider>

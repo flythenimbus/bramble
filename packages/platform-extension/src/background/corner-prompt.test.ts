@@ -208,7 +208,8 @@ describe("CORNER_FLUSH_HANDOFF", () => {
 		});
 		const { resp } = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(resp).toEqual({ ok: false, error: "vault still locked" });
-		// Handoff is consumed (cleared first) even on the locked path.
-		expect(bg.state.session["cornerPrompt.handoff"]).toBeUndefined();
+		// The handoff SURVIVES: it's the only copy of the capture, and this flush can land before
+		// the unlock is visible here. Consuming it on the locked path lost the entry outright.
+		expect(bg.state.session["cornerPrompt.handoff"]).toBeDefined();
 	});
 });

@@ -6,6 +6,7 @@ import {
 	loadBackground,
 	type OffscreenResponse,
 	pageSender,
+	TEST_ACTIVE_VAULT,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 
@@ -292,6 +293,50 @@ describe("commit: CORNER_FLUSH_HANDOFF after unlock", () => {
 		const { resp } = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(resp).toEqual({ ok: true, data: true });
 		expect(vaultChanged(bg)).toBe(true);
+		expect(bg.state.session["cornerPrompt.handoff"]).toBeUndefined();
+
+		const find = await bg.send(
+			{ type: "AUTOFILL_FIND", payload: { hostname: "newsite.com", hasLogin: true } },
+			extensionSender,
+		);
+		expect(find.resp.data.logins.map((l: any) => l.secondary)).toContain("bob");
+	});
+
+	// The popup fires the flush the instant its unwrap resolves, but the background mirrors the
+	// active vault id from a storage event that can still be in flight, so the first flush can
+	// see a "locked" vault. It must park the handoff (not consume it) and commit once the id
+	// lands — previously the handoff was cleared first, losing the capture outright.
+	it("parks the handoff when the unlock isn't visible yet, then commits it", async () => {
+		const bg = await loadBackground({
+			// VEK cached, but the active-vault id hasn't been mirrored yet: reads as locked.
+			sessionSeed: {
+				[TEST_VEK_KEY]: "SEED",
+				"vault.activeId": undefined,
+				"cornerPrompt.handoff": {
+					intent: "save",
+					capture: {
+						promptId: "p1",
+						etld1: "newsite.com",
+						hostname: "newsite.com",
+						username: "bob",
+						password: "secret",
+						capturedAt: 0,
+						newLogin: true,
+					},
+				},
+			},
+			offscreen: commitOffscreen,
+		});
+		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
+
+		const early = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
+		expect(early.resp).toEqual({ ok: false, error: "vault still locked" });
+		expect(bg.state.session["cornerPrompt.handoff"]).toBeDefined();
+
+		// The active id lands; the next flush re-reads it and commits the parked capture.
+		await bg.chrome.storage.session.set({ "vault.activeId": TEST_ACTIVE_VAULT });
+		const late = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
+		expect(late.resp).toEqual({ ok: true, data: true });
 		expect(bg.state.session["cornerPrompt.handoff"]).toBeUndefined();
 
 		const find = await bg.send(

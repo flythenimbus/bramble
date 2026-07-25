@@ -20,7 +20,7 @@ import {
 import { sendToOffscreen } from "./offscreen-client";
 import { appendNeverSaveSite, getNeverSaveSites, getOfferToSavePref } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
-import { requireActiveVaultId, vaultLocked } from "./session";
+import { refreshActiveVaultId, requireActiveVaultId, vaultLocked } from "./session";
 import { nextStamp } from "./sync-clock";
 import {
 	broadcastVaultChanged,
@@ -360,10 +360,14 @@ async function cornerPromptResponse(
 			return { ok: true, data: null };
 		}
 		if (response.action === "save-unlock-first") {
+			// The username stays editable on the locked card, so honor an edit on both paths.
+			const unlockCapture: PendingCapture = response.editedUsername
+				? { ...capture, username: response.editedUsername }
+				: capture;
 			// Fast path: if already unlocked, commit directly instead of routing through the popup.
 			if (!vaultLocked()) {
 				await hydrateAutofillIndexFromDisk();
-				const outcome = captureOutcome(capture);
+				const outcome = captureOutcome(unlockCapture);
 				try {
 					if (outcome.kind === "exact") {
 						// no-op
@@ -372,9 +376,9 @@ async function cornerPromptResponse(
 						(response.chosenEntryId || outcome.candidates.length === 1)
 					) {
 						const targetId = response.chosenEntryId ?? outcome.candidates[0]!.id;
-						await commitCornerUpdate(capture, targetId);
+						await commitCornerUpdate(unlockCapture, targetId);
 					} else {
-						await commitCornerSave(capture, undefined);
+						await commitCornerSave(unlockCapture, undefined);
 					}
 				} finally {
 					await clearPendingCapture(etld1);
@@ -383,7 +387,7 @@ async function cornerPromptResponse(
 			}
 			const handoff: CornerHandoff = {
 				intent: response.chosenEntryId ? "update" : "save",
-				capture,
+				capture: unlockCapture,
 				chosenEntryId: response.chosenEntryId,
 			};
 			await api.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
@@ -457,13 +461,20 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 		if (!handoff) {
 			return { ok: true, data: false };
 		}
-		// Clear first so a racing duplicate flush cannot double-write.
-		await api.storage.session.remove(CORNER_HANDOFF_KEY);
+		// The popup fires this the moment its unwrap resolves, but the background mirrors the
+		// active vault id from a storage event, which can still be in flight. Re-read it so a
+		// freshly-unlocked vault isn't misread as locked.
+		await refreshActiveVaultId();
 		await hydrateAutofillIndexFromDisk();
+		// Check BEFORE consuming: a flush that lands early must leave the handoff parked for the
+		// next one (unlock / popup reopen), never destroy the only copy of the capture.
 		if (vaultLocked()) {
 			return { ok: false, error: "vault still locked" };
 		}
+		// Committing now: clear first so a racing duplicate flush cannot double-write.
+		await api.storage.session.remove(CORNER_HANDOFF_KEY);
 		const outcome = captureOutcome(handoff.capture);
+		let saved: "save" | "update" | null = null;
 		try {
 			if (outcome.kind === "exact") {
 				// no-op
@@ -471,11 +482,23 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 				const targetId = handoff.chosenEntryId ?? outcome.candidates[0]?.id;
 				if (!targetId) throw new Error("no update target");
 				await commitCornerUpdate(handoff.capture, targetId);
+				saved = "update";
 			} else {
 				await commitCornerSave(handoff.capture, undefined);
+				saved = "save";
 			}
 		} finally {
 			await clearPendingCapture(handoff.capture.etld1);
+		}
+		// The corner card is long gone by the time this lands, so tell the UI that just unlocked
+		// to confirm it. Best-effort: no receiver is fine.
+		if (saved) {
+			void api.runtime
+				.sendMessage({
+					type: "CORNER_SAVED",
+					payload: { kind: saved, hostname: handoff.capture.hostname },
+				})
+				.catch(() => {});
 		}
 		return { ok: true, data: true };
 	} catch (err) {
