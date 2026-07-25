@@ -359,7 +359,13 @@ function releaseAndroid(version: string) {
 		if (!existsSync(UNSIGNED)) fail(`container did not produce ${UNSIGNED}`);
 
 		// Sign on the host: decrypt the keystore into a 0700 dir, apksigner-sign the container's
-		// unsigned apk (content-preserving, so it still matches F-Droid's build), then wipe the key.
+		// unsigned apk, then wipe the key. The two flags are load-bearing for reproducibility:
+		//   --v1-signing-enabled false  no JAR/META-INF signature files (minSdk 24 verifies via v2),
+		//                               which would otherwise add entries F-Droid's build lacks.
+		//   --alignment-preserved       keep the unsigned apk's exact byte layout; the default would
+		//                               re-align every entry.
+		// Both keep the signed apk = the container's unsigned apk + the APK Signing Block, which is
+		// exactly what F-Droid's apksigcopier reconstructs when it grafts our signature onto its build.
 		const ksFile = join(tmp, "release.jks");
 		const idFile = join(tmp, "id.txt");
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
@@ -377,6 +383,9 @@ function releaseAndroid(version: string) {
 				"env:BR_KS_PASS",
 				"--key-pass",
 				"env:BR_KEY_PASS",
+				"--v1-signing-enabled",
+				"false",
+				"--alignment-preserved",
 				"--out",
 				apkAsset,
 				UNSIGNED,
