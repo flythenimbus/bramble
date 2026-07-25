@@ -9,6 +9,7 @@ import {
 } from "./detection";
 import { getLastFilledPassword } from "./fill";
 import { safeSendMessage } from "./lifecycle";
+import { isAccountCreationForm } from "./signup-detect";
 
 // Most recent user-typed password across all fields. Values we wrote via
 // `fillForm` are not edits: gated on `e.isTrusted` below. Cleared on submit.
@@ -19,7 +20,7 @@ let lastEditAt = 0;
 const SPA_SUBMIT_WINDOW_MS = 1500;
 
 /** Builds the capture payload from the current form state; returns null when any capture gate trips. */
-function buildCapture(): { username: string; password: string } | null {
+function buildCapture(): { username: string; password: string; newLogin: boolean } | null {
 	if (lastUserEditedPassword === null) return null;
 	// Don't fire a save prompt mid-CAPTCHA-challenge.
 	if (hasInteractiveCaptcha()) return null;
@@ -27,14 +28,18 @@ function buildCapture(): { username: string; password: string } | null {
 	const login = detectLoginFields();
 	if (otpInputs().length > 0 && !login.password) return null;
 
-	const pwFields = deepQueryAll('input[type="password"]:not([readonly]):not([disabled])');
+	const pwFields = deepQueryAll<HTMLInputElement>(
+		'input[type="password"]:not([readonly]):not([disabled])',
+	);
 	let capturePassword = lastUserEditedPassword;
+	let pwField = login.password;
 	if (pwFields.length >= 2) {
 		// Change form (old/new/confirm): only capture when the new-password field
 		// is confidently identified and its confirm matches.
 		const newField = findNewPasswordOnChangeForm();
 		if (!newField) return null;
 		capturePassword = newField.value;
+		pwField = newField;
 	}
 	// Suppress unchanged autofilled credentials: nothing to save.
 	if (capturePassword === getLastFilledPassword()) return null;
@@ -43,7 +48,10 @@ function buildCapture(): { username: string; password: string } | null {
 		login.username?.value ??
 		deepQuery<HTMLInputElement>('input[autocomplete~="username"]')?.value ??
 		"";
-	return { username, password: capturePassword };
+	// A signup form yields a NEW login even when one is already saved for the site; a login or
+	// change form does not (dedupe decides / rotates). See signup-detect.ts.
+	const newLogin = !!pwField && isAccountCreationForm(pwField);
+	return { username, password: capturePassword, newLogin };
 }
 
 /** Emits a capture event to the background and clears state so re-submits don't duplicate it. */
@@ -53,7 +61,11 @@ function emitCapture(): void {
 	if (!captured.password) return;
 	safeSendMessage({
 		type: "CORNER_PROMPT_CAPTURE",
-		payload: { username: captured.username, password: captured.password },
+		payload: {
+			username: captured.username,
+			password: captured.password,
+			newLogin: captured.newLogin,
+		},
 	});
 	lastUserEditedPassword = null;
 }

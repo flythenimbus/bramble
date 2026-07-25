@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, expectUnlocked, openPopup } from "./helpers";
+import { backgroundWorker, createVault, expectUnlocked, openPopup } from "./helpers";
 
 // Drives the strong-password suggestion end to end through the real content script, the picker,
 // and the background save path. Like autofill-unlock.spec.ts, the pages are served with
@@ -55,6 +55,28 @@ async function serve(page: Page, html: string): Promise<void> {
 		);
 }
 
+/** Add a saved login for example.com through the popup UI (the account already on file). */
+async function seedLogin(popup: Page): Promise<void> {
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Add a new login/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
+	await popup.getByRole("button", { name: /Add URL/i }).click();
+	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
+	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
+	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
+	await popup.getByRole("button", { name: /Save Login/i }).click();
+	await expect(popup.getByText("Example Login")).toBeVisible();
+}
+
+/** The `newLogin` flag on the pending capture stash for example.com (save-new vs update intent). */
+async function pendingNewLogin(context: BrowserContext): Promise<boolean | undefined> {
+	const sw = await backgroundWorker(context);
+	return sw.evaluate(async () => {
+		const r = await chrome.storage.session.get("capture.pending.example.com");
+		return (r["capture.pending.example.com"] as { newLogin?: boolean } | undefined)?.newLogin;
+	});
+}
+
 test("suggests a strong password on a signup form, then fills it and offers to save", async ({
 	context,
 	extensionId,
@@ -88,6 +110,58 @@ test("suggests a strong password on a signup form, then fills it and offers to s
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 	// ...and the in-page save prompt is offered for the new login.
 	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect.poll(() => pendingNewLogin(context)).toBe(true);
+});
+
+test("a signup with an existing saved login still offers a NEW login, not update", async ({
+	context,
+	extensionId,
+}) => {
+	// The exact reported case: the user already has a saved login for the site, then visits its signup
+	// page. Using the suggestion must offer to SAVE a new login, not UPDATE the existing one.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, SIGNUP);
+	await page.goto("https://example.com/");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+
+	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	// The capture is flagged as a new login despite the saved match, so the prompt is Save, not Update.
+	await expect.poll(() => pendingNewLogin(context)).toBe(true);
+});
+
+test("a manually typed signup password captures as a NEW login (submit path)", async ({
+	context,
+	extensionId,
+}) => {
+	// The same guarantee for a hand-typed password (no suggestion): submitting a signup form with a
+	// saved login on file still captures as a new login, driven by capture.ts.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, SIGNUP);
+	await page.goto("https://example.com/");
+
+	await page.locator("#email").fill("new@example.com");
+	await page.locator("#pass").fill("Hand-Typed-Pw-123");
+	await page.getByRole("button", { name: /Create account/i }).click();
+
+	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });
 
 test("does not suggest on a login form (current-password vetoes the offer)", async ({
@@ -121,15 +195,7 @@ test("suggests a strong password on a change-password form (new field, not the c
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Add a new login/i }).click();
-	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
-	await popup.getByRole("button", { name: /Add URL/i }).click();
-	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
-	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
-	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
-	await popup.getByRole("button", { name: /Save Login/i }).click();
-	await expect(popup.getByText("Example Login")).toBeVisible();
+	await seedLogin(popup);
 
 	const page = await context.newPage();
 	await serve(page, CHANGE);
@@ -154,4 +220,6 @@ test("suggests a strong password on a change-password form (new field, not the c
 	expect(await page.locator("#confirm").inputValue()).toBe(filled);
 	expect(await page.locator("#current").inputValue()).toBe("");
 	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	// A change form is a rotation, not a new login: the capture is NOT flagged new (offers Update).
+	await expect.poll(() => pendingNewLogin(context)).toBe(false);
 });

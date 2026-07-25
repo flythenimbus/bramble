@@ -213,6 +213,24 @@ describe("content: strong-password suggestion on signup", () => {
 		expect(lastSuggest()?.password).toEqual(expect.any(String));
 	});
 
+	it("keeps the suggestion across re-renders even after the anchor autocomplete is suppressed", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		expect(lastSuggest()?.password).toEqual(expect.any(String));
+		// The real picker rewrites the anchor field's autocomplete to "off" to suppress native
+		// autofill, which would erase the new-password token if the decision were re-evaluated.
+		pass.setAttribute("autocomplete", "off");
+		// A later query returns a saved login for the site: we must still show the suggestion only.
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "GitHub", secondary: "jordanavery" }] }),
+		});
+		const call = showMatches.mock.calls.at(-1);
+		expect(call?.[0]).toEqual([]);
+		expect((call?.[2] as { suggest?: unknown })?.suggest).toBeTruthy();
+	});
+
 	it("fills the password and offers to save when the suggestion is used", () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		const user = document.getElementById("user") as HTMLInputElement;
@@ -222,12 +240,49 @@ describe("content: strong-password suggestion on signup", () => {
 
 		onSuggestedCb?.();
 		expect(fillPasswordFields).toHaveBeenCalled();
+		// A signup (new-password field, no current-password) captures as a NEW login.
 		expect(safeSendMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "CORNER_PROMPT_CAPTURE",
-				payload: expect.objectContaining({ username: "me@example.com" }),
+				payload: expect.objectContaining({ username: "me@example.com", newLogin: true }),
 			}),
 		);
+	});
+
+	it("captures a change-form suggestion as a rotation, not a new login", () => {
+		// jsdom has no layout; give inputs a box so isRendered() sees the current-password sibling.
+		const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		document.body.innerHTML = `
+			<form>
+				<input id="cur" type="password" name="current" autocomplete="current-password" />
+				<input id="np" type="password" name="new" autocomplete="new-password" />
+				<input id="cf" type="password" name="confirm" autocomplete="new-password" />
+			</form>`;
+		invalidatePageFields();
+		const np = document.getElementById("np") as HTMLInputElement;
+		np.focus();
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "GitHub", secondary: "jordanavery" }] }),
+		});
+		onSuggestedCb?.();
+		expect(safeSendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "CORNER_PROMPT_CAPTURE",
+				payload: expect.objectContaining({ newLogin: false }),
+			}),
+		);
+		rect.mockRestore();
 	});
 
 	it("swaps in a fresh suggestion on regenerate", () => {

@@ -288,3 +288,28 @@ export function shouldSuggestPassword(
 	const { score, veto } = scoreSignupForm(field, opts);
 	return !veto && score >= THRESHOLD;
 }
+
+/**
+ * True if `field`'s form has a rendered current-password sibling: a password-change
+ * (rotation of an existing login), not a signup. Used to decide save-new vs update.
+ */
+export function isPasswordChangeForm(field: HTMLInputElement): boolean {
+	const form = scopeFormOf(field);
+	if (!form) return false;
+	return deepQueryAll<HTMLInputElement>(
+		'input[type="password"]:not([readonly]):not([disabled])',
+		form,
+	).some((el) => el !== field && isRendered(el) && isCurrentPassword(el));
+}
+
+/**
+ * True if `field` is the new-password field of an account-creation form (signup / reset),
+ * not a login or a password-change form. Unlike `shouldSuggestPassword` this ignores whether
+ * the field is empty, so a capture can be classified at submit time.
+ */
+export function isAccountCreationForm(field: HTMLInputElement): boolean {
+	if (field.type !== "password") return false;
+	if (isPasswordChangeForm(field)) return false;
+	const { score, veto } = scoreSignupForm(field);
+	return !veto && score >= THRESHOLD;
+}

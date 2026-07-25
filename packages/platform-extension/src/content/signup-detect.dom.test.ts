@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { scoreSignupForm, shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
+import {
+	isAccountCreationForm,
+	isPasswordChangeForm,
+	scoreSignupForm,
+	shouldSuggestPassword,
+	signupPasswordFields,
+} from "./signup-detect";
 
 function loadHTML(html: string): void {
 	document.body.innerHTML = html;
@@ -244,6 +250,52 @@ describe("scoreSignupForm", () => {
 			expect.arrayContaining(["new-password-token", "confirm-pair", "signup-url", "terms-link"]),
 		);
 		expect(score).toBeGreaterThanOrEqual(100);
+	});
+});
+
+describe("isPasswordChangeForm / isAccountCreationForm (save-new vs update intent)", () => {
+	it("classifies a change form as a rotation, not account creation", () => {
+		loadHTML(`
+			<form>
+				<input type="password" name="current" autocomplete="current-password" />
+				<input type="password" name="new" autocomplete="new-password" />
+				<input type="password" name="confirm" />
+			</form>
+		`);
+		expect(isPasswordChangeForm(pw(1))).toBe(true);
+		expect(isAccountCreationForm(pw(1))).toBe(false);
+	});
+
+	it("classifies a signup form as account creation", () => {
+		loadHTML(`
+			<form>
+				<input type="email" autocomplete="email" />
+				<input type="password" autocomplete="new-password" />
+			</form>
+		`);
+		expect(isPasswordChangeForm(pw())).toBe(false);
+		expect(isAccountCreationForm(pw())).toBe(true);
+	});
+
+	it("treats a reset form (new + confirm, no current) as account creation", () => {
+		loadHTML(`
+			<form>
+				<input type="password" name="new" />
+				<input type="password" name="confirm" />
+			</form>
+		`);
+		expect(isPasswordChangeForm(pw(0))).toBe(false);
+		expect(isAccountCreationForm(pw(0))).toBe(true);
+	});
+
+	it("does not treat a login form as account creation", () => {
+		loadHTML(`
+			<form>
+				<input type="email" autocomplete="username" />
+				<input type="password" autocomplete="current-password" />
+			</form>
+		`);
+		expect(isAccountCreationForm(pw())).toBe(false);
 	});
 });
 

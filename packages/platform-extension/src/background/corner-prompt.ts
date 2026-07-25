@@ -41,6 +41,9 @@ interface PendingCapture {
 	username: string;
 	password: string;
 	capturedAt: number;
+	// Set by a signup capture: this is a brand-new login, so never fold it into an existing
+	// entry even if one is saved for the site (dedupe matches on hostname alone).
+	newLogin?: boolean;
 }
 
 interface CornerHandoff {
@@ -70,6 +73,12 @@ async function writePendingCapture(capture: PendingCapture): Promise<void> {
 
 async function clearPendingCapture(etld1: string): Promise<void> {
 	await api.storage.session.remove(captureStashKey(etld1));
+}
+
+/** Dedupe outcome for a capture, forcing a fresh save when it's flagged as a new login (signup). */
+function captureOutcome(capture: PendingCapture): DedupeOutcome {
+	if (capture.newLogin) return { kind: "save" };
+	return dedupeCapture(capture.hostname, capture.username, capture.password);
 }
 
 function buildCornerPayload(
@@ -239,7 +248,7 @@ async function dispatchCornerPromptForCapture(
 
 	await hydrateAutofillIndexFromDisk();
 	const locked = vaultLocked();
-	const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+	const outcome = captureOutcome(capture);
 	const payload = buildCornerPayload(capture, outcome, locked);
 	if (!payload) {
 		await clearPendingCapture(capture.etld1);
@@ -270,9 +279,10 @@ async function cornerPromptCapture(
 		if (src) hostname = new URL(src).hostname;
 	} catch {}
 	if (!hostname) return { ok: false, error: "no verifiable origin on sender" };
-	const { username, password } = message.payload as {
+	const { username, password, newLogin } = message.payload as {
 		username: string;
 		password: string;
+		newLogin?: boolean;
 	};
 	if (!password) return { ok: true, data: null };
 	const etld1 = registrableDomain(hostname);
@@ -283,6 +293,7 @@ async function cornerPromptCapture(
 		username,
 		password,
 		capturedAt: Date.now(),
+		newLogin: newLogin === true,
 	};
 	const dispatched = await dispatchCornerPromptForCapture(capture, sender.tab?.id);
 	return { ok: true, data: dispatched };
@@ -308,7 +319,7 @@ async function cornerPromptQuery(
 	// recurring entry would mis-label as a fresh save).
 	await hydrateAutofillIndexFromDisk();
 	const locked = vaultLocked();
-	const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+	const outcome = captureOutcome(capture);
 	const payload = buildCornerPayload(capture, outcome, locked);
 	if (!payload) {
 		await clearPendingCapture(etld1);
@@ -352,7 +363,7 @@ async function cornerPromptResponse(
 			// Fast path: if already unlocked, commit directly instead of routing through the popup.
 			if (!vaultLocked()) {
 				await hydrateAutofillIndexFromDisk();
-				const outcome = dedupeCapture(capture.hostname, capture.username, capture.password);
+				const outcome = captureOutcome(capture);
 				try {
 					if (outcome.kind === "exact") {
 						// no-op
@@ -402,11 +413,7 @@ async function cornerPromptResponse(
 			const editedCapture: PendingCapture = response.editedUsername
 				? { ...capture, username: response.editedUsername }
 				: capture;
-			const outcome = dedupeCapture(
-				editedCapture.hostname,
-				editedCapture.username,
-				editedCapture.password,
-			);
+			const outcome = captureOutcome(editedCapture);
 			try {
 				if (outcome.kind === "exact") {
 					// no-op
@@ -456,11 +463,7 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 		if (vaultLocked()) {
 			return { ok: false, error: "vault still locked" };
 		}
-		const outcome = dedupeCapture(
-			handoff.capture.hostname,
-			handoff.capture.username,
-			handoff.capture.password,
-		);
+		const outcome = captureOutcome(handoff.capture);
 		try {
 			if (outcome.kind === "exact") {
 				// no-op

@@ -28,7 +28,7 @@ import {
 import { onTeardown, safeSendMessage } from "./lifecycle";
 import { generatePassword } from "./password-gen";
 import { picker } from "./picker";
-import { shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
+import { isPasswordChangeForm, shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
 import type { CornerPromptPayload, FillPayload, MatchSummary, QueryResult } from "./types";
 
 let mutationObserver: MutationObserver | null = null;
@@ -58,12 +58,18 @@ function maybeSuggest(
 	field: HTMLInputElement,
 	hasExistingLogins: boolean,
 ): { password: string } | null {
+	// Never suggest into a non-password field or one the user has already typed into.
+	if (field.type !== "password" || field.value) return null;
+	// The decision is cached per field and reused across re-renders. Re-evaluating would be both
+	// wasteful and wrong: once the picker shows here it rewrites the anchor field's `autocomplete`
+	// to "off" to suppress native autofill, which erases the new-password token the detector reads,
+	// so a re-query (e.g. a saved login arriving) would flip us to showing the match. Deciding once,
+	// while the attributes are still pristine, keeps the suggestion stable.
+	const cached = suggestionFor.get(field);
+	if (cached) return { password: cached };
 	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
-	let pw = suggestionFor.get(field);
-	if (!pw) {
-		pw = generatePassword();
-		suggestionFor.set(field, pw);
-	}
+	const pw = generatePassword();
+	suggestionFor.set(field, pw);
 	return { password: pw };
 }
 
@@ -87,7 +93,10 @@ function applyGeneratedPassword(field: HTMLInputElement): void {
 	if (!fillPasswordFields(signupPasswordFields(field), pw)) return;
 	// Grab whatever username/email the user already typed; the password is ours.
 	const username = getPageFields().login.username?.value ?? "";
-	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw } });
+	// A signup creates a NEW login; a change form rotates the existing one. Tell the background
+	// so a login already saved for this site doesn't turn a signup into an "update".
+	const newLogin = !isPasswordChangeForm(field);
+	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw, newLogin } });
 }
 
 /** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
