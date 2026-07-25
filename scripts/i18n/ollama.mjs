@@ -6,7 +6,7 @@
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
 const API_BASE = process.env.I18N_API_BASE ?? "https://api.deepseek.com";
 const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://localhost:11434";
-const MODEL = process.env.I18N_MODEL ?? (DEEPSEEK_KEY ? "deepseek-chat" : "gemma4:e4b-mlx");
+const MODEL = process.env.I18N_MODEL ?? (DEEPSEEK_KEY ? "deepseek-v4-pro" : "gemma4:e4b-mlx");
 // Small models drop/add an item on long arrays; smaller chunks validate far more
 // reliably (a mismatch forces a slow per-string fallback for the whole chunk).
 // DeepSeek handles bigger batches fine, so widen the chunk there.
@@ -15,12 +15,21 @@ const CHUNK = Number(process.env.I18N_CHUNK ?? (DEEPSEEK_KEY ? 40 : 10));
 export const modelInfo = DEEPSEEK_KEY ? `${MODEL} @ deepseek` : `${MODEL} @ ${OLLAMA_HOST}`;
 
 const GUIDANCE =
-	`Keep the tone concise and trustworthy. Use a consistently FORMAL register ` +
-	`throughout (e.g. "Sie" in German, "usted" in Spanish, "vous" in French, ` +
-	`"Lei" in Italian); never switch to informal address. Preserve placeholders ` +
-	`verbatim and in place: {appName}, %s, %d, %@, %lld, %1$s and similar. Do not translate ` +
-	`brand or standard terms (Bramble, Face ID, Touch ID, Optic ID, AES-256-GCM, ` +
-	`KeePass, TOTP).`;
+	`Keep the tone concise and trustworthy. Write buttons, labels and short captions the way ` +
+	`native UI does — normally the infinitive ("Neues Login erstellen", "Crear una cuenta", ` +
+	`"Créer un compte", "Creare un account") — not as an instruction addressed to the user. ` +
+	`Where a string IS a full sentence, use a FORMAL register ("Sie", "usted", "vous", "Lei"); ` +
+	`never use informal address. Preserve placeholders verbatim and in place ({appName}, %s, ` +
+	`%d, %@, %lld, %1$s and similar). Never translate brand or standard terms (Bramble, ` +
+	`Face ID, Touch ID, Optic ID, AES-256-GCM, KeePass, TOTP).`;
+
+// Appended to the translation prompts: a cheap self-review pass catches the failures we
+// otherwise only detect after the fact (count/placeholder drift) or not at all (stilted
+// phrasing), and costs one round trip instead of a retry.
+const SELF_CHECK =
+	`Before answering, re-read each translation and check it: the item count and order match ` +
+	`the input, every placeholder is intact, the register is right, and a native speaker would ` +
+	`phrase it that way in an app. Silently fix any that fail, then output the final result.`;
 
 async function chat(system, user) {
 	const messages = [
@@ -56,8 +65,8 @@ const placeholders = (s) => (s.match(PLACEHOLDER) ?? []).sort().join(",");
 async function batchOnce(language, strings) {
 	const system =
 		`You are a professional software-UI translator localizing a privacy-focused ` +
-		`password manager into ${language}. ${GUIDANCE} Output ONLY a JSON array of ` +
-		`the translated strings in the same order as the input, nothing else.`;
+		`password manager into ${language}. ${GUIDANCE} ${SELF_CHECK} Output ONLY a JSON array ` +
+		`of the translated strings in the same order as the input, nothing else.`;
 	const text = await chat(system, JSON.stringify(strings));
 	const json = text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
 	const out = JSON.parse(json);
@@ -103,7 +112,7 @@ export async function translateText(language, text, extra = "") {
 	const system =
 		`You are a professional translator localizing marketing/store copy for a ` +
 		`privacy-focused password manager into ${language}. ${GUIDANCE} Preserve line ` +
-		`breaks and formatting. ${extra} Output ONLY the translated text, nothing else.`;
+		`breaks and formatting. ${extra} ${SELF_CHECK} Output ONLY the translated text, nothing else.`;
 	return (await chat(system, text)).trim();
 }
 

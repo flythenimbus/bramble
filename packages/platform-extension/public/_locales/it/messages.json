@@ -134,5 +134,13 @@
 	"vaultLockedUnlockHint": {
 		"message": "Cliccare per sbloccare nella finestra",
 		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
+	},
+	"suggestPasswordUse": {
+		"message": "Usare password suggerita",
+		"description": "Sub-text under the generated password in the autofill dropdown; the row fills a strong password on signup forms."
+	},
+	"suggestPasswordRegenerate": {
+		"message": "Generare una password diversa",
+		"description": "Accessible label for the regenerate button on the suggested-password row."
 	}
 }

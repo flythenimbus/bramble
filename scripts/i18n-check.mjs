@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // CI / release gate: fail if any locale catalog has missing entries. Pure and
 // model-free. Covers every surface: Lingui .po, Android strings.xml, iOS
-// .xcstrings, and fastlane store metadata (presence + App Store length caps).
+// .xcstrings, the Chrome extension _locales, and fastlane store metadata
+// (presence + App Store length caps).
 //
 //   node scripts/i18n-check.mjs            # validate committed catalogs
 //   node scripts/i18n-check.mjs --extract  # run `lingui extract` first (CI),
@@ -16,6 +17,7 @@ import { join } from "node:path";
 import {
 	ANDROID_FASTLANE_DIR,
 	ANDROID_RES,
+	CHROME_LOCALES_DIR,
 	FASTLANE_DIR,
 	LOCALES,
 	PO_CATALOG,
@@ -77,6 +79,27 @@ if (existsSync(XCSTRINGS)) {
 	}
 }
 
+// --- Chrome extension _locales: every en key present (and non-empty) per locale ---
+// getMessage falls back to default_locale, so a gap degrades to English silently rather
+// than breaking: only this check catches it. Chrome locale dirs use underscores (pt_BR).
+const chromeSrc = join(CHROME_LOCALES_DIR, "en", "messages.json");
+if (existsSync(chromeSrc)) {
+	const want = Object.keys(JSON.parse(readFileSync(chromeSrc, "utf8")));
+	for (const { code } of LOCALES) {
+		const chromeCode = code.replace("-", "_");
+		const path = join(CHROME_LOCALES_DIR, chromeCode, "messages.json");
+		if (!existsSync(path)) {
+			note(`chrome-locales[${chromeCode}]: messages.json missing (run pnpm i18n:native)`);
+			continue;
+		}
+		const have = JSON.parse(readFileSync(path, "utf8"));
+		const miss = want.filter((k) => !have[k]?.message);
+		if (miss.length) {
+			note(`chrome-locales[${chromeCode}]: ${miss.length} missing (${miss.slice(0, 3).join(", ")}…)`);
+		}
+	}
+}
+
 // --- fastlane: each store-locale dir has the source files, all within caps ---
 const LIMITS = { "keywords.txt": 100, "subtitle.txt": 30, "promotional_text.txt": 170, "name.txt": 30 };
 const srcDir = join(FASTLANE_DIR, "en-US");
@@ -118,5 +141,5 @@ if (problems.length) {
 	process.exit(1);
 }
 console.log(
-	"✓ i18n check passed: all locales complete across po, android, xcstrings, fastlane (iOS + Android)",
+	"✓ i18n check passed: all locales complete across po, android, xcstrings, chrome _locales, fastlane (iOS + Android)",
 );
