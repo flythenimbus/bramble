@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, expectUnlocked, openPopup } from "./helpers";
+import { backgroundWorker, createVault, expectUnlocked, lock, openPopup } from "./helpers";
 
 // Drives the strong-password suggestion end to end through the real content script, the picker,
 // and the background save path. Like autofill-unlock.spec.ts, the pages are served with
@@ -222,4 +222,38 @@ test("suggests a strong password on a change-password form (new field, not the c
 	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	// A change form is a rotation, not a new login: the capture is NOT flagged new (offers Update).
 	await expect.poll(() => pendingNewLogin(context)).toBe(false);
+});
+
+test("offers the suggestion while the vault is locked (fills, then prompts Unlock & Save)", async ({
+	context,
+	extensionId,
+}) => {
+	// The reported case: a saved login exists, the vault is LOCKED, and the user hits a signup page.
+	// Generating a password needs no vault, so the suggestion is offered instead of the unlock row.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedLogin(popup);
+	await lock(popup);
+
+	const page = await context.newPage();
+	await serve(page, SIGNUP);
+	await page.goto("https://example.com/");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+
+	// Clicking the top row fills a 20-char strong password. (A locked row would instead open the
+	// unlock pop-out and leave the field empty.)
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
+
+	// The capture is offered while still locked (the card is "Unlock & Save"), as a new login.
+	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });

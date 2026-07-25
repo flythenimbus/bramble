@@ -86,6 +86,17 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 	picker.showMatches(logins, field);
 }
 
+/**
+ * What to show on `field` while the vault is locked. Generating a strong password needs no vault,
+ * so a signup field still gets the suggestion (picking it fills and offers an "Unlock & Save"
+ * corner prompt); anything else falls back to the "Vault locked" unlock row.
+ */
+function showLockedPicker(field: HTMLInputElement, hasPotentialMatch: boolean): void {
+	const suggest = maybeSuggest(field, hasPotentialMatch);
+	if (suggest) picker.showMatches([], field, { suggest });
+	else picker.showLocked(field);
+}
+
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */
 function applyGeneratedPassword(field: HTMLInputElement): void {
 	const pw = suggestionFor.get(field);
@@ -153,7 +164,7 @@ function handleResult(result: QueryResult | undefined): void {
 	if (!target) return;
 
 	if (result.locked) {
-		picker.showLocked(target);
+		showLockedPicker(target, result.hasPotentialMatch);
 		return;
 	}
 
@@ -198,7 +209,7 @@ function showFor(field: HTMLInputElement): void {
 		return;
 	}
 	if (cachedResult.locked) {
-		picker.showLocked(field);
+		showLockedPicker(field, cachedResult.hasPotentialMatch);
 		return;
 	}
 	const kind = kindOf(getPageFields(), field);
@@ -310,9 +321,9 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		if (picker.activeHost()) {
 			const focused = focusedCandidate();
 			if (locked) {
-				// Locked: swap to the "Vault locked" row on the focused field, or hide stale
-				// matches when focus has left (don't pop the locked prompt on an idle field).
-				if (focused) picker.showLocked(focused);
+				// Locked: swap to the "Vault locked" row on the focused field (or keep the strong-password
+				// suggestion, which needs no vault), or hide stale matches when focus has left.
+				if (focused) showLockedPicker(focused, cachedResult?.hasPotentialMatch ?? false);
 				else picker.remove();
 			} else {
 				// Unlocked: the row belongs to the picker's anchor field, which may no longer be

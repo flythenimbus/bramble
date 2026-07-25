@@ -213,6 +213,34 @@ describe("content: strong-password suggestion on signup", () => {
 		expect(lastSuggest()?.password).toEqual(expect.any(String));
 	});
 
+	it("offers the suggestion (not the unlock row) on a signup field while the vault is locked", () => {
+		showLocked.mockClear();
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		// Locked, and the user even has a saved login for the site (hasPotentialMatch): a signup field
+		// still shows the generated password, since generating one needs no vault.
+		send({ type: "AUTOFILL_MATCHES", payload: result({ locked: true, hasPotentialMatch: true }) });
+		expect(showLocked).not.toHaveBeenCalled();
+		const call = showMatches.mock.calls.at(-1);
+		expect(call?.[1]).toBe(pass);
+		expect((call?.[2] as { suggest?: unknown })?.suggest).toBeTruthy();
+	});
+
+	it("still shows the unlock row on a locked login field (no suggestion)", () => {
+		showLocked.mockClear();
+		document.body.innerHTML = `
+			<form>
+				<input id="luser" type="email" name="email" autocomplete="username" />
+				<input id="lpass" type="password" name="password" autocomplete="current-password" />
+				<button type="submit">Sign in</button>
+			</form>`;
+		invalidatePageFields();
+		const pass = document.getElementById("lpass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ locked: true, hasPotentialMatch: true }) });
+		expect(showLocked).toHaveBeenCalledWith(pass);
+	});
+
 	it("keeps the suggestion across re-renders even after the anchor autocomplete is suppressed", () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
