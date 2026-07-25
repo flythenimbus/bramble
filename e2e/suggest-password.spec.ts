@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, expectUnlocked, lock, openPopup } from "./helpers";
+import { backgroundWorker, createVault, expectUnlocked, lock, openPopup, unlock } from "./helpers";
 
 // Drives the strong-password suggestion end to end through the real content script, the picker,
 // and the background save path. Like autofill-unlock.spec.ts, the pages are served with
@@ -256,4 +256,39 @@ test("offers the suggestion while the vault is locked (fills, then prompts Unloc
 	// The capture is offered while still locked (the card is "Unlock & Save"), as a new login.
 	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	await expect.poll(() => pendingNewLogin(context)).toBe(true);
+});
+
+test("click-to-unlock re-surfaces the matches in place, without refocusing (issue b)", async ({
+	context,
+	extensionId,
+}) => {
+	// A locked login page: clicking the "Vault locked" row opens the unlock pop-out AND dismisses the
+	// dropdown. After unlocking, the matches must re-surface on that field on their own.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedLogin(popup);
+	await lock(popup);
+
+	const page = await context.newPage();
+	await serve(page, LOGIN);
+	await page.goto("https://example.com/");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+
+	// Click the locked row: it opens the unlock pop-out AND tears the dropdown down (the key
+	// condition for this bug — there's no active host left to refresh).
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+	await expect(host).toHaveCount(0);
+
+	// Unlock (the seed popup is already on the unlock screen after lock()). The matches must
+	// re-surface on the field on their own, with nothing focused on the page.
+	await unlock(popup);
+	await expect(host).toBeAttached({ timeout: 10_000 });
 });

@@ -16,7 +16,9 @@ import type { MatchSummary } from "./types";
 // User actions are reported via callbacks so this module never messages the
 // background or touches the page's display policy directly.
 let pickCb: ((entryId: string, otpOnly: boolean) => void) | null = null;
-let unlockCb: (() => void) | null = null;
+// Reports the field the unlock was requested from: clicking the locked row dismisses the picker,
+// so the content policy needs the anchor to re-surface matches on it once the vault unlocks.
+let unlockCb: ((field: HTMLInputElement | null) => void) | null = null;
 let dismissCb: (() => void) | null = null;
 // The generated-password suggestion row reports through its own callbacks so the
 // content policy owns generation and the fill (this module never touches secrets).
@@ -286,8 +288,10 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-tp-popout]");
 		if (!item) return;
 		e.preventDefault();
+		// Capture the anchor before removeDropdown() clears it, so the caller can re-surface here.
+		const field = anchorField;
 		removeDropdown();
-		unlockCb?.();
+		unlockCb?.(field);
 	});
 }
 
@@ -523,10 +527,13 @@ window.addEventListener("message", (e) => {
 		case "UI_HIGHLIGHT":
 			iframeHasHighlight = !!msg.active;
 			break;
-		case "UI_POPOUT":
+		case "UI_POPOUT": {
+			// Capture the anchor before hideIframe() clears it, so the caller can re-surface here.
+			const field = anchorField;
 			hideIframe();
-			unlockCb?.();
+			unlockCb?.(field);
 			break;
+		}
 		case "UI_USE_SUGGESTED":
 			// Using the suggestion fills the page field, so it needs the same
 			// anti-clickjacking gate as a secret pick.
@@ -591,7 +598,7 @@ export const picker = {
 		pickCb = cb;
 	},
 	/** Fired when the user requests the unlock pop-out (locked row / iframe pop-out). */
-	onUnlockRequest(cb: () => void): void {
+	onUnlockRequest(cb: (field: HTMLInputElement | null) => void): void {
 		unlockCb = cb;
 	},
 	/** Fired when the user dismisses the picker via the keyboard (Escape). */

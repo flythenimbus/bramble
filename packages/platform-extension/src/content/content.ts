@@ -43,6 +43,9 @@ let silenceAutoOpen = false;
 // unlocks while a "Vault locked" picker is open: unlocking via the toolbar/pop-out moves focus
 // off the page, so focusedCandidate() is null. See issue #20.
 let reshowField: HTMLInputElement | null = null;
+// The field the user clicked "unlock" from. Clicking the locked row dismisses the picker, so on
+// unlock there's no active host to refresh; we re-surface matches on this field instead.
+let pendingUnlockField: HTMLInputElement | null = null;
 let lastCheck = 0;
 
 // The generated password offered on a given field, cached so re-renders don't
@@ -257,7 +260,11 @@ function onDomChange(): void {
 
 // The picker reports user actions through callbacks; the policy lives here.
 picker.onPick((entryId, otpOnly) => selectMatch(entryId, false, otpOnly));
-picker.onUnlockRequest(() => safeSendMessage({ type: "POPOUT_OPEN" }));
+picker.onUnlockRequest((field) => {
+	// The click dismissed the picker; remember the field so the unlock broadcast can re-surface here.
+	pendingUnlockField = field;
+	safeSendMessage({ type: "POPOUT_OPEN" });
+});
 picker.onDismiss(() => {
 	silenceAutoOpen = true;
 });
@@ -318,23 +325,28 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		// stale "Vault locked" row clears on unlock (and stale matches hide on lock).
 		const locked = (message.payload as { locked?: boolean } | undefined)?.locked === true;
 		if (cachedResult) cachedResult.locked = locked;
-		if (picker.activeHost()) {
-			const focused = focusedCandidate();
-			if (locked) {
-				// Locked: swap to the "Vault locked" row on the focused field (or keep the strong-password
-				// suggestion, which needs no vault), or hide stale matches when focus has left.
+		const focused = focusedCandidate();
+		if (locked) {
+			// Lock only matters when a picker is open: swap to the "Vault locked" row on the focused
+			// field (or keep the strong-password suggestion, which needs no vault), or hide stale
+			// matches when focus has left. A fresh lock invalidates any pending unlock.
+			if (picker.activeHost()) {
 				if (focused) showLockedPicker(focused, cachedResult?.hasPotentialMatch ?? false);
 				else picker.remove();
-			} else {
-				// Unlocked: the row belongs to the picker's anchor field, which may no longer be
-				// focused (unlocking via the toolbar/pop-out moves focus off the page). Re-query and
-				// re-surface matches on that field so the stale "Vault locked" row is replaced in place.
-				const field = focused ?? picker.anchorField();
-				picker.remove();
-				if (field) {
-					reshowField = field;
-					queryAutofill();
-				}
+			}
+			pendingUnlockField = null;
+		} else {
+			// Unlock: re-surface matches on the focused field, the open picker's anchor (toolbar/pop-out
+			// unlock leaves the locked row up but moves focus off the page — issue #20), or the field the
+			// user clicked "unlock" from (that click dismissed the picker, so there's no active host).
+			const anchor = picker.activeHost() ? picker.anchorField() : null;
+			const pending = pendingUnlockField?.isConnected ? pendingUnlockField : null;
+			pendingUnlockField = null;
+			const field = focused ?? anchor ?? pending;
+			picker.remove();
+			if (field) {
+				reshowField = field;
+				queryAutofill();
 			}
 		}
 		sendResponse({ ok: true });

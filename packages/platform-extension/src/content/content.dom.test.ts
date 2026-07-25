@@ -26,9 +26,10 @@ const removePicker = vi.fn(() => {
 	pickerState.host = null;
 	pickerState.anchor = null;
 });
-// Captured content-side callbacks for the suggested-password row.
+// Captured content-side callbacks for the suggested-password row and the unlock request.
 let onSuggestedCb: (() => void) | null = null;
 let regenerateCb: (() => void) | null = null;
+let unlockCb: ((field: HTMLInputElement | null) => void) | null = null;
 vi.mock("./picker", () => ({
 	picker: {
 		showMatches,
@@ -41,7 +42,9 @@ vi.mock("./picker", () => ({
 		clickIsOnAnchor: () => false,
 		handleKey: () => false,
 		onPick: vi.fn(),
-		onUnlockRequest: vi.fn(),
+		onUnlockRequest: (cb: (field: HTMLInputElement | null) => void) => {
+			unlockCb = cb;
+		},
 		onDismiss: vi.fn(),
 		onUseSuggested: (cb: () => void) => {
 			onSuggestedCb = cb;
@@ -168,6 +171,37 @@ describe("content: refresh the picker on unlock (issue #20)", () => {
 		send({ type: "VAULT_LOCK_STATE", payload: { locked: true } });
 		expect(removePicker).toHaveBeenCalled();
 		expect(showLocked).not.toHaveBeenCalled();
+	});
+
+	it("re-surfaces matches after click-to-unlock, even though the click dismissed the picker", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+
+		// Locked: focusing the field shows the "Vault locked" row anchored to it.
+		user.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ locked: true, hasPotentialMatch: true }) });
+		expect(showLocked).toHaveBeenCalledWith(user);
+
+		// The user clicks the locked row: the real picker dismisses its host, then reports the field.
+		pickerState.host = null;
+		pickerState.anchor = null;
+		unlockCb?.(user);
+		expect(safeSendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "POPOUT_OPEN" }));
+
+		// Focus leaves the page for the unlock pop-out; the unlock broadcast arrives with no active host.
+		user.blur();
+		safeSendMessage.mockClear();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		// Previously nothing happened (activeHost() was null); now a re-query fires for the pending field.
+		expect(safeSendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "AUTOFILL_QUERY" }),
+		);
+
+		// The matches arrive while nothing is focused: they surface on the field unlocked from.
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "Example", secondary: "user@example.com" }] }),
+		});
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
 	});
 });
 
