@@ -199,6 +199,20 @@ describe("content: strong-password suggestion on signup", () => {
 		expect(lastSuggest()?.password).toEqual(expect.any(String));
 	});
 
+	it("shows only the suggestion, not existing logins, on a signup form", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		// A returning user has a saved login for the site, but a signup form should still show just
+		// the suggestion (the new-password token is a strong signal), never the existing match.
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "GitHub", secondary: "jordanavery" }] }),
+		});
+		const call = showMatches.mock.calls.at(-1);
+		expect(call?.[0]).toEqual([]);
+		expect(lastSuggest()?.password).toEqual(expect.any(String));
+	});
+
 	it("fills the password and offers to save when the suggestion is used", () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		const user = document.getElementById("user") as HTMLInputElement;

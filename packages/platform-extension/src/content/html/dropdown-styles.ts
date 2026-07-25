@@ -1,21 +1,40 @@
 import { html } from "../template";
 
+// Colours reference the local --tp-* tokens defined below, never literals. The tokens mirror the
+// @vault/theme scale (packages/theme/theme.css); the on-page UI has no Bramble app shell to read a
+// `.dark` class, so light/dark follows the OS via prefers-color-scheme. Keep values in sync with
+// theme.css. The iframe renderer (autofill-ui.ts) carries a byte-identical copy for its flat bundle.
 export const dropdownStyles = html`
 		<style>
 			:host {
 				display: block;
+				color-scheme: light dark;
+				--tp-surface: #ffffff; /* --popover */
+				--tp-foreground: oklch(20.5% 0 0); /* --popover-foreground */
+				--tp-muted: oklch(55.6% 0 0); /* --muted-foreground */
+				--tp-border: oklch(87% 0 0); /* --border */
+				--tp-primary: oklch(20.5% 0 0); /* --primary */
+				--tp-on-primary: #ffffff; /* --primary-foreground */
+			}
+			@media (prefers-color-scheme: dark) {
+				:host {
+					--tp-surface: oklch(26.9% 0 0);
+					--tp-foreground: oklch(97% 0 0);
+					--tp-muted: oklch(70.8% 0 0);
+					--tp-border: oklch(37.1% 0 0);
+					--tp-primary: oklch(97% 0 0);
+					--tp-on-primary: oklch(20.5% 0 0);
+				}
 			}
 			.tp-dropdown {
-				background: linear-gradient(135deg, rgba(40, 40, 45, 0.94), rgba(16, 16, 18, 0.94));
-				-webkit-backdrop-filter: saturate(180%) blur(20px);
-				backdrop-filter: saturate(180%) blur(20px);
-				border: 1px solid rgba(255, 255, 255, 0.1);
+				background: var(--tp-surface);
+				border: 1px solid var(--tp-border);
 				border-radius: 16px;
-				box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+				box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.15);
 				font-family:
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				font-size: 13px;
-				color: #fff;
+				color: var(--tp-foreground);
 				text-align: left;
 				letter-spacing: normal;
 				text-transform: none;
@@ -37,7 +56,7 @@ export const dropdownStyles = html`
 				transition: background 0.12s ease;
 			}
 			.tp-item:hover {
-				background: rgba(255, 255, 255, 0.1);
+				background: color-mix(in oklab, var(--tp-foreground) 8%, transparent);
 			}
 			.tp-avatar {
 				width: 40px;
@@ -54,8 +73,8 @@ export const dropdownStyles = html`
 				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.14);
 			}
 			.tp-avatar-locked {
-				background: rgba(255, 255, 255, 0.1);
-				color: rgba(255, 255, 255, 0.85);
+				background: color-mix(in oklab, var(--tp-foreground) 10%, transparent);
+				color: var(--tp-muted);
 			}
 			.tp-avatar-locked svg {
 				width: 20px;
@@ -73,11 +92,11 @@ export const dropdownStyles = html`
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
-				color: #fff;
+				color: var(--tp-foreground);
 				line-height: 1.3;
 			}
 			.tp-user {
-				color: rgba(235, 235, 245, 0.6);
+				color: var(--tp-muted);
 				font-size: 13px;
 				white-space: nowrap;
 				overflow: hidden;
@@ -90,15 +109,15 @@ export const dropdownStyles = html`
 				flex-shrink: 0;
 				display: flex;
 				align-items: center;
-				color: rgba(235, 235, 245, 0.45);
+				color: var(--tp-muted);
 				transition: color 0.12s ease;
 			}
 			.tp-item:hover .tp-launch {
-				color: rgba(235, 235, 245, 0.85);
+				color: var(--tp-foreground);
 			}
 			.tp-avatar-suggest {
-				background: linear-gradient(135deg, #7c3aed, #2563eb);
-				color: #fff;
+				background: var(--tp-primary);
+				color: var(--tp-on-primary);
 			}
 			.tp-avatar-suggest svg {
 				width: 20px;
@@ -121,13 +140,13 @@ export const dropdownStyles = html`
 				border: 0;
 				border-radius: 8px;
 				background: transparent;
-				color: rgba(235, 235, 245, 0.55);
+				color: var(--tp-muted);
 				cursor: pointer !important;
 				transition: background 0.12s ease, color 0.12s ease;
 			}
 			.tp-regenerate:hover {
-				background: rgba(255, 255, 255, 0.12);
-				color: #fff;
+				background: color-mix(in oklab, var(--tp-foreground) 12%, transparent);
+				color: var(--tp-foreground);
 			}
 		</style>
 	`;

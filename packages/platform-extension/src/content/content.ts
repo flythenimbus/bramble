@@ -67,11 +67,17 @@ function maybeSuggest(
 	return { password: pw };
 }
 
-/** Shows the login picker for `field`: matches plus, on a signup form, a strong-password row. */
+/** Shows the login picker for `field`: existing matches, or ONLY the strong-password row on a signup/rotation form. */
 function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void {
 	const suggest = maybeSuggest(field, logins.length > 0);
-	if (logins.length === 0 && !suggest) return;
-	picker.showMatches(logins, field, suggest ? { suggest } : undefined);
+	// On an account-creation / password-rotation form, offer only the suggestion. Existing logins
+	// aren't useful when making or rotating a credential and would clutter the prompt.
+	if (suggest) {
+		picker.showMatches([], field, { suggest });
+		return;
+	}
+	if (logins.length === 0) return;
+	picker.showMatches(logins, field);
 }
 
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */
@@ -249,8 +255,8 @@ picker.onRegenerate(() => {
 	if (!field) return;
 	const pw = generatePassword();
 	suggestionFor.set(field, pw);
-	const logins = cachedResult && !cachedResult.locked ? cachedResult.logins : [];
-	picker.showMatches(logins, field, { suggest: { password: pw } });
+	// Suggestion-only prompt (no matches), matching showLoginPicker.
+	picker.showMatches([], field, { suggest: { password: pw } });
 });
 
 // Disconnect the observer when the extension context is torn down.
