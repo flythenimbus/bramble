@@ -90,6 +90,40 @@ old/current/confirm/verify/repeat), and its value matches a confirm field. If th
 form is ambiguous or mid-edit it returns null rather than guessing, so an
 unconfirmed password is never captured.
 
+## Signup detection
+
+`signup-detect.ts` decides whether a focused password field belongs to an
+account-creation flow (signup or password-reset) so the autofill dropdown can
+offer a **generated strong password** (`password-gen.ts`) without firing on
+ordinary login pages. See [autofill.md](autofill.md) for the dropdown row and the
+save flow.
+
+The design principle is to lean on **language-independent structural signals** so
+non-English pages work without reading their prose. `scoreSignupForm` sums
+weighted signals (all in `WEIGHTS`, tune there) and offers above `THRESHOLD`
+(100):
+
+- **Strong (each reaches the threshold alone):** `autocomplete="new-password"` on
+  the field, or a confirm-password pair (2+ non-current password fields in scope).
+- **Supporting (structural, language-independent):** a terms/privacy link or agree
+  checkbox in the form, a name field (`given-name`/`family-name`), the field's
+  `pattern`/`minlength>=8`, a strength meter (`<meter>`/`role=progressbar`), and a
+  long form (>4 inputs).
+- **Supporting (text, boosters only):** the URL path (`/signup`, `/register`, …)
+  and a small multilingual keyword dictionary matched against submit buttons,
+  headings, and the title.
+- **Negative:** login URLs, "forgot password"/"remember me" text, and a
+  returning-user damper when the site already has saved logins (skipped when a
+  strong signal fires).
+
+A **current-password field vetoes outright** (the focused field, or a
+current-password sibling in the same `<form>`), so login and password-change forms
+never trigger. The scope is the field's enclosing `<form>` when present, else the
+document; visibility is gated by `isRendered`, so a display:none honeypot password
+field can't fabricate a confirm pair. The offer is also suppressed once the field
+holds a value (the user is typing their own). Exercised by
+`signup-detect.dom.test.ts`.
+
 ## Fixtures
 
 `fixtures/sites.dom.test.ts` runs the detectors against real HTML captured from

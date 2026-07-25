@@ -207,3 +207,31 @@ divide 256, `byte % n` would over-represent the first `256 % n` characters, so i
 are accepted, giving every position equal probability. Bytes are drawn in 16-byte
 chunks to amortise the `getRandomValues` call; worst-case expected rejection rate
 at n=88 is about 12.5%.
+
+The content script carries its own copy of the same algorithm
+(`content/password-gen.ts`, 20 characters) for the signup suggestion below, since
+it is a flat bundle with no cross-package runtime imports.
+
+## Suggesting a strong password on signup
+
+When the user focuses a password field that looks like account creation (see
+[field-detection.md](field-detection.md), "Signup detection"), the dropdown shows
+a **generated-password row** above any matches: the suggested password in
+monospace with a "Use suggested password" caption and a regenerate button. Both
+renderers carry it (`content/html/dropdown-suggest.ts` for the shadow fallback,
+`suggestRow` in `autofill-ui.ts` for the iframe), navigable by keyboard like any
+other row.
+
+The suggestion is generated **in the content script** and passed to the iframe as
+render data, never fetched from the vault. Choosing it (`UI_USE_SUGGESTED`, gated
+by the same anti-clickjacking `pickIsTrustworthy` check as a secret pick):
+
+1. fills the new-password field and any confirm sibling (`fillPasswordFields`,
+   which records the value so a later real submit won't re-prompt), and
+2. fires a `CORNER_PROMPT_CAPTURE` with whatever username/email the user already
+   typed plus the generated password, reusing the entire corner-prompt save path
+   above (including the navigation-surviving stash) so the login is offered for
+   saving immediately.
+
+The row is offered only on an empty field, and never on a login or
+password-change form (the current-password veto).

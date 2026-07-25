@@ -53,6 +53,22 @@ export function fillForm(
 }
 
 /**
+ * Fills a generated password into the given fields (the new-password field plus
+ * any confirm sibling). Records it as the last-filled password so a later real
+ * submit won't re-prompt to save the same value. See signup-detect.ts.
+ */
+export function fillPasswordFields(fields: HTMLInputElement[], value: string): boolean {
+	let filled = false;
+	for (const el of fields) {
+		fillField(el, value);
+		autoFilledFields.add(el);
+		filled = true;
+	}
+	if (filled) lastFilledPassword = value;
+	return filled;
+}
+
+/**
  * Submits the form after autofill: prefers requestSubmit() on the enclosing
  * <form>, falling back to a synthesised Enter keypress for key-handler forms.
  */

@@ -4,8 +4,8 @@ import { api } from "./content-api";
 import { dropdownItem } from "./html/dropdown-item";
 import { dropdownLocked } from "./html/dropdown-locked";
 import { dropdownStyles } from "./html/dropdown-styles";
+import { dropdownSuggest } from "./html/dropdown-suggest";
 import { onTeardown } from "./lifecycle";
-import { html } from "./template";
 import type { MatchSummary } from "./types";
 
 // The autofill picker: an extension-origin iframe (primary) with a closed-shadow
@@ -18,6 +18,18 @@ import type { MatchSummary } from "./types";
 let pickCb: ((entryId: string, otpOnly: boolean) => void) | null = null;
 let unlockCb: (() => void) | null = null;
 let dismissCb: (() => void) | null = null;
+// The generated-password suggestion row reports through its own callbacks so the
+// content policy owns generation and the fill (this module never touches secrets).
+let onSuggestedCb: (() => void) | null = null;
+let regenerateCb: (() => void) | null = null;
+
+// A suggest option threads a generated password to whichever renderer is active.
+type SuggestOpt = { password: string };
+
+/** Cache key for a rendered match set plus its optional suggest row. */
+function renderKey(matches: MatchSummary[], suggest?: SuggestOpt): string {
+	return (suggest ? `s:${suggest.password}\0` : "") + matchesKey(matches);
+}
 
 // Anchor field shared by both renderers (the page input the picker sits under).
 let anchorField: HTMLInputElement | null = null;
@@ -204,16 +216,16 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 	return shadow;
 }
 
-/** Renders the match picker anchored to `field`; no-op when matches are unchanged to avoid flicker. */
+/** Renders the match picker anchored to `field`; no-op when content is unchanged to avoid flicker. */
 function buildDropdown(
 	matches: MatchSummary[],
 	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean },
+	opts?: { otpOnly?: boolean; suggest?: SuggestOpt },
 ): void {
-	if (matches.length === 0) return;
+	if (matches.length === 0 && !opts?.suggest) return;
 
-	const key = matchesKey(matches);
-	// Same matches/field already showing: keep the existing dropdown to avoid
+	const key = renderKey(matches, opts?.suggest);
+	// Same content/field already showing: keep the existing dropdown to avoid
 	// flicker from re-queries on every DOM mutation.
 	if (
 		dropdownEl &&
@@ -225,23 +237,37 @@ function buildDropdown(
 		return;
 	}
 
-	const body = html`
-		${matches.map((m) => dropdownItem({ ...m }))}
-	`;
-	const root = mountDropdown(field, body);
+	// Suggest row (if any) leads, then the matches. Join verbatim (each piece is
+	// already escaped html) rather than interpolating strings, which would re-escape.
+	const parts: string[] = [];
+	if (opts?.suggest) parts.push(dropdownSuggest(opts.suggest.password));
+	for (const m of matches) parts.push(dropdownItem({ ...m }));
+	const root = mountDropdown(field, parts.join(""));
 	openMatchesKey = key;
 	openDropdownKind = "matches";
 
 	// mousedown (not click) beats the field's blur; otherwise focus leaves first
 	// and the click never reaches us.
 	root.addEventListener("mousedown", (e) => {
-		// Only a real user mousedown may pull a secret (no synthetic events).
+		// Only a real user mousedown may act (no synthetic events).
 		if (!e.isTrusted) return;
-		const item = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-entry-id]");
-		if (!item) return;
-		e.preventDefault();
-		const id = item.dataset.entryId;
-		if (id) pickCb?.(id, opts?.otpOnly === true);
+		const target = e.target as HTMLElement | null;
+		// Regenerate sits inside the suggest row, so match it before data-tp-suggest.
+		if (target?.closest("[data-tp-regenerate]")) {
+			e.preventDefault();
+			regenerateCb?.();
+			return;
+		}
+		const item = target?.closest<HTMLElement>("[data-entry-id]");
+		if (item?.dataset.entryId) {
+			e.preventDefault();
+			pickCb?.(item.dataset.entryId, opts?.otpOnly === true);
+			return;
+		}
+		if (target?.closest("[data-tp-suggest]")) {
+			e.preventDefault();
+			onSuggestedCb?.();
+		}
 	});
 }
 
@@ -271,7 +297,7 @@ const AUTOFILL_UI_URL = api.runtime.getURL("autofill-ui.html");
 const EXT_ORIGIN = new URL(AUTOFILL_UI_URL).origin;
 
 type IframeRender =
-	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean }
+	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean; suggest?: SuggestOpt }
 	| { kind: "locked" };
 
 // "probe" until the first mount resolves to iframe (READY) or shadow (timeout).
@@ -344,7 +370,12 @@ function flushPendingRender(): void {
 	pendingRender = null;
 	if (render.kind === "matches") {
 		win.postMessage(
-			{ type: "RENDER_MATCHES", matches: render.matches, otpOnly: render.otpOnly },
+			{
+				type: "RENDER_MATCHES",
+				matches: render.matches,
+				otpOnly: render.otpOnly,
+				suggest: render.suggest,
+			},
 			EXT_ORIGIN,
 		);
 	} else {
@@ -377,7 +408,7 @@ function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 	positionHostElement(iframeHostEl, field);
 	startPositionTracking();
 	// Skip a redundant re-post when the same content is already showing here.
-	const key = render.kind === "matches" ? matchesKey(render.matches) : "\0locked";
+	const key = render.kind === "matches" ? renderKey(render.matches, render.suggest) : "\0locked";
 	if (iframeReady && key === iframeMatchesKey) return;
 	iframeMatchesKey = key;
 	pendingRender = render;
@@ -433,14 +464,19 @@ function removeActiveUi(): void {
 function showMatchesUi(
 	matches: MatchSummary[],
 	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean },
+	opts?: { otpOnly?: boolean; suggest?: SuggestOpt },
 ): void {
-	if (matches.length === 0) return;
+	if (matches.length === 0 && !opts?.suggest) return;
 	if (uiMode === "shadow") {
 		buildDropdown(matches, field, opts);
 		return;
 	}
-	iframeShow(field, { kind: "matches", matches, otpOnly: opts?.otpOnly === true });
+	iframeShow(field, {
+		kind: "matches",
+		matches,
+		otpOnly: opts?.otpOnly === true,
+		suggest: opts?.suggest,
+	});
 }
 
 function showLockedUi(field: HTMLInputElement): void {
@@ -461,6 +497,8 @@ window.addEventListener("message", (e) => {
 		| { type: "UI_PICK"; entryId?: string; otpOnly?: boolean }
 		| { type: "UI_POPOUT" }
 		| { type: "UI_HIGHLIGHT"; active?: boolean }
+		| { type: "UI_USE_SUGGESTED" }
+		| { type: "UI_REGENERATE" }
 		| undefined;
 	switch (msg?.type) {
 		case "AUTOFILL_UI_READY":
@@ -488,6 +526,14 @@ window.addEventListener("message", (e) => {
 		case "UI_POPOUT":
 			hideIframe();
 			unlockCb?.();
+			break;
+		case "UI_USE_SUGGESTED":
+			// Using the suggestion fills the page field, so it needs the same
+			// anti-clickjacking gate as a secret pick.
+			if (pickIsTrustworthy()) onSuggestedCb?.();
+			break;
+		case "UI_REGENERATE":
+			regenerateCb?.();
 			break;
 	}
 });
@@ -551,5 +597,13 @@ export const picker = {
 	/** Fired when the user dismisses the picker via the keyboard (Escape). */
 	onDismiss(cb: () => void): void {
 		dismissCb = cb;
+	},
+	/** Fired when the user chooses the generated-password suggestion row. */
+	onUseSuggested(cb: () => void): void {
+		onSuggestedCb = cb;
+	},
+	/** Fired when the user clicks the regenerate button on the suggestion row. */
+	onRegenerate(cb: () => void): void {
+		regenerateCb = cb;
 	},
 };

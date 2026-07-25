@@ -14,7 +14,7 @@ const pickerState: { host: object | null; anchor: HTMLInputElement | null } = {
 	host: null,
 	anchor: null,
 };
-const showMatches = vi.fn((_matches: unknown, field: HTMLInputElement) => {
+const showMatches = vi.fn((_matches: unknown, field: HTMLInputElement, _opts?: unknown) => {
 	pickerState.host = {};
 	pickerState.anchor = field;
 });
@@ -26,6 +26,9 @@ const removePicker = vi.fn(() => {
 	pickerState.host = null;
 	pickerState.anchor = null;
 });
+// Captured content-side callbacks for the suggested-password row.
+let onSuggestedCb: (() => void) | null = null;
+let regenerateCb: (() => void) | null = null;
 vi.mock("./picker", () => ({
 	picker: {
 		showMatches,
@@ -40,6 +43,12 @@ vi.mock("./picker", () => ({
 		onPick: vi.fn(),
 		onUnlockRequest: vi.fn(),
 		onDismiss: vi.fn(),
+		onUseSuggested: (cb: () => void) => {
+			onSuggestedCb = cb;
+		},
+		onRegenerate: (cb: () => void) => {
+			regenerateCb = cb;
+		},
 	},
 }));
 
@@ -50,11 +59,13 @@ vi.mock("./lifecycle", () => ({
 }));
 vi.mock("./corner-prompt", () => ({ handleCornerPromptShow: vi.fn(), queryCornerPrompt: vi.fn() }));
 vi.mock("./capture", () => ({ maybeEmitSpaSubmit: vi.fn(), onPasswordEnter: vi.fn() }));
+const fillPasswordFields = vi.fn(() => true);
 vi.mock("./fill", () => ({
 	fillCard: vi.fn(),
 	fillCustomFields: vi.fn(),
 	fillForm: vi.fn(),
 	fillOtp: vi.fn(),
+	fillPasswordFields,
 	submitFromField: vi.fn(),
 }));
 
@@ -157,5 +168,77 @@ describe("content: refresh the picker on unlock (issue #20)", () => {
 		send({ type: "VAULT_LOCK_STATE", payload: { locked: true } });
 		expect(removePicker).toHaveBeenCalled();
 		expect(showLocked).not.toHaveBeenCalled();
+	});
+});
+
+describe("content: strong-password suggestion on signup", () => {
+	beforeEach(() => {
+		showMatches.mockClear();
+		removePicker.mockClear();
+		safeSendMessage.mockClear();
+		fillPasswordFields.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="email" />
+				<input id="pass" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+	});
+
+	const lastSuggest = () =>
+		(showMatches.mock.calls.at(-1)?.[2] as { suggest?: { password: string } } | undefined)?.suggest;
+
+	it("offers a generated password when a signup password field is focused", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(pass);
+		expect(lastSuggest()?.password).toEqual(expect.any(String));
+	});
+
+	it("fills the password and offers to save when the suggestion is used", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.value = "me@example.com";
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+
+		onSuggestedCb?.();
+		expect(fillPasswordFields).toHaveBeenCalled();
+		expect(safeSendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "CORNER_PROMPT_CAPTURE",
+				payload: expect.objectContaining({ username: "me@example.com" }),
+			}),
+		);
+	});
+
+	it("swaps in a fresh suggestion on regenerate", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		const first = lastSuggest()?.password;
+
+		regenerateCb?.();
+		const second = lastSuggest()?.password;
+		expect(second).toEqual(expect.any(String));
+		expect(second).not.toBe(first);
+	});
+
+	it("does not offer on a plain login field (current-password)", () => {
+		document.body.innerHTML = `
+			<form>
+				<input id="luser" type="email" name="email" />
+				<input id="lpass" type="password" name="password" autocomplete="current-password" />
+				<button type="submit">Sign in</button>
+			</form>`;
+		invalidatePageFields();
+		const pass = document.getElementById("lpass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		expect(lastSuggest()).toBeUndefined();
 	});
 });

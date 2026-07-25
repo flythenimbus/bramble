@@ -8,7 +8,12 @@ interface MatchSummary {
 }
 
 type Inbound =
-	| { type: "RENDER_MATCHES"; matches: MatchSummary[]; otpOnly?: boolean }
+	| {
+			type: "RENDER_MATCHES";
+			matches: MatchSummary[];
+			otpOnly?: boolean;
+			suggest?: { password: string };
+	  }
 	| { type: "RENDER_LOCKED" }
 	| { type: "UI_KEY"; key: string }
 	| { type: "CLEAR" };
@@ -17,9 +22,10 @@ type Inbound =
 const PARENT_ORIGIN = new URLSearchParams(location.search).get("parentOrigin") ?? "";
 
 let otpOnly = false;
-let currentMatches: MatchSummary[] = [];
-// The locked row is a single navigable item (Enter opens the unlock pop-out).
-let lockedNav = false;
+// Navigable rows in render order: an optional leading "suggest a password" row,
+// the login/card matches, or (alone) the locked row. Keyboard + click share this.
+type NavRow = { kind: "suggest" } | { kind: "match"; id: string } | { kind: "locked" };
+let rows: NavRow[] = [];
 let highlight = -1;
 
 function post(message: unknown): void {
@@ -149,6 +155,30 @@ const STYLE = `
 		transition: color 0.12s ease;
 	}
 	.tp-item:hover .tp-launch { color: rgba(235, 235, 245, 0.85); }
+	.tp-avatar-suggest { background: linear-gradient(135deg, #7c3aed, #2563eb); color: #fff; }
+	.tp-avatar-suggest svg { width: 20px; height: 20px; }
+	.tp-suggest-pw {
+		font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+		font-size: 14px;
+		letter-spacing: 0.5px;
+	}
+	.tp-regenerate {
+		margin-left: auto;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: rgba(235, 235, 245, 0.55);
+		cursor: pointer;
+		transition: background 0.12s ease, color 0.12s ease;
+	}
+	.tp-regenerate:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 `;
 
 function matchRow(m: MatchSummary): string {
@@ -170,6 +200,23 @@ type I18n = { getMessage(key: string): string };
 function t(key: string): string {
 	const g = globalThis as { browser?: { i18n: I18n }; chrome?: { i18n: I18n } };
 	return (g.browser ?? g.chrome)?.i18n.getMessage(key) ?? key;
+}
+
+function suggestRow(password: string): string {
+	return html`
+		<div class="tp-item tp-suggest" data-tp-suggest="1" role="option">
+			<div class="tp-avatar tp-avatar-suggest">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3 20 3"></path><path d="m16 6 3 3"></path><path d="m14 8 3 3"></path></svg>
+			</div>
+			<div class="tp-text">
+				<span class="tp-name tp-suggest-pw">${password}</span>
+				<span class="tp-user">${t("suggestPasswordUse")}</span>
+			</div>
+			<button class="tp-regenerate" data-tp-regenerate="1" type="button" aria-label="${t("suggestPasswordRegenerate")}">
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
+			</button>
+		</div>
+	`;
 }
 
 function lockedRow(): string {
@@ -212,21 +259,41 @@ function setHighlight(index: number): void {
 }
 
 function moveHighlight(delta: number): void {
-	const n = lockedNav ? 1 : currentMatches.length;
+	const n = rows.length;
 	if (n === 0) return;
 	const next =
 		highlight < 0 ? (delta > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, highlight + delta));
 	setHighlight(next);
 }
 
+/** Fire the action for the row at `i`: pick a match, use the suggestion, or open the pop-out. */
+function activate(i: number): void {
+	const row = rows[i];
+	if (!row) return;
+	if (row.kind === "match") post({ type: "UI_PICK", entryId: row.id, otpOnly });
+	else if (row.kind === "suggest") post({ type: "UI_USE_SUGGESTED" });
+	else post({ type: "UI_POPOUT" });
+}
+
 // preventDefault keeps focus on the page field; the page can't reach this listener.
 document.addEventListener("mousedown", (e) => {
 	if (!e.isTrusted) return;
 	const target = e.target as HTMLElement | null;
+	// Regenerate lives inside the suggest row, so match it before data-tp-suggest.
+	if (target?.closest("[data-tp-regenerate]")) {
+		e.preventDefault();
+		post({ type: "UI_REGENERATE" });
+		return;
+	}
 	const item = target?.closest<HTMLElement>("[data-entry-id]");
 	if (item?.dataset.entryId) {
 		e.preventDefault();
 		post({ type: "UI_PICK", entryId: item.dataset.entryId, otpOnly });
+		return;
+	}
+	if (target?.closest("[data-tp-suggest]")) {
+		e.preventDefault();
+		post({ type: "UI_USE_SUGGESTED" });
 		return;
 	}
 	if (target?.closest("[data-tp-popout]")) {
@@ -240,17 +307,25 @@ window.addEventListener("message", (e) => {
 	if (PARENT_ORIGIN && e.origin !== PARENT_ORIGIN) return;
 	const msg = e.data as Inbound | undefined;
 	switch (msg?.type) {
-		case "RENDER_MATCHES":
+		case "RENDER_MATCHES": {
 			otpOnly = !!msg.otpOnly;
-			currentMatches = msg.matches;
-			lockedNav = false;
 			highlight = -1;
-			render(msg.matches.map(matchRow).join(""));
+			rows = [];
+			const body: string[] = [];
+			if (msg.suggest) {
+				rows.push({ kind: "suggest" });
+				body.push(suggestRow(msg.suggest.password));
+			}
+			for (const m of msg.matches) {
+				rows.push({ kind: "match", id: m.id });
+				body.push(matchRow(m));
+			}
+			render(body.join(""));
 			post({ type: "UI_HIGHLIGHT", active: false });
 			break;
+		}
 		case "RENDER_LOCKED":
-			currentMatches = [];
-			lockedNav = true;
+			rows = [{ kind: "locked" }];
 			highlight = -1;
 			render(lockedRow());
 			post({ type: "UI_HIGHLIGHT", active: false });
@@ -258,17 +333,10 @@ window.addEventListener("message", (e) => {
 		case "UI_KEY":
 			if (msg.key === "ArrowDown") moveHighlight(1);
 			else if (msg.key === "ArrowUp") moveHighlight(-1);
-			else if (msg.key === "Enter" && highlight >= 0) {
-				if (lockedNav) post({ type: "UI_POPOUT" });
-				else {
-					const m = currentMatches[highlight];
-					if (m) post({ type: "UI_PICK", entryId: m.id, otpOnly });
-				}
-			}
+			else if (msg.key === "Enter" && highlight >= 0) activate(highlight);
 			break;
 		case "CLEAR":
-			currentMatches = [];
-			lockedNav = false;
+			rows = [];
 			highlight = -1;
 			document.body.innerHTML = "";
 			break;

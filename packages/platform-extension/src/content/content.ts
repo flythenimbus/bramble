@@ -17,10 +17,19 @@ import {
 	kindOf,
 } from "./detection";
 import { getPageFields, invalidatePageFields } from "./field-model";
-import { fillCard, fillCustomFields, fillForm, fillOtp, submitFromField } from "./fill";
+import {
+	fillCard,
+	fillCustomFields,
+	fillForm,
+	fillOtp,
+	fillPasswordFields,
+	submitFromField,
+} from "./fill";
 import { onTeardown, safeSendMessage } from "./lifecycle";
+import { generatePassword } from "./password-gen";
 import { picker } from "./picker";
-import type { CornerPromptPayload, FillPayload, QueryResult } from "./types";
+import { shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
+import type { CornerPromptPayload, FillPayload, MatchSummary, QueryResult } from "./types";
 
 let mutationObserver: MutationObserver | null = null;
 
@@ -35,6 +44,45 @@ let silenceAutoOpen = false;
 // off the page, so focusedCandidate() is null. See issue #20.
 let reshowField: HTMLInputElement | null = null;
 let lastCheck = 0;
+
+// The generated password offered on a given field, cached so re-renders don't
+// churn a new one each frame. Regenerate replaces it; the WeakMap forgets fields
+// that leave the DOM.
+const suggestionFor = new WeakMap<HTMLInputElement, string>();
+
+/**
+ * A generated-password suggestion for `field`, or null when this isn't an
+ * account-creation flow. Generates once per field and caches it.
+ */
+function maybeSuggest(
+	field: HTMLInputElement,
+	hasExistingLogins: boolean,
+): { password: string } | null {
+	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
+	let pw = suggestionFor.get(field);
+	if (!pw) {
+		pw = generatePassword();
+		suggestionFor.set(field, pw);
+	}
+	return { password: pw };
+}
+
+/** Shows the login picker for `field`: matches plus, on a signup form, a strong-password row. */
+function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void {
+	const suggest = maybeSuggest(field, logins.length > 0);
+	if (logins.length === 0 && !suggest) return;
+	picker.showMatches(logins, field, suggest ? { suggest } : undefined);
+}
+
+/** Fills the suggested password into the new-password field(s) and offers to save the login. */
+function applyGeneratedPassword(field: HTMLInputElement): void {
+	const pw = suggestionFor.get(field);
+	if (!pw) return;
+	if (!fillPasswordFields(signupPasswordFields(field), pw)) return;
+	// Grab whatever username/email the user already typed; the password is ours.
+	const username = getPageFields().login.username?.value ?? "";
+	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw } });
+}
 
 /** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
 function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
@@ -105,7 +153,7 @@ function handleResult(result: QueryResult | undefined): void {
 		return;
 	}
 	// login
-	if (result.logins.length > 0) picker.showMatches(result.logins, target);
+	showLoginPicker(target, result.logins);
 }
 
 /** Asks the background what's available for this page, but only if a fillable field exists. */
@@ -156,11 +204,15 @@ function showFor(field: HTMLInputElement): void {
 		return;
 	}
 	if (cachedResult.logins.length === 0) {
+		// No cached matches: offer a strong password if this looks like a signup
+		// form, and (re)query in case matches exist but weren't cached yet.
+		const suggest = maybeSuggest(field, false);
+		if (suggest) picker.showMatches([], field, { suggest });
 		queryAutofill();
 		return;
 	}
 	if (cachedResult.logins.length > 1 || !field.value) {
-		picker.showMatches(cachedResult.logins, field);
+		showLoginPicker(field, cachedResult.logins);
 	}
 }
 
@@ -182,6 +234,23 @@ picker.onPick((entryId, otpOnly) => selectMatch(entryId, false, otpOnly));
 picker.onUnlockRequest(() => safeSendMessage({ type: "POPOUT_OPEN" }));
 picker.onDismiss(() => {
 	silenceAutoOpen = true;
+});
+picker.onUseSuggested(() => {
+	const field = picker.anchorField();
+	if (!field) return;
+	// Using the suggestion is an explicit choice: fill, offer to save, then silence
+	// auto-redisplay until the user re-engages.
+	applyGeneratedPassword(field);
+	silenceAutoOpen = true;
+	picker.remove();
+});
+picker.onRegenerate(() => {
+	const field = picker.anchorField();
+	if (!field) return;
+	const pw = generatePassword();
+	suggestionFor.set(field, pw);
+	const logins = cachedResult && !cachedResult.locked ? cachedResult.logins : [];
+	picker.showMatches(logins, field, { suggest: { password: pw } });
 });
 
 // Disconnect the observer when the extension context is torn down.

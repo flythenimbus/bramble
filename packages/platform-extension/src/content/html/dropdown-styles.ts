@@ -96,5 +96,38 @@ export const dropdownStyles = html`
 			.tp-item:hover .tp-launch {
 				color: rgba(235, 235, 245, 0.85);
 			}
+			.tp-avatar-suggest {
+				background: linear-gradient(135deg, #7c3aed, #2563eb);
+				color: #fff;
+			}
+			.tp-avatar-suggest svg {
+				width: 20px;
+				height: 20px;
+			}
+			.tp-suggest-pw {
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+				font-size: 14px;
+				letter-spacing: 0.5px;
+			}
+			.tp-regenerate {
+				margin-left: auto;
+				flex-shrink: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				width: 32px;
+				height: 32px;
+				padding: 0;
+				border: 0;
+				border-radius: 8px;
+				background: transparent;
+				color: rgba(235, 235, 245, 0.55);
+				cursor: pointer !important;
+				transition: background 0.12s ease, color 0.12s ease;
+			}
+			.tp-regenerate:hover {
+				background: rgba(255, 255, 255, 0.12);
+				color: #fff;
+			}
 		</style>
 	`;
