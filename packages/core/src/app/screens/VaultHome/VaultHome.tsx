@@ -149,7 +149,10 @@ export function VaultHome({
 										key={row.key}
 										data-index={row.index}
 										ref={rowVirtualizer.measureElement}
-										className="absolute top-0 left-0 w-full pb-1"
+										// has-[[data-menu-open]]:z-10 lifts the row whose dropdown is open above the
+										// rows below it. Each row is transform-positioned (its own stacking
+										// context), so a z-index inside the row can't clear its neighbours.
+										className="absolute top-0 left-0 w-full pb-1 has-[[data-menu-open]]:z-10"
 										style={{ transform: `translateY(${row.start}px)` }}
 									>
 										<EntryRow

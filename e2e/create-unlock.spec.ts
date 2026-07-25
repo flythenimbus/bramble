@@ -68,8 +68,8 @@ test("the reveal button doesn't leave a gap in the master-password border", asyn
 			const label = group.querySelector("label") as HTMLElement;
 			return {
 				notchOpen: legend.getBoundingClientRect().width > 4,
-				labelFloated:
-					Math.abs(label.getBoundingClientRect().top - group.getBoundingClientRect().top) < 8,
+				// Floated sits ~7px above the group's top edge; centred sits ~12px below it.
+				labelFloated: label.getBoundingClientRect().top - group.getBoundingClientRect().top < 3,
 			};
 		});
 
@@ -87,7 +87,7 @@ test("the reveal button doesn't leave a gap in the master-password border", asyn
 		.getByRole("button", { name: /password/i })
 		.first()
 		.click();
-	expect(await state()).toEqual({ notchOpen: true, labelFloated: true });
+	await expect.poll(state).toEqual({ notchOpen: true, labelFloated: true });
 });
 
 // A detached pop-out lives in its own popup-type window whose only tab is the extension page,
@@ -156,4 +156,49 @@ test("a detached pop-out still floats the current site to the top", async ({
 			{ timeout: 15_000 },
 		)
 		.toEqual(["Zebra", "Aaa"]);
+});
+
+// The list virtualizer positions every row with a transform, so each row is its own stacking
+// context and the row dropdowns' z-50 could not clear the rows BELOW them: those painted over
+// the menu and swallowed its clicks (elementFromPoint on "Edit" hit the next row). The row with
+// an open menu has to be lifted above its siblings.
+test("an open row menu is not covered by the rows below it", async ({ context, extensionId }) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	for (const name of ["Aaa One", "Bbb Two", "Ccc Three"]) {
+		await popup.getByRole("button", { name: /Add New/i }).click();
+		await popup.getByRole("button", { name: /Add a new login/i }).click();
+		await popup.getByLabel("Name", { exact: true }).fill(name);
+		await popup.getByLabel("Username or email", { exact: true }).fill("u@e.com");
+		await popup.getByLabel("Password", { exact: true }).fill("pw-123456");
+		await popup.getByRole("button", { name: /Save Login/i }).click();
+		await expect(popup.getByText(name)).toBeVisible();
+	}
+
+	// Open the first row's overflow menu: it overlaps the rows beneath it.
+	await popup
+		.getByRole("button", { name: /More options/i })
+		.first()
+		.click();
+	const edit = popup.getByRole("button", { name: "Edit", exact: true });
+	await expect(edit).toBeVisible();
+
+	// Hit-test the menu item: the topmost element there must be the item itself, not a later row.
+	const hit = await popup.evaluate(() => {
+		const item = Array.from(document.querySelectorAll("button")).find(
+			(b) => (b.textContent ?? "").trim() === "Edit",
+		);
+		if (!item) return "no-edit-item";
+		const r = item.getBoundingClientRect();
+		const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+		return top === item || item.contains(top as Node)
+			? "menu"
+			: `covered: ${top?.textContent?.trim().slice(0, 24)}`;
+	});
+	expect(hit).toBe("menu");
+
+	// And it is genuinely clickable (the covered menu used to route the click to the row below).
+	await edit.click();
+	await expect(popup.getByRole("button", { name: /Update Login/i })).toBeVisible();
 });

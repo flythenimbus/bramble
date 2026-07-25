@@ -107,6 +107,11 @@ export function EntryRow({
 
 	return (
 		<div
+			// Marks the row while a dropdown is open. The list virtualizer positions each row with a
+			// transform, which creates a stacking context the menu's own z-index can't escape, so the
+			// NEXT rows paint over it (and swallow its clicks). The list lifts the marked row above
+			// its siblings; see VaultHome's row wrapper.
+			data-menu-open={copyOpen || moreOpen ? "" : undefined}
 			className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/30 ${
 				highlighted
 					? "border-primary/40 bg-primary/5"
