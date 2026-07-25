@@ -74,6 +74,31 @@ describe("shouldSuggestPassword — offers on account creation", () => {
 		expect(shouldSuggestPassword(pw(0))).toBe(true);
 	});
 
+	it("offers on the new-password field of a change form (current + new + confirm)", () => {
+		loadHTML(`
+			<form>
+				<input type="password" name="current" autocomplete="current-password" />
+				<input type="password" name="new" autocomplete="new-password" />
+				<input type="password" name="confirm" />
+			</form>
+		`);
+		// The current-password sibling marks the new field as a rotation target, even for
+		// a returning user (they have a saved login for the site).
+		expect(shouldSuggestPassword(pw(1), { hasExistingLogins: true })).toBe(true);
+	});
+
+	it("offers on a token-less two-field change form (old + new, no confirm)", () => {
+		loadHTML(`
+			<form>
+				<input type="password" name="oldpass" placeholder="Current password" />
+				<input type="password" name="newpass" placeholder="New password" />
+			</form>
+		`);
+		// Field 0 is "Current password" (hint), field 1 is the new one. The change-form
+		// signal carries it past the threshold with no autocomplete tokens.
+		expect(shouldSuggestPassword(pw(1), { hasExistingLogins: true })).toBe(true);
+	});
+
 	it("offers on a non-English signup via structural signals only (no keywords)", () => {
 		// German path + name field + privacy link + minlength: no English text needed.
 		path("/registrieren");
@@ -115,7 +140,7 @@ describe("shouldSuggestPassword — declines on login and edge cases", () => {
 		expect(shouldSuggestPassword(pw())).toBe(false);
 	});
 
-	it("vetoes on a password-change form (current + new + confirm)", () => {
+	it("still vetoes the old-password field of a change form", () => {
 		loadHTML(`
 			<form>
 				<input type="password" name="current" autocomplete="current-password" />
@@ -123,8 +148,8 @@ describe("shouldSuggestPassword — declines on login and edge cases", () => {
 				<input type="password" name="confirm" />
 			</form>
 		`);
-		// Focused on the new field, but the current-password sibling vetoes the form.
-		expect(shouldSuggestPassword(pw(1))).toBe(false);
+		// Focused on the current-password ("old") field: never suggest into it.
+		expect(shouldSuggestPassword(pw(0))).toBe(false);
 	});
 
 	it("declines on an ambiguous single-password form with no signals", () => {

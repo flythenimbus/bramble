@@ -156,6 +156,33 @@ describe("commit: update an existing login (password rotation)", () => {
 		expect(fetched.resp.data.password).toBe("ROTATED");
 	});
 
+	it("preserves the existing username when the capture has none (password-change form)", async () => {
+		const bg = await unlocked();
+		// A change-password form has no username field, so the capture's username is empty.
+		const cap = await bg.send(
+			{ type: "CORNER_PROMPT_CAPTURE", payload: { username: "", password: "ROTATED" } },
+			pageSender("example.com", 5),
+		);
+		expect(cap.resp.data.kind).toBe("update-login");
+
+		const res = await bg.send(
+			{
+				type: "CORNER_PROMPT_RESPONSE",
+				payload: { promptId: cap.resp.data.promptId, action: "update", chosenEntryId: "login1" },
+			},
+			pageSender("example.com", 5),
+		);
+		expect(res.resp).toEqual({ ok: true, data: null });
+
+		// The password rotated, but the saved username is kept, not blanked.
+		const fetched = await bg.send(
+			{ type: "AUTOFILL_FETCH", payload: { entryId: "login1" } },
+			extensionSender,
+		);
+		expect(fetched.resp.data.password).toBe("ROTATED");
+		expect(fetched.resp.data.username).toBe("alice");
+	});
+
 	it("rejects an explicit update action with no chosenEntryId", async () => {
 		const bg = await unlocked();
 		const cap = await bg.send(

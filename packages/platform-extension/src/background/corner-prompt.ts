@@ -161,12 +161,15 @@ async function commitCornerSave(
 	await broadcastVaultChanged();
 }
 
-/** Overwrite an existing login's username and password with a captured credential. */
+/** Overwrite an existing login's password (and username, when the capture has one) with a captured credential. */
 async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string): Promise<void> {
 	const indexEntry = getIndexEntry(chosenEntryId);
 	if (indexEntry?.type !== "login") {
 		throw new Error(`update target not in index: ${chosenEntryId}`);
 	}
+	// A password-change form has no username field, so the capture's username is empty; keep the
+	// entry's existing username in that case rather than blanking it (only the password rotates).
+	const username = capture.username || indexEntry.username;
 	// Parity with authorizeFill: only overwrite a login the captured hostname matches, so a
 	// capture on site A can never be written into site B's entry. See docs/sec-audit-7726.md (A4).
 	if (!hostnameMatches(indexEntry, capture.hostname)) {
@@ -197,7 +200,7 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 					throw new Error(`decrypt entry failed: ${dec.error ?? "no data"}`);
 				}
 				const parsed = JSON.parse(dec.data);
-				parsed.username = capture.username;
+				parsed.username = username;
 				parsed.password = capture.password;
 				const reenc = await sendToOffscreen({
 					type: "CRYPTO_ENCRYPT",
@@ -220,7 +223,7 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 		entriesCiphertext: outer.entriesCiphertext,
 	};
 	await writeVault(encodeVaultBlob(newBlob), vaultId);
-	updateLoginCredentials(chosenEntryId, capture.username, capture.password);
+	updateLoginCredentials(chosenEntryId, username, capture.password);
 	await broadcastVaultChanged();
 }
 

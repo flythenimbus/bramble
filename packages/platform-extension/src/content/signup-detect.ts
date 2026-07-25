@@ -22,6 +22,7 @@ import {
 export const WEIGHTS = {
 	newPasswordToken: 100, // autocomplete="new-password" on the focused field
 	confirmPair: 100, // 2+ non-current password fields in scope
+	changeForm: 100, // a current-password sibling (focused field is the new password)
 	tosLink: 40, // terms/privacy link or agree checkbox in the form
 	nameField: 30, // given-name / family-name / name input in scope
 	signupUrl: 40, // /signup, /register, /join, ... in the path
@@ -222,16 +223,14 @@ export function scoreSignupForm(
 	const scope: ParentNode = form ?? doc;
 	const signals: string[] = [];
 
-	// Veto: the focused field is a current-password, or a current-password sibling
-	// shares the same <form> (a password-change form: old + new + confirm).
+	// Veto only when the FOCUSED field is the current password: a login field, or the
+	// "old password" box on a change form. A current-password SIBLING is not a veto; it
+	// marks this (non-current) field as a change form's new-password field (handled below).
 	if (isCurrentPassword(field)) return { score: 0, veto: true, signals: ["veto:current"] };
 	const scopePws = deepQueryAll<HTMLInputElement>(
 		'input[type="password"]:not([readonly]):not([disabled])',
 		scope,
 	).filter(isRendered);
-	if (form && scopePws.some(isCurrentPassword)) {
-		return { score: 0, veto: true, signals: ["veto:change-form"] };
-	}
 
 	let score = 0;
 	const add = (weight: number, name: string): void => {
@@ -245,6 +244,11 @@ export function scoreSignupForm(
 	const newPws = scopePws.filter((el) => !isCurrentPassword(el));
 	const confirmPair = newPws.length >= 2;
 	if (confirmPair) add(WEIGHTS.confirmPair, "confirm-pair");
+
+	// A current-password sibling in the same form (the focused field is not it) means we're
+	// on a change form and this is the new-password field: offer a strong password to rotate to.
+	const changeForm = !!form && scopePws.some(isCurrentPassword);
+	if (changeForm) add(WEIGHTS.changeForm, "change-form");
 
 	if (hasTermsSignal(scope)) add(WEIGHTS.tosLink, "terms-link");
 	if (hasNameField(scope)) add(WEIGHTS.nameField, "name-field");
@@ -265,8 +269,8 @@ export function scoreSignupForm(
 	if (countRenderedInputs(scope) > 4) add(WEIGHTS.largeForm, "large-form");
 
 	// Returning-user damper: don't nag when the site already has saved logins,
-	// unless a STRONG structural signal makes signup unambiguous.
-	if (opts.hasExistingLogins && !strongToken && !confirmPair) {
+	// unless a STRONG structural signal makes account creation / rotation unambiguous.
+	if (opts.hasExistingLogins && !strongToken && !confirmPair && !changeForm) {
 		add(WEIGHTS.returningUser, "returning-user");
 	}
 

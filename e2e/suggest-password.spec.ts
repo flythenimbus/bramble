@@ -31,6 +31,16 @@ const LOGIN = `<!doctype html><html><head><title>login</title></head><body>
 	</form>
 </body></html>`;
 
+// A change-password form: old + new + confirm, no username field.
+const CHANGE = `<!doctype html><html><head><title>Change password</title></head><body>
+	<form>
+		<input id="current" name="current" type="password" autocomplete="current-password" />
+		<input id="newpass" name="new" type="password" autocomplete="new-password" />
+		<input id="confirm" name="confirm" type="password" autocomplete="new-password" />
+		<button type="submit">Change password</button>
+	</form>
+</body></html>`;
+
 const HOST = "#titanpass-autofill-dropdown";
 const STRONG_CHARS = /^[A-Za-z0-9!@#$%^&*()_+\-=[\]{}|;:,.<>?]{20}$/;
 
@@ -100,4 +110,48 @@ test("does not suggest on a login form (current-password vetoes the offer)", asy
 	// Give the content script ample time to inject, query the background, and decide.
 	await page.waitForTimeout(3000);
 	await expect(page.locator(HOST)).toHaveCount(0);
+});
+
+test("suggests a strong password on a change-password form (new field, not the current one)", async ({
+	context,
+	extensionId,
+}) => {
+	// Seed the account being changed, so this is a real rotation scenario, and open the popup so the
+	// vault is unlocked and indexed.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Add a new login/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
+	await popup.getByRole("button", { name: /Add URL/i }).click();
+	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
+	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
+	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
+	await popup.getByRole("button", { name: /Save Login/i }).click();
+	await expect(popup.getByText("Example Login")).toBeVisible();
+
+	const page = await context.newPage();
+	await serve(page, CHANGE);
+	await page.goto("https://example.com/");
+
+	// The picker mounts when the NEW-password field is focused (the current-password field is vetoed).
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#newpass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+
+	// Use the suggestion (top row).
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+
+	// It fills the new-password and confirm fields with the same strong password, leaves the
+	// current-password field for the user, and offers to save the rotation.
+	await expect.poll(() => page.locator("#newpass").inputValue()).toMatch(STRONG_CHARS);
+	const filled = await page.locator("#newpass").inputValue();
+	expect(await page.locator("#confirm").inputValue()).toBe(filled);
+	expect(await page.locator("#current").inputValue()).toBe("");
+	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
 });

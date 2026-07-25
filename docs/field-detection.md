@@ -93,10 +93,10 @@ unconfirmed password is never captured.
 ## Signup detection
 
 `signup-detect.ts` decides whether a focused password field belongs to an
-account-creation flow (signup or password-reset) so the autofill dropdown can
-offer a **generated strong password** (`password-gen.ts`) without firing on
-ordinary login pages. See [autofill.md](autofill.md) for the dropdown row and the
-save flow.
+account-creation or password-rotation flow (signup, password-reset, or a
+change-password form) so the autofill dropdown can offer a **generated strong
+password** (`password-gen.ts`) without firing on ordinary login pages. See
+[autofill.md](autofill.md) for the dropdown row and the save/update flow.
 
 The design principle is to lean on **language-independent structural signals** so
 non-English pages work without reading their prose. `scoreSignupForm` sums
@@ -104,7 +104,9 @@ weighted signals (all in `WEIGHTS`, tune there) and offers above `THRESHOLD`
 (100):
 
 - **Strong (each reaches the threshold alone):** `autocomplete="new-password"` on
-  the field, or a confirm-password pair (2+ non-current password fields in scope).
+  the field, a confirm-password pair (2+ non-current password fields in scope), or
+  a change form (a `current-password` sibling while the focused field is not it,
+  marking the focused field as the new password to rotate to).
 - **Supporting (structural, language-independent):** a terms/privacy link or agree
   checkbox in the form, a name field (`given-name`/`family-name`), the field's
   `pattern`/`minlength>=8`, a strength meter (`<meter>`/`role=progressbar`), and a
@@ -116,13 +118,14 @@ weighted signals (all in `WEIGHTS`, tune there) and offers above `THRESHOLD`
   returning-user damper when the site already has saved logins (skipped when a
   strong signal fires).
 
-A **current-password field vetoes outright** (the focused field, or a
-current-password sibling in the same `<form>`), so login and password-change forms
-never trigger. The scope is the field's enclosing `<form>` when present, else the
-document; visibility is gated by `isRendered`, so a display:none honeypot password
-field can't fabricate a confirm pair. The offer is also suppressed once the field
-holds a value (the user is typing their own). Exercised by
-`signup-detect.dom.test.ts`.
+The veto is narrow: only when the **focused** field is itself a `current-password`
+(a login field, or the "old password" box on a change form) do we suppress. A
+`current-password` *sibling* is not a veto but a change-form signal (above), so the
+new-password field of a change form still gets the offer. The scope is the field's
+enclosing `<form>` when present, else the document; visibility is gated by
+`isRendered`, so a display:none honeypot password field can't fabricate a confirm
+pair. The offer is also suppressed once the field holds a value (the user is typing
+their own). Exercised by `signup-detect.dom.test.ts`.
 
 ## Fixtures
 
