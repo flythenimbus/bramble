@@ -61,13 +61,7 @@ function maybeSuggest(
 	field: HTMLInputElement,
 	hasExistingLogins: boolean,
 ): { password: string } | null {
-	// Never suggest into a non-password field or one the user has already typed into.
 	if (field.type !== "password" || field.value) return null;
-	// The decision is cached per field and reused across re-renders. Re-evaluating would be both
-	// wasteful and wrong: once the picker shows here it rewrites the anchor field's `autocomplete`
-	// to "off" to suppress native autofill, which erases the new-password token the detector reads,
-	// so a re-query (e.g. a saved login arriving) would flip us to showing the match. Deciding once,
-	// while the attributes are still pristine, keeps the suggestion stable.
 	const cached = suggestionFor.get(field);
 	if (cached) return { password: cached };
 	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
@@ -206,8 +200,6 @@ function queryAutofill(): void {
 function showFor(field: HTMLInputElement): void {
 	if (silenceAutoOpen) return;
 	if (!cachedResult) {
-		// Focus before bootstrap's query returned: kick one off; handleResult
-		// surfaces the dropdown if the field is still focused on response.
 		queryAutofill();
 		return;
 	}
