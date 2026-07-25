@@ -56,7 +56,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 						className={cn(
 							"block invisible h-0 max-w-[0.01px] overflow-hidden whitespace-nowrap text-[0.66rem]",
 							"transition-[max-width] duration-150",
-							"group-focus-within:max-w-full",
+							// Keyed to the INPUT's focus, not the group's :focus-within: an adornment
+							// button (the password reveal) also lives in the group, so focus-within
+							// notched the border while the label - which keys off the input - stayed
+							// centred, leaving a gap in the border with nothing in it.
+							"group-has-[input:focus]:max-w-full",
 							"group-has-[input:not(:placeholder-shown)]:max-w-full",
 						)}
 					>

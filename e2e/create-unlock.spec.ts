@@ -43,3 +43,49 @@ test("a newly created second vault opens directly, not the picker", async ({
 	// The header names the open vault when more than one exists (the second is "Vault 2").
 	await expect(popup.getByTestId("active-vault-label")).toHaveText("Vault 2");
 });
+
+// The outlined TextField draws its border with a fieldset/legend, so the label gap is a real
+// notch. The notch used to key off the group's :focus-within while the label keyed off the
+// input, and the password reveal button lives in that same group - so focusing the eye notched
+// the border open with no label in it (a visible cut in the border). Both must agree.
+test("the reveal button doesn't leave a gap in the master-password border", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await lock(popup);
+
+	// notch open <-> label floated, read off real layout (CSS-driven, so jsdom can't see it).
+	const state = () =>
+		popup.evaluate(() => {
+			const input = document.querySelector<HTMLInputElement>(
+				'input[type="password"], input[type="text"]',
+			);
+			const group = input?.closest(".group") as HTMLElement;
+			const legend = group.querySelector("legend") as HTMLElement;
+			const label = group.querySelector("label") as HTMLElement;
+			return {
+				notchOpen: legend.getBoundingClientRect().width > 4,
+				labelFloated:
+					Math.abs(label.getBoundingClientRect().top - group.getBoundingClientRect().top) < 8,
+			};
+		});
+
+	// Poll: the label/notch animate (150ms), so assert the settled state.
+	await popup.locator('input[type="password"]').first().click();
+	await expect.poll(state).toEqual({ notchOpen: true, labelFloated: true });
+
+	// Focus moves to the eye, off the (empty) input: the notch must close with the label.
+	await popup.getByRole("button", { name: /Show password/i }).click();
+	await expect.poll(state).toEqual({ notchOpen: false, labelFloated: false });
+
+	// With a value, both stay on even while the eye holds focus.
+	await popup.locator('input[type="text"], input[type="password"]').first().fill("hunter2");
+	await popup
+		.getByRole("button", { name: /password/i })
+		.first()
+		.click();
+	expect(await state()).toEqual({ notchOpen: true, labelFloated: true });
+});
