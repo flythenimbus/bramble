@@ -36,6 +36,15 @@ interface QuickTypeIdentity {
 	service: string;
 }
 
+// A one-time-code identity (iOS 18+, cleartext): what the OS shows when a verification-code
+// field is focused. `label` names the account in that UI. Same opt-in as QuickType, since it
+// also reveals which sites have 2FA. The seed stays in the encrypted bundle.
+interface OneTimeCodeIdentity {
+	recordId: string;
+	label: string;
+	service: string;
+}
+
 // A passkey identity registered with the OS so it offers Bramble for that site's passkey
 // sign-in. All fields are non-secret metadata (the private key never leaves the encrypted
 // bundle); `credentialId`/`userHandle` are STANDARD base64 (as stored, what the OS wants
@@ -65,6 +74,7 @@ interface AutofillBridgePlugin {
 		ciphertext: string;
 		slot?: SlotPayload;
 		identities?: QuickTypeIdentity[];
+		oneTimeCodeIdentities?: OneTimeCodeIdentity[];
 		passkeyIv?: string;
 		passkeyCiphertext?: string;
 		passkeyIdentities?: PasskeyIdentity[];
@@ -122,6 +132,9 @@ export const mobileAutofill: AutofillAdapter = {
 					username: e.username,
 					password: e.password,
 					services: e.hostnames,
+					// The TOTP seed, for one-time-code AutoFill. Rides the VEK-encrypted bundle
+					// like the password; the extension generates the digits itself.
+					totp: e.totp,
 				});
 			}
 			// A login can hold passkeys even with no password (a passkey-only account).
@@ -154,6 +167,23 @@ export const mobileAutofill: AutofillAdapter = {
 						: [],
 				)
 			: [];
+		// One-time-code identities (iOS 18+), behind the SAME opt-in as the password ones:
+		// they expose a domain + label in the clear, which also reveals which sites have 2FA.
+		// The seed stays in the encrypted bundle; the extension generates the digits.
+		const oneTimeCodeIdentities: OneTimeCodeIdentity[] = quickType
+			? list.flatMap((c) =>
+					c.totp
+						? c.services
+								.map(normalizeHost)
+								.filter((s) => s.length > 0)
+								.map((service) => ({
+									recordId: c.recordId,
+									label: c.username || c.name,
+									service,
+								}))
+						: [],
+				)
+			: [];
 		// Passkey identities are NOT gated on QuickType: the OS can't route a passkey
 		// sign-in to a provider whose credentials it hasn't been told about. Metadata only.
 		const passkeyIdentities: PasskeyIdentity[] = passkeys.map((p) => ({
@@ -167,6 +197,7 @@ export const mobileAutofill: AutofillAdapter = {
 			ciphertext: enc.ciphertext,
 			slot: await readPasswordSlot(),
 			identities,
+			oneTimeCodeIdentities,
 			passkeyIv: encPk.iv,
 			passkeyCiphertext: encPk.ciphertext,
 			passkeyIdentities,

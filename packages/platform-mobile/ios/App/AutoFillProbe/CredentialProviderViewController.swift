@@ -19,6 +19,9 @@ private struct Cred: Identifiable, Decodable {
 	let username: String
 	let password: String
 	let services: [String]
+	/// The TOTP key (otpauth URI or bare base32), for one-time-code AutoFill. Optional: absent
+	/// from bundles written by an older app build, and from logins with no 2FA.
+	let totp: String?
 }
 
 private struct Slot {
@@ -426,6 +429,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 
 	private var pendingHosts: [String] = []
 	private var pendingRecordId: String?
+	// Set while satisfying a one-time-code request (iOS 18+): onUnlocked() completes with a
+	// generated code instead of the password. A plain Bool so it needs no iOS-18 SDK type.
+	private var pendingOneTimeCode = false
 	// Set while satisfying a passkey get(); onUnlocked() branches to the assertion path.
 	private var pendingPasskey: PasskeyGet?
 	// Set while satisfying a passkey create(); onUnlocked() branches to the registration path.
@@ -439,12 +445,26 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		// stored services are bare hostnames; normalize both to a host so they compare.
 		pendingHosts = serviceIdentifiers.map { normalizeHost($0.identifier) }.filter { !$0.isEmpty }
 		pendingRecordId = nil
+		pendingOneTimeCode = false
 		resume()
 	}
 
 	override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
 		pendingHosts = []
 		pendingRecordId = credentialIdentity.recordIdentifier
+		pendingOneTimeCode = false
+		resume()
+	}
+
+	// Bramble opened from a verification-code field (iOS 18+). Same auth-first flow as the
+	// password list; onUnlocked() narrows the list to logins that can actually produce a code.
+	@available(iOS 18.0, *)
+	override func prepareOneTimeCodeCredentialList(
+		for serviceIdentifiers: [ASCredentialServiceIdentifier]
+	) {
+		pendingHosts = serviceIdentifiers.map { normalizeHost($0.identifier) }.filter { !$0.isEmpty }
+		pendingRecordId = nil
+		pendingOneTimeCode = true
 		resume()
 	}
 
@@ -498,7 +518,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		guard let req = credentialRequest as? ASPasskeyCredentialRequest,
 			let identity = req.credentialIdentity as? ASPasskeyCredentialIdentity
 		else {
-			if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+			if #available(iOS 18.0, *), credentialRequest is ASOneTimeCodeCredentialRequest {
+				provideOneTimeCodeWithoutUserInteraction(for: credentialRequest.credentialIdentity)
+			} else if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
 				provideCredentialWithoutUserInteraction(for: pwd)
 			} else {
 				cancel(.userInteractionRequired)
@@ -527,7 +549,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		guard let req = credentialRequest as? ASPasskeyCredentialRequest,
 			let identity = req.credentialIdentity as? ASPasskeyCredentialIdentity
 		else {
-			if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
+			if #available(iOS 18.0, *), credentialRequest is ASOneTimeCodeCredentialRequest {
+				pendingHosts = []
+				pendingRecordId = credentialRequest.credentialIdentity.recordIdentifier
+				pendingOneTimeCode = true
+				resume()
+			} else if let pwd = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity {
 				prepareInterfaceToProvideCredential(for: pwd)
 			} else {
 				cancel(.userInteractionRequired)
@@ -536,6 +563,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		}
 		pendingHosts = []
 		pendingRecordId = nil
+		pendingOneTimeCode = false
 		pendingPasskey = PasskeyGet(
 			rpId: identity.relyingPartyIdentifier, clientDataHash: req.clientDataHash,
 			allowed: [], chosen: identity.credentialID.base64EncodedString())
@@ -551,6 +579,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	) {
 		pendingHosts = []
 		pendingRecordId = nil
+		pendingOneTimeCode = false
 		pendingPasskey = PasskeyGet(
 			rpId: requestParameters.relyingPartyIdentifier,
 			clientDataHash: requestParameters.clientDataHash,
@@ -621,6 +650,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		}
 		pendingHosts = []
 		pendingRecordId = nil
+		pendingOneTimeCode = false
 		pendingPasskey = nil
 		pendingPasskeyCreate = PasskeyCreate(
 			rpId: identity.relyingPartyIdentifier, userName: identity.userName,
@@ -848,9 +878,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		}
 		do {
 			let json = try decryptWithVek(ivB64: bundle.iv, ciphertextB64: bundle.ct)
-			let creds = (try? JSONDecoder().decode([Cred].self, from: Data(json.utf8))) ?? []
+			var creds = (try? JSONDecoder().decode([Cred].self, from: Data(json.utf8))) ?? []
+			// A code request can only be satisfied by a login whose key actually generates one,
+			// so don't offer the rest (a password-only entry would just dead-end).
+			if pendingOneTimeCode { creds = creds.filter { Totp.generate($0.totp) != nil } }
 			if let rid = pendingRecordId, let c = creds.first(where: { $0.recordId == rid }) {
-				complete(c)
+				select(c)
 			} else {
 				let matches = creds.filter { matchesRequested($0) }
 				showList(matches: matches, all: creds, requestedHost: pendingHosts.first)
@@ -864,14 +897,58 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		host(
 			CredentialListView(
 				matches: matches, all: all, requestedHost: requestedHost,
-				onSelect: { [weak self] in self?.complete($0) },
+				onSelect: { [weak self] in self?.select($0) },
 				onCancel: { [weak self] in self?.cancel(.userCanceled) }))
+	}
+
+	/// Finish with whatever this request asked of the chosen login: its password, or a freshly
+	/// generated one-time code.
+	private func select(_ cred: Cred) {
+		if pendingOneTimeCode {
+			if #available(iOS 18.0, *) { completeOneTimeCode(cred) } else { cancel(.failed) }
+		} else {
+			complete(cred)
+		}
 	}
 
 	private func complete(_ cred: Cred) {
 		extensionContext.completeRequest(
 			withSelectedCredential: ASPasswordCredential(user: cred.username, password: cred.password),
 			completionHandler: nil)
+	}
+
+	// --- one-time codes (iOS 18+, ProvidesOneTimeCodes) ---
+
+	/// Generate this login's live TOTP and hand the OS the digits. Only the code leaves the
+	/// extension, never the seed. Cancels when the entry has no usable key (HOTP, garbage).
+	@available(iOS 18.0, *)
+	private func completeOneTimeCode(_ cred: Cred) {
+		guard let code = Totp.generate(cred.totp) else {
+			cancel(.failed)
+			return
+		}
+		extensionContext.completeOneTimeCodeRequest(using: ASOneTimeCodeCredential(code: code))
+	}
+
+	/// The no-UI path for a tapped code suggestion, mirroring the password one: fill silently
+	/// while a keep-unlocked session is live, else ask the OS for UI so it relaunches into
+	/// prepareInterfaceToProvideCredential with the same record.
+	@available(iOS 18.0, *)
+	private func provideOneTimeCodeWithoutUserInteraction(for identity: ASCredentialIdentity) {
+		guard let vek = loadSession(), (try? unlockWithVek(vekB64: vek)) != nil else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		saveSession(vek)  // slide the keep-unlocked window, as the interactive path does
+		guard let bundle = loadBundle(),
+			let json = try? decryptWithVek(ivB64: bundle.iv, ciphertextB64: bundle.ct),
+			let creds = try? JSONDecoder().decode([Cred].self, from: Data(json.utf8)),
+			let cred = creds.first(where: { $0.recordId == identity.recordIdentifier })
+		else {
+			cancel(.userInteractionRequired)
+			return
+		}
+		completeOneTimeCode(cred)
 	}
 
 	// Normalize a service identifier or a stored URL/hostname to a bare registrable host:

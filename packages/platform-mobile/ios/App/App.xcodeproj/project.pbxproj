@@ -25,6 +25,7 @@
 		5D9912CAF80812505BE81EB7 /* NativeCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A41ECEEF258FCC8C58E8E9A /* NativeCrypto.swift */; };
 		B100000000000000000B0003 /* NativeWebRTC.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000B0004 /* NativeWebRTC.swift */; };
 		AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */; };
+		B100000000000000000C0011 /* Totp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000C0010 /* Totp.swift */; };
 		B100000000000000000B0001 /* BiometricVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0001 /* BiometricVault.swift */; };
 		B100000000000000000B0002 /* QrScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000A0002 /* QrScanner.swift */; };
 		DA77030FEB0F1014AA5F80D0 /* BrambleConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364AE8F9F5FF147BF36A0FDE /* BrambleConstants.swift */; };
@@ -80,6 +81,7 @@
 		DB4181B60FCE1FC26E8FAE8C /* vault_crypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.swift; sourceTree = "<group>"; };
 		B100000000000000000B0005 /* vault_crypto.autofill.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = vault_crypto.autofill.swift; sourceTree = "<group>"; };
 		FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialProviderViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000C0010 /* Totp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Totp.swift; sourceTree = "<group>"; };
 		B100000000000000000C0001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -123,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				FF834C57F536934CFEE77A5F /* CredentialProviderViewController.swift */,
+				B100000000000000000C0010 /* Totp.swift */,
 				B100000000000000000C0001 /* Localizable.xcstrings */,
 				7032D4DE80695ED12D43BB6A /* Info.plist */,
 				3AE14515F7A8E1BEEA894346 /* AutoFillProbe.entitlements */,
@@ -315,6 +318,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1E7019A9755380A0B4D80A /* CredentialProviderViewController.swift in Sources */,
+				B100000000000000000C0011 /* Totp.swift in Sources */,
 				B100000000000000000B0006 /* vault_crypto.autofill.swift in Sources */,
 				DA77030FEB0F1014AA5F80D0 /* BrambleConstants.swift in Sources */,
 			);

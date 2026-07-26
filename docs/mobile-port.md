@@ -507,6 +507,17 @@ deferred with passkey hosting. Lifecycle:
 - **Locked / reprompt:** the OS relaunches and calls `prepareInterfaceToProvideCredential(for:)`;
   show the Face ID / unlock sheet, decrypt, complete.
 - **Full list:** `prepareCredentialList(for:)` renders our searchable list.
+- **One-time codes (iOS 18+, BUILT):** a verification-code field routes to the same two unified
+  methods, with the request arriving as `ASOneTimeCodeCredentialRequest`; the manual "Passwords"
+  path gets its own `prepareOneTimeCodeCredentialList(for:)`. All three set `pendingOneTimeCode`,
+  so the shared post-unlock path completes with `ASOneTimeCodeCredential(code:)` instead of the
+  password, and narrows the list to logins whose key actually generates a code. The seed rides the
+  existing VEK-encrypted bundle (`Cred.totp`) and never leaves it: `Totp.swift` derives the digits
+  in-process, mirroring `android/.../Totp.kt` and `util/totp.ts` (RFC 6238, SHA1/256/512, verified
+  against the appendix-B vectors). `ASOneTimeCodeCredentialIdentity` entries are published in the
+  SAME `replaceCredentialIdentities` call as passwords and passkeys (it clears the whole store, so
+  they must go together) and behind the SAME "Keyboard suggestions" opt-in as QuickType, since a
+  code identity's cleartext domain reveals which sites have 2FA.
 - **Passkeys (deferred, future feature):** the `prepareInterface(forPasskeyRegistration:)` and
   assertion path (`ASPasskeyRegistrationCredential` / `ASPasskeyAssertionCredential`) is part of
   passkey hosting, not v1. See "Passkey hosting is a deferred future feature" below.
