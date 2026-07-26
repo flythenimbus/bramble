@@ -68,22 +68,6 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		// does both in one step. It silently no-ops unless the user has enabled Bramble as an
 		// AutoFill provider, so guard on the store state (and so QuickType only populates once
 		// the provider is actually on).
-		// One-time-code identities (iOS 18+). Behind the SAME opt-in as the password ones: they
-		// carry a domain + label in the clear, which also reveals WHICH sites have 2FA. The code
-		// itself is generated in the extension from the VEK-encrypted seed, never stored here.
-		var oneTimeCodes: [ASCredentialIdentity] = []
-		if #available(iOS 18.0, *) {
-			oneTimeCodes = (call.getArray("oneTimeCodeIdentities") ?? []).compactMap {
-				guard let d = $0 as? [String: Any],
-					let service = d["service"] as? String,
-					let label = d["label"] as? String,
-					let rid = d["recordId"] as? String
-				else { return nil }
-				return ASOneTimeCodeCredentialIdentity(
-					serviceIdentifier: ASCredentialServiceIdentifier(identifier: service, type: .domain),
-					label: label, recordIdentifier: rid)
-			}
-		}
 		if #available(iOS 17.0, *) {
 			// Passkey identities (NOT gated on QuickType: the OS can't route a passkey sign-in
 			// to a provider whose credentials it doesn't know). Metadata only; credentialID /
@@ -100,6 +84,23 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 						relyingPartyIdentifier: rp, userName: (d["userName"] as? String) ?? "",
 						credentialID: credID, userHandle: userHandle, recordIdentifier: cid)
 				}
+			// One-time-code identities (iOS 18+). Behind the SAME opt-in as the password ones: they
+			// carry a domain + label in the clear, which also reveals WHICH sites have 2FA. The code
+			// itself is generated in the extension from the VEK-encrypted seed, never stored here.
+			// Declared in here, not at method scope: ASCredentialIdentity is itself iOS 17+.
+			var oneTimeCodes: [ASCredentialIdentity] = []
+			if #available(iOS 18.0, *) {
+				oneTimeCodes = (call.getArray("oneTimeCodeIdentities") ?? []).compactMap {
+					guard let d = $0 as? [String: Any],
+						let service = d["service"] as? String,
+						let label = d["label"] as? String,
+						let rid = d["recordId"] as? String
+					else { return nil }
+					return ASOneTimeCodeCredentialIdentity(
+						serviceIdentifier: ASCredentialServiceIdentifier(identifier: service, type: .domain),
+						label: label, recordIdentifier: rid)
+				}
+			}
 			// One replace for ALL kinds: replaceCredentialIdentities clears the WHOLE store, so
 			// passwords + passkeys + codes must go together or a second call would wipe the first.
 			let all: [ASCredentialIdentity] = passwords + passkeys + oneTimeCodes
