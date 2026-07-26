@@ -1,12 +1,6 @@
 Novidades desta versão:
 
-- Preencha automaticamente seus códigos de dois fatores. Quando um site solicitar o código de verificação de seis dígitos, o Bramble pode preenchê-lo diretamente do teclado, assim como sua senha. Requer iOS 18 e a opção "Sugestões do Teclado" ativada nos Ajustes.
-- Agora o Bramble oferece suporte a mais de um cofre. Mantenha cofres separados, por exemplo, um para logins pessoais e outro para o trabalho, cada um com sua própria senha, e alterne entre eles quando quiser.
-- Sincronize um cofre entre seus dispositivos. Seu telefone, tablet e computador ficam atualizados conectando-se diretamente uns aos outros, de forma privada, sem que nada seja armazenado em um servidor. Emparelhe um novo dispositivo escaneando um código QR.
-- Importe um cofre existente abrindo um backup .bramble criptografado, diretamente da tela de configuração ou dos Ajustes.
-- Os Ajustes foram reorganizados em abas, para facilitar a localização das opções.
-- Mostre ou oculte sua senha enquanto digita, para detectar erros antes de desbloquear, criar ou alterar um cofre.
-- O Bramble não permite mais que o iOS preencha automaticamente ou salve sua senha mestre. Ela permanece apenas sua, para ser digitada.
-- Apoie o desenvolvimento do Bramble nas novas opções da aba Sobre.
+- Preencher automaticamente seus códigos de dois fatores. Quando um site solicita o código de verificação de seis dígitos, o Bramble pode preenchê-lo diretamente pelo teclado, assim como faz com sua senha. Requer iOS 18 e que as Sugestões do Teclado estejam ativadas nos Ajustes.
+- Apoie o desenvolvimento do Bramble com as novas opções na aba Sobre.
 
-Sem conta, sem nuvem. Tudo fica nos seus dispositivos.
+Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

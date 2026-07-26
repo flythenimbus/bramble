@@ -1,12 +1,6 @@
 Neu in dieser Version:
 
-- Autofill für Ihre Zwei-Faktor-Codes. Wenn eine Website nach dem sechsstelligen Bestätigungscode fragt, kann Bramble ihn direkt über die Tastatur ausfüllen, genau wie Ihr Passwort. Erfordert iOS 18 und aktivierte Tastaturvorschläge in den Einstellungen.
-- Bramble unterstützt jetzt mehrere Tresore. Legen Sie separate Tresore an, zum Beispiel einen für private Anmeldedaten und einen für die Arbeit, jeweils mit eigenem Passwort, und wechseln Sie nach Belieben zwischen ihnen.
-- Synchronisieren Sie einen Tresor über Ihre Geräte hinweg. Ihr Telefon, Tablet und Computer bleiben auf dem neuesten Stand, indem sie sich direkt und privat miteinander verbinden, ohne dass jemals Daten auf einem Server gespeichert werden. Koppeln Sie ein neues Gerät durch Scannen eines QR-Codes.
-- Importieren Sie einen bestehenden Tresor, indem Sie eine verschlüsselte .bramble-Sicherung öffnen – direkt vom Einrichtungsbildschirm oder aus den Einstellungen.
-- Die Einstellungen sind in Tabs neu strukturiert, sodass die Optionen leichter zu finden sind.
-- Blenden Sie Ihr Passwort beim Tippen ein oder aus, um Tippfehler vor dem Entsperren, Erstellen oder Ändern eines Tresors zu erkennen.
-- Bramble erlaubt iOS nicht mehr, Ihr Master-Passwort automatisch auszufüllen oder zu speichern. Es bleibt Ihnen allein zum Tippen überlassen.
-- Unterstützen Sie die Entwicklung von Bramble über die neuen Optionen im Tab „Über“.
+- Zwei-Faktor-Codes automatisch ausfüllen. Wenn eine Website nach dem sechsstelligen Bestätigungscode fragt, kann Bramble ihn direkt über die Tastatur ausfüllen, genauso wie Ihr Passwort. Erfordert iOS 18 und in den Einstellungen aktivierte Tastaturvorschläge.
+- Brambles Entwicklung über die neuen Optionen im Tab „Info“ unterstützen.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

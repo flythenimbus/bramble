@@ -1,12 +1,6 @@
 Novità di questa versione:
 
-- Compilare automaticamente i codici a due fattori. Quando un sito richiede il suo codice di verifica a sei cifre, Bramble può compilarlo direttamente dalla tastiera, proprio come la sua password. Richiede iOS 18 e i suggerimenti tastiera attivati nelle Impostazioni.
-- Bramble ora supporta più di un archivio. Mantenere archivi separati, ad esempio uno per gli accessi personali e uno per il lavoro, ciascuno con la propria password, e passare dall'uno all'altro quando si desidera.
-- Sincronizzare un archivio tra i dispositivi. Il telefono, il tablet e il computer rimangono aggiornati collegandosi direttamente tra loro, in modo privato, senza mai salvare nulla su un server. Associare un nuovo dispositivo scansionando un codice QR.
-- Importare un archivio esistente aprendo un backup crittografato .bramble, direttamente dalla schermata di configurazione o dalle Impostazioni.
-- Le Impostazioni sono state riorganizzate in schede, in modo che le opzioni siano più facili da trovare.
-- Mostrare o nascondere la password durante la digitazione, per individuare errori di battitura prima di sbloccare, creare o modificare un archivio.
-- Bramble non consente più a iOS di compilare o salvare automaticamente la password principale. Rimane solo sua da digitare.
-- Sostenere lo sviluppo di Bramble dalle nuove opzioni nella scheda Informazioni.
+- Compilare automaticamente i codici a due fattori. Quando un sito richiede il codice di verifica a sei cifre, Bramble può compilarlo direttamente dalla tastiera, proprio come la password. Richiede iOS 18 e l'attivazione dell’opzione Suggerimenti tastiera in Impostazioni.
+- Supportare lo sviluppo di Bramble tramite le nuove opzioni nella scheda Informazioni.
 
-Nessun account, nessun cloud. Tutto rimane sui vostri dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

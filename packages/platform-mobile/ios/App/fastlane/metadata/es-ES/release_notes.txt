@@ -1,12 +1,6 @@
 Novedades de esta versión:
 
-- Autocompletar los códigos de doble factor. Cuando un sitio solicite su código de verificación de seis dígitos, Bramble podrá completarlo directamente desde el teclado, igual que su contraseña. Requiere iOS 18 y la opción de sugerencias del teclado activada en Ajustes.
-- Bramble ahora admite más de una bóveda. Mantener bóvedas separadas, por ejemplo una para inicios de sesión personales y otra para el trabajo, cada una con su propia contraseña, y alternar entre ellas cuando quiera.
-- Sincronizar una bóveda entre sus dispositivos. Su teléfono, tableta y ordenador se mantienen actualizados conectándose directamente entre sí, de forma privada, sin que nunca se almacene nada en un servidor. Emparejar un nuevo dispositivo escaneando un código QR.
-- Importar una bóveda existente abriendo una copia de seguridad cifrada .bramble, directamente desde la pantalla de configuración o Ajustes.
-- Ajustes se ha reorganizado en pestañas, para que las opciones sean más fáciles de encontrar.
-- Mostrar u ocultar su contraseña mientras la escribe, para detectar errores tipográficos antes de desbloquear, crear o cambiar una bóveda.
-- Bramble ya no permite que iOS autocomplete ni guarde su contraseña maestra. Solo usted la escribirá.
-- Apoyar el desarrollo de Bramble desde las nuevas opciones en la pestaña Acerca de.
+- Autocompletar tus códigos de verificación en dos pasos. Cuando un sitio solicite su código de verificación de seis dígitos, Bramble puede rellenarlo directamente desde el teclado, igual que su contraseña. Requiere iOS 18 y tener activadas las sugerencias del teclado en Ajustes.
+- Apoyar el desarrollo de Bramble desde las nuevas opciones en la pestaña Información.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

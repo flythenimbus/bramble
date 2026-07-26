@@ -1,12 +1,6 @@
-Nouveautés de cette version :
+Quoi de neuf dans cette version :
 
-- Remplissage automatique des codes de double authentification. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme votre mot de passe. Nécessite iOS 18 et les suggestions de clavier activées dans Réglages.
-- Bramble prend désormais en charge plusieurs coffres-forts. Conservez des coffres-forts distincts, par exemple un pour vos identifiants personnels et un pour le travail, chacun avec son propre mot de passe, et basculez de l’un à l’autre quand vous le souhaitez.
-- Synchronisez un coffre-fort entre vos appareils. Votre téléphone, tablette et ordinateur restent à jour en se connectant directement les uns aux autres, de manière privée, sans jamais rien conserver sur un serveur. Associez un nouvel appareil en scannant un code QR.
-- Importez un coffre-fort existant en ouvrant une sauvegarde chiffrée .bramble, directement depuis l’écran de configuration ou les Réglages.
-- Les Réglages sont réorganisés en onglets, pour retrouver plus facilement les options.
-- Affichez ou masquez votre mot de passe lorsque vous le saisissez, pour repérer une erreur de frappe avant de déverrouiller, créer ou modifier un coffre-fort.
-- Bramble n’autorise plus le remplissage automatique ni l’enregistrement de votre mot de passe principal par iOS. Il reste le vôtre, à saisir uniquement par vous.
-- Soutenez le développement de Bramble depuis les nouvelles options dans l’onglet À propos.
+- Saisie automatique de vos codes de vérification à deux facteurs. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme pour votre mot de passe. Nécessite iOS 18 et l’activation des suggestions du clavier dans Réglages.
+- Soutenir le développement de Bramble à partir des nouvelles options dans l’onglet À propos.
 
-Pas de compte, pas de cloud. Tout reste sur vos appareils.
+Aucun compte, aucun cloud. Tout reste sur vos appareils.
