@@ -2,10 +2,10 @@ import { registerPlugin } from "@capacitor/core";
 import type { BiometricUnlock, BiometryType } from "@core/index";
 
 // The native local plugin (ios/App/App/BiometricVault.swift, android .../BiometricVaultPlugin.java)
-// that holds the VEK behind an OS-enforced biometric gate: iOS Keychain item with a
-// .biometryCurrentSet access control + Secure Enclave; Android a Keystore AES key created
-// setUserAuthenticationRequired + setInvalidatedByBiometricEnrollment. The OS itself
-// triggers Face ID / fingerprint on getSecret; we never run the Argon2 KDF here.
+// that holds the VEK behind an OS-enforced gate: iOS Keychain item with a .userPresence
+// access control + Secure Enclave (biometry OR device passcode); Android a Keystore AES key
+// created setUserAuthenticationRequired + setInvalidatedByBiometricEnrollment (biometry only).
+// The OS itself prompts on getSecret; we never run the Argon2 KDF here.
 // Each vault's VEK is a distinct native item, keyed by `vaultId` (the item's Keychain account /
 // Keystore alias includes it), so enabling biometric on one vault can't overwrite another's.
 interface BiometricVaultPlugin {
@@ -32,7 +32,9 @@ export const mobileBiometric: BiometricUnlock = {
 	async biometryType(): Promise<BiometryType> {
 		try {
 			const t = (await Native.isAvailable()).biometryType;
-			return t === "faceId" || t === "touchId" || t === "opticId" ? t : "biometric";
+			return t === "faceId" || t === "touchId" || t === "opticId" || t === "passcode"
+				? t
+				: "biometric";
 		} catch {
 			return "biometric";
 		}

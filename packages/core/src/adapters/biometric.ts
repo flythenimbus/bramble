@@ -1,13 +1,14 @@
 // Device-local biometric (Face ID / Touch ID / Android BiometricPrompt) convenience
 // unlock. This is NOT a vault-format slot: the VEK is cached on THIS device behind an
-// OS-enforced biometric gate (Secure Enclave / Keystore, auto-invalidated when the
-// device's biometric set changes), so the vault file stays portable and slot-policy is
-// untouched. A device holding this cache skips the Argon2 password/recovery KDF; it
-// never replaces those slots, which remain the portable unlock methods. Optional on
-// `Platform` — only mobile supplies it; the extension leaves it undefined.
-/** Best-effort biometric modality for UI copy/icon. Android can't distinguish the
- * enrolled modality, so it reports "biometric"; iOS maps LAContext.biometryType. */
-export type BiometryType = "faceId" | "touchId" | "opticId" | "biometric";
+// OS-enforced gate (Secure Enclave / Keystore; the Android key is dropped when the
+// enrolled set changes), so the vault file stays portable and slot-policy is untouched.
+// A device holding this cache skips the Argon2 password/recovery KDF; it never replaces
+// those slots, which remain the portable unlock methods. Optional on `Platform` — only
+// mobile supplies it; the extension leaves it undefined.
+/** Best-effort modality for UI copy/icon. Android can't distinguish the enrolled
+ * modality, so it reports "biometric"; iOS maps LAContext.biometryType, and reports
+ * "passcode" when nothing is enrolled but the device passcode can still open the gate. */
+export type BiometryType = "faceId" | "touchId" | "opticId" | "passcode" | "biometric";
 
 export interface BiometricUnlock {
 	/** Hardware is present and a biometric is enrolled, so enable/unlock can be offered. */

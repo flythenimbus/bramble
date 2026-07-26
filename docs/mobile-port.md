@@ -91,9 +91,14 @@ ground truth of what exists.
   keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish
   landed. **Biometric unlock is built** as a device-local, OS-gated convenience unlock (not a
   vault-format slot, so the vault stays portable): the VEK is cached behind a hardware biometric
-  gate by an in-house local Capacitor plugin (`BiometricVault` — iOS Keychain `.biometryCurrentSet`
+  gate by an in-house local Capacitor plugin (`BiometricVault` — iOS Keychain `.userPresence`
   + Secure Enclave; Android Keystore key `setUserAuthenticationRequired` + invalidated-by-enrollment
   wrapping the VEK), surfaced through an optional sixth `Platform.biometric` capability in `@core`.
+  On iOS the gate is `.userPresence`, not `.biometryCurrentSet`, so the **device passcode** opens it
+  too: `isAvailable`/`getSecret` evaluate `.deviceOwnerAuthentication`, a passcode-only iPhone reports
+  `biometryType: "passcode"` for the UI copy, and a Face ID user gets an "Enter Passcode" fallback.
+  The trade-off is deliberate (it's what the AutoFill extension has always relied on) but it does mean
+  iOS has no enrollment-change invalidation; Android keeps it, and stays biometry-only.
   Decided the attack-surface trade-off in favor of OS-enforced gating (not an app-level check), so
   it also seeds the Phase 3 autofill biometric-unwrap path. **iOS functionally verified on the
   simulator** (enable -> lock -> Face ID unlock, plus cancel/non-match/disable); Android compiles
@@ -580,7 +585,7 @@ The provider is native code with no webview and no WASM. On its own it must:
    app/package, so it shares internal app storage and the **Keystore** directly (no App Group
    needed).
 2. **Unlock via biometric**: iOS stores a wrapping key in the Keychain behind `kSecAccessControl`
-   `.biometryCurrentSet` + Secure Enclave, and the Keychain read itself triggers Face ID; Android
+   `.userPresence` + Secure Enclave, and the Keychain read itself triggers Face ID or passcode; Android
    uses a Keystore key created `setUserAuthenticationRequired(true)`, unlocked with `BiometricPrompt`
    + a `CryptoObject`. (iOS gotcha: `LAContext.evaluatePolicy` fails with "not running foreground"
    if called too early; defer the prompt to `viewDidAppear`.)

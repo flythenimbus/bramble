@@ -4,10 +4,10 @@ import LocalAuthentication
 import Security
 
 // Local Capacitor plugin: caches the vault VEK in the Keychain behind an OS-enforced
-// biometric gate. The item uses a .biometryCurrentSet access control, so the Secure
-// Enclave only releases it after a Face ID / Touch ID match and permanently invalidates
-// it if the enrolled biometric set changes. We never run Argon2 here; this is the
-// device-local convenience-unlock cache described in docs/mobile-port.md (Phase 2).
+// user-presence gate. The item uses .userPresence, so the Secure Enclave releases it on a
+// Face ID / Touch ID match OR the device passcode; that fallback is what lets a
+// passcode-only device (and the AutoFill extension) unlock. We never run Argon2 here; this
+// is the device-local convenience-unlock cache described in docs/mobile-port.md (Phase 2).
 @objc(BiometricVaultPlugin)
 public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	public let identifier = "BiometricVaultPlugin"
@@ -69,21 +69,33 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	@objc func isAvailable(_ call: CAPPluginCall) {
 		let context = LAContext()
 		var error: NSError?
-		let ok = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+		// deviceOwnerAuthentication = biometry OR passcode, so a device with no enrolled
+		// biometric still gets the fast unlock. It reports "passcode" for the UI copy.
+		let ok = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
+		var bioError: NSError?
+		let bioReady = context.canEvaluatePolicy(
+			.deviceOwnerAuthenticationWithBiometrics, error: &bioError)
+		// Locked out still means enrolled: keep naming the device's biometry, since the
+		// passcode fallback is what carries the unlock until the lockout clears.
+		let enrolled = bioReady || (bioError as? LAError)?.code == .biometryLockout
 		var type = "none"
 		if ok {
-			// .opticID is iOS 17+; guard it since the deployment target is 15.0.
-			if #available(iOS 17.0, *), context.biometryType == .opticID {
-				type = "opticId"
-			} else {
-				switch context.biometryType {
-				case .faceID: type = "faceId"
-				case .touchID: type = "touchId"
-				default: type = "unknown"
-				}
-			}
+			type = enrolled ? Self.biometryName(context) : "passcode"
 		}
 		call.resolve(["available": ok, "biometryType": type])
+	}
+
+	// LAContext.biometryType is only meaningful once canEvaluatePolicy has run.
+	private static func biometryName(_ context: LAContext) -> String {
+		// .opticID is iOS 17+; guard it since the deployment target is 15.0.
+		if #available(iOS 17.0, *), context.biometryType == .opticID {
+			return "opticId"
+		}
+		switch context.biometryType {
+		case .faceID: return "faceId"
+		case .touchID: return "touchId"
+		default: return "unknown"
+		}
 	}
 
 	// Presence check that never triggers a biometric prompt: ask only for attributes
@@ -174,8 +186,11 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		let context = LAContext()
 		// Authenticate once, then read the protected item reusing that authenticated
 		// context (skip the keychain's own prompt). Cleaner cancel detection than the
-		// deprecated kSecUseOperationPrompt path.
-		context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) {
+		// deprecated kSecUseOperationPrompt path. The policy must stay
+		// deviceOwnerAuthentication (not ...WithBiometrics) to match the item's
+		// .userPresence gate: passcode-only devices have no other way in, and a
+		// passcode-authenticated context would fail a .biometryCurrentSet item.
+		context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) {
 			success, evalError in
 			guard success else {
 				let code = (evalError as? LAError)?.code

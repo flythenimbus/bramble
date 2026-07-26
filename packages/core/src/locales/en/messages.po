@@ -599,6 +599,10 @@ msgstr "Delete vault"
 msgid "Deleting…"
 msgstr "Deleting…"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Device passcode"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Device sync"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Unlock with Optic ID"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Unlock with passcode"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Unlock with recovery code"
 
@@ -2140,6 +2148,10 @@ msgstr "Your backup was added as a new vault. Open it from the vault list and un
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Your browser may ask for access to your vault file when you unlock."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "your device passcode"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"

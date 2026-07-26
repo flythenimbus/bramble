@@ -44,6 +44,13 @@ describe("mobileBiometric availability probes swallow errors", () => {
 		expect(await mobileBiometric.biometryType?.()).toBe("biometric");
 	});
 
+	// A passcode-only iPhone (no enrolled Face ID / Touch ID) still opens the .userPresence
+	// gate, so the modality must survive the mapping instead of collapsing to "biometric".
+	it("biometryType passes through 'passcode'", async () => {
+		native.isAvailable.mockResolvedValue({ available: true, biometryType: "passcode" });
+		expect(await mobileBiometric.biometryType?.()).toBe("passcode");
+	});
+
 	it("isEnabled reflects whether a secret is cached", async () => {
 		native.hasSecret.mockResolvedValue({ value: true });
 		expect(await mobileBiometric.isEnabled(VID)).toBe(true);

@@ -599,6 +599,10 @@ msgstr "Supprimer le coffre"
 msgid "Deleting…"
 msgstr "Suppression en cours..."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Code d’accès de l’appareil"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Synchronisation des appareils"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Déverrouiller avec Optic ID"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Déverrouiller avec le code d’accès"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Déverrouiller avec le code de récupération"
 
@@ -2140,6 +2148,10 @@ msgstr "Votre sauvegarde a été ajoutée en tant que nouveau coffre. Ouvrez-le 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Votre navigateur peut demander l'accès à votre fichier de coffre lors du déverrouillage."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "le code d’accès de votre appareil"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"

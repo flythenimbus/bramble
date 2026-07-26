@@ -1,5 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Asterisk, ExternalLink, Fingerprint, KeyRound, Plus, ScanFace } from "lucide-react";
+import {
+	Asterisk,
+	ExternalLink,
+	Fingerprint,
+	KeyRound,
+	LockKeyhole,
+	Plus,
+	ScanFace,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
@@ -144,10 +152,11 @@ export function Auth() {
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
 	const showBiometric = hasVault && biometricEnabled && biometricAvailable;
-	// Label/icon track the enrolled modality: Face ID gets its own icon, everything
-	// else (Touch ID, generic Android fingerprint) uses the fingerprint icon.
+	// Label/icon track the enrolled modality: Face ID gets its own icon, a passcode-only
+	// device (iOS, nothing enrolled) gets the lock, everything else the fingerprint.
 	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
-	const BiometricIcon = isFaceId ? ScanFace : Fingerprint;
+	const BiometricIcon =
+		biometryType === "passcode" ? LockKeyhole : isFaceId ? ScanFace : Fingerprint;
 	const biometricLabel =
 		biometryType === "faceId"
 			? t`Unlock with Face ID`
@@ -155,7 +164,9 @@ export function Auth() {
 				? t`Unlock with Optic ID`
 				: biometryType === "touchId"
 					? t`Unlock with Touch ID`
-					: t`Unlock with biometrics`;
+					: biometryType === "passcode"
+						? t`Unlock with passcode`
+						: t`Unlock with biometrics`;
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">

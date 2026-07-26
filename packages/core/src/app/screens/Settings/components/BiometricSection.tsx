@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { Fingerprint, ScanFace } from "lucide-react";
+import { Fingerprint, LockKeyhole, ScanFace } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Toggle } from "./primitives";
@@ -28,9 +28,10 @@ export function BiometricSection() {
 	if (!biometricSupported) return null;
 
 	// Track the enrolled modality. Android can't tell face from fingerprint, so it
-	// reports "biometric" and we keep the generic "Face ID or a fingerprint" copy.
+	// reports "biometric" and we keep the generic "Face ID or a fingerprint" copy;
+	// iOS reports "passcode" when nothing is enrolled but the gate still opens.
 	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
-	const Icon = isFaceId ? ScanFace : Fingerprint;
+	const Icon = biometryType === "passcode" ? LockKeyhole : isFaceId ? ScanFace : Fingerprint;
 	const title =
 		biometryType === "faceId"
 			? t`Face ID`
@@ -38,7 +39,9 @@ export function BiometricSection() {
 				? t`Optic ID`
 				: biometryType === "touchId"
 					? t`Touch ID`
-					: t`Biometric unlock`;
+					: biometryType === "passcode"
+						? t`Device passcode`
+						: t`Biometric unlock`;
 	// Noun phrase woven into the subtitle copy below ("...with Face ID").
 	const name =
 		biometryType === "faceId"
@@ -47,7 +50,9 @@ export function BiometricSection() {
 				? t`Optic ID`
 				: biometryType === "touchId"
 					? t`Touch ID`
-					: t`Face ID or a fingerprint`;
+					: biometryType === "passcode"
+						? t`your device passcode`
+						: t`Face ID or a fingerprint`;
 
 	const onToggle = async (next: boolean) => {
 		setError(null);
@@ -74,7 +79,7 @@ export function BiometricSection() {
 				<Toggle
 					checked={biometricEnabled && biometricAvailable}
 					onChange={(next) => void onToggle(next)}
-					label={t`Biometric unlock`}
+					label={title}
 					disabled={busy || !biometricAvailable}
 				/>
 			</Row>

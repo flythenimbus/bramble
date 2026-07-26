@@ -599,6 +599,10 @@ msgstr "Excluir cofre"
 msgid "Deleting…"
 msgstr "Excluindo..."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Código do dispositivo"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Sincronização do dispositivo"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Desbloquear com Optic ID"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Desbloquear com o código"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Desbloquear com código de recuperação"
 
@@ -2140,6 +2148,10 @@ msgstr "Seu backup foi adicionado como um novo cofre. Abra-o na lista de cofres 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Seu navegador pode solicitar acesso ao arquivo do cofre ao desbloquear."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "código do seu dispositivo"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"

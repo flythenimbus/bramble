@@ -599,6 +599,10 @@ msgstr "Elimina vault"
 msgid "Deleting…"
 msgstr "Eliminazione in corso..."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Codice di accesso del dispositivo"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Sincronizzazione dispositivo"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Sblocca con Optic ID"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Sbloccare con il codice di accesso"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Sbloccare con il codice di recupero"
 
@@ -2140,6 +2148,10 @@ msgstr "Il backup è stato aggiunto come un nuovo vault. Aprilo dall'elenco dei 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Il suo browser potrebbe richiedere l'accesso al file del caveau quando lo sblocca."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "il codice di accesso del tuo dispositivo"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"

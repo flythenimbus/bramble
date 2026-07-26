@@ -599,6 +599,10 @@ msgstr "Eliminar almacén"
 msgid "Deleting…"
 msgstr "Eliminando..."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Código del dispositivo"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Sincronización del dispositivo"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Desbloquear con llave de seguridad"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Desbloquear con código"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Desbloquear con Touch ID"
 
@@ -2140,6 +2148,10 @@ msgstr "Su copia de seguridad se añadió como una nueva bóveda. Ábrala desde 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Su navegador puede solicitar acceso al archivo de la bóveda cuando usted desbloquee."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "tu código de acceso del dispositivo"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"

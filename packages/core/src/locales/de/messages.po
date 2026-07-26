@@ -599,6 +599,10 @@ msgstr "Tresor löschen"
 msgid "Deleting…"
 msgstr "Lösche..."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "Gerätecode"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Geräresynchronisierung"
@@ -1934,6 +1938,10 @@ msgid "Unlock with Optic ID"
 msgstr "Mit Wiederherstellungscode entsperren"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "Mit Gerätecode entsperren"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with recovery code"
 msgstr "Mit Sicherheitsschlüssel entsperren"
 
@@ -2140,6 +2148,10 @@ msgstr "Ihr Backup wurde als neuer Tresor hinzugefügt. Öffnen Sie ihn aus der 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Ihr Browser kann beim Entsperren nach Zugriff auf die Tresordatei fragen."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your device passcode"
+msgstr "Ihr Gerätecode"
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 #~ msgid "Your master password"
