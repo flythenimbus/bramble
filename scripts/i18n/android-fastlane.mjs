@@ -4,20 +4,22 @@
 // iOS adapter (fastlane.mjs); the difference is that Android's English is written FOR Android
 // (e.g. "your browser", "fingerprint or face") rather than projected from the iOS listing.
 //
-// Run via `pnpm i18n:native` (translation needs Ollama running, or a DEEPSEEK_API_KEY). After
-// editing the English, delete a locale's file to have it re-translated on the next run.
+// Run via `pnpm i18n:native` (translation needs Ollama running, or a DEEPSEEK_API_KEY).
+// Editing the English is enough: the next run re-translates the locales that came from it.
 //
 //   en-US/title.txt               brand name, copied verbatim
 //   en-US/short_description.txt   Play summary (<=80 chars), translated
 //   en-US/full_description.txt    translated
 //   en-US/changelogs/current.txt  hand-authored, en-US only (snapshotted to <versionCode>.txt at
 //                                 release; the client falls back to en-US for other locales)
+// A target is rewritten only when the English it was translated from changed (source-hash.mjs).
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ANDROID_FASTLANE_DIR, LOCALES, repo } from "./locales.mjs";
 import { translateText } from "./ollama.mjs";
+import { flushSources, recordSource, sourceChanged } from "./source-hash.mjs";
 
 const SOURCE = "en-US";
 const VERBATIM = new Set(["title.txt"]); // brand name — copied as-is
@@ -40,13 +42,17 @@ export async function run() {
 		for (const file of TXT) {
 			const from = join(src, file);
 			const target = join(dst, file);
-			if (!existsSync(from) || existsSync(target)) continue; // don't clobber existing translations
+			if (!existsSync(from)) continue;
 			const en = readFileSync(from, "utf8");
+			// Present AND still matching the English it came from: leave it (a manual fix wins).
+			if (existsSync(target) && !sourceChanged(target, en)) continue;
 			writeFileSync(target, VERBATIM.has(file) ? en : await translateText(name, en));
+			recordSource(target, en);
 			wrote++;
 		}
 		console.log(`  ${appStore}: ${wrote ? `wrote ${wrote} file(s)` : "up to date"}`);
 	}
+	flushSources();
 	// Icon (once). F-Droid otherwise falls back to the APK launcher icon.
 	const iconDst = join(ANDROID_FASTLANE_DIR, SOURCE, "images", "icon.png");
 	if (!existsSync(iconDst) && existsSync(ICON_SRC)) {

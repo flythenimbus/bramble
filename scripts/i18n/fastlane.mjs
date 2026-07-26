@@ -1,11 +1,13 @@
 // iOS fastlane metadata adapter: generates metadata/<appStore>/ dirs from the
 // en-US source so `deliver` uploads localized App Store listings. Idempotent: a
-// target file that already exists is left alone (manual edits win).
+// target is rewritten only when the English it was translated from has changed
+// (see source-hash.mjs), so manual fixes survive but an edit to en-US propagates.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FASTLANE_DIR, LOCALES, SOURCE } from "./locales.mjs";
 import { fitToLimit, translateText } from "./ollama.mjs";
+import { flushSources, recordSource, sourceChanged } from "./source-hash.mjs";
 
 const SOURCE_DIR = "en-US";
 // Prose files worth translating.
@@ -31,18 +33,21 @@ export async function run() {
 		let wrote = 0;
 		for (const file of files) {
 			const target = join(dir, file);
-			if (existsSync(target)) continue; // don't clobber existing/edited translations
 			const en = readFileSync(join(src, file), "utf8");
+			// Present AND still matching the English it came from: leave it (a manual fix wins).
+			if (existsSync(target) && !sourceChanged(target, en)) continue;
 			let value;
 			if (VERBATIM.has(file)) value = en;
 			else if (file === KEYWORDS) value = await translateKeywords(name, en);
 			else if (PROSE.has(file)) value = await translateText(name, en);
 			else value = en; // unknown file: copy through
 			writeFileSync(target, value);
+			recordSource(target, en);
 			wrote++;
 		}
 		console.log(`  ${appStore}: ${wrote ? `wrote ${wrote} file(s)` : "up to date"}`);
 	}
+	flushSources();
 	await fitPass();
 }
 
