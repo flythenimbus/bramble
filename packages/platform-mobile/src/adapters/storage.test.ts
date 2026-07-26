@@ -130,6 +130,46 @@ describe("mobile one-time namespacing migration", () => {
 		expect(prefs).toEqual(prefsSnap);
 	});
 
+	it("reaps a record with no blob and no sync group, keeping the ones that have either", async () => {
+		files.set(nf("real"), bytesToBase64(new Uint8Array([9])));
+		prefs.set("meta:sync.group:joining", JSON.stringify({ groupKey: "gk" }));
+		prefs.set(
+			REG_KEY,
+			JSON.stringify({
+				vaults: [
+					{ id: "ghost", label: "", createdAt: 1 }, // orphan: no blob, never enrolled
+					{ id: "real", label: "", createdAt: 2 }, // has a blob
+					{ id: "joining", label: "", createdAt: 3 }, // enrolled, blob not landed yet
+				],
+			}),
+		);
+
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(reg().vaults.map((v) => v.id)).toEqual(["real", "joining"]);
+	});
+
+	it("leaves an intact registry untouched (no needless rewrite)", async () => {
+		files.set(nf("v"), bytesToBase64(new Uint8Array([1])));
+		const stored = JSON.stringify({ vaults: [{ id: "v", label: "", createdAt: 0 }] });
+		prefs.set(REG_KEY, stored);
+
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(prefs.get(REG_KEY)).toBe(stored);
+	});
+
+	// Minting a record from a blind write is what produced unopenable "ghost" vaults: the picker
+	// offered them, but they had no blob, so they dead-ended on the first-run screen.
+	it("refuses a blind blob write when no vault is registered, rather than minting one", async () => {
+		const storage = await loadStorage();
+		await expect(storage.writeVaultBlob(new Uint8Array([1, 2, 3]))).rejects.toThrow(/no vault id/);
+		expect(reg().vaults).toEqual([]);
+		expect(files.size).toBe(0);
+	});
+
 	it("never clobbers a namespaced blob when the flat file is already gone (race guard)", async () => {
 		const good = bytesToBase64(new Uint8Array([1, 1, 1]));
 		files.set(nf("v"), good); // another context already copied + deleted the flat file

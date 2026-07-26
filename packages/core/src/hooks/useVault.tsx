@@ -1086,25 +1086,42 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		null,
 	);
 	const joinRunningRef = useRef(false);
+	// The in-flight startJoin promise, so a re-entrant call rides it instead of starting a second join.
+	const joinInFlightRef = useRef<Promise<void> | null>(null);
 
+	// Re-entry guard. The dedup below only matches a PERSISTED sync.group, which an in-flight join
+	// hasn't written yet, so a second call would create a second registry record and overwrite
+	// pendingJoin + joinResolverRef - stranding the first record forever, since the failure cleanup
+	// can only ever fire for the newest attempt. Assigned before the first await, so a double tap
+	// rides the in-flight join instead. See docs/multiple-vaults.md.
 	const startJoin = useCallback(
-		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
-			setJoinError(null);
-			const code = decodePairingCode(pairingCode.trim()); // validate before creating anything
-			// Dedup: if a vault already syncs this group, open it instead of adding a duplicate.
-			for (const v of vaults) {
-				const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
-				if (g?.groupKey === code.groupKey) {
-					selectVault(v.id);
-					return;
+		(pairingCode: string, method: JoinUnlock): Promise<void> => {
+			if (joinInFlightRef.current) return joinInFlightRef.current;
+			const run = (async () => {
+				setJoinError(null);
+				const code = decodePairingCode(pairingCode.trim()); // validate before creating anything
+				// Dedup: if a vault already syncs this group, open it instead of adding a duplicate.
+				for (const v of vaults) {
+					const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
+					if (g?.groupKey === code.groupKey) {
+						selectVault(v.id);
+						return;
+					}
 				}
-			}
-			const newId = await createRecord();
-			await shell.setActiveVault?.(newId);
-			return new Promise<void>((resolve, reject) => {
-				joinResolverRef.current = { resolve, reject };
-				setPendingJoin({ code: pairingCode, method, targetId: newId });
-			});
+				const newId = await createRecord();
+				await shell.setActiveVault?.(newId);
+				return new Promise<void>((resolve, reject) => {
+					joinResolverRef.current = { resolve, reject };
+					setPendingJoin({ code: pairingCode, method, targetId: newId });
+				});
+			})();
+			joinInFlightRef.current = run;
+			void run
+				.catch(() => {})
+				.finally(() => {
+					joinInFlightRef.current = null;
+				});
+			return run;
 		},
 		[vaults, storage, createRecord, shell, selectVault],
 	);

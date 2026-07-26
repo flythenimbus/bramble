@@ -869,6 +869,36 @@ the restore-as-new-vault flow. Flows that operate on the already-active vault (u
 entry CRUD, register/revoke key, password changes, recovery-code reset) correctly use the
 ambient `vcrypto`, because unlock screens only render for the selected vault.
 
+### Ghost records: registered but never written
+
+A registry record whose blob was never written is a dead end for the user: the picker
+offers it, selecting it renders the first-run "Create your vault" screen (`hasVault` is
+false), and there's no route to Settings from there, so it can't be deleted. `createVault`
+is no escape either - it mints a *new* record rather than filling the selected empty one.
+Three ways one got created, all now closed:
+
+- **Join re-entry.** `startJoin` registers a record, then defers the handshake to an effect
+  via `pendingJoin` + `joinResolverRef`. A second call overwrote both, so the failure
+  cleanup could only ever fire for the newest attempt and the first record was stranded
+  forever. The dedup at the top of `startJoin` cannot catch this: it matches a *persisted*
+  `sync.group`, which an in-flight join hasn't written yet. Fixed with an in-flight promise
+  ref, assigned before the first await, that a re-entrant call rides instead.
+- **Blind blob writes minting records.** Mobile's `writeVaultBlob` fell back to
+  `reg.vaults[0]?.id`, and with an empty registry minted a record *before* writing the file.
+  Anything failing in between left exactly this shape. It now throws: a blind write with an
+  empty registry means the caller lost its vault id.
+- **Merges landing in the wrong vault.** The mobile sync manager built its entries blob
+  store with the raw adapter, so `writeEntriesBlob` (which passes no id) resolved to
+  `reg.vaults[0]` while the store's own `readDecodedBlob` used the *active* vault. With more
+  than one vault, every remote merge read the active vault and wrote the result into the
+  first one. The store's storage is now scoped per call, matching the read.
+
+Belt and braces: mobile startup reaps records with neither a blob file nor a `sync.group`,
+so an existing ghost clears itself instead of needing a reinstall. Startup only, since a
+vault mid-creation is briefly in exactly that state. Mobile `getMeta`/`setMeta` now gate on
+that startup pass too, so the UI can't read a pre-reap registry, and a record written during
+it can't be clobbered by the fresh-install `writeRegistry(EMPTY_REGISTRY)`.
+
 ### Enrollment: hand the VEK to the transfer explicitly
 
 Previously called a deferred pre-existing risk. **The scratch-slot model breaks enrollment

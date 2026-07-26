@@ -17,6 +17,7 @@ import {
 	mergeRemoteRoster,
 	type RosterEntry,
 	type RosterPayload,
+	type StorageAdapter,
 	SYNC_LAST_SYNCED_KEY,
 	type SyncEvent,
 	type WireRecoverySlot,
@@ -266,9 +267,19 @@ function getClock(): Promise<HybridClock> {
 
 // The one reader/writer of the on-disk entries format (shared with EntryMutations
 // and the enrollment path), so a remote merge writes exactly what a local edit does.
+// writeEntriesBlob passes no vault id, and the raw adapter then falls back to the FIRST registry
+// entry - which on a multi-vault device is a different vault's file than the read above came from,
+// so a merge would land in the wrong vault. Resolve the id per call (the store is a module-level
+// singleton and the active vault changes at runtime), matching readDecodedBlob exactly.
+const activeScopedStorage: StorageAdapter = {
+	...mobileStorage,
+	writeVaultBlob: async (blob, vaultId) =>
+		mobileStorage.writeVaultBlob(blob, vaultId ?? (await activeVaultId())),
+};
+
 const blobStore = createEntriesBlobStore({
 	crypto: mobileCrypto,
-	storage: mobileStorage,
+	storage: activeScopedStorage,
 	readDecodedBlob: async () => ({
 		blob: decodeVaultBlob(await mobileStorage.readVaultBlob(await activeVaultId())),
 	}),

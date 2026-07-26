@@ -7,6 +7,7 @@ import {
 	EMPTY_REGISTRY,
 	parseRegistry,
 	VAULT_REGISTRY_KEY,
+	type VaultRecord,
 	type VaultRegistry,
 } from "@core/vault/vault-registry";
 
@@ -66,6 +67,26 @@ function ensureMigrated(): Promise<void> {
 	return migration;
 }
 async function runMigration(): Promise<void> {
+	await migrateNamespacing();
+	await reapGhostRecords();
+}
+
+// A record with no blob file and no sync group is an orphan from a create/join that registered the
+// vault but never wrote it. The picker still offers it, selecting it dead-ends on the first-run
+// screen, and it can't be deleted from the UI, so reap it. Startup only: a vault being created is
+// briefly in exactly this state.
+async function reapGhostRecords(): Promise<void> {
+	const reg = await readRegistry();
+	const live: VaultRecord[] = [];
+	for (const v of reg.vaults) {
+		const enrolled =
+			(await Preferences.get({ key: syncMetaKey("sync.group", v.id) })).value != null;
+		if (enrolled || (await fileExists(blobFileFor(v.id)))) live.push(v);
+	}
+	if (live.length !== reg.vaults.length) await writeRegistry({ vaults: live });
+}
+
+async function migrateNamespacing(): Promise<void> {
 	const rawStr = (await Preferences.get({ key: `meta:${VAULT_REGISTRY_KEY}` })).value;
 	if (rawStr != null) {
 		// A registry exists. Finish namespacing a vault it still points at the fixed paths via the
@@ -133,13 +154,11 @@ export const mobileStorage: StorageAdapter = {
 	},
 	async writeVaultBlob(blob, vaultId) {
 		await ensureMigrated();
-		let reg = await readRegistry();
-		let targetId = vaultId ?? reg.vaults[0]?.id;
-		if (targetId == null) {
-			targetId = crypto.randomUUID();
-			reg = addVault(reg, { id: targetId, label: "", createdAt: Date.now() });
-			await writeRegistry(reg);
-		}
+		const reg = await readRegistry();
+		const targetId = vaultId ?? reg.vaults[0]?.id;
+		// Never mint a registry record here: a blind write with an empty registry means the caller
+		// lost its vault id, and registering one strands a vault the UI can't open or delete.
+		if (targetId == null) throw new Error("writeVaultBlob: no vault id, and no vault registered");
 		const path = blobFileFor(targetId);
 		// Snapshot the previous good bytes before truncating, so a crash mid-write
 		// is recoverable via restoreVaultFromBackup.
@@ -177,11 +196,17 @@ export const mobileStorage: StorageAdapter = {
 		if (await fileExists(bak)) await Filesystem.deleteFile({ path: bak, directory: DIR });
 	},
 
+	// Meta reads/writes gate on the migration too: the registry lives here, so a read that skipped
+	// it could hand the UI a pre-reap registry, and a write racing it could be clobbered by the
+	// fresh-install `writeRegistry(EMPTY_REGISTRY)`. (runMigration uses Preferences directly, so
+	// this can't recurse.)
 	async getMeta<T>(key: string): Promise<T | undefined> {
+		await ensureMigrated();
 		const r = await Preferences.get({ key: `meta:${key}` });
 		return r.value ? (JSON.parse(r.value) as T) : undefined;
 	},
 	async setMeta<T>(key: string, value: T): Promise<void> {
+		await ensureMigrated();
 		await Preferences.set({ key: `meta:${key}`, value: JSON.stringify(value) });
 	},
 	async removeMeta(key: string): Promise<void> {
