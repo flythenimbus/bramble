@@ -1,11 +1,12 @@
 Nouveautés de cette version :
 
-- Bramble prend désormais en charge plusieurs coffres. Conservez des coffres séparés, par exemple un pour vos identifiants personnels et un pour le travail, chacun avec son propre mot de passe, et passez de l'un à l'autre quand vous le souhaitez.
-- Synchronisez un coffre entre vos appareils. Votre téléphone, votre tablette et votre ordinateur restent à jour en se connectant directement les uns aux autres, de manière privée, sans que rien ne soit jamais conservé sur un serveur. Associez un nouvel appareil en scannant un code QR.
-- Importez un coffre existant en ouvrant une sauvegarde .bramble chiffrée, directement depuis l'écran de configuration ou les Réglages.
-- Les Réglages sont désormais organisés en onglets, pour que les options soient plus faciles à trouver.
-- Affichez ou masquez votre mot de passe pendant que vous le saisissez, afin de détecter une erreur de frappe avant de déverrouiller, créer ou modifier un coffre.
-- Bramble ne permet plus à iOS de remplir automatiquement ou d'enregistrer votre mot de passe principal. Il reste uniquement à vous de le saisir.
-- Soutenez le développement de Bramble grâce aux nouvelles options de l'onglet À propos.
+- Remplissage automatique des codes de double authentification. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme votre mot de passe. Nécessite iOS 18 et les suggestions de clavier activées dans Réglages.
+- Bramble prend désormais en charge plusieurs coffres-forts. Conservez des coffres-forts distincts, par exemple un pour vos identifiants personnels et un pour le travail, chacun avec son propre mot de passe, et basculez de l’un à l’autre quand vous le souhaitez.
+- Synchronisez un coffre-fort entre vos appareils. Votre téléphone, tablette et ordinateur restent à jour en se connectant directement les uns aux autres, de manière privée, sans jamais rien conserver sur un serveur. Associez un nouvel appareil en scannant un code QR.
+- Importez un coffre-fort existant en ouvrant une sauvegarde chiffrée .bramble, directement depuis l’écran de configuration ou les Réglages.
+- Les Réglages sont réorganisés en onglets, pour retrouver plus facilement les options.
+- Affichez ou masquez votre mot de passe lorsque vous le saisissez, pour repérer une erreur de frappe avant de déverrouiller, créer ou modifier un coffre-fort.
+- Bramble n’autorise plus le remplissage automatique ni l’enregistrement de votre mot de passe principal par iOS. Il reste le vôtre, à saisir uniquement par vous.
+- Soutenez le développement de Bramble depuis les nouvelles options dans l’onglet À propos.
 
 Pas de compte, pas de cloud. Tout reste sur vos appareils.
