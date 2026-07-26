@@ -1,3 +1,4 @@
+import type { StorageAdapter } from "@core/adapters/storage";
 import { bytesToBase64 } from "@core/util/bytes";
 import { addVault, VAULT_REGISTRY_KEY, type VaultRegistry } from "@core/vault/vault-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -61,6 +62,13 @@ async function loadStorage() {
 
 const reg = (local: Record<string, unknown>) => local[VAULT_REGISTRY_KEY] as VaultRegistry;
 const firstId = (local: Record<string, unknown>) => reg(local).vaults[0]!.id;
+
+/** Register vault ids the way the app does: the record is persisted before its blob is written. */
+async function register(storage: { setMeta: StorageAdapter["setMeta"] }, ...ids: string[]) {
+	await storage.setMeta(VAULT_REGISTRY_KEY, {
+		vaults: ids.map((id, i) => ({ id, label: "", createdAt: i })),
+	} satisfies VaultRegistry);
+}
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -156,10 +164,20 @@ describe("extensionStorage.writeVaultBlob + restore", () => {
 	it("clears any stale backup on the first write (nothing to recover)", async () => {
 		const local = stubChrome();
 		const storage = await loadStorage();
-		await storage.writeVaultBlob(new Uint8Array([2]));
-		const id = firstId(local);
-		expect(local[`${BACKUP_KEY}:${id}`]).toBeUndefined();
+		await register(storage, "v1");
+		await storage.writeVaultBlob(new Uint8Array([2]), "v1");
+		expect(local[`${BACKUP_KEY}:v1`]).toBeUndefined();
 		expect(await storage.restoreVaultFromBackup()).toBe(false);
+	});
+
+	// Minting a record from a blind write is what produced unopenable "ghost" vaults: the picker
+	// offered them, but they had no blob, so they dead-ended on the first-run screen.
+	it("refuses a blind write when no vault is registered, rather than minting one", async () => {
+		const local = stubChrome();
+		const storage = await loadStorage();
+		await expect(storage.writeVaultBlob(new Uint8Array([1]))).rejects.toThrow(/no vault id/);
+		expect(reg(local).vaults).toEqual([]);
+		expect(Object.keys(local).some((k) => k.startsWith(`${VAULT_KEY}:`))).toBe(false);
 	});
 });
 
@@ -375,15 +393,15 @@ describe("one-time namespacing migration", () => {
 });
 
 describe("multi-vault registry", () => {
-	it("bootstraps the first vault at a namespaced key on a fresh install write", async () => {
+	it("stores the first vault at its namespaced key, never the un-suffixed one", async () => {
 		const local = stubChrome();
 		const storage = await loadStorage();
+		await register(storage, "v1");
 
-		await storage.writeVaultBlob(new Uint8Array([1]));
+		await storage.writeVaultBlob(new Uint8Array([1]), "v1");
 
-		const id = firstId(local);
 		expect(reg(local).vaults).toHaveLength(1);
-		expect(local[nk(id)]).toBe(bytesToBase64(new Uint8Array([1])));
+		expect(local[nk("v1")]).toBe(bytesToBase64(new Uint8Array([1])));
 		expect(local[VAULT_KEY]).toBeUndefined();
 		expect(await storage.readVaultBlob()).toEqual(new Uint8Array([1]));
 	});
@@ -426,14 +444,62 @@ describe("multi-vault registry", () => {
 	});
 
 	it("reports vault existence for a specific id and for any vault", async () => {
-		const local = stubChrome();
+		stubChrome();
 		const storage = await loadStorage();
 		expect(await storage.hasVaultHandle()).toBe(false);
 
-		await storage.writeVaultBlob(new Uint8Array([9]));
+		await register(storage, "v1");
+		await storage.writeVaultBlob(new Uint8Array([9]), "v1");
 		expect(await storage.hasVaultHandle()).toBe(true);
-		expect(await storage.hasVaultHandle(firstId(local))).toBe(true);
+		expect(await storage.hasVaultHandle("v1")).toBe(true);
 		expect(await storage.hasVaultHandle("nonexistent")).toBe(false);
+	});
+});
+
+// A record with nothing behind it is an orphan from a create/join that registered the vault but
+// never wrote it: offered by the picker, dead-ends on the first-run screen, undeletable from the UI.
+describe("ghost-record reaping", () => {
+	it("drops a record with no blob, no snapshot and no sync group, keeping the rest", async () => {
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: {
+				vaults: [
+					{ id: "ghost", label: "", createdAt: 1 },
+					{ id: "real", label: "", createdAt: 2 },
+					{ id: "joining", label: "", createdAt: 3 },
+					{ id: "crashed", label: "", createdAt: 4 },
+				],
+			},
+			[nk("real")]: bytesToBase64(new Uint8Array([1])),
+			"sync.group:joining": { groupKey: "gk" }, // enrolled, blob not landed yet
+			[`${BACKUP_KEY}:crashed`]: bytesToBase64(new Uint8Array([2])), // recoverable via restore
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["real", "joining", "crashed"]);
+	});
+
+	it("leaves an intact registry alone", async () => {
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: { vaults: [{ id: "v", label: "", createdAt: 0 }] },
+			[nk("v")]: bytesToBase64(new Uint8Array([1])),
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["v"]);
+	});
+
+	// A file-backed vault's record legitimately has no blob until the first unlock materialises it.
+	it("reaps nothing while a legacy FSA handle exists", async () => {
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: { vaults: [{ id: "fsa", label: "", createdAt: 0 }] },
+		});
+		getLegacyHandle.mockResolvedValue(fakeHandle(new Uint8Array([5])).handle);
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["fsa"]);
 	});
 });
 

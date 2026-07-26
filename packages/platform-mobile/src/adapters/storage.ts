@@ -71,17 +71,25 @@ async function runMigration(): Promise<void> {
 	await reapGhostRecords();
 }
 
-// A record with no blob file and no sync group is an orphan from a create/join that registered the
-// vault but never wrote it. The picker still offers it, selecting it dead-ends on the first-run
-// screen, and it can't be deleted from the UI, so reap it. Startup only: a vault being created is
-// briefly in exactly this state.
+// A record with neither a blob file, a recovery snapshot, nor a sync group is an orphan from a
+// create/join that registered the vault but never wrote it. The picker still offers it, selecting
+// it dead-ends on the first-run screen, and it can't be deleted from the UI, so reap it. Startup
+// only: a vault being created is briefly in exactly this state.
 async function reapGhostRecords(): Promise<void> {
 	const reg = await readRegistry();
+	if (reg.vaults.length === 0) return;
 	const live: VaultRecord[] = [];
 	for (const v of reg.vaults) {
 		const enrolled =
 			(await Preferences.get({ key: syncMetaKey("sync.group", v.id) })).value != null;
-		if (enrolled || (await fileExists(blobFileFor(v.id)))) live.push(v);
+		// The snapshot counts: a crash mid-write can leave one recoverable via restoreVaultFromBackup.
+		if (
+			enrolled ||
+			(await fileExists(blobFileFor(v.id))) ||
+			(await fileExists(backupFileFor(v.id)))
+		) {
+			live.push(v);
+		}
 	}
 	if (live.length !== reg.vaults.length) await writeRegistry({ vaults: live });
 }

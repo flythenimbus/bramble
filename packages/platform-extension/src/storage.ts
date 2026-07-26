@@ -8,6 +8,7 @@ import {
 	EMPTY_REGISTRY,
 	parseRegistry,
 	VAULT_REGISTRY_KEY,
+	type VaultRecord,
 	type VaultRegistry,
 } from "@core/vault/vault-registry";
 import { api } from "./platform-api";
@@ -93,6 +94,36 @@ function ensureMigrated(): Promise<void> {
 	return migration;
 }
 async function runMigration(): Promise<void> {
+	await migrateNamespacing();
+	await reapGhostRecords();
+}
+
+// A record with neither a blob, a recovery snapshot, nor a sync group is an orphan from a
+// create/join that registered the vault but never wrote it. The picker still offers it, selecting
+// it dead-ends on the first-run screen, and it can't be deleted from the UI, so reap it. Startup
+// only: a vault being created is briefly in exactly this state. Skipped entirely while a legacy
+// FSA handle exists, because that vault's record legitimately has no blob until the first unlock
+// materialises it (see readVaultBlob).
+async function reapGhostRecords(): Promise<void> {
+	const reg = await readRegistry();
+	if (reg.vaults.length === 0) return;
+	const live: VaultRecord[] = [];
+	for (const v of reg.vaults) {
+		const keys = await api.storage.local.get([
+			blobKeyFor(v.id),
+			backupKeyFor(v.id),
+			syncKeyFor("sync.group", v.id),
+		]);
+		if (Object.values(keys).some((x) => x != null)) live.push(v);
+	}
+	if (live.length === reg.vaults.length) return;
+	// Only consult the handle once something would actually be dropped, so the common startup
+	// never touches IndexedDB.
+	if ((await getLegacyHandle()) !== null) return;
+	await writeRegistry({ vaults: live });
+}
+
+async function migrateNamespacing(): Promise<void> {
 	const raw = (await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY] as
 		| { legacyBlobVaultId?: unknown }
 		| undefined;
@@ -211,16 +242,14 @@ export const extensionStorage: StorageAdapter = {
 		throw new Error("no vault stored");
 	},
 
-	/** Write the vault bytes, snapshotting a recoverable backup first. With no id and no vaults yet (fresh install), bootstraps the first vault. */
+	/** Write the vault bytes, snapshotting a recoverable backup first. */
 	async writeVaultBlob(blob, vaultId) {
 		await ensureMigrated();
-		let reg = await readRegistry();
-		let targetId = vaultId ?? reg.vaults[0]?.id;
-		if (targetId == null) {
-			targetId = crypto.randomUUID();
-			reg = addVault(reg, { id: targetId, label: "", createdAt: Date.now() });
-			await writeRegistry(reg);
-		}
+		const reg = await readRegistry();
+		const targetId = vaultId ?? reg.vaults[0]?.id;
+		// Never mint a registry record here: a blind write with an empty registry means the caller
+		// lost its vault id, and registering one strands a vault the UI can't open or delete.
+		if (targetId == null) throw new Error("writeVaultBlob: no vault id, and no vault registered");
 		const key = blobKeyFor(targetId);
 		await snapshotBlob(key, backupKeyFor(targetId));
 		await api.storage.local.set({ [key]: bytesToBase64(blob) });
@@ -247,14 +276,19 @@ export const extensionStorage: StorageAdapter = {
 		await api.storage.local.remove(backupKeyFor(vaultId));
 	},
 
+	// Meta reads/writes gate on the migration too: the registry lives here, so a read that skipped
+	// it could hand the UI a pre-reap registry. (runMigration uses api.storage.local directly, so
+	// this can't recurse.)
 	/** Read a plaintext metadata value from chrome.storage.local. */
 	async getMeta(key) {
+		await ensureMigrated();
 		const result = await api.storage.local.get(key);
 		return result[key];
 	},
 
 	/** Write a plaintext metadata value to chrome.storage.local. */
 	async setMeta(key, value) {
+		await ensureMigrated();
 		await api.storage.local.set({ [key]: value });
 	},
 

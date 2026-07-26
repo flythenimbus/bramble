@@ -893,11 +893,19 @@ Three ways one got created, all now closed:
   than one vault, every remote merge read the active vault and wrote the result into the
   first one. The store's storage is now scoped per call, matching the read.
 
-Belt and braces: mobile startup reaps records with neither a blob file nor a `sync.group`,
-so an existing ghost clears itself instead of needing a reinstall. Startup only, since a
-vault mid-creation is briefly in exactly that state. Mobile `getMeta`/`setMeta` now gate on
-that startup pass too, so the UI can't read a pre-reap registry, and a record written during
-it can't be clobbered by the fresh-install `writeRegistry(EMPTY_REGISTRY)`.
+Belt and braces: startup reaps records with no blob, no recovery snapshot and no
+`sync.group`, so an existing ghost clears itself instead of needing a reinstall. Startup
+only, since a vault mid-creation is briefly in exactly that state. `getMeta`/`setMeta` gate
+on that pass too, so the UI can't read a pre-reap registry, and on mobile a record written
+during it can't be clobbered by the fresh-install `writeRegistry(EMPTY_REGISTRY)`.
+
+The first two apply to **both** storage adapters (the extension's `writeVaultBlob` had the
+same mint, byte for byte); the third was mobile-only, since the extension threads
+`ctx.vaultId` explicitly through its own merge port in `background/sync.ts`. Two
+extension-only wrinkles in the reaper: a file-backed (FSA) vault's record legitimately has
+no blob until the first unlock materialises it, so the reap is skipped entirely while a
+legacy handle exists; and the handle is only consulted once something would actually be
+dropped, to keep the common startup off IndexedDB.
 
 ### Enrollment: hand the VEK to the transfer explicitly
 
