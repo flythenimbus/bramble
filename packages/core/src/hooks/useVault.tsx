@@ -545,8 +545,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// can restore it. Only WRITE it while unlocked; never clear it here. The background clears it on
 	// lock (clearSession). Clearing it on the initially-locked mount (isLocked starts true, before
 	// the VEK hydrates) would wipe the id before useVaultRegistry can restore it, dropping a
-	// reopened popup onto the picker instead of the unlocked vault. No-op on mobile (setActiveVault
-	// is absent there).
+	// reopened popup onto the picker instead of the unlocked vault.
+	//
+	// Mobile DOES implement setActiveVault (adapters/shell.ts) — a previous comment here claimed it
+	// was absent, which hid the fact that mobile's sync reads this key to pick its target vault.
+	// There it also retargets the live roster session, so it is the seam that keeps sync and the
+	// process-global VEK pointed at the same vault.
 	useEffect(() => {
 		if (!isLocked && activeId) void shell.setActiveVault?.(activeId);
 	}, [isLocked, activeId, shell]);
@@ -770,6 +774,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// additional vault must not disturb an existing vault's sync state. Sync state is still
 			// device-global until Phase 2 namespaces it per vault. See docs/multiple-vaults.md.
 			if (isFirst) await shell.resetSyncState?.();
+			// Record the new vault BEFORE generateVek() swaps the process-global VEK. On mobile the
+			// swap fires onUnlocked -> maybeStartRosterSync, and the recorded active vault is still
+			// the PREVIOUS one, so sync would start a session for that vault while the global key is
+			// this new one — a merge then seals the old vault's file with the new vault's key and
+			// locks it permanently (issue #27). setActiveVault stops any live session first, so by
+			// the time the key moves there is nothing running against the old vault. Mirrors the
+			// ordering unlock() already uses.
+			await shell.setActiveVault?.(newId);
 			// Bind crypto to the NEW vault id explicitly. The ambient `crypto` is still memoized to
 			// the previous active id (createRecord only just set the new one via React state), so
 			// using it would cache the new vault's VEK under the old id and re-open the original
@@ -1251,9 +1263,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
 			await storage.deleteVaultBlob(activeId).catch(() => {});
 			await dropActiveRecord();
+			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
+			// so after a delete it still named the vault we just erased. Mobile's sync resolves its
+			// target from that key, so leaving it set pointed a later session at a dead id — and,
+			// with the old vaults[0] fallback, at some other vault's file entirely (issue #27).
+			await shell.setActiveVault?.(null);
 			return true;
 		},
-		[verifyMasterPassword, verifyWithSecurityKey, activeId, lock, storage, dropActiveRecord],
+		[verifyMasterPassword, verifyWithSecurityKey, activeId, lock, storage, dropActiveRecord, shell],
 	);
 
 	// Every action is referentially stable (state reads route through latestRef), so this

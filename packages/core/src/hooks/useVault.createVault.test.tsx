@@ -45,7 +45,7 @@ function makePlatform(existingVaults: number) {
 	};
 	const shell = {
 		resetSyncState,
-		setActiveVault: vi.fn(async () => {}),
+		setActiveVault: vi.fn(async (_id: string | null) => {}),
 		getActiveVault: vi.fn(async () => null),
 		flushPendingCornerCapture: vi.fn(async () => {}),
 	};
@@ -56,7 +56,7 @@ function makePlatform(existingVaults: number) {
 		shell,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, resetSyncState };
+	return { platform, resetSyncState, shell, crypto };
 }
 
 function mountActions(platform: Platform) {
@@ -103,5 +103,33 @@ describe("createVault sync-reset guard", () => {
 		});
 
 		expect(resetSyncState).not.toHaveBeenCalled();
+	});
+});
+
+// Issue #27: generateVek() swaps mobile's ONE process-global VEK. On mobile that fires
+// onUnlocked -> the sync manager starts a roster session, and it targets whatever vault is
+// RECORDED active — still the previous one at that point. The session then merges the old vault's
+// file while the global key is the new vault's, sealing entries no slot in that file can unwrap:
+// permanent lockout under both the master password and the recovery code. So the new id has to be
+// recorded (which also stops any live session) strictly before the key moves.
+describe("createVault records the active vault before swapping the VEK", () => {
+	it("calls setActiveVault(newId) before generateVek", async () => {
+		const { platform, shell, crypto } = makePlatform(1);
+		const order: string[] = [];
+		shell.setActiveVault.mockImplementation(async (id: string | null) => {
+			order.push(`setActiveVault:${id === null ? "null" : "id"}`);
+		});
+		crypto.generateVek.mockImplementation(async () => {
+			order.push("generateVek");
+			throw new Error("stop after the guard");
+		});
+		const getActions = mountActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			await expect(getActions().createVault("pw")).rejects.toThrow();
+		});
+
+		expect(order).toEqual(["setActiveVault:id", "generateVek"]);
 	});
 });
