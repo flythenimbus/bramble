@@ -1,6 +1,7 @@
 Neu in dieser Version:
 
-- Zwei-Faktor-Codes automatisch ausfüllen. Wenn eine Website nach dem sechsstelligen Bestätigungscode fragt, kann Bramble ihn direkt über die Tastatur ausfüllen, genauso wie Ihr Passwort. Erfordert iOS 18 und in den Einstellungen aktivierte Tastaturvorschläge.
-- Brambles Entwicklung über die neuen Optionen im Tab „Info“ unterstützen.
+- Zwei-Faktor-Codes automatisch ausfüllen. Wenn eine Website nach einem sechsstelligen Bestätigungscode fragt, kann Bramble diesen direkt über die Tastatur ausfüllen – genau wie Ihr Passwort. Setzt iOS 18 und aktivierte Tastaturvorschläge in den Einstellungen voraus.
+- Brambles Entwicklung über die neuen Optionen im Info-Tab unterstützen.
+- Behoben: Der AutoFill-Entsperrbildschirm zeigt keinen unerwarteten Fehlercode mehr an, und Face ID oder Ihr Code erscheinen jetzt zuverlässig von selbst.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

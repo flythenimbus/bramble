@@ -1,6 +1,7 @@
 Novidades desta versão:
 
-- Preencher automaticamente seus códigos de dois fatores. Quando um site solicita o código de verificação de seis dígitos, o Bramble pode preenchê-lo diretamente pelo teclado, assim como faz com sua senha. Requer iOS 18 e que as Sugestões do Teclado estejam ativadas nos Ajustes.
-- Apoie o desenvolvimento do Bramble com as novas opções na aba Sobre.
+- Preencher automaticamente seus códigos de dois fatores. Quando um site solicitar o código de verificação de seis dígitos, o Bramble pode preenchê-lo diretamente do teclado, assim como sua senha. Requer iOS 18 e a opção Sugestões do Teclado ativada nos Ajustes.
+- Apoiar o desenvolvimento do Bramble com as novas opções na aba Sobre.
+- Corrigida a tela de desbloqueio do AutoFill: não exibe mais um código de erro inesperado, e o Face ID ou seu código de acesso agora aparece automaticamente com confiabilidade.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

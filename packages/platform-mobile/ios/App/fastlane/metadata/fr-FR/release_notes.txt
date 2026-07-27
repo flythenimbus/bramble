@@ -1,6 +1,7 @@
-Quoi de neuf dans cette version :
+Quoi de neuf dans cette version :
 
-- Saisie automatique de vos codes de vérification à deux facteurs. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme pour votre mot de passe. Nécessite iOS 18 et l’activation des suggestions du clavier dans Réglages.
+- Remplir automatiquement les codes à deux facteurs. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme pour votre mot de passe. Nécessite iOS 18 et les suggestions du clavier activées dans Réglages.
 - Soutenir le développement de Bramble à partir des nouvelles options dans l’onglet À propos.
+- Correction de l’écran de déverrouillage de l’AutoFill : il n’affiche plus de code d’erreur parasite, et Face ID ou votre code d’accès s’affiche désormais de manière fiable et autonome.
 
 Aucun compte, aucun cloud. Tout reste sur vos appareils.

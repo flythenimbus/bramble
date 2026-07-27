@@ -2,5 +2,6 @@ What's new in this release:
 
 - Autofill your two-factor codes. When a site asks for its six-digit verification code, Bramble can fill it straight from the keyboard, just like your password. Needs iOS 18 and Keyboard suggestions switched on in Settings.
 - Support Bramble's development from the new options in the About tab.
+- Fixed AutoFill's unlock screen: it no longer shows a stray error code, and Face ID or your passcode now comes up on its own reliably.
 
 No account, no cloud. Everything stays on your devices.
