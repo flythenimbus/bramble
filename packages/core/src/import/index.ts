@@ -1,4 +1,5 @@
 import { parseBitwarden } from "./bitwarden";
+import { parseApplePasswords, parseGooglePasswords } from "./csv";
 import { parseKeePass } from "./keepass";
 import { parseOnePassword } from "./onepassword";
 import { parseProtonPass } from "./protonpass";
@@ -6,13 +7,22 @@ import type { ImportParser, ImportProvider, ImportResult } from "./types";
 
 export { kdbxEntriesToResult } from "./kdbx";
 export type { ImportProvider, ImportResult } from "./types";
-export { parseBitwarden, parseKeePass, parseOnePassword, parseProtonPass };
+export {
+	parseApplePasswords,
+	parseBitwarden,
+	parseGooglePasswords,
+	parseKeePass,
+	parseOnePassword,
+	parseProtonPass,
+};
 
 const PARSERS: Record<ImportProvider, ImportParser> = {
 	bitwarden: parseBitwarden,
 	onepassword: parseOnePassword,
 	protonpass: parseProtonPass,
 	keepass: parseKeePass,
+	apple: parseApplePasswords,
+	google: parseGooglePasswords,
 };
 
 /** Provider id, including `keepass-kdbx` which has no synchronous parser (opened in WASM). */
@@ -65,6 +75,20 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 		accept: ".kdbx",
 		reads: "bytes",
 		needsCredential: true,
+	},
+	{
+		id: "apple",
+		label: "Apple Passwords",
+		blurb: "Passwords → Export All Passwords (.csv)",
+		accept: ".csv,text/csv",
+		reads: "text",
+	},
+	{
+		id: "google",
+		label: "Google Passwords",
+		blurb: "passwords.google.com → Export (.csv)",
+		accept: ".csv,text/csv",
+		reads: "text",
 	},
 ];
 

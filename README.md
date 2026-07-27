@@ -71,7 +71,7 @@ The iOS and Android apps are versioned and released independently of the extensi
 - **Peer-to-peer sync.** Mirror your vault directly between your own devices over an end-to-end encrypted connection. No cloud, no relay holding your data.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine.
 - **Auto-lock.** Locks after idle time by default (configurable).
-- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, or KeePass, KDBX4 key files included.
+- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, KeePass (KDBX4 key files included), Apple Passwords, or Google Password Manager.
 - **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, biometrics, or your recovery code can each unlock the same vault.
 - **Multiple vaults.** Keep more than one vault side by side and pick which to unlock when you open Bramble. Handy for sharing a device, or walling off separate sets of logins behind their own master passwords.
 

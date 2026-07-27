@@ -1,0 +1,5 @@
+name,url,username,password,note
+github.com,https://github.com/login,alice@example.com,fake-pw-1,
+accounts.google.com,https://accounts.google.com/,alice@example.com,fake-pw-2,
+bank.example.com,https://bank.example.com/signin,alice,fake-pw-3,"Recovery contact: 555-0100, ext 2"
+no-user.example.com,https://no-user.example.com/,,fake-pw-4,

@@ -1,7 +1,13 @@
 import type { EntryData, EntryType } from "../hooks/useVault";
 
 /** Password managers we can read a (synchronous) export from. */
-export type ImportProvider = "bitwarden" | "onepassword" | "protonpass" | "keepass";
+export type ImportProvider =
+	| "bitwarden"
+	| "onepassword"
+	| "protonpass"
+	| "keepass"
+	| "apple"
+	| "google";
 
 /** Normalized parse result. `imported` is id-less (the vault assigns ids); `warnings` flags lossy mappings. */
 export interface ImportResult {

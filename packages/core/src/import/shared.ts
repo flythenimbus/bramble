@@ -47,6 +47,50 @@ export function asText(raw: string | Uint8Array): string {
 	return typeof raw === "string" ? raw : strFromU8(raw);
 }
 
+/**
+ * RFC 4180 CSV reader: quoted fields may contain commas, newlines and `""`-escaped quotes.
+ * Also strips a UTF-8 BOM (Apple's export carries one) and accepts CRLF or LF.
+ *
+ * Values are returned verbatim, never trimmed: a password may legitimately begin or end with
+ * a space. Blank lines are dropped, but a trailing empty field is kept — Apple writes an unset
+ * final column as a bare trailing comma (`…,"secret","",`), not as `""`.
+ */
+export function parseCsvRows(text: string): string[][] {
+	const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+	const rows: string[][] = [];
+	let row: string[] = [];
+	let field = "";
+	let quoted = false;
+	for (let i = 0; i < src.length; i++) {
+		const c = src[i];
+		if (quoted) {
+			if (c !== '"') field += c;
+			else if (src[i + 1] === '"') {
+				field += '"';
+				i++;
+			} else quoted = false;
+			continue;
+		}
+		if (c === '"') quoted = true;
+		else if (c === ",") {
+			row.push(field);
+			field = "";
+		} else if (c === "\n" || c === "\r") {
+			if (c === "\r" && src[i + 1] === "\n") i++;
+			row.push(field);
+			rows.push(row);
+			row = [];
+			field = "";
+		} else field += c;
+	}
+	// Flush a final row only if the file didn't end on a newline.
+	if (field !== "" || row.length > 0) {
+		row.push(field);
+		rows.push(row);
+	}
+	return rows.filter((r) => r.length > 1 || r[0] !== "");
+}
+
 /** Normalize a string-or-bytes input to bytes; throws if handed text. */
 export function asBytes(raw: string | Uint8Array): Uint8Array {
 	if (typeof raw === "string") throw new Error("expected file bytes, received text");
