@@ -195,8 +195,14 @@ export async function startEnrollInvite(opts: {
 }): Promise<void> {
 	const wasm = await loadSyncCrypto();
 	const { privateKey } = await deviceKeypair();
+	// Capture the VEK NOW, while the user is demonstrably in the vault they're sharing. An invite
+	// stays open for as long as the QR code is up, and the key here is process-global: reading it
+	// at send time (the old ambient export_vek() fallback in sendBundle) would ship whichever vault
+	// the user had switched to by then, handing the joiner a vault it could never open.
+	const vekB64 = await wasm.export_vek();
 	session?.stop();
 	session = await startEnroll("inviter", {
+		vekB64,
 		relayUrl: opts.relayUrl,
 		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,

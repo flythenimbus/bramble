@@ -226,6 +226,8 @@ describe("sendBundle — inviter ships its password verifier", () => {
 		report: () => {},
 		roster: emptyRoster(),
 		entries: emptyEntriesPayload(),
+		// Inviting requires an explicitly captured key; only the refusal test omits it.
+		vekB64: b64(32),
 		...over,
 	});
 
@@ -260,10 +262,24 @@ describe("sendBundle — inviter ships its password verifier", () => {
 		expect(JSON.parse(out).vek).toBe(b64(32));
 	});
 
-	it("falls back to export_vek when no vekB64 is injected (mobile's single-VEK core)", async () => {
+	// Issue #27: the ambient export_vek() fallback read whichever key was loaded at SEND time. An
+	// invite outliving a vault switch would ship the wrong vault's key, and the joiner would rebuild
+	// a vault nothing could open. Callers now capture the key when the invite starts; refusing to
+	// send without one costs a retry, sending the wrong one costs the vault.
+	it("refuses to send a bundle without an explicit vekB64, rather than exporting the ambient key", async () => {
 		const wasm = mockWasm({ export_vek: () => b64(32) });
-		const out = await captureBundle(inviterOpts({ wasm }));
-		expect(JSON.parse(out).vek).toBe(b64(32));
+		const sent: string[] = [];
+		const channel: Channel = {
+			send: (d) => void sent.push(d),
+			recv: () => new Promise<string>(() => {}),
+		};
+
+		// Asserted against sendBundle directly: captureBundle turns any failure into "bundle was
+		// not sent", which would pass even if it broke for an unrelated reason.
+		await expect(
+			sendBundle(inviterOpts({ wasm, vekB64: undefined }), channel, sess),
+		).rejects.toThrow(/without an explicit VEK/i);
+		expect(sent).toEqual([]);
 	});
 });
 
@@ -302,6 +318,7 @@ describe("large vault: bundle spans multiple Noise frames", () => {
 				report: () => {},
 				roster: emptyRoster(),
 				entries: bigEntries,
+				vekB64: b64(32),
 			},
 			inviterChannel,
 			sess,

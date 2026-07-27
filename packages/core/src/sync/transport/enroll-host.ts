@@ -96,10 +96,13 @@ export interface EnrollOptions {
 	/** Inviter: the bundle's non-secret parts (the VEK is added from the wasm here). */
 	roster?: RosterPayload;
 	entries?: EntriesPayload;
-	/** Inviter (extension): this vault's VEK (base64), injected by the background from its per-vault
-	 * map so the bundle ships the RIGHT vault's key. Under the scratch-slot offscreen, export_vek()
-	 * would return whatever op ran last. Falls back to wasm.export_vek() for mobile's single-VEK
-	 * core. See docs/multiple-vaults.md "Enrollment". */
+	/** Inviter: this vault's VEK (base64), captured by the caller when the invite starts so the
+	 * bundle ships the RIGHT vault's key. REQUIRED to invite — there is no ambient fallback.
+	 * export_vek() reads whichever key is loaded at send time, which is the vault the user is in
+	 * NOW, not necessarily the one being shared: on the extension's scratch-slot offscreen it
+	 * returns whatever op ran last, and on mobile's single-VEK core it follows a vault switch.
+	 * Shipping the wrong key hands the joiner a vault it can never open. See
+	 * docs/multiple-vaults.md "Enrollment". */
 	vekB64?: string;
 	/** Inviter: this device's own password-slot fields (base64), shipped so the joiner
 	 * can prove its typed password matches. Omitted when there is no password slot. */
@@ -141,8 +144,12 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 
 // Load the group vek into the slot, then run the op, with no await between them on the
 // synchronous (extension) path. The joiner shares the offscreen wasm with the per-op seam, so a
-// concurrent crypto op could otherwise clobber the loaded vek between the joiner's wraps. On
-// mobile the wasm calls are async (single-vault, no contention), so a chained .then is fine.
+// concurrent crypto op could otherwise clobber the loaded vek between the joiner's wraps.
+//
+// Mobile's calls are async, so this chains a .then instead. That is NOT because mobile has no
+// contention — it has a single process-global VEK, so it has the most — but because there is no
+// synchronous option there. The joiner is safe regardless: it is rebuilding a vault from a bundle,
+// so the key it loads here is the one it just received, not one it looked up.
 function loadThen<T>(wasm: CryptoWasm, vekB64: string, op: () => Awaitable<T>): Promise<T> {
 	const r = wasm.unlock_with_vek(vekB64);
 	return r instanceof Promise ? r.then(op) : Promise.resolve(op());
@@ -200,8 +207,12 @@ export async function sendBundle(
 	channel: Channel,
 	sess: Session,
 ): Promise<void> {
+	// No ambient export_vek() fallback: it reads whatever key is loaded at THIS moment, so an
+	// invite that outlived a vault switch would ship the wrong vault's key. Refusing is safe (the
+	// user retries the invite); sending is not (the joiner rebuilds a vault nothing can open).
+	if (!opts.vekB64) throw new Error("enroll: refusing to send a bundle without an explicit VEK");
 	const bundle = encodeEnrollmentBundle({
-		vek: opts.vekB64 ?? (await opts.wasm.export_vek()),
+		vek: opts.vekB64,
 		roster: opts.roster ?? { devices: [], revoked: [] },
 		entries: opts.entries ?? { entries: [], tombstones: [] },
 		primaryPasswordCheck: opts.passwordCheck,
