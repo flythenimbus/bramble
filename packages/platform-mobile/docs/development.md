@@ -295,9 +295,12 @@ distribution IPA to `~/Desktop` with no credentials. Both run the Capacitor pre-
 with the Android F-Droid metadata, which fdroidserver only reads from there), so run them from the repo
 root. Secrets live in `<repo root>/fastlane/.env` + `AuthKey.p8`
 (gitignored; see `.env.example`). **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
-(`/tmp/bramble-derived-data`) because Xcode's default DerivedData here is the external Transcend volume,
-which EPERMs the SPM checkout cache and fails `build_app` with "Could not resolve package dependencies"
-(quirks 3-6). Signing stays automatic + `-allowProvisioningUpdates`.
+(`packages/platform-mobile/ios/DerivedData`, gitignored) because Xcode's default DerivedData here is the
+external Transcend volume, which EPERMs the SPM checkout cache and fails `build_app` with "Could not
+resolve package dependencies" (quirks 3-6). That pin used to be `/tmp`, but macOS prunes `/tmp` after
+~3 days and left the SPM checkout corrupt, so it's repo-local now. Both lanes also pass
+`manageAppVersionAndBuildNumber: false`, or Xcode's export step re-stamps the build number and ships
+archive+1. Signing stays automatic + `-allowProvisioningUpdates`.
 
 ## Reclaiming disk space
 

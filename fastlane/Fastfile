@@ -31,6 +31,18 @@ SCREENSHOTS = "#{__dir__}/screenshots"
 # a repo-local path is internal, not auto-pruned, and never committed.
 DERIVED = "#{REPO}/packages/platform-mobile/ios/DerivedData"
 
+# Xcode's EXPORT step rewrites the build number unless told not to: `xcodebuild -help` documents
+# manageAppVersionAndBuildNumber as "Defaults to YES", and gym doesn't set it. That silently shipped
+# archive+1, so the pbxproj and the release commit said N while TestFlight received N+1 (caught by
+# diffing the .xcarchive's Info.plist against the exported IPA's: 207275524 vs 207275525). Off, so
+# the exported binary carries exactly the number that was archived.
+#
+# A fresh hash per call, not a constant: gym mutates what it's handed (it merges `method` in), so a
+# frozen constant raises FrozenError during packaging and a shared mutable one leaks between lanes.
+def stable_export_options
+  { manageAppVersionAndBuildNumber: false }
+end
+
 # App Store Connect API key, shared by the TestFlight + metadata lanes. Reads the key id /
 # issuer / .p8 path from fastlane/.env (gitignored; see .env.example).
 def asc_api_key
@@ -60,6 +72,7 @@ platform :ios do
       output_directory: File.expand_path("~/Desktop"),
       output_name: "Bramble-TestFlight.ipa",
       xcargs: "-allowProvisioningUpdates",
+      export_options: stable_export_options,
     )
     UI.success("IPA at ~/Desktop/Bramble-TestFlight.ipa")
   end
@@ -72,18 +85,21 @@ platform :ios do
     # `latest_testflight_build_number + 1`, which queries App Store Connect and lags while
     # builds process -> it kept recomputing already-used numbers ("Redundant Binary Upload").
     # `pnpm run release ios` precomputes the same value and passes it via BRAMBLE_IOS_BUILD so the
-    # git tag it cuts matches this uploaded build; a bare `fastlane beta` computes its own.
+    # release commit it makes names the build that actually lands on TestFlight (iOS cuts no tag);
+    # a bare `fastlane beta` computes its own.
     next_build = (ENV["BRAMBLE_IOS_BUILD"] || (Time.now.to_i - 1_577_836_800)).to_i
     # Pin CURRENT_PROJECT_VERSION at build time (both the app + extension consume it). `pnpm run
     # release ios` commits this same number to the pbxproj (mirroring the Android versionCode), so
     # the xcarg just guarantees the built binary matches what was passed in, and keeps a bare
-    # `fastlane beta` working when nothing was committed.
+    # `fastlane beta` working when nothing was committed. stable_export_options keeps export from
+    # re-stamping it afterwards.
     build_app(
       project: PROJECT,
       scheme: "App",
       export_method: "app-store",
       derived_data_path: DERIVED,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} -allowProvisioningUpdates",
+      export_options: stable_export_options,
     )
     upload_to_testflight(api_key: key, skip_waiting_for_build_processing: true)
     UI.success("Uploaded build #{next_build} to TestFlight")
