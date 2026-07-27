@@ -1,5 +1,6 @@
 name,url,username,password,note
-github.com,https://github.com/login,alice@example.com,fake-pw-1,
-accounts.google.com,https://accounts.google.com/,alice@example.com,fake-pw-2,
-bank.example.com,https://bank.example.com/signin,alice,fake-pw-3,"Recovery contact: 555-0100, ext 2"
-no-user.example.com,https://no-user.example.com/,,fake-pw-4,
+github.com,https://github.com/login,octocat@example.com,hunter2-c0rrect-h0rse,Personal dev account.
+accounts.google.com,https://accounts.google.com/,jane.doe@example.com,Tr0ub4dor3xkcd!,
+www.amazon.com,https://www.amazon.com/ap/signin,jdoe-shopping@example.com,Pr1me-Sh1pping!2024,"Shopping; card on file, gate B"
+bank.example.com,https://bank.example.com/signin,jane.doe@example.com,"c0mma,and-qu0te""inside",
+intranet.example.com,https://intranet.example.com/login,,Pr0xy-Auth-2024,

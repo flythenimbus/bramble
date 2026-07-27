@@ -85,7 +85,9 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 	},
 	{
 		id: "google",
-		label: "Google Passwords",
+		// Matches the label the CSV parser names in its "wrong file" error, so the message
+		// points at a card the user can actually see.
+		label: "Google Password Manager",
 		blurb: "passwords.google.com → Export (.csv)",
 		accept: ".csv,text/csv",
 		reads: "text",

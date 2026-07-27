@@ -79,13 +79,14 @@ function parseSpec(spec: CsvSpec, raw: string | Uint8Array): ImportResult {
 	const header = (rows[0] ?? []).map((h) => h.trim().toLowerCase());
 	if (!spec.signature.every((h) => header.includes(h))) {
 		const other = OTHER.get(spec);
+		// No indefinite article before the label: it would read "a Apple Passwords export".
 		if (other?.signature.every((h) => header.includes(h))) {
 			throw new Error(
-				`This looks like a ${other.label} export. Go back and choose ${other.label} instead.`,
+				`This looks like an export from ${other.label}. Go back and choose ${other.label} instead.`,
 			);
 		}
 		throw new Error(
-			`This doesn't look like a ${spec.label} export. Its first line should be the column names.`,
+			`This doesn't look like an export from ${spec.label}. Its first line should be the column names.`,
 		);
 	}
 

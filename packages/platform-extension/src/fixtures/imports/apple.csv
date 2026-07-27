@@ -1,7 +1,7 @@
 Title,URL,Username,Password,Notes,OTPAuth
-"GitHub","https://github.com/login","alice@example.com","fake-pw-1","",
-"Google","https://accounts.google.com/","alice@example.com","fake-pw-2","","otpauth://totp/Google:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Google"
-"Bank","https://bank.example.com/signin","alice","fake-pw-3","Recovery contact: 555-0100
-Second line of the note, with a comma",
-"","https://no-title.example.com/","bob","fake-pw-4","",
-"Quoted ""nickname""","https://quotes.example.com/","carol","fake-pw-5","Has ""quotes"" inside",
+"GitHub","https://github.com","octocat@example.com","hunter2-c0rrect-h0rse","Personal dev account.","otpauth://totp/GitHub:octocat@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
+"Google","https://accounts.google.com","jane.doe@example.com","Tr0ub4dor3xkcd!","SSO across Google services.",
+"Amazon","https://www.amazon.com","jdoe-shopping@example.com","Pr1me-Sh1pping!2024","Shopping; card on file.
+Delivery code: 4417, gate B",
+"Nimbus Bank (""joint"")","https://bank.example.com/signin","jane.doe@example.com","c0mma,and-qu0te""inside","Recovery contact: 555-0100",
+"","https://intranet.example.com/login","jdoe","Pr0xy-Auth-2024","",
