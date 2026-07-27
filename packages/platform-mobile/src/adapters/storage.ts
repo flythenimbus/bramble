@@ -163,6 +163,16 @@ export const mobileStorage: StorageAdapter = {
 	async writeVaultBlob(blob, vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
+		// An id-less write is only unambiguous when there is exactly one vault it could mean. With
+		// several registered, falling back to vaults[0] was a guess, and a wrong guess writes one
+		// vault's bytes over another vault's file — the amplifier behind issue #27, where the
+		// overwritten file's slots then wrapped a key its entries were no longer sealed under.
+		// Refuse instead: every real caller either passes an id or goes through the vault-scoped
+		// storage in useVaultRegistry, which supplies the active one.
+		if (vaultId == null && reg.vaults.length > 1) {
+			throw new Error("writeVaultBlob: no vault id, and several vaults are registered");
+		}
+		// The single-vault fallback stays for installs that predate ids being threaded through.
 		const targetId = vaultId ?? reg.vaults[0]?.id;
 		// Never mint a registry record here: a blind write with an empty registry means the caller
 		// lost its vault id, and registering one strands a vault the UI can't open or delete.

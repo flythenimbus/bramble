@@ -170,6 +170,40 @@ describe("mobile one-time namespacing migration", () => {
 		expect(files.size).toBe(0);
 	});
 
+	// Issue #27: with several vaults registered, an id-less write used to resolve to vaults[0] —
+	// a guess that could drop one vault's bytes onto another's file. The overwritten vault's slots
+	// then wrapped a key its entries were no longer sealed under, which no password can undo.
+	it("refuses a blind blob write when several vaults are registered, rather than guessing", async () => {
+		// Both need a sync group, else the migration reaps them as orphans (no blob, never enrolled).
+		prefs.set("meta:sync.group:a", JSON.stringify({ groupKey: "gk" }));
+		prefs.set("meta:sync.group:b", JSON.stringify({ groupKey: "gk" }));
+		prefs.set(
+			REG_KEY,
+			JSON.stringify({
+				vaults: [
+					{ id: "a", label: "", createdAt: 0 },
+					{ id: "b", label: "", createdAt: 0 },
+				],
+			}),
+		);
+		const storage = await loadStorage();
+
+		await expect(storage.writeVaultBlob(new Uint8Array([1, 2, 3]))).rejects.toThrow(
+			/several vaults are registered/,
+		);
+		expect(files.size).toBe(0); // nothing written to either vault
+	});
+
+	it("still resolves a blind write when there is exactly one vault (pre-id-threading installs)", async () => {
+		prefs.set("meta:sync.group:solo", JSON.stringify({ groupKey: "gk" }));
+		prefs.set(REG_KEY, JSON.stringify({ vaults: [{ id: "solo", label: "", createdAt: 0 }] }));
+		const storage = await loadStorage();
+
+		await storage.writeVaultBlob(new Uint8Array([7, 7, 7]));
+
+		expect(files.get(nf("solo"))).toBe(bytesToBase64(new Uint8Array([7, 7, 7])));
+	});
+
 	it("never clobbers a namespaced blob when the flat file is already gone (race guard)", async () => {
 		const good = bytesToBase64(new Uint8Array([1, 1, 1]));
 		files.set(nf("v"), good); // another context already copied + deleted the flat file
