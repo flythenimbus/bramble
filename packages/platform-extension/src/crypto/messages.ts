@@ -68,6 +68,17 @@ export const CryptoOpenKdbxSchema = z.object({
 	keyfileB64: z.string().optional(),
 });
 
+// KDBX4 export. Carries the entries as KeePass String pairs already shaped by the core
+// mapper, plus the user's chosen file password; the reply is the .kdbx as base64.
+export const CryptoSaveKdbxSchema = z.object({
+	entries: z.array(
+		z.object({
+			strings: z.array(z.object({ key: z.string(), value: z.string(), protected: z.boolean() })),
+		}),
+	),
+	password: z.string(),
+});
+
 // Passkey provider (authenticator role). The crypto is pure, so no slot/VEK fields.
 export const CryptoPasskeyMakeSchema = z.object({
 	rpId: z.string(),
@@ -93,5 +104,6 @@ export type CryptoDecryptBatch = z.infer<typeof CryptoDecryptBatchSchema>;
 export type CryptoEncryptOuter = z.infer<typeof CryptoEncryptOuterSchema>;
 export type CryptoDecryptOuter = z.infer<typeof CryptoDecryptOuterSchema>;
 export type CryptoOpenKdbx = z.infer<typeof CryptoOpenKdbxSchema>;
+export type CryptoSaveKdbx = z.infer<typeof CryptoSaveKdbxSchema>;
 export type CryptoPasskeyMake = z.infer<typeof CryptoPasskeyMakeSchema>;
 export type CryptoPasskeyGet = z.infer<typeof CryptoPasskeyGetSchema>;

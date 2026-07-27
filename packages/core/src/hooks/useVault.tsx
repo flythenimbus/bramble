@@ -143,6 +143,7 @@ export type JoinUnlock =
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { securityKey: true };
 
+import { toKdbxEntries } from "../export/kdbx";
 import {
 	DEVICE_ID_KEY,
 	decodeEntriesPayload,
@@ -238,6 +239,12 @@ export interface VaultActions {
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	exportVault(): Promise<void>;
+	/**
+	 * Save the vault as a KeePass `.kdbx` (KDBX4), encrypted with `password` — chosen for the
+	 * file, unrelated to the master password. Unlike `exportVault` this re-encrypts decrypted
+	 * entries, so it only works unlocked. Rejects where the platform can't save files.
+	 */
+	exportKdbx(password: string): Promise<void>;
 	addEntry(data: EntryData): Promise<void>;
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
@@ -799,6 +806,28 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await shell.exportBytes(`bramble-vault-${stamp}.bramble`, bytes, "application/octet-stream");
 	}, [shell, storage]);
 
+	/** Export to a KeePass .kdbx under a password the user picks for the file. Reads the
+	 * already-decrypted entries (so it needs an unlocked vault) and re-encrypts them in
+	 * WASM; the vault's own key never leaves. */
+	const exportKdbx = useCallback(
+		async (password: string) => {
+			if (!shell.exportBytes) throw new Error("Export isn't available here.");
+			if (!crypto.saveKdbx) throw new Error("KDBX export isn't available here.");
+			if (!password) throw new Error("Choose a password for the exported file.");
+			const b64 = await crypto.saveKdbx({
+				entries: toKdbxEntries(latestRef.current.entries),
+				password,
+			});
+			const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+			await shell.exportBytes(
+				`bramble-vault-${stamp}.kdbx`,
+				base64ToBytes(b64),
+				"application/octet-stream",
+			);
+		},
+		[shell, crypto],
+	);
+
 	/** Re-encrypt all entries with their stamps plus the tombstone list, and write
 	 * a new blob; the slot list is unchanged. Stamps come from the caller so a
 	 * full rewrite does not re-stamp unchanged entries. */
@@ -1236,6 +1265,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			exportVault,
+			exportKdbx,
 			addEntry,
 			importEntries,
 			updateEntry,
@@ -1266,6 +1296,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			exportVault,
+			exportKdbx,
 			addEntry,
 			importEntries,
 			updateEntry,

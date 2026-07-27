@@ -227,8 +227,12 @@ msgid "Breached"
 msgstr "Violato"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
-msgid "Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
-msgstr "Importa voci da 1Password, Bitwarden, KeePass o Proton Pass"
+#~ msgid "Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
+#~ msgstr "Importa voci da 1Password, Bitwarden, KeePass o Proton Pass"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Bring entries in from 1Password, Bitwarden, KeePass, Proton Pass, Apple or Google"
+msgstr "Importa voci da 1Password, Bitwarden, KeePass, Proton Pass, Apple o Google"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Bring your logins, cards and notes over from another manager"
@@ -248,6 +252,7 @@ msgstr "Bucket"
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -298,6 +303,10 @@ msgstr "Scegli un altro vault"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Choose a master password"
 msgstr "Scegliere una password principale"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Choose a password for the exported file."
+msgstr "Scegliere una password per il file esportato."
 
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Choose a vault to unlock"
@@ -370,6 +379,10 @@ msgstr "Confermare la password principale"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Confirm new password"
 msgstr "Confermare la nuova password"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Confirm password"
+msgstr "Confermare password"
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Confirm with security key"
@@ -475,6 +488,10 @@ msgstr "Impossibile verificare la chiave di sicurezza."
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Couldn't verify your security key. Try again."
 msgstr "Non è stata verificata la chiave di sicurezza. Riprovi."
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Couldn't write the .kdbx file."
+msgstr "Impossibile scrivere il file .kdbx."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't write to the vault."
@@ -724,12 +741,25 @@ msgid "Expires"
 msgstr "Scadica"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Export"
 msgstr "Esporta"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Export a backup"
 msgstr "Esporta un backup"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Export as KeePass"
+msgstr "Esportare come KeePass"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Export as KeePass (.kdbx)"
+msgstr "Esportare come KeePass (.kdbx)"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Exporting…"
+msgstr "Esportazione in corso…"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Face ID"
@@ -1276,6 +1306,10 @@ msgstr "Password"
 msgid "Password"
 msgstr "Password"
 
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Password for the file"
+msgstr "Password per il file"
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Password found in a known data breach"
 msgstr "Password trovato in una violazione di dati nota"
@@ -1328,6 +1362,10 @@ msgstr "Carta di pagamento"
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
 msgstr "Selezionare una password principale per proteggere la vostra vault."
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file — we don't keep a copy."
+msgstr "Scegliere una password per il file esportato. È separata dalla password principale ed è l'unico modo per aprire il file: non ne conserviamo una copia."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Please enter your master password"
@@ -1513,6 +1551,10 @@ msgstr "Salva"
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Save {modeLabel}"
 msgstr "Salva {modeLabel}"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Save a .kdbx you can open in KeePassXC or any KeePass app, under a password you pick."
+msgstr "Salvare un file .kdbx apribile con KeePassXC o qualsiasi app KeePass, utilizzando una password a scelta."
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
@@ -1851,6 +1893,10 @@ msgstr "Questa operazione rimuove il vault da questo dispositivo. Le copie sincr
 #: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
 #~ msgid "This vault"
 #~ msgstr "Questo vault"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Those passwords don't match."
+msgstr "Le password non corrispondono."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"

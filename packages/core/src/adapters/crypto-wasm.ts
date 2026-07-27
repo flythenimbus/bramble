@@ -5,7 +5,7 @@
 // transitions; the subscription seams default to no-ops for transports (the offscreen)
 // that don't surface session lifecycle. See CONTEXT.md and docs/cryptography.md.
 
-import { base64ToBytes } from "../util/bytes";
+import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import type { VaultCrypto } from "../wasm";
 import type { CryptoAdapter } from "./crypto";
 
@@ -157,6 +157,15 @@ export function buildCryptoAdapter(
 				i.password,
 				i.keyfileB64 ? base64ToBytes(i.keyfileB64) : undefined,
 			);
+		},
+
+		async saveKdbx(i) {
+			const wasm = await getWasm();
+			// Absent on the mobile native module, which has no export path to feed.
+			if (!wasm.save_kdbx4) throw new Error("KDBX export isn't available here.");
+			// Base64 out, not bytes: the extension hands this back across the offscreen
+			// message channel, which doesn't preserve a Uint8Array.
+			return bytesToBase64(wasm.save_kdbx4(i.entries, i.password));
 		},
 	};
 }

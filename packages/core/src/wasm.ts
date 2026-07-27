@@ -99,4 +99,12 @@ export interface VaultCrypto {
 		password: string,
 		keyfile?: Uint8Array,
 	): Awaitable<{ strings: { key: string; value: string; protected: boolean }[] }[]>;
+
+	/** KDBX4 export. Optional: only the WASM module implements it, since export is an
+	 * extension-only affordance (mobile has no shell.exportBytes). The mobile native
+	 * module deliberately omits it rather than carrying a stub that can't work. */
+	save_kdbx4?(
+		entries: { strings: { key: string; value: string; protected: boolean }[] }[],
+		password: string,
+	): Uint8Array;
 }

@@ -63,6 +63,7 @@ The iOS and Android apps are versioned and released independently of the extensi
 - **Passkeys.** Bramble is your own WebAuthn authenticator: create and sign in with passkeys, in the extension and on both mobile apps. Passkeys are stored as vault entries, so they sync across your devices with no vendor cloud.
 - **More than logins.** Logins, payment cards, secure notes, and SSH keys, each with their own fields.
 - **Encrypted backups.** Export your whole vault to an encrypted `.bramble` file whenever you want a copy in your own hands. It still needs your master password to open.
+- **Export to KeePass.** Save your vault as a standard `.kdbx` (KDBX4) under a password you choose for the file, and open it in KeePassXC or any other KeePass app. No lock-in: the door out is as easy as the door in.
 - **Scheduled cloud backups.** Set-and-forget encrypted backups to Dropbox (one-click), any S3-compatible bucket, or self-hosted WebDAV, each on the cadence you choose. Ciphertext only, so the provider can't read a thing (browser extension for now).
 - **Built-in password generator.** Strong passwords on tap.
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF on desktop), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.

@@ -86,6 +86,17 @@ export interface OpenKdbxInput {
 	keyfileB64?: string;
 }
 
+/** One entry to write into a .kdbx: the same String pairs the read side returns. */
+export interface KdbxSaveEntry {
+	strings: { key: string; value: string; protected: boolean }[];
+}
+
+export interface SaveKdbxInput {
+	entries: KdbxSaveEntry[];
+	/** The password that will unlock the exported file. Chosen for the export, not the vault's. */
+	password: string;
+}
+
 /** Vault crypto operations (VEK lifecycle, slot wrap/unwrap, entry encryption, KeePass import). */
 export interface CryptoAdapter {
 	// Return an adapter bound to a specific vault id, so every VEK-scoped op it sends targets
@@ -145,4 +156,11 @@ export interface CryptoAdapter {
 	// Rejects with an Error whose message is a stable KDBX_* code (e.g.
 	// KDBX_WRONG_CREDENTIAL) so the UI can branch on it.
 	openKdbx(input: OpenKdbxInput): Promise<KdbxRawEntry[]>;
+	/**
+	 * Write a KDBX4 database (AES-256-CBC + Argon2id) holding `entries`, unlocked by
+	 * `password` alone. Returns the file as base64, since the extension routes this
+	 * through the offscreen message channel. Optional: absent on platforms with no
+	 * export path, which is every one but the extension today.
+	 */
+	saveKdbx?(input: SaveKdbxInput): Promise<string>;
 }

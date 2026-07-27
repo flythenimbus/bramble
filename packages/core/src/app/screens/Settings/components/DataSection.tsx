@@ -1,15 +1,18 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ArchiveRestore, DatabaseBackup, Download, Upload } from "lucide-react";
+import { ArchiveRestore, DatabaseBackup, Download, KeyRound, Upload } from "lucide-react";
+import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
+import { KdbxExportDialog } from "./KdbxExportDialog";
 import { Row, Section } from "./primitives";
 
-/** Import & backup: restore a .bramble, export a .bramble, or import from another manager. */
+/** Import & backup: restore a .bramble, export a .bramble or .kdbx, or import from another manager. */
 export function DataSection() {
 	const { shell } = usePlatform();
 	const { exportVault } = useVault();
 	const { t } = useLingui();
+	const [kdbxOpen, setKdbxOpen] = useState(false);
 	return (
 		<Section icon={<DatabaseBackup className="w-4 h-4 text-primary" />} title={t`Import & backup`}>
 			<Row
@@ -32,15 +35,27 @@ export function DataSection() {
 					</Button>
 				</Row>
 			)}
+			{shell.exportBytes && (
+				<Row
+					icon={<KeyRound className="w-4 h-4 text-primary" />}
+					title={t`Export as KeePass`}
+					subtitle={t`Save a .kdbx you can open in KeePassXC or any KeePass app, under a password you pick.`}
+				>
+					<Button variant="secondary" size="sm" onClick={() => setKdbxOpen(true)}>
+						<Trans>Export</Trans>
+					</Button>
+				</Row>
+			)}
 			<Row
 				icon={<Upload className="w-4 h-4 text-primary" />}
 				title={t`Import from another manager`}
-				subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass`}
+				subtitle={t`Bring entries in from 1Password, Bitwarden, KeePass, Proton Pass, Apple or Google`}
 			>
 				<Button variant="secondary" size="sm" onClick={() => void shell.openSetup("import")}>
 					<Trans>Import</Trans>
 				</Button>
 			</Row>
+			<KdbxExportDialog open={kdbxOpen} onClose={() => setKdbxOpen(false)} />
 		</Section>
 	);
 }

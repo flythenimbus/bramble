@@ -29,6 +29,7 @@ import {
 	CryptoOpenKdbxSchema,
 	CryptoPasskeyGetSchema,
 	CryptoPasskeyMakeSchema,
+	CryptoSaveKdbxSchema,
 	CryptoUnlockWithVekSchema,
 	CryptoUnwrapPasswordSlotSchema,
 	CryptoUnwrapWebauthnSlotSchema,
@@ -319,6 +320,15 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			// key/value pairs come back. Unrelated to the vault VEK.
 			const p = CryptoOpenKdbxSchema.parse(payload);
 			return a.openKdbx({ fileB64: p.fileB64, password: p.password, keyfileB64: p.keyfileB64 });
+		}
+
+		case "CRYPTO_SAVE_KDBX": {
+			// Builds a foreign KeePass database in WASM from already-decrypted entries the
+			// caller passed in, under an export password of the user's choosing. Nothing
+			// here touches the vault VEK.
+			const p = CryptoSaveKdbxSchema.parse(payload);
+			if (!a.saveKdbx) throw new Error("KDBX export isn't available here.");
+			return a.saveKdbx({ entries: p.entries, password: p.password });
 		}
 
 		case "CRYPTO_PASSKEY_MAKE": {

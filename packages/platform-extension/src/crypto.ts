@@ -8,6 +8,7 @@ import type {
 	PasskeyAssertion,
 	PasskeyRegistration,
 	PasswordSlotBlob,
+	SaveKdbxInput,
 	UnwrapPasswordSlotInput,
 	UnwrapWebauthnSlotInput,
 	VekEncrypted,
@@ -172,6 +173,8 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 			send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
 
 		openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
+		// Reply is the .kdbx as base64; the message channel wouldn't preserve raw bytes.
+		saveKdbx: (input: SaveKdbxInput) => send<string>("CRYPTO_SAVE_KDBX", input),
 
 		passkeyMakeCredential: (rpId, userVerified) =>
 			send<PasskeyRegistration>("CRYPTO_PASSKEY_MAKE", {

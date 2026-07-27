@@ -1,22 +1,25 @@
 //! KDBX4 import: opens a KeePass KDBX4 database inside WASM.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use chacha20::cipher::StreamCipher;
 use chacha20::ChaCha20;
 use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use hmac::{Hmac, Mac};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
-use std::io::Read;
+use std::io::{Read, Write};
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
 type HmacSha256 = Hmac<Sha256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 // 16-byte UUIDs as stored in the header / KDF VariantDictionary.
 const CIPHER_AES256: [u8; 16] = [
@@ -573,6 +576,214 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
     Ok(entries)
 }
 
+// ===== KDBX4 export =====
+//
+// The mirror of open_inner: build KeePass XML, encrypt protected values with the inner
+// ChaCha20 stream, gzip, AES-256-CBC, then frame in the HMAC block stream under a header
+// this reader (and KeePassXC) accepts. Written files are always AES-256-CBC + Argon2id +
+// gzip + ChaCha20 inner stream, i.e. one point in the format's space rather than all of it.
+
+/// Argon2id cost for exported files: the same as the vault's own KEK (64 MiB / 3 passes /
+/// 1 lane), which is comfortably inside the ceilings `argon2_transform` enforces on read.
+const OUT_KDF_MEM_BYTES: u64 = 64 * 1024 * 1024;
+const OUT_KDF_ITERATIONS: u64 = 3;
+const OUT_KDF_PARALLELISM: u32 = 1;
+const ARGON2_V13: u32 = 0x13;
+/// KeePass's own payload block size. A single huge block is legal but unconventional.
+const BLOCK_SIZE: usize = 1024 * 1024;
+
+/// One entry to write, as KeePass String pairs. The read-side mirror of `OutEntry`; JS
+/// builds these from `EntryData` so the field naming stays in the TS layer.
+#[derive(Deserialize)]
+pub struct SaveEntry {
+    pub strings: Vec<SaveString>,
+}
+#[derive(Deserialize)]
+pub struct SaveString {
+    pub key: String,
+    pub value: String,
+    /// Written as `Protected="True"` and encrypted with the inner stream.
+    pub protected: bool,
+}
+
+/// WASM entry point: returns the finished .kdbx bytes.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn save_kdbx4(entries: JsValue, password: &str) -> Result<Box<[u8]>, JsError> {
+    let entries: Vec<SaveEntry> =
+        serde_wasm_bindgen::from_value(entries).map_err(|e| JsError::new(&format!("KDBX_INPUT:{e}")))?;
+    let bytes = save_inner(&entries, password).map_err(|e| JsError::new(&e.code()))?;
+    Ok(bytes.into_boxed_slice())
+}
+
+fn rng(buf: &mut [u8]) -> Res<()> {
+    crate::random_bytes(buf).map_err(|_| KdbxError::Corrupt("rng"))
+}
+
+/// `[id:u8][len:u32][data]`, the shape of both the outer and inner header fields.
+fn push_field(out: &mut Vec<u8>, id: u8, data: &[u8]) {
+    out.push(id);
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out.extend_from_slice(data);
+}
+
+/// `[type:u8][klen:u32][key][vlen:u32][val]`, one VariantDictionary item.
+fn push_variant(out: &mut Vec<u8>, ty: u8, key: &[u8], val: &[u8]) {
+    out.push(ty);
+    out.extend_from_slice(&(key.len() as u32).to_le_bytes());
+    out.extend_from_slice(key);
+    out.extend_from_slice(&(val.len() as u32).to_le_bytes());
+    out.extend_from_slice(val);
+}
+
+/// KDF VariantDictionary for Argon2id. Types: 0x04 u32, 0x05 u64, 0x42 byte array.
+fn build_kdf_dict(salt: &[u8]) -> Vec<u8> {
+    let mut d = Vec::new();
+    d.extend_from_slice(&0x0100u16.to_le_bytes()); // dictionary version 1.0
+    push_variant(&mut d, 0x42, b"$UUID", &KDF_ARGON2ID);
+    push_variant(&mut d, 0x05, b"I", &OUT_KDF_ITERATIONS.to_le_bytes());
+    push_variant(&mut d, 0x05, b"M", &OUT_KDF_MEM_BYTES.to_le_bytes());
+    push_variant(&mut d, 0x04, b"P", &OUT_KDF_PARALLELISM.to_le_bytes());
+    push_variant(&mut d, 0x42, b"S", salt);
+    push_variant(&mut d, 0x04, b"V", &ARGON2_V13.to_le_bytes());
+    d.push(0x00); // terminator
+    d
+}
+
+/// Build the inner XML, encrypting protected values with the inner ChaCha20 stream.
+///
+/// The keystream must advance for every protected value in document order, exactly as
+/// `parse_inner_xml` consumes it. An EMPTY protected value advances it by zero bytes on
+/// both sides (the reader skips empty values), so the two stay in step.
+fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
+    let kd = Sha512::digest(inner_key);
+    let mut stream = ChaCha20::new_from_slices(&kd[0..32], &kd[32..44])
+        .map_err(|_| KdbxError::Corrupt("inner chacha"))?;
+    let uuid = || -> Res<String> {
+        let mut u = [0u8; 16];
+        rng(&mut u)?;
+        Ok(B64.encode(u))
+    };
+
+    let mut x = String::from(r#"<?xml version="1.0" encoding="utf-8" standalone="yes"?>"#);
+    x.push_str("<KeePassFile><Meta><Generator>Bramble</Generator>");
+    x.push_str("<DatabaseName>Bramble Export</DatabaseName>");
+    // No recycle bin and no history: open_inner discards entries in either, and an export
+    // should not carry a second, stale copy of every secret.
+    x.push_str("<RecycleBinEnabled>False</RecycleBinEnabled>");
+    x.push_str("<HistoryMaxItems>0</HistoryMaxItems></Meta>");
+    x.push_str("<Root><Group>");
+    x.push_str(&format!("<UUID>{}</UUID>", uuid()?));
+    x.push_str("<Name>Bramble</Name>");
+    for e in entries {
+        x.push_str("<Entry>");
+        x.push_str(&format!("<UUID>{}</UUID>", uuid()?));
+        for s in &e.strings {
+            if s.key.is_empty() {
+                continue; // a String with no Key has nowhere to land on re-import
+            }
+            x.push_str("<String><Key>");
+            x.push_str(&quick_xml::escape::escape(&s.key));
+            x.push_str("</Key>");
+            if s.protected {
+                let mut raw = s.value.clone().into_bytes();
+                stream.apply_keystream(&mut raw);
+                x.push_str(&format!(r#"<Value Protected="True">{}</Value>"#, B64.encode(&raw)));
+            } else {
+                x.push_str("<Value>");
+                x.push_str(&quick_xml::escape::escape(&s.value));
+                x.push_str("</Value>");
+            }
+            x.push_str("</String>");
+        }
+        x.push_str("</Entry>");
+    }
+    x.push_str("</Group></Root></KeePassFile>");
+    Ok(x.into_bytes())
+}
+
+/// Write a KDBX4 database holding `entries`, unlockable with `password` alone (no key file).
+pub fn save_inner(entries: &[SaveEntry], password: &str) -> Res<Vec<u8>> {
+    if password.is_empty() {
+        return Err(KdbxError::Corrupt("export password must not be empty"));
+    }
+    let mut master_seed = [0u8; 32];
+    let mut enc_iv = [0u8; 16];
+    let mut kdf_salt = [0u8; 32];
+    let mut inner_key = Zeroizing::new([0u8; 64]);
+    rng(&mut master_seed)?;
+    rng(&mut enc_iv)?;
+    rng(&mut kdf_salt)?;
+    rng(inner_key.as_mut_slice())?;
+
+    // Inner payload: inner header (stream id 3 = ChaCha20, stream key) then the XML.
+    let xml = build_xml(entries, inner_key.as_slice())?;
+    let mut inner = Zeroizing::new(Vec::new());
+    push_field(&mut inner, 1, &3u32.to_le_bytes());
+    push_field(&mut inner, 2, inner_key.as_slice());
+    push_field(&mut inner, 0, &[]);
+    inner.extend_from_slice(&xml);
+
+    let mut gz = GzEncoder::new(Vec::new(), Compression::default());
+    gz.write_all(&inner).map_err(|_| KdbxError::Corrupt("gzip write"))?;
+    let compressed = Zeroizing::new(gz.finish().map_err(|_| KdbxError::Corrupt("gzip finish"))?);
+
+    // Outer header. Everything from the signature through EndOfHeader is what gets hashed.
+    let mut header = Vec::new();
+    header.extend_from_slice(&0x9AA2_D903u32.to_le_bytes());
+    header.extend_from_slice(&0xB54B_FB67u32.to_le_bytes());
+    header.extend_from_slice(&0u16.to_le_bytes()); // minor: 4.0, which every KDBX4 reader takes
+    header.extend_from_slice(&4u16.to_le_bytes()); // major
+    push_field(&mut header, 2, &CIPHER_AES256);
+    push_field(&mut header, 3, &1u32.to_le_bytes()); // gzip
+    push_field(&mut header, 4, &master_seed);
+    push_field(&mut header, 7, &enc_iv);
+    push_field(&mut header, 11, &build_kdf_dict(&kdf_salt));
+    push_field(&mut header, 0, b"\r\n\r\n");
+
+    let kdf = Kdf {
+        uuid: KDF_ARGON2ID.to_vec(),
+        iterations: OUT_KDF_ITERATIONS,
+        mem_bytes: OUT_KDF_MEM_BYTES,
+        parallelism: OUT_KDF_PARALLELISM,
+        salt: kdf_salt.to_vec(),
+        version: ARGON2_V13,
+    };
+    let composite = composite_key(password, None);
+    let transformed = argon2_transform(&kdf, composite.as_slice())?;
+    let keys = derive_keys(&master_seed, &transformed);
+
+    let enc = Aes256CbcEnc::new_from_slices(keys.cipher_key.as_slice(), &enc_iv)
+        .map_err(|_| KdbxError::Corrupt("AES key/iv"))?;
+    let ciphertext = enc.encrypt_padded_vec_mut::<Pkcs7>(&compressed);
+
+    let mut out = header.clone();
+    out.extend_from_slice(&Sha256::digest(&header));
+    let hdr_key = sha512_block_key(u64::MAX, keys.hmac_base.as_slice());
+    let mut mac = HmacSha256::new_from_slice(&hdr_key).unwrap();
+    mac.update(&header);
+    out.extend_from_slice(&mac.finalize().into_bytes());
+
+    // HMAC block stream, terminated by a zero-length block (whose HMAC still counts).
+    let mut index: u64 = 0;
+    let push_block = |out: &mut Vec<u8>, index: u64, data: &[u8]| {
+        let bk = sha512_block_key(index, keys.hmac_base.as_slice());
+        let mut m = HmacSha256::new_from_slice(&bk).unwrap();
+        m.update(&index.to_le_bytes());
+        m.update(&(data.len() as u32).to_le_bytes());
+        m.update(data);
+        out.extend_from_slice(&m.finalize().into_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(data);
+    };
+    for chunk in ciphertext.chunks(BLOCK_SIZE) {
+        push_block(&mut out, index, chunk);
+        index += 1;
+    }
+    push_block(&mut out, index, &[]);
+    Ok(out)
+}
+
 // Fixtures are AES-256-CBC + Argon2d. Two paths are covered by reasoning, not a
 // fixture: Argon2id (a one-line Algorithm branch) and outer ChaCha20 (shares all
 // framing with AES; the primitive itself runs on every test via inner values).
@@ -725,5 +936,152 @@ mod tests {
         let pos = f.windows(16).position(|w| w == KDF_ARGON2D).expect("argon2d uuid present");
         f[pos..pos + 16].copy_from_slice(&AES_KDF);
         assert_eq!(open_inner(&f, PASSWORD, None), Err(KdbxError::UnsupportedKdf));
+    }
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    fn entry(pairs: &[(&str, &str, bool)]) -> SaveEntry {
+        SaveEntry {
+            strings: pairs
+                .iter()
+                .map(|(k, v, p)| SaveString {
+                    key: (*k).into(),
+                    value: (*v).into(),
+                    protected: *p,
+                })
+                .collect(),
+        }
+    }
+
+    fn find<'a>(e: &'a OutEntry, key: &str) -> Option<&'a str> {
+        e.strings.iter().find(|s| s.key == key).map(|s| s.value.as_str())
+    }
+
+    #[test]
+    fn round_trips_through_our_own_reader() {
+        let entries = vec![
+            entry(&[
+                ("Title", "GitHub", false),
+                ("UserName", "octocat@example.com", false),
+                ("Password", "hunter2-c0rrect-h0rse", true),
+                ("URL", "https://github.com", false),
+                ("Notes", "Personal dev account.", false),
+                ("otp", "otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP", true),
+            ]),
+            entry(&[
+                ("Title", "Amazon", false),
+                ("UserName", "jdoe@example.com", false),
+                ("Password", "Pr1me!2024", true),
+            ]),
+        ];
+        let bytes = save_inner(&entries, "export-pw").expect("save");
+        let read = open_inner(&bytes, "export-pw", None).expect("open");
+
+        assert_eq!(read.len(), 2);
+        assert_eq!(find(&read[0], "Title"), Some("GitHub"));
+        assert_eq!(find(&read[0], "Password"), Some("hunter2-c0rrect-h0rse"));
+        assert_eq!(
+            find(&read[0], "otp"),
+            Some("otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP")
+        );
+        assert_eq!(find(&read[1], "Password"), Some("Pr1me!2024"));
+        // Protected on write must stay protected on read.
+        assert!(read[0].strings.iter().any(|s| s.key == "Password" && s.protected));
+        assert!(read[0].strings.iter().any(|s| s.key == "Title" && !s.protected));
+    }
+
+    #[test]
+    fn wrong_password_is_a_credential_error() {
+        let bytes = save_inner(&[entry(&[("Title", "x", false)])], "right").unwrap();
+        assert_eq!(open_inner(&bytes, "wrong", None), Err(KdbxError::WrongCredential));
+    }
+
+    #[test]
+    fn keeps_the_inner_stream_in_step_across_empty_protected_values() {
+        // An empty protected value must advance the keystream by zero on BOTH sides, or
+        // every later secret decrypts to garbage.
+        let entries = vec![entry(&[
+            ("Title", "T", false),
+            ("Password", "", true),
+            ("Custom", "after-the-empty-one", true),
+            ("Other", "second", true),
+        ])];
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(find(&read[0], "Password"), Some(""));
+        assert_eq!(find(&read[0], "Custom"), Some("after-the-empty-one"));
+        assert_eq!(find(&read[0], "Other"), Some("second"));
+    }
+
+    #[test]
+    fn escapes_xml_metacharacters_in_keys_and_values() {
+        let entries = vec![entry(&[
+            ("Title", "a<b>&c\"d'e", false),
+            ("We&ird<Key>", "plain & value", false),
+            ("Password", "<not-a-tag> & \"quoted\"", true),
+        ])];
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(find(&read[0], "Title"), Some("a<b>&c\"d'e"));
+        assert_eq!(find(&read[0], "We&ird<Key>"), Some("plain & value"));
+        assert_eq!(find(&read[0], "Password"), Some("<not-a-tag> & \"quoted\""));
+    }
+
+    /// Writes a real .kdbx to /tmp for cross-checking against an actual KeePass client,
+    /// which our own reader can't prove. Ignored by default (it touches the filesystem):
+    ///   cargo test --lib emit_for_keepassxc -- --ignored --nocapture
+    ///   printf 'export-pw-123\n' | keepassxc-cli show -s /tmp/bramble-export.kdbx GitHub
+    ///   printf 'export-pw-123\n' | keepassxc-cli show -t /tmp/bramble-export.kdbx GitHub
+    /// Verified against keepassxc-cli 2.7.12: entries list, protected values decrypt, the
+    /// `otp` field generates a live code, and custom String fields survive.
+    #[test]
+    #[ignore]
+    fn emit_for_keepassxc() {
+        let e = |pairs: &[(&str, &str, bool)]| super::SaveEntry {
+            strings: pairs.iter().map(|(k, v, p)| super::SaveString {
+                key: (*k).into(), value: (*v).into(), protected: *p,
+            }).collect(),
+        };
+        let entries = vec![
+            e(&[("Title","GitHub",false),("UserName","octocat@example.com",false),
+                ("Password","hunter2-c0rrect-h0rse",true),("URL","https://github.com",false),
+                ("Notes","Personal dev account.\nSecond line.",false),
+                ("otp","otpauth://totp/GitHub:octocat?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",true)]),
+            e(&[("Title","Nimbus Bank (\"joint\")",false),("UserName","jane.doe@example.com",false),
+                ("Password","c0mma,and-qu0te\"inside",true),("URL","https://bank.example.com",false),
+                ("Recovery contact","555-0100",false)]),
+            e(&[("Title","Personal Visa",false),("Cardholder","Jane Q. Doe",false),
+                ("Number","4111111111111111",true),("CVV","123",true),("Expiry","08/2027",false)]),
+        ];
+        let bytes = super::save_inner(&entries, "export-pw-123").expect("save");
+        std::fs::write("/tmp/bramble-export.kdbx", &bytes).unwrap();
+        eprintln!("WROTE {} bytes", bytes.len());
+    }
+
+    #[test]
+    fn rejects_an_empty_password() {
+        assert!(save_inner(&[entry(&[("Title", "x", false)])], "").is_err());
+    }
+
+    #[test]
+    fn writes_an_empty_database_without_entries() {
+        let bytes = save_inner(&[], "pw").unwrap();
+        assert_eq!(open_inner(&bytes, "pw", None).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn survives_a_payload_larger_than_one_block() {
+        // Forces multiple HMAC blocks, where a wrong block index would break verification.
+        let big = "x".repeat(300_000);
+        let entries: Vec<SaveEntry> = (0..8)
+            .map(|i| entry(&[("Title", &format!("e{i}"), false), ("Notes", &big, false)]))
+            .collect();
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(read.len(), 8);
+        assert_eq!(find(&read[7], "Notes").map(str::len), Some(300_000));
     }
 }
