@@ -296,6 +296,9 @@ function makeBlobStore(vaultId: string) {
 		readDecodedBlob: async () => ({
 			blob: decodeVaultBlob(await mobileStorage.readVaultBlob(vaultId)),
 		}),
+		// The backstop behind the id pinning above: merges are the one writer that can be holding a
+		// key belonging to a different vault, because the VEK here is process-global.
+		verifyVekBeforeWrite: true,
 	});
 }
 

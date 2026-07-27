@@ -22,6 +22,16 @@ export interface EntriesBlobDeps {
 	storage: Pick<StorageAdapter, "writeVaultBlob">;
 	/** The current decoded vault blob (for the slot list + outer ciphertext). */
 	readDecodedBlob: () => Promise<{ blob: VaultBlob }>;
+	/**
+	 * Before overwriting a non-empty entries blob, confirm the loaded VEK can decrypt the one
+	 * already on disk — i.e. that this key belongs to the file we're about to write.
+	 *
+	 * Off by default because it costs a decrypt per write and is pointless where the key can't be
+	 * the wrong one. Mobile's sync store passes it: there is ONE process-global VEK there, so a
+	 * writer can hold a key that no slot in the target file wraps. Writing anyway leaves slots and
+	 * entries under different keys, which no password or recovery code can open (issue #27).
+	 */
+	verifyVekBeforeWrite?: boolean;
 }
 
 export interface EntriesBlobStore {
@@ -36,6 +46,7 @@ export function createEntriesBlobStore({
 	crypto,
 	storage,
 	readDecodedBlob,
+	verifyVekBeforeWrite = false,
 }: EntriesBlobDeps): EntriesBlobStore {
 	return {
 		async readEntriesPayload() {
@@ -47,9 +58,28 @@ export function createEntriesBlobStore({
 			);
 			return decodeEntriesPayload(json);
 		},
+		// Order is load-bearing: read, then verify, then seal, then write. Sealing first (as this
+		// did) meant the ciphertext was produced under whatever key was loaded at that moment, then
+		// married to a slot list read afterwards — two independent snapshots, and nothing checked
+		// they belonged together.
 		async writeEntriesBlob(payload) {
-			const { iv, ciphertext } = await crypto.encryptWithVek(encodeEntriesPayload(payload));
 			const { blob } = await readDecodedBlob();
+			if (verifyVekBeforeWrite && blob.entriesCiphertext.length > 0) {
+				try {
+					await crypto.decryptWithVek(
+						bytesToBase64(blob.entriesIv),
+						bytesToBase64(blob.entriesCiphertext),
+					);
+				} catch {
+					// The loaded key can't open what's already there, so it isn't this vault's key.
+					// Abort before writing: a bad write here is unrecoverable, and refusing costs at
+					// most one dropped merge (the peer rebroadcasts).
+					throw new Error(
+						"Refusing to write: the loaded key doesn't match this vault's existing entries.",
+					);
+				}
+			}
+			const { iv, ciphertext } = await crypto.encryptWithVek(encodeEntriesPayload(payload));
 			await storage.writeVaultBlob(
 				encodeVaultBlob({
 					slots: blob.slots,
