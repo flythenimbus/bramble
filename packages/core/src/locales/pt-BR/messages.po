@@ -750,6 +750,10 @@ msgid "Export a backup"
 msgstr "Exportar um backup"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Export an encrypted backup"
+msgstr "Exportar um backup criptografado"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Export as KeePass"
 msgstr "Exportar como KeePass"
 

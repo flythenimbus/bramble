@@ -30,7 +30,14 @@ export function DataSection() {
 					title={t`Export a backup`}
 					subtitle={t`Save an encrypted .bramble copy of your vault. It still needs your master password to open.`}
 				>
-					<Button variant="secondary" size="sm" onClick={() => void exportVault().catch(() => {})}>
+					{/* Two rows in this section both read "Export"; the aria-label distinguishes them
+					    for screen readers, which would otherwise announce the pair identically. */}
+					<Button
+						variant="secondary"
+						size="sm"
+						aria-label={t`Export an encrypted backup`}
+						onClick={() => void exportVault().catch(() => {})}
+					>
 						<Trans>Export</Trans>
 					</Button>
 				</Row>
@@ -41,7 +48,12 @@ export function DataSection() {
 					title={t`Export as KeePass`}
 					subtitle={t`Save a .kdbx you can open in KeePassXC or any KeePass app, under a password you pick.`}
 				>
-					<Button variant="secondary" size="sm" onClick={() => setKdbxOpen(true)}>
+					<Button
+						variant="secondary"
+						size="sm"
+						aria-label={t`Export as KeePass`}
+						onClick={() => setKdbxOpen(true)}
+					>
 						<Trans>Export</Trans>
 					</Button>
 				</Row>
