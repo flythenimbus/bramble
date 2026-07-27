@@ -44,6 +44,22 @@ export function Row({ icon, title, subtitle, children }: RowProps) {
 	);
 }
 
+interface RowGroupProps {
+	label: string;
+	children: React.ReactNode;
+}
+
+/** Captioned group of rows inside a Section, for a section that splits into two concerns
+ * (e.g. our own backup format vs other vendors'). h4 keeps the heading order under Section's h3. */
+export function RowGroup({ label, children }: RowGroupProps) {
+	return (
+		<div className="space-y-4">
+			<h4 className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</h4>
+			{children}
+		</div>
+	);
+}
+
 interface ToggleProps {
 	checked: boolean;
 	onChange: (next: boolean) => void;

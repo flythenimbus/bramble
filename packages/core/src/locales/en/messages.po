@@ -1259,6 +1259,10 @@ msgstr "Optional (e.g. Restored)"
 msgid "Optional (e.g. Work)"
 msgstr "Optional (e.g. Work)"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Other vendors"
+msgstr "Other vendors"
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Overview"
 msgstr "Overview"

@@ -1259,6 +1259,10 @@ msgstr "Opzionale (es. Ripristinato)"
 msgid "Optional (e.g. Work)"
 msgstr "Opzionale (es. Lavoro)"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Other vendors"
+msgstr "Altri fornitori"
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Overview"
 msgstr "Panoramica"
