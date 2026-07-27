@@ -13,6 +13,7 @@ import {
 	onSyncEvent,
 	onSyncStatus,
 	resetSyncState,
+	retargetActiveVault,
 	signRoster,
 	startEnrollInvite,
 	startEnrollJoin,
@@ -114,10 +115,15 @@ export const mobileShell: ShellAdapter = {
 	// Preferences; sync-manager reads it to target the active vault's namespaced keys, and the
 	// registry restores it on reopen. Written on unlock, left in place on lock (overwritten by the
 	// next unlock). See sync-manager `activeVaultId`.
-	setActiveVault: (vaultId) =>
-		vaultId == null
+	// Retarget sync BEFORE recording the new id: the live session is pinned to the old vault, and
+	// a merge that lands after the id moves but before the session stops writes into the wrong
+	// vault's file (issue #27). retargetActiveVault stops it and drains any in-flight merge.
+	setActiveVault: async (vaultId) => {
+		await retargetActiveVault(vaultId ?? null);
+		await (vaultId == null
 			? mobileStorage.removeMeta(ACTIVE_VAULT_KEY)
-			: mobileStorage.setMeta(ACTIVE_VAULT_KEY, vaultId),
+			: mobileStorage.setMeta(ACTIVE_VAULT_KEY, vaultId));
+	},
 	getActiveVault: async () => (await mobileStorage.getMeta<string>(ACTIVE_VAULT_KEY)) ?? null,
 
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
