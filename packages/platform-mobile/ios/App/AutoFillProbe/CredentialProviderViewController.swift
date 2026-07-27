@@ -297,7 +297,6 @@ private struct UnlockView: View {
 	@ObservedObject var model: UnlockModel
 	@State private var password = ""
 	@State private var showPassword = false
-	@State private var triggered = false
 	@FocusState private var focused: Bool
 
 	var body: some View {
@@ -398,14 +397,9 @@ private struct UnlockView: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Theme.background.ignoresSafeArea())
 		.onAppear {
-			// Cached key present: pop Face ID / passcode right away (password is the fallback).
-			if model.hasBiometric, !triggered {
-				triggered = true
-				model.busy = true
-				model.onBiometric()
-			} else if !model.hasBiometric {
-				focused = true
-			}
+			// The automatic Face ID / passcode prompt is fired from the controller's
+			// viewDidAppear, not here: .onAppear is too early for the Keychain to present it.
+			if !model.hasBiometric { focused = true }
 		}
 	}
 
@@ -437,6 +431,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// Set while satisfying a passkey create(); onUnlocked() branches to the registration path.
 	private var pendingPasskeyCreate: PasskeyCreate?
 	private var model: UnlockModel?
+	// An unlock screen is up and still owes its automatic biometric prompt (fired in viewDidAppear).
+	private var pendingAutoBiometric = false
 
 	// --- entry points: authenticate first ---
 
@@ -784,7 +780,21 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			onPassword: { [weak self] in self?.unlockWithPassword($0) },
 			onCancel: { [weak self] in self?.cancel(.userCanceled) })
 		model = m
+		pendingAutoBiometric = m.hasBiometric
 		host(UnlockView(model: m))
+	}
+
+	// Fire the Face ID / passcode prompt HERE, not from the view's .onAppear: that runs while
+	// the view is still being added, and the Keychain then refuses to present its own prompt
+	// (errSecInteractionNotAllowed, -25308, surfaced as a red "Keychain status" line). By
+	// viewDidAppear the extension is on screen and the system's own sheet has finished
+	// dismissing. See docs/mobile-port.md (the "not running foreground" gotcha).
+	override func viewDidAppear(_ animated: Bool) {
+		super.viewDidAppear(animated)
+		guard pendingAutoBiometric, let m = model else { return }
+		pendingAutoBiometric = false
+		m.busy = true
+		unlockWithBiometric()
 	}
 
 	// The device's biometry name + the passcode fallback (the cached VEK is gated by
@@ -1111,7 +1121,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			} else if status == errSecItemNotFound {
 				completion(.missing)
 			} else {
-				completion(.denied(status == errSecUserCanceled ? "" : "Keychain status \(status)"))
+				// A raw OSStatus means nothing to the user, and two of these aren't errors at
+				// all: a cancel, and interactionNotAllowed (the Keychain couldn't put its prompt
+				// up right now). Both leave the unlock screen usable, so say nothing and let the
+				// user tap the button or type the master password.
+				let silent = status == errSecUserCanceled || status == errSecInteractionNotAllowed
+				completion(.denied(silent ? "" : String(localized: "Couldn't read the saved key.")))
 			}
 		}
 	}
