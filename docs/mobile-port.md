@@ -181,7 +181,7 @@ ground truth of what exists.
     glyph, heading, card; the list mirrors the in-app vault). The `bramble-glyph.png` is base64-embedded.
   - **Release pipeline:** `pnpm ios:beta` (fastlane: build + TestFlight upload, **timestamp build numbers**
     so the auto-bump can't collide) and `pnpm ios:ipa` (distribution IPA to ~/Desktop). Needs an ASC API key
-    in `ios/App/fastlane/.env` + `AuthKey.p8` (gitignored). Wiring is idempotent (`scripts/add-native-crypto.rb`).
+    in `<repo root>/fastlane/.env` + `AuthKey.p8` (gitignored). Wiring is idempotent (`scripts/add-native-crypto.rb`).
   - Fixed for App Store: the 1024 marketing icon had an alpha channel (placeholder in ASC); flattened to
     opaque RGB.
 - **Android native crypto: BUILT + compile-verified (the iOS peer).** Android now runs the same

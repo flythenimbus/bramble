@@ -470,13 +470,14 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 
 	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
-	// fastlane/.env. The actual signing is Xcode-automatic (-allowProvisioningUpdates), so unlike
-	// Android there's no keystore to decrypt here.
+	// fastlane/.env. The lanes live in the REPO-ROOT fastlane/ (shared with the Android F-Droid
+	// metadata, which fdroidserver only reads from there). The actual signing is Xcode-automatic
+	// (-allowProvisioningUpdates), so unlike Android there's no keystore to decrypt here.
 	if (!has("fastlane"))
 		fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");
-	if (!existsSync(join(IOS, "fastlane", ".env")))
+	if (!existsSync("fastlane/.env"))
 		fail(
-			`missing ${IOS}/fastlane/.env (ASC_KEY_ID/ASC_ISSUER_ID + AuthKey.p8); copy fastlane/.env.example`,
+			"missing fastlane/.env (ASC_KEY_ID/ASC_ISSUER_ID + AuthKey.p8); copy fastlane/.env.example",
 		);
 
 	if (!ipaOnly) gate(); // a dry run only tests build + signing, so skip the slow CI gate
