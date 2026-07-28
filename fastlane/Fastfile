@@ -23,6 +23,10 @@ PROJECT = "#{REPO}/packages/platform-mobile/ios/App/App.xcodeproj"
 # with this layout metadata_path MUST be passed explicitly: the default (metadata/) errors on `ios`.
 METADATA = "#{__dir__}/metadata/ios"
 SCREENSHOTS = "#{__dir__}/screenshots"
+# Where gym drops the .ipa + .dSYM.zip. Without this it writes to the working directory, which
+# since fastlane moved to the repo root means littering the root with build artifacts. This path
+# is already gitignored (packages/platform-mobile/ios/.gitignore, `App/output`).
+BUILD_OUT = "#{REPO}/packages/platform-mobile/ios/App/output"
 # Force DerivedData (incl. the SPM checkout cache) onto the internal disk, at a stable
 # repo-local (gitignored) path. Xcode's default here points at an external Transcend
 # volume that EPERMs the SPM cache and breaks `build_app` (see
@@ -98,6 +102,7 @@ platform :ios do
       scheme: "App",
       export_method: "app-store",
       derived_data_path: DERIVED,
+      output_directory: BUILD_OUT,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} -allowProvisioningUpdates",
       export_options: stable_export_options,
     )

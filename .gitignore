@@ -44,3 +44,11 @@ playwright-report/
 
 # Unsigned APKs from the reproducible-build container (docker-compose android-repro)
 build-fdroid/
+
+# iOS build output. Unanchored on purpose: the existing rules in
+# packages/platform-mobile/ios/.gitignore are path-anchored (`App/App.ipa`), so anything
+# gym writes elsewhere - e.g. the repo root, which is now fastlane's working directory -
+# slipped through. The Fastfile also pins an output_directory so these shouldn't appear
+# at the root at all; this is the backstop.
+*.ipa
+*.dSYM.zip
