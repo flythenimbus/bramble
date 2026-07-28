@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, lock, openPopup, STRONG_PW } from "./helpers";
+import { createVault, lock, openPopup, STRONG_PW, seedExampleLogin } from "./helpers";
 
 // The production click-to-unlock flow, end to end: locked vault -> "Vault locked" row in the picker
 // -> the real unlock POP-OUT WINDOW the background opens -> master password. Two things must happen
@@ -41,19 +41,6 @@ async function serve(page: Page): Promise<void> {
 		);
 }
 
-/** Add a saved login for example.com through the popup UI. */
-async function seedLogin(popup: Page): Promise<void> {
-	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Add a new login/i }).click();
-	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
-	await popup.getByRole("button", { name: /Add URL/i }).click();
-	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
-	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
-	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
-	await popup.getByRole("button", { name: /Save Login/i }).click();
-	await expect(popup.getByText("Example Login")).toBeVisible();
-}
-
 /** Click the middle of the picker's first row (the rows are in a closed shadow root). */
 async function clickPickerRow(page: Page): Promise<void> {
 	const box = await page.locator(HOST).boundingBox();
@@ -68,7 +55,7 @@ test("click-to-unlock closes the pop-out and re-surfaces the matches", async ({
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 	await lock(popup);
 	// No extension view open: the pop-out the picker opens is the only unlock UI, as in real use.
 	await popup.close();

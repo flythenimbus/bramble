@@ -130,7 +130,14 @@ origin checks the page can't forge:
 - The content script honors an iframe message only when `event.source ===
   iframe.contentWindow` **and** `event.origin === <extension origin>` (both
   browser-set). A page's `window.postMessage` carries the page origin and a
-  different source, so it is dropped.
+  different source, so it is dropped. The extension origin is taken from the
+  iframe's own `AUTOFILL_UI_READY` handshake (it must arrive from that window, on
+  the extension's url scheme) and pinned for every later message in both
+  directions - **not** from `runtime.getURL()`. Under Chromium's manifest
+  `use_dynamic_url`, getURL hands a content script a per-session GUID origin while
+  the document it loads reports the extension's static origin, so comparing
+  against the src origin drops every message both ways: READY never lands and the
+  picker silently falls back to the shadow renderer on every page.
 - The iframe accepts a parent message only when `event.source === window.parent`
   and `event.origin === <page origin>` (passed on the iframe `src` as
   `?parentOrigin=`), and posts back pinned to that origin.

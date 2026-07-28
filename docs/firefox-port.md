@@ -409,9 +409,11 @@ Verified Firefox facts behind these choices:
 - **Host permissions**: from FF 127, entries in `host_permissions` and `content_scripts` are shown
   in the install prompt and granted on install, so `<all_urls>` autofill works out of the box.
   Users can still revoke them in `about:addons`. `strict_min_version: "128.0"` is the safe floor.
-- **`web_accessible_resources` `use_dynamic_url: true`**: Firefox may ignore it. The autofill-ui
-  iframe still loads via a static `moz-extension` URL; only per-session URL rotation is lost.
-  Confirm with `web-ext lint`.
+- **`web_accessible_resources` `use_dynamic_url: true`**: Firefox may ignore it (the manifest omits
+  it there). The autofill-ui iframe still loads via a static `moz-extension` URL; only per-session
+  URL rotation is lost. Confirm with `web-ext lint`. Note the Chromium subtlety it caused: with the
+  flag on, `runtime.getURL()` returns a GUID origin the loaded document does not share, so the
+  picker's bridge pins the origin from the iframe's READY handshake instead (see docs/autofill.md).
 
 ## Build tooling
 

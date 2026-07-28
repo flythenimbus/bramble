@@ -298,7 +298,16 @@ function buildLockedDropdown(field: HTMLInputElement): void {
 // --- Iframe renderer (primary); the shadow path above is the COEP fallback. ---
 
 const AUTOFILL_UI_URL = api.runtime.getURL("autofill-ui.html");
-const EXT_ORIGIN = new URL(AUTOFILL_UI_URL).origin;
+// The extension url scheme (chrome-extension: / moz-extension:), the one thing about the iframe's
+// origin we can know up front.
+const EXT_SCHEME = new URL(AUTOFILL_UI_URL).protocol;
+// The origin the iframe actually speaks from, adopted at its READY handshake. It is NOT always the
+// origin of the url we set as src: under Chromium's manifest `use_dynamic_url`, getURL hands a
+// content script a per-session GUID origin while the document it loads reports the extension's
+// static one. Pinning posts (and inbound checks) to the src origin silently dropped every message
+// in both directions, so READY never landed and the picker fell back to its shadow renderer on
+// every page. Null until the handshake; every post is pinned to it, never "*".
+let uiOrigin: string | null = null;
 
 type IframeRender =
 	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean; suggest?: SuggestOpt }
@@ -335,6 +344,7 @@ function destroyIframeHost(): void {
 	}
 	iframeEl = null;
 	iframeReady = false;
+	uiOrigin = null; // a fresh frame re-introduces itself
 	pendingRender = null;
 	iframeMatchesKey = "";
 	iframeHasHighlight = false;
@@ -367,23 +377,26 @@ function ensureIframeHost(): void {
 	iframeReady = false;
 }
 
-function flushPendingRender(): void {
+/** Post to the iframe, pinned to the origin it introduced itself with. No-op before the handshake. */
+function postToUi(message: unknown): void {
 	const win = iframeEl?.contentWindow;
-	if (!win || !pendingRender) return;
+	if (!win || uiOrigin === null) return;
+	win.postMessage(message, uiOrigin);
+}
+
+function flushPendingRender(): void {
+	if (!iframeEl?.contentWindow || !pendingRender) return;
 	const render = pendingRender;
 	pendingRender = null;
 	if (render.kind === "matches") {
-		win.postMessage(
-			{
-				type: "RENDER_MATCHES",
-				matches: render.matches,
-				otpOnly: render.otpOnly,
-				suggest: render.suggest,
-			},
-			EXT_ORIGIN,
-		);
+		postToUi({
+			type: "RENDER_MATCHES",
+			matches: render.matches,
+			otpOnly: render.otpOnly,
+			suggest: render.suggest,
+		});
 	} else {
-		win.postMessage({ type: "RENDER_LOCKED" }, EXT_ORIGIN);
+		postToUi({ type: "RENDER_LOCKED" });
 	}
 }
 
@@ -491,10 +504,18 @@ function showLockedUi(field: HTMLInputElement): void {
 	iframeShow(field, { kind: "locked" });
 }
 
-// Bridge from the iframe: honor only OUR iframe on the extension origin (a
-// page-forged postMessage has a different source/origin and is dropped).
+// Bridge from the iframe: honor only OUR iframe's window on an extension origin (a page-forged
+// postMessage has a different source, and a frame navigated off the extension a different scheme).
 window.addEventListener("message", (e) => {
-	if (!iframeEl || e.source !== iframeEl.contentWindow || e.origin !== EXT_ORIGIN) return;
+	if (!iframeEl || e.source !== iframeEl.contentWindow) return;
+	// The handshake introduces the frame's origin; everything after must match it exactly.
+	if (uiOrigin === null) {
+		if ((e.data as { type?: string } | undefined)?.type !== "AUTOFILL_UI_READY") return;
+		if (!e.origin.startsWith(`${EXT_SCHEME}//`)) return;
+		uiOrigin = e.origin;
+	} else if (e.origin !== uiOrigin) {
+		return;
+	}
 	const msg = e.data as
 		| { type: "AUTOFILL_UI_READY" }
 		| { type: "UI_RESIZE"; height?: number }
@@ -550,11 +571,10 @@ function handleDropdownKey(e: KeyboardEvent): boolean {
 	if (uiMode !== "iframe" || !iframeReady || !iframeHostEl) return false;
 	if (iframeHostEl.style.display === "none") return false;
 	if (document.activeElement !== anchorField) return false;
-	const win = iframeEl?.contentWindow;
-	if (!win) return false;
+	if (!iframeEl?.contentWindow) return false;
 	if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 		e.preventDefault();
-		win.postMessage({ type: "UI_KEY", key: e.key }, EXT_ORIGIN);
+		postToUi({ type: "UI_KEY", key: e.key });
 		return true;
 	}
 	if (e.key === "Escape") {
@@ -566,7 +586,7 @@ function handleDropdownKey(e: KeyboardEvent): boolean {
 	// Enter only picks when a row is highlighted; otherwise the form submits normally.
 	if (e.key === "Enter" && iframeHasHighlight) {
 		e.preventDefault();
-		win.postMessage({ type: "UI_KEY", key: "Enter" }, EXT_ORIGIN);
+		postToUi({ type: "UI_KEY", key: "Enter" });
 		return true;
 	}
 	return false;

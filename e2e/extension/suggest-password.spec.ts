@@ -1,6 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, expectUnlocked, lock, openPopup, unlock } from "./helpers";
+import {
+	backgroundWorker,
+	createVault,
+	expectUnlocked,
+	lock,
+	openPopup,
+	seedExampleLogin,
+	unlock,
+} from "./helpers";
 
 // Drives the strong-password suggestion end to end through the real content script, the picker,
 // and the background save path. Like autofill-unlock.spec.ts, the pages are served with
@@ -53,19 +61,6 @@ async function serve(page: Page, html: string): Promise<void> {
 				? route.fulfill({ body: html, headers: COEP })
 				: route.fulfill({ status: 200, body: "" }),
 		);
-}
-
-/** Add a saved login for example.com through the popup UI (the account already on file). */
-async function seedLogin(popup: Page): Promise<void> {
-	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Add a new login/i }).click();
-	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
-	await popup.getByRole("button", { name: /Add URL/i }).click();
-	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
-	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
-	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
-	await popup.getByRole("button", { name: /Save Login/i }).click();
-	await expect(popup.getByText("Example Login")).toBeVisible();
 }
 
 /** The `newLogin` flag on the pending capture stash for example.com (save-new vs update intent). */
@@ -122,7 +117,7 @@ test("a signup with an existing saved login still offers a NEW login, not update
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 
 	const page = await context.newPage();
 	await serve(page, SIGNUP);
@@ -151,7 +146,7 @@ test("a manually typed signup password captures as a NEW login (submit path)", a
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 
 	const page = await context.newPage();
 	await serve(page, SIGNUP);
@@ -195,7 +190,7 @@ test("suggests a strong password on a change-password form (new field, not the c
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 
 	const page = await context.newPage();
 	await serve(page, CHANGE);
@@ -233,7 +228,7 @@ test("offers the suggestion while the vault is locked (fills, then prompts Unloc
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 	await lock(popup);
 
 	const page = await context.newPage();
@@ -322,7 +317,7 @@ test("click-to-unlock re-surfaces the matches in place, without refocusing (issu
 	const popup = await context.newPage();
 	await createVault(popup, extensionId);
 	await openPopup(popup, extensionId);
-	await seedLogin(popup);
+	await seedExampleLogin(popup);
 	await lock(popup);
 
 	const page = await context.newPage();

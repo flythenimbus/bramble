@@ -69,6 +69,20 @@ export async function selectVault(page: Page, name: RegExp, password = STRONG_PW
 	await expectUnlocked(page);
 }
 
+/** Add the saved login the autofill specs match against (alice@example.com on example.com),
+ * through the unlocked popup's own UI. */
+export async function seedExampleLogin(popup: Page) {
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Add a new login/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
+	await popup.getByRole("button", { name: /Add URL/i }).click();
+	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
+	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
+	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
+	await popup.getByRole("button", { name: /Save Login/i }).click();
+	await expect(popup.getByText("Example Login")).toBeVisible();
+}
+
 /** From an unlocked popup, open Settings and select the Device sync panel. */
 export async function gotoSync(page: Page) {
 	await page.getByRole("button", { name: "Settings" }).click();
