@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `labeled` so adding the `e2e` label to a PR re-triggers the workflow and lets the
+    # browser suite run (see the e2e job). The other types are the defaults, which listing
+    # `labeled` would otherwise replace.
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 # Least privilege: CI only reads the repo, never writes back.
 permissions:
@@ -87,3 +92,70 @@ jobs:
 
       - name: Build extension
         run: pnpm run build
+
+      # Handed to the e2e job so it doesn't repeat the Rust + WASM build, which is the slow part.
+      - name: Upload the built extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-chromium
+          path: packages/platform-extension/dist-chromium
+          retention-days: 1
+
+  # Browser-driven tests: a real Chromium with the extension loaded. Kept out of the `build` job
+  # because it is minutes slower and has a different flake profile.
+  #
+  # NOT run automatically on pull requests. A fork PR can run arbitrary code, and while
+  # `pull_request` gives it no secrets and a read-only token, it still spends runner time — so a
+  # maintainer opts in per PR by adding the `e2e` label (only users with write access can label).
+  # Pushes to main and manual dispatches always run it.
+  #
+  # Caveat worth knowing: once a PR is labelled, later pushes to it re-run this. Remove the label
+  # to stop that.
+  e2e:
+    name: E2E (extension)
+    needs: build
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the built extension
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-chromium
+          path: packages/platform-extension/dist-chromium
+
+      # The full Chromium build, not just the headless shell: loading an MV3 extension and
+      # starting its service worker needs the real one (see e2e/README.md).
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Only the extension suite. `sync` spins up WebRTC between two contexts and `android`
+      # needs a physical device; neither belongs on a shared runner.
+      - name: E2E
+        run: pnpm run test:e2e
+
+      - name: Upload the report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
