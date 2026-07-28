@@ -1,24 +1,33 @@
 //! KDBX4 import: opens a KeePass KDBX4 database inside WASM.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+#[cfg(feature = "wasm")]
+use cbc::cipher::BlockEncryptMut;
 use chacha20::cipher::StreamCipher;
 use chacha20::ChaCha20;
 use flate2::read::GzDecoder;
+#[cfg(feature = "wasm")]
 use flate2::write::GzEncoder;
+#[cfg(feature = "wasm")]
 use flate2::Compression;
 use hmac::{Hmac, Mac};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+#[cfg(feature = "wasm")]
+use serde::Deserialize;
 use sha2::{Digest, Sha256, Sha512};
-use std::io::{Read, Write};
+use std::io::Read;
+#[cfg(feature = "wasm")]
+use std::io::Write;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroizing;
 
 type HmacSha256 = Hmac<Sha256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+#[cfg(feature = "wasm")]
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 // 16-byte UUIDs as stored in the header / KDF VariantDictionary.
@@ -585,19 +594,26 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
 
 /// Argon2id cost for exported files: the same as the vault's own KEK (64 MiB / 3 passes /
 /// 1 lane), which is comfortably inside the ceilings `argon2_transform` enforces on read.
+#[cfg(feature = "wasm")]
 const OUT_KDF_MEM_BYTES: u64 = 64 * 1024 * 1024;
+#[cfg(feature = "wasm")]
 const OUT_KDF_ITERATIONS: u64 = 3;
+#[cfg(feature = "wasm")]
 const OUT_KDF_PARALLELISM: u32 = 1;
+#[cfg(feature = "wasm")]
 const ARGON2_V13: u32 = 0x13;
 /// KeePass's own payload block size. A single huge block is legal but unconventional.
+#[cfg(feature = "wasm")]
 const BLOCK_SIZE: usize = 1024 * 1024;
 
 /// One entry to write, as KeePass String pairs. The read-side mirror of `OutEntry`; JS
 /// builds these from `EntryData` so the field naming stays in the TS layer.
+#[cfg(feature = "wasm")]
 #[derive(Deserialize)]
 pub struct SaveEntry {
     pub strings: Vec<SaveString>,
 }
+#[cfg(feature = "wasm")]
 #[derive(Deserialize)]
 pub struct SaveString {
     pub key: String,
@@ -616,11 +632,13 @@ pub fn save_kdbx4(entries: JsValue, password: &str) -> Result<Box<[u8]>, JsError
     Ok(bytes.into_boxed_slice())
 }
 
+#[cfg(feature = "wasm")]
 fn rng(buf: &mut [u8]) -> Res<()> {
     crate::random_bytes(buf).map_err(|_| KdbxError::Corrupt("rng"))
 }
 
 /// `[id:u8][len:u32][data]`, the shape of both the outer and inner header fields.
+#[cfg(feature = "wasm")]
 fn push_field(out: &mut Vec<u8>, id: u8, data: &[u8]) {
     out.push(id);
     out.extend_from_slice(&(data.len() as u32).to_le_bytes());
@@ -628,6 +646,7 @@ fn push_field(out: &mut Vec<u8>, id: u8, data: &[u8]) {
 }
 
 /// `[type:u8][klen:u32][key][vlen:u32][val]`, one VariantDictionary item.
+#[cfg(feature = "wasm")]
 fn push_variant(out: &mut Vec<u8>, ty: u8, key: &[u8], val: &[u8]) {
     out.push(ty);
     out.extend_from_slice(&(key.len() as u32).to_le_bytes());
@@ -637,6 +656,7 @@ fn push_variant(out: &mut Vec<u8>, ty: u8, key: &[u8], val: &[u8]) {
 }
 
 /// KDF VariantDictionary for Argon2id. Types: 0x04 u32, 0x05 u64, 0x42 byte array.
+#[cfg(feature = "wasm")]
 fn build_kdf_dict(salt: &[u8]) -> Vec<u8> {
     let mut d = Vec::new();
     d.extend_from_slice(&0x0100u16.to_le_bytes()); // dictionary version 1.0
@@ -655,6 +675,7 @@ fn build_kdf_dict(salt: &[u8]) -> Vec<u8> {
 /// The keystream must advance for every protected value in document order, exactly as
 /// `parse_inner_xml` consumes it. An EMPTY protected value advances it by zero bytes on
 /// both sides (the reader skips empty values), so the two stay in step.
+#[cfg(feature = "wasm")]
 fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
     let kd = Sha512::digest(inner_key);
     let mut stream = ChaCha20::new_from_slices(&kd[0..32], &kd[32..44])
@@ -703,6 +724,7 @@ fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
 }
 
 /// Write a KDBX4 database holding `entries`, unlockable with `password` alone (no key file).
+#[cfg(feature = "wasm")]
 pub fn save_inner(entries: &[SaveEntry], password: &str) -> Res<Vec<u8>> {
     if password.is_empty() {
         return Err(KdbxError::Corrupt("export password must not be empty"));
@@ -939,7 +961,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm"))]
 mod export_tests {
     use super::*;
 
