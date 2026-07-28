@@ -21,8 +21,14 @@ PROJECT = "#{REPO}/packages/platform-mobile/ios/App/App.xcodeproj"
 # (metadata/android/, where fdroidserver requires it). The two could share metadata/ directly -
 # deliver skips `android` as a known supply dir - but it rejects any other non-locale child, so
 # with this layout metadata_path MUST be passed explicitly: the default (metadata/) errors on `ios`.
-METADATA = "#{__dir__}/metadata/ios"
-SCREENSHOTS = "#{__dir__}/screenshots"
+#
+# Built from REPO, NOT `__dir__`: inside a Fastfile `__dir__` evaluates to "." (fastlane
+# instance_evals the file from a relative path), so these became "./metadata/ios" and
+# "./screenshots". deliver then expanded them against the REPO ROOT rather than fastlane/,
+# silently found zero locale folders, created the empty dirs, uploaded nothing, and reported
+# success. Absolute paths, so there is nothing left to resolve.
+METADATA = "#{REPO}/fastlane/metadata/ios"
+SCREENSHOTS = "#{REPO}/fastlane/screenshots"
 # Where gym drops the .ipa + .dSYM.zip. Without this it writes to the working directory, which
 # since fastlane moved to the repo root means littering the root with build artifacts. This path
 # is already gitignored (packages/platform-mobile/ios/.gitignore, `App/output`).
