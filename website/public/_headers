@@ -1,0 +1,3 @@
+/.well-known/matrix/*
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
