@@ -1,0 +1,80 @@
+import type { Page } from "@playwright/test";
+import { popupUrl } from "../e2e/helpers";
+import { createVault, expect, gotoSync, PW, RELAY_URL, test } from "./fixtures";
+
+// Two real peers — the browser extension and the mobile app — pairing over WebRTC through a local
+// signaling relay, then merging a vault. Closes the gap e2e/README.md flagged as "a further step".
+//
+// Only the INVITER needs the relay configured: the pairing code carries it (PairingCodeSchema.relay)
+// and the joiner adopts it. And it must be set AFTER the vault exists, because creating the first
+// vault calls resetSyncState(), which removes sync.relay along with the rest of the sync identity.
+
+const LOCAL_RELAY_HOST = "localhost:7400";
+
+/** Point this peer's sync at the local relay, via the Advanced panel a user would use. */
+async function useLocalRelay(page: Page): Promise<void> {
+	await page.getByRole("button", { name: /Advanced/i }).click();
+	const field = page.getByLabel(/Nostr relay URL/i);
+	await field.fill(RELAY_URL);
+	// The ICE endpoint derives from the relay; blank it so nothing reaches for the hosted one.
+	await page.getByLabel(/TURN \/ ICE servers URL/i).fill("");
+}
+
+/** Run the inviter flow and return the pairing code. */
+async function invite(page: Page): Promise<string> {
+	await page
+		.getByRole("button", { name: /^Add a device$/i })
+		.last()
+		.click();
+	// Re-auth: adding a device is authorised by the master password, not just an unlocked session.
+	await page.locator('input[type="password"]').first().fill(PW);
+	await page.getByRole("button", { name: /Continue/i }).click();
+
+	const codeField = page.locator("input[readonly]");
+	await expect(codeField).toBeVisible();
+	const code = await codeField.inputValue();
+	expect(code).toMatch(/^bramble-pair-1\./);
+	return code;
+}
+
+test("the extension and the mobile app pair over a real relay and share a vault", async ({
+	ext,
+	mobile,
+}) => {
+	// --- inviter: the extension ---
+	// Setup runs in the options tab; Settings (and therefore Sync) lives in the popup.
+	await createVault(ext.page);
+	await ext.page.goto(popupUrl(ext.extensionId));
+	await ext.page.locator("#root").waitFor();
+	await gotoSync(ext.page);
+	await useLocalRelay(ext.page);
+	const code = await invite(ext.page);
+
+	// The code must name OUR relay, not the hosted default — otherwise the test would be
+	// silently exercising production infrastructure.
+	const decoded = JSON.parse(
+		Buffer.from(code.replace("bramble-pair-1.", ""), "base64").toString("utf8"),
+	) as { relay: string };
+	expect(decoded.relay).toContain(LOCAL_RELAY_HOST);
+
+	await expect(ext.page.getByText(/Waiting for a device to join/i).first()).toBeVisible();
+
+	// --- joiner: the mobile app, with no vault of its own ---
+	// Setup opens on "Create new vault"; the join flow is a sibling tab.
+	await mobile.page.getByRole("button", { name: /Create your vault/i }).click();
+	await mobile.page.getByRole("button", { name: /Join a device/i }).click();
+	// On mobile the camera scanner is offered first; take the paste path instead.
+	const paste = mobile.page.getByRole("button", { name: /Paste code instead/i });
+	if (await paste.isVisible().catch(() => false)) await paste.click();
+	await mobile.page.getByPlaceholder(/Paste the code from your other device/i).fill(code);
+	await mobile.page.getByLabel(/Master password/i).fill(PW);
+	await mobile.page.getByRole("button", { name: /Join vault/i }).click();
+
+	// --- both sides observe the pairing ---
+	// The joiner ends up in an unlocked vault it did not create.
+	await expect(mobile.page.getByRole("button", { name: "Lock vault", exact: true })).toBeVisible({
+		timeout: 90_000,
+	});
+	// And the inviter's roster gains the peer.
+	await expect(ext.page.getByText(/THIS DEVICE/i)).toBeVisible();
+});
