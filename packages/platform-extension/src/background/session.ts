@@ -1,11 +1,12 @@
 /// <reference types="chrome" />
 
 import { api } from "../platform-api";
+import { CORNER_HANDOFF_KEY } from "../session-keys";
 import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
-import { CAPTURE_KEY_PREFIX, CORNER_HANDOFF_KEY } from "./corner-prompt";
+import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
 import { sendToOffscreen } from "./offscreen-client";
-import { POPOUT_HANDOFF_KEY } from "./popout";
+import { closeUnlockPopout, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
 import { extensionOnly, type MessageEnvelope, onPrefix } from "./router";
 import { maybeStartSync, stopSync } from "./sync";
@@ -141,16 +142,25 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 	const response = await sendToOffscreen(message);
 	if (response.ok) {
 		if (type === "CRYPTO_GENERATE_VEK") {
+			await refreshActiveVaultId();
 			await scheduleAutoLock();
 			void broadcastLockState(false);
 		} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
 			// The unwrap reply was stripped to a boolean; true means the VEK was recovered and
 			// cached (by sendToOffscreen). Both slot kinds count as an unlock of the active vault.
 			if (response.data === true) {
+				// The UI writes the active vault id to session right before the unwrap, but the
+				// onChanged mirror can still be in flight - and vaultLocked() reads that mirror.
+				// Refresh it BEFORE announcing the unlock, or the autofill re-query the broadcast
+				// triggers is answered "locked" and the page keeps its "Vault locked" row.
+				await refreshActiveVaultId();
 				await scheduleAutoLock();
 				void maybeStartSync(); // begin continuous sync if this vault is in a group
 				void runDueBackups(); // back up any target that's due, now that the VEK is live
 				void broadcastLockState(false);
+				// If this unlock was reached from a page's "Vault locked" row, the pop-out has
+				// done its job: get it off the form the user is going back to.
+				void closeUnlockPopout();
 			}
 		}
 	}

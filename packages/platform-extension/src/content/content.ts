@@ -255,7 +255,8 @@ picker.onPick((entryId, otpOnly) => selectMatch(entryId, false, otpOnly));
 picker.onUnlockRequest((field) => {
 	// The click dismissed the picker; remember the field so the unlock broadcast can re-surface here.
 	pendingUnlockField = field;
-	safeSendMessage({ type: "POPOUT_OPEN" });
+	// `reason` marks this pop-out as a step in the fill flow, so it closes itself on unlock.
+	safeSendMessage({ type: "POPOUT_OPEN", payload: { reason: "unlock" } });
 });
 picker.onDismiss(() => {
 	silenceAutoOpen = true;

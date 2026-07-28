@@ -15,8 +15,7 @@ type Inbound =
 			suggest?: { password: string };
 	  }
 	| { type: "RENDER_LOCKED" }
-	| { type: "UI_KEY"; key: string }
-	| { type: "CLEAR" };
+	| { type: "UI_KEY"; key: string };
 
 // Page origin (from the iframe src): outbound posts pin to it, inbound is checked against it.
 const PARENT_ORIGIN = new URLSearchParams(location.search).get("parentOrigin") ?? "";
@@ -356,11 +355,6 @@ window.addEventListener("message", (e) => {
 			if (msg.key === "ArrowDown") moveHighlight(1);
 			else if (msg.key === "ArrowUp") moveHighlight(-1);
 			else if (msg.key === "Enter" && highlight >= 0) activate(highlight);
-			break;
-		case "CLEAR":
-			rows = [];
-			highlight = -1;
-			document.body.innerHTML = "";
 			break;
 	}
 });

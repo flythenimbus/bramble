@@ -7,9 +7,9 @@ import type {
 	MatchSummary,
 	QueryResult,
 } from "@core/adapters/autofill";
+import { decodeEntriesPayload } from "@core/sync";
 import { parseTotp, totpAt } from "@core/util/totp";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
-import type { EncryptedEntry } from "@core/vault-format";
 import {
 	type DedupeOutcome,
 	dedupeCapture as dedupeCaptureFn,
@@ -209,7 +209,9 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 			},
 		});
 		if (!outerResp.ok || typeof outerResp.data !== "string") return false;
-		const encryptedEntries = JSON.parse(outerResp.data) as EncryptedEntry[];
+		// The outer payload is `{entries, tombstones}` (see core/sync/entries-payload); parsing it
+		// as a bare array threw and left the index null, so every query answered "vault locked".
+		const { entries: encryptedEntries } = decodeEntriesPayload(outerResp.data);
 		const newIndex = new Map<string, IndexEntry>();
 		for (const enc of encryptedEntries) {
 			const dec = await sendToOffscreen({

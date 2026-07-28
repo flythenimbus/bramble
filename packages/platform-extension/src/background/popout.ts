@@ -1,6 +1,8 @@
 /// <reference types="chrome" />
 
 import { api } from "../platform-api";
+import { CORNER_HANDOFF_KEY } from "../session-keys";
+import { getAutoLockMinutes } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
 import { armViewGrace } from "./view-lock";
 
@@ -10,6 +12,9 @@ export const POPOUT_HANDOFF_KEY = "popout.handoff";
 // storage.session (not local) survives a service-worker restart but clears on browser restart,
 // which matches the lifetime of a chrome window id.
 export const POPOUT_WINDOW_KEY = "popout.windowId";
+// Id of a pop-out opened solely to unlock (the picker's "Vault locked" row). It is a step in the
+// page's fill flow, not a place the user asked to be, so it closes itself once the vault unlocks.
+export const POPOUT_UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
 
 /** Focus the tracked pop-out window if it is still open. Returns false when there is none:
  * the id was never stored, or the window was closed while the worker slept (windows.get
@@ -26,6 +31,31 @@ async function focusExistingPopout(): Promise<boolean> {
 	return true;
 }
 
+const WIDTH = 500;
+const HEIGHT = 600;
+const CHROME_INSET = 80;
+
+/** Create the pop-out window, anchored beside `anchor` when the position is usable. Chrome rejects
+ *  bounds that fall (mostly) off-screen, which used to take the whole pop-out down with them - so a
+ *  rejected position falls back to letting the browser place the window. */
+async function createPopoutWindow(
+	anchor: chrome.windows.Window | undefined,
+): Promise<chrome.windows.Window | undefined> {
+	const url = api.runtime.getURL("popup.html?detached=1");
+	const base = { url, type: "popup" as const, focused: true, width: WIDTH, height: HEIGHT };
+	const top = (anchor?.top ?? 0) + CHROME_INSET;
+	const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
+	const created = await api.windows.create({ ...base, top, left }).catch(() => undefined);
+	if (!created) return api.windows.create(base).catch(() => undefined);
+	if (created.id !== undefined) {
+		// Re-assert the bounds: some platforms ignore them on create.
+		await api.windows
+			.update(created.id, { state: "normal", width: WIDTH, height: HEIGHT, top, left })
+			.catch(() => undefined);
+	}
+	return created;
+}
+
 async function popoutOpen(
 	message: any,
 	sender: chrome.runtime.MessageSender,
@@ -34,7 +64,8 @@ async function popoutOpen(
 	// that gap so popping out doesn't lock the vault out from under the new window.
 	armViewGrace();
 
-	const handoff = (message.payload as { handoff?: { draft?: unknown } } | undefined)?.handoff;
+	const payload = message.payload as { handoff?: { draft?: unknown }; reason?: string } | undefined;
+	const handoff = payload?.handoff;
 	// Single instance: focus an already-open pop-out instead of spawning a duplicate. A request
 	// carrying an in-flight draft is the exception - the open window consumed its boot handoff
 	// once, so focusing it would silently drop the new draft (which can hold a plaintext
@@ -49,9 +80,6 @@ async function popoutOpen(
 	} else {
 		await api.storage.session.remove([POPOUT_HANDOFF_KEY]);
 	}
-	const WIDTH = 500;
-	const HEIGHT = 600;
-	const CHROME_INSET = 80;
 	// Prefer the sender's window so the pop-out lands next to the active tab.
 	let anchor: chrome.windows.Window | undefined;
 	if (sender.tab?.windowId !== undefined) {
@@ -60,29 +88,39 @@ async function popoutOpen(
 	if (!anchor) {
 		anchor = await api.windows.getCurrent().catch(() => undefined);
 	}
-	const top = (anchor?.top ?? 0) + CHROME_INSET;
-	const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
-	const created = await api.windows.create({
-		url: api.runtime.getURL("popup.html?detached=1"),
-		type: "popup",
-		focused: true,
-		width: WIDTH,
-		height: HEIGHT,
-		top,
-		left,
-	});
+	const created = await createPopoutWindow(anchor);
 	if (created?.id !== undefined) {
-		await api.windows.update(created.id, {
-			state: "normal",
-			width: WIDTH,
-			height: HEIGHT,
-			top,
-			left,
-		});
 		// Track this window so the next pop-out request focuses it rather than duplicating.
 		await api.storage.session.set({ [POPOUT_WINDOW_KEY]: created.id });
+		// An unlock-only pop-out closes itself once the vault opens (see closeUnlockPopout).
+		if (payload?.reason === "unlock") {
+			await api.storage.session.set({ [POPOUT_UNLOCK_WINDOW_KEY]: created.id });
+		}
 	}
 	return { ok: true };
+}
+
+/**
+ * Close the pop-out that was opened just to unlock, now that the vault is open: the user asked to
+ * fill a form, so the window has done its job and would otherwise sit over the page. No-op for a
+ * pop-out the user opened themselves. Two cases keep it open: "Immediate" auto-lock, where closing
+ * the last view would re-lock the vault we just unlocked (see view-lock.ts), and a parked corner
+ * capture, which the unlocking view still has to flush (and confirm) before it goes away.
+ */
+export async function closeUnlockPopout(): Promise<void> {
+	try {
+		const stored = await api.storage.session.get(POPOUT_UNLOCK_WINDOW_KEY);
+		const id = stored[POPOUT_UNLOCK_WINDOW_KEY];
+		if (typeof id !== "number") return;
+		await api.storage.session.remove([POPOUT_UNLOCK_WINDOW_KEY]);
+		if ((await getAutoLockMinutes()) < 0) return;
+		const parked = await api.storage.session.get(CORNER_HANDOFF_KEY);
+		if (parked[CORNER_HANDOFF_KEY]) return;
+		await api.windows.remove(id).catch(() => undefined);
+		// It was the tracked pop-out too; drop that so the next request opens a fresh window.
+		const win = await api.storage.session.get(POPOUT_WINDOW_KEY);
+		if (win[POPOUT_WINDOW_KEY] === id) await api.storage.session.remove([POPOUT_WINDOW_KEY]);
+	} catch {}
 }
 
 async function popoutConsumeHandoff(): Promise<MessageEnvelope> {

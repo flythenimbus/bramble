@@ -10,6 +10,7 @@ import type {
 import { type EncryptedEntry, encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { type DedupeOutcome, hostnameMatches, registrableDomain } from "../dedupe";
 import { api } from "../platform-api";
+import { CORNER_HANDOFF_KEY } from "../session-keys";
 import {
 	addLoginEntry,
 	dedupeCapture,
@@ -31,8 +32,6 @@ import {
 
 // Session stash for an in-flight capture, keyed one per eTLD+1.
 export const CAPTURE_KEY_PREFIX = "capture.pending.";
-// Plaintext captured credentials: wiped on lock alongside the capture stash.
-export const CORNER_HANDOFF_KEY = "cornerPrompt.handoff";
 
 interface PendingCapture {
 	promptId: string;

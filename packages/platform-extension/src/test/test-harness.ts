@@ -54,6 +54,7 @@ export interface HarnessState {
 	broadcasts: AnyMsg[];
 	offscreenCalls: AnyMsg[];
 	windowsCreated: AnyMsg[];
+	windowsRemoved: number[];
 	listeners: Record<string, ((...args: any[]) => any) | undefined>;
 	/** All runtime.onMessage listeners, in registration order. Chrome dispatches a message to
 	 * every listener (not just the last), so the background legitimately registers more than one
@@ -136,6 +137,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		broadcasts: [],
 		offscreenCalls: [],
 		windowsCreated: [],
+		windowsRemoved: [],
 		listeners: {},
 		messageListeners: [],
 	};
@@ -245,6 +247,9 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			getCurrent: vi.fn(async () => ({ id: 1, top: 0, left: 0, width: 500 })),
 			getLastFocused: vi.fn(async () => opts.lastFocusedWindow ?? { id: 7 }),
 			update: vi.fn(async () => {}),
+			remove: vi.fn(async (id: number) => {
+				state.windowsRemoved.push(id);
+			}),
 		},
 		idle: {
 			onStateChanged: {

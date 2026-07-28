@@ -7,3 +7,10 @@
  * (`clearSession`). It is a UUID, not a secret. See docs/multiple-vaults.md (Sync).
  */
 export const ACTIVE_VAULT_SESSION_KEY = "vault.activeId";
+
+/**
+ * A corner-prompt capture parked while the vault was locked ("Unlock & Save"), committed by the
+ * background once a view unlocks. Holds a plaintext password, so it lives in session only and is
+ * dropped on lock. Shared here because more than one background concern has to see it.
+ */
+export const CORNER_HANDOFF_KEY = "cornerPrompt.handoff";
