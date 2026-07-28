@@ -671,9 +671,12 @@ wrapped under one key and the entries sealed under another. Unlock recovers the 
 VEK and then fails to decrypt the entries. Timing-dependent, hence intermittent.
 
 The same class is still latent in `receiveBundle` (join), restore, any entry-seal into an
-empty vault (a non-empty vault self-guards because it decrypts before it re-encrypts; a
-fresh one has nothing to decrypt), and generally any two views on different vaults
-fighting over the one VEK.
+empty vault, and generally any two views on different vaults fighting over the one VEK.
+
+> The claim that "a non-empty vault self-guards because it decrypts before it re-encrypts"
+> used to be wrong. `writeEntriesBlob` sealed the payload *first* and only then read the blob
+> for its slot list, never decrypting what was already there. It is true now, but only where
+> `verifyVekBeforeWrite` is set (mobile's sync store) — see [Mobile hardening](#mobile-hardening-issue-27).
 
 A create-time self-verify guard (build, then confirm both slots decrypt the entries, else
 rebuild) was written and then **reverted**: per-vault VEK removes the race structurally,
@@ -688,7 +691,10 @@ and the guard would only have masked bugs in the real fix.
   designated primary. (`primaryId` turns out to be effectively dead already, per
   [Surface area](#surface-area), so this mostly means "do not let it back into autofill.")
 - **Extension-only, no native change.** The offscreen WASM and the mobile uniffi core stay
-  single-VEK. Mobile stays single-active-vault; the vault id is threaded but ignored there.
+  single-VEK. Mobile stays single-active-vault. The vault id was described here as "threaded
+  but ignored" on mobile; that was true of the *crypto* calls and remains so, but it is now
+  load-bearing for **storage and sync routing** there — see
+  [Mobile hardening](#mobile-hardening-issue-27). Ignoring it is what produced issue #27.
   The shared `CryptoAdapter` interface gains only one **optional** member
   (`withVault?(vaultId)`, extension-implemented); mobile code does not change.
 
@@ -868,6 +874,59 @@ against it before the React context catches up: the Phase 2 "join adds a vault" 
 the restore-as-new-vault flow. Flows that operate on the already-active vault (unlock,
 entry CRUD, register/revoke key, password changes, recovery-code reset) correctly use the
 ambient `vcrypto`, because unlock screens only render for the selected vault.
+
+### Mobile hardening (issue #27)
+
+Per-vault VEK shipped on the extension only; mobile's Rust core stays a process-global
+singleton, so `withVault` is undefined there and the binding at `useVault.createVault` is a
+silent no-op. That left mobile with the original hazard, and it reached a user:
+[#27](https://github.com/flythenimbus/bramble/issues/27) — a synced vault that no longer
+opens under **either** the master password or the recovery code, failing with
+`aes decrypt: aead::Error`.
+
+The failure is not a wrong password. The Rust unlock checks an HMAC verifier before any
+AES, so an AEAD error means the password was right and the vault's *slots and entries are
+sealed under different keys*. Both slots wrap the same VEK, which is why the recovery code
+is no help either.
+
+Mobile could reach that state because **storage was vault-scoped while crypto was not**:
+
+- The sync merge store was a module singleton that re-resolved `activeVaultId()` separately
+  for its read and its write, so a vault switch mid-merge moved the target.
+- `createVault` swapped the global VEK *before* recording the new active vault, so the
+  session that `onUnlocked` started targeted the previous vault while the loaded key was the
+  new one.
+- `deleteVault` never cleared the recorded active vault, so it named a deleted vault.
+- An id-less `writeVaultBlob` fell back to `reg.vaults[0]`, a guess that could drop one
+  vault's bytes onto another's file.
+- `sendBundle` fell back to `export_vek()` at send time, so an invite outliving a vault
+  switch shipped the wrong vault's key.
+
+Rename and lock are red herrings in the repro: renaming writes only the registry label and
+locking only clears state. They discard the good in-memory plaintext and force a fresh disk
+decrypt, which is what *exposes* damage planted earlier.
+
+**Invariant now enforced: a seal may only land in a file whose slots wrap the sealing key.**
+
+- A roster session is bound to one vault id for its lifetime; its blob store's read, slot
+  list and write all name that vault. Merges serialize, and each captures a session
+  generation so one queued across a teardown is dropped rather than written to a vault we
+  have left. `retargetActiveVault` (stop, bump, drain) runs *before* the new active id is
+  persisted.
+- `activeVaultId()` no longer guesses `vaults[0]` when several vaults exist and none is
+  recorded active; the single-vault fallback stays for pre-`setActiveVault` installs.
+- `writeEntriesBlob` reads, verifies, seals, writes — in that order. With
+  `verifyVekBeforeWrite` (mobile's sync store) it refuses to overwrite a non-empty blob the
+  loaded key cannot open. Refusing costs one dropped merge; writing costs the vault.
+- Inviting requires an explicitly captured VEK. There is no ambient fallback on either
+  platform.
+- `decryptEntriesOrRecover` un-bricks an already-damaged vault from the pre-write snapshot,
+  but only after that snapshot proves it opens under the key in hand — restoring is
+  destructive, and the live file is the user's only other copy.
+
+Still a follow-up: porting the per-vault VEK map to mobile, which would remove this class
+structurally rather than fencing it. The extension has a milder instance of the same shape
+in `background/sync.ts`, which re-resolves its vault per call.
 
 ### Ghost records: registered but never written
 
