@@ -1,13 +1,13 @@
 import { defineConfig } from "@playwright/test";
 
 // On-device tests: drive the installed Android app over its WebView devtools socket (see
-// e2e-android/fixtures.ts). Separate from playwright.config.ts because these need a physical
+// e2e/android/fixtures.ts). Separate from playwright.config.ts because these need a physical
 // device attached and mutate real app state, so they must never join the default `pnpm test:e2e`.
 //
 // Run: pnpm test:e2e:android   (needs `adb devices` to show exactly one device, and a debuggable
 // build of the app installed — Capacitor only exposes the devtools socket for those.)
 export default defineConfig({
-	testDir: "./e2e-android",
+	testDir: "./e2e/android",
 	// One device, one WebView: everything is shared state.
 	fullyParallel: false,
 	workers: 1,

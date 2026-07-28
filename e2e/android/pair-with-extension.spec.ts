@@ -1,13 +1,13 @@
 import { rmSync } from "node:fs";
 import type { BrowserContext, Page } from "@playwright/test";
-import { launchExtensionContext } from "../e2e/fixtures";
-import { optionsUrl, popupUrl, STRONG_PW } from "../e2e/helpers";
+import { launchExtensionContext } from "../extension/fixtures";
+import { optionsUrl, popupUrl, STRONG_PW } from "../extension/helpers";
 import { adbReverse, expect, test } from "./fixtures";
 
 // The most realistic test we can run: the browser extension pairs with the SHIPPED Android app on
 // a real device, over a relay on this machine.
 //
-// The device peer is the thing nothing else covers. e2e-sync pairs the extension with the mobile
+// The device peer is the thing nothing else covers. e2e/sync pairs the extension with the mobile
 // SPA in a desktop browser, where Capacitor falls back to the WASM crypto core and the web
 // Filesystem/Preferences. Here the joiner rebuilds its vault with the uniffi Rust core and writes
 // it through the Android storage adapter — the layer issue #27 actually shipped on.

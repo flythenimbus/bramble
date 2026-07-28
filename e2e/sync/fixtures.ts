@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import { type BrowserContext, test as base, chromium, type Page } from "@playwright/test";
-import { launchExtensionContext } from "../e2e/fixtures";
+import { launchExtensionContext } from "../extension/fixtures";
 
 /**
  * Two REAL peers pairing over WebRTC through a real signaling relay.
@@ -15,7 +15,7 @@ import { launchExtensionContext } from "../e2e/fixtures";
  *
  * What it does NOT cover: mobile's native layer. In a desktop browser Capacitor falls back to
  * the WASM crypto core and the web implementations of Filesystem/Preferences, not uniffi and the
- * Android ones. For that, see e2e-android (CDP over adb).
+ * Android ones. For that, see e2e/android (CDP over adb).
  */
 
 /** Local signaling relay, started by playwright.sync.config.ts. */

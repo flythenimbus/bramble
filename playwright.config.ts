@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
 // e2e/fixtures.ts). Build the extension first: `pnpm --filter @vault/platform-extension build:chromium`.
 // Run: `pnpm test:e2e`. These are excluded from the vitest unit suites (different runner).
 export default defineConfig({
-	testDir: "./e2e",
+	testDir: "./e2e/extension",
 	// Extension tests share a persistent profile and (for sync) a local relay on a fixed port,
 	// so run them serially rather than in parallel workers.
 	fullyParallel: false,

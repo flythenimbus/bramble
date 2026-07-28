@@ -6,7 +6,7 @@ import { defineConfig } from "@playwright/test";
 //
 // Run: pnpm test:e2e:sync   (build the extension first, as with the other e2e suite)
 export default defineConfig({
-	testDir: "./e2e-sync",
+	testDir: "./e2e/sync",
 	// Both peers share the relay and fixed ports; nothing here is parallel-safe.
 	fullyParallel: false,
 	workers: 1,

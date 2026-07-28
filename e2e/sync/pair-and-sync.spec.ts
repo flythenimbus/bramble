@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { popupUrl } from "../e2e/helpers";
+import { popupUrl } from "../extension/helpers";
 import { createVault, expect, gotoSync, PW, RELAY_URL, test } from "./fixtures";
 
 // Two real peers — the browser extension and the mobile app — pairing over WebRTC through a local
