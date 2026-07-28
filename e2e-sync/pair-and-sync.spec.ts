@@ -37,15 +37,38 @@ async function invite(page: Page): Promise<string> {
 	return code;
 }
 
+/** Add a login through the real create-entry UI. */
+async function addLogin(page: Page, name: string): Promise<void> {
+	await page.getByRole("button", { name: /Add New/i }).click();
+	await page
+		.getByRole("button", { name: /^Login/ })
+		.first()
+		.click();
+	await page.getByLabel(/^Name$/).fill(name);
+	await page.getByLabel(/Username or email/i).fill("octocat@example.com");
+	await page
+		.getByLabel(/^Password$/)
+		.first()
+		.fill("hunter2-c0rrect-h0rse");
+	await page.getByRole("button", { name: /Save Login/i }).click();
+	await expect(page.getByText(name)).toBeVisible();
+}
+
 test("the extension and the mobile app pair over a real relay and share a vault", async ({
 	ext,
 	mobile,
 }) => {
-	// --- inviter: the extension ---
-	// Setup runs in the options tab; Settings (and therefore Sync) lives in the popup.
+	// --- inviter: the extension, with something worth syncing ---
+	// Setup runs in the options tab; the vault UI and Settings live in the popup.
 	await createVault(ext.page);
 	await ext.page.goto(popupUrl(ext.extensionId));
-	await ext.page.locator("#root").waitFor();
+	await expect(ext.page.getByRole("button", { name: "Lock vault", exact: true })).toBeVisible();
+	// Written before the invite so there is real data to move. It reaches the joiner by whichever
+	// path gets there first — the enrolment bundle or the ongoing merge. Measured, not assumed:
+	// forcing the bundle to ship zero entries still passes, because the merge delivers it. So this
+	// pins the end-to-end outcome (the joiner can READ the inviter's data), NOT the bundle path.
+	const NAME = `Synced ${Date.now().toString(36)}`;
+	await addLogin(ext.page, NAME);
 	await gotoSync(ext.page);
 	await useLocalRelay(ext.page);
 	const code = await invite(ext.page);
@@ -77,4 +100,10 @@ test("the extension and the mobile app pair over a real relay and share a vault"
 	});
 	// And the inviter's roster gains the peer.
 	await expect(ext.page.getByText(/THIS DEVICE/i)).toBeVisible();
+
+	// --- the payoff: the joiner can actually READ the inviter's data ---
+	// Decrypted with the key it was handed, which is the outcome issue #27 destroys: slots and
+	// entries under different keys. Shipping a wrong VEK fails even earlier than this — the join
+	// never completes — so the pairing assertions above cover that case.
+	await expect(mobile.page.getByText(NAME)).toBeVisible({ timeout: 90_000 });
 });

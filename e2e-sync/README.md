@@ -35,6 +35,16 @@ on the relay rather than reaching the hosted one:
 SYNC_RELAY_URL=ws://localhost:7999 pnpm run test:e2e:sync   # must FAIL
 ```
 
+## What the entry assertion does and doesn't pin
+
+The spec writes a login on the inviter and asserts the joiner can read it. That covers the
+end-to-end outcome — the joiner decrypts the inviter's data with the key it was handed, which is
+exactly what issue #27 destroys.
+
+It does NOT pin the enrolment bundle specifically. Forcing `sendBundle` to ship zero entries still
+passes, because the ongoing merge delivers the entry anyway. Measured, not assumed. Shipping a
+*wrong* VEK does fail, but earlier: the join never completes, so the pairing assertions catch it.
+
 ## What this does not cover
 
 Mobile's **native layer**. In a desktop browser Capacitor falls back to the WASM crypto core and
