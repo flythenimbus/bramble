@@ -1,6 +1,5 @@
 ---
 import BrandGithub from "@tabler/icons/outline/brand-github.svg";
-import Codeberg from "@/assets/codeberg.svg";
 import { Separator } from "@/components/starwind/separator";
 import { LINKS, SITE } from "@/consts";
 
@@ -20,7 +19,6 @@ const columns = [
 		title: "Project",
 		links: [
 			{ label: "Source on GitHub", href: LINKS.github },
-			{ label: "Source on Codeberg", href: LINKS.codeberg },
 			{ label: "Releases", href: LINKS.android },
 		],
 	},
@@ -84,15 +82,6 @@ const columns = [
 				>
 					<BrandGithub class="size-4" />
 					<span>GitHub</span>
-				</a>
-				<a
-					href={LINKS.codeberg}
-					target="_blank"
-					rel="noopener"
-					class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-				>
-					<Codeberg class="size-4" />
-					<span>Codeberg</span>
 				</a>
 			</div>
 		</div>

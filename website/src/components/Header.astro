@@ -1,6 +1,5 @@
 ---
 import BrandGithub from "@tabler/icons/outline/brand-github.svg";
-import Codeberg from "@/assets/codeberg.svg";
 import { Button } from "@/components/starwind/button";
 import { ThemeToggle } from "@/components/starwind/theme-toggle";
 import { LINKS, NAV, SITE } from "@/consts";
@@ -38,17 +37,6 @@ import { LINKS, NAV, SITE } from "@/consts";
 				aria-label="Bramble on GitHub"
 			>
 				<BrandGithub />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				href={LINKS.codeberg}
-				target="_blank"
-				rel="noopener"
-				aria-label="Bramble on Codeberg"
-				class="hidden sm:inline-flex"
-			>
-				<Codeberg />
 			</Button>
 			<ThemeToggle size="sm" class="hidden sm:inline-flex" />
 			<Button

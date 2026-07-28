@@ -3,10 +3,9 @@ import { Info } from "lucide-react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { Section } from "./primitives";
 
-// Public repositories. External-origin links open in a new tab on the extension and in the
+// Public repository. External-origin links open in a new tab on the extension and in the
 // system browser on mobile (Capacitor's default for cross-origin links).
 const GITHUB_URL = "https://github.com/flythenimbus/bramble";
-const CODEBERG_URL = "https://codeberg.org/flythenimbus/bramble";
 
 const linkClass = "text-primary hover:underline";
 
@@ -29,12 +28,6 @@ export function AboutSection() {
 				<span className="flex items-center gap-2">
 					<a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
 						GitHub
-					</a>
-					<span className="text-muted-foreground" aria-hidden>
-						·
-					</span>
-					<a href={CODEBERG_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
-						Codeberg
 					</a>
 				</span>
 			</div>

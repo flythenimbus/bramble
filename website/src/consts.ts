@@ -10,7 +10,6 @@ export const SITE = {
 
 export const LINKS = {
 	github: "https://github.com/flythenimbus/bramble",
-	codeberg: "https://codeberg.org/flythenimbus/bramble",
 	chrome: "https://chromewebstore.google.com/detail/bramble/kmokhdhoggbdcgoepifeckhgbfakaknm",
 	firefox: "https://addons.mozilla.org/firefox/addon/bramble/",
 	ios: "https://apps.apple.com/us/app/bramble-password-manager/id6783071787",

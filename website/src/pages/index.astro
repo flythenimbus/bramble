@@ -21,7 +21,6 @@ import FileExport from "@tabler/icons/outline/file-export.svg";
 import Router from "@tabler/icons/outline/router.svg";
 import Server2 from "@tabler/icons/outline/server-2.svg";
 import ServerCog from "@tabler/icons/outline/server-cog.svg";
-import Codeberg from "@/assets/codeberg.svg";
 
 import {
     Accordion,
@@ -124,7 +123,7 @@ const faqs = [
     },
     {
         q: "Is it open source?",
-        a: "Yes, the whole thing. The code lives on GitHub and Codeberg, so you can read it, build it yourself, or point sync at your own relay.",
+        a: "Yes, the whole thing. The code lives on GitHub, so you can read it, build it yourself, or point sync at your own relay.",
     },
 ];
 ---
@@ -541,15 +540,6 @@ const faqs = [
                         >
                             <BrandGithub />
                             Read the source
-                        </Button>
-                        <Button
-                            href={LINKS.codeberg}
-                            target="_blank"
-                            rel="noopener"
-                            variant="ghost"
-                        >
-                            <Codeberg />
-                            Mirror on Codeberg
                         </Button>
                     </div>
                 </div>
