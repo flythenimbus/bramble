@@ -1,0 +1,11 @@
+What's new in this release:
+
+- Bramble now supports more than one vault. Keep separate vaults, for example one for personal logins and one for work, each with its own password, and switch between them whenever you like.
+- Sync a vault across your devices. Your phone, tablet, and computer stay up to date by connecting straight to each other, privately, with nothing ever kept on a server. Pair a new device by scanning a QR code.
+- Import an existing vault by opening an encrypted .bramble backup, right from the setup screen or Settings.
+- Settings is reorganized into tabs, so options are easier to find.
+- Show or hide your password as you type it, to catch a typo before you unlock, create, or change a vault.
+- Bramble no longer lets the system autofill or save your master password. It stays yours alone to type.
+- Support Bramble's development from the new options in the About tab.
+
+No account, no cloud. Everything stays on your devices.
