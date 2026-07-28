@@ -1,5 +1,7 @@
 # Bramble
 
+[![Matrix](https://img.shields.io/badge/Matrix-%23general%3Abramble.sh-000000?logo=matrix&logoColor=white)](https://matrix.to/#/%23general:bramble.sh)
+
 A password manager that keeps your secrets on your own devices. No account, no server holding your vault, no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
 
 Bramble runs where you do:
