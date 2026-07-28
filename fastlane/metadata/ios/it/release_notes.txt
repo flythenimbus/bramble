@@ -1,7 +1,7 @@
-Novità di questa versione:
+Novità in questa versione:
 
-- Compilare automaticamente i codici a due fattori. Quando un sito richiede un codice di verifica a sei cifre, Bramble può inserirlo direttamente dalla tastiera, proprio come la Sua password. Richiede iOS 18 e l’opzione Suggerimenti tastiera attivata nelle Impostazioni.
-- Sostenga lo sviluppo di Bramble dalle nuove opzioni nella scheda Informazioni.
-- Risolto un problema nella schermata di sblocco del riempimento automatico: non viene più mostrato un codice di errore spurio e Face ID o il Suo codice adesso appare in modo affidabile.
+- Risolto un bug che poteva impedire lo sblocco di una cassaforte sincronizzata, anche con la password principale corretta. Se Bramble trova una cassaforte rimasta in quello stato, ora la ripristina dalla copia salvata prima che il problema si verificasse.
+- Importi da Apple Passwords e Google Password Manager. Esporti un file .csv da uno di questi e lo apra in Bramble.
+- Le opzioni di importazione e backup in Impostazioni sono ora raggruppate in base alla provenienza del file, in modo che sia più chiaro quale desidera.
 
-Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

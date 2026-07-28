@@ -1,7 +1,7 @@
 Neu in dieser Version:
 
-- Zwei-Faktor-Codes automatisch ausfüllen. Wenn eine Website nach einem sechsstelligen Bestätigungscode fragt, kann Bramble diesen direkt über die Tastatur ausfüllen – genau wie Ihr Passwort. Setzt iOS 18 und aktivierte Tastaturvorschläge in den Einstellungen voraus.
-- Brambles Entwicklung über die neuen Optionen im Info-Tab unterstützen.
-- Behoben: Der AutoFill-Entsperrbildschirm zeigt keinen unerwarteten Fehlercode mehr an, und Face ID oder Ihr Code erscheinen jetzt zuverlässig von selbst.
+- Ein Fehler wurde behoben, der das Entsperren eines synchronisierten Tresors auch mit dem richtigen Master-Passwort verhindern konnte. Findet Bramble einen Tresor in diesem Zustand vor, stellt es ihn nun aus der vor dem Problem gespeicherten Kopie wieder her.
+- Import aus Apple Passwords und Google Password Manager. Exportieren Sie eine .csv-Datei aus einer der beiden Apps und öffnen Sie sie in Bramble.
+- Die Import- und Backup-Optionen in den Einstellungen sind jetzt nach Dateiherkunft gruppiert, sodass deutlicher wird, welche Sie benötigen.
 
-Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.
+Kein Account, keine Cloud. Alles bleibt auf Ihren Geräten.

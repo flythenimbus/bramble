@@ -1,1 +1,1 @@
-No account, no cloud, no company holding your vault. Your passwords stay encrypted on your device. Passkeys, AutoFill, TOTP, and KeePass import included.
+No account, no cloud, no company holding your vault. Passwords stay encrypted on your device. Passkeys, AutoFill, TOTP, and import from KeePass, Apple or Google.

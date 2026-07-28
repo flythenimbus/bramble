@@ -1,1 +1,1 @@
-Vault locale: le Sue password sono criptate solo sul Suo dispositivo. Supporta Passkeys, AutoFill, TOTP e KeePass. Nessun cloud o account richiesti.
+Niente account, cloud o azienda custode. Le password rimangono cifrate sul suo dispositivo. Include Passkey, AutoFill, TOTP e importazione da KeePass, Apple e Google.

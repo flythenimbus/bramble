@@ -1,1 +1,1 @@
-Sem conta, sem nuvem, sem empresa guardando seu cofre. Suas senhas permanecem criptografadas no dispositivo. Passkeys, AutoFill, TOTP e importação do KeePass incluídos.
+Senhas criptografadas localmente, sem conta ou nuvem. Inclui Passkeys, Preenchimento automático, TOTP e importação de KeePass, Apple ou Google.

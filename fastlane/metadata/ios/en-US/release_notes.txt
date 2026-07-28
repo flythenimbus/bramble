@@ -1,7 +1,7 @@
 What's new in this release:
 
-- Autofill your two-factor codes. When a site asks for its six-digit verification code, Bramble can fill it straight from the keyboard, just like your password. Needs iOS 18 and Keyboard suggestions switched on in Settings.
-- Support Bramble's development from the new options in the About tab.
-- Fixed AutoFill's unlock screen: it no longer shows a stray error code, and Face ID or your passcode now comes up on its own reliably.
+- Fixed a bug that could stop a synced vault from unlocking, even with the correct master password. If Bramble finds a vault left in that state, it now restores it from the copy saved before the problem happened.
+- Import from Apple Passwords and Google Password Manager. Export a .csv from either one and open it in Bramble.
+- Import and backup options in Settings are now grouped by where the file comes from, so it's clearer which one you want.
 
 No account, no cloud. Everything stays on your devices.

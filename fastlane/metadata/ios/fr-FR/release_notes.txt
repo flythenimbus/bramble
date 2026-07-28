@@ -1,7 +1,7 @@
-Quoi de neuf dans cette version :
+Nouveautés de cette version :
 
-- Remplir automatiquement les codes à deux facteurs. Lorsqu’un site demande son code de vérification à six chiffres, Bramble peut le remplir directement depuis le clavier, comme pour votre mot de passe. Nécessite iOS 18 et les suggestions du clavier activées dans Réglages.
-- Soutenir le développement de Bramble à partir des nouvelles options dans l’onglet À propos.
-- Correction de l’écran de déverrouillage de l’AutoFill : il n’affiche plus de code d’erreur parasite, et Face ID ou votre code d’accès s’affiche désormais de manière fiable et autonome.
+- Correction d’un bug pouvant empêcher le déverrouillage d’un coffre synchronisé, même avec le bon mot de passe principal. Si Bramble trouve un coffre dans cet état, il le restaure désormais à partir de la copie sauvegardée avant que le problème ne survienne.
+- Importer à partir d’Apple Passwords et de Google Password Manager. Exporter un fichier .csv depuis l’une ou l’autre et l’ouvrir dans Bramble.
+- Les options d’importation et de sauvegarde dans les Réglages sont désormais regroupées selon la source du fichier, ce qui clarifie celle que vous souhaitez utiliser.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Sans compte, sans cloud. Tout reste sur vos appareils.
