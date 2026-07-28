@@ -18,4 +18,14 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	// No retries: a rerun against a device left mid-flow by the first attempt is misleading.
 	retries: 0,
+	// The signaling relay for the extension<->device sync spec. Cheap enough to leave running for
+	// the read-only specs too. adb reverse (in the fixture) is what lets the phone reach it.
+	webServer: [
+		{
+			command: "node nostr-relay/node/relay.mjs",
+			port: 7400,
+			reuseExistingServer: !process.env.CI,
+			stdout: "ignore",
+		},
+	],
 });

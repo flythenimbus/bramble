@@ -88,6 +88,22 @@ function forwardDevtools(pid: string): () => void {
 	};
 }
 
+/**
+ * Route the DEVICE's `localhost:<port>` back to this machine's, so the phone can reach a relay
+ * running here. It also means a pairing code containing `ws://localhost:7400` is valid verbatim on
+ * both peers — no rewriting, and the code the inviter really produced is the one the joiner uses.
+ */
+export function adbReverse(port: number): () => void {
+	adb(["reverse", `tcp:${port}`, `tcp:${port}`]);
+	return () => {
+		try {
+			adb(["reverse", "--remove", `tcp:${port}`]);
+		} catch {
+			// device already gone; nothing to undo
+		}
+	};
+}
+
 export const test = base.extend<{ browser: Browser; context: BrowserContext; page: Page }>({
 	// biome-ignore lint/correctness/noEmptyPattern: Playwright requires the fixtures destructuring param.
 	browser: async ({}, use) => {
