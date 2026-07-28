@@ -14,6 +14,16 @@ export interface StorageAdapter {
 	// false if there was nothing to recover. Run when readVaultBlob no longer
 	// decodes (the usual signal that a write was interrupted).
 	restoreVaultFromBackup(vaultId?: string): Promise<boolean>;
+	/**
+	 * Read the recovery snapshot WITHOUT restoring it, so a caller can check whether it's actually
+	 * better than what's live before overwriting anything. Null when there is no snapshot.
+	 *
+	 * Exists because the failure in issue #27 is not a torn write: the live blob decodes fine, it
+	 * just holds entries sealed under a key its slots don't wrap. restoreVaultFromBackup would
+	 * happily swap in a snapshot with the same problem, or a worse one, and destroy the only copy.
+	 * Optional: platforms without a snapshot store leave it undefined and the fallback self-disables.
+	 */
+	readVaultBackup?(vaultId?: string): Promise<Uint8Array | null>;
 	/** Delete a vault's blob and its recovery snapshot (used when removing a vault). */
 	deleteVaultBlob(vaultId: string): Promise<void>;
 	getMeta<T>(key: string): Promise<T | undefined>;

@@ -166,6 +166,7 @@ import {
 } from "../vault/build-vault";
 import { createEntryMutations, type VaultEntries } from "../vault/entry-mutations";
 import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
+import { decryptEntriesOrRecover } from "../vault/recover-entries";
 import {
 	generateRecoveryCode as makeRecoveryCode,
 	normalizeRecoveryCode,
@@ -436,9 +437,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await autofill.setIndex([]);
 			return;
 		}
-		const outerJson = await crypto.decryptWithVek(
-			bytesToBase64(blob.entriesIv),
-			bytesToBase64(blob.entriesCiphertext),
+		// A blob that decodes but won't decrypt is the issue-#27 signature; recover from the
+		// verified snapshot where one exists. See vault/recover-entries.
+		const outerJson = await decryptEntriesOrRecover(
+			{
+				crypto,
+				storage,
+				onRestored: () =>
+					console.warn("[vault] entries failed to decrypt; restoring the verified snapshot"),
+			},
+			blob,
 		);
 		// The blob decrypted, so the key is right; a decode failure here means the
 		// payload shape is from an incompatible (older) format. Surface an actionable
@@ -476,7 +484,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		});
 		setEntries(decrypted);
 		await autofill.setIndex(toAutofillIndex(decrypted));
-	}, [readDecodedBlob, crypto, autofill, ensureClock]);
+	}, [readDecodedBlob, crypto, storage, autofill, ensureClock]);
 
 	// On mount (and when the active vault resolves): detect an existing vault handle and
 	// whether crypto is already unlocked (popup reopened mid-session). Waits for the registry

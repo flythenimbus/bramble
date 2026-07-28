@@ -190,6 +190,17 @@ export const mobileStorage: StorageAdapter = {
 		}
 		await Filesystem.writeFile({ path, directory: DIR, data: bytesToBase64(blob) });
 	},
+	/** The recovery snapshot's bytes, without touching the live file. See StorageAdapter. */
+	async readVaultBackup(vaultId) {
+		await ensureMigrated();
+		const reg = await readRegistry();
+		const targetId = vaultId ?? (reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined);
+		if (targetId == null) return null;
+		const bakPath = backupFileFor(targetId);
+		if (!(await fileExists(bakPath))) return null;
+		const bak = await Filesystem.readFile({ path: bakPath, directory: DIR });
+		return base64ToBytes(bak.data as string);
+	},
 	async restoreVaultFromBackup(vaultId) {
 		await ensureMigrated();
 		const reg = await readRegistry();
