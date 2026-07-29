@@ -2163,6 +2163,10 @@ msgstr "Cofre desbloqueado"
 #~ msgstr "Cofres"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "verification code"
+msgstr "código de verificação"
+
+#: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
 msgstr "Código de verificação (TOTP)"
 

@@ -2163,6 +2163,10 @@ msgstr "Bóveda desbloqueada"
 #~ msgstr "Almacenes"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "verification code"
+msgstr "código de verificación"
+
+#: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
 msgstr "Código de verificación (TOTP)"
 

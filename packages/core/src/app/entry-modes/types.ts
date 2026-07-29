@@ -17,6 +17,19 @@ export interface EntryDetailBodyProps {
 	copy: (label: string, value: string) => void;
 }
 
+/**
+ * One entry in the row's copy menu.
+ *
+ * `value` may be a thunk, resolved when the user clicks rather than when the row is projected.
+ * That is what lets a time-based value belong here: a TOTP code baked in at projection time goes
+ * stale within its 30-second step, and the list is virtualized, so rows are not re-projected on
+ * any schedule that would keep it fresh.
+ */
+export interface CopyItem {
+	label: string;
+	value: string | (() => string);
+}
+
 /** How a mode projects an entry into a vault-list row, keeping the list type-agnostic. */
 export interface EntryRowView {
 	// Avatar icon (also used in the detail header). Shown unless `initials` is set.
@@ -26,7 +39,7 @@ export interface EntryRowView {
 	// Secondary line under the name (username, masked card number, ...).
 	secondary: string;
 	// Quick-copy actions for the row's copy menu. Empty hides the menu.
-	copyItems: { label: string; value: string }[];
+	copyItems: CopyItem[];
 	// Login-only: drives the "Breached" badge.
 	leaked?: boolean;
 }

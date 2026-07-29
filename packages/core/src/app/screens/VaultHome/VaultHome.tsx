@@ -5,6 +5,7 @@ import { useRef } from "react";
 import type { EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
+import type { CopyItem } from "../../entry-modes/types";
 import { VaultSearchBar } from "./VaultSearchBar";
 import { filterAndSortEntries, type VaultSearch } from "./vault-search";
 
@@ -17,7 +18,7 @@ export interface VaultListItem {
 	initials?: string;
 	secondary: string;
 	leaked?: boolean;
-	copyItems: { label: string; value: string }[];
+	copyItems: CopyItem[];
 	// Lowercased text the search box matches against.
 	searchText: string;
 	createdAt?: number;

@@ -2163,6 +2163,10 @@ msgstr "Vault entsperrt"
 #~ msgstr "Tresore"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "verification code"
+msgstr "Bestätigungscode"
+
+#: packages/core/src/app/entry-modes/login.tsx
 msgid "Verification code (TOTP)"
 msgstr "Verifizierungscode (TOTP)"
 

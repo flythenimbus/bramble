@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
+import type { CopyItem } from "../entry-modes/types";
 import { Button } from "./ui/button";
 
 interface EntryRowProps {
@@ -22,7 +23,7 @@ interface EntryRowProps {
 	/** Login-only "Breached" badge. */
 	leaked?: boolean;
 	/** Quick-copy actions; empty hides the copy button. */
-	copyItems: { label: string; value: string }[];
+	copyItems: CopyItem[];
 	onSelect: () => void;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
@@ -78,9 +79,10 @@ export function EntryRow({
 		return () => clearTimeout(id);
 	}, [copied]);
 
-	const copyToClipboard = async (label: string, value: string) => {
+	const copyToClipboard = async (label: string, value: CopyItem["value"]) => {
 		try {
-			await clipboard.copy(value);
+			// Resolved here, not at projection time, so a TOTP code is the one valid right now.
+			await clipboard.copy(typeof value === "function" ? value() : value);
 			setCopied(label);
 			setCopyOpen(false);
 			onUse?.();

@@ -697,6 +697,10 @@ export const loginMode: EntryMode = {
 
 	row: (entry) => {
 		const login = entry as LoginEntry;
+		// Offered only when the stored key actually parses: an unparseable one can't generate a
+		// code, and the detail view already says so. A thunk, so the code is generated on click
+		// rather than baked into a row projection that outlives its 30-second step.
+		const parsedTotp = parseTotp(login.totp);
 		return {
 			icon: Globe,
 			initials: login.name.substring(0, 2).toUpperCase(),
@@ -704,6 +708,14 @@ export const loginMode: EntryMode = {
 			copyItems: [
 				{ label: i18n._(msg`username`), value: login.username },
 				{ label: i18n._(msg`password`), value: login.password },
+				...(parsedTotp
+					? [
+							{
+								label: i18n._(msg`verification code`),
+								value: () => totpAt(parsedTotp.totp).code,
+							},
+						]
+					: []),
 			],
 			leaked: login.breach?.leaked === true,
 		};
