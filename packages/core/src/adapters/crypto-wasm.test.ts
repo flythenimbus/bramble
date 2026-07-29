@@ -34,6 +34,7 @@ function fakeWasm() {
 			authenticatorData: "ad",
 			publicKey: "spki",
 		})),
+		passkey_import_pkcs8: vi.fn(() => ({ privateKey: "sk", publicKeyCose: "pk" })),
 		passkey_get_assertion: vi.fn(() => ({ authenticatorData: "ad", signature: "sig" })),
 		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => [
 			{ strings: [] },
@@ -86,6 +87,8 @@ describe("buildCryptoAdapter", () => {
 
 		await a.passkeyMakeCredential("github.com", true);
 		expect(wasm.passkey_make_credential).toHaveBeenCalledWith("github.com", true);
+		await a.passkeyImportPkcs8("pkcs8");
+		expect(wasm.passkey_import_pkcs8).toHaveBeenCalledWith("pkcs8");
 		await a.passkeyGetAssertion("github.com", "sk", "hash", false);
 		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", "hash", false);
 	});

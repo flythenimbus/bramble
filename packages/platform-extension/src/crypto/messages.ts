@@ -90,6 +90,9 @@ export const CryptoPasskeyGetSchema = z.object({
 	clientDataHashB64: z.string(),
 	userVerified: z.boolean(),
 });
+export const CryptoPasskeyImportPkcs8Schema = z.object({
+	pkcs8B64: z.string(),
+});
 
 export type CryptoUnlockWithVek = z.infer<typeof CryptoUnlockWithVekSchema>;
 export type CryptoWrapPasswordSlot = z.infer<typeof CryptoWrapPasswordSlotSchema>;
@@ -107,3 +110,4 @@ export type CryptoOpenKdbx = z.infer<typeof CryptoOpenKdbxSchema>;
 export type CryptoSaveKdbx = z.infer<typeof CryptoSaveKdbxSchema>;
 export type CryptoPasskeyMake = z.infer<typeof CryptoPasskeyMakeSchema>;
 export type CryptoPasskeyGet = z.infer<typeof CryptoPasskeyGetSchema>;
+export type CryptoPasskeyImportPkcs8 = z.infer<typeof CryptoPasskeyImportPkcs8Schema>;

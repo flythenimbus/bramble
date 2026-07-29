@@ -32,6 +32,7 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "decryptEntries", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "encryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "passkeyImportPkcs8", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
 		// Sync transport: Noise handshake (KK roster-auth + XXpsk3 enrollment) + Nostr.
 		CAPPluginMethod(name: "handshakeGenerateKeypair", returnType: CAPPluginReturnPromise),
@@ -252,6 +253,16 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		guard let iv = str(call, "ivB64"), let ct = str(call, "ciphertextB64") else { return }
 		do {
 			call.resolve(["value": try App.decryptWithVek(ivB64: iv, ciphertextB64: ct)])
+		} catch { fail(call, error) }
+	}
+
+	// --- passkey import ---
+
+	@objc func passkeyImportPkcs8(_ call: CAPPluginCall) {
+		guard let pkcs8 = str(call, "pkcs8B64") else { return }
+		do {
+			let imported = try App.passkeyImportPkcs8(pkcs8B64: pkcs8)
+			call.resolve(["privateKey": imported.privateKey, "publicKeyCose": imported.publicKeyCose])
 		} catch { fail(call, error) }
 	}
 

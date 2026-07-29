@@ -264,6 +264,21 @@ class NativeCryptoPlugin : Plugin() {
         }
     }
 
+    // --- passkey import ---
+
+    @PluginMethod
+    fun passkeyImportPkcs8(call: PluginCall) {
+        val pkcs8 = str(call, "pkcs8B64") ?: return
+        call.runCrypto {
+            val imported = uniffi.vault_crypto.passkeyImportPkcs8(pkcs8)
+            call.resolve(
+                JSObject()
+                    .put("privateKey", imported.privateKey)
+                    .put("publicKeyCose", imported.publicKeyCose)
+            )
+        }
+    }
+
     // --- KDBX4 import ---
 
     @PluginMethod
