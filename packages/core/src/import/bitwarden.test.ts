@@ -1,11 +1,46 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseBitwarden } from "./bitwarden";
 
 const json = (obj: unknown) => JSON.stringify(obj);
+// Synthetic P-256 PKCS#8 vector using Bitwarden's exported key encoding.
+const BITWARDEN_TEST_PKCS8_B64URL =
+	"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBnZeheB_70OqF-B614VjAYBwjGxhQ33Dseb5CSTrH_WhRANCAAQ1mlLzgkRmXz_ixAscFjTFYAc6Jf5-f3_a1Bw2kADusY6Ss6yRf7GMpIXnAwfR9VvTe8NWEd-8epdwMks8hAVx";
+const BITWARDEN_TEST_PKCS8_B64 =
+	"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBnZeheB/70OqF+B614VjAYBwjGxhQ33Dseb5CSTrH/WhRANCAAQ1mlLzgkRmXz/ixAscFjTFYAc6Jf5+f3/a1Bw2kADusY6Ss6yRf7GMpIXnAwfR9VvTe8NWEd+8epdwMks8hAVx";
+
+function importContext(
+	convert: (pkcs8StandardB64: string) => Promise<{
+		privateKey: string;
+		publicKeyCose: string;
+	}> = async () => ({ privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==" }),
+) {
+	const passkeyImportPkcs8 = vi.fn(convert);
+	return { context: { passkeyImportPkcs8 }, passkeyImportPkcs8 };
+}
+
+function validPasskey(over: Record<string, unknown> = {}) {
+	return {
+		credentialId: "00112233-4455-6677-8899-aabbccddeeff",
+		keyType: "public-key",
+		keyAlgorithm: "ECDSA",
+		keyCurve: "P-256",
+		keyValue: BITWARDEN_TEST_PKCS8_B64URL,
+		rpId: "github.com",
+		rpName: "GitHub",
+		userHandle: "dXNlci1vbmU",
+		userName: "octo",
+		userDisplayName: "Octo Cat",
+		counter: "0",
+		creationDate: "2024-02-03T04:05:06.000Z",
+		discoverable: "true",
+		...over,
+	};
+}
 
 describe("parseBitwarden", () => {
-	it("maps each item type and folds identities into notes", () => {
-		const res = parseBitwarden(
+	it("maps each item type and folds identities into notes", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
 			json({
 				items: [
 					{
@@ -47,6 +82,7 @@ describe("parseBitwarden", () => {
 					{ type: 4, name: "Me", identity: { firstName: "Jane", ssn: "" } },
 				],
 			}),
+			context,
 		);
 
 		expect(res.byType).toEqual({ login: 1, card: 1, note: 2, "ssh-key": 1 });
@@ -77,8 +113,9 @@ describe("parseBitwarden", () => {
 		expect(res.imported[4]?.customFields).toEqual([{ key: "firstName", value: "Jane" }]);
 	});
 
-	it("maps per-URI match detection onto the entry's subdomainMatch", () => {
-		const res = parseBitwarden(
+	it("maps per-URI match detection onto the entry's subdomainMatch", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
 			json({
 				items: [
 					// Default (base domain) / null: stays eTLD+1, so no explicit subdomainMatch.
@@ -105,6 +142,7 @@ describe("parseBitwarden", () => {
 					},
 				],
 			}),
+			context,
 		);
 		const bySubMatch = Object.fromEntries(
 			res.imported.map((e) => [e.name, (e as { subdomainMatch?: string }).subdomainMatch]),
@@ -119,35 +157,309 @@ describe("parseBitwarden", () => {
 		});
 	});
 
-	it("tolerates a login with no uris and warns on passkeys", () => {
-		const res = parseBitwarden(
+	it("imports multiple passkeys and preserves the parent login fields", async () => {
+		const { context, passkeyImportPkcs8 } = importContext();
+		const res = await parseBitwarden(
 			json({
 				items: [
-					{ type: 1, name: "x", login: { username: "u", password: "p", fido2Credentials: [{}] } },
+					{
+						type: 1,
+						name: "GitHub",
+						notes: "keep",
+						creationDate: "2023-01-02T03:04:05.000Z",
+						login: {
+							uris: [{ uri: "https://github.com" }],
+							username: "octo",
+							password: "pw",
+							totp: "otpauth://totp/example",
+							fido2Credentials: [
+								validPasskey(),
+								validPasskey({
+									credentialId: "b64._-4",
+									keyValue: "BQY",
+									userHandle: "dXNlci10d28",
+									userName: null,
+									userDisplayName: null,
+									discoverable: "false",
+								}),
+							],
+						},
+						fields: [{ name: "PIN", value: "1234", type: 1 }],
+					},
 				],
 			}),
+			context,
 		);
-		expect(res.imported[0]).toMatchObject({ type: "login", urls: [] });
-		expect(res.warnings).toHaveLength(1);
+
+		expect(res.skipped).toBe(0);
+		expect(res.warnings).toEqual([]);
+		expect(res.imported).toHaveLength(1);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			name: "GitHub",
+			notes: "keep",
+			urls: ["https://github.com"],
+			username: "octo",
+			password: "pw",
+			totp: "otpauth://totp/example",
+			createdAt: Date.parse("2023-01-02T03:04:05.000Z"),
+			customFields: [{ key: "PIN", value: "1234", hidden: true }],
+			passkeys: [
+				{
+					credentialId: "ABEiM0RVZneImaq7zN3u/w==",
+					rpId: "github.com",
+					rpName: "GitHub",
+					userHandle: "dXNlci1vbmU=",
+					userName: "octo",
+					userDisplayName: "Octo Cat",
+					alg: -7,
+					publicKeyCose: "Y29zZQ==",
+					privateKey: "c2NhbGFy",
+					signCount: 0,
+					createdAt: Date.parse("2024-02-03T04:05:06.000Z"),
+				},
+				{
+					credentialId: "/+4=",
+					userHandle: "dXNlci10d28=",
+				},
+			],
+		});
+		expect(passkeyImportPkcs8.mock.calls).toEqual([[BITWARDEN_TEST_PKCS8_B64], ["BQY="]]);
 	});
 
-	it("rejects non-Bitwarden input", () => {
-		expect(() => parseBitwarden("{}")).toThrow();
-		expect(() => parseBitwarden("not json")).toThrow();
+	it("ignores Bitwarden's discoverability hint and imports every otherwise valid credential", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "portable",
+						login: {
+							fido2Credentials: [
+								validPasskey({ credentialId: "b64.AQ", discoverable: "true" }),
+								validPasskey({ credentialId: "b64.Ag", discoverable: "false" }),
+								validPasskey({ credentialId: "b64.Aw", discoverable: false }),
+								validPasskey({ credentialId: "b64.BA", discoverable: { malformed: true } }),
+								validPasskey({ credentialId: "b64.BQ", discoverable: undefined }),
+							],
+						},
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(res.warnings).toEqual([]);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			passkeys: [
+				{ credentialId: "AQ==" },
+				{ credentialId: "Ag==" },
+				{ credentialId: "Aw==" },
+				{ credentialId: "BA==" },
+				{ credentialId: "BQ==" },
+			],
+		});
 	});
 
-	it("gives a specific error for an encrypted (password-protected) export", () => {
+	it("skips malformed and unsupported passkeys without dropping the login or valid siblings", async () => {
+		const { context } = importContext(async (pkcs8) => {
+			if (pkcs8 === "cmVqZWN0") throw new Error("synthetic conversion failure");
+			return { privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==" };
+		});
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "mixed",
+						login: {
+							username: "u",
+							password: "p",
+							fido2Credentials: [
+								validPasskey(),
+								{},
+								validPasskey({ keyCurve: "P-384" }),
+								validPasskey({ userHandle: "" }),
+								validPasskey({ credentialId: "not-a-supported-id" }),
+								validPasskey({ keyValue: "cmVqZWN0" }),
+							],
+						},
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(res.skipped).toBe(0);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			username: "u",
+			password: "p",
+			urls: [],
+			passkeys: [{ credentialId: "ABEiM0RVZneImaq7zN3u/w==" }],
+		});
+		expect(res.warnings).toHaveLength(5);
+		expect(res.warnings.join("\n")).toMatch(/unexpected shape/);
+		expect(res.warnings.join("\n")).toMatch(/unsupported key type, algorithm, or curve/);
+		expect(res.warnings.join("\n")).toMatch(/invalid credential encoding/);
+		expect(res.warnings.join("\n")).toMatch(/invalid private-key material/);
+		expect(res.warnings.join("\n")).not.toContain("cmVqZWN0");
+	});
+
+	it("rejects oversized encoded credential IDs and user handles before conversion", async () => {
+		const { context, passkeyImportPkcs8 } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "bounded",
+						login: {
+							username: "keep",
+							password: "parent",
+							fido2Credentials: [
+								validPasskey({ credentialId: `b64.${"A".repeat(1365)}` }),
+								validPasskey({ userHandle: "A".repeat(87) }),
+							],
+						},
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(passkeyImportPkcs8).not.toHaveBeenCalled();
+		expect(res.skipped).toBe(0);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			username: "keep",
+			password: "parent",
+		});
+		const login = res.imported[0];
+		if (login?.type !== "login") throw new Error("expected retained login");
+		expect(login.passkeys).toBeUndefined();
+		expect(res.warnings).toHaveLength(2);
+	});
+
+	it("rejects oversized PKCS#8 before conversion and retains the parent login", async () => {
+		const { context, passkeyImportPkcs8 } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "oversized key",
+						login: {
+							username: "keep",
+							password: "parent",
+							// 1,367 base64url chars is larger than the 1 KiB decoded-key ceiling.
+							fido2Credentials: [validPasskey({ keyValue: "A".repeat(1367) })],
+						},
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(passkeyImportPkcs8).not.toHaveBeenCalled();
+		expect(res.skipped).toBe(0);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			username: "keep",
+			password: "parent",
+		});
+		const login = res.imported[0];
+		if (login?.type !== "login") throw new Error("expected retained login");
+		expect(login.passkeys).toBeUndefined();
+		expect(res.warnings).toEqual([
+			'"oversized key" passkey 1 has invalid credential encoding and was skipped.',
+		]);
+	});
+
+	it("normalizes counters and falls back to the parent creation date", async () => {
+		const { context } = importContext();
+		const parentDate = "2022-06-07T08:09:10.000Z";
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "dated",
+						creationDate: parentDate,
+						login: {
+							fido2Credentials: [validPasskey({ counter: "12", creationDate: "not a date" })],
+						},
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			passkeys: [{ signCount: 0, createdAt: Date.parse(parentDate) }],
+		});
+		expect(res.warnings).toEqual([
+			'"dated" passkey 1 had its signature counter reset to zero.',
+			'"dated" passkey 1 had no valid creation date; a fallback date was used.',
+		]);
+	});
+
+	it("uses one import timestamp when neither credential nor parent has a valid date", async () => {
+		const now = vi.spyOn(Date, "now").mockReturnValue(1_725_000_000_000);
+		const { context } = importContext();
+		try {
+			const res = await parseBitwarden(
+				json({
+					items: [
+						{
+							type: 1,
+							name: "fallback",
+							login: {
+								fido2Credentials: [
+									validPasskey({ creationDate: null }),
+									validPasskey({ creationDate: undefined }),
+								],
+							},
+						},
+					],
+				}),
+				context,
+			);
+			expect(res.imported[0]).toMatchObject({
+				type: "login",
+				passkeys: [{ createdAt: 1_725_000_000_000 }, { createdAt: 1_725_000_000_000 }],
+			});
+		} finally {
+			now.mockRestore();
+		}
+	});
+
+	it("rejects non-Bitwarden input", async () => {
+		const { context } = importContext();
+		await expect(parseBitwarden("{}", context)).rejects.toThrow();
+		await expect(parseBitwarden("not json", context)).rejects.toThrow();
+	});
+
+	it("gives a specific error for an encrypted (password-protected) export", async () => {
+		const { context } = importContext();
 		// The password-protected format: no `items`, an opaque `data` blob, `encrypted: true`.
 		const enc = json({ encrypted: true, passwordProtected: true, salt: "x", data: "2.abc|def" });
-		expect(() => parseBitwarden(enc)).toThrow(/encrypted \(password-protected\)/i);
+		await expect(parseBitwarden(enc, context)).rejects.toThrow(/encrypted \(password-protected\)/i);
 		// passwordProtected alone (some exports omit `encrypted`) is caught too.
-		expect(() => parseBitwarden(json({ passwordProtected: true, data: "x" }))).toThrow(
-			/encrypted/i,
-		);
+		await expect(
+			parseBitwarden(json({ passwordProtected: true, data: "x" }), context),
+		).rejects.toThrow(/encrypted/i);
 	});
 
-	it("does not misfire on an unencrypted export (encrypted: false)", () => {
-		const res = parseBitwarden(json({ encrypted: false, items: [{ type: 2, name: "n" }] }));
+	it("does not misfire on an unencrypted export (encrypted: false)", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({ encrypted: false, items: [{ type: 2, name: "n" }] }),
+			context,
+		);
 		expect(res.imported).toHaveLength(1);
 	});
 });

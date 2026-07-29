@@ -48,20 +48,20 @@ export interface CustomField {
  * security-key unlock in `vault/webauthn-ceremony.ts`. See docs/passkey-provider.md.
  */
 export interface PasskeyCredential {
-	/** Base64url random credential id Bramble minted at creation. */
+	/** Standard-base64 credential id Bramble minted at creation or imported. */
 	credentialId: string;
 	/** Relying-party id, e.g. "github.com". Matched against hostnames. */
 	rpId: string;
 	rpName?: string;
-	/** Base64url `user.id` from the RP. Required for discoverable credentials. */
+	/** Standard-base64 `user.id` from the RP. Required for discoverable credentials. */
 	userHandle: string;
 	userName?: string;
 	userDisplayName?: string;
 	/** COSE algorithm identifier; -7 (ES256) by default. */
 	alg: number;
-	/** Base64url COSE_Key public key the RP verifies against. */
+	/** Standard-base64 COSE_Key public key the RP verifies against. */
 	publicKeyCose: string;
-	/** Base64url PKCS#8 private key. Encrypted at rest with the rest of the entry. */
+	/** Standard-base64 raw P-256 scalar. Encrypted at rest with the rest of the entry. */
 	privateKey: string;
 	/** Always 0: synced passkeys must not increment (a regression reads as a clone). */
 	signCount: number;
