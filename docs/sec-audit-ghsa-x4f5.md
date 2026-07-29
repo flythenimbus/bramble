@@ -16,10 +16,13 @@
 
 | Target | Affected | Fixed in |
 |---|---|---|
-| Chromium extension | 1.1.0 through 1.10.1 | next release |
-| Firefox extension | 1.0.1 through 1.7.1 | next release |
-| Android | 0.0.1 through 0.9.7 (all releases) | next release |
-| iOS | 1.1.0 through 1.4.2 | next release |
+| Chromium extension | 1.1.0 through 1.10.1 | 1.11.0 |
+| Firefox extension | 1.0.1 through 1.7.1 | 1.8.0 |
+| Android | 0.0.1 through 0.9.7 (all releases) | 0.9.8 |
+| iOS | 1.1.0 through 1.4.2 | 1.4.3 |
+
+Each target versions independently, but the four ship together: the fix is a mutual change, so a
+device left on an older version cannot pair with an updated one.
 
 Vaults that have never used P2P sync are unaffected: the vulnerable path is reachable only while
 an invite is open.
