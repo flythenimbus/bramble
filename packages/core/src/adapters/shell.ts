@@ -126,6 +126,11 @@ export interface ShellAdapter {
 	flushPendingCornerCapture(): Promise<boolean>;
 	/** Tear down the offscreen sync host (enrollment / ongoing sync). */
 	stopSyncSpike(): Promise<void>;
+	/** Tear down ONLY the enrollment session, leaving ongoing sync running. Called when the user
+	 * dismisses the pairing modal or the invite expires: the code is a bearer credential, so the
+	 * host must stop listening the moment the window closes, but an already-paired device adding
+	 * a third one must not lose its live sync to do it (which is what stopSyncSpike would cost). */
+	stopEnrollInvite?(): Promise<void>;
 	/** Subscribe to the sync host's status lines (shown in the dev panel). Returns an unsubscribe function. */
 	onSyncStatus(callback: (status: string) => void): () => void;
 	/** This device's Noise static public key (base64), for the roster and pairing code. Generated + persisted on first call. */
@@ -193,6 +198,21 @@ export interface ShellAdapter {
 	}): Promise<void>;
 	/** Subscribe to structured enrollment events from the sync host (e.g. the joiner's rebuilt vault). Returns an unsubscribe function. */
 	onSyncEvent(callback: (event: SyncEvent) => void): () => void;
+	/** Inviter: answer the pending "is this your device?" prompt. The host is holding the joiner
+	 * on an open channel with nothing sent yet; true releases the vault, false burns the invite.
+	 * Paired with the "enroll-approval" SyncEvent. */
+	approveEnrollment?(approved: boolean): Promise<void>;
+	/** Inviter: read back an approval the host is still waiting on, so a popup that was closed and
+	 * reopened mid-pairing shows the prompt instead of silently stranding it. Null when none. */
+	getPendingEnrollApproval?(): Promise<EnrollApproval | null>;
+}
+
+/** The inviter-side confirmation prompt: the number to compare, and who is asking. */
+export interface EnrollApproval {
+	/** The 12-digit SAS both devices derive. This is the check. */
+	sas: string;
+	/** The joining device's self-declared label. Attacker-controlled: context, never proof. */
+	label: string;
 }
 
 /** A structured event from the sync host (vs. the human-readable status strings). */
@@ -205,6 +225,10 @@ export interface SyncEvent {
 	entryJson?: string;
 	/** Joiner: a human-readable reason a join failed recoverably (e.g. password mismatch). */
 	message?: string;
+	/** For kind "enroll-approval" (inviter) and "sas" (joiner): the pairing SAS to display. */
+	sas?: string;
+	/** For kind "enroll-approval": the joining device's label. Context for the user, not proof. */
+	label?: string;
 	/** For kind "synced": epoch ms of the reconcile, carrying the "last synced" tick to the UI (mobile). */
 	at?: number;
 }

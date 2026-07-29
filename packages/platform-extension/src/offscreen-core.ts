@@ -42,9 +42,11 @@ import { api } from "./platform-api";
 import {
 	AdmissionPubkeyMsgSchema,
 	AdmissionSignHostMsgSchema,
+	EnrollApproveMsgSchema,
 	type EnrollInviteMsg,
 	EnrollInviteMsgSchema,
 	EnrollJoinMsgSchema,
+	type PendingEnrollApproval,
 	RosterSignHostMsgSchema,
 	RosterSyncMsgSchema,
 	type SyncEventMsg,
@@ -93,6 +95,23 @@ const unregisteredBridge: SyncBridge = {
 // The single live enrollment / sync session for this host context.
 let enrollSession: MeshSession | null = null;
 let syncSession: MeshSession | null = null;
+
+/**
+ * The pairing approval the host is waiting on, if any. It lives here rather than in the popup
+ * because the popup is disposable: it can be closed and reopened (or, on Firefox, be gone
+ * entirely) while the joiner sits on an open channel with nothing sent yet. Held state lets a
+ * reopened popup pick the prompt back up instead of stranding the joiner until the invite expires.
+ */
+let pendingApproval: { sas: string; label: string; settle: (approved: boolean) => void } | null =
+	null;
+
+/** Answer (and clear) the pending approval. A no-op when there isn't one, which is what a stale
+ * click from a popup that reopened after the invite already ended looks like. */
+function settleApproval(approved: boolean): void {
+	const pending = pendingApproval;
+	pendingApproval = null;
+	pending?.settle(approved);
+}
 
 /** Broadcast a dev-sync status line; the Settings panel listens for SYNC_STATUS. Also logged to the
  * host console (offscreen on Chrome / event page on Firefox), which persists across popup closes -
@@ -429,12 +448,35 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				return { ok: true, data: await decodeQrDataUrl(dataUrl) };
 			}
 			case "SYNC_DISCONNECT":
+				settleApproval(false);
 				enrollSession?.stop();
 				enrollSession = null;
 				syncSession?.stop();
 				syncSession = null;
 				reportSyncStatus("disconnected");
 				return { ok: true };
+			case "SYNC_ENROLL_STOP":
+				// The pairing window closed: stop listening for a joiner, but leave ongoing sync up.
+				// Dismissing the UI is not approval, so any prompt still parked here is a refusal.
+				settleApproval(false);
+				enrollSession?.stop();
+				enrollSession = null;
+				reportSyncStatus("invite closed");
+				return { ok: true };
+			case "SYNC_ENROLL_APPROVE":
+				settleApproval(EnrollApproveMsgSchema.parse(payload).approved);
+				return { ok: true };
+			case "SYNC_ENROLL_PENDING":
+				// A reopened popup asking whether a prompt is still outstanding.
+				return {
+					ok: true,
+					data: pendingApproval
+						? ({
+								sas: pendingApproval.sas,
+								label: pendingApproval.label,
+							} satisfies NonNullable<PendingEnrollApproval>)
+						: null,
+				};
 			case "SYNC_BROADCAST_NOW":
 				// A local vault write landed: push it to peers now instead of at the next tick.
 				await syncSession?.broadcastNow?.();
@@ -494,10 +536,28 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				// Inviter-only: the material for the host to admission-sign + roster the joiner itself.
 				const admission = role === "inviter" ? (opts as EnrollInviteMsg).admission : undefined;
 				enrollSession?.stop();
+				settleApproval(false); // a new enroll supersedes any prompt left over from the last one
 				enrollSession = await startEnroll(role, {
 					...opts,
 					wasm: w,
 					report: reportSyncStatus,
+					// Inviter: park the transfer on the user's answer. The joiner is connected and
+					// authenticated at this point, but nothing has been sent, and nothing will be
+					// unless this resolves true. See docs/p2p-sync.md "Pairing code".
+					approve: (sas, label) =>
+						new Promise<boolean>((resolve) => {
+							pendingApproval = { sas, label, settle: resolve };
+							broadcastSyncEvent({ kind: "enroll-approval", sas, label });
+						}),
+					onSas: (sas) => broadcastSyncEvent({ kind: "sas", sas }),
+					// The window closed. Refuse any prompt still parked here (nothing can be sent
+					// after this) and tell the UI, which may have lost its own countdown when the
+					// popup closed and reopened.
+					onInviteExpired: () => {
+						settleApproval(false);
+						broadcastSyncEvent({ kind: "enroll-expired" });
+					},
+					onEnrollFailed: (msg) => broadcastSyncEvent({ kind: "enroll-failed", message: msg }),
 					onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
 					onJoinError: (msg) => broadcastSyncEvent({ kind: "join-error", message: msg }),
 					onEnrolled: (entryJson) => {

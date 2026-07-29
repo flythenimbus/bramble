@@ -61,6 +61,10 @@ msgstr "30 segundos"
 msgid "5 minutes"
 msgstr "5 minutos"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
+msgstr "Um dispositivo se conectou com seu código de pareamento. Verifique se está mostrando exatamente este número e, em seguida, aprove. Seu cofre ainda não foi enviado."
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "A one-time backup code that unlocks your vault if you're locked out."
 msgstr "Um código de backup único que desbloqueia seu cofre caso você seja bloqueado."
@@ -292,6 +296,10 @@ msgstr "Mudar sua senha mestra"
 msgid "Check passwords for breaches"
 msgstr "Verificar senhas por violações"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Check this matches"
+msgstr "Verificar se corresponde"
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Choose a .bramble file"
 msgstr "Escolha um arquivo .bramble"
@@ -355,6 +363,10 @@ msgstr "Backups na nuvem"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Code scanned"
 msgstr "Código escaneado"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Codes are short-lived on purpose. Generate a new one when your other device is ready to scan it."
+msgstr "Os códigos têm vida curta intencionalmente. Gere um novo quando o outro dispositivo estiver pronto para escaneá-lo."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Coming soon"
@@ -740,6 +752,11 @@ msgstr "Apenas o nome de host exato"
 msgid "Expires"
 msgstr "Expira"
 
+#. placeholder {0}: mmss(secondsLeft)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Expires in {0} · keep this window open until pairing finishes"
+msgstr "Expira em {0} · mantenha esta janela aberta até a conclusão do pareamento"
+
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Export"
@@ -807,6 +824,10 @@ msgid "Generate"
 msgstr "Gerar"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Generate a new code"
+msgstr "Gerar um novo código"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
 msgstr "Gerar um código de pareamento único e aguardar um dispositivo para se juntar. Nenhum segredo do cofre está no código."
 
@@ -825,6 +846,10 @@ msgstr "Voltar"
 #: packages/core/src/app/layouts/AppLayout.tsx
 msgid "Go to vault"
 msgstr "Acessar o cofre"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "Got it"
+#~ msgstr "Entendi"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 #~ msgid "Have a backup? Open a .bramble file instead"
@@ -876,6 +901,10 @@ msgstr "Ocultar valor"
 msgid "I've saved it, continue"
 msgstr "Salvei e prossigo"
 
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "If the numbers differ, someone else is trying to join. Reject it there and start again with a new code."
+msgstr "Se os números forem diferentes, outra pessoa está tentando participar. Rejeite-o e recomece com um novo código."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Immediate"
 msgstr "Imediato"
@@ -922,6 +951,15 @@ msgstr "Senha mestra incorreta"
 msgid "Incorrect master password for this backup."
 msgstr "Senha mestra incorreta para este backup."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Is this your device?"
+msgstr "Este é o seu dispositivo?"
+
+#. placeholder {0}: approval.label
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "It calls itself \"{0}\". Only the number above proves who it is."
+msgstr "Ele se chama \""
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "item"
 msgstr "Item"
@@ -955,6 +993,10 @@ msgstr "Vincular cofre"
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Keep the invite open on your other device while the vault transfers."
 msgstr "Mantenha o convite aberto no seu outro dispositivo enquanto o cofre é transferido."
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Keep this screen open until pairing finishes."
+msgstr "Mantenha esta tela aberta até que o emparelhamento seja concluído."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
@@ -1177,6 +1219,14 @@ msgstr "Notas"
 msgid "Notes (optional)"
 msgstr "Notas (opcional)"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
+#~ msgstr "Nada foi enviado. Esse código agora está inválido e pode ter sido visto por outra pessoa, portanto não pode ser reutilizado. Gere um novo quando estiver pronto para tentar novamente, com o outro dispositivo à sua frente."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Numbers match, approve"
+msgstr "Números coincidem, aprovar"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Off"
 msgstr "Desativado"
@@ -1274,6 +1324,14 @@ msgstr "Parear com outro dispositivo"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Código de emparelhamento"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing didn't complete."
+msgstr "O emparelhamento não foi concluído."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "Pairing rejected"
+#~ msgstr "Pareamento rejeitado"
 
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
@@ -1461,6 +1519,10 @@ msgstr "Registrar"
 msgid "Register a security key below before you can turn off the master password."
 msgstr "Registre uma chave de segurança abaixo antes de desativar a senha mestra."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Reject"
+msgstr "Rejeitar"
+
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Reload"
 msgstr "Recarregar"
@@ -1606,8 +1668,12 @@ msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key
 msgstr "Escanear o QR na página de 2FA de um site, ou colar um URI otpauth:// ou a chave de configuração."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
-msgstr "Escaneie isso no seu outro dispositivo ou copie o código abaixo. Nenhum segredo do cofre está nele."
+msgid "Scan this on your other device, or copy the code below. Keep it private: anyone who sees it while this window is open could try to join. You'll confirm a matching number on both devices before anything is sent."
+msgstr "Escaneie isto no seu outro dispositivo ou copie o código abaixo. Mantenha-o privado: qualquer pessoa que o veja enquanto esta janela estiver aberta pode tentar participar. Você confirmará um número correspondente em ambos os dispositivos antes que algo seja enviado."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
+#~ msgstr "Escaneie isso no seu outro dispositivo ou copie o código abaixo. Nenhum segredo do cofre está nele."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
@@ -1851,6 +1917,10 @@ msgstr "Esta chave autenticadora é inválida e não pode gerar códigos."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Este backup não possui senha mestra, portanto não pode ser restaurado aqui."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "This code has expired."
+msgstr "Este código expirou."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
@@ -2214,6 +2284,10 @@ msgstr "código do seu dispositivo"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"
 msgstr "Seu novo código de recuperação"
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Your other device is showing a number. Confirm it there only if it matches this one."
+msgstr "O outro dispositivo está mostrando um número. Confirme-o lá apenas se corresponder a este."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Your vault is empty. Add your first item."

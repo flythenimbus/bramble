@@ -79,6 +79,16 @@ on(
 	}),
 );
 
+on(
+	"SYNC_ENROLL_STOP",
+	extensionOnly((message) => {
+		// Only the invite is ending. The keepalive was taken for the enroll, so give it back;
+		// ongoing sync takes its own (via the alarm) and is unaffected.
+		releaseEventPage();
+		return sendToOffscreen(message);
+	}),
+);
+
 // Per-vault sync identity: which vault this device is enrolling/syncing (the active one).
 async function requireSyncVault(): Promise<SyncVaultCtx> {
 	const ctx = await resolveSyncVault();
@@ -124,11 +134,30 @@ const withDeviceKey = async (message: {
 	keepEventPageAlive(syncHostSuspends);
 	return sendToOffscreen({
 		...message,
-		payload: { ...message.payload, devicePrivB64: kp.privateKey, ...(vekB64 ? { vekB64 } : {}) },
+		payload: {
+			...message.payload,
+			devicePrivB64: kp.privateKey,
+			// The public half too: the inviter needs its own static key to derive the pairing SAS,
+			// and it can't recover it from the private key. Harmless on the join path.
+			devicePubB64: kp.publicKey,
+			...(vekB64 ? { vekB64 } : {}),
+		},
 	});
 };
 on("SYNC_ENROLL_INVITE", extensionOnly(withDeviceKey));
 on("SYNC_ENROLL_JOIN", extensionOnly(withDeviceKey));
+
+// The user's answer to the pairing prompt, and a read-back for a popup that was closed and
+// reopened while the host was still holding a joiner. Pure forwarding: the pending approval
+// lives with the enrollment session in the offscreen.
+on(
+	"SYNC_ENROLL_APPROVE",
+	extensionOnly((message) => sendToOffscreen(message)),
+);
+on(
+	"SYNC_ENROLL_PENDING",
+	extensionOnly((message) => sendToOffscreen(message)),
+);
 
 // Ed25519 roster-signing identity (Item A). The key is generated in the offscreen (has the wasm)
 // and persisted here (has chrome.storage), mirroring the Noise keypair. See docs/p2p-sync-revocation-hardening.md.

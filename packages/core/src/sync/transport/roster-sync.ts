@@ -22,6 +22,7 @@ import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, startMeshSession } from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
+import { withTimeout } from "./with-timeout";
 
 /** The Noise KK roster-auth + transport exports. Returns are Awaitable so the native
  * plugin (async bridge) and the in-webview WASM module share one interface. */
@@ -54,14 +55,6 @@ const REBROADCAST_MS = 4000;
 // attempt and the periodic resume (Firefox keep-alive / a peer's re-announce) retries.
 // The post-handshake receive loop is intentionally unbounded (it idles between changes).
 const HANDSHAKE_TIMEOUT_MS = 15_000;
-
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
-	});
-	return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
-}
 
 export interface RosterSyncOptions {
 	relayUrl: string;

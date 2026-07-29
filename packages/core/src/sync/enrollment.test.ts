@@ -5,7 +5,9 @@ import {
 	type EnrollmentBundle,
 	encodeEnrollmentBundle,
 	encodePairingCode,
+	INVITE_TTL_MS,
 	type PairingCode,
+	pairingCodeExpired,
 	randomKeyB64,
 } from "./enrollment";
 
@@ -47,6 +49,54 @@ describe("pairing code", () => {
 
 	it("does not carry a VEK field", () => {
 		expect(Object.keys(code)).not.toContain("vek");
+	});
+});
+
+// The invite window (GHSA-x4f5-4wq4-c6c8). `exp` is additive: it must not break a code produced
+// by, or handed to, a build that predates it — hence no `v` bump and no prefix change.
+describe("pairing code expiry", () => {
+	const NOW = 1_800_000_000_000;
+	const live: PairingCode = { ...code, exp: NOW + INVITE_TTL_MS };
+
+	it("round-trips exp", () => {
+		expect(decodePairingCode(encodePairingCode(live))).toEqual(live);
+	});
+
+	it("still parses a code with no exp (an older inviter)", () => {
+		const parsed = decodePairingCode(encodePairingCode(code));
+		expect(parsed.exp).toBeUndefined();
+		expect(pairingCodeExpired(parsed, NOW)).toBe(false); // nothing to enforce; never expires here
+	});
+
+	it("tolerates unknown future fields rather than throwing", () => {
+		// zod strips unknown keys, which is what lets a NEWER code be read by an older build. If
+		// this ever became strict, every future additive field would be a hard compat break.
+		const forward = JSON.stringify({ ...live, somethingNew: "x", nested: { a: 1 } });
+		const encoded = `bramble-pair-1.${btoa(forward)}`;
+		expect(decodePairingCode(encoded)).toEqual(live);
+	});
+
+	it("is live inside the window and expired past it", () => {
+		expect(pairingCodeExpired(live, NOW)).toBe(false);
+		expect(pairingCodeExpired(live, NOW + INVITE_TTL_MS - 1)).toBe(false);
+		expect(pairingCodeExpired(live, NOW + INVITE_TTL_MS + 10 * 60_000)).toBe(true);
+	});
+
+	it("gives a joiner whose clock runs fast a grace period", () => {
+		// The inviter's LOCAL timer is the enforcement; this check only picks the error message, so
+		// it must not refuse a code the inviter is still honouring just because clocks disagree.
+		const justPast = NOW + INVITE_TTL_MS + 1_000;
+		expect(pairingCodeExpired(live, justPast)).toBe(false);
+		expect(pairingCodeExpired(live, justPast, 0)).toBe(true); // ...but the window itself is real
+	});
+
+	it("rejects a non-positive or fractional exp", () => {
+		expect(() =>
+			decodePairingCode(`bramble-pair-1.${btoa(JSON.stringify({ ...code, exp: -1 }))}`),
+		).toThrow();
+		expect(() =>
+			decodePairingCode(`bramble-pair-1.${btoa(JSON.stringify({ ...code, exp: 1.5 }))}`),
+		).toThrow();
 	});
 });
 

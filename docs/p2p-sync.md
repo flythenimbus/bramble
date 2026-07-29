@@ -66,6 +66,128 @@ The VEK crosses the wire exactly once, at enrollment, over the roster-authentica
 (see "Trust model"). After that the VEK never crosses again; ongoing sync moves only
 encrypted entry envelopes.
 
+### Pairing code
+
+**The pairing code is a bearer secret equivalent to the vault.** It contains no VEK, and for a
+long time the code and the docs said so and stopped there. That conclusion was wrong, and
+GHSA-x4f5-4wq4-c6c8 is the report that caught it: the code's `psk` is the *sole* authenticator of
+the joiner in the XXpsk3 handshake, so whoever completes that handshake is sent the bundle. What
+the bundle contains is the whole vault:
+
+| In the bundle | Consequence if it leaks |
+| --- | --- |
+| `vek` | Decrypts every entry, on any device, forever (v1 does not rotate the VEK). |
+| `entries` | The vault contents at that moment. |
+| `roster` | Group membership + device public keys. |
+| `recoverySlots` | A recovery path that **survives a master-password change**, since the slots wrap the same VEK. |
+
+So a code observed while an invite is live is a compromised vault, not a compromised session.
+Say that plainly wherever the code is described; "no vault secrets in the code" is true about the
+bytes and false about the consequence.
+
+What limits the damage is the **invite lifecycle**, not the code's contents:
+
+1. **Expiry.** The code carries `exp` (epoch ms) and the inviter arms a local timer for
+   `INVITE_TTL_MS` (3 minutes) that tears down the mesh session. The timer is local rather than a
+   wall-clock comparison, so device clock skew cannot extend or break the window. The joiner's
+   `exp` check is a courtesy that buys a readable error, not the enforcement point.
+2. **Single use.** The invite is *claimed* at handshake completion, before anything is sent, by a
+   check-and-set with no `await` between the two statements. A second concurrent peer is refused.
+3. **Burn on failure.** A claimed invite is never re-armed, including when the user rejects the
+   approval or the flow fails afterwards. A rejection means the code demonstrably reached someone
+   else, so re-arming it would hand them a second try. The user regenerates. On rejection the
+   inviter sends an explicit notice (`ENROLL_REJECTED`) before tearing down, because the joiner's
+   own wait is human-scale (below): without it the refused device sits on a spinner for minutes.
+   It discloses nothing, since that peer can already see it got no vault.
+4. **Bounded waits.** Every `recvSecure` and the handshake itself are wrapped in `withTimeout`, so
+   a peer that connects and then stalls cannot hold the invite open (which is what made the
+   "inviter serves one device then stops itself" comment unenforceable: `stop()` sat downstream of
+   an unbounded `await`). Three budgets, because they wait on different things: `ENROLL_TIMEOUT_MS`
+   (30s) for machine-speed waits, `VAULT_ACK_TIMEOUT_MS` (60s) for the flush barrier, which also
+   covers the joiner's Argon2 rebuild, and `APPROVAL_WAIT_MS` for the joiner's wait on the first
+   bundle frame, which spans the inviter's prompt and is therefore **human** time. That last one is
+   tied to `INVITE_TTL_MS` rather than chosen separately: the inviter's approval cannot outlive the
+   invite timer, so the joiner's budget cannot fall short of the real bound by construction. Giving
+   it a machine-speed budget times the joiner out on the happy path whenever the user actually
+   stops to compare the digits, which punishes the one behaviour the SAS depends on.
+5. **The SAS gate** below, which is what makes a race visible rather than silent.
+
+#### Short authentication string (SAS)
+
+After the handshake, **the joiner speaks first**: it sends its roster entry, and the inviter
+validates `entry.publicKey === sess.remoteStatic` *before sending anything*. Both sides then
+derive 12 decimal digits and the user confirms they match before the bundle moves.
+
+```
+sas = HKDF-SHA256(ikm = psk, salt = sorted(pubA, pubB), info = "bramble/sync/sas/v1")
+      -> 8 bytes -> BigInt mod 10^12 -> "NNNN NNNN NNNN"
+```
+
+Derived in TypeScript (`sync/pairing-sas.ts`) from the two Noise static public keys and the invite
+PSK, not from the Noise handshake hash: `snow::TransportState` does not expose it and
+`handshake.rs` drops it at `into_transport_mode()`, so using it would mean a Rust change plus a
+wasm rebuild plus uniffi bindgen plus three mobile bridge layers. Deriving from the statics is
+equally sound, because XXpsk3's `es`/`se` DHs prove each party owns the private key for the static
+it presented: an interposer must present a *different* static, which changes the SAS. Sorting the
+two keys makes it symmetric. `crypto.subtle` is used (as in `nostr.ts`), so this also works under
+iOS Lockdown Mode, which disables WASM but not WebCrypto.
+
+12 digits (~39.9 bits, Matrix's decimal SAS) rather than emoji or a word list: digits render
+identically on iOS, Android and every browser, and need no 64-entry name table translated into 6
+locales.
+
+**What it defends, and what it does not.** The joiner already pins the inviter's static key from
+the code, so an attacker cannot be the *joiner's* peer; the open direction was only the inviter
+accepting an unknown joiner, and the SAS closes exactly that, making the authentication mutual:
+
+- Attacker races and wins: the inviter's prompt shows `SAS(inviter, attacker)` while the real
+  device shows `SAS(inviter, joiner)`. Mismatch, the user rejects, and single use means no retry.
+- Real device wins: the two match, and the attacker is refused as a second peer.
+
+Either way the theft becomes a **visible event** instead of a silent one. Note this also rules out
+grinding a short SAS: grinding needs the attacker to be *both* peers, which the joiner's pin
+prevents, so 40 bits is comfortable here rather than marginal.
+
+It does **not** defend a user who approves without comparing, and it does not help against a code
+leaked *before* this shipped (see "Deferred": no VEK rotation). The joiner's device label is shown
+alongside the SAS as context only; it is attacker-controlled and is not proof of anything.
+
+#### Version skew
+
+|  | old inviter | new inviter |
+| --- | --- | --- |
+| **old joiner** | unchanged | the inviter's bounded wait expires and it aborts, telling the user to update Bramble on the other device |
+| **new joiner** | the joiner's entry queues (`channel.ts` queues inbound); the old inviter sends the bundle and then reads that entry as its ack, so this works unchanged | full gate |
+
+This is why the joiner sends **the existing ack frame, up front** rather than a new envelope: an
+old inviter consumes it as the ack it already expects.
+
+After the bundle the joiner sends a second, content-free frame (`VAULT_ACK`) confirming receipt.
+That is not identity (identity was settled before the bundle moved); it is a **flush barrier**.
+`sendSecure` resolving means the frames were handed to the channel, not that they were sent: on
+the relay path `channel.send` only queues `void publish(...)`, which awaits two WebCrypto
+operations before reaching the socket, and `mesh.stop()` calls `client.close()` synchronously in
+the same macrotask; on WebRTC, `pc.close()` discards whatever SCTP still has queued. With `stop()`
+running straight after the send, the tail of a multi-frame bundle was dropped, and losing one
+frame fails the whole message. Roughly 30 entries fit in a single 32 KiB frame, so it only bites
+on real vaults, and on WebRTC only when the queue happens to be non-empty: it presents as flaky
+pairing rather than a clean failure.
+
+An old inviter has already stopped by the time this frame is sent and simply never reads it. That
+is the right trade: an unread frame costs nothing, a truncated vault transfer costs the pairing.
+The wait is bounded and sits upstream of `stop()`, so it does not reintroduce the unbounded ack it
+replaced.
+
+**There is deliberately no downgrade path.** A new inviter that receives no hello aborts rather
+than falling back, because an attacker would otherwise simply stay silent to force the legacy
+flow. The cost is that un-updated devices can no longer pair with updated ones; they get an
+explicit update prompt.
+
+`exp` is purely additive: zod's `z.object` strips unknown keys, so an old client parsing a code
+that carries it silently ignores it. The `v: 1` literal and the `bramble-pair-1.` prefix are
+therefore kept, since bumping either would make old joiners fail with a raw zod error instead of a
+readable message.
+
 ## Trust model: the relay is a dumb, untrusted pipe
 
 The signaling relay (next section) is never trusted. Its honesty is made irrelevant rather
@@ -95,6 +217,13 @@ What a malicious or impostor relay can therefore do:
 
 So the relay is reduced to connect-or-not. It can deny service or watch metadata; it can never
 read, alter, or impersonate. This is why the relay need not be trustworthy, only available.
+
+**This table is about the relay, and only the relay.** It says nothing about an attacker who has
+seen a live pairing code, which is a different and much stronger position: such an attacker is not
+trying to break the handshake, it is holding the credential that *completes* it. That class is
+covered in "Pairing code" above, and the mitigations there (expiry, single use, the SAS gate) are
+the ones that apply. Conflating the two is how "the relay can't read anything" got read as "the
+pairing code is safe to share."
 
 **Metadata residual:** signaling payloads are additionally encrypted under the group key (the
 relay sees opaque blobs), and the room is addressed by `roomId = HMAC(groupKey, "signal")`, so
@@ -271,6 +400,10 @@ field to the entry payload; see "Deferred / known limitations".
   forward; it is not a remote wipe.** A stolen device that already holds the VEK and a local
   vault copy still has that data offline. True lockout requires rotation, which is the natural
   follow-up. State this clearly so it is not mistaken for the stronger guarantee.
+  This is also the residual behind GHSA-x4f5-4wq4-c6c8: a pairing code observed *before* the
+  invite hardening shipped already yielded a VEK, and no amount of lifecycle hardening makes that
+  recoverable. Rotation is what would; until then the advice for a code known to have leaked is to
+  treat the vault as compromised and rotate the credentials in it.
 - **Async (offline) sync is out of scope.** Cross-network sync now works (TURN, above), but it is
   still *synchronous*: both devices must be online and unlocked at once. "Edit on A now, B picks
   it up tomorrow" needs a **store-and-forward mailbox** (a server that holds encrypted deltas for

@@ -7,7 +7,11 @@ import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
 import { hostnameMatches } from "./dedupe";
 import { api } from "./platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "./session-keys";
-import { SyncEventMsgSchema, SyncStatusMsgSchema } from "./sync/messages";
+import {
+	PendingEnrollApprovalSchema,
+	SyncEventMsgSchema,
+	SyncStatusMsgSchema,
+} from "./sync/messages";
 
 const DETACHED_FLAG = "detached";
 
@@ -202,6 +206,20 @@ export const extensionShell: ShellAdapter = {
 	},
 	async stopSyncSpike() {
 		await api.runtime.sendMessage({ type: "SYNC_DISCONNECT" });
+	},
+	async stopEnrollInvite() {
+		await api.runtime.sendMessage({ type: "SYNC_ENROLL_STOP" });
+	},
+	async approveEnrollment(approved: boolean) {
+		await api.runtime.sendMessage({ type: "SYNC_ENROLL_APPROVE", payload: { approved } });
+	},
+	async getPendingEnrollApproval() {
+		const res = (await api.runtime.sendMessage({ type: "SYNC_ENROLL_PENDING" })) as
+			| { ok: boolean; data?: unknown }
+			| undefined;
+		if (!res?.ok) return null;
+		const parsed = PendingEnrollApprovalSchema.safeParse(res.data ?? null);
+		return parsed.success ? parsed.data : null;
 	},
 	onSyncStatus(callback: (status: string) => void) {
 		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {

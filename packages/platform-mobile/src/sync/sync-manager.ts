@@ -183,6 +183,31 @@ export async function syncDevicePublicKey(): Promise<string> {
 
 let session: MeshSession | null = null;
 
+/**
+ * The pairing approval the host is waiting on. Mobile runs the transport in-process, so this is
+ * just a parked promise, but it is held at module scope for the same reason the extension holds
+ * it in the offscreen: the joiner is on an open channel with nothing sent, and the UI that has to
+ * answer may be remounted (or backgrounded) before it does. See ShellAdapter.approveEnrollment.
+ */
+let pendingApproval: { sas: string; label: string; settle: (approved: boolean) => void } | null =
+	null;
+
+function settleApproval(approved: boolean): void {
+	const pending = pendingApproval;
+	pendingApproval = null;
+	pending?.settle(approved);
+}
+
+/** Answer the pending pairing prompt: true releases the vault, false burns the invite. */
+export async function approveEnrollment(approved: boolean): Promise<void> {
+	settleApproval(approved);
+}
+
+/** The prompt still outstanding, for a UI that mounted after it was raised. */
+export async function getPendingEnrollApproval(): Promise<{ sas: string; label: string } | null> {
+	return pendingApproval ? { sas: pendingApproval.sas, label: pendingApproval.label } : null;
+}
+
 export async function startEnrollInvite(opts: {
 	relayUrl: string;
 	iceUrl?: string;
@@ -194,15 +219,30 @@ export async function startEnrollInvite(opts: {
 	recoverySlots?: WireRecoverySlot[];
 }): Promise<void> {
 	const wasm = await loadSyncCrypto();
-	const { privateKey } = await deviceKeypair();
+	const { privateKey, publicKey } = await deviceKeypair();
 	// Capture the VEK NOW, while the user is demonstrably in the vault they're sharing. An invite
 	// stays open for as long as the QR code is up, and the key here is process-global: reading it
 	// at send time (the old ambient export_vek() fallback in sendBundle) would ship whichever vault
 	// the user had switched to by then, handing the joiner a vault it could never open.
 	const vekB64 = await wasm.export_vek();
 	session?.stop();
+	settleApproval(false); // a new invite supersedes any prompt left over from the last one
 	session = await startEnroll("inviter", {
 		vekB64,
+		devicePubB64: publicKey,
+		// Park the transfer on the user's answer: authenticated is not the same as authorized.
+		approve: (sas, label) =>
+			new Promise<boolean>((resolve) => {
+				pendingApproval = { sas, label, settle: resolve };
+				emit({ kind: "enroll-approval", sas, label });
+			}),
+		// The window closed: refuse anything still parked on the prompt (nothing can be sent after
+		// this) and tell the UI, rather than leaving a dead prompt on screen.
+		onInviteExpired: () => {
+			settleApproval(false);
+			emit({ kind: "enroll-expired" });
+		},
+		onEnrollFailed: (message) => emit({ kind: "enroll-failed", message }),
 		relayUrl: opts.relayUrl,
 		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
@@ -243,16 +283,27 @@ export async function startEnrollJoin(opts: {
 		devicePrivB64: privateKey,
 		wasm,
 		report,
+		onSas: (sas) => emit({ kind: "sas", sas }),
 		onJoined: (r) => emit({ kind: "joined", vaultBlobB64: r.vaultBlobB64, roster: r.roster }),
 		onJoinError: (message) => emit({ kind: "join-error", message }),
 	});
 }
 
 export async function stopSync(): Promise<void> {
+	settleApproval(false);
 	session?.stop();
 	session = null;
 	stopRosterSync(); // full teardown: halt ongoing roster sync too, not just enrollment
 	report("disconnected");
+}
+
+/** Stop listening for a joiner, leaving ongoing sync alone. The pairing modal closing must not
+ * cost an already-paired device its live sync. See ShellAdapter.stopEnrollInvite. */
+export async function stopEnrollInvite(): Promise<void> {
+	settleApproval(false); // dismissing the UI is a refusal, not an approval
+	session?.stop();
+	session = null;
+	report("invite closed");
 }
 
 // --- ongoing roster sync (continuous merge after enrollment) ---

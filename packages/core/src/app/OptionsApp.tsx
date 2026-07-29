@@ -1,6 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 import { Check } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { OptionsScreen } from "../adapters/shell";
 import { usePlatform } from "../context/PlatformContext";
 import { useVault, VaultProvider } from "../hooks/useVault";
@@ -28,6 +28,18 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
 	const [mode, setMode] = useState<VaultSetupMode>("create");
+	// The pairing SAS for a join in progress, raised by the sync host once the channel is
+	// authenticated and cleared when the join settles either way (so a retry never shows a stale
+	// number). Held here rather than in VaultProvider: the setup screen is its only consumer.
+	const [joinSas, setJoinSas] = useState<string | null>(null);
+	useEffect(
+		() =>
+			shell.onSyncEvent((e) => {
+				if (e.kind === "sas") setJoinSas(e.sas ?? null);
+				else if (e.kind === "joined" || e.kind === "join-error") setJoinSas(null);
+			}),
+		[shell],
+	);
 	// "added" = a backup was restored isnto a new, locked vault (vaults already existed).
 	const [done, setDone] = useState<null | "created" | "opened" | "added">(null);
 	const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
@@ -98,6 +110,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			}}
 			joining={joining}
 			joinError={joinError}
+			joinSas={joinSas}
 			onRestore={({ addedNew }) => {
 				if (onComplete) onComplete();
 				else setDone(addedNew ? "added" : "opened");

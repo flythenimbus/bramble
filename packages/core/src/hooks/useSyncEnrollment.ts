@@ -10,6 +10,8 @@ import {
 	emptyRoster,
 	encodePairingCode,
 	type HybridClock,
+	INVITE_TTL_MS,
+	pairingCodeExpired,
 	type RosterEntry,
 	RosterEntrySchema,
 	type RosterPayload,
@@ -164,8 +166,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		[shell, storage, syncKey, ensureClock],
 	);
 
-	// Generate a fresh one-time pairing code and start listening for a device to
-	// join. The code carries no vault secrets (groupKey + our pubkey + PSK + relay).
+	// Generate a fresh one-time pairing code and start listening for a device to join.
+	// The code carries no vault secrets directly, but its PSK is what authenticates a
+	// joiner, so anyone holding it while this invite is live can be handed the vault.
+	// The invite is short-lived, single-use, and gated on the user confirming the SAS.
 	const inviteDevice = useCallback(
 		async (relayUrl: string, iceUrl?: string, password?: string): Promise<string> => {
 			// Persist + propagate (via the pairing code) both relays so a joiner adopts them.
@@ -224,6 +228,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 					enrollUnsubRef.current = null;
 				})();
 			});
+			// Stamped BEFORE the host arms its own timer, so the deadline the joiner and the UI
+			// count down to always falls at or before the inviter's local one. Never after: the
+			// window shown must not outlive the window enforced.
+			const exp = Date.now() + INVITE_TTL_MS;
 			await shell.startEnrollInvite({
 				relayUrl,
 				iceUrl,
@@ -245,6 +253,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				psk,
 				relay: relayUrl,
 				iceUrl: iceUrl || undefined,
+				exp,
 			});
 		},
 		[
@@ -264,6 +273,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	const joinGroup = useCallback(
 		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
 			const code = decodePairingCode(pairingCode.trim()); // validate before any prompt
+			// Refuse a stale code up front, before a security-key tap or a device-id rotation. The
+			// inviter has already torn its side down by now, so proceeding would just hang.
+			if (pairingCodeExpired(code)) {
+				throw new Error("That pairing code has expired. Generate a new one and try again.");
+			}
 			// Security-key path: run the PRF create() ceremony FIRST, on this click's
 			// fresh user activation, before any await can spend it. One tap; we keep the
 			// secret so the offscreen can wrap a webauthn slot and we finish the local

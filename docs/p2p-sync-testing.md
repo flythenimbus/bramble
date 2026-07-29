@@ -40,8 +40,12 @@ document, and WebRTC connects them over loopback.
 3. The log shows `authenticated ✅ -> transferring vault…`, then B's vault becomes
    A's. B unlocks with the method it just set.
 
-The pairing code carries only `{groupKey, inviterPub, psk, relay}` — no vault
-secrets. The VEK is sealed Noise-only over the authenticated channel and the joiner
+The pairing code carries `{groupKey, inviterPub, psk, relay, exp}` and no vault secrets
+directly — but its `psk` is what authenticates the joiner, so while the invite is live
+the code is worth the vault. Treat it as a password when testing (don't paste one into
+an issue or a shared log). The invite expires, is single-use, and the transfer is gated
+on the SAS both sides show; see docs/p2p-sync.md "Pairing code".
+The VEK is sealed Noise-only over the authenticated channel and the joiner
 rebuilds its vault inside the offscreen, so the raw VEK never reaches the popup. The
 joiner mints its own unlock slot there: for the security-key choice the PRF ceremony
 runs in the popup (where WebAuthn works) and only the hmac-secret crosses to the

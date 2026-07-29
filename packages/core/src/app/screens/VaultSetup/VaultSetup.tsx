@@ -25,6 +25,9 @@ interface VaultSetupProps {
 	joining?: boolean;
 	/** The last join failure, surfaced in the join form. */
 	joinError?: string | null;
+	/** The pairing SAS, once the channel is authenticated: the user compares it against the same
+	 * number on the inviting device before approving there. Absent until then. */
+	joinSas?: string | null;
 	/** Restore a .bramble backup (the "Restore from backup" tab; rendered inline like the others).
 	 * Called on success so the parent drives the terminal screen; `addedNew` marks a restored-into-new
 	 * locked vault vs the first vault unlocked in place. Absent where restore isn't supported (mobile). */
@@ -48,6 +51,7 @@ export function VaultSetup({
 	onJoin,
 	joining,
 	joinError,
+	joinSas,
 	onRestore,
 	mobile,
 	adding,
@@ -89,11 +93,40 @@ export function VaultSetup({
 				<div className="w-full max-w-xl text-center">
 					<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 					<h1 className="text-2xl mb-2">
-						<Trans>Connecting to your other device…</Trans>
+						{joinSas ? (
+							<Trans>Check this matches</Trans>
+						) : (
+							<Trans>Connecting to your other device…</Trans>
+						)}
 					</h1>
-					<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
-						<Trans>Keep the invite open on your other device while the vault transfers.</Trans>
-					</p>
+					{joinSas ? (
+						<>
+							{/* The comparison is the whole defence, so the number is the loudest thing on
+							    screen and the instruction is one sentence. */}
+							<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
+								<Trans>
+									Your other device is showing a number. Confirm it there only if it matches this
+									one.
+								</Trans>
+							</p>
+							<p className="mt-6 font-mono text-3xl tracking-[0.2em] tabular-nums">{joinSas}</p>
+							<p className="mt-4 text-xs text-muted-foreground">
+								<Trans>
+									If the numbers differ, someone else is trying to join. Reject it there and start
+									again with a new code.
+								</Trans>
+							</p>
+							{/* Backgrounding here isn't survivable: the OS suspends the app and the connection
+							    dies with it. Cheaper to warn than to explain the failure afterwards. */}
+							<p className="mt-2 text-xs text-muted-foreground">
+								<Trans>Keep this screen open until pairing finishes.</Trans>
+							</p>
+						</>
+					) : (
+						<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
+							<Trans>Keep the invite open on your other device while the vault transfers.</Trans>
+						</p>
+					)}
 					<Loader2 className="w-6 h-6 mt-6 inline-block animate-spin text-primary" />
 				</div>
 			</div>

@@ -87,8 +87,11 @@ import { SITE } from "@/consts";
 			when prompted; this confirms the request is really from you, not just an unlocked device.
 		</li>
 		<li>
-			Bramble shows a QR code and a matching text code, then waits for a device to join. The code
-			holds no vault secrets.
+			Bramble shows a QR code and a matching text code, then waits for a device to join.{" "}
+			<strong>Treat that code like your master password.</strong> It is what proves a joining device
+			is yours, so anyone who photographs or copies it while it is on screen could use it to join and
+			receive a copy of your vault. Show it only to the device you are adding, and close the window
+			once pairing is done.
 		</li>
 		<li>
 			On the device you are adding, open Bramble and choose to join: on a fresh install, pick{" "}

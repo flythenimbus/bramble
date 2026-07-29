@@ -28,6 +28,9 @@ export const EnrollInviteMsgSchema = z.object({
 	groupKeyB64: z.string(),
 	psk: z.string(),
 	devicePrivB64: z.string(),
+	// This device's own Noise static public key, injected alongside the private one. Half the SAS
+	// input, and the host can't derive it from the private key it holds. See @core/sync/pairing-sas.
+	devicePubB64: z.string().optional(),
 	// The inviter's vault VEK, injected by the background invite handler from the per-vault map
 	// (the scratch-slot offscreen can't be trusted to export the right one). See docs/multiple-vaults.md.
 	vekB64: z.string().optional(),
@@ -115,6 +118,18 @@ export const AdmissionSignHostMsgSchema = z.object({
 });
 export type AdmissionSignHostMsg = z.infer<typeof AdmissionSignHostMsgSchema>;
 
+/** popup -> background -> offscreen (SYNC_ENROLL_APPROVE): the user's answer to the pairing
+ * prompt. The host is holding the joiner with nothing sent; false burns the invite. */
+export const EnrollApproveMsgSchema = z.object({ approved: z.boolean() });
+export type EnrollApproveMsg = z.infer<typeof EnrollApproveMsgSchema>;
+
+/** offscreen -> popup: an approval the host is still waiting on, so a reopened popup can resume
+ * the prompt rather than stranding it. Null when there is none. */
+export const PendingEnrollApprovalSchema = z
+	.object({ sas: z.string(), label: z.string() })
+	.nullable();
+export type PendingEnrollApproval = z.infer<typeof PendingEnrollApprovalSchema>;
+
 /** offscreen -> popup broadcast: a structured enrollment event. Mirrors core's SyncEvent. */
 export const SyncEventMsgSchema = z.object({
 	kind: z.string(),
@@ -122,6 +137,8 @@ export const SyncEventMsgSchema = z.object({
 	roster: RosterPayloadSchema.optional(),
 	entryJson: z.string().optional(),
 	message: z.string().optional(),
+	sas: z.string().optional(),
+	label: z.string().optional(),
 });
 export type SyncEventMsg = z.infer<typeof SyncEventMsgSchema>;
 

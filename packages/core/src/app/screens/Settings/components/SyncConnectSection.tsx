@@ -2,12 +2,13 @@ import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import {
 	activeDevices,
+	decodePairingCode,
 	type RosterEntry,
 	type RosterPayload,
 	SYNC_LAST_SYNCED_KEY,
@@ -31,6 +32,10 @@ interface SyncGroup {
 
 const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
 const addedOn = (ms: number): string => formatDate(ms);
+
+/** m:ss for the invite countdown. */
+const mmss = (seconds: number): string =>
+	`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 // Locale-aware relative time ("just now" / "5 minutes ago" / "2 days ago") via Intl, so
 // "Last synced" reads at a glance. Coarsens by magnitude; refreshes on the next re-render.
@@ -67,6 +72,20 @@ export function SyncConnectSection() {
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
+	// Seconds left on the open invite (null before one exists). The host enforces the same window
+	// with its own timer; this is the user-visible half, and it never runs past the host's (the
+	// code's `exp` is stamped before the host arms it). See docs/p2p-sync.md "Pairing code".
+	const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+	// The pending "is this your device?" prompt. Until it is answered the joiner is connected and
+	// authenticated but has been sent nothing at all, so this is the last gate before the vault
+	// leaves this device. See docs/p2p-sync.md "Pairing code".
+	const [approval, setApproval] = useState<{ sas: string; label: string } | null>(null);
+	/** The host told us the invite window closed. Independent of the countdown, which only runs
+	 * while this panel is mounted and only knows the deadline it decoded out of the code. */
+	const [hostExpired, setHostExpired] = useState(false);
+	/** A device tried to join and the invite died doing it. Shown in place of the code, because a
+	 * QR that can no longer work is worse than no QR: it just gets scanned again. */
+	const [inviteError, setInviteError] = useState<string | null>(null);
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	// Master-password gate before adding a device: the re-entered password admission-signs the new
@@ -130,9 +149,32 @@ export function SyncConnectSection() {
 				if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
 					void refreshGroup();
 				if (e.kind === "synced") setLastSynced(e.at ?? Date.now());
+				if (e.kind === "enroll-approval" && e.sas)
+					setApproval({ sas: e.sas, label: e.label ?? "" });
+				if (e.kind === "enrolled") setApproval(null);
+				// The host closed the window. It is the authority on that, not the countdown below:
+				// this panel may have been unmounted for most of the invite (an extension popup
+				// closes on focus loss), in which case it has no countdown running at all.
+				if (e.kind === "enroll-expired") {
+					setApproval(null);
+					setHostExpired(true);
+				}
+				if (e.kind === "enroll-failed") {
+					setApproval(null);
+					setInviteError(e.message || null);
+				}
 			}),
 		[shell, refreshGroup],
 	);
+
+	// The host raises the prompt whether or not this panel is mounted (the popup can be closed and
+	// reopened mid-pairing, and on Firefox it may be gone entirely). Pick up an outstanding one on
+	// mount so the joiner isn't stranded until the invite expires.
+	useEffect(() => {
+		void shell.getPendingEnrollApproval?.().then((p) => {
+			if (p) setApproval(p);
+		});
+	}, [shell]);
 
 	// "Last synced": read the persisted stamp on mount, and on the extension live-refresh via
 	// storage change events (the background writes it). No-op subscription on mobile, where the
@@ -168,6 +210,65 @@ export function SyncConnectSection() {
 		}
 	};
 
+	// The open invite's deadline, read back off the code we just handed the user.
+	const inviteExp = useMemo(() => {
+		if (pairingCode === null) return null;
+		try {
+			return decodePairingCode(pairingCode).exp ?? null;
+		} catch {
+			return null;
+		}
+	}, [pairingCode]);
+
+	useEffect(() => {
+		if (inviteExp === null) {
+			setSecondsLeft(null);
+			return;
+		}
+		const tick = () => setSecondsLeft(Math.max(0, Math.ceil((inviteExp - Date.now()) / 1000)));
+		tick();
+		const id = setInterval(tick, 1000);
+		return () => clearInterval(id);
+	}, [inviteExp]);
+
+	// Either signal is enough. The countdown is the smooth one the user watches; the host event is
+	// the reliable one, and it is what fires when this panel wasn't around to count.
+	const inviteExpired = secondsLeft === 0 || hostExpired;
+
+	// An expired invite must not leave a live prompt on screen. Answering it then would be
+	// answering for a session the host has already torn down, so withdraw it as a refusal (which
+	// also settles the host's parked promise) rather than showing a button that does nothing.
+	useEffect(() => {
+		if (!inviteExpired || !approval) return;
+		setApproval(null);
+		void shell.approveEnrollment?.(false);
+	}, [inviteExpired, approval, shell]);
+
+	// Dismissing the pairing UI must also stop the host listening: clearing React state alone left
+	// a live invite behind a closed modal, which is the whole point of a bounded window. Not
+	// stopSyncSpike, which would also drop this device's ongoing sync.
+	const closeInvite = useCallback(() => {
+		setPairingCode(null);
+		setApproval(null);
+		void shell.stopEnrollInvite?.();
+	}, [shell]);
+
+	// Answering ends the invite either way: approving spends it on this device, and rejecting
+	// burns it, because a prompt the user didn't expect means the code reached someone else.
+	// Rejecting just closes the pairing UI — no confirmation screen. The user has to reopen "Add a
+	// device" to try again anyway, which mints a fresh code, so telling them the old one is dead
+	// is a dialog to dismiss rather than a decision to make.
+	const answerApproval = useCallback(
+		(approved: boolean) => {
+			setApproval(null);
+			// The code is spent either way, so it goes off screen either way. Not closeInvite():
+			// that stops the host, and on approval the vault transfer is in flight right now.
+			setPairingCode(null);
+			void shell.approveEnrollment?.(approved);
+		},
+		[shell],
+	);
+
 	const devices = group ? activeDevices(group.roster) : [];
 	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
 	const inGroup = group != null;
@@ -179,6 +280,9 @@ export function SyncConnectSection() {
 
 	const addDevice = (password?: string) =>
 		run("creating pairing code…", async () => {
+			// A fresh invite; clear the previous one's expiry/failure.
+			setHostExpired(false);
+			setInviteError(null);
 			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined, password));
 			await refreshGroup();
 		});
@@ -444,7 +548,7 @@ export function SyncConnectSection() {
 
 			<Modal
 				open={pairingCode !== null}
-				onClose={() => setPairingCode(null)}
+				onClose={closeInvite}
 				backdropClassName="bg-black/90"
 				className="max-w-lg"
 			>
@@ -457,34 +561,134 @@ export function SyncConnectSection() {
 							<Button
 								variant="link"
 								size="none"
-								onClick={() => setPairingCode(null)}
+								onClick={closeInvite}
 								aria-label={t`Close`}
 								className="transition-colors"
 							>
 								<X className="w-4 h-4" />
 							</Button>
 						</div>
+						{inviteError !== null ? (
+							// A device tried and it didn't work. The invite is spent, so the code must go: a
+							// QR that can no longer pair is worse than none, because it just gets scanned again.
+							<>
+								<p className="text-sm">
+									<Trans>Pairing didn't complete.</Trans>
+								</p>
+								<p className="text-xs text-muted-foreground">{inviteError}</p>
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={() => {
+										setPairingCode(null);
+										beginAddDevice();
+									}}
+								>
+									<Trans>Generate a new code</Trans>
+								</Button>
+							</>
+						) : inviteExpired ? (
+							// Expired: hide the code outright rather than leaving a dead one on screen to be
+							// photographed. The invite is already dead on the host side (its own timer).
+							<>
+								<p className="text-sm">
+									<Trans>This code has expired.</Trans>
+								</p>
+								<p className="text-xs text-muted-foreground">
+									<Trans>
+										Codes are short-lived on purpose. Generate a new one when your other device is
+										ready to scan it.
+									</Trans>
+								</p>
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={() => {
+										setPairingCode(null);
+										beginAddDevice();
+									}}
+								>
+									<Trans>Generate a new code</Trans>
+								</Button>
+							</>
+						) : (
+							<>
+								<p className="text-xs text-muted-foreground">
+									<Trans>
+										Scan this on your other device, or copy the code below. Keep it private: anyone
+										who sees it while this window is open could try to join. You'll confirm a
+										matching number on both devices before anything is sent.
+									</Trans>
+								</p>
+								<div className="rounded-xl bg-white p-4">
+									<QRCodeSVG
+										value={pairingCode}
+										size={320}
+										marginSize={2}
+										className="h-auto w-full"
+									/>
+								</div>
+								<div className="flex gap-2">
+									<input
+										readOnly
+										value={pairingCode}
+										onFocus={(e) => e.currentTarget.select()}
+										className={`${inputClass} flex-1`}
+									/>
+									<Button
+										variant="secondary"
+										size="sm"
+										onClick={() => void navigator.clipboard?.writeText(pairingCode)}
+									>
+										<Trans>Copy</Trans>
+									</Button>
+								</div>
+								{secondsLeft !== null && (
+									<p className="text-xs text-muted-foreground text-center">
+										<Trans>
+											Expires in {mmss(secondsLeft)} · keep this window open until pairing finishes
+										</Trans>
+									</p>
+								)}
+							</>
+						)}
+					</div>
+				)}
+			</Modal>
+
+			{/* The approval gate. Stacked over the pairing modal, since the QR is still up when the
+			    joiner arrives. Not dismissable by backdrop: an accidental click must not be able to
+			    answer for the user, and closing it IS a refusal (the host treats it as one). */}
+			<Modal open={approval !== null} onClose={() => answerApproval(false)} className="max-w-md">
+				{approval !== null && (
+					<div className="p-5 space-y-4">
+						<h2 className="text-base font-medium">
+							<Trans>Is this your device?</Trans>
+						</h2>
 						<p className="text-xs text-muted-foreground">
 							<Trans>
-								Scan this on your other device, or copy the code below. No vault secrets are in it.
+								A device has connected with your pairing code. Check that it is showing this exact
+								number, then approve. Your vault has not been sent yet.
 							</Trans>
 						</p>
-						<div className="rounded-xl bg-white p-4">
-							<QRCodeSVG value={pairingCode} size={320} marginSize={2} className="h-auto w-full" />
-						</div>
-						<div className="flex gap-2">
-							<input
-								readOnly
-								value={pairingCode}
-								onFocus={(e) => e.currentTarget.select()}
-								className={`${inputClass} flex-1`}
-							/>
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => void navigator.clipboard?.writeText(pairingCode)}
-							>
-								<Trans>Copy</Trans>
+						<p className="text-center font-mono text-3xl tracking-[0.2em] tabular-nums">
+							{approval.sas}
+						</p>
+						{approval.label && (
+							// The label is chosen by whoever is joining, so it is context, not evidence. Said
+							// plainly here rather than left to be read as confirmation.
+							<p className="text-center text-xs text-muted-foreground">
+								<Trans>
+									It calls itself "{approval.label}". Only the number above proves who it is.
+								</Trans>
+							</p>
+						)}
+						<div className="flex justify-end gap-2">
+							<Button variant="destructiveOutline" size="sm" onClick={() => answerApproval(false)}>
+								<Trans>Reject</Trans>
+							</Button>
+							<Button variant="secondary" size="sm" onClick={() => answerApproval(true)}>
+								<Trans>Numbers match, approve</Trans>
 							</Button>
 						</div>
 					</div>

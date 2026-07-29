@@ -10,6 +10,8 @@ import { scanQrNative } from "../qr-scanner";
 import { scanQrCode } from "../scan";
 import {
 	ACTIVE_VAULT_KEY,
+	approveEnrollment,
+	getPendingEnrollApproval,
 	onSyncEvent,
 	onSyncStatus,
 	resetSyncState,
@@ -17,6 +19,7 @@ import {
 	signRoster,
 	startEnrollInvite,
 	startEnrollJoin,
+	stopEnrollInvite,
 	stopSync,
 	syncAdmissionPublicKey,
 	syncAdmissionSign,
@@ -129,6 +132,9 @@ export const mobileShell: ShellAdapter = {
 	// P2P sync runs in-webview (the offscreen indirection collapses on mobile); the
 	// transport lives in @core/sync/transport and is driven by ./sync/sync-manager.
 	stopSyncSpike: stopSync,
+	stopEnrollInvite,
+	approveEnrollment,
+	getPendingEnrollApproval,
 	// Wipe all local sync state on new-vault creation (group, device keys, relay, mesh); without
 	// this a fresh vault inherited the old group and reconnected to the old mesh. See sync-manager.
 	resetSyncState,
