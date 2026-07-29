@@ -14,6 +14,7 @@ export const LINKS = {
 	firefox: "https://addons.mozilla.org/firefox/addon/bramble/",
 	ios: "https://apps.apple.com/us/app/bramble-password-manager/id6783071787",
 	android: "https://github.com/flythenimbus/bramble/releases",
+	matrix: "https://matrix.to/#/%23general:bramble.sh",
 } as const;
 
 export const BUTTONDOWN = {

@@ -1,5 +1,6 @@
 ---
 import BrandGithub from "@tabler/icons/outline/brand-github.svg";
+import BrandMatrix from "@tabler/icons/outline/brand-matrix.svg";
 import { Button } from "@/components/starwind/button";
 import { ThemeToggle } from "@/components/starwind/theme-toggle";
 import { LINKS, NAV, SITE } from "@/consts";
@@ -28,6 +29,16 @@ import { LINKS, NAV, SITE } from "@/consts";
 		</nav>
 
 		<div class="ml-auto flex items-center gap-1.5">
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				href={LINKS.matrix}
+				target="_blank"
+				rel="noopener"
+				aria-label="Bramble on Matrix"
+			>
+				<BrandMatrix />
+			</Button>
 			<Button
 				variant="ghost"
 				size="icon-sm"

@@ -1,5 +1,6 @@
 ---
 import BrandGithub from "@tabler/icons/outline/brand-github.svg";
+import BrandMatrix from "@tabler/icons/outline/brand-matrix.svg";
 import { Separator } from "@/components/starwind/separator";
 import { LINKS, SITE } from "@/consts";
 
@@ -74,6 +75,15 @@ const columns = [
 				&copy; {year} {SITE.name}. Free and open source.
 			</p>
 			<div class="flex items-center gap-4">
+				<a
+					href={LINKS.matrix}
+					target="_blank"
+					rel="noopener"
+					class="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<BrandMatrix class="size-4" />
+					<span>Matrix</span>
+				</a>
 				<a
 					href={LINKS.github}
 					target="_blank"
