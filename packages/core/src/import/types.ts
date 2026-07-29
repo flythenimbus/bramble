@@ -1,6 +1,7 @@
+import type { PasskeyImportResult } from "../adapters/crypto";
 import type { EntryData, EntryType } from "../hooks/useVault";
 
-/** Password managers we can read a (synchronous) export from. */
+/** Password managers whose plaintext/container exports Bramble can read. */
 export type ImportProvider =
 	| "bitwarden"
 	| "onepassword"
@@ -17,5 +18,13 @@ export interface ImportResult {
 	warnings: string[];
 }
 
-/** Pure parser: string for text formats (JSON/XML), bytes for containers (.1pux/.zip). */
-export type ImportParser = (raw: string | Uint8Array) => ImportResult;
+/** Narrow async services available to importers; ordinary parsers ignore this context. */
+export interface ImportParserContext {
+	passkeyImportPkcs8(pkcs8StandardB64: string): Promise<PasskeyImportResult>;
+}
+
+/** String for text formats, bytes for containers. Crypto-backed parsers may be asynchronous. */
+export type ImportParser = (
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+) => ImportResult | Promise<ImportResult>;

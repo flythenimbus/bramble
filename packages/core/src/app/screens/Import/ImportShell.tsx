@@ -120,7 +120,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				return;
 			}
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());
-			const res = parseImport(p.id as ImportProvider, raw);
+			const res = await parseImport(p.id as ImportProvider, raw, {
+				passkeyImportPkcs8: (pkcs8StandardB64) => crypto.passkeyImportPkcs8(pkcs8StandardB64),
+			});
 			if (res.imported.length === 0) {
 				// Distinguish an empty file from one where all items failed validation.
 				const noun = res.skipped === 1 ? t`item` : t`items`;

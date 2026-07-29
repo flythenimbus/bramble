@@ -3,10 +3,10 @@ import { parseApplePasswords, parseGooglePasswords } from "./csv";
 import { parseKeePass } from "./keepass";
 import { parseOnePassword } from "./onepassword";
 import { parseProtonPass } from "./protonpass";
-import type { ImportParser, ImportProvider, ImportResult } from "./types";
+import type { ImportParser, ImportParserContext, ImportProvider, ImportResult } from "./types";
 
 export { kdbxEntriesToResult } from "./kdbx";
-export type { ImportProvider, ImportResult } from "./types";
+export type { ImportParserContext, ImportProvider, ImportResult } from "./types";
 export {
 	parseApplePasswords,
 	parseBitwarden,
@@ -95,6 +95,10 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 ];
 
 /** Parse a provider export into normalized entries. Read the file as the provider's `reads` kind. */
-export function parseImport(provider: ImportProvider, raw: string | Uint8Array): ImportResult {
-	return PARSERS[provider](raw);
+export function parseImport(
+	provider: ImportProvider,
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+): ImportResult | Promise<ImportResult> {
+	return PARSERS[provider](raw, context);
 }
