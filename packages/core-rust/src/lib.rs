@@ -580,6 +580,13 @@ mod wasm_exports {
         serde_wasm_bindgen::to_value(&reg).map_err(|e| err(format!("serialize: {e}")))
     }
 
+    /// Convert a base64 P-256 PKCS#8 key into Bramble's scalar and ES256 COSE key.
+    #[wasm_bindgen]
+    pub fn passkey_import_pkcs8(pkcs8_b64: String) -> Result<JsValue, CryptoError> {
+        let imported = crate::passkey::passkey_import_pkcs8_core(&pkcs8_b64)?;
+        serde_wasm_bindgen::to_value(&imported).map_err(|e| err(format!("serialize: {e}")))
+    }
+
     /// Assert a stored passkey: sign authenticatorData || clientDataHash with its key.
     #[wasm_bindgen]
     pub fn passkey_get_assertion(
@@ -644,6 +651,14 @@ mod ffi_exports {
         user_verified: bool,
     ) -> Result<crate::passkey::PasskeyRegistration, CryptoError> {
         crate::passkey::passkey_make_credential_core(&rp_id, user_verified)
+    }
+
+    /// Convert a standard-base64 P-256 PKCS#8 private key into stored key material.
+    #[uniffi::export]
+    pub fn passkey_import_pkcs8(
+        pkcs8_b64: String,
+    ) -> Result<crate::passkey::PasskeyImportResult, CryptoError> {
+        crate::passkey::passkey_import_pkcs8_core(&pkcs8_b64)
     }
 
     /// Assert a stored passkey: sign authenticatorData || clientDataHash with its key.
