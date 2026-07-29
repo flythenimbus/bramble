@@ -40,7 +40,7 @@ Nobody else holds a copy of your vault, so keeping a backup is up to you. Brambl
 
 - **Explicit: export a backup file.** From Settings (browser extension for now), export your whole vault to an encrypted `.bramble` file and stash it somewhere safe: another drive, a USB stick, wherever you like. It stays ciphertext, so opening it still needs your master password and a stolen backup is useless on its own. Do this now and then, especially before any big change.
 - **Implicit: peer-to-peer sync.** Turn on sync and every device in your sync group is basically a live copy of the vault. Pair a second device and each one holds everything, so if you lose or wipe one, the others still have your data. It is the simplest safety net there is, with no files to remember to export.
-- **Automatic: scheduled cloud backups (browser extension).** Point Bramble at storage you already use and it drops an encrypted backup there on the schedule you pick. Sign in to **Dropbox** in one click, use any **S3-compatible** bucket (Backblaze B2, Cloudflare R2, Storj, Wasabi, MinIO, and friends), or point it at your own **self-hosted WebDAV** server (Nextcloud, ownCloud, Fastmail, and the like). Add as many destinations as you want, each on its own cadence — daily, weekly, or monthly — or press **Back up now** whenever. Only ciphertext ever leaves your device, so the provider stores something it can't read and a stolen backup still needs your master password to open; Bramble keeps the most recent snapshots and prunes the rest. Restoring a backup onto a new or wiped device works from the extension and the mobile apps.
+- **Automatic: scheduled cloud backups (browser extension).** Point Bramble at storage you already use and it drops an encrypted backup there on the schedule you pick. Sign in to **Dropbox** in one click, use any **S3-compatible** bucket (Backblaze B2, Cloudflare R2, Storj, Wasabi, MinIO, and friends), or point it at your own **self-hosted WebDAV** server (Nextcloud, ownCloud, Fastmail, and the like). Add as many destinations as you want, each on its own cadence (daily, weekly, or monthly), or press **Back up now** whenever. Only ciphertext ever leaves your device, so the provider stores something it can't read and a stolen backup still needs your master password to open; Bramble keeps the most recent snapshots and prunes the rest. Restoring a backup onto a new or wiped device works from the extension and the mobile apps.
 
 A synced second device and the occasional export together mean you are never one lost or broken device away from losing your vault.
 
@@ -58,7 +58,7 @@ The iOS and Android apps are versioned and released independently of the extensi
 
 ## Features
 
-- **Local-first, always.** Your vault is encrypted and stored on your own device — the browser's private storage on desktop, app-private storage on mobile — never on a server.
+- **Local-first, always.** Your vault is encrypted and stored on your own device (the browser's private storage on desktop, app-private storage on mobile), never on a server.
 - **No shortcuts on crypto.** Argon2id for your key, AES-256-GCM for the data, envelope encryption so every entry has its own key. Secrets get wiped from memory after use.
 - **Everything is encrypted.** Site names, usernames, notes, all of it. The only readable part of the stored vault is its header.
 - **Smart autofill everywhere.** `www.ikea.com`, `ca.accounts.ikea.com`, and `ikea.com` all match the same login. One entry, several URLs. On the browser it's an on-page dropdown that reaches forms inside iframes and shadow DOM; on mobile it's the OS autofill bar across apps and browsers.
@@ -86,7 +86,7 @@ Bramble flips that around:
 
 - **No server to breach.** Your vault never leaves your control. No central pile of data for anyone to go after.
 - **No account, no subscription, no telemetry.** Nothing to sign up for, nothing phoning home.
-- **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like — your call.
+- **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like. Your call.
 - **Cloud-like convenience, without the cloud.** Sync keeps every device up to date automatically, like a cloud manager would, but your vault travels straight between them over an end-to-end encrypted link. No central honeypot, no company in the middle.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data."
 
@@ -143,9 +143,9 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 
 ## Contributing
 
-Open source and contributions welcome. A few things worth knowing:
+Open source and contributions welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup steps, the coding standard, and what CI expects. A few things worth knowing up front:
 
-- **Open an issue first for anything big.** Bug reports and small fixes can go straight to a PR.
+- **Open an issue first for anything big.** Bug reports and small fixes can go straight to a PR. The tracker is at [github.com/flythenimbus/bramble/issues](https://github.com/flythenimbus/bramble/issues).
 - **Security software has a higher bar.** Expect changes to come with tests, and the crypto and vault-format paths to get extra scrutiny.
 - **Found a security issue?** Please don't file it in the public tracker. Report it privately via [GitHub Security Advisories](https://github.com/flythenimbus/bramble/security/advisories) or email, so it can be fixed before it's out in the open. See [SECURITY.md](SECURITY.md) for details.
 
