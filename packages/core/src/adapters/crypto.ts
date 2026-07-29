@@ -34,6 +34,12 @@ export interface PasskeyRegistration {
 	publicKey: string;
 }
 
+/** P-256 PKCS#8 key material converted to Bramble's stored representation. All base64. */
+export interface PasskeyImportResult {
+	privateKey: string;
+	publicKeyCose: string;
+}
+
 /** A passkey assertion: the two parts that require the private key. All base64. */
 export interface PasskeyAssertion {
 	authenticatorData: string;
@@ -146,6 +152,7 @@ export interface CryptoAdapter {
 	// assert signs with the stored private key. Neither needs the VEK loaded; the
 	// private key is decrypted from its entry separately (decryptEntry) first.
 	passkeyMakeCredential(rpId: string, userVerified: boolean): Promise<PasskeyRegistration>;
+	passkeyImportPkcs8(pkcs8B64: string): Promise<PasskeyImportResult>;
 	passkeyGetAssertion(
 		rpId: string,
 		privateKeyB64: string,

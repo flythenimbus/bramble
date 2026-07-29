@@ -7,6 +7,7 @@
 import type {
 	EncryptedPayload,
 	PasskeyAssertion,
+	PasskeyImportResult,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	VekEncrypted,
@@ -87,6 +88,7 @@ export interface VaultCrypto {
 	decrypt_with_vek(iv: string, ciphertext: string): Awaitable<string>;
 
 	passkey_make_credential(rpId: string, userVerified: boolean): Awaitable<PasskeyRegistration>;
+	passkey_import_pkcs8(pkcs8B64: string): Awaitable<PasskeyImportResult>;
 	passkey_get_assertion(
 		rpId: string,
 		privateKeyB64: string,

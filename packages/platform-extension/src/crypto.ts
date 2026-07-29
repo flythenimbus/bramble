@@ -6,6 +6,7 @@ import type {
 	KdbxRawEntry,
 	OpenKdbxInput,
 	PasskeyAssertion,
+	PasskeyImportResult,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	SaveKdbxInput,
@@ -24,6 +25,7 @@ import type {
 	CryptoEncrypt,
 	CryptoEncryptOuter,
 	CryptoPasskeyGet,
+	CryptoPasskeyImportPkcs8,
 	CryptoPasskeyMake,
 	CryptoUnlockWithVek,
 	CryptoUnwrapPasswordSlot,
@@ -188,6 +190,10 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 				clientDataHashB64,
 				userVerified,
 			} satisfies CryptoPasskeyGet),
+		passkeyImportPkcs8: (pkcs8B64) =>
+			send<PasskeyImportResult>("CRYPTO_PASSKEY_IMPORT_PKCS8", {
+				pkcs8B64,
+			} satisfies CryptoPasskeyImportPkcs8),
 	};
 }
 

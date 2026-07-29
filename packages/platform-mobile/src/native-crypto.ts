@@ -8,6 +8,7 @@ import { registerPlugin } from "@capacitor/core";
 import type {
 	EncryptedPayload,
 	PasskeyAssertion,
+	PasskeyImportResult,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	VekEncrypted,
@@ -86,6 +87,7 @@ interface NativeCryptoPlugin {
 		clientDataHashB64: string;
 		userVerified: boolean;
 	}): Promise<PasskeyAssertion>;
+	passkeyImportPkcs8(o: { pkcs8B64: string }): Promise<PasskeyImportResult>;
 	openKdbx4(o: {
 		fileB64: string;
 		password: string;
@@ -239,6 +241,7 @@ const nativeModule: VaultCrypto = {
 		Native.passkeyMakeCredential({ rpId, userVerified }),
 	passkey_get_assertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
 		Native.passkeyGetAssertion({ rpId, privateKeyB64, clientDataHashB64, userVerified }),
+	passkey_import_pkcs8: (pkcs8B64) => Native.passkeyImportPkcs8({ pkcs8B64 }),
 
 	open_kdbx4: async (file, password, keyfile) =>
 		(
