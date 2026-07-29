@@ -13,7 +13,7 @@ use ciborium::Value;
 use coset::{iana, CborSerializable, CoseKeyBuilder};
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
-use p256::pkcs8::EncodePublicKey;
+use p256::pkcs8::{DecodePrivateKey, EncodePublicKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
@@ -64,6 +64,17 @@ pub struct PasskeyRegistration {
     pub public_key: String,
 }
 
+/// Bramble key material converted from a P-256 PKCS#8 key, in standard base64.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct PasskeyImportResult {
+    /// base64 raw P-256 private scalar (32 bytes).
+    pub private_key: String,
+    /// base64 canonical ES256 COSE_Key derived from the private key.
+    pub public_key_cose: String,
+}
+
 /// Result of asserting a passkey. The caller supplies credentialId + userHandle to
 /// the OS; these two fields are the parts that require the private key.
 #[derive(Serialize, Deserialize)]
@@ -103,13 +114,8 @@ fn generate_p256() -> Result<p256::SecretKey, CryptoError> {
     Err(err("p256 keygen: no valid scalar"))
 }
 
-/// Mint a new passkey for `rp_id`. ES256 (COSE -7) only for now.
-pub fn passkey_make_credential_core(
-    rp_id: &str,
-    user_verified: bool,
-) -> Result<PasskeyRegistration, CryptoError> {
-    let secret = generate_p256()?;
-    let public = secret.public_key();
+/// Keep minted and imported passkeys on one canonical ES256 COSE representation.
+fn encode_public_key_cose(public: &p256::PublicKey) -> Result<Vec<u8>, CryptoError> {
     let point = public.to_encoded_point(false);
     let x = point
         .x()
@@ -122,12 +128,35 @@ pub fn passkey_make_credential_core(
         .as_slice()
         .to_vec();
 
-    let cose = CoseKeyBuilder::new_ec2_pub_key(iana::EllipticCurve::P_256, x, y)
+    CoseKeyBuilder::new_ec2_pub_key(iana::EllipticCurve::P_256, x, y)
         .algorithm(iana::Algorithm::ES256)
-        .build();
-    let cose_bytes = cose
+        .build()
         .to_vec()
-        .map_err(|e| err(format!("cose encode: {e}")))?;
+        .map_err(|e| err(format!("cose encode: {e}")))
+}
+
+/// Convert a base64 P-256 PKCS#8 key into Bramble's scalar and ES256 COSE key.
+pub fn passkey_import_pkcs8_core(pkcs8_b64: &str) -> Result<PasskeyImportResult, CryptoError> {
+    let pkcs8_der = Zeroizing::new(b64_decode(pkcs8_b64)?);
+    let secret = p256::SecretKey::from_pkcs8_der(pkcs8_der.as_slice())
+        .map_err(|_| err("invalid P-256 PKCS#8 private key"))?;
+    let public_key_cose = encode_public_key_cose(&secret.public_key())?;
+    let private_key = Zeroizing::new(secret.to_bytes());
+
+    Ok(PasskeyImportResult {
+        private_key: B64.encode(private_key.as_slice()),
+        public_key_cose: B64.encode(public_key_cose),
+    })
+}
+
+/// Mint a new passkey for `rp_id`. ES256 (COSE -7) only for now.
+pub fn passkey_make_credential_core(
+    rp_id: &str,
+    user_verified: bool,
+) -> Result<PasskeyRegistration, CryptoError> {
+    let secret = generate_p256()?;
+    let public = secret.public_key();
+    let cose_bytes = encode_public_key_cose(&public)?;
 
     let mut credential_id = [0u8; CREDENTIAL_ID_LEN];
     random_bytes(&mut credential_id)?;
@@ -199,12 +228,82 @@ pub fn passkey_get_assertion_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use coset::{Algorithm, CoseKey, KeyType, Label};
     use p256::ecdsa::{signature::Verifier, VerifyingKey};
+    use p256::pkcs8::EncodePrivateKey;
 
     fn verifying_key(private_key_b64: &str) -> VerifyingKey {
         let bytes = B64.decode(private_key_b64).unwrap();
         let secret = p256::SecretKey::from_slice(&bytes).unwrap();
         VerifyingKey::from(SigningKey::from(&secret))
+    }
+
+    #[test]
+    fn import_pkcs8_derives_stored_key_material_that_can_sign() {
+        let scalar = [
+            0x17, 0x91, 0x22, 0x63, 0xa5, 0x11, 0xd4, 0x9e, 0x35, 0x9d, 0x1f, 0x8c, 0x88, 0x75,
+            0x1a, 0xcb, 0x34, 0xfa, 0x73, 0x04, 0xea, 0x12, 0x56, 0x5d, 0xa4, 0xb3, 0xee, 0x5d,
+            0x67, 0x85, 0x34, 0x12,
+        ];
+        let original = p256::SecretKey::from_slice(&scalar).unwrap();
+        let pkcs8 = original.to_pkcs8_der().unwrap();
+
+        let imported = passkey_import_pkcs8_core(&B64.encode(pkcs8.as_bytes())).unwrap();
+        assert_eq!(B64.decode(&imported.private_key).unwrap(), scalar);
+
+        let public_point = original.public_key().to_encoded_point(false);
+        let cose = CoseKey::from_slice(&B64.decode(&imported.public_key_cose).unwrap()).unwrap();
+        assert_eq!(cose.kty, KeyType::Assigned(iana::KeyType::EC2));
+        assert_eq!(cose.alg, Some(Algorithm::Assigned(iana::Algorithm::ES256)));
+        assert_eq!(
+            cose.params,
+            vec![
+                (
+                    Label::Int(iana::Ec2KeyParameter::Crv as i64),
+                    Value::from(iana::EllipticCurve::P_256 as u64),
+                ),
+                (
+                    Label::Int(iana::Ec2KeyParameter::X as i64),
+                    Value::Bytes(public_point.x().unwrap().to_vec()),
+                ),
+                (
+                    Label::Int(iana::Ec2KeyParameter::Y as i64),
+                    Value::Bytes(public_point.y().unwrap().to_vec()),
+                ),
+            ]
+        );
+
+        let client_data_hash = B64.encode([0x42u8; 32]);
+        let assertion = passkey_get_assertion_core(
+            "import.example",
+            &imported.private_key,
+            &client_data_hash,
+            true,
+        )
+        .unwrap();
+        let mut signed = B64.decode(&assertion.authenticator_data).unwrap();
+        signed.extend_from_slice(&B64.decode(client_data_hash).unwrap());
+        let signature = Signature::from_der(&B64.decode(assertion.signature).unwrap()).unwrap();
+        let verifying_key = VerifyingKey::from(SigningKey::from(&original));
+        assert!(verifying_key.verify(&signed, &signature).is_ok());
+    }
+
+    #[test]
+    fn import_pkcs8_rejects_malformed_and_wrong_curve_keys() {
+        assert!(passkey_import_pkcs8_core("not base64!").is_err());
+        assert!(passkey_import_pkcs8_core(&B64.encode(b"not DER")).is_err());
+
+        let original = p256::SecretKey::from_slice(&[0x23; 32]).unwrap();
+        let pkcs8 = original.to_pkcs8_der().unwrap();
+        let mut wrong_curve = pkcs8.as_bytes().to_vec();
+        // id-ecPublicKey parameters: prime256v1 (1.2.840.10045.3.1.7).
+        let p256_oid = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+        let oid_start = wrong_curve
+            .windows(p256_oid.len())
+            .position(|window| window == p256_oid)
+            .expect("PKCS#8 contains the P-256 curve OID");
+        wrong_curve[oid_start + p256_oid.len() - 1] = 0x01;
+        assert!(passkey_import_pkcs8_core(&B64.encode(wrong_curve)).is_err());
     }
 
     // End-to-end: mint a passkey, assert with it, and verify the signature against
