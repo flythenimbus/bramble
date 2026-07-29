@@ -1,7 +1,7 @@
-Novità in questa versione:
+Novità di questa versione:
 
-- Risolto un bug che poteva impedire lo sblocco di una cassaforte sincronizzata, anche con la password principale corretta. Se Bramble trova una cassaforte rimasta in quello stato, ora la ripristina dalla copia salvata prima che il problema si verificasse.
-- Importi da Apple Passwords e Google Password Manager. Esporti un file .csv da uno di questi e lo apra in Bramble.
-- Le opzioni di importazione e backup in Impostazioni sono ora raggruppate in base alla provenienza del file, in modo che sia più chiaro quale desidera.
+- Aggiungere un dispositivo ora mostra un numero di 12 cifre su entrambi gli schermi. Il vault non viene trasferito finché non conferma che i due numeri corrispondono, quindi un codice visto da qualcun altro non può più essere utilizzato per copiare il suo vault sul proprio dispositivo.
+- I codici di abbinamento ora scadono dopo tre minuti e funzionano una sola volta. Consideri un codice come la sua password principale: chiunque lo veda mentre è sullo schermo potrebbe tentare di utilizzarlo.
+- Aggiorni Bramble su ogni dispositivo che sincronizza. Un dispositivo aggiornato non può abbinarsi con uno che esegue ancora una versione precedente.
 
 Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

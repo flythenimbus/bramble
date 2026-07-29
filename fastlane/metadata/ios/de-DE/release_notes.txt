@@ -1,7 +1,7 @@
 Neu in dieser Version:
 
-- Ein Fehler wurde behoben, der das Entsperren eines synchronisierten Tresors auch mit dem richtigen Master-Passwort verhindern konnte. Findet Bramble einen Tresor in diesem Zustand vor, stellt es ihn nun aus der vor dem Problem gespeicherten Kopie wieder her.
-- Import aus Apple Passwords und Google Password Manager. Exportieren Sie eine .csv-Datei aus einer der beiden Apps und öffnen Sie sie in Bramble.
-- Die Import- und Backup-Optionen in den Einstellungen sind jetzt nach Dateiherkunft gruppiert, sodass deutlicher wird, welche Sie benötigen.
+- Beim Hinzufügen eines Geräts wird jetzt auf beiden Bildschirmen eine 12-stellige Nummer angezeigt. Ihr Tresor wird erst übertragen, wenn Sie bestätigen, dass die Nummern übereinstimmen. So kann ein Code, den jemand anderes gesehen hat, nicht mehr verwendet werden, um Ihren Tresor auf sein Gerät zu kopieren.
+- Pairing-Codes laufen jetzt nach drei Minuten ab und funktionieren nur einmal. Behandeln Sie einen Code wie Ihr Master-Passwort: Jeder, der ihn sieht, während er auf dem Bildschirm angezeigt wird, könnte versuchen, ihn zu verwenden.
+- Bitte aktualisieren Sie Bramble auf jedem Gerät, das Sie synchronisieren. Ein aktualisiertes Gerät kann nicht mit einem Gerät verbunden werden, auf dem noch eine ältere Version läuft.
 
-Kein Account, keine Cloud. Alles bleibt auf Ihren Geräten.
+Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

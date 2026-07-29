@@ -1,7 +1,7 @@
 Nouveautés de cette version :
 
-- Correction d’un bug pouvant empêcher le déverrouillage d’un coffre synchronisé, même avec le bon mot de passe principal. Si Bramble trouve un coffre dans cet état, il le restaure désormais à partir de la copie sauvegardée avant que le problème ne survienne.
-- Importer à partir d’Apple Passwords et de Google Password Manager. Exporter un fichier .csv depuis l’une ou l’autre et l’ouvrir dans Bramble.
-- Les options d’importation et de sauvegarde dans les Réglages sont désormais regroupées selon la source du fichier, ce qui clarifie celle que vous souhaitez utiliser.
+- L'ajout d'un appareil affiche désormais un nombre à 12 chiffres sur les deux écrans. Votre coffre-fort ne se transfère pas tant que vous n'avez pas confirmé la correspondance des deux nombres, afin qu'un code aperçu par un tiers ne puisse plus être utilisé pour copier votre coffre-fort sur son appareil.
+- Les codes d'appairage expirent désormais après trois minutes et ne fonctionnent qu'une seule fois. Traitez un code comme votre mot de passe principal : toute personne qui le voit à l'écran pourrait tenter de l'utiliser.
+- Veuillez mettre à jour Bramble sur chaque appareil que vous synchronisez. Un appareil mis à jour ne peut pas s'appairer avec un appareil qui exécute encore une ancienne version.
 
-Sans compte, sans cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

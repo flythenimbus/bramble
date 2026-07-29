@@ -1,7 +1,7 @@
 Novedades de esta versión:
 
-- Se ha corregido un error que podía impedir el desbloqueo de una caja fuerte sincronizada incluso con la contraseña maestra correcta. Si Bramble encuentra una caja fuerte en ese estado, ahora la restaura desde la copia guardada antes de que ocurriera el problema.
-- Importar desde Apple Passwords y Google Password Manager. Exporte un archivo .csv de cualquiera de ellos y ábralo en Bramble.
-- Las opciones de importación y copia de seguridad en Ajustes ahora se agrupan según el origen del archivo, para que le sea más claro cuál quiere.
+- Añadir un dispositivo ahora muestra un número de 12 dígitos en ambas pantallas. Su caja fuerte no se transfiere hasta que confirme que los dos números coinciden, por lo que un código que otra persona haya visto ya no puede utilizarse para copiar su caja fuerte en el dispositivo de esa persona.
+- Los códigos de emparejamiento ahora caducan después de tres minutos y solo funcionan una vez. Trate un código como su contraseña maestra: cualquier persona que lo vea mientras está en pantalla podría intentar usarlo.
+- Por favor, actualice Bramble en todos los dispositivos que sincroniza. Un dispositivo actualizado no puede emparejarse con uno que aún ejecute una versión anterior.
 
-Sin cuenta, sin nube. Todo se queda en sus dispositivos.
+Sin cuenta, sin nube. Todo permanece en sus dispositivos.

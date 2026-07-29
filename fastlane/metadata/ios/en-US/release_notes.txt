@@ -1,7 +1,7 @@
 What's new in this release:
 
-- Fixed a bug that could stop a synced vault from unlocking, even with the correct master password. If Bramble finds a vault left in that state, it now restores it from the copy saved before the problem happened.
-- Import from Apple Passwords and Google Password Manager. Export a .csv from either one and open it in Bramble.
-- Import and backup options in Settings are now grouped by where the file comes from, so it's clearer which one you want.
+- Adding a device now shows a 12-digit number on both screens. Your vault does not transfer until you confirm the two numbers match, so a code someone else has seen can no longer be used to copy your vault onto their device.
+- Pairing codes now expire after three minutes and work only once. Treat a code like your master password: anyone who sees it while it is on screen could try to use it.
+- Please update Bramble on every device you sync. An updated device cannot pair with one still running an older version.
 
 No account, no cloud. Everything stays on your devices.
