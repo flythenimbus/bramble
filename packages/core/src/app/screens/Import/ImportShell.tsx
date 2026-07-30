@@ -62,20 +62,25 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// source they have already picked. Claims nothing when no transfer is waiting (the normal
 	// case, when the user opened Import themselves), and then the list is exactly right.
 	// Is a transfer waiting? Peeked (not claimed) so the destination can be settled first.
-	const [transferPending, setTransferPending] = useState(false);
+	// Null until the peek answers, which the claim below waits for: on an app that is already
+	// unlocked the claim would otherwise win the race and import into the restored vault
+	// before we knew to ask which vault the user wanted.
+	const [transferPending, setTransferPending] = useState<boolean | null>(null);
 	const [vaultChosen, setVaultChosen] = useState(false);
-	const needsVaultChoice = transferPending && vaults.length > 1 && !vaultChosen;
+	const needsVaultChoice = transferPending === true && vaults.length > 1 && !vaultChosen;
 	useEffect(() => {
 		if (!exchange) return;
 		void exchange
 			.hasPendingImport()
 			.then(setTransferPending)
-			.catch(() => {});
+			.catch(() => setTransferPending(false));
 	}, [exchange]);
 
 	const claimed = useRef(false);
 	useEffect(() => {
-		if (!exchange || !ready || isLocked || needsVaultChoice || claimed.current) return;
+		if (!exchange || !ready || isLocked || claimed.current) return;
+		// Wait for the peek, then for the destination if one has to be chosen.
+		if (transferPending === null || needsVaultChoice) return;
 		claimed.current = true;
 		void (async () => {
 			setBusy(true);
@@ -93,7 +98,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				setBusy(false);
 			}
 		})();
-	}, [exchange, ready, isLocked, needsVaultChoice]);
+	}, [exchange, ready, isLocked, transferPending, needsVaultChoice]);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
