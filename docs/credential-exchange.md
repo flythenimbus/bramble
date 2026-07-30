@@ -24,9 +24,10 @@ is fixed regardless of what CXP does next.
 - **iOS is a ~2 week job**, and most of it is a pure-TS mapper that is platform independent.
 - **The hard parts already exist**: an OS-registered credential provider extension, a working passkey
   provider role, per-entry encryption, and an import wizard with a lossy-mapping warning convention.
-- **Passkey export is nearly free.** `PasskeyCredential.privateKey` is already base64url PKCS#8,
-  exactly CXF's `key` encoding, and `signCount` is already hardcoded 0, exactly what CXF requires of
-  exporters.
+- **Passkey export is nearly free.** `PasskeyCredential.privateKey` is already PKCS#8, which is what
+  CXF's `key` holds, and `signCount` is already hardcoded 0, exactly what CXF requires of exporters.
+  The one catch is encoding: we store standard base64 and CXF is unpadded base64url, so every passkey
+  field converts at the boundary. Import is the harder direction, because CXF carries no public key.
 - **Phase 0 is done and it passed** (2026-07-29, Xcode 26.4 / iOS 26.4 sim): Apple's
   `ASExportedCredentialData` encodes to **CXF-conformant JSON**, so the Swift layer is a pass-through
   and the 2-3 day contingency is off the table. Evidence below.
@@ -105,39 +106,56 @@ Two caveats found while reading the interface:
 - `ASImportableCredentialScope.urls` is `[Foundation.URL]`, so malformed stored URLs will be dropped
   by the decoder rather than round-tripped. `login.urls` is free text in our schema; filter and warn.
 
-## Core work: the shared CXF module
+## Core work: the shared CXF module (LANDED, phase 1)
 
-New `packages/core/src/exchange/`, mirroring the shape of `import/` and `export/`:
+`packages/core/src/exchange/`, mirroring the shape of `import/` and `export/`:
 
-- `types.ts` - TS mirror of the CXF CDDL (`Header`, `Account`, `Item`, the credential union,
-  `EditableField`).
-- `to-cxf.ts` - `EntryData[]` -> CXF, for export.
-- `from-cxf.ts` - CXF -> `ImportResult`, reusing the existing `warnings`/`skipped` contract.
-- Tests, including a round-trip suite in the style of `export/kdbx.test.ts`.
+- `types.ts` - zod schemas for the CXF wire format, and the inferred types. Deliberately lenient:
+  anything CXF marks required that we can recover from is optional, and objects are loose, because
+  this parses another vendor's export. The strict shape is whatever `to-cxf.ts` emits, pinned by its
+  tests rather than by the schema.
+- `to-cxf.ts` - `Entry[]` -> CXF. Takes `Entry` (not `EntryData`) so item ids are stable across
+  exports, and an injected `now` so tests don't read the clock.
+- `from-cxf.ts` - CXF -> `ImportResult`, reusing the existing `warnings`/`skipped` contract and
+  `import/shared.ts`'s `summarize`, so bad shapes can't reach the vault.
+- `passkey-key.ts` - rebuilds a passkey's public key from the private key CXF carries.
+- Tests: `to-cxf`, `from-cxf`, and a round trip in the style of `export/kdbx.test.ts`.
+
+Two decisions worth knowing before Phase 3 wires the UI:
+
+- **`parseCxf` is async.** CXF ships only the PKCS#8 private key, so an imported passkey's
+  `publicKeyCose` has to be derived: WebCrypto's JWK export of the private key carries the public
+  coordinates, and `passkey-key.ts` assembles the COSE_Key by hand. That keeps the mapper in TS
+  instead of routing through the Rust core, at the cost of a promise. `publicKeyCose` is write-only
+  at runtime (stored at creation, never read back for an assertion), so these bytes need to be
+  correct, not byte-identical to what `coset` emits in `core-rust/src/passkey.rs`.
+- **`parseCxf` accepts `string | Uint8Array`**, so Phase 5 (CXF files) is the same code path.
 
 ### Mapping
 
 | Bramble | CXF | Notes |
 |---|---|---|
 | `login.username` / `.password` | `BasicAuth{username, password}` | Values wrap in `EditableField`, not bare strings. |
-| `login.urls` | `Item.scope` | Verify the exact `CredentialScope` shape against the spec. |
-| `login.totp` | `TOTP{secret, period, digits, algorithm, issuer}` | `parseTotp` out; `OTPAuth.URI.stringify` back. |
-| `login.passkeys[]` | `Passkey{credentialId, rpId, username, userDisplayName, userHandle, key}` | Direct: our `privateKey` is already b64url PKCS#8. `username`/`userDisplayName` are required in CXF and optional for us, so default to `""`. |
+| `login.urls` | `Item.scope.urls` | Absolute URLs only (the decoder drops what `Foundation.URL` rejects), so a bare host is promoted to https. |
+| `login.totp` | `TOTP{secret, period, digits, algorithm, issuer}` | `parseTotp` out, `buildTotpUri` back. An unreadable key becomes a custom field plus a warning, never a drop. |
+| `login.passkeys[]` | `Passkey{credentialId, rpId, username, userDisplayName, userHandle, key}` | Field-for-field, but **converted**: ours are standard base64, CXF is unpadded base64url. `username`/`userDisplayName` are required in CXF and optional for us, so they default to `""`. |
 | `card` | `CreditCard{number, fullName, cardType, verificationNumber, expiryDate}` | `expMonth`/`expYear` -> one `year-month` field. `brand` -> `cardType`. |
 | `note` / `.notes` | `Note{content}` | A note entry becomes an Item with a single Note credential; a login's `notes` becomes a second credential on the same Item. |
 | `ssh-key` | `CustomFields`, **not** `SSHKey` | See below. |
 | `customFields[]` | `CustomFields{fields[]}` | `hidden` -> `concealed-string` field type. |
 | `createdAt` / `updatedAt` | `Item.creationAt` / `.modifiedAt` | ms -> UNIX seconds. |
 
-**SSH keys are deliberately lossy.** CXF's `SSHKey.privateKey` is PKCS#8 DER base64url; we store PEM
-text (OpenSSH, PKCS#1 or SEC1, per `util/ssh.ts`). Converting an OpenSSH container is real work for a
-credential type no counterparty is likely to consume. Ship them as `CustomFields` carrying the PEM
-verbatim plus a warning, and upgrade later if a real interop need appears. Importing a foreign
-`SSHKey` gets the mirror treatment: keep the bytes, warn, do not pretend it round-trips.
+**SSH keys are asymmetric on purpose.** CXF's `SSHKey.privateKey` is PKCS#8 DER base64url; we store
+PEM in whichever flavour the user pasted (OpenSSH, PKCS#1, SEC1, per `util/ssh.ts`). Parsing an
+OpenSSH container is real work for a credential type no counterparty is known to consume, so **export**
+downgrades them to `CustomFields` carrying the PEM verbatim, plus a warning. **Import** goes the other
+way and builds a real `ssh-key` entry, because DER to PEM is a clean wrap. CXF carries no public key,
+so that field comes back empty; we only ever copy it out.
 
 Unknown CXF types on import (passport, wifi, drivers-license, ...) become custom fields on a note
 entry with a warning rather than being dropped, matching how the KDBX importer handles foreign
-databases.
+databases. A credential of a type we *do* model that arrives malformed takes the same salvage path,
+so one bad field can't cost the user the whole item.
 
 ## iOS integration
 
@@ -215,13 +233,13 @@ picker and it applies verbatim here.
 | Phase | Work | Estimate |
 |---|---|---|
 | 0 | ~~Spike: is Apple's Codable CXF-shaped?~~ **DONE, passed.** | - |
-| 1 | Shared `core/src/exchange/` module + tests | 2-3d |
+| 1 | ~~Shared `core/src/exchange/` module + tests~~ **DONE** (31 tests, both directions + round trip). | - |
 | 2 | Swift plugin, Info.plist keys, AppDelegate hook, auto-lock grace | 3-4d |
 | 3 | Import card, Settings export row, flags, i18n | 1-1.5d |
 | 4 | Device + interop testing: Apple Passwords, Chrome iOS, 1Password, Bitwarden. Both directions. | 1-2d |
 | 5 | *Optional*: CXF file import/export through the existing file path, all targets, Android included | +1d |
 
-**Total: 7-10 working days**, contingency retired.
+**Total: 5-7 working days left** (phases 2 to 4); contingency retired.
 
 ## What the simulator can and cannot do
 
