@@ -255,14 +255,23 @@ picker and it applies verbatim here.
 | 1 | ~~Shared `core/src/exchange/` module + tests~~ **DONE** (31 tests, both directions + round trip). | - |
 | 2 | ~~Swift plugin, Info.plist keys, AppDelegate hook, auto-lock grace~~ **BUILT, compile-verified; the transfer itself is unverified.** | - |
 | 3 | ~~Import card, Settings export row, flags, i18n~~ **DONE.** | - |
-| 4 | Device + interop testing: Apple Passwords, Chrome iOS, 1Password, Bitwarden. Both directions. | 1-2d |
+| 4 | Device + interop testing. **Export -> Apple Passwords VERIFIED on device (2026-07-30), including a real webauthn.io sign-in from the transferred passkey. Import is untested.** | ~1d left |
 | 5 | *Optional*: CXF file import/export through the existing file path, all targets, Android included | +1d |
 
 **Remaining: phase 4 (device + interop testing, 1-2d), and optionally phase 5.**
 
-Everything above phase 4 is code-complete and verified as far as a machine without a paired
-device can verify it: 1039 tests green, the Release build carries the plugin and both plists,
-and the extension registers on a simulator. What has NOT happened is a single real transfer.
+**Export is done.** Bramble -> Apple Passwords on an iPhone SE (iOS 26.5.2) carried a login and a
+passkey, and the transferred passkey then signed in on webauthn.io from Passwords. That is the
+strongest available check: an importer will accept a structurally valid key it can never use, so
+only a successful assertion proves the key material survived.
+
+**Import has never run on a device.** It has more moving parts than export: the token handoff at a
+cold launch, the claim against a locked vault, and unpacking the PKCS#8 back to a scalar, none of
+which unit tests can cover.
+
+Two defects that only a device could have found, both now fixed and both silent by nature:
+a local Capacitor plugin that compiles and ships but is never registered (quirk 10), and a passkey
+key sent in the wrong format, which decodes cleanly and fails only on use.
 
 ## What the simulator can and cannot do
 
