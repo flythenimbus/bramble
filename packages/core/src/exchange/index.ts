@@ -2,6 +2,7 @@
 // nothing here touches HPKE. See docs/credential-exchange.md.
 
 export { parseCxf } from "./from-cxf";
+export { exportToOs, importFromOs } from "./os-transfer";
 export { COSE_ES256, coseFromPkcs8 } from "./passkey-key";
 export { type CxfExportOptions, type CxfExportResult, toCxf } from "./to-cxf";
 export {

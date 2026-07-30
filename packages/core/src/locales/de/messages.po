@@ -481,6 +481,10 @@ msgid "Couldn't open this database."
 msgstr "Die Datenbank konnte nicht geöffnet werden."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Couldn't read that transfer."
+msgstr "Diese Übertragung konnte nicht gelesen werden."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Couldn't read this file."
 msgstr "Datei konnte nicht gelesen werden."
@@ -851,6 +855,10 @@ msgstr "Zum Tresor gehen"
 #~ msgid "Got it"
 #~ msgstr "Verstanden"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file."
+msgstr "Übergeben Sie Ihre Logins, Codes und Passkeys direkt an eine andere Passwort-App auf diesem Gerät. Es wird nichts in eine Datei geschrieben."
+
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 #~ msgid "Have a backup? Open a .bramble file instead"
 #~ msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
@@ -1193,6 +1201,11 @@ msgstr "Auf diesen Websites wurde keine Karte gespeichert. Entfernen Sie sie, um
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "No save card on this site. Remove to start prompting again."
 msgstr "Auf dieser Website wurde keine Karte gespeichert. Entfernen Sie sie, um die Abfrage erneut zu starten."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No transfer is waiting. Start one from the other app and pick {0}."
+msgstr "Es wartet keine Übertragung. Starten Sie eine in der anderen App und wählen Sie {0}."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Nostr relay URL"
@@ -1704,6 +1717,18 @@ msgstr "Sicherheitsschlüssel"
 msgid "Security keys"
 msgstr "Sicherheitsschlüssel"
 
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Send"
+msgstr "Senden"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Send to another app"
+msgstr "An andere App senden"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Sending…"
+msgstr "Wird gesendet …"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
 msgstr "Sendet einen 5-stelligen SHA-1-Präfix jedes gespeicherten Passworts an haveibeenpwned.com (k-Anonymität)"
@@ -1889,6 +1914,14 @@ msgstr "Dies sieht nicht wie eine Bramble-Backup-Datei (.bramble) aus."
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "That password is incorrect."
 msgstr "Dieses Passwort ist falsch."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That transfer didn't contain anything we could import."
+msgstr "Diese Übertragung enthielt keine importierbaren Daten."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "That transfer didn't go through."
+msgstr "Diese Übertragung ist fehlgeschlagen."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

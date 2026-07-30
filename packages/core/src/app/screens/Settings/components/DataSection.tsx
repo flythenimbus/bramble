@@ -1,9 +1,17 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ArchiveRestore, DatabaseBackup, Download, KeyRound, Upload } from "lucide-react";
+import {
+	ArchiveRestore,
+	ArrowLeftRight,
+	DatabaseBackup,
+	Download,
+	KeyRound,
+	Upload,
+} from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
+import { useToast } from "../../../components/ui/toast";
 import { KdbxExportDialog } from "./KdbxExportDialog";
 import { Row, RowGroup, Section } from "./primitives";
 
@@ -13,10 +21,32 @@ import { Row, RowGroup, Section } from "./primitives";
  * export so the way in and the way out sit together.
  */
 export function DataSection() {
-	const { shell } = usePlatform();
-	const { exportVault } = useVault();
+	const { shell, exchange } = usePlatform();
+	const { exportVault, exportToApp } = useVault();
 	const { t } = useLingui();
+	const { show } = useToast();
 	const [kdbxOpen, setKdbxOpen] = useState(false);
+	const [sending, setSending] = useState(false);
+
+	// The OS runs the picker and the consent sheet, so the only outcomes we report are the
+	// lossy-mapping warnings and an outright failure. A cancel is silent by design.
+	const send = async () => {
+		setSending(true);
+		try {
+			const warnings = await exportToApp();
+			if (warnings.length > 0) {
+				show({ message: warnings[0] ?? "", variant: "info", icon: ArrowLeftRight });
+			}
+		} catch {
+			show({
+				message: t`That transfer didn't go through.`,
+				variant: "error",
+				icon: ArrowLeftRight,
+			});
+		} finally {
+			setSending(false);
+		}
+	};
 	return (
 		<Section icon={<DatabaseBackup className="w-4 h-4 text-primary" />} title={t`Import & backup`}>
 			<RowGroup label={shell.appName}>
@@ -72,6 +102,23 @@ export function DataSection() {
 							onClick={() => setKdbxOpen(true)}
 						>
 							<Trans>Export</Trans>
+						</Button>
+					</Row>
+				)}
+				{exchange && (
+					<Row
+						icon={<ArrowLeftRight className="w-4 h-4 text-primary" />}
+						title={t`Send to another app`}
+						subtitle={t`Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file.`}
+					>
+						<Button
+							variant="secondary"
+							size="sm"
+							disabled={sending}
+							aria-label={t`Send to another app`}
+							onClick={() => void send()}
+						>
+							{sending ? <Trans>Sending…</Trans> : <Trans>Send</Trans>}
 						</Button>
 					</Row>
 				)}

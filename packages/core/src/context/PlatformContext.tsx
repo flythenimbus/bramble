@@ -3,6 +3,7 @@ import type { AutofillAdapter } from "../adapters/autofill";
 import type { BiometricUnlock } from "../adapters/biometric";
 import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
+import type { CredentialExchangeAdapter } from "../adapters/exchange";
 import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
 import { type CapabilityKey, can, type Target } from "../flags";
@@ -17,6 +18,8 @@ export interface Platform {
 	clipboard: ClipboardAdapter;
 	/** Device-local biometric unlock. Mobile only; undefined on the extension. */
 	biometric?: BiometricUnlock;
+	/** OS-driven credential exchange (FIDO CXP). iOS 26+ only; undefined elsewhere. */
+	exchange?: CredentialExchangeAdapter;
 }
 
 const PlatformContext = createContext<Platform | null>(null);

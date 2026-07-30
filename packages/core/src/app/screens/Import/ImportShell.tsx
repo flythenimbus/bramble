@@ -1,7 +1,8 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ArrowLeft, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
+import { importFromOs } from "../../../exchange";
 import { useVault } from "../../../hooks/useVault";
 import type { ImportProvider } from "../../../import";
 import {
@@ -30,7 +31,7 @@ const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
  * in its own tab and passes nothing. */
 export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
-	const { shell, crypto } = usePlatform();
+	const { shell, crypto, exchange } = usePlatform();
 	const { t } = useLingui();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
 	const [result, setResult] = useState<ImportResult | null>(null);
@@ -42,6 +43,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		provider: ImportProviderInfo;
 		fileB64: string;
 	} | null>(null);
+
+	// The OS-transfer card only exists where the platform can do it (iOS 26+).
+	const providers = IMPORT_PROVIDERS.filter((p) => !p.viaSystem || exchange);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
@@ -137,6 +141,33 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			setResult(res);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : t`Couldn't read this file.`);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	// Pull an OS-delivered transfer (FIDO CXP). The other app starts it and the OS launches us,
+	// so most of the time there is nothing waiting and we say so rather than failing.
+	const onSystemTransfer = async (p: ImportProviderInfo) => {
+		if (!exchange) return;
+		setError(null);
+		setBusy(true);
+		try {
+			const res = await importFromOs(exchange);
+			if (!res) {
+				setError(
+					t`No transfer is waiting. Start one from the other app and pick ${shell.appName}.`,
+				);
+				return;
+			}
+			if (res.imported.length === 0) {
+				setError(t`That transfer didn't contain anything we could import.`);
+				return;
+			}
+			setProvider(p);
+			setResult(res);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : t`Couldn't read that transfer.`);
 		} finally {
 			setBusy(false);
 		}
@@ -252,35 +283,53 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		<Shell onClose={onClose}>
 			<Header subtitle={t`Bring your logins, cards and notes over from another manager`} />
 			<div className="space-y-2.5">
-				{IMPORT_PROVIDERS.map((p) => (
-					<label
-						key={p.id}
-						className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all"
-					>
-						<input
-							type="file"
-							accept={p.accept}
-							className="hidden"
-							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
-							onClick={() => shell.notifyFilePickerOpening?.()}
-							onChange={(e) => {
-								// Reset value after handling so re-picking the same file fires onChange again.
-								const input = e.currentTarget;
-								void onFile(p, input.files?.[0]).finally(() => {
-									input.value = "";
-								});
-							}}
-						/>
-						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
-							<span className="text-sm text-primary">{p.label.charAt(0)}</span>
-						</div>
-						<div className="min-w-0 flex-1">
-							<p className="text-sm">{p.label}</p>
-							<p className="text-xs text-muted-foreground truncate">{p.blurb}</p>
-						</div>
-						<Upload className="w-4 h-4 text-muted-foreground shrink-0" />
-					</label>
-				))}
+				{providers.map((p) =>
+					p.viaSystem ? (
+						<button
+							key={p.id}
+							type="button"
+							disabled={busy}
+							onClick={() => void onSystemTransfer(p)}
+							className="w-full flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm text-left hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all disabled:opacity-60"
+						>
+							<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
+								<ArrowLeftRight className="w-4 h-4 text-primary" />
+							</div>
+							<div className="min-w-0 flex-1">
+								<p className="text-sm">{p.label}</p>
+								<p className="text-xs text-muted-foreground truncate">{p.blurb}</p>
+							</div>
+						</button>
+					) : (
+						<label
+							key={p.id}
+							className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all"
+						>
+							<input
+								type="file"
+								accept={p.accept}
+								className="hidden"
+								// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
+								onClick={() => shell.notifyFilePickerOpening?.()}
+								onChange={(e) => {
+									// Reset value after handling so re-picking the same file fires onChange again.
+									const input = e.currentTarget;
+									void onFile(p, input.files?.[0]).finally(() => {
+										input.value = "";
+									});
+								}}
+							/>
+							<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
+								<span className="text-sm text-primary">{p.label.charAt(0)}</span>
+							</div>
+							<div className="min-w-0 flex-1">
+								<p className="text-sm">{p.label}</p>
+								<p className="text-xs text-muted-foreground truncate">{p.blurb}</p>
+							</div>
+							<Upload className="w-4 h-4 text-muted-foreground shrink-0" />
+						</label>
+					),
+				)}
 			</div>
 			{busy && (
 				<div className="flex items-center justify-center gap-2 mt-4 text-sm text-muted-foreground">

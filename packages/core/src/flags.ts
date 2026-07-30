@@ -47,6 +47,10 @@ export const CAPABILITIES = {
 	saveCapture: { chromium: true, firefox: true, android: true, ios: false },
 	// In-app runtime toggle for the passkey provider (extension only; mobile's provider is OS-managed).
 	passkeyProviderToggle: { chromium: true, firefox: true, android: false, ios: false },
+	// OS-driven credential exchange (FIDO CXP): app-to-app transfer of logins and passkeys with
+	// no file in between. iOS 26+ only. Android's routing lives in Google Play services, which
+	// we don't ship; the extension has no such API. See docs/credential-exchange.md.
+	credentialExchange: { chromium: false, firefox: false, android: false, ios: true },
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
 	lockOnScreenLock: { extension: true, mobile: false },

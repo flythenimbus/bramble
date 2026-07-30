@@ -14,6 +14,7 @@ interface CredentialExchangePlugin {
 	exportCredentials(options: { cxfJson: string }): Promise<void>;
 	consumeImportToken(): Promise<{ token?: string }>;
 	importCredentials(options: { token: string }): Promise<{ cxfJson: string }>;
+	addListener(event: "importAvailable", cb: () => void): Promise<{ remove: () => Promise<void> }>;
 }
 
 const Native = registerPlugin<CredentialExchangePlugin>("CredentialExchange");
@@ -48,6 +49,18 @@ export async function exportToApp(
 	// window is measured from the last arm.
 	armFilePickGrace();
 	await Native.exportCredentials({ cxfJson: await buildPayload(formatVersion) });
+}
+
+/**
+ * Fires when the OS hands us an inbound transfer, so the app can route to the import screen
+ * (which owns the token). The activity can also arrive at a cold launch, before any listener
+ * exists, which is why the token is parked natively rather than pushed. Returns an unsubscribe.
+ */
+export function onImportAvailable(cb: () => void): () => void {
+	const handle = Native.addListener?.("importAvailable", cb);
+	return () => {
+		void handle?.then((h) => h.remove()).catch(() => {});
+	};
 }
 
 /**

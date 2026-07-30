@@ -146,6 +146,7 @@ export type JoinUnlock =
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { securityKey: true };
 
+import { exportToOs } from "../exchange";
 import { toKdbxEntries } from "../export/kdbx";
 import {
 	DEVICE_ID_KEY,
@@ -249,6 +250,13 @@ export interface VaultActions {
 	 * entries, so it only works unlocked. Rejects where the platform can't save files.
 	 */
 	exportKdbx(password: string): Promise<void>;
+	/**
+	 * Hand the vault to another app on this device via the OS (FIDO CXP). Like `exportKdbx`
+	 * this reads decrypted entries, so it needs an unlocked vault; unlike it, nothing is
+	 * written to disk. Resolves with any lossy-mapping warnings. Rejects where the platform
+	 * has no exchange adapter. See docs/credential-exchange.md.
+	 */
+	exportToApp(): Promise<string[]>;
 	addEntry(data: EntryData): Promise<void>;
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
@@ -306,6 +314,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		autofill,
 		shell,
 		biometric,
+		exchange,
 	} = usePlatform();
 	// The app operates on one vault at a time; bind its id so this provider's blob reads and
 	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
@@ -851,6 +860,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[shell, crypto],
 	);
 
+	/** Send the decrypted entries to another app through the OS. The payload is built inside
+	 * the callback, which the adapter runs only after the user has picked a destination. */
+	const exportToApp = useCallback(async () => {
+		if (!exchange) throw new Error("Transferring to another app isn't available here.");
+		return exportToOs(exchange, latestRef.current.entries, shell.appName);
+	}, [exchange, shell.appName]);
+
 	/** Re-encrypt all entries with their stamps plus the tombstone list, and write
 	 * a new blob; the slot list is unchanged. Stamps come from the caller so a
 	 * full rewrite does not re-stamp unchanged entries. */
@@ -1294,6 +1310,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteVault,
 			exportVault,
 			exportKdbx,
+			exportToApp,
 			addEntry,
 			importEntries,
 			updateEntry,
@@ -1325,6 +1342,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteVault,
 			exportVault,
 			exportKdbx,
+			exportToApp,
 			addEntry,
 			importEntries,
 			updateEntry,

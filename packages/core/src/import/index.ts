@@ -25,21 +25,35 @@ const PARSERS: Record<ImportProvider, ImportParser> = {
 	google: parseGooglePasswords,
 };
 
-/** Provider id, including `keepass-kdbx` which has no synchronous parser (opened in WASM). */
-export type ImportProviderId = ImportProvider | "keepass-kdbx";
+/**
+ * Provider id. `keepass-kdbx` has no synchronous parser (opened in WASM), and
+ * `credential-exchange` has no file at all (the OS hands us the payload).
+ */
+export type ImportProviderId = ImportProvider | "keepass-kdbx" | "credential-exchange";
 
 /** UI-facing description of a supported import provider. Icons live in the UI layer. */
 export interface ImportProviderInfo {
 	id: ImportProviderId;
 	label: string;
 	blurb: string;
-	accept: string;
-	reads: "text" | "bytes";
+	/** Absent for providers that don't read a file. */
+	accept?: string;
+	reads?: "text" | "bytes";
 	/** kdbx: prompt for credentials and open via CryptoAdapter.openKdbx, not parseImport. */
 	needsCredential?: boolean;
+	/** No file picker: the payload arrives from the OS. Gated on the `credentialExchange` capability. */
+	viaSystem?: boolean;
 }
 
 export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
+	{
+		// First because it is the best route where it exists: passkeys come across too, and
+		// nothing is written to disk. Hidden unless the platform supports it.
+		id: "credential-exchange",
+		label: "Another app on this device",
+		blurb: "Passwords, passkeys and codes, with no file in between",
+		viaSystem: true,
+	},
 	{
 		id: "bitwarden",
 		label: "Bitwarden",

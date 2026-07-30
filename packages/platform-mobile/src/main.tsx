@@ -18,10 +18,12 @@ import { mobileAutofill } from "./adapters/autofill";
 import { mobileBiometric } from "./adapters/biometric";
 import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
+import { resolveExchange } from "./adapters/exchange";
 import { mobileShell, mobileTarget, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
 import { consumePendingAutofillSave } from "./autofill-pending";
+import { onImportAvailable } from "./credential-exchange";
 import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/sync-manager";
 
@@ -64,6 +66,11 @@ function Root() {
 			),
 		[],
 	);
+
+	// An inbound credential-exchange transfer (iOS 26+): the OS launches us with a token, so
+	// route to the import wizard, which owns claiming and redeeming it. A cold launch has no
+	// listener yet, but the token is parked natively until the screen asks for it.
+	useEffect(() => onImportAvailable(() => setView("import")), []);
 
 	// Android hardware / gesture back (github #15): close an open setup/import/restore overlay, else
 	// let the app step its (memory-history) router via tryAppBack, else background the app (Android's
@@ -124,6 +131,9 @@ void (async () => {
 		await mobileStorage.setMeta(PREF_AUTOLOCK_MINUTES, -1);
 	}
 	await resolveAppVersion();
+	// OS credential exchange (iOS 26+). Resolved before first render so the import/export
+	// entry points can gate on the adapter's presence without flashing.
+	platform.exchange = await resolveExchange();
 	// Best-effort: detect the device locale before render so the UI loads the right
 	// catalog with no English flash. Falls back to navigator.language inside @core.
 	deviceLocale = await Device.getLanguageTag()
