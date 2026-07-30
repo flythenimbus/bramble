@@ -240,11 +240,15 @@ picker and it applies verbatim here.
 | 0 | ~~Spike: is Apple's Codable CXF-shaped?~~ **DONE, passed.** | - |
 | 1 | ~~Shared `core/src/exchange/` module + tests~~ **DONE** (31 tests, both directions + round trip). | - |
 | 2 | ~~Swift plugin, Info.plist keys, AppDelegate hook, auto-lock grace~~ **BUILT, compile-verified; the transfer itself is unverified.** | - |
-| 3 | Import card, Settings export row, flags, i18n | 1-1.5d |
+| 3 | ~~Import card, Settings export row, flags, i18n~~ **DONE.** | - |
 | 4 | Device + interop testing: Apple Passwords, Chrome iOS, 1Password, Bitwarden. Both directions. | 1-2d |
 | 5 | *Optional*: CXF file import/export through the existing file path, all targets, Android included | +1d |
 
-**Total: 5-7 working days left** (phases 2 to 4); contingency retired.
+**Remaining: phase 4 (device + interop testing, 1-2d), and optionally phase 5.**
+
+Everything above phase 4 is code-complete and verified as far as a machine without a paired
+device can verify it: 1039 tests green, the Release build carries the plugin and both plists,
+and the extension registers on a simulator. What has NOT happened is a single real transfer.
 
 ## What the simulator can and cannot do
 
