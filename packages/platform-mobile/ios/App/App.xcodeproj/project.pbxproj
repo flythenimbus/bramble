@@ -475,7 +475,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 207508398;
+				CURRENT_PROJECT_VERSION = 207596880;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -487,7 +487,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.3;
+				MARKETING_VERSION = 1.5.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = app.bramble.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -503,7 +503,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 207508398;
+				CURRENT_PROJECT_VERSION = 207596880;
 				DEVELOPMENT_TEAM = BHGR3PP64J;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -515,7 +515,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.3;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bramble.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -544,8 +544,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				CURRENT_PROJECT_VERSION = 207508398;
-				MARKETING_VERSION = 1.4.3;
+				CURRENT_PROJECT_VERSION = 207596880;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bramble.mobile.AutoFillProbe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -577,8 +577,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				CURRENT_PROJECT_VERSION = 207508398;
-				MARKETING_VERSION = 1.4.3;
+				CURRENT_PROJECT_VERSION = 207596880;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.bramble.mobile.AutoFillProbe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
