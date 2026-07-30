@@ -172,6 +172,10 @@ msgstr "Délai de verrouillage automatique"
 msgid "Auto-submit after fill"
 msgstr "Soumission automatique après remplissage"
 
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "AutoFill diagnostic"
+msgstr "Diagnostic AutoFill"
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
 msgstr "Retour"

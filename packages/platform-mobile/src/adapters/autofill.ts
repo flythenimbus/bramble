@@ -81,6 +81,7 @@ interface AutofillBridgePlugin {
 	}): Promise<void>;
 	clear(): Promise<void>;
 	setKeepUnlocked(o: { minutes: number }): Promise<void>;
+	readDiagnostic(): Promise<{ line: string }>;
 }
 
 // Normalize a stored hostname to a bare registrable host for QuickType matching
@@ -202,6 +203,15 @@ export const mobileAutofill: AutofillAdapter = {
 			passkeyCiphertext: encPk.ciphertext,
 			passkeyIdentities,
 		});
+	},
+	// TEMPORARY: see the provider's last passkey lookup without attaching a Mac.
+	async readDiagnostic() {
+		if (!isIos) return "";
+		try {
+			return (await Bridge.readDiagnostic()).line;
+		} catch {
+			return "";
+		}
 	},
 	async clearIndex() {
 		// Deliberately a no-op on iOS. The bundle is VEK-encrypted (unreadable at rest)

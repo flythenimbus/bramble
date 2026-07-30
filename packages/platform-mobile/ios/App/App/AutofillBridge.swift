@@ -21,6 +21,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingPasskeys", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "readDiagnostic", returnType: CAPPluginReturnPromise),
 	]
 
 	// Shared identifiers (App Group, Keychain group, keys) live in BrambleVault, compiled
@@ -137,6 +138,13 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	// Erase every trace of the vault the provider holds. Called when a vault is deleted, so it
 	// must also drop the pending-passkey handoff and the live keep-unlocked session VEK: both
 	// outlive the vault otherwise, and both are readable with the same credential it used.
+	// TEMPORARY: the provider's last passkey-lookup line, so it can be read on-device with no
+	// Mac attached. Remove with the diagnostics.
+	@objc func readDiagnostic(_ call: CAPPluginCall) {
+		let line = UserDefaults(suiteName: BrambleVault.appGroup)?.string(forKey: BrambleVault.diagKey)
+		call.resolve(["line": line ?? ""])
+	}
+
 	@objc func clear(_ call: CAPPluginCall) {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		defaults?.removeObject(forKey: BrambleVault.bundleKey)

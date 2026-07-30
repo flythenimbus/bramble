@@ -181,6 +181,9 @@ export interface CornerPromptResponse {
 export interface AutofillAdapter {
 	/** Popup-side: push the unlocked vault's searchable index to the background so autofill works while the popup is closed. */
 	setIndex(entries: IndexEntry[]): Promise<void>;
+	/** TEMPORARY: last diagnostic line from the native credential provider, for on-device
+	 * debugging of the passkey handoff. Absent where there is no provider. */
+	readDiagnostic?(): Promise<string>;
 	/** Clear the pushed index (on lock). */
 	clearIndex(): Promise<void>;
 	/**
