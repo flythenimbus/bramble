@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Capacitor
 import Foundation
+import OSLog
 import Security
 
 // Local Capacitor plugin (main-app side) bridging the unlocked vault's login list to the
@@ -40,6 +41,11 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		{
 			defaults?.set(slotJson, forKey: BrambleVault.slotKey)
 		}
+		// TEMPORARY diagnostic: pairs with the extension's, so a failure can be pinned to the
+		// write side or the read side. Remove with it.
+		Logger(subsystem: "app.bramble.mobile", category: "passkey-bundle").info(
+			"sync: bundleWritten=\(call.getString("passkeyCiphertext") != nil, privacy: .public) identities=\((call.getArray("passkeyIdentities") ?? []).count, privacy: .public)"
+		)
 		// Passkey bundle (provider role): a second VEK-encrypted blob the extension decrypts
 		// to assert. Its own key so the login/password path above is untouched.
 		if let pkIv = call.getString("passkeyIv"), let pkCt = call.getString("passkeyCiphertext"),

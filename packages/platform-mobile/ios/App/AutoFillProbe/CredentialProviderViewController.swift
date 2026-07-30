@@ -1,5 +1,6 @@
 import AuthenticationServices
 import LocalAuthentication
+import OSLog
 import Security
 import SwiftUI
 import UIKit
@@ -590,6 +591,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func handlePasskeyUnlocked() {
 		guard let req = pendingPasskey else { return }
 		let all = loadPasskeyBundle()
+		Logger(subsystem: "app.bramble.mobile", category: "passkey-bundle").info(
+			"request: rpId=\(req.rpId, privacy: .public) allowed=\(req.allowed.count, privacy: .public) chosen=\(req.chosen ?? "-", privacy: .public)"
+		)
 		let matches =
 			req.chosen.map { id in all.filter { $0.credentialId == id } }
 			?? all.filter { $0.rpId == req.rpId && (req.allowed.isEmpty || req.allowed.contains($0.credentialId)) }
@@ -758,15 +762,36 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	// Decrypt the passkey bundle (empty if none / not unlocked). VEK must already be loaded.
+	// TEMPORARY diagnostic (docs/credential-exchange.md, import debugging). Every failure here
+	// currently collapses to an empty array, so the UI says "no passkey for this site" whether
+	// the blob is missing, the VEK is wrong, or one element failed to decode. Remove once the
+	// imported-passkey report is closed.
 	private func loadPasskeyBundle() -> [Passkey] {
+		let log = Logger(subsystem: "app.bramble.mobile", category: "passkey-bundle")
 		guard
 			let data = UserDefaults(suiteName: BrambleVault.appGroup)?.data(
-				forKey: BrambleVault.passkeyBundleKey),
-			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String,
-			let json = try? decryptWithVek(ivB64: iv, ciphertextB64: ct),
-			let creds = try? JSONDecoder().decode([Passkey].self, from: Data(json.utf8))
-		else { return [] }
+				forKey: BrambleVault.passkeyBundleKey)
+		else {
+			log.error("bundle: NO BLOB in the app group")
+			return []
+		}
+		guard let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String
+		else {
+			log.error("bundle: blob present (\(data.count, privacy: .public) bytes) but unreadable")
+			return []
+		}
+		guard let json = try? decryptWithVek(ivB64: iv, ciphertextB64: ct) else {
+			log.error("bundle: DECRYPT FAILED (\(data.count, privacy: .public) bytes)")
+			return []
+		}
+		guard let creds = try? JSONDecoder().decode([Passkey].self, from: Data(json.utf8)) else {
+			log.error("bundle: DECODE FAILED over \(json.count, privacy: .public) chars of json")
+			return []
+		}
+		log.info(
+			"bundle: \(creds.count, privacy: .public) passkey(s), rpIds=\(creds.map(\.rpId).joined(separator: ","), privacy: .public)"
+		)
 		return creds
 	}
 
