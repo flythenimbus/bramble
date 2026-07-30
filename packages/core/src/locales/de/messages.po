@@ -24,6 +24,10 @@ msgstr "...und noch {0} weitere"
 msgid "{0} · added {1}"
 msgstr "{0} · hinzugefügt am {1}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining}s verbleiben"
@@ -1236,6 +1240,10 @@ msgstr "Anmerkungen"
 msgid "Notes (optional)"
 msgstr "Anmerkungen (optional)"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "Nothing to import"
+msgstr "Nichts zu importieren"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
 #~ msgstr "Es wurde nichts gesendet. Der Code ist jetzt abgelaufen und könnte von jemand anderem eingesehen worden sein, daher kann er nicht erneut verwendet werden. Erstellen Sie einen neuen Code, wenn Sie bereit sind, es erneut zu versuchen, und halten Sie das andere Gerät bereit."
@@ -1946,6 +1954,10 @@ msgstr "Es gibt keinen Reset durch den Anbieter. Merken Sie sich dieses Passwort
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
 msgstr "Sie befinden sich nun in Ihrem Tresor. Zu Ihrer Sicherheit löschen Sie bitte die gerade importierte Exportdatei, da diese Ihre Passwörter im Klartext enthält."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
+msgstr "Sie sind jetzt in Ihrem Tresor. Die Übertragung erfolgte direkt zwischen den beiden Apps, daher gibt es keine Datei zu bereinigen."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."

@@ -24,6 +24,10 @@ msgstr "…et {0} autres"
 msgid "{0} · added {1}"
 msgstr "{0} · ajouté {1}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining}s restants"
@@ -1236,6 +1240,10 @@ msgstr "Notes"
 msgid "Notes (optional)"
 msgstr "Notes (facultatif)"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "Nothing to import"
+msgstr "Rien à importer"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
 #~ msgstr "Rien n'a été envoyé. Ce code est maintenant inutilisable, et quelqu'un d'autre a pu le voir ; il ne peut donc pas être réutilisé. Générez un nouveau code lorsque vous serez prêt à réessayer, avec votre autre appareil devant vous."
@@ -1946,6 +1954,10 @@ msgstr "Il n'y a pas de réinitialisation par le fournisseur. Mémorisez ce mot 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
 msgstr "Ils se trouvent maintenant dans votre coffre-fort. Pour votre sécurité, supprimez le fichier d'exportation que vous venez d'importer, car il contient vos mots de passe en texte clair."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
+msgstr "Ils sont maintenant dans votre coffre. Le transfert s’est effectué directement entre les deux apps, il n’y a donc aucun fichier à supprimer."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."

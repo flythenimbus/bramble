@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
 import {
@@ -54,6 +54,32 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const exchangeBlocked = exchangeBlockedReason(availability);
 	const providers = IMPORT_PROVIDERS.filter((p) => !p.viaSystem || exchange);
 
+	// The OS opens this screen only because a transfer is already in flight, so claim it and
+	// go straight to the preview. Showing the provider list first would ask the user to pick a
+	// source they have already picked. Claims nothing when no transfer is waiting (the normal
+	// case, when the user opened Import themselves), and then the list is exactly right.
+	const claimed = useRef(false);
+	useEffect(() => {
+		if (!exchange || !ready || isLocked || claimed.current) return;
+		claimed.current = true;
+		void (async () => {
+			setBusy(true);
+			try {
+				const res = await importFromOs(exchange);
+				const card = IMPORT_PROVIDERS.find((p) => p.viaSystem);
+				if (res && res.imported.length > 0 && card) {
+					setProvider(card);
+					setResult(res);
+				}
+			} catch {
+				// Fall through to the provider list rather than blocking it behind an error the
+				// user can do nothing about; the card is still there to retry.
+			} finally {
+				setBusy(false);
+			}
+		})();
+	}, [exchange, ready, isLocked]);
+
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
 		return (
@@ -99,10 +125,18 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						<Trans>Imported {imported} items</Trans>
 					</h1>
 					<p className="text-sm text-muted-foreground">
-						<Trans>
-							They're in your vault now. For your safety, delete the export file you just imported,
-							as it holds your passwords in plain text.
-						</Trans>
+						{provider?.viaSystem ? (
+							// Nothing was written to disk: the OS moved the payload app to app.
+							<Trans>
+								They're in your vault now. The transfer happened directly between the two apps, so
+								there's no file to clean up.
+							</Trans>
+						) : (
+							<Trans>
+								They're in your vault now. For your safety, delete the export file you just
+								imported, as it holds your passwords in plain text.
+							</Trans>
+						)}
 					</p>
 					{onClose && (
 						<Button variant="primary" size="none" onClick={onClose} className="px-5 py-2.5 text-sm">

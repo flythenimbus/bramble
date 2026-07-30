@@ -24,6 +24,10 @@ msgstr "...e mais {0}"
 msgid "{0} · added {1}"
 msgstr "{0} · adicionado em {1}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining}s restantes"
@@ -1236,6 +1240,10 @@ msgstr "Notas"
 msgid "Notes (optional)"
 msgstr "Notas (opcional)"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "Nothing to import"
+msgstr "Nada a importar"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
 #~ msgstr "Nada foi enviado. Esse código agora está inválido e pode ter sido visto por outra pessoa, portanto não pode ser reutilizado. Gere um novo quando estiver pronto para tentar novamente, com o outro dispositivo à sua frente."
@@ -1946,6 +1954,10 @@ msgstr "Não há redefinição pelo fornecedor. Memorize esta senha e guarde o c
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
 msgstr "Eles estão no seu cofre agora. Por sua segurança, exclua o arquivo de exportação que você acabou de importar, pois ele contém suas senhas em texto simples."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
+msgstr "Eles estão no seu cofre agora. A transferência ocorreu diretamente entre os dois aplicativos, portanto não há nenhum arquivo para limpar."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."

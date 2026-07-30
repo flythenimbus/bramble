@@ -24,6 +24,10 @@ msgstr "...e altri {0}"
 msgid "{0} · added {1}"
 msgstr "{0} · aggiunto {1}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining} secondi rimasti"
@@ -1236,6 +1240,10 @@ msgstr "Note"
 msgid "Notes (optional)"
 msgstr "Note (opzionale)"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "Nothing to import"
+msgstr "Niente da importare"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
 #~ msgstr "Non è stato inviato nulla. Il codice ora non è più valido e potrebbe essere stato visto da qualcun altro, quindi non può essere riutilizzato. Generi un nuovo codice quando è pronto a riprovare, con l'altro dispositivo davanti a lei."
@@ -1946,6 +1954,10 @@ msgstr "Non esiste un ripristino fornito dal venditore. Memorizzi questa passwor
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
 msgstr "Sono ora nella sua vault. Per la sua sicurezza, elimini il file di esportazione che ha appena importato, poiché contiene le sue password in testo semplice."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
+msgstr "Sono ora nella sua cassaforte. Il trasferimento è avvenuto direttamente tra le due app, quindi non c'è alcun file da eliminare."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."
