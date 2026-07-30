@@ -38,7 +38,7 @@ const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
 export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
 	const { shell, crypto, exchange } = usePlatform();
-	const { vaults, activeId, selectVault } = useVaultRegistry();
+	const { vaults, selectVault } = useVaultRegistry();
 	const { t } = useLingui();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
 	const [result, setResult] = useState<ImportResult | null>(null);
@@ -61,9 +61,21 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// go straight to the preview. Showing the provider list first would ask the user to pick a
 	// source they have already picked. Claims nothing when no transfer is waiting (the normal
 	// case, when the user opened Import themselves), and then the list is exactly right.
+	// Is a transfer waiting? Peeked (not claimed) so the destination can be settled first.
+	const [transferPending, setTransferPending] = useState(false);
+	const [vaultChosen, setVaultChosen] = useState(false);
+	const needsVaultChoice = transferPending && vaults.length > 1 && !vaultChosen;
+	useEffect(() => {
+		if (!exchange) return;
+		void exchange
+			.hasPendingImport()
+			.then(setTransferPending)
+			.catch(() => {});
+	}, [exchange]);
+
 	const claimed = useRef(false);
 	useEffect(() => {
-		if (!exchange || !ready || isLocked || claimed.current) return;
+		if (!exchange || !ready || isLocked || needsVaultChoice || claimed.current) return;
 		claimed.current = true;
 		void (async () => {
 			setBusy(true);
@@ -81,7 +93,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				setBusy(false);
 			}
 		})();
-	}, [exchange, ready, isLocked]);
+	}, [exchange, ready, isLocked, needsVaultChoice]);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
@@ -94,15 +106,20 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		);
 	}
 
-	// Several vaults and none chosen yet. Happens when the OS launches us straight into an
-	// inbound transfer, which skips the launch-time picker, so ask here instead of silently
-	// importing into whichever vault happens to be first. One vault auto-selects upstream, so
-	// this never appears for the common case.
-	if (!activeId && vaults.length > 1) {
+	// An inbound transfer with more than one vault: ask where it lands. The launch-time picker
+	// is skipped when the OS opens us here, and the registry restores whichever vault was used
+	// last, so without this the credentials would silently go to "the last one you opened"
+	// rather than the one the user meant.
+	if (needsVaultChoice) {
 		return (
 			<Shell onClose={onClose}>
 				<Header subtitle={t`Choose the vault these items should go into`} />
-				<VaultChoiceList onSelect={selectVault} />
+				<VaultChoiceList
+					onSelect={(id) => {
+						selectVault(id);
+						setVaultChosen(true);
+					}}
+				/>
 			</Shell>
 		);
 	}
