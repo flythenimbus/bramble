@@ -12,7 +12,7 @@ import { usePlatform } from "../context/PlatformContext";
 // Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
 // background.ts for the auto-lock + clipboard TTL values the SW reads itself.
 export const PREF_AUTOLOCK_MINUTES = "pref.autoLockMinutes";
-export const PREF_BREACH_CHECK = "pref.breachCheckEnabled";
+const PREF_BREACH_CHECK = "pref.breachCheckEnabled";
 export const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
 export const PREF_OFFER_TO_SAVE = "pref.offerToSave";
 export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
@@ -28,19 +28,19 @@ export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
 // Home screen: whether the Total / At Risk / Strong stats row is collapsed.
 // Persisted so the user's choice sticks across opens.
-export const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
+const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
 // SHA-1 prefix to HIBP), so we don't opt users in silently.
-export const DEFAULT_BREACH_CHECK = false;
+const DEFAULT_BREACH_CHECK = false;
 export const DEFAULT_CLIPBOARD_SECONDS = 30;
 export const DEFAULT_OFFER_TO_SAVE = true;
-export const DEFAULT_NEVER_SAVE_SITES: string[] = [];
-export const DEFAULT_AUTOFILL_QUICKTYPE = false;
+const DEFAULT_NEVER_SAVE_SITES: string[] = [];
+const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
-export const DEFAULT_STATS_COLLAPSED = false;
+const DEFAULT_STATS_COLLAPSED = false;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {

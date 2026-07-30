@@ -13,7 +13,7 @@ import {
 // useToast().show({...}) from anywhere in core. Variant styling lives here so every
 // toast looks consistent (success/error/info). See PasskeySavedToast for a usage example.
 
-export type ToastVariant = "success" | "error" | "info";
+type ToastVariant = "success" | "error" | "info";
 
 export interface ToastOptions {
 	message: string;

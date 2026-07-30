@@ -123,7 +123,7 @@ export type EnrollWasm = NostrWasm & EnrollHandshakeWasm & CryptoWasm;
 export type EnrollRole = "inviter" | "joiner";
 type Report = (status: string) => void;
 
-export interface JoinResult {
+interface JoinResult {
 	vaultBlobB64: string;
 	roster: RosterPayload;
 }
@@ -359,11 +359,7 @@ export function makeEnrollHandler(
  * Every step before `sendBundle` is a gate, and the order is the point: an attacker that wins the
  * race to the handshake gets no further than a prompt the user is about to reject.
  */
-export async function serveJoiner(
-	opts: EnrollOptions,
-	channel: Channel,
-	sess: Session,
-): Promise<void> {
+async function serveJoiner(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
 	if (!opts.devicePubB64) throw new Error("enroll: refusing to invite without this device's key");
 	if (!opts.approve) throw new Error("enroll: refusing to invite without an approval gate");
 	const entry = await recvJoinerHello(opts, channel, sess);
@@ -435,7 +431,7 @@ async function awaitReceipt(
  * to the old order for a joiner that sends nothing: an attacker could otherwise stay silent to
  * force the legacy "send first, validate later" path. See docs/p2p-sync.md "Version skew".
  */
-export async function recvJoinerHello(
+async function recvJoinerHello(
 	opts: EnrollOptions,
 	channel: Channel,
 	sess: Session,

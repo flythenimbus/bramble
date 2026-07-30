@@ -78,7 +78,7 @@ export function decodePairingCode(text: string): PairingCode {
 }
 
 /** The handoff sent over the authenticated channel once enrollment connects. */
-export const EnrollmentBundleSchema = z.object({
+const EnrollmentBundleSchema = z.object({
 	/** The shared VEK (base64), wrapped by the channel encryption in transit. */
 	vek: z.string().min(1),
 	roster: RosterPayloadSchema,

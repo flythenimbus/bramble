@@ -1,7 +1,7 @@
 const crypto = globalThis.crypto;
 
 /** True if `password`'s SHA-1 appears in the HIBP range API (k-anonymity). Throws on network failure. */
-export async function isPasswordLeaked(password: string) {
+async function isPasswordLeaked(password: string) {
 	if (typeof password !== "string") throw new Error("Password must be a string");
 
 	const hashedPassword = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(password));

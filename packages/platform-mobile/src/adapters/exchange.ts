@@ -11,7 +11,7 @@ import {
 // Maps the native CredentialExchange plugin (ios/App/App/CredentialExchange.swift) to the
 // core adapter. Present only where the OS can actually do a transfer, which the UI treats as
 // the feature switch; see resolveExchange below. docs/credential-exchange.md.
-export const mobileExchange: CredentialExchangeAdapter = {
+const mobileExchange: CredentialExchangeAdapter = {
 	// The bundle id we present to the importer as the source of the export.
 	exporterId: "app.bramble.mobile",
 	availability: exchangeAvailability,

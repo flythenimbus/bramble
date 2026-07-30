@@ -30,7 +30,7 @@ function useSshFingerprint(publicKey: string): string | undefined {
 	return fingerprint;
 }
 
-export interface SshKeyFormValues {
+interface SshKeyFormValues {
 	name: string;
 	publicKey: string;
 	privateKey: string;

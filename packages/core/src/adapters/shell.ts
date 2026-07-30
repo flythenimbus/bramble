@@ -3,7 +3,7 @@ import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } fro
 import type { SubdomainMatchMode } from "./autofill";
 
 /** Minimal login shape for current-tab matching: id + the fields the hostname policy reads. */
-export interface CurrentTabLogin {
+interface CurrentTabLogin {
 	id: string;
 	urls: string[];
 	subdomainMatch?: SubdomainMatchMode;
@@ -21,7 +21,7 @@ export interface PopOutHandoff {
 export type OptionsScreen = "import" | "restore";
 
 /** A passkey the provider just stored, for a confirmation toast. */
-export interface PasskeySavedInfo {
+interface PasskeySavedInfo {
 	rpId: string;
 	/** The login the passkey attached to / the new login created for it. */
 	loginName: string;
@@ -30,7 +30,7 @@ export interface PasskeySavedInfo {
 }
 
 /** A corner-prompt capture the background committed after an unlock, for a confirmation toast. */
-export interface CornerSavedInfo {
+interface CornerSavedInfo {
 	/** "save" created a new login; "update" rotated an existing one's password. */
 	kind: "save" | "update";
 	hostname: string;
@@ -208,7 +208,7 @@ export interface ShellAdapter {
 }
 
 /** The inviter-side confirmation prompt: the number to compare, and who is asking. */
-export interface EnrollApproval {
+interface EnrollApproval {
 	/** The 12-digit SAS both devices derive. This is the check. */
 	sas: string;
 	/** The joining device's self-declared label. Attacker-controlled: context, never proof. */

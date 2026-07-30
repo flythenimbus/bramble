@@ -52,7 +52,7 @@ export interface LoginIndexEntry {
 }
 
 /** A payment card. Not tied to a hostname: offered on any detected payment form, filled only on explicit pick. */
-export interface CardIndexEntry {
+interface CardIndexEntry {
 	type: "card";
 	id: string;
 	name: string;
@@ -100,8 +100,6 @@ export type FillPayload =
 			cvv: string;
 			customFields?: CustomFieldData[];
 	  };
-
-export type CornerPromptKind = "save-login" | "update-login" | "save-passkey";
 
 interface CornerPromptCommon {
 	/** UUID minted per capture; rides the round-trip on the response so a stale prompt can't commit (id no longer matches the live stash). */
@@ -162,12 +160,7 @@ export interface PasskeyPromptResponse {
 	choice?: string;
 }
 
-export type CornerPromptResponseAction =
-	| "save"
-	| "update"
-	| "dismiss"
-	| "never"
-	| "save-unlock-first";
+type CornerPromptResponseAction = "save" | "update" | "dismiss" | "never" | "save-unlock-first";
 
 export interface CornerPromptResponse {
 	promptId: string;

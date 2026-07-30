@@ -57,7 +57,7 @@ function amzDateNow(): string {
 	return new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
 }
 
-export interface S3Credentials {
+interface S3Credentials {
 	accessKeyId: string;
 	secretAccessKey: string;
 	region: string;

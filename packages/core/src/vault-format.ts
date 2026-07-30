@@ -37,7 +37,7 @@ const bytes = (n: number, label: string) =>
 	u8.refine((u) => u.length === n, { message: `${label} must be ${n} bytes` });
 
 /** Master-password slot: KEK is an Argon2id derivation of the password. */
-export const PasswordSlotSchema = z.object({
+const PasswordSlotSchema = z.object({
 	kind: z.literal(SLOT_KIND_PASSWORD),
 	slotId: bytes(LEN_SLOT_ID, "slotId"),
 	salt: bytes(LEN_SALT, "salt"),
@@ -48,7 +48,7 @@ export const PasswordSlotSchema = z.object({
 export type PasswordSlot = z.infer<typeof PasswordSlotSchema>;
 
 /** FIDO2 slot: KEK is HKDF over the authenticator's `hmac-secret`. credentialId is variable. */
-export const WebauthnSlotSchema = z.object({
+const WebauthnSlotSchema = z.object({
 	kind: z.literal(SLOT_KIND_WEBAUTHN),
 	slotId: bytes(LEN_SLOT_ID, "slotId"),
 	credentialId: u8.refine((u) => u.length >= 1 && u.length <= 0xffff, {
@@ -62,7 +62,7 @@ export const WebauthnSlotSchema = z.object({
 export type WebauthnSlot = z.infer<typeof WebauthnSlotSchema>;
 
 /** Offline recovery code. Byte-identical to a password slot; only the kind differs. */
-export const RecoverySlotSchema = z.object({
+const RecoverySlotSchema = z.object({
 	kind: z.literal(SLOT_KIND_RECOVERY),
 	slotId: bytes(LEN_SLOT_ID, "slotId"),
 	salt: bytes(LEN_SALT, "salt"),
@@ -73,7 +73,7 @@ export const RecoverySlotSchema = z.object({
 export type RecoverySlot = z.infer<typeof RecoverySlotSchema>;
 
 /** Unknown slot kind, preserved verbatim for round-trip. The kind must not collide with a known one. */
-export const OpaqueSlotSchema = z.object({
+const OpaqueSlotSchema = z.object({
 	kind: z
 		.number()
 		.refine((k) => !KNOWN_KINDS.includes(k), { message: "opaque slot kind is reserved" }),
@@ -81,7 +81,7 @@ export const OpaqueSlotSchema = z.object({
 });
 export type OpaqueSlot = z.infer<typeof OpaqueSlotSchema>;
 
-export const SlotSchema = z.union([
+const SlotSchema = z.union([
 	PasswordSlotSchema,
 	WebauthnSlotSchema,
 	RecoverySlotSchema,
@@ -103,7 +103,7 @@ export const EncryptedEntrySchema = z.object({
 export type EncryptedEntry = z.infer<typeof EncryptedEntrySchema>;
 
 /** Decoded vault: unlock slots plus the encrypted entries blob. */
-export const VaultBlobSchema = z.object({
+const VaultBlobSchema = z.object({
 	slots: z
 		.array(SlotSchema)
 		.min(1, { message: "vault must have at least one slot" })

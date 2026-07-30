@@ -29,7 +29,7 @@ const PARSERS: Record<ImportProvider, ImportParser> = {
  * Provider id. `keepass-kdbx` has no synchronous parser (opened in WASM), and
  * `credential-exchange` has no file at all (the OS hands us the payload).
  */
-export type ImportProviderId = ImportProvider | "keepass-kdbx" | "credential-exchange";
+type ImportProviderId = ImportProvider | "keepass-kdbx" | "credential-exchange";
 
 /** UI-facing description of a supported import provider. Icons live in the UI layer. */
 export interface ImportProviderInfo {

@@ -37,7 +37,7 @@ import {
 } from "./webauthn-json";
 
 /** A WebAuthn-shaped failure; surfaced to the page as a DOMException of this name. */
-export class WebAuthnError extends Error {
+class WebAuthnError extends Error {
 	constructor(
 		readonly domName: string,
 		message: string,

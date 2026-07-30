@@ -13,7 +13,7 @@
 
 // ---- base64url <-> bytes (self-contained: no @core import, to keep the bundle flat) ----
 
-export function bufToB64Url(src: ArrayBuffer | ArrayBufferView): string {
+function bufToB64Url(src: ArrayBuffer | ArrayBufferView): string {
 	const bytes =
 		src instanceof ArrayBuffer
 			? new Uint8Array(src)
@@ -23,7 +23,7 @@ export function bufToB64Url(src: ArrayBuffer | ArrayBufferView): string {
 	return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function b64UrlToBuf(b64url: string): ArrayBuffer {
+function b64UrlToBuf(b64url: string): ArrayBuffer {
 	const pad = b64url.length % 4;
 	const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/") + (pad ? "=".repeat(4 - pad) : "");
 	const s = atob(b64);

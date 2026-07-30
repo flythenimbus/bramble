@@ -137,7 +137,7 @@ export async function initWebauthnProxy(): Promise<void> {
 	attached = true;
 }
 
-export async function detachWebauthnProxy(): Promise<void> {
+async function detachWebauthnProxy(): Promise<void> {
 	if (!attached) return;
 	await api.webAuthenticationProxy.detach();
 	attached = false;

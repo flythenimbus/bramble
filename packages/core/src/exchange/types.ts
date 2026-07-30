@@ -13,7 +13,7 @@
 import { z } from "zod";
 
 /** CXF EditableField types. Unknown values degrade to "string" rather than failing the item. */
-export const cxfFieldTypeSchema = z.enum([
+const cxfFieldTypeSchema = z.enum([
 	"string",
 	"concealed-string",
 	"email",
@@ -26,7 +26,7 @@ export const cxfFieldTypeSchema = z.enum([
 	"subdivision-code",
 ]);
 
-export const cxfEditableFieldSchema = z.looseObject({
+const cxfEditableFieldSchema = z.looseObject({
 	id: z.string().optional(),
 	fieldType: cxfFieldTypeSchema.catch("string").optional(),
 	value: z.string().optional(),
@@ -111,12 +111,12 @@ export const cxfCredentialSchema = z.discriminatedUnion("type", [
  */
 export const cxfUnknownCredentialSchema = z.looseObject({ type: z.string() });
 
-export const cxfScopeSchema = z.looseObject({
+const cxfScopeSchema = z.looseObject({
 	urls: z.array(z.string()).optional(),
 	androidApps: z.array(z.unknown()).optional(),
 });
 
-export const cxfItemSchema = z.looseObject({
+const cxfItemSchema = z.looseObject({
 	id: z.string().optional(),
 	creationAt: z.number().optional(),
 	modifiedAt: z.number().optional(),
@@ -130,7 +130,7 @@ export const cxfItemSchema = z.looseObject({
 	tags: z.array(z.string()).optional(),
 });
 
-export const cxfAccountSchema = z.looseObject({
+const cxfAccountSchema = z.looseObject({
 	id: z.string().optional(),
 	username: z.string().optional(),
 	email: z.string().optional(),
@@ -140,7 +140,7 @@ export const cxfAccountSchema = z.looseObject({
 });
 
 /** Version is an object on the wire, not the string "1.0". */
-export const cxfVersionSchema = z.looseObject({
+const cxfVersionSchema = z.looseObject({
 	major: z.number().optional(),
 	minor: z.number().optional(),
 });
@@ -153,11 +153,9 @@ export const cxfPayloadSchema = z.looseObject({
 	accounts: z.array(cxfAccountSchema).optional(),
 });
 
-export type CxfFieldType = z.infer<typeof cxfFieldTypeSchema>;
 export type CxfEditableField = z.infer<typeof cxfEditableFieldSchema>;
 export type CxfCredential = z.infer<typeof cxfCredentialSchema>;
 export type CxfItem = z.infer<typeof cxfItemSchema>;
-export type CxfAccount = z.infer<typeof cxfAccountSchema>;
 export type CxfPayload = z.infer<typeof cxfPayloadSchema>;
 
 /** The CXF version we emit and the only one Apple negotiates today. */

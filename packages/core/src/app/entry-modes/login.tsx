@@ -33,7 +33,7 @@ import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryFieldsProps, EntryMode } from "./types";
 
 /** The login form's value shape. (Custom fields are host-owned and shared across modes, so not listed here.) */
-export interface LoginFormValues {
+interface LoginFormValues {
 	name: string;
 	/** Wrapped as `{ value }[]` so useFieldArray has stable per-row identity; `toEntry` collapses back to `string[]`. */
 	urls: { value: string }[];

@@ -9,7 +9,7 @@ import type { EntriesPayload } from "./entries-payload";
 import { liveRecords, mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
 
 /** View a stored payload as a mergeable replica (max stamp per id for both maps). */
-export function payloadToReplica(payload: EntriesPayload): ReplicaState<EncryptedEntry> {
+function payloadToReplica(payload: EntriesPayload): ReplicaState<EncryptedEntry> {
 	return replicaFrom(
 		payload.entries,
 		payload.tombstones.map((t) => [t.id, t.hlc] as const),
@@ -17,7 +17,7 @@ export function payloadToReplica(payload: EntriesPayload): ReplicaState<Encrypte
 }
 
 /** Render a replica back to a storable payload: live entries plus the graveyard. */
-export function replicaToPayload(state: ReplicaState<EncryptedEntry>): EntriesPayload {
+function replicaToPayload(state: ReplicaState<EncryptedEntry>): EntriesPayload {
 	return {
 		entries: liveRecords(state),
 		tombstones: [...state.tombstones].map(([id, hlc]) => ({ id, hlc })),

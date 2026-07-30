@@ -46,7 +46,4 @@ object BrambleAutofill {
     const val DEFAULT_OFFER_TO_SAVE = true
 
     const val LOG_TAG = "BrambleAutofill"
-
-    // Extras passed from the service's auth IntentSender to the unlock Activity.
-    const val EXTRA_FILL_CONTEXT = "app.bramble.autofill.FILL_CONTEXT"
 }

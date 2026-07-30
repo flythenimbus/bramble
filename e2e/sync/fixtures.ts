@@ -21,7 +21,7 @@ import { launchExtensionContext } from "../extension/fixtures";
 /** Local signaling relay, started by playwright.sync.config.ts. */
 export const RELAY_URL = process.env.SYNC_RELAY_URL ?? "ws://localhost:7400";
 /** The mobile SPA dev server, also started by the config. */
-export const MOBILE_URL = process.env.MOBILE_APP_URL ?? "http://localhost:5199";
+const MOBILE_URL = process.env.MOBILE_APP_URL ?? "http://localhost:5199";
 
 /** Master password shared by both peers' vaults (the joiner must prove the same one). */
 export const PW = "Zx9-mQ2-vLp7-wK4-tR8";

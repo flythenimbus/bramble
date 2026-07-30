@@ -12,7 +12,7 @@ import { TextField } from "../components/ui/text-field";
 import { DetailField } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
-export interface CardFormValues {
+interface CardFormValues {
 	name: string;
 	cardholderName: string;
 	number: string;

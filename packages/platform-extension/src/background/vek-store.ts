@@ -131,13 +131,6 @@ export async function removeVek(vaultId: string): Promise<void> {
 	await api.storage.session.set({ [MRU_KEY]: mru }).catch(() => {});
 }
 
-/** Record the active vault id, mirroring the session key the UI also writes. */
-export async function setActiveVaultId(id: string | null): Promise<void> {
-	activeId = id;
-	if (id === null) await api.storage.session.remove([ACTIVE_VAULT_SESSION_KEY]).catch(() => {});
-	else await api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: id }).catch(() => {});
-}
-
 /** Walk-away lock: forget every vault's VEK, the MRU, and the active id. */
 export async function clearAllVeks(): Promise<void> {
 	const keys = [...veks.keys()].map(vekKey);

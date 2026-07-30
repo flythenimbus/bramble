@@ -31,7 +31,7 @@ export interface CopyItem {
 }
 
 /** How a mode projects an entry into a vault-list row, keeping the list type-agnostic. */
-export interface EntryRowView {
+interface EntryRowView {
 	// Avatar icon (also used in the detail header). Shown unless `initials` is set.
 	icon: LucideIcon;
 	// When present, the avatar shows these characters instead of `icon`.

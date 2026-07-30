@@ -4,10 +4,10 @@ import { z } from "zod";
 import type { EntryType } from "../../../hooks/useVault";
 
 /** Type filter values; "all" disables the filter. */
-export const TYPE_FILTERS = ["all", "login", "card", "note", "ssh-key"] as const;
+const TYPE_FILTERS = ["all", "login", "card", "note", "ssh-key"] as const;
 export type TypeFilter = (typeof TYPE_FILTERS)[number];
 
-export const SORT_KEYS = [
+const SORT_KEYS = [
 	"name-asc",
 	"name-desc",
 	"recent-used",

@@ -4,7 +4,7 @@ export interface LoginFields {
 }
 
 export const USERNAME_HINT_RE = /email|e-mail|user|login|account|signin|sign-in/i;
-export const NEGATIVE_HINT_RE = /search|captcha|coupon|otp|code/i;
+const NEGATIVE_HINT_RE = /search|captcha|coupon|otp|code/i;
 
 const USERNAME_TEXT_SELECTOR =
 	'input[type="text"]:not([readonly]):not([disabled]), input[type="email"]:not([readonly]):not([disabled]), input[type="tel"]:not([readonly]):not([disabled]), input:not([type]):not([readonly]):not([disabled])';
@@ -132,7 +132,7 @@ function looksLikeUsername(el: HTMLInputElement): boolean {
 }
 
 /** Latest text/email input appearing before `password` in DOM order, or null. */
-export function findUsernameNearPassword(password: HTMLInputElement): HTMLInputElement | null {
+function findUsernameNearPassword(password: HTMLInputElement): HTMLInputElement | null {
 	const form = closestAcrossShadow(password, "form");
 	const scope: ParentNode = form ?? password.ownerDocument;
 	// Walk text-like inputs AND password inputs together in pre-order: the
@@ -164,17 +164,17 @@ export interface CardFields {
 }
 
 export const CC_NUMBER_RE = /card.?number|cardnum|ccnum|cc.?number/i;
-export const CC_NAME_RE = /cardholder|name.?on.?card|cc.?name/i;
-export const CC_EXP_RE = /expir(y|ation)/i;
-export const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
-export const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
+const CC_NAME_RE = /cardholder|name.?on.?card|cc.?name/i;
+const CC_EXP_RE = /expir(y|ation)/i;
+const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
+const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
 // "verification code/number" alone is far more often a 2FA/OTP label than a CVV
 // (e.g. GitHub's 2FA field: label "Enter the verification code"), so the CVV
 // match requires card context (card verification value/code/number, or cvn).
 export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|security.?code|card.?code|card.?verif/i;
 
 /** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
-export function ccByToken(token: string, doc: Document = document): HTMLInputElement | null {
+function ccByToken(token: string, doc: Document = document): HTMLInputElement | null {
 	return deepQuery<HTMLInputElement>(
 		`input[autocomplete~="${token}"]:not([readonly]):not([disabled])`,
 		doc,
@@ -185,7 +185,7 @@ export function ccByToken(token: string, doc: Document = document): HTMLInputEle
  * First visible input matching `re` (attributes first, then label text).
  * Password-typed inputs are skipped unless `allowPassword` (CVV may be type=password).
  */
-export function findByHint(
+function findByHint(
 	re: RegExp,
 	exclude?: RegExp,
 	allowPassword = false,
@@ -309,7 +309,7 @@ export function otpInputs(
 
 // Match only interactive captchas; v3/invisible variants run transparently and
 // don't block submit, so they're excluded here and by the isRendered check.
-export const CAPTCHA_SELECTORS = [
+const CAPTCHA_SELECTORS = [
 	".g-recaptcha:not([data-size='invisible'])",
 	".h-captcha",
 	".cf-turnstile",

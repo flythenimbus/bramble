@@ -52,7 +52,7 @@ interface RegistryGuard {
 }
 
 /** Router context: guard slices, undefined until React injects them. */
-export interface RouterContext {
+interface RouterContext {
 	vault: VaultGuard | undefined;
 	registry: RegistryGuard | undefined;
 }

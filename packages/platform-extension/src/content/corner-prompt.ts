@@ -22,7 +22,7 @@ let cornerPromptEl: HTMLElement | null = null;
 let cornerShadow: ShadowRoot | null = null;
 let currentPrompt: CornerPromptPayload | null = null;
 
-export function removeCornerPrompt(): void {
+function removeCornerPrompt(): void {
 	if (cornerPromptEl) {
 		cornerPromptEl.remove();
 		cornerPromptEl = null;

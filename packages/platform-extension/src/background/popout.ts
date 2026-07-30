@@ -11,10 +11,10 @@ export const POPOUT_HANDOFF_KEY = "popout.handoff";
 // Id of the detached window we opened, so a later request focuses it instead of duplicating.
 // storage.session (not local) survives a service-worker restart but clears on browser restart,
 // which matches the lifetime of a chrome window id.
-export const POPOUT_WINDOW_KEY = "popout.windowId";
+const POPOUT_WINDOW_KEY = "popout.windowId";
 // Id of a pop-out opened solely to unlock (the picker's "Vault locked" row). It is a step in the
 // page's fill flow, not a place the user asked to be, so it closes itself once the vault unlocks.
-export const POPOUT_UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
+const POPOUT_UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
 
 /** Focus the tracked pop-out window if it is still open. Returns false when there is none:
  * the id was never stored, or the window was closed while the worker slept (windows.get

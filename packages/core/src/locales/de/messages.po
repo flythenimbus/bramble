@@ -194,10 +194,6 @@ msgid "Backing up…"
 msgstr "Sicherung läuft…"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Backup failed"
-#~ msgstr "Sicherung fehlgeschlagen"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backup folder (optional)"
 msgstr "Sicherungsordner (optional)"
 
@@ -208,10 +204,6 @@ msgstr "Master-Passwort des Backups"
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Backups"
 msgstr "Sicherungskopien"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Backups are best-effort, not a fixed time. Bramble backs up at most as often as you pick here, and only the next time you unlock it after a backup is due, so how often backups actually happen depends on how often you open Bramble on this device. Unchanged vaults are skipped. Need one right now? Use Back up now."
-#~ msgstr "Backups erfolgen nach bestmöglicher Bemühung, nicht zu einem festgelegten Zeitpunkt. Bramble sichert höchstens so oft, wie Sie hier festlegen, und zwar erst beim nächsten Entsperren nach Fälligkeit eines Backups. Wie oft Backups tatsächlich stattfinden, hängt also davon ab, wie oft Sie Bramble auf diesem Gerät öffnen. Unveränderte Tresore werden übersprungen. Benötigen Sie sofort eines? Nutzen Sie „Jetzt sichern“."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
@@ -239,20 +231,12 @@ msgid "Breached"
 msgstr "Kompromittiert"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
-#~ msgid "Bring entries in from 1Password, Bitwarden, KeePass or Proton Pass"
-#~ msgstr "Einträge von 1Password, Bitwarden, KeePass oder Proton Pass importieren"
-
-#: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Bring entries in from 1Password, Bitwarden, KeePass, Proton Pass, Apple or Google"
 msgstr "Einträge von 1Password, Bitwarden, KeePass, Proton Pass, Apple oder Google importieren"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Bring your logins, cards and notes over from another manager"
 msgstr "Migrieren Sie Ihre Anmeldedaten, Karten und Notizen von einem anderen Manager"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Bring your own storage"
-#~ msgstr "Eigenen Speicher verwenden"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bucket"
@@ -332,10 +316,6 @@ msgstr "Wählen Sie einen zu entsperrenden Tresor"
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Choose another file"
 msgstr "Andere Datei auswählen"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault."
-#~ msgstr "Wählen Sie aus, wo verschlüsselte Sicherungen gespeichert werden sollen. Bramble lädt ausschließlich Chiffretext hoch, sodass Ihr Anbieter nichts in Ihrem Tresor lesen kann."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault. Add as many as you like."
@@ -423,10 +403,6 @@ msgstr "Neues Passwort bestätigen"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Connect {name}"
 msgstr "{name} verbinden"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Connected"
-#~ msgstr "Verbunden"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Connecting to your other device…"
@@ -530,10 +506,6 @@ msgid "Create a new vault alongside your existing ones, with its own master pass
 msgstr "Erstellen Sie einen neuen Tresor zusätzlich zu Ihren bestehenden, mit einem eigenen Master-Passwort."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Create an access key with read and write access to a bucket, then paste it below."
-#~ msgstr "Erstellen Sie einen Zugriffsschlüssel mit Lese- und Schreibzugriff auf einen Bucket und fügen Sie ihn unten ein."
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Create an access key with read and write access to a bucket, then paste it below. For the bucket you can paste its full URL (https://host/bucket)."
 msgstr "Erstellen Sie einen Zugangsschlüssel mit Lese- und Schreibzugriff auf einen Bucket und fügen Sie ihn unten ein. Für den Bucket können Sie dessen vollständige URL (https://host/bucket) einfügen."
 
@@ -558,12 +530,6 @@ msgstr "Tresor erstellen"
 msgid "Create your vault"
 msgstr "Erstellen Sie Ihren Tresor"
 
-#. placeholder {0}: new Date(v.createdAt).toLocaleDateString()
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
-#~ msgid "Created {0}"
-#~ msgstr "Erstellt {0}"
-
 #. placeholder {0}: formatDate(v.createdAt)
 #: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
 msgid "Created on {0}"
@@ -576,10 +542,6 @@ msgstr "Erstellung..."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Credit or debit card"
 msgstr "Kredit- oder Debitkarte"
-
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Current"
-#~ msgstr "Aktuell"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Current password"
@@ -605,10 +567,6 @@ msgstr "Täglich"
 msgid "Dark"
 msgstr "Dunkelmodus"
 
-#: packages/core/src/app/screens/Settings/Settings.tsx
-#~ msgid "Data"
-#~ msgstr "Daten"
-
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Delete"
@@ -630,10 +588,6 @@ msgstr "Diesen Eintrag löschen?"
 msgid "Delete this vault"
 msgstr "Diesen Tresor löschen"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Delete this vault from this device? Synced copies on your other devices aren't affected, and this can't be undone here."
-#~ msgstr "Möchten Sie diesen Tresor von diesem Gerät löschen? Synchronisierte Kopien auf Ihren anderen Geräten sind davon nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden."
-
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Delete vault"
 msgstr "Tresor löschen"
@@ -651,10 +605,6 @@ msgstr "Gerätecode"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
 msgstr "Geräresynchronisierung"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Device sync currently applies to your primary vault. Independent sync for each vault is coming soon."
-#~ msgstr "Die Gerätesynchronisation gilt derzeit für Ihren primären Tresor. Eine unabhängige Synchronisation für jeden Tresor ist in Kürze verfügbar."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
@@ -681,10 +631,6 @@ msgstr "Fertig"
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
 msgstr "Herunterladen"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Easiest"
-#~ msgstr "Am einfachsten"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -732,10 +678,6 @@ msgstr "Geben Sie das Passwort für Ihre {providerLabel}-Datenbank ein"
 msgid "Enter your current password"
 msgstr "Geben Sie Ihr aktuelles Passwort ein"
 
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-#~ msgid "Enter your master password"
-#~ msgstr "Geben Sie Ihr Master-Passwort ein"
-
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
 msgstr "Geben Sie Ihr Master-Passwort ein, um das neue Gerät zu autorisieren. So ist belegt, dass die Anfrage von Ihnen stammt und nicht nur von einem bereits entsperrten Gerät."
@@ -743,10 +685,6 @@ msgstr "Geben Sie Ihr Master-Passwort ein, um das neue Gerät zu autorisieren. S
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your master password to unlock your vault"
 msgstr "Geben Sie Ihr Master-Passwort ein, um den Tresor zu entsperren"
-
-#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-#~ msgid "Enter your master password to unlock your vault."
-#~ msgstr "Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -863,17 +801,9 @@ msgstr "Zurück"
 msgid "Go to vault"
 msgstr "Zum Tresor gehen"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Got it"
-#~ msgstr "Verstanden"
-
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file."
 msgstr "Übergeben Sie Ihre Logins, Codes und Passkeys direkt an eine andere Passwort-App auf diesem Gerät. Es wird nichts in eine Datei geschrieben."
-
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-#~ msgid "Have a backup? Open a .bramble file instead"
-#~ msgstr "Haben Sie ein Backup? Öffnen Sie stattdessen eine .bramble-Datei"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
@@ -912,10 +842,6 @@ msgstr "Privaten Schlüssel ausblenden"
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hide value"
 msgstr "Wert ausblenden"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "How often to back up, at most. Off keeps manual backups only."
-#~ msgstr "Wie oft maximal gesichert werden soll. „Aus“ behält nur manuelle Backups."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
@@ -993,10 +919,6 @@ msgstr "Elemente"
 msgid "Items ({0})"
 msgstr "Elemente ({0})"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Join"
-#~ msgstr "Beitreten"
-
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Join a device"
@@ -1005,10 +927,6 @@ msgstr "Einem Gerät beitreten"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Join vault"
 msgstr "Tresor beitreten"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Join with a pairing code"
-#~ msgstr "Mit einem Kopplungscode beitreten"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Keep the invite open on your other device while the vault transfers."
@@ -1059,10 +977,6 @@ msgstr "Letzte 5"
 msgid "Last backed up {0}"
 msgstr "Zuletzt gesichert {0}"
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Last backed up: never"
-#~ msgstr "Zuletzt gesichert: nie"
-
 #. placeholder {0}: relativeTime(lastSynced)
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Last synced {0}"
@@ -1105,10 +1019,6 @@ msgstr "Login für {0} gespeichert"
 msgid "Logins"
 msgstr "Anmeldedaten"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Make primary"
-#~ msgstr "Als primär festlegen"
-
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
@@ -1119,10 +1029,6 @@ msgstr "Anmeldedaten"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Master password"
 msgstr "Master-Passwort"
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Master password for this device"
-#~ msgstr "Master-Passwort für dieses Gerät"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Master password set."
@@ -1178,10 +1084,6 @@ msgstr "Neuer {modeLabel}"
 msgid "New password"
 msgstr "Neues Passwort"
 
-#: packages/core/src/app/screens/Auth/Auth.tsx
-#~ msgid "New to {appName}?"
-#~ msgstr "Neu bei {appName}?"
-
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
 msgstr "Kein Authentifikator-QR-Code auf der Seite gefunden. Stellen Sie sicher, dass er sichtbar ist, und versuchen Sie es erneut oder fügen Sie den Einrichtungsschlüssel ein."
@@ -1227,10 +1129,6 @@ msgstr "Nostr Relay URL"
 msgid "Not backed up yet"
 msgstr "Noch nicht gesichert"
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Not set"
-#~ msgstr "Nicht festgelegt"
-
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
@@ -1249,10 +1147,6 @@ msgid "Nothing to import"
 msgstr "Nichts zu importieren"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Nothing was sent. That code is now dead, and it may have been seen by someone else, so it can't be reused. Generate a new one when you're ready to try again, with your other device in front of you."
-#~ msgstr "Es wurde nichts gesendet. Der Code ist jetzt abgelaufen und könnte von jemand anderem eingesehen worden sein, daher kann er nicht erneut verwendet werden. Erstellen Sie einen neuen Code, wenn Sie bereit sind, es erneut zu versuchen, und halten Sie das andere Gerät bereit."
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Numbers match, approve"
 msgstr "Genehmigen"
 
@@ -1268,10 +1162,6 @@ msgstr "Ausgeschaltet. Sie entsperren mit einem Sicherheitsschlüssel."
 msgid "Offer to save logins"
 msgstr "Angebot zur Speicherung von Anmeldungen"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
-#~ msgstr "Nach der Registrierung synchronisieren sich die Geräte automatisch im Hintergrund, solange diese entsperrt sind. Kein Button oder Fenster ist nötig."
-
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
 msgstr "Die Ein-Klick-Anmeldung für {name} wird in einem zukünftigen Update verfügbar sein. Wählen Sie vorerst einen Anbieter unter „"
@@ -1284,10 +1174,6 @@ msgstr "Öffnen {name}"
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
 msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Master-Passwort ein."
-
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-#~ msgid "Open a backup file instead"
-#~ msgstr "Stattdessen eine Sicherungsdatei öffnen"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
@@ -1302,10 +1188,6 @@ msgstr "Öffnen Sie Bramble auf Ihrem anderen Gerät und scannen Sie den Code od
 msgid "Open database"
 msgstr "Datenbank öffnen"
 
-#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
-#~ msgid "Open existing vault"
-#~ msgstr "Bestehenden Tresor öffnen"
-
 #: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Open in window"
@@ -1315,10 +1197,6 @@ msgstr "Im Fenster öffnen"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Open it from the {0} popup and unlock it with its master password."
 msgstr "Öffnen Sie es aus dem {0}-Popup und entsperren Sie es mit seinem Master-Passwort."
-
-#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-#~ msgid "Open your vault"
-#~ msgstr "Ihren Tresor öffnen"
 
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -1357,10 +1235,6 @@ msgstr "Kopplungscode"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."
 msgstr "Die Kopplung wurde nicht abgeschlossen."
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Pairing rejected"
-#~ msgstr "Kopplung abgelehnt"
 
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
@@ -1430,10 +1304,6 @@ msgstr "Die Passwörter stimmen nicht überein"
 msgid "Paste code instead"
 msgstr "Code stattdessen einfügen"
 
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Paste the code from your other device to sync this one to it. Replaces this profile's vault."
-#~ msgstr "Fügen Sie den Code von Ihrem anderen Gerät ein, um diesen mit ihm zu synchronisieren. Dies ersetzt den Tresor dieses Profils."
-
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Paste the code from your other device's \"Add a device\" screen"
 msgstr "Fügen Sie den Code vom anderen Gerät ein, ohne das \\"
@@ -1441,10 +1311,6 @@ msgstr "Fügen Sie den Code vom anderen Gerät ein, ohne das \\"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Paste the pairing code from your other device."
 msgstr "Fügen Sie den Pairing-Code von Ihrem anderen Gerät ein."
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Path (optional)"
-#~ msgstr "Pfad (optional)"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Path prefix (optional)"
@@ -1466,10 +1332,6 @@ msgstr "Wählen Sie ein Passwort für die exportierte Datei. Es ist unabhängig 
 msgid "Please enter your master password"
 msgstr "Bitte geben Sie Ihr Master-Passwort ein"
 
-#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-#~ msgid "Point at your existing vault file and enter your master password."
-#~ msgstr "Zeigen Sie auf Ihre bestehende Tresordatei und geben Sie Ihr Master-Passwort ein."
-
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Point your camera at the code on your other device"
 msgstr "Richten Sie Ihre Kamera auf den Code auf Ihrem anderen Gerät"
@@ -1478,10 +1340,6 @@ msgstr "Richten Sie Ihre Kamera auf den Code auf Ihrem anderen Gerät"
 msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Drücken Sie Eingabe / senden Sie das Formular ab, nachdem die Anmeldeinformationen eingegeben wurden."
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Primary"
-#~ msgstr "Primär"
-
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
 msgstr "Privater Schlüssel"
@@ -1489,10 +1347,6 @@ msgstr "Privater Schlüssel"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Private key"
 msgstr "Privater Schlüssel"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Provider"
-#~ msgstr "Anbieter"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Public / private key pair"
@@ -1584,10 +1438,6 @@ msgstr "Passkey entfernen"
 msgid "Remove URL"
 msgstr "URL entfernen"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Rename"
-#~ msgstr "Umbenennen"
-
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
 msgstr "Master-Passwort zur Entsperrung erforderlich"
@@ -1640,10 +1490,6 @@ msgid "Review what we found in your {0} export"
 msgstr "Überprüfen Sie den {0}-Export."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "S3-compatible"
-#~ msgstr "S3-kompatibel"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Save"
 msgstr "Speichern"
 
@@ -1662,10 +1508,6 @@ msgstr "Speichern Sie eine verschlüsselte .bramble-Kopie Ihres Tresors. Zum Öf
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 msgstr "Speichern Sie es jetzt an einem sicheren Ort offline. Dies ist die einzige Möglichkeit, wieder darauf zuzugreifen, falls Sie Ihr Master-Passwort vergessen und Ihre Sicherheitsschlüssel verlieren – wir können dies nicht für Sie wiederherstellen."
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Save this device's recovery code"
-#~ msgstr "Sicherungscode dieses Geräts speichern"
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
@@ -1699,10 +1541,6 @@ msgstr "Scannen Sie den QR-Code auf der 2FA-Seite einer Website oder fügen Sie 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Scan this on your other device, or copy the code below. Keep it private: anyone who sees it while this window is open could try to join. You'll confirm a matching number on both devices before anything is sent."
 msgstr "Scannen Sie diesen Code auf Ihrem anderen Gerät oder kopieren Sie ihn unten. Halten Sie ihn geheim: Jeder, der ihn sieht, solange dieses Fenster geöffnet ist, könnte versuchen beizutreten. Sie bestätigen auf beiden Geräten eine übereinstimmende Nummer, bevor etwas gesendet wird."
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "Scan this on your other device, or copy the code below. No vault secrets are in it."
-#~ msgstr "Scannen Sie dies auf Ihrem anderen Gerät oder kopieren Sie den Code unten. Es enthält keine Tresor-Geheimnisse."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
@@ -1829,10 +1667,6 @@ msgid "Show value"
 msgstr "Wert anzeigen"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Sign in (easiest)"
-#~ msgstr "Anmelden (am einfachsten)"
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Sign in and Bramble stores encrypted backups in its own {name} app folder. Only ciphertext is uploaded, so {name} can't read anything in your vault."
 msgstr "Melden Sie sich an und Bramble speichert verschlüsselte Sicherungen in seinem eigenen {name}-App-Ordner. Es wird nur Chiffretext hochgeladen, sodass {name} nichts in Ihrem Tresor lesen kann."
 
@@ -1869,10 +1703,6 @@ msgstr "SSH key · {0}"
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."
 msgstr "Stoppt die Synchronisierung dieses Geräts und hält es auf Offline-Nutzung. Ihre Einträge bleiben hier; andere Geräte sind nicht betroffen."
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Store encrypted backups in your iCloud Drive. Works on iPhone, iPad and Mac, not in the browser extension."
-#~ msgstr "Speichern Sie verschlüsselte Sicherungskopien in Ihrer iCloud Drive. Funktioniert auf iPhone, iPad und Mac, nicht in der Browsererweiterung."
-
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Store sensitive text"
 msgstr "Sensiblen Text speichern"
@@ -1892,10 +1722,6 @@ msgstr "Subdomain-Abgleich"
 #: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Support"
 msgstr "Unterstützen"
-
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Switch vault"
-#~ msgstr "Tresor wechseln"
 
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "Sync"
@@ -2016,15 +1842,6 @@ msgstr "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Dadurch wird der Tresor von diesem Gerät entfernt. Synchronisierte Kopien auf Ihren anderen Geräten sind nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden. Bestätigen Sie, um fortzufahren."
 
-#. placeholder {0}: picked.name
-#: packages/core/src/app/screens/Restore/RestoreShell.tsx
-#~ msgid "This replaces the vault currently on this device with <0>{0}</0>. Enter that backup's master password to open it."
-#~ msgstr "Dies ersetzt den aktuell auf diesem Gerät befindlichen Tresor durch <0>{0}</0>. Geben Sie das Master-Passwort dieses Backups ein, um es zu öffnen."
-
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "This vault"
-#~ msgstr "Dieser Tresor"
-
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Those passwords don't match."
 msgstr "Diese Passwörter stimmen nicht überein."
@@ -2061,10 +1878,6 @@ msgstr "Sperren bei Bildschirmsperre umschalten"
 msgid "Toggle offer to save logins"
 msgstr "Angebot zum Speichern von Anmeldedaten umschalten"
 
-#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
-#~ msgid "Total entries"
-#~ msgstr "Gesamtzahl der Einträge"
-
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
 msgstr "Gesamtanzahl der Elemente"
@@ -2097,10 +1910,6 @@ msgstr "Typ"
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock"
 msgstr "Entsperren"
-
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-#~ msgid "Unlock vault"
-#~ msgstr "Tresor entsperren"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"
@@ -2163,10 +1972,6 @@ msgstr "Passwort aktualisieren"
 msgid "Use Bramble for passkeys"
 msgstr "Bramble für Passkeys verwenden"
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Use iCloud Drive"
-#~ msgstr "iCloud Drive verwenden"
-
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Verwenden Sie helles, dunkles oder passendes System"
@@ -2192,10 +1997,6 @@ msgstr "Benutzername oder E-Mail"
 msgid "Value"
 msgstr "Wert"
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Vault"
-#~ msgstr "Tresor"
-
 #: packages/core/src/app/OptionsApp.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Vault added"
@@ -2218,10 +2019,6 @@ msgstr "Tresor wiederhergestellt"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault unlocked"
 msgstr "Vault entsperrt"
-
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "Vaults"
-#~ msgstr "Tresore"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "verification code"
@@ -2252,10 +2049,6 @@ msgstr "Wartet darauf, dass ein Gerät beitritt…"
 msgid "Waiting for your key…"
 msgstr "Warte auf Ihren Schlüssel…"
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "WebDAV"
-#~ msgstr "WebDAV"
-
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Website"
 msgstr "Website"
@@ -2276,10 +2069,6 @@ msgstr "Wöchentlich"
 msgid "Welcome to {appName}"
 msgstr "Willkommen bei {appName}"
 
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "Where scheduled encrypted backups are uploaded. The provider only ever sees ciphertext."
-#~ msgstr "Wohin geplante verschlüsselte Backups hochgeladen werden. Der Anbieter sieht ausschließlich Chiffretext."
-
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"
 msgstr "Löschen von kopierten Passwörtern nach"
@@ -2297,10 +2086,6 @@ msgstr "Jahr (JJ)"
 msgid "You can close this tab and use the {0} popup."
 msgstr "Sie können diesen Tab schließen und das {0}-Popup verwenden."
 
-#: packages/core/src/app/screens/Settings/components/VaultsSection.tsx
-#~ msgid "You can't delete the vault you're in"
-#~ msgstr "Sie können den Tresor, in dem Sie sich befinden, nicht löschen"
-
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"
 msgstr "Sie benötigen einen Tresor, bevor Sie etwas hineinimportieren können."
@@ -2308,14 +2093,6 @@ msgstr "Sie benötigen einen Tresor, bevor Sie etwas hineinimportieren können."
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "You won't be able to see this code again."
 msgstr "Sie werden diesen Code nicht wieder sehen."
-
-#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#~ msgid "You'll sign in to {name} in a new window and let Bramble upload encrypted backups to your account. Bramble only ever uploads ciphertext."
-#~ msgstr "Sie melden sich in einem neuen Fenster bei {name} an und lassen Bramble verschlüsselte Sicherungen in Ihr Konto hochladen. Bramble lädt ausschließlich Chiffretext hoch."
-
-#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-#~ msgid "You'll tap your security key when you press Join. No master password is set on this device."
-#~ msgstr "Wenn Sie auf „Beitreten“ klicken, tippen Sie Ihren Sicherheitsschlüssel. Es ist kein Master-Passwort auf diesem Gerät festgelegt."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
@@ -2341,10 +2118,6 @@ msgstr "Ihr Browser kann beim Entsperren nach Zugriff auf die Tresordatei fragen
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "your device passcode"
 msgstr "Ihr Gerätecode"
-
-#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
-#~ msgid "Your master password"
-#~ msgstr "Ihr Master-Passwort"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

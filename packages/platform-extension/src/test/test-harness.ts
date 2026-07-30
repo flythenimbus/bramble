@@ -46,7 +46,7 @@ export interface BackgroundHarness {
 	flush: () => Promise<void>;
 }
 
-export interface HarnessState {
+interface HarnessState {
 	session: Record<string, unknown>;
 	local: Record<string, unknown>;
 	alarms: Record<string, unknown>;

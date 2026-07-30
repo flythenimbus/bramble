@@ -78,7 +78,6 @@ export const EnrollJoinMsgSchema = z.object({
 		})
 		.optional(),
 });
-export type EnrollJoinMsg = z.infer<typeof EnrollJoinMsgSchema>;
 
 /** offscreen -> background: a peer's entries payload (JSON) to merge locally. */
 export const ApplyRemoteMsgSchema = z.object({ payloadJson: z.string() });
@@ -86,21 +85,17 @@ export type ApplyRemoteMsg = z.infer<typeof ApplyRemoteMsgSchema>;
 
 /** offscreen -> background: a peer's roster (JSON) to merge locally (revocations propagate). */
 export const ApplyRosterMsgSchema = z.object({ rosterJson: z.string() });
-export type ApplyRosterMsg = z.infer<typeof ApplyRosterMsgSchema>;
 
 /** shell -> background (SYNC_SIGN_ENTRY): the canonical roster-entry string to Ed25519-sign. */
 export const RosterSignEntryMsgSchema = z.object({ canonical: z.string() });
-export type RosterSignEntryMsg = z.infer<typeof RosterSignEntryMsgSchema>;
 
 /** background -> offscreen (SYNC_ROSTER_SIGN): the Ed25519 seed + the message to sign. */
 export const RosterSignHostMsgSchema = z.object({ secretB64: z.string(), message: z.string() });
-export type RosterSignHostMsg = z.infer<typeof RosterSignHostMsgSchema>;
 
 /** shell -> background (SYNC_ADMISSION_PUBKEY) / background -> offscreen (SYNC_ROSTER_ADMISSION_PUBKEY):
  * the re-entered master password + this device's password-slot salt, to derive the admission verify
  * key transiently (never stored). See docs/p2p-sync-revocation-hardening.md. */
 export const AdmissionPubkeyMsgSchema = z.object({ password: z.string(), saltB64: z.string() });
-export type AdmissionPubkeyMsg = z.infer<typeof AdmissionPubkeyMsgSchema>;
 
 /** shell -> background (SYNC_ADMISSION_SIGN): password + salt + the canonical entry to admission-sign. */
 export const AdmissionSignEntryMsgSchema = z.object({
@@ -108,7 +103,6 @@ export const AdmissionSignEntryMsgSchema = z.object({
 	saltB64: z.string(),
 	canonical: z.string(),
 });
-export type AdmissionSignEntryMsg = z.infer<typeof AdmissionSignEntryMsgSchema>;
 
 /** background -> offscreen (SYNC_ROSTER_ADMISSION_SIGN): password + salt + the message to sign. */
 export const AdmissionSignHostMsgSchema = z.object({
@@ -116,12 +110,10 @@ export const AdmissionSignHostMsgSchema = z.object({
 	saltB64: z.string(),
 	message: z.string(),
 });
-export type AdmissionSignHostMsg = z.infer<typeof AdmissionSignHostMsgSchema>;
 
 /** popup -> background -> offscreen (SYNC_ENROLL_APPROVE): the user's answer to the pairing
  * prompt. The host is holding the joiner with nothing sent; false burns the invite. */
 export const EnrollApproveMsgSchema = z.object({ approved: z.boolean() });
-export type EnrollApproveMsg = z.infer<typeof EnrollApproveMsgSchema>;
 
 /** offscreen -> popup: an approval the host is still waiting on, so a reopened popup can resume
  * the prompt rather than stranding it. Null when there is none. */

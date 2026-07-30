@@ -13,7 +13,7 @@ import { getDomain } from "tldts";
 
 // ---- request parsing ----
 
-export type UserVerification = "required" | "preferred" | "discouraged";
+type UserVerification = "required" | "preferred" | "discouraged";
 
 export interface ParsedCreationOptions {
 	rpId?: string;

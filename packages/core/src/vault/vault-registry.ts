@@ -7,7 +7,7 @@ import { z } from "zod";
 /** Device-global metadata key the registry is persisted under (via the storage adapter's meta store). */
 export const VAULT_REGISTRY_KEY = "vault.registry";
 
-export const VaultRecordSchema = z.object({
+const VaultRecordSchema = z.object({
 	id: z.string().min(1),
 	/** User-facing label. May be blank; a blank label renders as "Vault N" by position. */
 	label: z.string(),
@@ -19,7 +19,7 @@ export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 // (Older `primaryId` / `legacyBlobVaultId` fields are Zod-stripped on parse; the storage adapter's
 // one-time migration copies a pre-namespacing vault's flat data to its `:<id>` keys. See storage.ts
 // and docs/multiple-vaults.md.)
-export const VaultRegistrySchema = z.object({
+const VaultRegistrySchema = z.object({
 	vaults: z.array(VaultRecordSchema),
 });
 export type VaultRegistry = z.infer<typeof VaultRegistrySchema>;

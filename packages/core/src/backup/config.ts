@@ -33,9 +33,9 @@ export interface BackupTargetConfig {
 	lastError?: string;
 }
 
-export type S3Secrets = { accessKeyId: string; secretAccessKey: string };
-export type WebdavSecrets = { username: string; password: string };
-export type DropboxSecrets = { refreshToken: string };
+type S3Secrets = { accessKeyId: string; secretAccessKey: string };
+type WebdavSecrets = { username: string; password: string };
+type DropboxSecrets = { refreshToken: string };
 export type BackupSecrets = S3Secrets | WebdavSecrets | DropboxSecrets;
 
 /** Combine a target's non-secret config with unwrapped secrets into a ProviderConfig. */

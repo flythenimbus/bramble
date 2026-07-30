@@ -8,7 +8,7 @@ import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
-export interface NoteFormValues {
+interface NoteFormValues {
 	name: string;
 	notes: string;
 }

@@ -133,7 +133,7 @@ async function ensureUnlocked(): Promise<boolean> {
  * passes nothing (falls back to the active tab); Firefox's content transport passes the
  * exact `sender.tab.id`, so the card lands in the requesting tab even if focus moved.
  */
-export function cornerCeremonyForTab(explicitTabId?: number): CeremonyFn {
+function cornerCeremonyForTab(explicitTabId?: number): CeremonyFn {
 	return async (req) => {
 		const tabId = explicitTabId ?? (await activeTabId());
 		if (tabId === undefined) return { approved: false };
