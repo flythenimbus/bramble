@@ -9,7 +9,7 @@ import type { ImportResult } from "../import/types";
 import { base64UrlToBase64 } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
-import { COSE_ES256, coseFromPkcs8 } from "./passkey-key";
+import { COSE_ES256, keyMaterialFromPkcs8 } from "./passkey-key";
 import {
 	type CxfCredential,
 	type CxfEditableField,
@@ -109,8 +109,8 @@ async function toPasskeys(
 ): Promise<PasskeyCredential[]> {
 	const out: PasskeyCredential[] = [];
 	for (const p of raw) {
-		const publicKeyCose = await coseFromPkcs8(p.key);
-		if (!publicKeyCose) {
+		const material = await keyMaterialFromPkcs8(p.key);
+		if (!material) {
 			warnings.push(`A passkey on "${title}" uses a key type we can't read and was skipped.`);
 			continue;
 		}
@@ -122,8 +122,9 @@ async function toPasskeys(
 			userName: p.username || undefined,
 			userDisplayName: p.userDisplayName || undefined,
 			alg: COSE_ES256,
-			publicKeyCose,
-			privateKey: base64UrlToBase64(p.key),
+			publicKeyCose: material.publicKeyCose,
+			// The raw scalar unpacked from the PKCS#8, which is what core-rust signs with.
+			privateKey: material.privateKey,
 			// CXF requires exporters to zero this, and a non-zero counter reads as a clone.
 			signCount: 0,
 			createdAt,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Entry } from "../hooks/useVault";
-import { bytesToBase64 } from "../util/bytes";
+import type { Entry, PasskeyCredential } from "../hooks/useVault";
+import { base64UrlToBytes, bytesToBase64 } from "../util/bytes";
 import { toCxf } from "./to-cxf";
 import { type CxfCredential, cxfCredentialSchema } from "./types";
 
@@ -17,6 +17,20 @@ const login = (over: Partial<Extract<Entry, { type: "login" }>> = {}): Entry => 
 });
 
 const run = (e: Entry) => toCxf([e], OPTS);
+
+/** A stored passkey: `privateKey` is the RAW 32-byte scalar, as core-rust writes it. */
+const passkey = (over: Partial<PasskeyCredential> = {}): PasskeyCredential => ({
+	credentialId: bytesToBase64(new Uint8Array(16).fill(1)),
+	rpId: "github.com",
+	userHandle: bytesToBase64(new Uint8Array(8).fill(2)),
+	userName: "octocat",
+	alg: -7,
+	publicKeyCose: bytesToBase64(new Uint8Array(77).fill(3)),
+	privateKey: bytesToBase64(new Uint8Array(32).fill(4)),
+	signCount: 0,
+	createdAt: 1,
+	...over,
+});
 
 /** The emitted credentials, re-parsed through the schema so the test also proves we emit valid CXF. */
 function creds(e: Entry): CxfCredential[] {
@@ -89,34 +103,33 @@ describe("toCxf: logins", () => {
 		expect(run(e).warnings[0]).toMatch(/one-time-code/);
 	});
 
-	it("re-encodes passkey fields from our standard base64 to CXF's unpadded base64url", () => {
+	it("re-encodes passkey ids from our standard base64 to CXF's unpadded base64url", () => {
 		// 0xfb 0xff 0xbe -> standard "+/++", base64url "-_--", and the padding must go.
 		const b64 = bytesToBase64(new Uint8Array([0xfb, 0xff, 0xbe]));
 		const c = cred(
-			login({
-				passkeys: [
-					{
-						credentialId: b64,
-						rpId: "github.com",
-						userHandle: b64,
-						userName: "octocat",
-						alg: -7,
-						publicKeyCose: b64,
-						privateKey: b64,
-						signCount: 0,
-						createdAt: 1,
-					},
-				],
-			}),
+			login({ passkeys: [passkey({ credentialId: b64, userHandle: b64 })] }),
 			"passkey",
 		);
 		expect(c?.credentialId).toBe("-_--");
 		expect(c?.userHandle).toBe("-_--");
-		expect(c?.key).toBe("-_--");
 		expect(c?.rpId).toBe("github.com");
 		// CXF requires both names; ours are optional, so the display name falls back.
 		expect(c?.username).toBe("octocat");
 		expect(c?.userDisplayName).toBe("octocat");
+	});
+
+	it("wraps the stored scalar as PKCS#8, which is what CXF's `key` holds", () => {
+		const c = cred(login({ passkeys: [passkey()] }), "passkey");
+		const der = base64UrlToBytes(c?.key ?? "");
+		expect(der).toHaveLength(67);
+		// SEQUENCE, version 0, then the ecPublicKey/prime256v1 AlgorithmIdentifier.
+		expect([...der.slice(0, 7)]).toEqual([0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13]);
+	});
+
+	it("leaves behind a passkey whose key isn't a P-256 scalar, and says so", () => {
+		const e = login({ passkeys: [passkey({ privateKey: bytesToBase64(new Uint8Array(3)) })] });
+		expect(cred(e, "passkey")).toBeUndefined();
+		expect(run(e).warnings[0]).toMatch(/passkey/);
 	});
 });
 

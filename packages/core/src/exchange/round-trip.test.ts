@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Entry } from "../hooks/useVault";
 import { isLogin } from "../hooks/useVault";
-import { bytesToBase64 } from "../util/bytes";
+import { base64UrlToBytes, bytesToBase64 } from "../util/bytes";
 import { parseCxf } from "./from-cxf";
 import { toCxf } from "./to-cxf";
 
@@ -18,9 +18,9 @@ beforeAll(async () => {
 		"sign",
 		"verify",
 	]);
-	privateKey = bytesToBase64(
-		new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey)),
-	);
+	// The vault stores the RAW scalar; the PKCS#8 hop happens inside the mapper.
+	const jwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+	privateKey = bytesToBase64(base64UrlToBytes(jwk.d ?? ""));
 	publicKeyCose = bytesToBase64(new Uint8Array([1, 2, 3])); // replaced on import by the derived key
 });
 

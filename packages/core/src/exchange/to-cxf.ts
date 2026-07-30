@@ -8,6 +8,7 @@
 import type { CardEntryData, Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
 import { base64ToBase64Url, bytesToBase64Url } from "../util/bytes";
 import { parseTotp } from "../util/totp";
+import { pkcs8FromScalar } from "./passkey-key";
 import {
 	CXF_VERSION,
 	type CxfCredential,
@@ -62,7 +63,13 @@ function toUrls(urls: readonly string[]): string[] {
 	return out;
 }
 
-function passkeyCredential(p: PasskeyCredential): CxfCredential {
+/** Null when the stored key isn't a P-256 scalar we can express as PKCS#8. */
+function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
+	// CXF's `key` is PKCS#8 DER; we store the bare 32-byte scalar. Sending the scalar as-is
+	// decodes cleanly on the far side and then fails when the importer tries to USE it, which
+	// is what "contains unsupported data" looks like from the user's end.
+	const key = pkcs8FromScalar(p.privateKey);
+	if (!key) return null;
 	return {
 		type: "passkey",
 		credentialId: base64ToBase64Url(p.credentialId),
@@ -71,7 +78,7 @@ function passkeyCredential(p: PasskeyCredential): CxfCredential {
 		username: p.userName ?? "",
 		userDisplayName: p.userDisplayName ?? p.userName ?? "",
 		userHandle: base64ToBase64Url(p.userHandle),
-		key: base64ToBase64Url(p.privateKey),
+		key,
 	};
 }
 
@@ -124,7 +131,11 @@ function loginCredentials(e: LoginEntryData, warnings: string[]): CxfCredential[
 			);
 		}
 	}
-	for (const p of e.passkeys ?? []) out.push(passkeyCredential(p));
+	for (const p of e.passkeys ?? []) {
+		const credential = passkeyCredential(p);
+		if (credential) out.push(credential);
+		else warnings.push(`A passkey on "${e.name}" uses a key we can't export and was left behind.`);
+	}
 	return [...out, ...customFieldsOrNothing(extra)];
 }
 

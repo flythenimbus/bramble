@@ -1,9 +1,56 @@
-// Phase 0 spike: is ASExportedCredentialData's Codable wire format CXF-conformant JSON?
-// Build a payload the way our exporter would, encode it, and print the JSON for diffing
-// against fidoalliance.org/specs/cx/cxf-v1.0-ps-20250814.html. Then round-trip it.
+// CXF wire probe, both directions.
+//
+//   spike                -> build a payload the way our exporter would and print the JSON,
+//                           for diffing against the CXF spec.
+//   spike <file.json>    -> decode a payload WE produced through Apple's own decoder, which
+//                           is the only way to find out what iOS will reject before a device
+//                           says "contains unsupported data" and names nothing.
+//
+// Build + run (see docs/credential-exchange.md):
+//   xcrun swiftc -sdk $(xcrun --sdk iphonesimulator --show-sdk-path) \
+//     -target arm64-apple-ios26.0-simulator scripts/cxf-wire-probe.swift -o /tmp/cxf-probe
+//   xcrun simctl spawn booted /tmp/cxf-probe /tmp/payload.json
 
 import AuthenticationServices
 import Foundation
+
+/// Decode one of our payloads and report what Apple's types actually accepted.
+func inspect(path: String) -> Never {
+	guard let data = FileManager.default.contents(atPath: path) else {
+		print("=== FAILED: can't read \(path) ===")
+		exit(1)
+	}
+	do {
+		let payload = try JSONDecoder().decode(ASExportedCredentialData.self, from: data)
+		print("=== DECODED: \(payload.accounts.count) account(s) ===")
+		for account in payload.accounts {
+			for item in account.items {
+				let kinds = item.credentials.map { credential -> String in
+					switch credential {
+					case .basicAuthentication: return "basic-auth"
+					case .passkey: return "passkey"
+					case .totp: return "totp"
+					case .note: return "note"
+					case .creditCard: return "credit-card"
+					case .sshKey: return "ssh-key"
+					case .customFields: return "custom-fields"
+					default: return "other"
+					}
+				}
+				print("  item title=\(item.title.isEmpty ? "<EMPTY>" : item.title) " +
+					"scope=\(item.scope?.urls.map(\.absoluteString) ?? []) credentials=\(kinds)")
+			}
+		}
+		exit(0)
+	} catch {
+		// The whole payload fails as a unit, so this is what a device would be reacting to.
+		print("=== REJECTED ===")
+		print(error)
+		exit(1)
+	}
+}
+
+if CommandLine.arguments.count > 1 { inspect(path: CommandLine.arguments[1]) }
 
 func field(_ v: String, _ t: ASImportableEditableField.FieldType = .string) -> ASImportableEditableField {
 	ASImportableEditableField(id: nil, fieldType: t, value: v)

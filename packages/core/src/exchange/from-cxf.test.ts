@@ -1,10 +1,19 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { isLogin } from "../hooks/useVault";
-import { base64ToBase64Url, base64UrlToBase64, bytesToBase64Url } from "../util/bytes";
+import {
+	base64ToBase64Url,
+	base64ToBytes,
+	base64UrlToBase64,
+	base64UrlToBytes,
+	bytesToBase64,
+	bytesToBase64Url,
+} from "../util/bytes";
 import { parseCxf } from "./from-cxf";
 
 /** A real P-256 key, so the COSE derivation under test runs against a genuine PKCS#8 blob. */
 let keyB64Url = "";
+/** The bare scalar inside it, which is the form the vault actually stores. */
+let scalarB64 = "";
 
 beforeAll(async () => {
 	const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
@@ -13,6 +22,8 @@ beforeAll(async () => {
 	]);
 	const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
 	keyB64Url = bytesToBase64Url(pkcs8);
+	const jwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+	scalarB64 = bytesToBase64(base64UrlToBytes(jwk.d ?? ""));
 });
 
 const payload = (...credentials: unknown[]) =>
@@ -97,7 +108,7 @@ describe("parseCxf: logins", () => {
 });
 
 describe("parseCxf: passkeys", () => {
-	it("stores the key as standard base64, derives the COSE public key, and zeroes signCount", async () => {
+	it("unpacks the PKCS#8 to the raw scalar the signer needs, and rebuilds the public key", async () => {
 		const { entry } = await first({
 			type: "passkey",
 			credentialId: "-_--",
@@ -110,7 +121,10 @@ describe("parseCxf: passkeys", () => {
 		if (!entry || !isLogin(entry)) throw new Error("expected a login");
 		const [pk] = entry.passkeys ?? [];
 		expect(pk?.credentialId).toBe(base64UrlToBase64("-_--"));
-		expect(pk?.privateKey).toBe(base64UrlToBase64(keyB64Url));
+		// NOT the PKCS#8 blob: core-rust signs with the bare scalar, so storing the DER would
+		// import cleanly and then fail every assertion.
+		expect(pk?.privateKey).toBe(scalarB64);
+		expect(base64ToBytes(pk?.privateKey ?? "")).toHaveLength(32);
 		expect(pk?.rpId).toBe("github.com");
 		expect(pk?.alg).toBe(-7);
 		expect(pk?.signCount).toBe(0);

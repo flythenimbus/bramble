@@ -3,7 +3,7 @@
 
 export { parseCxf } from "./from-cxf";
 export { exportToOs, importFromOs } from "./os-transfer";
-export { COSE_ES256, coseFromPkcs8 } from "./passkey-key";
+export { COSE_ES256, keyMaterialFromPkcs8, pkcs8FromScalar } from "./passkey-key";
 export { type CxfExportOptions, type CxfExportResult, toCxf } from "./to-cxf";
 export {
 	CXF_VERSION,

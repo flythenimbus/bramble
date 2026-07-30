@@ -138,12 +138,26 @@ Two decisions worth knowing before Phase 3 wires the UI:
 | `login.username` / `.password` | `BasicAuth{username, password}` | Values wrap in `EditableField`, not bare strings. |
 | `login.urls` | `Item.scope.urls` | Absolute URLs only (the decoder drops what `Foundation.URL` rejects), so a bare host is promoted to https. |
 | `login.totp` | `TOTP{secret, period, digits, algorithm, issuer}` | `parseTotp` out, `buildTotpUri` back. An unreadable key becomes a custom field plus a warning, never a drop. |
-| `login.passkeys[]` | `Passkey{credentialId, rpId, username, userDisplayName, userHandle, key}` | Field-for-field, but **converted**: ours are standard base64, CXF is unpadded base64url. `username`/`userDisplayName` are required in CXF and optional for us, so they default to `""`. |
+| `login.passkeys[]` | `Passkey{credentialId, rpId, username, userDisplayName, userHandle, key}` | Ids convert from our standard base64 to unpadded base64url. **`key` is a format change, not just an encoding one**: we store the raw 32-byte P-256 scalar, CXF holds PKCS#8 DER. `username`/`userDisplayName` are required in CXF and optional for us, so they default to `""`. |
 | `card` | `CreditCard{number, fullName, cardType, verificationNumber, expiryDate}` | `expMonth`/`expYear` -> one `year-month` field. `brand` -> `cardType`. |
 | `note` / `.notes` | `Note{content}` | A note entry becomes an Item with a single Note credential; a login's `notes` becomes a second credential on the same Item. |
 | `ssh-key` | `CustomFields`, **not** `SSHKey` | See below. |
 | `customFields[]` | `CustomFields{fields[]}` | `hidden` -> `concealed-string` field type. |
 | `createdAt` / `updatedAt` | `Item.creationAt` / `.modifiedAt` | ms -> UNIX seconds. |
+
+**The passkey private key is PKCS#8 on the wire and a bare scalar at rest.** `core-rust` stores
+`B64.encode(secret.to_bytes())` and signs with `SecretKey::from_slice`, i.e. the raw 32 bytes, while
+CXF's `key` is PKCS#8 DER. `passkey-key.ts` bridges both ways: `pkcs8FromScalar` wraps the scalar in
+a fixed 35-byte header on export (RFC 5915 makes the public key optional, so the scalar is enough),
+and `keyMaterialFromPkcs8` unpacks the scalar back out on import rather than storing the DER.
+
+This one is worth knowing because **both failure modes are quiet**. Sending the raw scalar as `key`
+decodes perfectly on the far side and only fails when the importer tries to use it, which iOS reports
+as "some items could not be imported because they are duplicates or contain unsupported data",
+naming nothing. Storing the DER on import would round-trip through our own code and fail every later
+assertion. Apple's decoder does not validate the key, so `cxf-wire-probe.swift` accepts either;
+`passkey-key.test.ts` checks the DER against WebCrypto instead, which is the parser a real
+counterparty uses.
 
 **SSH keys are asymmetric on purpose.** CXF's `SSHKey.privateKey` is PKCS#8 DER base64url; we store
 PEM in whichever flavour the user pasted (OpenSSH, PKCS#1, SEC1, per `util/ssh.ts`). Parsing an
@@ -279,6 +293,9 @@ Verified 2026-07-29 on iPhone 17 Pro / iOS 26.4:
   potential counterparty.
 - **Still device-only:** no App Store, so 1Password / Bitwarden / Chrome as counterparties. Phase 4
   interop does not move.
+- **Decoding one of OUR payloads** through Apple's types: `cxf-wire-probe.swift <file.json>` reports
+  what it accepted (titles, scope, credential kinds) or the decode error. This is the cheap way to
+  check what iOS will take before a device says "unsupported data" and names nothing.
 - **Untested:** whether a transfer actually completes in the sim. Settling it needs the Phase 2 build
   with the plist keys, plus UI taps that `simctl` cannot send. Budget for it being device-only and
   treat a working sim flow as a bonus.
