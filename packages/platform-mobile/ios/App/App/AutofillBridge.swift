@@ -1,7 +1,6 @@
 import AuthenticationServices
 import Capacitor
 import Foundation
-import OSLog
 import Security
 
 // Local Capacitor plugin (main-app side) bridging the unlocked vault's login list to the
@@ -21,7 +20,6 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingPasskeys", returnType: CAPPluginReturnPromise),
-		CAPPluginMethod(name: "readDiagnostic", returnType: CAPPluginReturnPromise),
 	]
 
 	// Shared identifiers (App Group, Keychain group, keys) live in BrambleVault, compiled
@@ -42,11 +40,6 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		{
 			defaults?.set(slotJson, forKey: BrambleVault.slotKey)
 		}
-		// TEMPORARY diagnostic: pairs with the extension's, so a failure can be pinned to the
-		// write side or the read side. Remove with it.
-		Logger(subsystem: "app.bramble.mobile", category: "passkey-bundle").info(
-			"sync: bundleWritten=\(call.getString("passkeyCiphertext") != nil, privacy: .public) identities=\((call.getArray("passkeyIdentities") ?? []).count, privacy: .public)"
-		)
 		// Passkey bundle (provider role): a second VEK-encrypted blob the extension decrypts
 		// to assert. Its own key so the login/password path above is untouched.
 		if let pkIv = call.getString("passkeyIv"), let pkCt = call.getString("passkeyCiphertext"),
@@ -138,13 +131,6 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	// Erase every trace of the vault the provider holds. Called when a vault is deleted, so it
 	// must also drop the pending-passkey handoff and the live keep-unlocked session VEK: both
 	// outlive the vault otherwise, and both are readable with the same credential it used.
-	// TEMPORARY: the provider's last passkey-lookup line, so it can be read on-device with no
-	// Mac attached. Remove with the diagnostics.
-	@objc func readDiagnostic(_ call: CAPPluginCall) {
-		let line = UserDefaults(suiteName: BrambleVault.appGroup)?.string(forKey: BrambleVault.diagKey)
-		call.resolve(["line": line ?? ""])
-	}
-
 	@objc func clear(_ call: CAPPluginCall) {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		defaults?.removeObject(forKey: BrambleVault.bundleKey)
