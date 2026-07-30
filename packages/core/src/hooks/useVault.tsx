@@ -47,6 +47,9 @@ export interface CustomField {
  * is the provider direction (other sites sign in with it), the opposite of the
  * security-key unlock in `vault/webauthn-ceremony.ts`. See docs/passkey-provider.md.
  */
+// Every base64 field here is STANDARD base64, not the base64url of the WebAuthn wire: the
+// Rust core encodes that way and the native bridges decode that way. Convert at the edges
+// (webauthn-proxy.ts does, and so does exchange/ for CXF, which is base64url).
 export interface PasskeyCredential {
 	/** Standard-base64 credential id Bramble minted at creation or imported. */
 	credentialId: string;

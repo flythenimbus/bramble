@@ -31,6 +31,29 @@ export function parseTotp(input: string | undefined | null): ParsedTotp | null {
 	}
 }
 
+/**
+ * Build the `otpauth://totp/...` URI we store, from structured parts (a CXF TOTP
+ * credential). Throws if the secret isn't valid base32.
+ */
+export function buildTotpUri(parts: {
+	secret: string;
+	issuer?: string;
+	account?: string;
+	digits?: number;
+	period?: number;
+	algorithm?: string;
+}): string {
+	const totp = new OTPAuth.TOTP({
+		secret: OTPAuth.Secret.fromBase32(parts.secret.replace(/[\s-]/g, "").toUpperCase()),
+		issuer: parts.issuer ?? "",
+		label: parts.account || "account",
+		algorithm: (parts.algorithm ?? "SHA1").toUpperCase(),
+		digits: parts.digits ?? 6,
+		period: parts.period ?? 30,
+	});
+	return totp.toString();
+}
+
 /** Current code plus whole seconds left in its time-step, for a given clock (ms, defaults to now). */
 export function totpAt(
 	totp: OTPAuth.TOTP,
