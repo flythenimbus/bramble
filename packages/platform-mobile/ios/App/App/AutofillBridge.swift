@@ -128,11 +128,22 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		call.resolve(["pending": pending])
 	}
 
+	// Erase every trace of the vault the provider holds. Called when a vault is deleted, so it
+	// must also drop the pending-passkey handoff and the live keep-unlocked session VEK: both
+	// outlive the vault otherwise, and both are readable with the same credential it used.
 	@objc func clear(_ call: CAPPluginCall) {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		defaults?.removeObject(forKey: BrambleVault.bundleKey)
 		defaults?.removeObject(forKey: BrambleVault.slotKey)
 		defaults?.removeObject(forKey: BrambleVault.passkeyBundleKey)
+		defaults?.removeObject(forKey: BrambleVault.pendingPasskeysKey)
+		SecItemDelete(
+			[
+				kSecClass as String: kSecClassGenericPassword,
+				kSecAttrService as String: BrambleVault.sessionService,
+				kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+			] as CFDictionary)
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
 	}
 

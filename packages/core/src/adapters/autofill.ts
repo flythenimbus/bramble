@@ -184,6 +184,14 @@ export interface AutofillAdapter {
 	/** Clear the pushed index (on lock). */
 	clearIndex(): Promise<void>;
 	/**
+	 * Mobile only: erase the OS credential provider's stored copy of the vault (the
+	 * VEK-encrypted bundle, the password slot, passkeys, and registered identities).
+	 * Called on vault DELETE, not on lock: `clearIndex` deliberately leaves the mirror
+	 * in place so the provider can still unlock and fill on its own. Without this the
+	 * bundle + slot outlive the vault as a self-contained, master-password-openable copy.
+	 */
+	clearProviderData?(): Promise<void>;
+	/**
 	 * Mobile only: how long the OS autofill provider may stay unlocked without
 	 * re-auth (a "keep unlocked" window, 0 = always require auth). Defined only on
 	 * platforms with a native credential provider; absent elsewhere.

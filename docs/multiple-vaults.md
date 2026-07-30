@@ -194,9 +194,28 @@ A new `VaultRegistryProvider` sits above `VaultProvider` and owns the vault list
 - **Delete** is destructive and irreversible, and it only removes **this device's**
   copy: a synced copy on another device survives, and the UI must say so plainly so
   nobody reads delete as destroy-everywhere. Delete wipes that vault's blob, backup
-  snapshot, and every `sync.*:<id>` / `backup.*:<id>` key, removes the registry
-  record, reassigns `primaryId` if it pointed here, and if it was the last vault
-  drops back to first-run setup.
+  snapshot, and every `sync.*:<id>` key, removes the registry record, and if it was
+  the last vault drops back to first-run setup.
+
+  It must also erase everything else keyed to that vault, or the bytes are gone while
+  readable copies of the contents and the key that opens them live on:
+  - the mobile credential provider's mirror (`autofill.clearProviderData`). The App Group
+    bundle + slot are a self-contained, master-password-openable copy of the vault, and
+    they are NOT namespaced by id, so nothing else reclaims them. `clearIndex` does not
+    do this: it is a no-op on iOS by design, since the mirror has to survive lock.
+  - the biometric VEK item (`biometric.disable(id)`), which also drops the shared autofill
+    mirror of that VEK. Otherwise the key outlives the data it opened.
+
+  All of it is best-effort (`.catch`): once the blob is erased the delete has to finish,
+  so a failing native call can't strand a half-deleted vault. There are no per-vault
+  `backup.*` keys (`backup.targets` / `backup.config` are device-global), and `primaryId`
+  no longer exists.
+
+  Known gap: on Android `KeepUnlockedStore`'s on-disk (Keystore-wrapped) VEK cache survives
+  a delete. There is no `AutofillBridge` plugin on Android to route `clearProviderData` to,
+  and `BiometricVaultPlugin.deleteSecret` clears only that vault's Keystore alias. Smaller
+  than the iOS leak was (Android's service reads the vault file, so the entry data goes with
+  the blob) but it is still key material outliving its vault. Needs a native entry point.
 
 ## Restore destination
 

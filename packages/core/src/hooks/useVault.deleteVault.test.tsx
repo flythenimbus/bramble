@@ -2,6 +2,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import { PER_VAULT_SYNC_KEYS } from "../sync/sync-keys";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import {
 	encodeVaultBlob,
@@ -73,14 +74,25 @@ function makePlatform() {
 		decryptWithVek: vi.fn(async () => JSON.stringify({ entries: [], tombstones: [] })),
 		unwrapVekPassword: vi.fn(async () => true),
 	};
+	const autofill = {
+		clearIndex: vi.fn(async () => {}),
+		setIndex: vi.fn(async () => {}),
+		clearProviderData: vi.fn(async () => {}),
+	};
+	const biometric = {
+		isAvailable: vi.fn(async () => false),
+		isEnabled: vi.fn(async () => false),
+		disable: vi.fn(async (_id: string) => {}),
+	};
 	const platform = {
 		storage,
 		crypto,
-		autofill: { clearIndex: vi.fn(async () => {}), setIndex: vi.fn(async () => {}) },
+		autofill,
+		biometric,
 		shell,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, shell, storage, crypto };
+	return { platform, shell, storage, crypto, autofill, biometric };
 }
 
 function mountActions(platform: Platform) {
@@ -134,5 +146,58 @@ describe("deleteVault clears the recorded active vault", () => {
 		expect(ok).toBe(false);
 		expect(storage.deleteVaultBlob).not.toHaveBeenCalled();
 		expect(shell.setActiveVault).not.toHaveBeenCalledWith(null);
+	});
+});
+
+// Erasing the blob is not enough: the mobile provider's mirror is an openable copy of the vault
+// (bundle + slot), and the biometric item is the key that opens it. Both survived a delete, and
+// neither is namespaced in a way that anything else would reclaim.
+describe("deleteVault erases everything else keyed to the vault", () => {
+	it("clears the provider mirror, the biometric item, and the per-vault sync keys", async () => {
+		const { platform, storage, autofill, biometric } = makePlatform();
+		const getActions = mountActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			await getActions().deleteVault({ password: "pw" });
+		});
+
+		expect(autofill.clearProviderData).toHaveBeenCalled();
+		expect(biometric.disable).toHaveBeenCalledWith(VAULT_ID);
+		for (const k of PER_VAULT_SYNC_KEYS) {
+			expect(storage.removeMeta).toHaveBeenCalledWith(`${k}:${VAULT_ID}`);
+		}
+	});
+
+	it("does none of it when re-auth fails", async () => {
+		const { platform, crypto, autofill, biometric } = makePlatform();
+		crypto.verifyPasswordSlot.mockResolvedValue(false);
+		const getActions = mountActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			await getActions().deleteVault({ password: "wrong" });
+		});
+
+		expect(autofill.clearProviderData).not.toHaveBeenCalled();
+		expect(biometric.disable).not.toHaveBeenCalled();
+	});
+
+	// The bytes are already gone by then, so a native plugin that throws must not strand a
+	// half-deleted vault: the registry record and active id still have to be cleared.
+	it("still finishes the delete when a native cleanup call throws", async () => {
+		const { platform, shell, autofill, biometric } = makePlatform();
+		autofill.clearProviderData.mockRejectedValue(new Error("no plugin"));
+		biometric.disable.mockRejectedValue(new Error("keychain -34018"));
+		const getActions = mountActions(platform);
+		await act(async () => {});
+
+		let ok: boolean | undefined;
+		await act(async () => {
+			ok = await getActions().deleteVault({ password: "pw" });
+		});
+
+		expect(ok).toBe(true);
+		expect(shell.setActiveVault).toHaveBeenLastCalledWith(null);
 	});
 });

@@ -159,7 +159,7 @@ import {
 	type HybridClock,
 	makeClock,
 } from "../sync";
-import { syncKeyFor } from "../sync/sync-keys";
+import { PER_VAULT_SYNC_KEYS, syncKeyFor } from "../sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { toAutofillIndex } from "../vault/autofill-index";
 import { biometricUnlockFlow, enableBiometricUnlock } from "../vault/biometric-unlock";
@@ -1289,6 +1289,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await lock();
 			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
 			await storage.deleteVaultBlob(activeId).catch(() => {});
+			// Everything else keyed to this vault, or the blob is gone while copies of its
+			// contents and its key material live on. Each is best-effort: a native or storage
+			// failure here must not abort a delete whose bytes are already erased.
+			await autofill.clearProviderData?.().catch(() => {});
+			await biometric?.disable(activeId).catch(() => {});
+			for (const k of PER_VAULT_SYNC_KEYS) {
+				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
+			}
 			await dropActiveRecord();
 			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
 			// so after a delete it still named the vault we just erased. Mobile's sync resolves its
@@ -1297,7 +1305,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await shell.setActiveVault?.(null);
 			return true;
 		},
-		[verifyMasterPassword, verifyWithSecurityKey, activeId, lock, storage, dropActiveRecord, shell],
+		[
+			verifyMasterPassword,
+			verifyWithSecurityKey,
+			activeId,
+			lock,
+			storage,
+			dropActiveRecord,
+			shell,
+			autofill,
+			biometric,
+		],
 	);
 
 	// Every action is referentially stable (state reads route through latestRef), so this
