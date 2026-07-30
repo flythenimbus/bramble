@@ -39,6 +39,9 @@ const platform: Platform = {
 	shell: mobileShell,
 	clipboard: mobileClipboard,
 	biometric: mobileBiometric,
+	// iOS only, and presence just means the plugin exists; the UI asks it whether this
+	// particular device can actually exchange. Kept off the async boot path on purpose.
+	exchange: resolveExchange(),
 };
 
 // Single-window host: `App` is the vault/unlock UI; the setup flow (create/open a
@@ -131,9 +134,6 @@ void (async () => {
 		await mobileStorage.setMeta(PREF_AUTOLOCK_MINUTES, -1);
 	}
 	await resolveAppVersion();
-	// OS credential exchange (iOS 26+). Resolved before first render so the import/export
-	// entry points can gate on the adapter's presence without flashing.
-	platform.exchange = await resolveExchange();
 	// Best-effort: detect the device locale before render so the UI loads the right
 	// catalog with no English flash. Falls back to navigator.language inside @core.
 	deviceLocale = await Device.getLanguageTag()

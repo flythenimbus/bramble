@@ -3,6 +3,10 @@ import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "
 import { useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
+import {
+	exchangeBlockedReason,
+	useExchangeAvailability,
+} from "../../../hooks/useExchangeAvailability";
 import { useVault } from "../../../hooks/useVault";
 import type { ImportProvider } from "../../../import";
 import {
@@ -44,7 +48,10 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		fileB64: string;
 	} | null>(null);
 
-	// The OS-transfer card only exists where the platform can do it (iOS 26+).
+	// The OS-transfer card shows wherever the build has the plugin; when this particular
+	// device can't transfer, the card says why instead of disappearing.
+	const availability = useExchangeAvailability();
+	const exchangeBlocked = exchangeBlockedReason(availability);
 	const providers = IMPORT_PROVIDERS.filter((p) => !p.viaSystem || exchange);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
@@ -288,7 +295,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						<button
 							key={p.id}
 							type="button"
-							disabled={busy}
+							disabled={busy || exchangeBlocked !== null}
 							onClick={() => void onSystemTransfer(p)}
 							className="w-full flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm text-left hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all disabled:opacity-60"
 						>
@@ -297,7 +304,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							</div>
 							<div className="min-w-0 flex-1">
 								<p className="text-sm">{p.label}</p>
-								<p className="text-xs text-muted-foreground truncate">{p.blurb}</p>
+								<p className="text-xs text-muted-foreground">{exchangeBlocked ?? p.blurb}</p>
 							</div>
 						</button>
 					) : (

@@ -480,6 +480,10 @@ msgstr "Copiar código de verificação"
 msgid "Couldn't open this database."
 msgstr "Não foi possível abrir este banco de dados."
 
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Couldn't reach the transfer service on this device."
+msgstr "Não foi possível alcançar o serviço de transferência neste dispositivo."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't read that transfer."
 msgstr "Não foi possível ler essa transferência."
@@ -2052,6 +2056,14 @@ msgstr "Total de Itens"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Touch ID"
 msgstr "Touch ID"
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26."
+msgstr "A transferência entre apps requer iOS 26."
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26. This device is on iOS {version}."
+msgstr "A transferência entre apps requer iOS 26. Este dispositivo está no iOS {version}."
 
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Try again"

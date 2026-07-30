@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
+import {
+	exchangeBlockedReason,
+	useExchangeAvailability,
+} from "../../../../hooks/useExchangeAvailability";
 import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { useToast } from "../../../components/ui/toast";
@@ -27,6 +31,10 @@ export function DataSection() {
 	const { show } = useToast();
 	const [kdbxOpen, setKdbxOpen] = useState(false);
 	const [sending, setSending] = useState(false);
+	// Presence of the adapter only means this build can ask. Whether THIS device can transfer
+	// is a runtime answer, and when it's no the row says why rather than vanishing.
+	const availability = useExchangeAvailability();
+	const blocked = exchangeBlockedReason(availability);
 
 	// The OS runs the picker and the consent sheet, so the only outcomes we report are the
 	// lossy-mapping warnings and an outright failure. A cancel is silent by design.
@@ -109,12 +117,15 @@ export function DataSection() {
 					<Row
 						icon={<ArrowLeftRight className="w-4 h-4 text-primary" />}
 						title={t`Send to another app`}
-						subtitle={t`Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file.`}
+						subtitle={
+							blocked ??
+							t`Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file.`
+						}
 					>
 						<Button
 							variant="secondary"
 							size="sm"
-							disabled={sending}
+							disabled={sending || blocked !== null || availability === null}
 							aria-label={t`Send to another app`}
 							onClick={() => void send()}
 						>

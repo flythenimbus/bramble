@@ -1,4 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
+import type { ExchangeAvailability } from "@core/index";
 import { armFilePickGrace } from "./auto-lock";
 
 // Credential exchange (FIDO CXP/CXF), iOS 26+. Thin wrapper over the native plugin in
@@ -9,7 +10,7 @@ import { armFilePickGrace } from "./auto-lock";
 // app. Without arming the auto-lock grace first, "Immediately" locks the vault mid-transfer
 // and the payload is lost, the same trap the native file picker has.
 interface CredentialExchangePlugin {
-	isAvailable(): Promise<{ available: boolean; providerEnabled: boolean }>;
+	isAvailable(): Promise<{ available: boolean; providerEnabled: boolean; osVersion?: string }>;
 	requestExport(options: { importerBundleId?: string }): Promise<{ formatVersion: string }>;
 	exportCredentials(options: { cxfJson: string }): Promise<void>;
 	consumeImportToken(): Promise<{ token?: string }>;
@@ -19,19 +20,20 @@ interface CredentialExchangePlugin {
 
 const Native = registerPlugin<CredentialExchangePlugin>("CredentialExchange");
 
-export interface ExchangeAvailability {
-	/** The OS supports credential exchange (iOS 26+) and the plugin is present. */
-	available: boolean;
-	/** Bramble is switched on as an AutoFill provider, which is what makes the OS list us. */
-	providerEnabled: boolean;
-}
-
-/** Swallows errors so a build without the native plugin (the browser dev build) hides the feature. */
+/**
+ * Never rejects: a missing plugin is reported as unavailable WITH the reason attached, so the
+ * UI can distinguish "this OS can't" from "the call failed" instead of hiding the feature and
+ * leaving nothing to diagnose.
+ */
 export async function exchangeAvailability(): Promise<ExchangeAvailability> {
 	try {
 		return await Native.isAvailable();
-	} catch {
-		return { available: false, providerEnabled: false };
+	} catch (err) {
+		return {
+			available: false,
+			providerEnabled: false,
+			error: err instanceof Error ? err.message : String(err),
+		};
 	}
 }
 

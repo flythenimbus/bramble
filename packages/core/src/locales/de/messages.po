@@ -480,6 +480,10 @@ msgstr "Verifizierungscode kopieren"
 msgid "Couldn't open this database."
 msgstr "Die Datenbank konnte nicht geöffnet werden."
 
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Couldn't reach the transfer service on this device."
+msgstr "Der Übertragungsdienst auf diesem Gerät konnte nicht erreicht werden."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't read that transfer."
 msgstr "Diese Übertragung konnte nicht gelesen werden."
@@ -2052,6 +2056,14 @@ msgstr "Gesamtanzahl der Elemente"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Touch ID"
 msgstr "Touch ID"
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26."
+msgstr "Die Übertragung zwischen Apps erfordert iOS 26."
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26. This device is on iOS {version}."
+msgstr "Die Übertragung zwischen Apps erfordert iOS 26. Dieses Gerät verwendet iOS {version}."
 
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Try again"

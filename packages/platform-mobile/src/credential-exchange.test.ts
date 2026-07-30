@@ -28,9 +28,15 @@ describe("exchangeAvailability", () => {
 		expect(await exchangeAvailability()).toEqual({ available: true, providerEnabled: false });
 	});
 
-	it("reports unavailable when the native plugin is absent, rather than throwing", async () => {
+	// Keeping the reason is the difference between "this OS can't" and "the plugin didn't load",
+	// which the UI shows the user instead of silently hiding the feature.
+	it("reports unavailable WITH the reason when the native call fails, rather than throwing", async () => {
 		native.isAvailable.mockRejectedValue(new Error("not implemented"));
-		expect(await exchangeAvailability()).toEqual({ available: false, providerEnabled: false });
+		expect(await exchangeAvailability()).toEqual({
+			available: false,
+			providerEnabled: false,
+			error: "not implemented",
+		});
 	});
 });
 

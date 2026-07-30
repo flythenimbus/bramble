@@ -8,6 +8,10 @@ export interface ExchangeAvailability {
 	available: boolean;
 	/** We are switched on as a credential provider, which is what makes the OS list us. */
 	providerEnabled: boolean;
+	/** OS version string, so an unavailable device can say why rather than hiding the feature. */
+	osVersion?: string;
+	/** Set when the native call itself failed, which is a different problem from an old OS. */
+	error?: string;
 }
 
 export interface CredentialExchangeAdapter {

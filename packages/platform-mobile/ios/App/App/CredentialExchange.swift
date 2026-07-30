@@ -86,15 +86,20 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 	// MARK: - Capability
 
 	@objc func isAvailable(_ call: CAPPluginCall) {
+		// Reported even when unavailable, so the UI can say "needs iOS 26, this is 18.5"
+		// rather than silently hiding the feature and leaving nothing to diagnose.
+		let osVersion = UIDevice.current.systemVersion
 		guard #available(iOS 26.0, *) else {
-			call.resolve(["available": false, "providerEnabled": false])
+			call.resolve(["available": false, "providerEnabled": false, "osVersion": osVersion])
 			return
 		}
 		// The exchange capability is declared by our credential-provider extension, so the
 		// OS only offers us once the user has enabled Bramble under AutoFill. Reported
 		// separately from `available` so the UI can say which of the two is missing.
 		ASCredentialIdentityStore.shared.getState { state in
-			call.resolve(["available": true, "providerEnabled": state.isEnabled])
+			call.resolve([
+				"available": true, "providerEnabled": state.isEnabled, "osVersion": osVersion,
+			])
 		}
 	}
 

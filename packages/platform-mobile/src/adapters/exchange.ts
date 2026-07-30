@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { CredentialExchangeAdapter } from "@core/index";
 import {
 	claimImportToken,
@@ -19,15 +20,15 @@ export const mobileExchange: CredentialExchangeAdapter = {
 };
 
 /**
- * The adapter, or undefined when this device can't exchange (pre-iOS-26, Android, or the dev
- * browser). Resolved once before first render so the UI can gate on presence synchronously
- * rather than flashing a card that would fail when tapped.
+ * The adapter, or undefined where the platform has no exchange plugin at all (Android, the
+ * dev browser). Presence means "this build can ask", NOT "this device can do it": the UI
+ * calls `availability()` and reports WHY when the answer is no.
  *
- * Deliberately keyed on OS support alone, not on whether Bramble is enabled as a credential
- * provider: a user who hasn't turned it on yet should still see the feature and be told what
- * to do, rather than have it silently missing.
+ * That distinction is deliberate. An earlier cut resolved availability here and dropped the
+ * adapter when the OS was too old, which hid the feature with no way to tell an old OS from a
+ * plugin that failed to load. It also put an unbounded native call on the pre-render path,
+ * where a hung callback would have blocked first paint.
  */
-export async function resolveExchange(): Promise<CredentialExchangeAdapter | undefined> {
-	const { available } = await mobileExchange.availability();
-	return available ? mobileExchange : undefined;
+export function resolveExchange(): CredentialExchangeAdapter | undefined {
+	return Capacitor.getPlatform() === "ios" ? mobileExchange : undefined;
 }
