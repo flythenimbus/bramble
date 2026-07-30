@@ -313,6 +313,10 @@ msgstr "Escolha um cofre para desbloquear"
 msgid "Choose another file"
 msgstr "Escolher outro arquivo"
 
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Choose the vault these items should go into"
+msgstr "Escolha o cofre de destino desses itens."
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault. Add as many as you like."
 msgstr "Escolha onde armazenar os backups criptografados. O Bramble envia apenas texto cifrado, portanto, seu provedor não pode ler nada no seu cofre. Adicione quantos destinos desejar."
@@ -527,7 +531,7 @@ msgid "Create your vault"
 msgstr "Crie seu cofre"
 
 #. placeholder {0}: formatDate(v.createdAt)
-#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+#: packages/core/src/app/components/VaultChoiceList.tsx
 msgid "Created on {0}"
 msgstr "Criado em {0}"
 

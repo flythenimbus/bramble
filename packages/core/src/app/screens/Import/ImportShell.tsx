@@ -8,6 +8,7 @@ import {
 	useExchangeAvailability,
 } from "../../../hooks/useExchangeAvailability";
 import { useVault } from "../../../hooks/useVault";
+import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import type { ImportProvider } from "../../../import";
 import {
 	IMPORT_PROVIDERS,
@@ -18,6 +19,7 @@ import {
 } from "../../../import";
 import { bytesToBase64 } from "../../../util/bytes";
 import { Button } from "../../components/ui/button";
+import { VaultChoiceList } from "../../components/VaultChoiceList";
 import { Header } from "./components/Header";
 import { KdbxUnlock } from "./components/KdbxUnlock";
 import { Shell } from "./components/Shell";
@@ -36,6 +38,7 @@ const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
 export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
 	const { shell, crypto, exchange } = usePlatform();
+	const { vaults, activeId, selectVault } = useVaultRegistry();
 	const { t } = useLingui();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
 	const [result, setResult] = useState<ImportResult | null>(null);
@@ -87,6 +90,19 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				<div className="flex justify-center py-12">
 					<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
 				</div>
+			</Shell>
+		);
+	}
+
+	// Several vaults and none chosen yet. Happens when the OS launches us straight into an
+	// inbound transfer, which skips the launch-time picker, so ask here instead of silently
+	// importing into whichever vault happens to be first. One vault auto-selects upstream, so
+	// this never appears for the common case.
+	if (!activeId && vaults.length > 1) {
+		return (
+			<Shell onClose={onClose}>
+				<Header subtitle={t`Choose the vault these items should go into`} />
+				<VaultChoiceList onSelect={selectVault} />
 			</Shell>
 		);
 	}
