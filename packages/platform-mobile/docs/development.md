@@ -141,6 +141,17 @@ The biometric unlock ships as a **local plugin** living inside the owned native 
   `@CapacitorPlugin(name = "BiometricVault")` class extending `Plugin`, registered with
   `registerPlugin(BiometricVaultPlugin.class)` in `MainActivity.onCreate` (before
   `super.onCreate`).
+- **The `registerPluginInstance` line is the step that actually matters, and forgetting it fails
+  silently.** Capacitor 8 does **not** discover plugins through the Objective-C runtime: it registers
+  `packageClassList` from the generated `capacitor.config.json` (npm-packaged plugins only), plus
+  whatever `capacitorDidLoad()` adds. A local plugin that compiles, links, and appears in the binary
+  is still invisible to JS until it is added to that list in `BiometricVault.swift`; calls to it
+  reject with "not implemented", which an adapter that swallows errors will report as "feature
+  unavailable". Adding the file to `project.pbxproj` is necessary but not sufficient.
+  ```bash
+  # every local plugin class should appear in the registration list
+  grep -c registerPluginInstance ios/App/App/BiometricVault.swift
+  ```
 - **Both survive `cap sync`.** Verified: `cap sync` rewrites only `public/`, the generated
   `capacitor.config.json`, and the plugin list (`Package.swift` / `capacitor.*.gradle`); it does
   **not** touch the storyboard, `pbxproj`, `MainActivity`, or hand-added native source. Re-check
