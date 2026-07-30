@@ -173,7 +173,12 @@ App (`ios/App/App/Info.plist`): add `NSUserActivityTypes` containing the credent
 type. Verify the exact constant spelling against the SDK at build time (`ASCredentialExchangeActivity`
 as the activity string, `ASCredentialExchangeActivityType` as the symbol).
 
-### New plugin: `ios/App/App/CredentialExchange.swift`
+### New plugin: `ios/App/App/CredentialExchange.swift` (BUILT)
+
+Verified in the built Release product: the plugin symbols are in `App.app/App`, the extension
+declares `SupportsCredentialExchange` + `SupportedCredentialExchangeVersions ["1.0"]`, and the app
+declares `NSUserActivityTypes ["ASCredentialExchangeActivity"]`. **A real transfer is still
+unverified**; see the simulator section.
 
 `@objc(CredentialExchangePlugin)`, `jsName = "CredentialExchange"`, following `AutofillBridge.swift`.
 Everything is `@available(iOS 26.0, *)` guarded; the deployment target stays 15.0.
@@ -234,7 +239,7 @@ picker and it applies verbatim here.
 |---|---|---|
 | 0 | ~~Spike: is Apple's Codable CXF-shaped?~~ **DONE, passed.** | - |
 | 1 | ~~Shared `core/src/exchange/` module + tests~~ **DONE** (31 tests, both directions + round trip). | - |
-| 2 | Swift plugin, Info.plist keys, AppDelegate hook, auto-lock grace | 3-4d |
+| 2 | ~~Swift plugin, Info.plist keys, AppDelegate hook, auto-lock grace~~ **BUILT, compile-verified; the transfer itself is unverified.** | - |
 | 3 | Import card, Settings export row, flags, i18n | 1-1.5d |
 | 4 | Device + interop testing: Apple Passwords, Chrome iOS, 1Password, Bitwarden. Both directions. | 1-2d |
 | 5 | *Optional*: CXF file import/export through the existing file path, all targets, Android included | +1d |

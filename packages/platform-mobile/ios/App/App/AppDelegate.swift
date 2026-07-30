@@ -39,6 +39,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        // A credential-exchange handoff carries an import token, not a URL, so it is parked
+        // for the JS side (which unlocks first) and never forwarded to the link handling.
+        if CredentialExchangeInbox.accept(userActivity) { return true }
         // Called when the app was launched with an activity, including Universal Links.
         // Feel free to add additional processing here, but if you want the App API to support
         // tracking app url opens, make sure to keep this call

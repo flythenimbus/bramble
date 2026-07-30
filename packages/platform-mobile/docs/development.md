@@ -302,6 +302,35 @@ resolve package dependencies" (quirks 3-6). That pin used to be `/tmp`, but macO
 `manageAppVersionAndBuildNumber: false`, or Xcode's export step re-stamps the build number and ships
 archive+1. Signing stays automatic + `-allowProvisioningUpdates`.
 
+### 18. The App scheme builds Release, so `Debug-iphonesimulator` products are stale
+
+`xcodebuild ... -scheme App build` writes to
+`ios/DerivedData/Build/Products/**Release**-iphonesimulator/`, because the scheme's build action is
+pinned to Release (the AutoFill provider only registers properly in a Release build, quirk 13).
+`Debug-iphonesimulator/` still holds whatever an older run left there, so inspecting it after a build
+shows old bytes and reads as "my change didn't compile". Always check the Release directory, or pass
+an explicit `-configuration`.
+
+Handy verification after touching native code or an Info.plist, since it reads the built product
+rather than the source:
+```bash
+strings App.app/App | grep -c CredentialExchangePlugin
+plutil -extract NSExtension.NSExtensionAttributes.ASCredentialProviderExtensionCapabilities json -o - \
+  App.app/PlugIns/AutoFillProbe.appex/Info.plist
+```
+
+### 19. Enabling the credential provider on a simulator without the Settings UI
+
+Quirk 13 says the Settings AutoFill toggle is device-only. The registration half is reachable from
+the CLI:
+```bash
+xcrun simctl spawn <udid> pluginkit -e use -i app.bramble.mobile.AutoFillProbe   # blank -> "+"
+xcrun simctl spawn <udid> pluginkit -m -vvv -i app.bramble.mobile.AutoFillProbe  # inspect the record
+```
+Only the flag flip is verified, not that AuthenticationServices honours it for live fill or for the
+credential-exchange picker; `pluginkit` does not surface the extension's declared capabilities either.
+Treat end-to-end behaviour as device-only until proven otherwise.
+
 ## Reclaiming disk space
 
 The iOS runtimes are the big consumers (~8 GB each). List and delete unused ones rather

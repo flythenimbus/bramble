@@ -44,6 +44,16 @@
 				     in code so the extension still runs on iOS 15/16 for passwords. -->
 				<key>ProvidesPasskeys</key>
 				<true/>
+				<!-- Credential exchange (iOS 26+). Declared on the EXTENSION even though the
+				     transfer runs in the app: this is what makes the OS list Bramble in the
+				     import/export picker. Older systems ignore both keys.
+				     See docs/credential-exchange.md. -->
+				<key>SupportsCredentialExchange</key>
+				<true/>
+				<key>SupportedCredentialExchangeVersions</key>
+				<array>
+					<string>1.0</string>
+				</array>
 			</dict>
 		</dict>
 	</dict>

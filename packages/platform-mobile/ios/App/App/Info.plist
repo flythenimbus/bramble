@@ -47,6 +47,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Credential exchange (iOS 26+): the OS hands an inbound transfer to the app as an
+	     NSUserActivity of this type, and it is only delivered if the type is declared here.
+	     The token is picked up in AppDelegate. See docs/credential-exchange.md. -->
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>ASCredentialExchangeActivity</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Bramble uses the camera to scan device pairing codes and 2FA QR codes.</string>
 	<key>NSFaceIDUsageDescription</key>
