@@ -4,6 +4,7 @@ import {
 	claimImportToken,
 	exchangeAvailability,
 	exportToApp,
+	hasPendingImport,
 	redeemImportToken,
 } from "../credential-exchange";
 
@@ -15,6 +16,7 @@ export const mobileExchange: CredentialExchangeAdapter = {
 	exporterId: "app.bramble.mobile",
 	availability: exchangeAvailability,
 	exportToApp,
+	hasPendingImport,
 	claimImportToken,
 	redeemImportToken,
 };

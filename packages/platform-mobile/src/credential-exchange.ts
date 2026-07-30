@@ -13,6 +13,7 @@ interface CredentialExchangePlugin {
 	isAvailable(): Promise<{ available: boolean; providerEnabled: boolean; osVersion?: string }>;
 	requestExport(options: { importerBundleId?: string }): Promise<{ formatVersion: string }>;
 	exportCredentials(options: { cxfJson: string }): Promise<void>;
+	hasPendingImport(): Promise<{ pending: boolean }>;
 	consumeImportToken(): Promise<{ token?: string }>;
 	importCredentials(options: { token: string }): Promise<{ cxfJson: string }>;
 	addListener(event: "importAvailable", cb: () => void): Promise<{ remove: () => Promise<void> }>;
@@ -63,6 +64,18 @@ export function onImportAvailable(cb: () => void): () => void {
 	return () => {
 		void handle?.then((h) => h.remove()).catch(() => {});
 	};
+}
+
+/**
+ * Is a transfer waiting? Used to route to the import screen at launch, when the activity has
+ * already been delivered and no listener could have caught it. Non-destructive.
+ */
+export async function hasPendingImport(): Promise<boolean> {
+	try {
+		return (await Native.hasPendingImport()).pending;
+	} catch {
+		return false;
+	}
 }
 
 /**

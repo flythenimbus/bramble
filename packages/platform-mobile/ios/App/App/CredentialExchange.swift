@@ -37,6 +37,13 @@ enum CredentialExchangeInbox {
 		NotificationCenter.default.post(name: didArrive, object: nil)
 	}
 
+	/// True when a token is waiting, without taking it.
+	static func peek() -> Bool {
+		lock.lock()
+		defer { lock.unlock() }
+		return pending != nil
+	}
+
 	/// Takes the token and clears it; a second read gets nothing.
 	static func take() -> UUID? {
 		lock.lock()
@@ -64,6 +71,7 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "requestExport", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "exportCredentials", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "hasPendingImport", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumeImportToken", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "importCredentials", returnType: CAPPluginReturnPromise),
 	]
@@ -161,6 +169,14 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 	}
 
 	// MARK: - Import (we are the destination)
+
+	/// Is a transfer waiting? Non-destructive, because this answers "should we route to the
+	/// import screen", which happens before the screen exists to claim it. At a cold launch the
+	/// activity arrives before the webview has registered any listener, so the event alone is
+	/// not enough.
+	@objc func hasPendingImport(_ call: CAPPluginCall) {
+		call.resolve(["pending": CredentialExchangeInbox.peek()])
+	}
 
 	@objc func consumeImportToken(_ call: CAPPluginCall) {
 		guard let token = CredentialExchangeInbox.take() else {

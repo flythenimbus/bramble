@@ -19,6 +19,7 @@ function adapter(over: Partial<CredentialExchangeAdapter> = {}): CredentialExcha
 		exportToApp: async (build) => {
 			await build("1.0");
 		},
+		hasPendingImport: async () => false,
 		claimImportToken: async () => null,
 		redeemImportToken: async () => "{}",
 		...over,

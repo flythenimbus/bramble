@@ -25,6 +25,11 @@ export interface CredentialExchangeAdapter {
 	 */
 	exportToApp(buildPayload: (formatVersion: string) => Promise<string> | string): Promise<void>;
 	/**
+	 * Is a transfer waiting? Non-destructive, so the app can route to the import screen at
+	 * launch without consuming the token the screen itself needs.
+	 */
+	hasPendingImport(): Promise<boolean>;
+	/**
 	 * Take the token for an inbound transfer, or null when none is waiting. Safe while
 	 * locked: a token carries no credentials. Destructive, so it can't be redeemed twice.
 	 */

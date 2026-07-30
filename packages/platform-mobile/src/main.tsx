@@ -23,7 +23,7 @@ import { mobileShell, mobileTarget, registerOpenSetup, resolveAppVersion } from 
 import { mobileStorage } from "./adapters/storage";
 import { startAutoLock } from "./auto-lock";
 import { consumePendingAutofillSave } from "./autofill-pending";
-import { onImportAvailable } from "./credential-exchange";
+import { hasPendingImport, onImportAvailable } from "./credential-exchange";
 import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/sync-manager";
 
@@ -71,9 +71,20 @@ function Root() {
 	);
 
 	// An inbound credential-exchange transfer (iOS 26+): the OS launches us with a token, so
-	// route to the import wizard, which owns claiming and redeeming it. A cold launch has no
-	// listener yet, but the token is parked natively until the screen asks for it.
+	// route to the import wizard, which owns claiming and redeeming it.
+	//
+	// Two paths, because one is not enough. The event covers an app that is already running.
+	// At a COLD launch the activity is delivered before the webview exists, so that event
+	// fires into nothing; the token is parked natively and we ask for it on mount instead.
+	// Routing while still locked is deliberate: the import screen shows its own unlock gate
+	// and claims the token the moment the vault opens, so the user is never dropped on the
+	// vault list having forgotten what they started.
 	useEffect(() => onImportAvailable(() => setView("import")), []);
+	useEffect(() => {
+		void hasPendingImport().then((pending) => {
+			if (pending) setView("import");
+		});
+	}, []);
 
 	// Android hardware / gesture back (github #15): close an open setup/import/restore overlay, else
 	// let the app step its (memory-history) router via tryAppBack, else background the app (Android's
