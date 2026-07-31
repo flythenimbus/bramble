@@ -1,11 +1,10 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
 import { encodePairingCode } from "../sync/enrollment";
+import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY, type VaultRegistry } from "../vault/vault-registry";
-import { useVaultActions, VaultProvider } from "./useVault";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 afterEach(cleanup);
 
@@ -60,31 +59,10 @@ function makePlatform() {
 	return { platform, setActiveVault };
 }
 
-function mountActions(platform: Platform) {
-	let actions: ReturnType<typeof useVaultActions> | null = null;
-	function Consumer() {
-		actions = useVaultActions();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<VaultProvider>
-					<Consumer />
-				</VaultProvider>
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-	return () => {
-		if (!actions) throw new Error("actions not captured");
-		return actions;
-	};
-}
-
 describe("startJoin re-entry", () => {
 	it("starts ONE join when called twice before the first settles", async () => {
 		const { platform, setActiveVault } = makePlatform();
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {}); // flush the registry load
 
 		let first: Promise<void> | null = null;

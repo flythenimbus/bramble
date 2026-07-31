@@ -1,10 +1,9 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
+import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import { useVaultActions, VaultProvider } from "./useVault";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 afterEach(cleanup);
 
@@ -59,31 +58,10 @@ function makePlatform(existingVaults: number) {
 	return { platform, resetSyncState, shell, crypto };
 }
 
-function mountActions(platform: Platform) {
-	let actions: ReturnType<typeof useVaultActions> | null = null;
-	function Consumer() {
-		actions = useVaultActions();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<VaultProvider>
-					<Consumer />
-				</VaultProvider>
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-	return () => {
-		if (!actions) throw new Error("actions not captured");
-		return actions;
-	};
-}
-
 describe("createVault sync-reset guard", () => {
 	it("resets device sync identity when creating the FIRST vault (clean slate)", async () => {
 		const { platform, resetSyncState } = makePlatform(0);
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {}); // flush the registry load
 
 		await act(async () => {
@@ -95,7 +73,7 @@ describe("createVault sync-reset guard", () => {
 
 	it("does NOT reset device sync identity when adding a vault (would wipe a sibling's sync)", async () => {
 		const { platform, resetSyncState } = makePlatform(1);
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {}); // flush the registry load
 
 		await act(async () => {
@@ -123,7 +101,7 @@ describe("createVault records the active vault before swapping the VEK", () => {
 			order.push("generateVek");
 			throw new Error("stop after the guard");
 		});
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
 		await act(async () => {

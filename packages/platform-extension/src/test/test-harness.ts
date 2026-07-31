@@ -7,6 +7,27 @@ import { vi } from "vitest";
 
 type AnyMsg = Record<string, any>;
 
+/**
+ * One in-memory `chrome.storage` area over a plain object, mirroring chrome's `get`
+ * overloads: a string key, an array of keys, or null/undefined for everything. Callers own
+ * the backing store, so they can seed it and assert against it after the fact.
+ */
+export function memoryStorageArea(store: Record<string, unknown>) {
+	return {
+		get: async (keys?: string | string[] | null) => {
+			if (keys == null) return { ...store };
+			const list = Array.isArray(keys) ? keys : [keys];
+			const out: Record<string, unknown> = {};
+			for (const k of list) if (k in store) out[k] = store[k];
+			return out;
+		},
+		set: async (obj: Record<string, unknown>) => Object.assign(store, obj),
+		remove: async (key: string) => {
+			delete store[key];
+		},
+	};
+}
+
 export interface OffscreenResponse {
 	ok: boolean;
 	data?: unknown;

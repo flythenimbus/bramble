@@ -6,6 +6,7 @@ import {
 } from "@core/vault/vault-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
+import { memoryStorageArea } from "../test/test-harness";
 
 // In-memory chrome.storage.local + .session, stubbed as the `chrome` global platform-api reads.
 // `get` mirrors chrome's overloads: a string key, an array of keys, or null/undefined (all).
@@ -16,20 +17,9 @@ function stubChrome(
 	// Copy the seeds so a test's writes don't leak into the shared fixtures below.
 	const local = { ...localSeed };
 	const session = { ...sessionSeed };
-	const area = (store: Record<string, unknown>) => ({
-		get: async (keys?: string | string[] | null) => {
-			if (keys == null) return { ...store };
-			const list = Array.isArray(keys) ? keys : [keys];
-			const out: Record<string, unknown> = {};
-			for (const k of list) if (k in store) out[k] = store[k];
-			return out;
-		},
-		set: async (obj: Record<string, unknown>) => Object.assign(store, obj),
-		remove: async (key: string) => {
-			delete store[key];
-		},
+	vi.stubGlobal("chrome", {
+		storage: { local: memoryStorageArea(local), session: memoryStorageArea(session) },
 	});
-	vi.stubGlobal("chrome", { storage: { local: area(local), session: area(session) } });
 	return { local, session };
 }
 

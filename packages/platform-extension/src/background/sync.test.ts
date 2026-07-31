@@ -6,6 +6,7 @@ import {
 } from "@core/vault/vault-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
+import { memoryStorageArea } from "../test/test-harness";
 
 // Capture what the background hands the offscreen host. The rest of the background wiring is
 // stubbed so importing ./sync doesn't drag in the router/offscreen machinery.
@@ -37,21 +38,8 @@ function stubChrome(
 ) {
 	const local = { ...localSeed };
 	const session = { ...sessionSeed };
-	const area = (store: Record<string, unknown>) => ({
-		get: async (keys?: string | string[] | null) => {
-			if (keys == null) return { ...store };
-			const list = Array.isArray(keys) ? keys : [keys];
-			const out: Record<string, unknown> = {};
-			for (const k of list) if (k in store) out[k] = store[k];
-			return out;
-		},
-		set: async (obj: Record<string, unknown>) => Object.assign(store, obj),
-		remove: async (key: string) => {
-			delete store[key];
-		},
-	});
 	vi.stubGlobal("chrome", {
-		storage: { local: area(local), session: area(session) },
+		storage: { local: memoryStorageArea(local), session: memoryStorageArea(session) },
 		alarms: { create: vi.fn(), clear: vi.fn(async () => {}) },
 		runtime: { onMessage: { addListener: vi.fn() } },
 	});

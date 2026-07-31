@@ -1,8 +1,9 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
 import { PER_VAULT_SYNC_KEYS } from "../sync/sync-keys";
+import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import {
 	encodeVaultBlob,
@@ -15,8 +16,6 @@ import {
 	type PasswordSlot,
 	SLOT_KIND_PASSWORD,
 } from "../vault-format";
-import { useVaultActions, VaultProvider } from "./useVault";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 afterEach(cleanup);
 
@@ -95,31 +94,10 @@ function makePlatform() {
 	return { platform, shell, storage, crypto, autofill, biometric };
 }
 
-function mountActions(platform: Platform) {
-	let actions: ReturnType<typeof useVaultActions> | null = null;
-	function Consumer() {
-		actions = useVaultActions();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<VaultProvider>
-					<Consumer />
-				</VaultProvider>
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-	return () => {
-		if (!actions) throw new Error("actions not captured");
-		return actions;
-	};
-}
-
 describe("deleteVault clears the recorded active vault", () => {
 	it("erases the blob and then clears the active id", async () => {
 		const { platform, shell, storage } = makePlatform();
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {}); // flush the registry load
 
 		let ok: boolean | undefined;
@@ -135,7 +113,7 @@ describe("deleteVault clears the recorded active vault", () => {
 	it("leaves the active id alone when re-auth fails (nothing was deleted)", async () => {
 		const { platform, shell, storage, crypto } = makePlatform();
 		crypto.verifyPasswordSlot.mockResolvedValue(false);
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
 		let ok: boolean | undefined;
@@ -155,7 +133,7 @@ describe("deleteVault clears the recorded active vault", () => {
 describe("deleteVault erases everything else keyed to the vault", () => {
 	it("clears the provider mirror, the biometric item, and the per-vault sync keys", async () => {
 		const { platform, storage, autofill, biometric } = makePlatform();
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
 		await act(async () => {
@@ -172,7 +150,7 @@ describe("deleteVault erases everything else keyed to the vault", () => {
 	it("does none of it when re-auth fails", async () => {
 		const { platform, crypto, autofill, biometric } = makePlatform();
 		crypto.verifyPasswordSlot.mockResolvedValue(false);
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
 		await act(async () => {
@@ -189,7 +167,7 @@ describe("deleteVault erases everything else keyed to the vault", () => {
 		const { platform, shell, autofill, biometric } = makePlatform();
 		autofill.clearProviderData.mockRejectedValue(new Error("no plugin"));
 		biometric.disable.mockRejectedValue(new Error("keychain -34018"));
-		const getActions = mountActions(platform);
+		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
 		let ok: boolean | undefined;
