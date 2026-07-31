@@ -142,6 +142,12 @@ function validRpId(value: string): boolean {
 		.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
 }
 
+/** Conversion outcomes across the whole file, so a systemic failure can be named once. */
+interface ConversionTally {
+	converted: number;
+	failed: number;
+}
+
 async function importPasskeys(
 	rawCredentials: unknown[] | null | undefined,
 	loginName: string,
@@ -149,6 +155,7 @@ async function importPasskeys(
 	importedAt: number,
 	context: ImportParserContext,
 	warnings: string[],
+	tally: ConversionTally,
 ): Promise<PasskeyCredential[] | undefined> {
 	if (!rawCredentials?.length) return undefined;
 
@@ -193,10 +200,12 @@ async function importPasskeys(
 		} catch {
 			// Suppress foreign conversion errors so they cannot leak key bytes into the UI.
 			warnings.push(`${label} has invalid private-key material and was skipped.`);
+			tally.failed++;
 			continue;
 		}
 
 		const credentialCreatedAt = parseDate(credential.creationDate);
+		tally.converted++;
 		imported.push({
 			credentialId,
 			rpId: credential.rpId,
@@ -267,6 +276,7 @@ export async function parseBitwarden(
 	const imported: EntryData[] = [];
 	const warnings: string[] = [];
 	const importedAt = Date.now();
+	const tally: ConversionTally = { converted: 0, failed: 0 };
 
 	for (const item of parsed.data.items) {
 		const name = item.name ?? "";
@@ -283,6 +293,7 @@ export async function parseBitwarden(
 				importedAt,
 				context,
 				warnings,
+				tally,
 			);
 			// Keep all URLs; collapse their per-URI match detection into one per-entry mode.
 			const urls = (login.uris ?? [])
@@ -344,6 +355,15 @@ export async function parseBitwarden(
 				customFields: toCustomFields([...fields, ...identity]),
 			});
 		}
+	}
+
+	// Every key failing is not a file full of corrupt passkeys, it is the converter not
+	// answering: a stale WASM build, or native bindings that were never regenerated. Without
+	// this the per-key warnings blame the user's data for a build problem.
+	if (tally.failed > 0 && tally.converted === 0) {
+		warnings.push(
+			"No passkey could be converted, which usually means the app's crypto module is out of date rather than a problem with your export.",
+		);
 	}
 
 	return summarize(imported, 0, warnings);

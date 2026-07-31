@@ -110,6 +110,7 @@ async function toPasskeys(
 	createdAt: number,
 	warnings: string[],
 	context: ImportParserContext,
+	tally: { converted: number; failed: number },
 ): Promise<PasskeyCredential[]> {
 	const out: PasskeyCredential[] = [];
 	for (const p of raw) {
@@ -121,8 +122,10 @@ async function toPasskeys(
 			material = await context.passkeyImportPkcs8(base64UrlToBase64(p.key));
 		} catch {
 			warnings.push(`A passkey on "${title}" uses a key type we can't read and was skipped.`);
+			tally.failed++;
 			continue;
 		}
+		tally.converted++;
 		out.push({
 			// Stored as STANDARD base64 throughout the app; CXF is base64url.
 			credentialId: base64UrlToBase64(p.credentialId),
@@ -168,6 +171,7 @@ async function entryFor(
 	item: CxfItem,
 	warnings: string[],
 	context: ImportParserContext,
+	tally: { converted: number; failed: number },
 ): Promise<EntryData | null> {
 	const g = group(item.credentials ?? []);
 	const name = item.title || item.subtitle || "Untitled";
@@ -185,7 +189,14 @@ async function entryFor(
 
 	if (g.basicAuth || g.totp || g.passkeys.length > 0) {
 		const totp = g.totp ? totpUriOf(g.totp, name, g.fields, warnings) : undefined;
-		const passkeys = await toPasskeys(g.passkeys, name, createdAt ?? Date.now(), warnings, context);
+		const passkeys = await toPasskeys(
+			g.passkeys,
+			name,
+			createdAt ?? Date.now(),
+			warnings,
+			context,
+			tally,
+		);
 		return {
 			type: "login",
 			name,
@@ -258,14 +269,23 @@ export async function parseCxf(
 
 	const imported: EntryData[] = [];
 	const warnings: string[] = [];
+	const tally = { converted: 0, failed: 0 };
 	let skipped = 0;
 
 	for (const account of parsed.data.accounts) {
 		for (const item of account.items ?? []) {
-			const entry = await entryFor(item, warnings, context);
+			const entry = await entryFor(item, warnings, context, tally);
 			if (entry) imported.push(entry);
 			else skipped++;
 		}
+	}
+
+	// Every key failing means the converter isn't answering (stale WASM, or native bindings that
+	// were never regenerated), not that the sender's passkeys are corrupt.
+	if (tally.failed > 0 && tally.converted === 0) {
+		warnings.push(
+			"No passkey could be converted, which usually means the app's crypto module is out of date rather than a problem with the transfer.",
+		);
 	}
 
 	return summarize(imported, skipped, warnings);
