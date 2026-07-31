@@ -1,9 +1,8 @@
-import { strFromU8, unzipSync } from "fflate";
 import { z } from "zod";
 import type { CardEntryData, EntryData, LoginEntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
-import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
+import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
 // 1Password .1pux = a zip whose export.data is JSON (accounts > vaults > items).
@@ -223,28 +222,16 @@ function mapNote(item: OpItem, name: string, notes: string | undefined): EntryDa
 
 /** Parse a 1Password .1pux export (zip) into importable entries. */
 export function parseOnePassword(raw: string | Uint8Array): ImportResult {
-	let files: Record<string, Uint8Array>;
-	try {
-		files = unzipSync(asBytes(raw));
-	} catch {
-		throw new Error("Couldn't read this .1pux file. It may be corrupt.");
-	}
-	assertUnzipUnderCap(files);
-	const dataFile =
-		files["export.data"] ?? Object.entries(files).find(([p]) => p.endsWith("export.data"))?.[1];
-	if (!dataFile) throw new Error(FORMAT_ERROR);
-
-	let json: unknown;
-	try {
-		json = JSON.parse(strFromU8(dataFile));
-	} catch {
-		throw new Error(FORMAT_ERROR);
-	}
-	const parsed = exportSchema.safeParse(json);
-	if (!parsed.success) throw new Error(FORMAT_ERROR);
+	const parsed = readZippedJson(raw, {
+		findData: (files) =>
+			files["export.data"] ?? Object.entries(files).find(([p]) => p.endsWith("export.data"))?.[1],
+		schema: exportSchema,
+		corruptError: "Couldn't read this .1pux file. It may be corrupt.",
+		formatError: FORMAT_ERROR,
+	});
 
 	const imported: EntryData[] = [];
-	for (const account of parsed.data.accounts) {
+	for (const account of parsed.accounts) {
 		for (const vault of account.vaults ?? []) {
 			for (const item of vault.items ?? []) {
 				const name = item.overview?.title ?? "";

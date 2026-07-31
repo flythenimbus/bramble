@@ -1,4 +1,4 @@
-import { strFromU8 } from "fflate";
+import { strFromU8, unzipSync } from "fflate";
 import {
 	type CustomField,
 	type EntryData,
@@ -100,6 +100,45 @@ export function asBytes(raw: string | Uint8Array): Uint8Array {
 // Decompressed-size ceiling for zip importers: the 50 MB input cap doesn't stop
 // a high-ratio zip bomb, so bound the decompressed total too.
 const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
+
+/**
+ * The shape every zipped vendor export shares: unzip under the size cap, find the one file
+ * that carries the data, parse it as JSON, and validate it. Only the file name and the error
+ * wording differ per vendor, so those are the parameters.
+ *
+ * `corruptError` covers an unreadable archive (a truncated download); `formatError` covers a
+ * readable archive that isn't this vendor's export, which is a different thing to tell a user.
+ */
+export function readZippedJson<T>(
+	raw: string | Uint8Array,
+	opts: {
+		findData: (files: Record<string, Uint8Array>) => Uint8Array | undefined;
+		schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false } };
+		corruptError: string;
+		formatError: string;
+	},
+): T {
+	let files: Record<string, Uint8Array>;
+	try {
+		files = unzipSync(asBytes(raw));
+	} catch {
+		throw new Error(opts.corruptError);
+	}
+	assertUnzipUnderCap(files);
+
+	const dataFile = opts.findData(files);
+	if (!dataFile) throw new Error(opts.formatError);
+
+	let json: unknown;
+	try {
+		json = JSON.parse(strFromU8(dataFile));
+	} catch {
+		throw new Error(opts.formatError);
+	}
+	const parsed = opts.schema.safeParse(json);
+	if (!parsed.success) throw new Error(opts.formatError);
+	return parsed.data;
+}
 
 /** Throw if an unzip result's total decompressed size exceeds the cap. Run before any further parsing. */
 export function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {

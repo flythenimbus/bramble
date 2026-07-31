@@ -1,4 +1,9 @@
-import type { BackupSecrets, BackupTargetConfig, WrappedCreds } from "./config";
+import {
+	applyBackupOutcomes,
+	type BackupSecrets,
+	type BackupTargetConfig,
+	type WrappedCreds,
+} from "./config";
 import { isDue, selectDueTargets } from "./schedule";
 
 /**
@@ -69,15 +74,7 @@ export async function runScheduledBackups(
 
 	// Re-read the list (it may have changed during the uploads) and fold results in by id.
 	const latest = await deps.loadTargets();
-	await deps.saveTargets(
-		latest.map((t) => {
-			const r = outcome.get(t.id);
-			if (!r) return t;
-			return r.error !== undefined
-				? { ...t, lastError: r.error }
-				: { ...t, lastBackupAt: now, lastVaultHash: r.hash, lastError: undefined };
-		}),
-	);
+	await deps.saveTargets(applyBackupOutcomes(latest, outcome, now));
 
 	const succeeded: string[] = [];
 	const failed: { id: string; error: string }[] = [];

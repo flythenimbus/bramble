@@ -1,8 +1,7 @@
-import { strFromU8, unzipSync } from "fflate";
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
-import { asBytes, assertUnzipUnderCap, type RawField, summarize, toCustomFields } from "./shared";
+import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
 // Proton Pass export: a zip holding data.json with a `vaults` map. Schema lenient except `vaults`.
@@ -71,29 +70,17 @@ function splitExpiry(raw: string | null | undefined): { expMonth: string; expYea
 
 /** Parse a Proton Pass zip export into Bramble entries. Throws on non-Proton input. */
 export function parseProtonPass(raw: string | Uint8Array): ImportResult {
-	let files: Record<string, Uint8Array>;
-	try {
-		files = unzipSync(asBytes(raw));
-	} catch {
-		throw new Error("Couldn't read this Proton Pass file. It may be corrupt.");
-	}
-	assertUnzipUnderCap(files);
-	const dataFile = Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1];
-	if (!dataFile) throw new Error(FORMAT_ERROR);
-
-	let json: unknown;
-	try {
-		json = JSON.parse(strFromU8(dataFile));
-	} catch {
-		throw new Error(FORMAT_ERROR);
-	}
-	const parsed = exportSchema.safeParse(json);
-	if (!parsed.success) throw new Error(FORMAT_ERROR);
+	const parsed = readZippedJson(raw, {
+		findData: (files) => Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1],
+		schema: exportSchema,
+		corruptError: "Couldn't read this Proton Pass file. It may be corrupt.",
+		formatError: FORMAT_ERROR,
+	});
 
 	const imported: EntryData[] = [];
 	const warnings: string[] = [];
 
-	for (const vault of Object.values(parsed.data.vaults)) {
+	for (const vault of Object.values(parsed.vaults)) {
 		for (const item of vault.items ?? []) {
 			if (item.state === STATE_TRASHED) continue;
 			const d = item.data ?? {};

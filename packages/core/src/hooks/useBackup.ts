@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createTarget, runBackup } from "../backup";
 import {
+	applyBackupOutcomes,
 	BACKUP_CONFIG_KEY,
 	BACKUP_TARGETS_KEY,
 	type BackupFrequency,
@@ -191,16 +192,7 @@ export function useBackup() {
 				}),
 			);
 			const byId = new Map(results.map((r) => [r.id, r]));
-			const now = Date.now();
-			await persist(
-				list.map((t) => {
-					const r = byId.get(t.id);
-					if (!r) return t;
-					return r.error !== undefined
-						? { ...t, lastError: r.error }
-						: { ...t, lastBackupAt: now, lastVaultHash: r.hash, lastError: undefined };
-				}),
-			);
+			await persist(applyBackupOutcomes(list, byId, Date.now()));
 			setRunningIds(new Set());
 		},
 		[targets, storage, crypto, persist, activeId, vaults],

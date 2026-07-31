@@ -2,19 +2,12 @@
 // available in the extension service worker and the mobile webview, so there is
 // no dependency on the Rust core. See docs/cloud-storage-backups.md.
 
+import { bytesToHex } from "../util/bytes";
+import { sha256Hex } from "../util/hash";
+
 const encoder = new TextEncoder();
 
-function toHex(bytes: Uint8Array): string {
-	let out = "";
-	for (const b of bytes) out += b.toString(16).padStart(2, "0");
-	return out;
-}
-
-export async function sha256Hex(data: Uint8Array | string): Promise<string> {
-	const bytes = typeof data === "string" ? encoder.encode(data) : data;
-	const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
-	return toHex(new Uint8Array(digest));
-}
+export { sha256Hex };
 
 async function hmac(key: Uint8Array, data: string): Promise<Uint8Array> {
 	const cryptoKey = await crypto.subtle.importKey(
@@ -117,7 +110,7 @@ export async function signS3Request(
 	const kRegion = await hmac(kDate, input.credentials.region);
 	const kService = await hmac(kRegion, service);
 	const kSigning = await hmac(kService, "aws4_request");
-	const signature = toHex(await hmac(kSigning, stringToSign));
+	const signature = bytesToHex(await hmac(kSigning, stringToSign));
 
 	return {
 		headers: {

@@ -5,6 +5,7 @@
 // module is platform-free and testable. See docs/p2p-sync.md.
 
 import { base64ToBytes, bytesToBase64, bytesToHex } from "../util/bytes";
+import { sha256Hex } from "../util/hash";
 
 const EPHEMERAL_KIND = 20000;
 const ROOM_LABEL = "bramble/signal";
@@ -46,10 +47,6 @@ export interface NostrVerifier {
 // crypto.subtle wants BufferSource; our Uint8Arrays are ArrayBufferLike-backed,
 // which newer TS lib.dom types reject without a cast.
 const buf = (b: Uint8Array): BufferSource => b as BufferSource;
-
-async function sha256Hex(data: Uint8Array): Promise<string> {
-	return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", buf(data))));
-}
 
 /** Derive a 32-byte subkey from the group key via HKDF-SHA256 under a context info
  * string, so distinct uses (room id vs signaling) never share raw key bytes. */

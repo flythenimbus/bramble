@@ -33,6 +33,33 @@ export interface BackupTargetConfig {
 	lastError?: string;
 }
 
+/** What one target's backup attempt produced: a vault hash on success, a message on failure. */
+export interface BackupOutcome {
+	hash?: string;
+	error?: string;
+}
+
+/**
+ * Fold outcomes into the stored targets, by id. The rule both callers need: success stamps
+ * the time and hash and CLEARS the previous error, failure records the error and leaves the
+ * last-good stamps alone, and a target with no outcome is untouched (the list can change
+ * while uploads run). Kept in one place because two copies of it drift into two different
+ * ideas of when a target is "up to date".
+ */
+export function applyBackupOutcomes(
+	targets: BackupTargetConfig[],
+	outcomes: Map<string, BackupOutcome>,
+	now: number,
+): BackupTargetConfig[] {
+	return targets.map((t) => {
+		const r = outcomes.get(t.id);
+		if (!r) return t;
+		return r.error !== undefined
+			? { ...t, lastError: r.error }
+			: { ...t, lastBackupAt: now, lastVaultHash: r.hash, lastError: undefined };
+	});
+}
+
 type S3Secrets = { accessKeyId: string; secretAccessKey: string };
 type WebdavSecrets = { username: string; password: string };
 type DropboxSecrets = { refreshToken: string };
