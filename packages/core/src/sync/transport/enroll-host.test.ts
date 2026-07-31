@@ -420,9 +420,8 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		}
 	});
 
-	// Regression: an un-updated joiner killed the invite and the inviter's UI said nothing at all.
-	// The reason ("update the other device") is the one thing only the user can act on, and it
-	// existed solely in a status log whose render is commented out.
+	// Regression: an un-updated joiner killed the invite and the UI said nothing, when "update the
+	// other device" is the one thing only the user can act on.
 	it("reports an invite-killing failure to the user, with something they can act on", async () => {
 		vi.useFakeTimers();
 		try {
@@ -534,12 +533,8 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		expect(b.sent).toEqual([]);
 	});
 
-	// Regression: removing the post-bundle ack removed the only thing keeping the transport alive
-	// long enough for the bundle to leave. sendSecure resolving means "handed to the channel", not
-	// "sent": the relay path only queues `void publish(...)`, which awaits two WebCrypto ops before
-	// it reaches the socket, and mesh.stop() closes the client synchronously in the same macrotask.
-	// With stop() in the handler's finally, the tail of a multi-frame bundle was dropped, and losing
-	// one frame fails the whole message. Only bites on vaults past ~30 entries, hence "flaky pairing".
+	// Regression: sendSecure resolving means "handed to the channel", not "sent", so stop() in the
+	// handler's finally dropped the tail of a multi-frame bundle. Only bites past ~30 entries.
 	it("does not stop the session until the joiner confirms it has the bundle", async () => {
 		const stop = vi.fn();
 		const handle = makeEnrollHandler("inviter", hostOpts(), stop);
@@ -583,11 +578,8 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		}
 	});
 
-	// Regression: the invite window closing has to reach whoever is holding the approval prompt.
-	// The UI countdown can't be relied on for that — an extension popup closes on focus loss and
-	// comes back with no countdown running — so the inviter was left showing Approve/Reject for a
-	// session that had already been torn down, offering a decision that could no longer be acted
-	// on. Found pairing Vivaldi to Firefox, where the joiner had already given up.
+	// Regression: expiry has to reach whoever holds the prompt. The UI countdown isn't reliable for
+	// that (a popup closes on focus loss), so the inviter offered Approve/Reject for a dead session.
 	it("fires onInviteExpired before stopping, so a parked prompt can be refused", async () => {
 		vi.useFakeTimers();
 		try {
@@ -679,10 +671,8 @@ describe("joiner — inviter pin", () => {
 		await expect(handle(peer)).rejects.toThrow(/inviter key/i);
 	});
 
-	// Regression: the joiner's wait for the first bundle frame spans the inviter's approval prompt,
-	// which is human time. It shared the 30s frame budget while the inviter allowed a full 3-minute
-	// invite, so a user who actually stopped to compare the digits timed out their own join — with
-	// the invite already burned. That penalises the exact behaviour the SAS depends on.
+	// Regression: this wait spans the inviter's prompt, so it is human time. On the 30s frame budget
+	// a user who actually compared the digits timed out their own join.
 	it("waits out a slow approval instead of timing out while the user compares digits", async () => {
 		vi.useFakeTimers();
 		try {

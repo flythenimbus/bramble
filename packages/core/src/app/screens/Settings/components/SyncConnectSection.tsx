@@ -73,20 +73,14 @@ export function SyncConnectSection() {
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
-	// Seconds left on the open invite (null before one exists). The host enforces the same window
-	// with its own timer; this is the user-visible half, and it never runs past the host's (the
-	// code's `exp` is stamped before the host arms it). See docs/p2p-sync.md "Pairing code".
+	// Seconds left on the open invite. Cosmetic: the host enforces the window with its own timer.
 	const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-	// The pending "is this your device?" prompt. Until it is answered the joiner is connected and
-	// authenticated but has been sent nothing at all, so this is the last gate before the vault
-	// leaves this device. See docs/p2p-sync.md "Pairing code".
-	// Owned by the hook, which converges on the host rather than trusting one event delivery.
+	// The last gate before the vault leaves this device: until it is answered the joiner is
+	// authenticated but has been sent nothing. The hook converges on the host, not one event.
 	const [approval, setApproval] = usePendingEnrollApproval(shell, pairingCode !== null);
-	/** The host told us the invite window closed. Independent of the countdown, which only runs
-	 * while this panel is mounted and only knows the deadline it decoded out of the code. */
+	/** The host closed the window. Independent of the countdown, which only runs while mounted. */
 	const [hostExpired, setHostExpired] = useState(false);
-	/** A device tried to join and the invite died doing it. Shown in place of the code, because a
-	 * QR that can no longer work is worse than no QR: it just gets scanned again. */
+	/** A join attempt killed the invite. Replaces the code: a dead QR just gets scanned again. */
 	const [inviteError, setInviteError] = useState<string | null>(null);
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
@@ -143,9 +137,8 @@ export function SyncConnectSection() {
 		void storage.setMeta("sync.iceUrl", v);
 	};
 
-	// Read through a ref so the subscription below does not depend on refreshGroup's identity.
-	// It changes whenever the vault registry re-reads (syncKey closes over registry.vaults), and
-	// re-subscribing means a teardown gap in which a host event reaches nobody.
+	// Read through a ref so the subscription doesn't depend on refreshGroup's identity, which
+	// changes whenever the registry re-reads: re-subscribing drops events landing in the gap.
 	const refreshGroupRef = useRef(refreshGroup);
 	refreshGroupRef.current = refreshGroup;
 
@@ -156,9 +149,8 @@ export function SyncConnectSection() {
 			if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
 				void refreshGroupRef.current();
 			if (e.kind === "synced") setLastSynced(e.at ?? Date.now());
-			// The host closed the window. It is the authority on that, not the countdown below:
-			// this panel may have been unmounted for most of the invite (an extension popup
-			// closes on focus loss), in which case it has no countdown running at all.
+			// The host is the authority on expiry, not the countdown: this panel may not have been
+			// mounted for it (an extension popup closes on focus loss).
 			if (e.kind === "enroll-expired") setHostExpired(true);
 			if (e.kind === "enroll-failed") setInviteError(e.message || null);
 		});
@@ -220,38 +212,31 @@ export function SyncConnectSection() {
 		return () => clearInterval(id);
 	}, [inviteExp]);
 
-	// Either signal is enough. The countdown is the smooth one the user watches; the host event is
-	// the reliable one, and it is what fires when this panel wasn't around to count.
+	// Either signal: the countdown is the smooth one, the host event is the reliable one.
 	const inviteExpired = secondsLeft === 0 || hostExpired;
 
-	// An expired invite must not leave a live prompt on screen. Answering it then would be
-	// answering for a session the host has already torn down, so withdraw it as a refusal (which
-	// also settles the host's parked promise) rather than showing a button that does nothing.
+	// Withdraw a prompt left over past expiry: the session is gone, so approving it would do
+	// nothing. Refusing also settles the host's parked promise.
 	useEffect(() => {
 		if (!inviteExpired || !approval) return;
 		setApproval(null);
 		void shell.approveEnrollment?.(false);
 	}, [inviteExpired, approval, shell, setApproval]);
 
-	// Dismissing the pairing UI must also stop the host listening: clearing React state alone left
-	// a live invite behind a closed modal, which is the whole point of a bounded window. Not
-	// stopSyncSpike, which would also drop this device's ongoing sync.
+	// Dismissing the UI must stop the host listening too. Not stopSyncSpike, which would also drop
+	// this device's ongoing sync.
 	const closeInvite = useCallback(() => {
 		setPairingCode(null);
 		setApproval(null);
 		void shell.stopEnrollInvite?.();
 	}, [shell, setApproval]);
 
-	// Answering ends the invite either way: approving spends it on this device, and rejecting
-	// burns it, because a prompt the user didn't expect means the code reached someone else.
-	// Rejecting just closes the pairing UI — no confirmation screen. The user has to reopen "Add a
-	// device" to try again anyway, which mints a fresh code, so telling them the old one is dead
-	// is a dialog to dismiss rather than a decision to make.
+	// Answering spends the invite either way, so the UI just closes; retrying means reopening
+	// "Add a device", which mints a fresh code.
 	const answerApproval = useCallback(
 		(approved: boolean) => {
 			setApproval(null);
-			// The code is spent either way, so it goes off screen either way. Not closeInvite():
-			// that stops the host, and on approval the vault transfer is in flight right now.
+			// Not closeInvite(): that stops the host, and on approval the transfer is in flight.
 			setPairingCode(null);
 			void shell.approveEnrollment?.(approved);
 		},

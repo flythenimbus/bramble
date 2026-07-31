@@ -17,14 +17,8 @@ export interface EntryDetailBodyProps {
 	copy: (label: string, value: string) => void;
 }
 
-/**
- * One entry in the row's copy menu.
- *
- * `value` may be a thunk, resolved when the user clicks rather than when the row is projected.
- * That is what lets a time-based value belong here: a TOTP code baked in at projection time goes
- * stale within its 30-second step, and the list is virtualized, so rows are not re-projected on
- * any schedule that would keep it fresh.
- */
+/** One entry in the row's copy menu. `value` may be a thunk, resolved on click: the projection is
+ * memoized, so a TOTP code baked in here would outlive its 30-second step. */
 export interface CopyItem {
 	label: string;
 	value: string | (() => string);

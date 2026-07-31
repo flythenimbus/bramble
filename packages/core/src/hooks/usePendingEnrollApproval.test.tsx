@@ -4,10 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EnrollApproval, SyncEvent } from "../adapters/shell";
 import { type ApprovalShell, usePendingEnrollApproval } from "./usePendingEnrollApproval";
 
-// Reported from the field, pairing Android to macOS: the joiner showed the verification code and
-// the inviter showed nothing, then it worked on the third attempt. The joiner derives its code
-// right after SENDING its introduction, while the inviter can only derive one after RECEIVING it
-// and raising a prompt, so a dropped prompt event shows the code on one side only.
+// Field report, Android to macOS: the joiner showed the code and the inviter showed nothing, then
+// it worked on the third try. The joiner derives its code after SENDING its introduction; the
+// inviter only after RECEIVING it, so a dropped prompt shows the code on one side only.
 
 const PROMPT: EnrollApproval = { sas: "1234 5678 9012", label: "Pixel 8" };
 

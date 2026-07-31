@@ -7,16 +7,10 @@ export type ApprovalShell = Pick<ShellAdapter, "onSyncEvent" | "getPendingEnroll
 /**
  * The inviter's pending "is this your device?" prompt, kept in step with the sync host.
  *
- * The host raises the prompt through a fire-and-forget event, which is one delivery attempt to
- * whoever is attached at that instant. That is not enough on its own: the panel re-renders and
- * re-subscribes during pairing, an extension popup closes on focus loss and comes back, and on
- * mobile `emit` is a synchronous walk over the current subscriber set. A prompt raised in any of
- * those gaps reaches nobody and is lost for good, leaving the verification code showing on the
- * joiner only, until a retry happens to land differently.
- *
- * So the host is treated as the authority and this converges on it three ways: the event, a
- * re-read whenever we attach, and a poll while an invite is open. Only the first is fast; the
- * other two exist so a missed delivery cannot strand a pairing.
+ * The host's event is one fire-and-forget delivery to whoever is attached at that instant, and a
+ * prompt raised during a re-subscribe reaches nobody (which showed the code on the joiner only).
+ * So the host is the authority, and this converges on it three ways: the event, a re-read on
+ * attach, and a poll while an invite is open.
  */
 export function usePendingEnrollApproval(
 	shell: ApprovalShell,

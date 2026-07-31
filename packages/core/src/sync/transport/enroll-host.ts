@@ -1,14 +1,6 @@
-// Enrollment orchestration over the mesh. On a peer channel: run the XXpsk3
-// handshake (joiner=initiator, inviter=responder), the joiner pins the inviter's
-// static key against the pairing code, then the inviter seals {vek, roster,
-// entries} over the Noise session and the joiner rebuilds its vault from it —
-// inside the offscreen, so the VEK never leaves it (only the wrapped blob does).
-// See docs/p2p-sync.md.
-//
-// The joiner speaks first. Completing the handshake proves only that a peer holds the pairing
-// code, which is not the same as being the user's device, so nothing is sent until the joiner
-// has introduced itself with its roster entry, that entry is bound to the key it proved in the
-// handshake, and the user has confirmed the SAS on both screens (GHSA-x4f5-4wq4-c6c8).
+// Enrollment orchestration over the mesh: XXpsk3 handshake (joiner=initiator), the joiner pins
+// the inviter's static key, the joiner introduces itself, the user confirms the SAS, and only
+// then does the inviter seal {vek, roster, entries} over the Noise session. See docs/p2p-sync.md.
 
 import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
 import {
@@ -43,39 +35,23 @@ import { type MeshSession, type MeshSessionOptions, startMeshSession } from "./p
 import { recvSecure, sendSecure } from "./secure-channel";
 import { withTimeout } from "./with-timeout";
 
-// Every enrollment wait a peer can stall is bounded. Unbounded ones are what made the invite
-// lifecycle unenforceable: `stop()` sat downstream of an unbounded await on the joiner's ack,
-// so "the inviter serves one device then stops itself" was not racy, it was never reached
-// (GHSA-x4f5-4wq4-c6c8). Per-frame, not per-message: a large vault legitimately spans frames.
-//
-// Machine-speed waits only: the handshake, the joiner's introduction, and continuation frames of
-// a bundle already in flight. Nothing here waits on a person.
+// Per-frame, and machine-speed only: handshake, introduction, continuation frames.
 const ENROLL_TIMEOUT_MS = 30_000;
 
-// The joiner's wait for the FIRST bundle frame, which spans the inviter's approval prompt and so
-// is human time, not machine time. It has to be at least the inviter's own ceiling or a careful
-// user times out the joiner on the happy path — with the invite already burned, and while
-// teaching people that comparing the digits is what makes pairing fail. Tied to INVITE_TTL_MS
-// rather than picked separately: the inviter's approval cannot outlive the invite timer, which
-// tears the session down, so this can't be short of the real bound by construction.
+// The joiner's wait for the first bundle frame spans the inviter's prompt, so it is human time.
+// Tied to the invite timer, which is the inviter's own ceiling, so it cannot fall short of it.
 const APPROVAL_WAIT_MS = INVITE_TTL_MS;
 
-// The inviter's wait for the joiner's "I have it" frame. Covers the tail of the transfer plus the
-// joiner's Argon2 vault rebuild, which is seconds on a slow phone, so it is deliberately slacker
-// than a frame wait. Expiring here is harmless: the bundle is long since delivered.
+// Covers the tail of the transfer plus the joiner's Argon2 rebuild, so slacker than a frame wait.
 const VAULT_ACK_TIMEOUT_MS = 60_000;
 
-// The same barrier behind the much smaller rejection notice: nothing is being rebuilt, so this
-// only has to cover the round trip.
+// Same barrier for the rejection notice, which only has to cover the round trip.
 const REJECT_ACK_TIMEOUT_MS = 5_000;
 
-// The joiner's "I got your last frame". Content-free on purpose: identity was settled by the
-// introduction BEFORE anything was sent, so this is not an identity claim, it is a flush barrier.
-// See awaitReceipt. Exported so the tests assert the wire value rather than a copy of it.
+/** The joiner's "I got your last frame". Content-free: a flush barrier, not an identity claim. */
 export const RECEIPT = "bramble/enroll/received";
 
-// Sent when the user answers "that is not my device". The joiner would otherwise sit on its
-// approval wait with no idea anything had happened, which is up to the whole invite window.
+/** Sent on rejection so the joiner fails now instead of waiting out its approval budget. */
 export const ENROLL_REJECTED = "bramble/enroll/rejected";
 
 /** The XXpsk3 enrollment handshake exports. Returns are Awaitable so the native
@@ -134,21 +110,16 @@ export interface EnrollOptions {
 	groupKeyB64: string;
 	psk: string;
 	devicePrivB64: string;
-	/** Inviter: this device's OWN Noise static public key (base64). Required to invite: it is half
-	 * the SAS input, and the inviter cannot derive it from the private key it holds here. */
+	/** Inviter: this device's own Noise static public key (base64). Half the SAS input. */
 	devicePubB64?: string;
 	wasm: EnrollWasm;
 	report: Report;
 	/** Inviter: the bundle's non-secret parts (the VEK is added from the wasm here). */
 	roster?: RosterPayload;
 	entries?: EntriesPayload;
-	/** Inviter: this vault's VEK (base64), captured by the caller when the invite starts so the
-	 * bundle ships the RIGHT vault's key. REQUIRED to invite — there is no ambient fallback.
-	 * export_vek() reads whichever key is loaded at send time, which is the vault the user is in
-	 * NOW, not necessarily the one being shared: on the extension's scratch-slot offscreen it
-	 * returns whatever op ran last, and on mobile's single-VEK core it follows a vault switch.
-	 * Shipping the wrong key hands the joiner a vault it can never open. See
-	 * docs/multiple-vaults.md "Enrollment". */
+	/** Inviter: this vault's VEK (base64), captured when the invite starts. REQUIRED, with no
+	 * export_vek() fallback: that reads whatever is loaded at SEND time, so an invite outliving a
+	 * vault switch ships the wrong key. See docs/multiple-vaults.md "Enrollment". */
 	vekB64?: string;
 	/** Inviter: this device's own password-slot fields (base64), shipped so the joiner
 	 * can prove its typed password matches. Omitted when there is no password slot. */
@@ -170,27 +141,18 @@ export interface EnrollOptions {
 	onJoinError?: (message: string) => void;
 	/** Inviter: the joiner's roster entry (JSON), to add to our roster. */
 	onEnrolled?: (entryJson: string) => void;
-	/** Inviter: show the SAS and the joining device's label, and resolve with the user's answer.
-	 * REQUIRED to invite — there is no ambient "approved" fallback, because this is the only thing
-	 * standing between a peer that holds the pairing code and the vault. `label` is chosen by the
-	 * joiner, so it is context for the user, never proof; the SAS is the proof. */
+	/** Inviter: show the SAS + the joiner's label, resolving with the user's answer. REQUIRED (no
+	 * "approved" fallback). `label` is joiner-chosen, so it is context, never proof. */
 	approve?: (sas: string, label: string) => Promise<boolean>;
 	/** Joiner: the SAS to show while the other device waits for the user to confirm it. */
 	onSas?: (sas: string) => void;
-	/** Inviter: the invite window closed. Fired before the session is stopped, so the host can
-	 * settle a prompt still waiting on `approve` and tell the UI. Expiry has to be authoritative
-	 * HERE rather than left to a countdown in the UI: the UI may not be running (an extension
-	 * popup closes on focus loss and comes back with its local state gone), and a prompt left on
-	 * screen after the transport is dead offers a decision that can no longer be carried out. */
+	/** Inviter: the invite window closed. Fired BEFORE stop(), so the host can settle a prompt
+	 * still waiting on `approve`; the UI's countdown is not authoritative (it may not be running). */
 	onInviteExpired?: () => void;
-	/** Inviter: a device tried to join and the invite died doing it. Carries a message for the
-	 * user, because the reasons are things only they can act on (update the other device, try a
-	 * new code). Fired only for failures that CONSUME the invite; a peer that never completes the
-	 * handshake leaves it live and must not blow away a QR the real device is still coming for. */
+	/** Inviter: a join attempt consumed the invite and failed, with a message only the user can act
+	 * on. Consuming failures only: a peer that never handshakes leaves the invite live. */
 	onEnrollFailed?: (message: string) => void;
-	/** The mesh joiner and ICE fetch, overridden in tests with fakes. Same seam (and same reason)
-	 * as MeshSessionOptions.join, passed straight through; without it the invite timer can only be
-	 * exercised by standing up a real transport. */
+	/** Mesh joiner + ICE fetch, overridden in tests with fakes. Same seam as MeshSessionOptions. */
 	join?: MeshSessionOptions["join"];
 	fetchIce?: MeshSessionOptions["fetchIce"];
 }
@@ -212,10 +174,8 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 		join: opts.join,
 		fetchIce: opts.fetchIce,
 	});
-	// An invite is a bearer credential, so it must not outlive the window the user is watching.
-	// A LOCAL timer, deliberately, rather than comparing wall clocks against the code's `exp`:
-	// no amount of device clock skew can then stretch the window. The joiner's `exp` check is
-	// only there to produce a readable error. See docs/p2p-sync.md "Pairing code".
+	// A LOCAL timer, not a wall-clock comparison against the code's `exp`, so clock skew cannot
+	// stretch the window. See docs/p2p-sync.md "Pairing code".
 	if (role === "inviter") {
 		expiry = setTimeout(() => {
 			opts.report("invite expired: generate a new code to add a device");
@@ -258,23 +218,14 @@ function wasmSlotCrypto(wasm: CryptoWasm, vekB64: string): VaultBuildCrypto {
 	};
 }
 
-/**
- * The per-peer handler for ONE invite, with the single-use claim in its closure.
- *
- * Exported (like sendBundle/receiveBundle below) because that closure is the seam the
- * concurrency tests need: two peers have to race the same invite, and neither startEnroll nor
- * roster-sync exposes the `join` override MeshSessionOptions has. A factory keeps that out of
- * the production options object.
- */
+/** The per-peer handler for ONE invite, holding the single-use claim. Exported because that
+ * closure is the seam the concurrency tests drive (two peers racing one invite). */
 export function makeEnrollHandler(
 	role: EnrollRole,
 	opts: EnrollOptions,
 	stop: () => void,
 ): (peer: PeerSession) => Promise<void> {
-	// Single use. The first peer to complete the handshake claims the invite; a claim is never
-	// released, so a failure downstream BURNS the code rather than re-arming it. That is
-	// deliberate: a second peer arriving means the code reached someone it shouldn't have, and
-	// the recovery ("generate a new one") costs the user a tap.
+	// Single use, never released: a failure downstream burns the code rather than re-arming it.
 	let consumed = false;
 	return async (peer: PeerSession): Promise<void> => {
 		const { channel, remotePubkey } = peer;
@@ -298,10 +249,8 @@ export function makeEnrollHandler(
 		}
 
 		if (role === "joiner") {
-			// Pin the inviter's static key from the pairing code. Previously guarded on
-			// `opts.inviterPub &&`, so a caller that forgot it silently got NO MITM protection;
-			// every current caller passes it (PairingCodeSchema requires it), so requiring it here
-			// only converts a latent footgun into a loud one.
+			// Required, not optional: guarding on `opts.inviterPub &&` silently disabled MITM
+			// protection for a caller that forgot it.
 			if (!opts.inviterPub) throw new Error("enroll: joining without an inviter key to pin");
 			if (sess.remoteStatic !== opts.inviterPub) {
 				// Close only THIS peer, and leave the session running. Stopping it here let anyone
@@ -314,10 +263,8 @@ export function makeEnrollHandler(
 			if (!opts.ownEntry) throw new Error("enroll: joining without a roster entry to present");
 			opts.report("authenticated ✅, waiting for confirmation on your other device…");
 			try {
-				// Hello first: hand the inviter our roster entry BEFORE it sends anything, so it can
-				// bind it to the key we just proved and show the user who is actually joining. Sent
-				// exactly once, and it is byte-identical to the ack an older inviter already expects
-				// after the bundle, which is what makes that direction of skew work unchanged.
+				// Hello first, so the inviter can bind it to the key we just proved. Byte-identical to
+				// the ack an older inviter expects after the bundle. See docs/p2p-sync.md "Version skew".
 				await sendSecure(channel, opts.wasm, sess.sessionId, JSON.stringify(opts.ownEntry));
 				opts.onSas?.(await pairingSas(opts.psk, opts.ownEntry.publicKey, sess.remoteStatic));
 				await receiveBundle(opts, peer, sess);
@@ -352,13 +299,8 @@ export function makeEnrollHandler(
 	};
 }
 
-/**
- * The inviter's side of one claimed invite: learn who is joining, get the user's confirmation,
- * and only then hand over the vault. Exported for unit tests, like the two seams below.
- *
- * Every step before `sendBundle` is a gate, and the order is the point: an attacker that wins the
- * race to the handshake gets no further than a prompt the user is about to reject.
- */
+/** The inviter's side of one claimed invite. Every step before `sendBundle` is a gate, and the
+ * order is the point: winning the race to the handshake only buys a prompt the user will reject. */
 async function serveJoiner(opts: EnrollOptions, channel: Channel, sess: Session): Promise<void> {
 	if (!opts.devicePubB64) throw new Error("enroll: refusing to invite without this device's key");
 	if (!opts.approve) throw new Error("enroll: refusing to invite without an approval gate");
@@ -367,14 +309,10 @@ async function serveJoiner(opts: EnrollOptions, channel: Channel, sess: Session)
 	const sas = await pairingSas(opts.psk, opts.devicePubB64, sess.remoteStatic);
 	opts.report(`confirm this code matches on the other device: ${sas}`);
 	if (!(await opts.approve(sas, entry.label))) {
-		// Burned, not re-armed: the invite is spent either way (see makeEnrollHandler). If the user
-		// says "that isn't my device", the code demonstrably reached someone else, so the one thing
-		// we must not do is give them another attempt at it.
+		// Burned, not re-armed: a rejection means the code reached someone it shouldn't have.
 		opts.report("⚠ pairing rejected: this code is now dead, generate a new one");
-		// Tell the joiner, and wait for it to confirm. Without this the peer just sees the transport
-		// vanish and sits on its approval wait, which is human-scale: the real device would spin for
-		// minutes with no idea it had been refused. Telling it discloses nothing, since it can
-		// already see it got no vault.
+		// Tell the joiner, or it sits on its human-scale approval wait. Discloses nothing: that peer
+		// can already see it got no vault.
 		await sendSecure(channel, opts.wasm, sess.sessionId, ENROLL_REJECTED);
 		await awaitReceipt(opts, channel, sess, REJECT_ACK_TIMEOUT_MS);
 		return;
@@ -389,20 +327,11 @@ async function serveJoiner(opts: EnrollOptions, channel: Channel, sess: Session)
 }
 
 /**
- * Wait for the joiner to confirm it received what we just sent, so the transport isn't torn down
- * with that data still in flight.
+ * Wait for the joiner to confirm receipt, so the transport is not torn down mid-transfer.
  *
- * `sendSecure` resolving means the frames were handed to the channel, NOT that they were sent.
- * On the relay path `channel.send` only queues `void publish(...)`, which awaits two WebCrypto
- * ops before it reaches the socket, and `mesh.stop()` calls `client.close()` synchronously in the
- * same macrotask; on WebRTC, `pc.close()` discards whatever SCTP still has queued. With `stop()`
- * in the handler's `finally` right behind the send, the tail of a multi-frame bundle was being
- * dropped, and losing any one frame fails the whole message. Roughly 30 entries fit in a single
- * 32 KiB frame, so this only shows up on real vaults, and only sometimes: exactly the shape of a
- * flaky-pairing bug report.
- *
- * A failure here is not an enrollment failure. The joiner has the bundle by the time it would be
- * building the vault, so we swallow it and let the session close.
+ * `sendSecure` resolving means "handed to the channel", not "sent": the relay path only queues
+ * `void publish(...)` behind two WebCrypto ops, and `mesh.stop()` closes the client synchronously.
+ * A failure here is not an enrollment failure. See docs/p2p-sync.md "Pairing code".
  */
 async function awaitReceipt(
 	opts: EnrollOptions,
@@ -417,20 +346,14 @@ async function awaitReceipt(
 			sess.sessionId,
 		);
 	} catch {
-		// An older joiner sends its roster entry here instead, which lands as an ordinary frame and
-		// satisfies the wait just as well. Anything else: the vault still went out.
+		// An older joiner sends its roster entry here instead, which satisfies the wait just as well.
 		opts.report("note: the other device didn't confirm receipt");
 	}
 }
 
-/**
- * Read the joiner's roster entry and bind it to the static key it proved in the handshake.
- *
- * Returns null (having reported why) rather than throwing, so a bad or absent introduction ends
- * the invite quietly instead of surfacing as a transport error. There is deliberately NO fallback
- * to the old order for a joiner that sends nothing: an attacker could otherwise stay silent to
- * force the legacy "send first, validate later" path. See docs/p2p-sync.md "Version skew".
- */
+/** Read the joiner's roster entry and bind it to the key it proved. Returns null (having reported
+ * why) on a bad or absent introduction; there is deliberately no fallback to the old send-first
+ * order, since an attacker could stay silent to force it. See docs/p2p-sync.md "Version skew". */
 async function recvJoinerHello(
 	opts: EnrollOptions,
 	channel: Channel,
@@ -563,11 +486,8 @@ export async function receiveBundle(
 		wrappedVek: base64ToBytes(s.wrappedVekB64),
 	}));
 	const bytes = await buildVaultBytes(slotCrypto, [slot, ...recoverySlots], bundle.entries);
-	// Tell the inviter we have it all, so it doesn't tear the transport down mid-transfer (see
-	// waitForVaultAck). Not our roster entry: that went up front, before the inviter released the
-	// vault, and this carries no identity. An older inviter has already stopped by now and simply
-	// never reads this; an unread frame costs nothing, whereas a truncated transfer costs the
-	// pairing. Sent before onJoined, which writes the vault and can take a while.
+	// Flush barrier, so the inviter doesn't tear down mid-transfer (see awaitReceipt). An older
+	// inviter has stopped by now and never reads it; an unread frame is cheaper than a truncation.
 	await sendSecure(channel, opts.wasm, sess.sessionId, RECEIPT);
 	opts.report("vault received ✅, finishing setup");
 	opts.onJoined?.({ vaultBlobB64: bytesToBase64(bytes), roster: bundle.roster });

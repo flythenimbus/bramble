@@ -1,13 +1,8 @@
-// Enrollment data: the pairing code a new device receives out-of-band, and the
-// bundle the inviter hands it over the authenticated channel.
+// Enrollment data: the out-of-band pairing code, and the bundle the inviter hands over.
 //
-// SECURITY: the code contains no VEK, but it IS a bearer secret equivalent to the
-// vault. Its PSK is the sole authenticator of the joiner in the XXpsk3 handshake, so
-// whoever holds a LIVE code can complete it and be sent the bundle: VEK, entries,
-// roster and recovery slots. Treat a leaked live code as a leaked vault. What limits
-// the damage is the invite lifecycle, not the code's contents: it expires
-// (INVITE_TTL_MS), it is single-use, and the vault does not leave the device until
-// the user confirms the pairing SAS. See docs/p2p-sync.md "Pairing code".
+// SECURITY: the code carries no VEK but IS a bearer secret worth the vault, since its PSK is the
+// sole authenticator of the joiner. What limits the damage is the invite lifecycle (expiry,
+// single use, the SAS gate), not the code's contents. See docs/p2p-sync.md "Pairing code".
 
 import { z } from "zod";
 import { bytesToBase64 } from "../util/bytes";
