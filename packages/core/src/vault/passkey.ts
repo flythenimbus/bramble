@@ -6,6 +6,9 @@
 
 import type { Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
 
+/** COSE algorithm identifier for ES256, the only algorithm Bramble mints or imports. */
+export const COSE_ES256 = -7;
+
 export interface PasskeyMatch {
 	/** The login entry that holds this passkey. */
 	entryId: string;

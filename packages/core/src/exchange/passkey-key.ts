@@ -8,9 +8,6 @@
 
 import { base64ToBytes, bytesToBase64Url } from "../util/bytes";
 
-/** COSE alg for ES256, the only algorithm our provider mints. */
-export const COSE_ES256 = -7;
-
 const P256_COORD_LEN = 32;
 
 /**

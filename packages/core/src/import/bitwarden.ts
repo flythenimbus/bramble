@@ -4,6 +4,7 @@ import type { EntryData, PasskeyCredential } from "../hooks/useVault";
 import { base64UrlToBase64, base64UrlToBytes, bytesToBase64, hexToBytes } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
+import { COSE_ES256 } from "../vault/passkey";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportParserContext, ImportResult } from "./types";
 
@@ -203,7 +204,7 @@ async function importPasskeys(
 			userHandle,
 			userName: credential.userName || undefined,
 			userDisplayName: credential.userDisplayName || undefined,
-			alg: -7,
+			alg: COSE_ES256,
 			publicKeyCose: key.publicKeyCose,
 			privateKey: key.privateKey,
 			signCount: 0,

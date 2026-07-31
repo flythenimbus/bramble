@@ -4,13 +4,15 @@
 // through the same ImportParserContext the file importers use. Everything else is a pure
 // mapping.
 
+import type { PasskeyImportResult } from "../adapters/crypto";
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
 import { asText, type RawField, summarize, toCustomFields } from "../import/shared";
 import type { ImportParserContext, ImportResult } from "../import/types";
 import { base64UrlToBase64 } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
-import { COSE_ES256 } from "./passkey-key";
+import { COSE_ES256 } from "../vault/passkey";
+
 import {
 	type CxfCredential,
 	type CxfEditableField,
@@ -114,7 +116,7 @@ async function toPasskeys(
 		// The Rust core parses the key and rebuilds the COSE public half, so an imported
 		// passkey is byte-identical in shape to a minted one. CXF is base64url, that API is
 		// standard base64. A key it rejects costs one passkey, not the item.
-		let material: { privateKey: string; publicKeyCose: string };
+		let material: PasskeyImportResult;
 		try {
 			material = await context.passkeyImportPkcs8(base64UrlToBase64(p.key));
 		} catch {
