@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
+import { usePendingEnrollApproval } from "../../../../hooks/usePendingEnrollApproval";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import {
@@ -79,7 +80,8 @@ export function SyncConnectSection() {
 	// The pending "is this your device?" prompt. Until it is answered the joiner is connected and
 	// authenticated but has been sent nothing at all, so this is the last gate before the vault
 	// leaves this device. See docs/p2p-sync.md "Pairing code".
-	const [approval, setApproval] = useState<{ sas: string; label: string } | null>(null);
+	// Owned by the hook, which converges on the host rather than trusting one event delivery.
+	const [approval, setApproval] = usePendingEnrollApproval(shell, pairingCode !== null);
 	/** The host told us the invite window closed. Independent of the countdown, which only runs
 	 * while this panel is mounted and only knows the deadline it decoded out of the code. */
 	const [hostExpired, setHostExpired] = useState(false);
@@ -141,39 +143,26 @@ export function SyncConnectSection() {
 		void storage.setMeta("sync.iceUrl", v);
 	};
 
+	// Read through a ref so the subscription below does not depend on refreshGroup's identity.
+	// It changes whenever the vault registry re-reads (syncKey closes over registry.vaults), and
+	// re-subscribing means a teardown gap in which a host event reaches nobody.
+	const refreshGroupRef = useRef(refreshGroup);
+	refreshGroupRef.current = refreshGroup;
+
 	// A device finishing enrollment (inviter side) or this device joining changes the roster.
 	// "synced" carries the last-synced tick on mobile (in-process); the extension uses subscribeMeta.
-	useEffect(
-		() =>
-			shell.onSyncEvent((e) => {
-				if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
-					void refreshGroup();
-				if (e.kind === "synced") setLastSynced(e.at ?? Date.now());
-				if (e.kind === "enroll-approval" && e.sas)
-					setApproval({ sas: e.sas, label: e.label ?? "" });
-				if (e.kind === "enrolled") setApproval(null);
-				// The host closed the window. It is the authority on that, not the countdown below:
-				// this panel may have been unmounted for most of the invite (an extension popup
-				// closes on focus loss), in which case it has no countdown running at all.
-				if (e.kind === "enroll-expired") {
-					setApproval(null);
-					setHostExpired(true);
-				}
-				if (e.kind === "enroll-failed") {
-					setApproval(null);
-					setInviteError(e.message || null);
-				}
-			}),
-		[shell, refreshGroup],
-	);
-
-	// The host raises the prompt whether or not this panel is mounted (the popup can be closed and
-	// reopened mid-pairing, and on Firefox it may be gone entirely). Pick up an outstanding one on
-	// mount so the joiner isn't stranded until the invite expires.
 	useEffect(() => {
-		void shell.getPendingEnrollApproval?.().then((p) => {
-			if (p) setApproval(p);
+		const off = shell.onSyncEvent((e) => {
+			if (e.kind === "enrolled" || e.kind === "joined" || e.kind === "roster")
+				void refreshGroupRef.current();
+			if (e.kind === "synced") setLastSynced(e.at ?? Date.now());
+			// The host closed the window. It is the authority on that, not the countdown below:
+			// this panel may have been unmounted for most of the invite (an extension popup
+			// closes on focus loss), in which case it has no countdown running at all.
+			if (e.kind === "enroll-expired") setHostExpired(true);
+			if (e.kind === "enroll-failed") setInviteError(e.message || null);
 		});
+		return off;
 	}, [shell]);
 
 	// "Last synced": read the persisted stamp on mount, and on the extension live-refresh via
@@ -242,7 +231,7 @@ export function SyncConnectSection() {
 		if (!inviteExpired || !approval) return;
 		setApproval(null);
 		void shell.approveEnrollment?.(false);
-	}, [inviteExpired, approval, shell]);
+	}, [inviteExpired, approval, shell, setApproval]);
 
 	// Dismissing the pairing UI must also stop the host listening: clearing React state alone left
 	// a live invite behind a closed modal, which is the whole point of a bounded window. Not
@@ -251,7 +240,7 @@ export function SyncConnectSection() {
 		setPairingCode(null);
 		setApproval(null);
 		void shell.stopEnrollInvite?.();
-	}, [shell]);
+	}, [shell, setApproval]);
 
 	// Answering ends the invite either way: approving spends it on this device, and rejecting
 	// burns it, because a prompt the user didn't expect means the code reached someone else.
@@ -266,7 +255,7 @@ export function SyncConnectSection() {
 			setPairingCode(null);
 			void shell.approveEnrollment?.(approved);
 		},
-		[shell],
+		[shell, setApproval],
 	);
 
 	const devices = group ? activeDevices(group.roster) : [];

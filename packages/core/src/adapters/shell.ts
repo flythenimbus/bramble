@@ -208,7 +208,7 @@ export interface ShellAdapter {
 }
 
 /** The inviter-side confirmation prompt: the number to compare, and who is asking. */
-interface EnrollApproval {
+export interface EnrollApproval {
 	/** The 12-digit SAS both devices derive. This is the check. */
 	sas: string;
 	/** The joining device's self-declared label. Attacker-controlled: context, never proof. */
