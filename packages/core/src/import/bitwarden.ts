@@ -86,14 +86,30 @@ function maxBase64UrlLength(decodedBytes: number): number {
 	return Math.ceil((decodedBytes * 4) / 3);
 }
 
+/**
+ * Rejections carry a reason so the warning can say WHICH field failed and WHY, instead of one
+ * "invalid credential encoding" covering three conversions (github issue #40). The sentinel
+ * marks the message as ours and therefore safe to show: anything else that escapes these
+ * helpers is reported generically, so a foreign error can never put value bytes in the UI.
+ */
+const OURS = "\u0000";
+function reject(reason: string): never {
+	throw new Error(OURS + reason);
+}
+
+/** The reason phrase for a rejection we raised, or null for anything unexpected. */
+function rejectionReason(e: unknown): string | null {
+	const message = e instanceof Error ? e.message : "";
+	return message.startsWith(OURS) ? message.slice(OURS.length) : null;
+}
+
 function strictBase64Url(value: string, maxDecodedBytes: number): string {
-	if (
-		value.length > maxBase64UrlLength(maxDecodedBytes) ||
-		!BASE64URL.test(value) ||
-		value.length % 4 === 1
-	) {
-		throw new Error("invalid base64url");
+	if (value.length === 0) reject("empty");
+	if (value.length > maxBase64UrlLength(maxDecodedBytes)) {
+		reject(`longer than the ${maxDecodedBytes}-byte maximum`);
 	}
+	// Canonical base64url: no padding, no + or /. Anything else is a format we don't read.
+	if (!BASE64URL.test(value) || value.length % 4 === 1) reject("not valid unpadded base64url");
 	return value;
 }
 
@@ -104,23 +120,24 @@ function credentialIdToBase64(value: string): string {
 		bytes = hexToBytes(uuid.slice(1).join(""));
 	} else if (value.startsWith("b64.")) {
 		if (value.length > 4 + maxBase64UrlLength(MAX_CREDENTIAL_ID_BYTES)) {
-			throw new Error("credential id outside supported bounds");
+			reject(`longer than the ${MAX_CREDENTIAL_ID_BYTES}-byte maximum`);
 		}
-		const encoded = value.slice(4);
-		bytes = base64UrlToBytes(strictBase64Url(encoded, MAX_CREDENTIAL_ID_BYTES));
+		bytes = base64UrlToBytes(strictBase64Url(value.slice(4), MAX_CREDENTIAL_ID_BYTES));
 	} else {
-		throw new Error("unsupported credential id");
+		reject("neither a UUID nor a b64.-prefixed value");
 	}
-	if (bytes.length === 0 || bytes.length > MAX_CREDENTIAL_ID_BYTES) {
-		throw new Error("credential id outside supported bounds");
+	if (bytes.length === 0) reject("empty");
+	if (bytes.length > MAX_CREDENTIAL_ID_BYTES) {
+		reject(`longer than the ${MAX_CREDENTIAL_ID_BYTES}-byte maximum`);
 	}
 	return bytesToBase64(bytes);
 }
 
 function userHandleToBase64(value: string): string {
 	const bytes = base64UrlToBytes(strictBase64Url(value, MAX_USER_HANDLE_BYTES));
-	if (bytes.length === 0 || bytes.length > MAX_USER_HANDLE_BYTES) {
-		throw new Error("user handle outside supported bounds");
+	if (bytes.length === 0) reject("empty");
+	if (bytes.length > MAX_USER_HANDLE_BYTES) {
+		reject(`longer than the ${MAX_USER_HANDLE_BYTES}-byte maximum`);
 	}
 	return bytesToBase64(bytes);
 }
@@ -181,17 +198,31 @@ async function importPasskeys(
 			continue;
 		}
 
-		let credentialId: string;
-		let userHandle: string;
-		let pkcs8: string;
-		try {
-			credentialId = credentialIdToBase64(credential.credentialId);
-			userHandle = userHandleToBase64(credential.userHandle);
-			pkcs8 = pkcs8ToStandardBase64(credential.keyValue);
-		} catch {
-			warnings.push(`${label} has invalid credential encoding and was skipped.`);
-			continue;
+		// One field at a time, so the warning names the field that failed rather than the three
+		// it could have been.
+		const fields: [name: string, read: () => string][] = [
+			["credential ID", () => credentialIdToBase64(credential.credentialId)],
+			["user handle", () => userHandleToBase64(credential.userHandle)],
+			["private key", () => pkcs8ToStandardBase64(credential.keyValue)],
+		];
+		const read: string[] = [];
+		let rejected = false;
+		for (const [field, convert] of fields) {
+			try {
+				read.push(convert());
+			} catch (e) {
+				const reason = rejectionReason(e);
+				warnings.push(
+					reason
+						? `${label} has a ${field} that is ${reason}, so it was skipped.`
+						: `${label} has a ${field} we couldn't read, so it was skipped.`,
+				);
+				rejected = true;
+				break;
+			}
 		}
+		if (rejected) continue;
+		const [credentialId, userHandle, pkcs8] = read as [string, string, string];
 
 		let key: Awaited<ReturnType<ImportParserContext["passkeyImportPkcs8"]>>;
 		try {

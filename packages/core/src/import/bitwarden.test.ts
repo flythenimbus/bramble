@@ -303,7 +303,7 @@ describe("parseBitwarden", () => {
 		expect(res.warnings).toHaveLength(5);
 		expect(res.warnings.join("\n")).toMatch(/unexpected shape/);
 		expect(res.warnings.join("\n")).toMatch(/unsupported key type, algorithm, or curve/);
-		expect(res.warnings.join("\n")).toMatch(/invalid credential encoding/);
+		expect(res.warnings.join("\n")).toMatch(/credential ID that is/);
 		expect(res.warnings.join("\n")).toMatch(/invalid private-key material/);
 		expect(res.warnings.join("\n")).not.toContain("cmVqZWN0");
 	});
@@ -374,7 +374,7 @@ describe("parseBitwarden", () => {
 		if (login?.type !== "login") throw new Error("expected retained login");
 		expect(login.passkeys).toBeUndefined();
 		expect(res.warnings).toEqual([
-			'"oversized key" passkey 1 has invalid credential encoding and was skipped.',
+			'"oversized key" passkey 1 has a private key that is longer than the 1024-byte maximum, so it was skipped.',
 		]);
 	});
 
