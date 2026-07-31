@@ -118,17 +118,20 @@ Two caveats found while reading the interface:
   exports, and an injected `now` so tests don't read the clock.
 - `from-cxf.ts` - CXF -> `ImportResult`, reusing the existing `warnings`/`skipped` contract and
   `import/shared.ts`'s `summarize`, so bad shapes can't reach the vault.
-- `passkey-key.ts` - rebuilds a passkey's public key from the private key CXF carries.
+- `passkey-key.ts` - wraps our stored scalar as the PKCS#8 CXF wants, for export only.
 - Tests: `to-cxf`, `from-cxf`, and a round trip in the style of `export/kdbx.test.ts`.
 
 Two decisions worth knowing before Phase 3 wires the UI:
 
-- **`parseCxf` is async.** CXF ships only the PKCS#8 private key, so an imported passkey's
-  `publicKeyCose` has to be derived: WebCrypto's JWK export of the private key carries the public
-  coordinates, and `passkey-key.ts` assembles the COSE_Key by hand. That keeps the mapper in TS
-  instead of routing through the Rust core, at the cost of a promise. `publicKeyCose` is write-only
-  at runtime (stored at creation, never read back for an assertion), so these bytes need to be
-  correct, not byte-identical to what `coset` emits in `core-rust/src/passkey.rs`.
+- **`parseCxf` is async and takes an `ImportParserContext`**, the same seam the Bitwarden importer
+  uses. CXF ships only the PKCS#8 private key, so an imported passkey's scalar and `publicKeyCose`
+  are recovered by the Rust core's `passkey_import_pkcs8`, which is the code path that mints
+  passkeys and so cannot drift from it. An earlier cut derived them in TS via WebCrypto; that was a
+  second COSE implementation and it is gone.
+- **The two directions sit in different layers on purpose.** Import parses a real key and encodes
+  canonical COSE, so it belongs in Rust. Export only wraps a 32-byte scalar in a fixed DER header
+  (RFC 5915 makes the public key optional), which parses nothing and does no curve maths, so it
+  stays in TS as `pkcs8FromScalar`. If it ever needs to do more than that, it should move too.
 - **`parseCxf` accepts `string | Uint8Array`**, so Phase 5 (CXF files) is the same code path.
 
 ### Mapping
@@ -147,9 +150,10 @@ Two decisions worth knowing before Phase 3 wires the UI:
 
 **The passkey private key is PKCS#8 on the wire and a bare scalar at rest.** `core-rust` stores
 `B64.encode(secret.to_bytes())` and signs with `SecretKey::from_slice`, i.e. the raw 32 bytes, while
-CXF's `key` is PKCS#8 DER. `passkey-key.ts` bridges both ways: `pkcs8FromScalar` wraps the scalar in
-a fixed 35-byte header on export (RFC 5915 makes the public key optional, so the scalar is enough),
-and `keyMaterialFromPkcs8` unpacks the scalar back out on import rather than storing the DER.
+CXF's `key` is PKCS#8 DER. Export wraps the scalar in a fixed 35-byte header
+(`pkcs8FromScalar`; RFC 5915 makes the public key optional, so the scalar alone is enough); import
+hands the DER to the Rust core's `passkey_import_pkcs8`, which returns the scalar and a canonical
+COSE public key rather than storing the DER.
 
 This one is worth knowing because **both failure modes are quiet**. Sending the raw scalar as `key`
 decodes perfectly on the far side and only fails when the importer tries to use it, which iOS reports

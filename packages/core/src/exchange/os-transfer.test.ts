@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CredentialExchangeAdapter } from "../adapters/exchange";
 import type { Entry } from "../hooks/useVault";
 import { exportToOs, importFromOs } from "./os-transfer";
+import { testParserContext } from "./test-crypto";
 
 const login: Entry = {
 	id: "e1",
@@ -29,7 +30,9 @@ function adapter(over: Partial<CredentialExchangeAdapter> = {}): CredentialExcha
 describe("importFromOs", () => {
 	it("returns null when no transfer is waiting, without redeeming anything", async () => {
 		const redeem = vi.fn();
-		expect(await importFromOs(adapter({ redeemImportToken: redeem }))).toBeNull();
+		expect(
+			await importFromOs(adapter({ redeemImportToken: redeem }), testParserContext),
+		).toBeNull();
 		expect(redeem).not.toHaveBeenCalled();
 	});
 
@@ -56,6 +59,7 @@ describe("importFromOs", () => {
 		const redeem = vi.fn().mockResolvedValue(payload);
 		const res = await importFromOs(
 			adapter({ claimImportToken: async () => "T", redeemImportToken: redeem }),
+			testParserContext,
 		);
 		expect(redeem).toHaveBeenCalledWith("T");
 		expect(res?.imported).toHaveLength(1);

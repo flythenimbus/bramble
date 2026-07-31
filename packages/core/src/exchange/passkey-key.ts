@@ -1,15 +1,12 @@
-// Rebuilding a passkey's public key from the private key CXF carries.
+// Bridging CXF's PKCS#8 against the bare P-256 scalar the vault stores.
 //
-// CXF ships only the PKCS#8 private key: no public key, no COSE algorithm. Our
-// PasskeyCredential wants `publicKeyCose`, so we derive it. WebCrypto's JWK export of an
-// EC private key includes the public coordinates, which is enough to assemble the COSE_Key
-// without touching the Rust core (and so this stays a pure-TS, vitest-runnable mapper).
-//
-// `publicKeyCose` is write-only at runtime today: it is stored at creation and never read
-// back for an assertion. So these bytes need to be correct, not byte-identical to what
-// coset emits in core-rust/src/passkey.rs.
+// Only the EXPORT direction lives here, and only because it is structural: wrapping a scalar
+// in a fixed DER header parses nothing and does no curve maths. The IMPORT direction needs a
+// real key parse plus a canonical COSE encoding, so it goes through the Rust core
+// (`passkey_import_pkcs8`), which is the same code path that mints passkeys and therefore
+// cannot drift from it. See docs/credential-exchange.md.
 
-import { base64ToBytes, base64UrlToBytes, bytesToBase64, bytesToBase64Url } from "../util/bytes";
+import { base64ToBytes, bytesToBase64Url } from "../util/bytes";
 
 /** COSE alg for ES256, the only algorithm our provider mints. */
 export const COSE_ES256 = -7;
@@ -50,76 +47,4 @@ export function pkcs8FromScalar(scalarB64: string): string | null {
 	der.set(PKCS8_P256_PREFIX, 0);
 	der.set(scalar, PKCS8_P256_PREFIX.length);
 	return bytesToBase64Url(der);
-}
-
-/**
- * COSE_Key for an EC2 P-256 public key:
- * {1: 2 (kty EC2), 3: -7 (alg ES256), -1: 1 (crv P-256), -2: x, -3: y}
- * Hand-encoded because the shape is fixed; a CBOR library would be dead weight here.
- */
-function coseEc2Key(x: Uint8Array, y: Uint8Array): Uint8Array {
-	const out = [
-		0xa5, // map(5)
-		0x01,
-		0x02, // kty: EC2
-		0x03,
-		0x26, // alg: -7
-		0x20,
-		0x01, // crv: P-256
-		0x21,
-		0x58,
-		P256_COORD_LEN, // x: bytes(32)
-		...x,
-		0x22,
-		0x58,
-		P256_COORD_LEN, // y: bytes(32)
-		...y,
-	];
-	return new Uint8Array(out);
-}
-
-/** Left-pad a coordinate to 32 bytes; WebCrypto can hand back a short one. */
-function coord(b64url: string | undefined): Uint8Array | null {
-	if (!b64url) return null;
-	const bytes = base64UrlToBytes(b64url);
-	if (bytes.length > P256_COORD_LEN) return null;
-	const out = new Uint8Array(P256_COORD_LEN);
-	out.set(bytes, P256_COORD_LEN - bytes.length);
-	return out;
-}
-
-/** A passkey's key material in the shape the vault stores: both STANDARD base64. */
-export interface PasskeyKeyMaterial {
-	/** Raw 32-byte P-256 scalar, which is what core-rust signs with. */
-	privateKey: string;
-	/** COSE_Key rebuilt from the private key, since CXF carries no public key. */
-	publicKeyCose: string;
-}
-
-/**
- * Unpack CXF's base64url PKCS#8 into what the vault stores. Returns null for anything that
- * isn't an importable P-256 key, so the caller can warn and skip that one passkey instead of
- * failing the whole import.
- *
- * Storing the PKCS#8 verbatim would be a silent corruption: it decodes and looks fine, but
- * `SecretKey::from_slice` in core-rust wants the bare scalar and every later assertion fails.
- */
-export async function keyMaterialFromPkcs8(keyB64Url: string): Promise<PasskeyKeyMaterial | null> {
-	try {
-		const key = await crypto.subtle.importKey(
-			"pkcs8",
-			base64UrlToBytes(keyB64Url) as BufferSource,
-			{ name: "ECDSA", namedCurve: "P-256" },
-			true,
-			["sign"],
-		);
-		const jwk = await crypto.subtle.exportKey("jwk", key);
-		const x = coord(jwk.x);
-		const y = coord(jwk.y);
-		const d = coord(jwk.d);
-		if (!x || !y || !d) return null;
-		return { privateKey: bytesToBase64(d), publicKeyCose: bytesToBase64(coseEc2Key(x, y)) };
-	} catch {
-		return null;
-	}
 }

@@ -3,7 +3,7 @@
 
 import type { CredentialExchangeAdapter } from "../adapters/exchange";
 import type { Entry } from "../hooks/useVault";
-import type { ImportResult } from "../import/types";
+import type { ImportParserContext, ImportResult } from "../import/types";
 import { parseCxf } from "./from-cxf";
 import { toCxf } from "./to-cxf";
 
@@ -16,10 +16,11 @@ import { toCxf } from "./to-cxf";
  */
 export async function importFromOs(
 	exchange: CredentialExchangeAdapter,
+	context: ImportParserContext,
 ): Promise<ImportResult | null> {
 	const token = await exchange.claimImportToken();
 	if (!token) return null;
-	return parseCxf(await exchange.redeemImportToken(token));
+	return parseCxf(await exchange.redeemImportToken(token), context);
 }
 
 /**

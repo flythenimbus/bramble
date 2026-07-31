@@ -6,6 +6,7 @@ import type { Entry } from "../hooks/useVault";
 import { isLogin } from "../hooks/useVault";
 import { base64UrlToBytes, bytesToBase64 } from "../util/bytes";
 import { parseCxf } from "./from-cxf";
+import { testParserContext } from "./test-crypto";
 import { toCxf } from "./to-cxf";
 
 const OPTS = { exporterRpId: "app.bramble.mobile", exporterDisplayName: "Bramble", now: 1_760_000 };
@@ -26,7 +27,7 @@ beforeAll(async () => {
 
 async function roundTrip(entry: Entry) {
 	const out = toCxf([entry], OPTS);
-	const res = await parseCxf(JSON.stringify(out.payload));
+	const res = await parseCxf(JSON.stringify(out.payload), testParserContext);
 	const back = res.imported[0];
 	if (!back) throw new Error("nothing re-imported");
 	return { back, warnings: [...out.warnings, ...res.warnings] };

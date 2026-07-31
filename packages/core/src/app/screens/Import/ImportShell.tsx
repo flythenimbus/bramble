@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
 import {
@@ -9,7 +9,7 @@ import {
 } from "../../../hooks/useExchangeAvailability";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
-import type { ImportProvider } from "../../../import";
+import type { ImportParserContext, ImportProvider } from "../../../import";
 import {
 	IMPORT_PROVIDERS,
 	type ImportProviderInfo,
@@ -76,6 +76,12 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			.catch(() => setTransferPending(false));
 	}, [exchange]);
 
+	// Crypto the importers may need: converting a foreign passkey key runs in the Rust core.
+	const parserContext = useMemo<ImportParserContext>(
+		() => ({ passkeyImportPkcs8: (b64) => crypto.passkeyImportPkcs8(b64) }),
+		[crypto],
+	);
+
 	const claimed = useRef(false);
 	useEffect(() => {
 		if (!exchange || !ready || isLocked || claimed.current) return;
@@ -85,7 +91,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		void (async () => {
 			setBusy(true);
 			try {
-				const res = await importFromOs(exchange);
+				const res = await importFromOs(exchange, parserContext);
 				const card = IMPORT_PROVIDERS.find((p) => p.viaSystem);
 				if (res && res.imported.length > 0 && card) {
 					setProvider(card);
@@ -98,7 +104,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				setBusy(false);
 			}
 		})();
-	}, [exchange, ready, isLocked, transferPending, needsVaultChoice]);
+	}, [exchange, ready, isLocked, transferPending, needsVaultChoice, parserContext]);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
@@ -203,9 +209,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				return;
 			}
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());
-			const res = await parseImport(p.id as ImportProvider, raw, {
-				passkeyImportPkcs8: (pkcs8StandardB64) => crypto.passkeyImportPkcs8(pkcs8StandardB64),
-			});
+			const res = await parseImport(p.id as ImportProvider, raw, parserContext);
 			if (res.imported.length === 0) {
 				// Distinguish an empty file from one where all items failed validation.
 				const noun = res.skipped === 1 ? t`item` : t`items`;
@@ -232,7 +236,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		setError(null);
 		setBusy(true);
 		try {
-			const res = await importFromOs(exchange);
+			const res = await importFromOs(exchange, parserContext);
 			if (!res) {
 				setError(
 					t`No transfer is waiting. Start one from the other app and pick ${shell.appName}.`,

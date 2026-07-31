@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { base64ToBytes, base64UrlToBytes, bytesToBase64 } from "../util/bytes";
-import { keyMaterialFromPkcs8, pkcs8FromScalar } from "./passkey-key";
+import { base64ToBytes, base64UrlToBase64, base64UrlToBytes, bytesToBase64 } from "../util/bytes";
+import { pkcs8FromScalar } from "./passkey-key";
+import { fakePasskeyImportPkcs8 } from "./test-crypto";
 
 // The vault stores the bare 32-byte P-256 scalar (core-rust `secret.to_bytes()`), while CXF
 // carries PKCS#8 DER. Getting that wrong is invisible in a round trip through our own code and
@@ -47,22 +48,21 @@ describe("pkcs8FromScalar", () => {
 	});
 });
 
-describe("keyMaterialFromPkcs8", () => {
-	it("unpacks back to the SAME scalar the vault stores, not the DER blob", async () => {
+// The import direction is the Rust core's `passkey_import_pkcs8`, tested there (it signs with
+// the converted key). What still needs proving here is that the DER we EXPORT survives that
+// conversion, since a counterparty importing our passkey runs exactly this round trip.
+describe("what we export survives a real import", () => {
+	it("comes back as the SAME scalar the vault stores, not the DER blob", async () => {
 		const der = pkcs8FromScalar(scalar);
-		const material = await keyMaterialFromPkcs8(der ?? "");
-		expect(material?.privateKey).toBe(scalar);
-		expect(base64ToBytes(material?.privateKey ?? "")).toHaveLength(32);
+		const material = await fakePasskeyImportPkcs8(base64UrlToBase64(der ?? ""));
+		expect(material.privateKey).toBe(scalar);
+		expect(base64ToBytes(material.privateKey)).toHaveLength(32);
 	});
 
-	it("rebuilds a COSE_Key, since CXF carries no public key", async () => {
-		const material = await keyMaterialFromPkcs8(pkcs8FromScalar(scalar) ?? "");
-		const cose = base64ToBytes(material?.publicKeyCose ?? "");
+	it("yields a COSE_Key, since CXF carries no public key", async () => {
+		const material = await fakePasskeyImportPkcs8(base64UrlToBase64(pkcs8FromScalar(scalar) ?? ""));
+		const cose = base64ToBytes(material.publicKeyCose);
 		expect([...cose.slice(0, 7)]).toEqual([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01]);
 		expect(cose).toHaveLength(77);
-	});
-
-	it("returns null for a key we can't read, so one bad passkey doesn't fail the import", async () => {
-		expect(await keyMaterialFromPkcs8("AQID")).toBeNull();
 	});
 });

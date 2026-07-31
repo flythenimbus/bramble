@@ -9,6 +9,7 @@ import {
 	bytesToBase64Url,
 } from "../util/bytes";
 import { parseCxf } from "./from-cxf";
+import { testParserContext } from "./test-crypto";
 
 /** A real P-256 key, so the COSE derivation under test runs against a genuine PKCS#8 blob. */
 let keyB64Url = "";
@@ -59,7 +60,7 @@ const basicAuth = {
 };
 
 const first = async (...credentials: unknown[]) => {
-	const res = await parseCxf(payload(...credentials));
+	const res = await parseCxf(payload(...credentials), testParserContext);
 	return { res, entry: res.imported[0] };
 };
 
@@ -207,19 +208,21 @@ describe("parseCxf: other credential types", () => {
 
 describe("parseCxf: robustness", () => {
 	it("skips an item with nothing in it", async () => {
-		const res = await parseCxf(payload());
+		const res = await parseCxf(payload(), testParserContext);
 		expect(res.imported).toHaveLength(0);
 		expect(res.skipped).toBe(1);
 	});
 
 	it("throws on input that isn't CXF at all", async () => {
-		await expect(parseCxf("not json")).rejects.toThrow(/credential exchange/);
-		await expect(parseCxf('{"hello":"world"}')).rejects.toThrow(/credential exchange/);
+		await expect(parseCxf("not json", testParserContext)).rejects.toThrow(/credential exchange/);
+		await expect(parseCxf('{"hello":"world"}', testParserContext)).rejects.toThrow(
+			/credential exchange/,
+		);
 	});
 
 	it("accepts bytes as well as text, so a CXF file drops into the same path", async () => {
 		const bytes = new TextEncoder().encode(payload(basicAuth));
-		const res = await parseCxf(bytes);
+		const res = await parseCxf(bytes, testParserContext);
 		expect(res.imported).toHaveLength(1);
 	});
 });

@@ -1,15 +1,16 @@
 // CXF -> EntryData, the inverse of to-cxf.ts.
 //
-// Async because rebuilding an imported passkey's public key goes through WebCrypto; see
-// passkey-key.ts. Everything else is a pure mapping.
+// Async because an imported passkey's key material is converted by the Rust core, reached
+// through the same ImportParserContext the file importers use. Everything else is a pure
+// mapping.
 
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
 import { asText, type RawField, summarize, toCustomFields } from "../import/shared";
-import type { ImportResult } from "../import/types";
+import type { ImportParserContext, ImportResult } from "../import/types";
 import { base64UrlToBase64 } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
-import { COSE_ES256, keyMaterialFromPkcs8 } from "./passkey-key";
+import { COSE_ES256 } from "./passkey-key";
 import {
 	type CxfCredential,
 	type CxfEditableField,
@@ -106,11 +107,17 @@ async function toPasskeys(
 	title: string,
 	createdAt: number,
 	warnings: string[],
+	context: ImportParserContext,
 ): Promise<PasskeyCredential[]> {
 	const out: PasskeyCredential[] = [];
 	for (const p of raw) {
-		const material = await keyMaterialFromPkcs8(p.key);
-		if (!material) {
+		// The Rust core parses the key and rebuilds the COSE public half, so an imported
+		// passkey is byte-identical in shape to a minted one. CXF is base64url, that API is
+		// standard base64. A key it rejects costs one passkey, not the item.
+		let material: { privateKey: string; publicKeyCose: string };
+		try {
+			material = await context.passkeyImportPkcs8(base64UrlToBase64(p.key));
+		} catch {
 			warnings.push(`A passkey on "${title}" uses a key type we can't read and was skipped.`);
 			continue;
 		}
@@ -155,7 +162,11 @@ function totpUriOf(
 	}
 }
 
-async function entryFor(item: CxfItem, warnings: string[]): Promise<EntryData | null> {
+async function entryFor(
+	item: CxfItem,
+	warnings: string[],
+	context: ImportParserContext,
+): Promise<EntryData | null> {
 	const g = group(item.credentials ?? []);
 	const name = item.title || item.subtitle || "Untitled";
 	const notes = g.notes.join("\n\n") || undefined;
@@ -172,7 +183,7 @@ async function entryFor(item: CxfItem, warnings: string[]): Promise<EntryData | 
 
 	if (g.basicAuth || g.totp || g.passkeys.length > 0) {
 		const totp = g.totp ? totpUriOf(g.totp, name, g.fields, warnings) : undefined;
-		const passkeys = await toPasskeys(g.passkeys, name, createdAt ?? Date.now(), warnings);
+		const passkeys = await toPasskeys(g.passkeys, name, createdAt ?? Date.now(), warnings, context);
 		return {
 			type: "login",
 			name,
@@ -230,7 +241,10 @@ async function entryFor(item: CxfItem, warnings: string[]): Promise<EntryData | 
  * Parse a CXF payload (the JSON the OS hands us, or a CXF file) into vault entries.
  * Throws only when the input isn't CXF at all; per-item problems become warnings.
  */
-export async function parseCxf(raw: string | Uint8Array): Promise<ImportResult> {
+export async function parseCxf(
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+): Promise<ImportResult> {
 	let json: unknown;
 	try {
 		json = JSON.parse(asText(raw));
@@ -246,7 +260,7 @@ export async function parseCxf(raw: string | Uint8Array): Promise<ImportResult> 
 
 	for (const account of parsed.data.accounts) {
 		for (const item of account.items ?? []) {
-			const entry = await entryFor(item, warnings);
+			const entry = await entryFor(item, warnings, context);
 			if (entry) imported.push(entry);
 			else skipped++;
 		}
