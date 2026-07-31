@@ -32,6 +32,9 @@ is fixed regardless of what CXP does next.
   `ASExportedCredentialData` encodes to **CXF-conformant JSON**, so the Swift layer is a pass-through
   and the 2-3 day contingency is off the table. Evidence below.
 
+Every reason an individual passkey is dropped on the way in, for this path and the file
+importers, is listed in [passkey-import.md](passkey-import.md).
+
 ## Android is out of scope, and why
 
 `androidx.credentials.providerevents` resolves its backend by reflecting over services declared in

@@ -19,6 +19,8 @@ comments point here instead of repeating it.
 | [field-detection.md](field-detection.md) | Page field detection heuristics and fixtures |
 | [storage.md](storage.md) | The chrome.storage.local vault backend, crash recovery, legacy FSA migration, durability |
 | [encrypted-import.md](encrypted-import.md) | Encrypted imports: KDBX4 internals + Bitwarden encrypted-JSON handling |
+| [credential-exchange.md](credential-exchange.md) | FIDO credential exchange (CXF/CXP) on iOS: the wire format, the OS handoff, and why Android is out |
+| [passkey-import.md](passkey-import.md) | Importing passkeys from a file or an OS transfer: what is stored vs what arrives, and every reason one is skipped |
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |
 | [multiple-vaults.md](multiple-vaults.md) | Plan: parallel vaults on one device (local-id registry, one active vault at a time, active-vault-only sync, a primary vault for autofill/biometric) |
 | [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
