@@ -1,4 +1,5 @@
 import { type ComponentProps, forwardRef, type ReactNode, useId } from "react";
+import { FieldOutline } from "./field-outline";
 import { cn } from "./utils";
 
 interface TextFieldProps extends Omit<ComponentProps<"input">, "id" | "placeholder"> {
@@ -44,29 +45,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 					)}
 					{...props}
 				/>
-				<fieldset
-					aria-hidden
-					className={cn(
-						"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
-						"peer-focus:border-primary",
-						invalid && "border-destructive peer-focus:border-destructive",
-					)}
-				>
-					<legend
-						className={cn(
-							"block invisible h-0 max-w-[0.01px] overflow-hidden whitespace-nowrap text-[0.66rem]",
-							"transition-[max-width] duration-150",
-							// Keyed to the INPUT's focus, not the group's :focus-within: an adornment
-							// button (the password reveal) also lives in the group, so focus-within
-							// notched the border while the label - which keys off the input - stayed
-							// centred, leaving a gap in the border with nothing in it.
-							"group-has-[input:focus]:max-w-full",
-							"group-has-[input:not(:placeholder-shown)]:max-w-full",
-						)}
-					>
-						<span className="px-1">{label}</span>
-					</legend>
-				</fieldset>
+				<FieldOutline label={label} invalid={invalid} notch="input" />
 				<label
 					htmlFor={id}
 					className={cn(

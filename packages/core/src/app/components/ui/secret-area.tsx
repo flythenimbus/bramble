@@ -2,6 +2,7 @@ import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
 import { type ComponentProps, forwardRef, useId, useState } from "react";
 import { Button } from "./button";
+import { FieldOutline } from "./field-outline";
 import { cn } from "./utils";
 
 interface SecretAreaProps extends Omit<ComponentProps<"textarea">, "id" | "placeholder"> {
@@ -56,25 +57,7 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 				>
 					{revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 				</Button>
-				<fieldset
-					aria-hidden
-					className={cn(
-						"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
-						"peer-focus:border-primary",
-						invalid && "border-destructive peer-focus:border-destructive",
-					)}
-				>
-					<legend
-						className={cn(
-							"block invisible h-0 max-w-[0.01px] overflow-hidden whitespace-nowrap text-[0.66rem]",
-							"transition-[max-width] duration-150",
-							"group-focus-within:max-w-full",
-							"group-has-[textarea:not(:placeholder-shown)]:max-w-full",
-						)}
-					>
-						<span className="px-1">{label}</span>
-					</legend>
-				</fieldset>
+				<FieldOutline label={label} invalid={invalid} notch="textarea" />
 				<label
 					htmlFor={id}
 					className={cn(

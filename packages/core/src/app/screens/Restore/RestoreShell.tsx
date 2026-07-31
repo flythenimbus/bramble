@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArchiveRestore, ArrowLeft, Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useCan, usePlatform } from "../../../context/PlatformContext";
+import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { bytesToBase64 } from "../../../util/bytes";
@@ -11,6 +11,7 @@ import {
 	type PasswordSlot,
 	verifierPrefix,
 } from "../../../vault-format";
+import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 
@@ -71,8 +72,6 @@ export function RestoreShell({
 	const { unlock } = useVault();
 	const { createRecord } = useVaultRegistry();
 	const { shell, crypto, storage } = usePlatform();
-	// Mobile document pickers grey out what they can't map to a MIME type (issue #36).
-	const filterByExtension = useCan("filePickerAcceptFilter");
 	const { t } = useLingui();
 	// Whether a vault already exists here: gates the "this replaces your vault" warning, which is
 	// wrong on a fresh install (nothing to replace, e.g. onboarding restore on mobile).
@@ -233,33 +232,13 @@ export function RestoreShell({
 
 			{!picked ? (
 				<>
-					<label className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all">
-						<input
-							type="file"
-							// Desktop filters to .bramble; mobile omits it so the native picker shows the file.
-							accept={filterByExtension ? ".bramble" : undefined}
-							className="hidden"
-							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
-							onClick={() => shell.notifyFilePickerOpening?.()}
-							onChange={(e) => {
-								const input = e.currentTarget;
-								void onFile(input.files?.[0]).finally(() => {
-									input.value = "";
-								});
-							}}
-						/>
-						<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
-							<ArchiveRestore className="w-5 h-5 text-primary" />
-						</div>
-						<div className="min-w-0 flex-1">
-							<p className="text-sm">
-								<Trans>Choose a .bramble file</Trans>
-							</p>
-							<p className="text-xs text-muted-foreground">
-								<Trans>The one you saved with Export a backup, or a cloud backup.</Trans>
-							</p>
-						</div>
-					</label>
+					<FilePickerRow
+						accept=".bramble"
+						icon={<ArchiveRestore className="w-5 h-5 text-primary" />}
+						title={<Trans>Choose a .bramble file</Trans>}
+						subtitle={<Trans>The one you saved with Export a backup, or a cloud backup.</Trans>}
+						onPick={onFile}
+					/>
 					{busy && (
 						<div className="flex items-center justify-center gap-2 mt-4 text-sm text-muted-foreground">
 							<Loader2 className="w-4 h-4 animate-spin" />

@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { type ComponentProps, forwardRef, type ReactNode, useId } from "react";
+import { FieldOutline } from "./field-outline";
 import { cn } from "./utils";
 
 interface SelectFieldProps extends Omit<ComponentProps<"select">, "id"> {
@@ -37,18 +38,7 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
 				>
 					{children}
 				</select>
-				<fieldset
-					aria-hidden
-					className={cn(
-						"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
-						"peer-focus:border-primary",
-						invalid && "border-destructive peer-focus:border-destructive",
-					)}
-				>
-					<legend className="block invisible h-0 max-w-full overflow-hidden whitespace-nowrap text-[0.66rem]">
-						<span className="px-1">{label}</span>
-					</legend>
-				</fieldset>
+				<FieldOutline label={label} invalid={invalid} notch="always" />
 				<label
 					htmlFor={id}
 					className={cn(

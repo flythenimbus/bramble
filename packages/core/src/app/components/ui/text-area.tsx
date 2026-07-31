@@ -1,4 +1,5 @@
 import { type ComponentProps, forwardRef, useId } from "react";
+import { FieldOutline } from "./field-outline";
 import { cn } from "./utils";
 
 interface TextAreaProps extends Omit<ComponentProps<"textarea">, "id" | "placeholder"> {
@@ -32,25 +33,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
 					)}
 					{...props}
 				/>
-				<fieldset
-					aria-hidden
-					className={cn(
-						"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
-						"peer-focus:border-primary",
-						invalid && "border-destructive peer-focus:border-destructive",
-					)}
-				>
-					<legend
-						className={cn(
-							"block invisible h-0 max-w-[0.01px] overflow-hidden whitespace-nowrap text-[0.66rem]",
-							"transition-[max-width] duration-150",
-							"group-focus-within:max-w-full",
-							"group-has-[textarea:not(:placeholder-shown)]:max-w-full",
-						)}
-					>
-						<span className="px-1">{label}</span>
-					</legend>
-				</fieldset>
+				<FieldOutline label={label} invalid={invalid} notch="textarea" />
 				<label
 					htmlFor={id}
 					className={cn(

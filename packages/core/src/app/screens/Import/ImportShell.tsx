@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useCan, usePlatform } from "../../../context/PlatformContext";
+import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
 import {
 	exchangeBlockedReason,
@@ -18,6 +18,7 @@ import {
 	parseImport,
 } from "../../../import";
 import { bytesToBase64 } from "../../../util/bytes";
+import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { VaultChoiceList } from "../../components/VaultChoiceList";
 import { Header } from "./components/Header";
@@ -53,8 +54,6 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 
 	// The OS-transfer card shows wherever the build has the plugin; when this particular
 	// device can't transfer, the card says why instead of disappearing.
-	// Mobile document pickers grey out what they can't map to a MIME type (issue #36).
-	const filterByExtension = useCan("filePickerAcceptFilter");
 	const availability = useExchangeAvailability();
 	const exchangeBlocked = exchangeBlockedReason(availability);
 	const providers = IMPORT_PROVIDERS.filter((p) => !p.viaSystem || exchange);
@@ -386,33 +385,15 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							</div>
 						</button>
 					) : (
-						<label
+						<FilePickerRow
 							key={p.id}
-							className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-border hover:bg-card/80 active:scale-[0.99] transition-all"
-						>
-							<input
-								type="file"
-								accept={filterByExtension ? p.accept : undefined}
-								className="hidden"
-								// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
-								onClick={() => shell.notifyFilePickerOpening?.()}
-								onChange={(e) => {
-									// Reset value after handling so re-picking the same file fires onChange again.
-									const input = e.currentTarget;
-									void onFile(p, input.files?.[0]).finally(() => {
-										input.value = "";
-									});
-								}}
-							/>
-							<div className="flex items-center justify-center w-10 h-10 rounded-lg bg-linear-to-br from-primary/20 to-primary/10 shrink-0">
-								<span className="text-sm text-primary">{p.label.charAt(0)}</span>
-							</div>
-							<div className="min-w-0 flex-1">
-								<p className="text-sm">{p.label}</p>
-								<p className="text-xs text-muted-foreground truncate">{p.blurb}</p>
-							</div>
-							<Upload className="w-4 h-4 text-muted-foreground shrink-0" />
-						</label>
+							accept={p.accept}
+							icon={<span className="text-sm text-primary">{p.label.charAt(0)}</span>}
+							title={p.label}
+							subtitle={p.blurb}
+							trailing={<Upload className="w-4 h-4 text-muted-foreground shrink-0" />}
+							onPick={(file) => onFile(p, file)}
+						/>
 					),
 				)}
 			</div>
