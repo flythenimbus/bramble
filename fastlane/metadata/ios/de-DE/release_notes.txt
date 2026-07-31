@@ -1,7 +1,7 @@
-Neu in dieser Version:
+Was ist neu in dieser Version:
 
-- Beim Hinzufügen eines Geräts wird jetzt auf beiden Bildschirmen eine 12-stellige Nummer angezeigt. Ihr Tresor wird erst übertragen, wenn Sie bestätigen, dass die Nummern übereinstimmen. So kann ein Code, den jemand anderes gesehen hat, nicht mehr verwendet werden, um Ihren Tresor auf sein Gerät zu kopieren.
-- Pairing-Codes laufen jetzt nach drei Minuten ab und funktionieren nur einmal. Behandeln Sie einen Code wie Ihr Master-Passwort: Jeder, der ihn sieht, während er auf dem Bildschirm angezeigt wird, könnte versuchen, ihn zu verwenden.
-- Bitte aktualisieren Sie Bramble auf jedem Gerät, das Sie synchronisieren. Ein aktualisiertes Gerät kann nicht mit einem Gerät verbunden werden, auf dem noch eine ältere Version läuft.
+- Übertragen Sie Ihre Logins direkt von einer anderen Passwort-App auf diesem Gerät in Bramble – oder umgekehrt. Es gibt keine Exportdatei, die erstellt, geteilt oder gelöscht werden muss: Die Übergabe erfolgt von App zu App, und Ihre Passkeys und Einmalcodes werden mit Ihren Passwörtern übertragen. Erfordert iOS 26.
+- Bitwarden-Exporte, die Passkeys enthalten, importieren diese jetzt mit. Zuvor kamen die Logins an und die Passkeys blieben zurück.
+- Behoben: Dateien von 1Password (.1pux) und KeePass (.kdbx) konnten nicht aus der Dateien-App oder Drive ausgewählt werden. Sie wurden ausgegraut angezeigt, sodass der Import nicht gestartet werden konnte.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

@@ -1,7 +1,7 @@
-O que há de novo nesta versão:
+Novidades desta versão:
 
-- Adicionar um dispositivo agora exibe um número de 12 dígitos em ambas as telas. Seu cofre não será transferido até que você confirme que os dois números são iguais; assim, um código visto por outra pessoa não pode mais ser usado para copiar o cofre para o dispositivo dela.
-- Códigos de pareamento agora expiram após três minutos e funcionam apenas uma vez. Trate um código como sua senha mestre: qualquer pessoa que o veja enquanto está na tela pode tentar usá-lo.
-- Por favor, atualize o Bramble em todos os dispositivos que você sincroniza. Um dispositivo atualizado não pode parear com outro que ainda esteja executando uma versão anterior.
+- Mova seus logins diretamente para o Bramble a partir de outro gerenciador de senhas neste dispositivo, ou envie-os no sentido inverso. Não há arquivo de exportação para criar, compartilhar ou excluir: a transferência ocorre de app para app, e suas passkeys e códigos de uso único viajam junto com suas senhas. Requer iOS 26.
+- Exportações do Bitwarden que contêm passkeys agora as importam. Antes, os logins chegavam, mas as passkeys eram deixadas para trás.
+- Corrigido: arquivos do 1Password (.1pux) e do KeePass (.kdbx) não podiam ser selecionados no app Arquivos ou no Drive. Eles apareciam esmaecidos, impossibilitando o início da importação.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

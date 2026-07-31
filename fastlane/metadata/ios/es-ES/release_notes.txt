@@ -1,7 +1,7 @@
 Novedades de esta versión:
 
-- Añadir un dispositivo ahora muestra un número de 12 dígitos en ambas pantallas. Su caja fuerte no se transfiere hasta que confirme que los dos números coinciden, por lo que un código que otra persona haya visto ya no puede utilizarse para copiar su caja fuerte en el dispositivo de esa persona.
-- Los códigos de emparejamiento ahora caducan después de tres minutos y solo funcionan una vez. Trate un código como su contraseña maestra: cualquier persona que lo vea mientras está en pantalla podría intentar usarlo.
-- Por favor, actualice Bramble en todos los dispositivos que sincroniza. Un dispositivo actualizado no puede emparejarse con uno que aún ejecute una versión anterior.
+- Mueva sus inicios de sesión directamente a Bramble desde otra aplicación de contraseñas en este dispositivo, o envíelos en la dirección opuesta. No hay ningún archivo de exportación que crear, compartir ni eliminar: la transferencia se realiza de aplicación a aplicación, y sus llaves de acceso y códigos de un solo uso viajan con sus contraseñas. Requiere iOS 26.
+- Las exportaciones de Bitwarden que contienen llaves de acceso ahora las importan. Antes, los inicios de sesión se importaban, pero las llaves de acceso se quedaban atrás.
+- Corregido: los archivos de 1Password (.1pux) y KeePass (.kdbx) no se podían seleccionar desde Archivos o Drive. Aparecían atenuados, por lo que no había forma de iniciar la importación.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

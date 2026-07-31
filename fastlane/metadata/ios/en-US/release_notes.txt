@@ -1,7 +1,7 @@
 What's new in this release:
 
-- Adding a device now shows a 12-digit number on both screens. Your vault does not transfer until you confirm the two numbers match, so a code someone else has seen can no longer be used to copy your vault onto their device.
-- Pairing codes now expire after three minutes and work only once. Treat a code like your master password: anyone who sees it while it is on screen could try to use it.
-- Please update Bramble on every device you sync. An updated device cannot pair with one still running an older version.
+- Move your logins straight into Bramble from another password app on this device, or send them the other way. There is no export file to create, share or delete: the handover happens app to app, and your passkeys and one-time codes travel with your passwords. Needs iOS 26.
+- Bitwarden exports that hold passkeys now bring them in. Before, the logins arrived and the passkeys were left behind.
+- Fixed: 1Password (.1pux) and KeePass (.kdbx) files could not be picked from Files or Drive. They showed as greyed out, so there was no way to start the import.
 
 No account, no cloud. Everything stays on your devices.

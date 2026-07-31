@@ -1,7 +1,7 @@
 Nouveautés de cette version :
 
-- L'ajout d'un appareil affiche désormais un nombre à 12 chiffres sur les deux écrans. Votre coffre-fort ne se transfère pas tant que vous n'avez pas confirmé la correspondance des deux nombres, afin qu'un code aperçu par un tiers ne puisse plus être utilisé pour copier votre coffre-fort sur son appareil.
-- Les codes d'appairage expirent désormais après trois minutes et ne fonctionnent qu'une seule fois. Traitez un code comme votre mot de passe principal : toute personne qui le voit à l'écran pourrait tenter de l'utiliser.
-- Veuillez mettre à jour Bramble sur chaque appareil que vous synchronisez. Un appareil mis à jour ne peut pas s'appairer avec un appareil qui exécute encore une ancienne version.
+- Déplacez vos identifiants directement dans Bramble depuis une autre application de mots de passe sur cet appareil, ou transférez-les dans l’autre sens. Aucun fichier d’export à créer, partager ou supprimer : le transfert se fait d’app à app, et vos clés d’accès et codes à usage unique suivent vos mots de passe. Nécessite iOS 26.
+- Les exports Bitwarden contenant des clés d’accès les importent désormais. Auparavant, les identifiants arrivaient mais les clés d’accès étaient laissées de côté.
+- Corrigé : les fichiers 1Password (.1pux) et KeePass (.kdbx) ne pouvaient pas être sélectionnés depuis Fichiers ou Drive. Ils apparaissaient grisés, ce qui empêchait de lancer l’importation.
 
 Pas de compte, pas de cloud. Tout reste sur vos appareils.
