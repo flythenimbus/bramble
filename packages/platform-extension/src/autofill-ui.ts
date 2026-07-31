@@ -1,6 +1,8 @@
 // Autofill match list for the extension-origin iframe. Holds no secrets; see
 // docs/autofill.md ("UI isolation"). Self-contained so the bundle stays flat.
 
+import { html } from "./autofill-ui-template";
+
 interface MatchSummary {
 	id: string;
 	name: string;
@@ -30,26 +32,6 @@ let highlight = -1;
 function post(message: unknown): void {
 	if (!PARENT_ORIGIN) return;
 	window.parent.postMessage(message, PARENT_ORIGIN);
-}
-
-function escapeHtml(value: unknown): string {
-	return String(value ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}
-
-/** Tagged template that html-escapes scalar interpolations; arrays join verbatim. */
-function html(strings: TemplateStringsArray, ...values: unknown[]): string {
-	let out = strings[0] ?? "";
-	for (let i = 0; i < values.length; i++) {
-		const v = values[i];
-		out += Array.isArray(v) ? v.join("") : escapeHtml(v);
-		out += strings[i + 1] ?? "";
-	}
-	return out;
 }
 
 /** Uppercase avatar initials: first letter of the first two words, else first two letters. */

@@ -92,7 +92,7 @@ export function parseCsvRows(text: string): string[][] {
 }
 
 /** Normalize a string-or-bytes input to bytes; throws if handed text. */
-export function asBytes(raw: string | Uint8Array): Uint8Array {
+function asBytes(raw: string | Uint8Array): Uint8Array {
 	if (typeof raw === "string") throw new Error("expected file bytes, received text");
 	return raw;
 }
@@ -141,7 +141,7 @@ export function readZippedJson<T>(
 }
 
 /** Throw if an unzip result's total decompressed size exceeds the cap. Run before any further parsing. */
-export function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {
+function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {
 	let total = 0;
 	for (const k in files) {
 		const f = files[k];

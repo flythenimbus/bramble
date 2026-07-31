@@ -44,13 +44,6 @@ const platform: Platform = {
 	exchange: resolveExchange(),
 };
 
-// Single-window host: `App` is the vault/unlock UI; the setup flow (create/open a
-// vault) is `OptionsApp`, shown when `shell.openSetup()` fires and dismissed when
-// it completes. The WASM crypto + filesystem are process singletons, so remounting
-// `App` afterwards reflects the now-unlocked vault.
-// Device language tag, resolved once before first render. On iOS WKWebView
-// navigator.language is clamped to the app bundle's localizations, so we read the
-// real device locale from Capacitor Device and hand it to @core's App.
 let deviceLocale: string | undefined;
 
 function Root() {
