@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
 import {
@@ -16,8 +16,10 @@ import {
 	type ImportResult,
 	kdbxEntriesToResult,
 	parseImport,
+	tallyByType,
 } from "../../../import";
 import { bytesToBase64 } from "../../../util/bytes";
+import { splitAlreadyImported } from "../../../vault/entry-identity";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { VaultChoiceList } from "../../components/VaultChoiceList";
@@ -37,7 +39,7 @@ const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
  * `onClose` (single-window hosts like mobile) returns to the app; the extension opens import
  * in its own tab and passes nothing. */
 export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
-	const { ready, hasVault, isLocked, unlock, importEntries } = useVault();
+	const { ready, hasVault, isLocked, unlock, importEntries, entries } = useVault();
 	const { shell, crypto, exchange } = usePlatform();
 	const { vaults, selectVault } = useVaultRegistry();
 	const { t } = useLingui();
@@ -83,6 +85,19 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		[crypto],
 	);
 
+	// Re-importing the same file is the common accident (github issue #39), so drop what the
+	// vault already holds before the preview rather than after the write. Counted, never silent.
+	const [duplicates, setDuplicates] = useState(0);
+	const showResult = useCallback(
+		(res: ImportResult) => {
+			const { fresh, duplicates: dupes } = splitAlreadyImported(entries, res.imported);
+			setDuplicates(dupes);
+			if (fresh.length > 0) setResult({ ...res, imported: fresh, byType: tallyByType(fresh) });
+			return fresh.length;
+		},
+		[entries],
+	);
+
 	const claimed = useRef(false);
 	useEffect(() => {
 		if (!exchange || !ready || isLocked || claimed.current) return;
@@ -94,9 +109,8 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			try {
 				const res = await importFromOs(exchange, parserContext);
 				const card = IMPORT_PROVIDERS.find((p) => p.viaSystem);
-				if (res && res.imported.length > 0 && card) {
+				if (res && res.imported.length > 0 && card && showResult(res) > 0) {
 					setProvider(card);
-					setResult(res);
 				}
 			} catch {
 				// Fall through to the provider list rather than blocking it behind an error the
@@ -105,7 +119,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				setBusy(false);
 			}
 		})();
-	}, [exchange, ready, isLocked, transferPending, needsVaultChoice, parserContext]);
+	}, [exchange, ready, isLocked, transferPending, needsVaultChoice, parserContext, showResult]);
 
 	// Wait for hydration before rendering, else we flash the wrong state.
 	if (!ready) {
@@ -221,8 +235,13 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				);
 				return;
 			}
+			if (showResult(res) === 0) {
+				setError(
+					t`Everything in this file is already in your vault, so there is nothing to import.`,
+				);
+				return;
+			}
 			setProvider(p);
-			setResult(res);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : t`Couldn't read this file.`);
 		} finally {
@@ -248,8 +267,13 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				setError(t`That transfer didn't contain anything we could import.`);
 				return;
 			}
+			if (showResult(res) === 0) {
+				setError(
+					t`Everything in that transfer is already in your vault, so there is nothing to import.`,
+				);
+				return;
+			}
 			setProvider(p);
-			setResult(res);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : t`Couldn't read that transfer.`);
 		} finally {
@@ -271,8 +295,11 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		if (res.imported.length === 0) {
 			throw new Error(t`No importable items were found in this database.`);
 		}
+		if (showResult(res) === 0)
+			throw new Error(
+				t`Everything in this file is already in your vault, so there is nothing to import.`,
+			);
 		setProvider(kdbxPending.provider);
-		setResult(res);
 		setKdbxPending(null);
 	};
 
@@ -305,6 +332,13 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							</p>
 						</div>
 						<p className="text-xs text-muted-foreground">{countLine(result)}</p>
+						{duplicates > 0 && (
+							<p className="text-xs text-muted-foreground">
+								<Trans>
+									{duplicates} more were already in your vault and will not be added again.
+								</Trans>
+							</p>
+						)}
 						{result.warnings.length > 0 && (
 							<ul className="text-xs text-yellow-500 space-y-1 list-disc pl-4">
 								{result.warnings.slice(0, 8).map((w) => (

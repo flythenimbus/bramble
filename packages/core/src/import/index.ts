@@ -6,6 +6,7 @@ import { parseProtonPass } from "./protonpass";
 import type { ImportParser, ImportParserContext, ImportProvider, ImportResult } from "./types";
 
 export { kdbxEntriesToResult } from "./kdbx";
+export { tallyByType } from "./shared";
 export type { ImportParserContext, ImportProvider, ImportResult } from "./types";
 export {
 	parseApplePasswords,

@@ -24,6 +24,13 @@ export function toCustomFields(pairs: RawField[]): CustomField[] | undefined {
 	return out.length ? out : undefined;
 }
 
+/** Count entries by type, for the preview's "3 Logins · 1 Payment card" line. */
+export function tallyByType(entries: readonly EntryData[]): Partial<Record<EntryType, number>> {
+	const byType: Partial<Record<EntryType, number>> = {};
+	for (const e of entries) byType[e.type] = (byType[e.type] ?? 0) + 1;
+	return byType;
+}
+
 /** Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest, tally by type. */
 export function summarize(
 	candidates: EntryData[],
@@ -37,9 +44,7 @@ export function summarize(
 		else dropped++;
 	}
 	if (dropped > 0) warnings.push(`${dropped} item(s) had an unexpected shape and were skipped.`);
-	const byType: Partial<Record<EntryType, number>> = {};
-	for (const e of imported) byType[e.type] = (byType[e.type] ?? 0) + 1;
-	return { imported, byType, skipped: skipped + dropped, warnings };
+	return { imported, byType: tallyByType(imported), skipped: skipped + dropped, warnings };
 }
 
 /** Normalize a string-or-bytes input to text. */

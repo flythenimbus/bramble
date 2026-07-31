@@ -24,6 +24,10 @@ msgstr "...e altri {0}"
 msgid "{0} · added {1}"
 msgstr "{0} · aggiunto {1}"
 
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{duplicates} more were already in your vault and will not be added again."
+msgstr "Altre {duplicates} voci erano già presenti nel suo vault e non verranno aggiunte di nuovo."
+
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
 msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
@@ -697,6 +701,14 @@ msgstr "Inserisci il tuo indirizzo WebDAV e una password dell'app per il tuo acc
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "eTLD+1 (default, matches all subdomains)"
 msgstr "eTLD+1 (predefinito, corrisponde a tutti i sottodomini)"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Everything in that transfer is already in your vault, so there is nothing to import."
+msgstr "Tutto ciò che è presente in quel trasferimento è già nel suo vault, quindi non c'è nulla da importare."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Everything in this file is already in your vault, so there is nothing to import."
+msgstr "Tutto ciò che è presente in questo file è già nel suo vault, quindi non c'è nulla da importare."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Exact hostname only"
