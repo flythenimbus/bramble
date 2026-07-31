@@ -146,7 +146,7 @@ export function VaultSetup({
 					showJoin={!!onJoin}
 				/>
 				{effectiveMode === "restore" && onRestore ? (
-					<RestoreShell embedded mobile={mobile} onRestored={onRestore} />
+					<RestoreShell embedded onRestored={onRestore} />
 				) : effectiveMode === "join" && onJoin ? (
 					<JoinCard onJoin={onJoin} busy={!!joining} error={joinError ?? null} mobile={mobile} />
 				) : (

@@ -51,6 +51,11 @@ export const CAPABILITIES = {
 	// no file in between. iOS 26+ only. Android's routing lives in Google Play services, which
 	// we don't ship; the extension has no such API. See docs/credential-exchange.md.
 	credentialExchange: { chromium: false, firefox: false, android: false, ios: true },
+	// Filter the file picker by extension. Extension only: the native document pickers on
+	// Android and iOS match on MIME type and grey out extensions they can't map, which is every
+	// container format we read (.1pux, .kdbx, .bramble). Mobile omits `accept` so the file is
+	// selectable at all. See github issue #36.
+	filePickerAcceptFilter: { extension: true, mobile: false },
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
 	lockOnScreenLock: { extension: true, mobile: false },

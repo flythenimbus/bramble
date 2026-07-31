@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePlatform } from "../../../context/PlatformContext";
+import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
 import {
 	exchangeBlockedReason,
@@ -53,6 +53,8 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 
 	// The OS-transfer card shows wherever the build has the plugin; when this particular
 	// device can't transfer, the card says why instead of disappearing.
+	// Mobile document pickers grey out what they can't map to a MIME type (issue #36).
+	const filterByExtension = useCan("filePickerAcceptFilter");
 	const availability = useExchangeAvailability();
 	const exchangeBlocked = exchangeBlockedReason(availability);
 	const providers = IMPORT_PROVIDERS.filter((p) => !p.viaSystem || exchange);
@@ -390,7 +392,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						>
 							<input
 								type="file"
-								accept={p.accept}
+								accept={filterByExtension ? p.accept : undefined}
 								className="hidden"
 								// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
 								onClick={() => shell.notifyFilePickerOpening?.()}

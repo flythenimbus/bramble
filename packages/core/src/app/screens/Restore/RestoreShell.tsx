@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ArchiveRestore, ArrowLeft, Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { usePlatform } from "../../../context/PlatformContext";
+import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { bytesToBase64 } from "../../../util/bytes";
@@ -57,7 +57,6 @@ function Wrapper({
 export function RestoreShell({
 	onClose,
 	onRestored,
-	mobile,
 	embedded,
 }: {
 	onClose?: () => void;
@@ -65,9 +64,6 @@ export function RestoreShell({
 	 * screen. Used when embedded in the setup flow, which owns the post-restore screen. `addedNew`
 	 * distinguishes a new locked vault (vaults already existed) from the first vault unlocked in place. */
 	onRestored?: (result: { addedNew: boolean }) => void;
-	/** Loosen the file `accept` so the native mobile document picker doesn't grey out .bramble
-	 * (no UTType/MIME is registered for the custom extension). */
-	mobile?: boolean;
 	/** Render as an inline panel (no full-screen wrapper or own header) for the setup "Restore from
 	 * backup" tab, so clicking the tab keeps the tabs/header visible. Standalone otherwise. */
 	embedded?: boolean;
@@ -75,6 +71,8 @@ export function RestoreShell({
 	const { unlock } = useVault();
 	const { createRecord } = useVaultRegistry();
 	const { shell, crypto, storage } = usePlatform();
+	// Mobile document pickers grey out what they can't map to a MIME type (issue #36).
+	const filterByExtension = useCan("filePickerAcceptFilter");
 	const { t } = useLingui();
 	// Whether a vault already exists here: gates the "this replaces your vault" warning, which is
 	// wrong on a fresh install (nothing to replace, e.g. onboarding restore on mobile).
@@ -239,7 +237,7 @@ export function RestoreShell({
 						<input
 							type="file"
 							// Desktop filters to .bramble; mobile omits it so the native picker shows the file.
-							accept={mobile ? undefined : ".bramble"}
+							accept={filterByExtension ? ".bramble" : undefined}
 							className="hidden"
 							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
 							onClick={() => shell.notifyFilePickerOpening?.()}

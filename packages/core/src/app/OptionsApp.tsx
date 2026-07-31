@@ -144,7 +144,7 @@ export default function OptionsApp({
 									<ImportShell onClose={onComplete} />
 								</Suspense>
 							) : active === "restore" ? (
-								<RestoreShell onClose={onComplete} mobile={mobile} />
+								<RestoreShell onClose={onComplete} />
 							) : (
 								<SetupShell onComplete={onComplete} mobile={mobile} />
 							)}

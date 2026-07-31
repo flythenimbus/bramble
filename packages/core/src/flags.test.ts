@@ -24,6 +24,12 @@ describe("can()", () => {
 		expect(can("passkeyProviderToggle", "firefox")).toBe(true);
 		expect(can("passkeyProviderToggle", "android")).toBe(false);
 		expect(can("passkeyProviderToggle", "ios")).toBe(false);
+		// `filePickerAcceptFilter`: extension only. Native document pickers grey out extensions
+		// they can't map to a MIME type, which is every container format we read (issue #36).
+		expect(can("filePickerAcceptFilter", "chromium")).toBe(true);
+		expect(can("filePickerAcceptFilter", "firefox")).toBe(true);
+		expect(can("filePickerAcceptFilter", "android")).toBe(false);
+		expect(can("filePickerAcceptFilter", "ios")).toBe(false);
 		// `credentialExchange`: iOS alone. Android's routing is in Play services, which we don't
 		// ship, and the extension has no equivalent API.
 		expect(can("credentialExchange", "ios")).toBe(true);
