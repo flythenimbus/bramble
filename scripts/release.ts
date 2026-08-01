@@ -4,7 +4,8 @@
 // Usage:
 //   pnpm run release chromium <version|patch|minor|major>   e.g. 1.0.0, or `patch` to bump
 //   pnpm run release firefox  <version|patch|minor|major>
-//   pnpm run release android  <version|patch|minor|major>
+//   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
+//                                                                      container already built)
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
 //
 // The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
@@ -63,7 +64,7 @@ const version = bumpKind
 	? nextVersion(currentVersion(platform), bumpKind)
 	: rawVersion.replace(/^v/, "");
 
-if (platform === "android") releaseAndroid(version);
+if (platform === "android") releaseAndroid(version, flags.has("--resume"));
 else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") releaseFirefox(version);
 else releaseExtension(platform, version);
@@ -271,7 +272,7 @@ function releaseFirefox(version: string) {
 
 // ----- android: GitHub-released, signed .apk + SHA256SUMS -----
 
-function releaseAndroid(version: string) {
+function releaseAndroid(version: string, resume: boolean) {
 	const ANDROID = "packages/platform-mobile/android";
 	const BUILD_GRADLE = `${ANDROID}/app/build.gradle`;
 	// The reproducible build runs in the F-Droid-matching container (docker-compose android-repro)
@@ -310,54 +311,87 @@ function releaseAndroid(version: string) {
 	for (const bin of ["age", "age-plugin-yubikey", "docker"])
 		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
 	const apksigner =
-		findApksigner() ??
+		findBuildTool("apksigner") ??
 		fail("apksigner not found (Android SDK build-tools); see docs/release-signing.md");
 	const java21 = resolveJava21();
 
-	gate();
-
-	// Bump versionName + a deterministic, committed versionCode (seconds-since-2020, kept monotonic),
-	// snapshot the changelogs, and COMMIT. This exact commit is what both the container and F-Droid
-	// build, so the versionCode and every other input line up.
-	const before = readFileSync(BUILD_GRADLE, "utf8");
-	const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
-	const versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
-	let replacedName = 0;
-	let replacedCode = 0;
-	let after = before.replace(/versionName "[^"]*"/, () => {
-		replacedName++;
-		return `versionName "${version}"`;
-	});
-	after = after.replace(/versionCode \d+/, () => {
-		replacedCode++;
-		return `versionCode ${versionCode}`;
-	});
-	if (replacedName !== 1)
-		fail(`expected exactly one versionName in ${BUILD_GRADLE}, found ${replacedName}`);
-	if (replacedCode !== 1)
-		fail(`expected exactly one versionCode in ${BUILD_GRADLE}, found ${replacedCode}`);
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
-	writeFileSync(BUILD_GRADLE, after);
-	const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
-	run(`git add ${[BUILD_GRADLE, ...changelogFiles].join(" ")}`);
-	run(`git commit -m ${JSON.stringify(`chore(release): android ${version}`)}`);
-	const commit = capture("git rev-parse HEAD");
-
-	// Reproducible build in the container, then host-sign. Any failure before the push rewinds the
-	// release commit so the tree is clean for a retry (the bump + changelogs regenerate next run).
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
-	const tmp = mkdtempSync(join(tmpdir(), "bramble-android-"));
 	const apkName = `bramble_android_${version}.apk`;
 	const apkAsset = join(stage, apkName);
-	try {
-		rmSync(UNSIGNED, { force: true });
-		console.log(
-			`\nbuilding ${commit.slice(0, 9)} in the reproducible container (slow; emulated amd64)…`,
-		);
-		run("docker compose build android-repro");
-		run(`docker compose run --rm android-repro ${commit}`);
-		if (!existsSync(UNSIGNED)) fail(`container did not produce ${UNSIGNED}`);
+	let versionCode: number;
+	let commit: string;
 
+	if (resume) {
+		// Sign an apk the container already built. Both checks are load-bearing: signing an apk
+		// built from any other commit would publish a binary F-Droid cannot reproduce from the tag.
+		if (!existsSync(UNSIGNED))
+			fail(`no unsigned apk at ${UNSIGNED}; nothing to resume, re-run without --resume`);
+		const head = capture("git log -1 --pretty=%s");
+		if (head !== `chore(release): android ${version}`)
+			fail(`HEAD is "${head}", not the android ${version} release commit`);
+		versionCode = Number(readFileSync(BUILD_GRADLE, "utf8").match(/versionCode (\d+)/)?.[1] ?? 0);
+		const aapt2 =
+			findBuildTool("aapt2") ??
+			fail("aapt2 not found (Android SDK build-tools), needed by --resume");
+		const badging = execFileSync(aapt2, ["dump", "badging", UNSIGNED], { encoding: "utf8" });
+		const built = `${badging.match(/versionCode='(\d+)'/)?.[1]}/${badging.match(/versionName='([^']*)'/)?.[1]}`;
+		if (built !== `${versionCode}/${version}`)
+			fail(
+				`${UNSIGNED} is ${built}, but HEAD is ${versionCode}/${version}; rebuild without --resume`,
+			);
+		commit = capture("git rev-parse HEAD");
+		console.log(`resuming ${tag}: signing the apk built from ${commit.slice(0, 9)}`);
+	} else {
+		gate();
+
+		// Bump versionName + a deterministic, committed versionCode (seconds-since-2020, kept monotonic),
+		// snapshot the changelogs, and COMMIT. This exact commit is what both the container and F-Droid
+		// build, so the versionCode and every other input line up.
+		const before = readFileSync(BUILD_GRADLE, "utf8");
+		const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
+		versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
+		let replacedName = 0;
+		let replacedCode = 0;
+		let after = before.replace(/versionName "[^"]*"/, () => {
+			replacedName++;
+			return `versionName "${version}"`;
+		});
+		after = after.replace(/versionCode \d+/, () => {
+			replacedCode++;
+			return `versionCode ${versionCode}`;
+		});
+		if (replacedName !== 1)
+			fail(`expected exactly one versionName in ${BUILD_GRADLE}, found ${replacedName}`);
+		if (replacedCode !== 1)
+			fail(`expected exactly one versionCode in ${BUILD_GRADLE}, found ${replacedCode}`);
+		writeFileSync(BUILD_GRADLE, after);
+		const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
+		run(`git add ${[BUILD_GRADLE, ...changelogFiles].join(" ")}`);
+		run(`git commit -m ${JSON.stringify(`chore(release): android ${version}`)}`);
+		commit = capture("git rev-parse HEAD");
+
+		// Reproducible build in the container. A failure here rewinds the release commit so the tree
+		// is clean for a retry (the bump + changelogs regenerate next run); nothing was built yet.
+		try {
+			rmSync(UNSIGNED, { force: true });
+			console.log(
+				`\nbuilding ${commit.slice(0, 9)} in the reproducible container (slow; emulated amd64)…`,
+			);
+			run("docker compose build android-repro");
+			run(`docker compose run --rm android-repro ${commit}`);
+			if (!existsSync(UNSIGNED)) fail(`container did not produce ${UNSIGNED}`);
+		} catch (e) {
+			rmSync(stage, { recursive: true, force: true });
+			run("git reset --hard HEAD~1");
+			fail(`build failed (${(e as Error).message}); rewound the release commit — fix and re-run`);
+		}
+	}
+
+	// Host-sign. The commit and the unsigned apk are KEPT on failure: the build is the expensive
+	// part, and the usual failure here is a missed YubiKey touch. `--resume` picks it up from here.
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-android-"));
+	try {
 		// Sign on the host: decrypt the keystore into a 0700 dir, apksigner-sign the container's
 		// unsigned apk, then wipe the key. The two flags are load-bearing for reproducibility:
 		//   --v1-signing-enabled false  no JAR/META-INF signature files (minSdk 24 verifies via v2),
@@ -403,9 +437,9 @@ function releaseAndroid(version: string) {
 	} catch (e) {
 		rmSync(tmp, { recursive: true, force: true });
 		rmSync(stage, { recursive: true, force: true });
-		run("git reset --hard HEAD~1");
 		fail(
-			`build/sign failed (${(e as Error).message}); rewound the release commit — fix and re-run`,
+			`signing failed (${(e as Error).message}); the release commit and ${UNSIGNED} are kept.` +
+				`\nre-run to sign that same build, with no rebuild: pnpm run release android ${version} --resume`,
 		);
 	}
 	rmSync(tmp, { recursive: true, force: true });
@@ -789,7 +823,8 @@ function resolveJava21(): string {
 	);
 }
 
-function findApksigner(): string | null {
+/** Newest Android SDK build-tools binary of this name (apksigner, aapt2, ...), else null. */
+function findBuildTool(name: string): string | null {
 	const sdk =
 		process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT ?? join(HOME, "Library/Android/sdk");
 	const buildTools = join(sdk, "build-tools");
@@ -798,7 +833,7 @@ function findApksigner(): string | null {
 			a.localeCompare(b, undefined, { numeric: true }),
 		);
 		for (const d of dirs.reverse()) {
-			const p = join(buildTools, d, "apksigner");
+			const p = join(buildTools, d, name);
 			if (existsSync(p)) return p;
 		}
 	} catch {
