@@ -85,6 +85,10 @@ test("exports the vault as a .kdbx the app can read back", async ({ context, ext
 
 	// Read it back through the app's own .kdbx import: proof the file is a real KDBX4 database,
 	// openable with the chosen password, still carrying every entry.
+	//
+	// Into a SECOND, empty vault. Importing back into the source vault would now be recognised as
+	// entries it already holds and skipped (github issue #39), which proves nothing about the file.
+	await createVault(await context.newPage(), extensionId);
 	const back = await context.newPage();
 	await pickImportFile(back, extensionId, /KeePass \(\.kdbx\)/, out);
 	await back.locator('input[type="password"]').first().fill(FILE_PW);
@@ -106,6 +110,8 @@ test("the exported file opens with the export password, not the master password"
 
 	// The master password must NOT open it. Asking for a separate password is the whole feature;
 	// if the vault's own password worked, the export password would be decorative.
+	// Second, empty vault for the same reason as the round-trip test above.
+	await createVault(await context.newPage(), extensionId);
 	const back = await context.newPage();
 	await pickImportFile(back, extensionId, /KeePass \(\.kdbx\)/, out);
 	await back.locator('input[type="password"]').first().fill(STRONG_PW);
