@@ -872,6 +872,14 @@ msgstr "Ocultar chave privada"
 msgid "Hide value"
 msgstr "Ocultar valor"
 
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds {passkeys} passkeys"
+msgstr "Contém {passkeys} passkeys"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds a passkey"
+msgstr "Contém uma passkey"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
 msgstr "Salvei e prossigo"

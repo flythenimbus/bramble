@@ -833,6 +833,7 @@ export const loginMode: EntryMode = {
 					: []),
 			],
 			leaked: login.breach?.leaked === true,
+			passkeys: login.passkeys?.length ?? 0,
 		};
 	},
 

@@ -18,6 +18,7 @@ export interface VaultListItem {
 	initials?: string;
 	secondary: string;
 	leaked?: boolean;
+	passkeys?: number;
 	copyItems: CopyItem[];
 	// Lowercased text the search box matches against.
 	searchText: string;
@@ -162,6 +163,7 @@ export function VaultHome({
 											icon={item.icon}
 											initials={item.initials}
 											leaked={item.leaked}
+											passkeys={item.passkeys}
 											copyItems={item.copyItems}
 											onSelect={() => onSelectEntry(item.id)}
 											onEdit={() => onEditEntry(item.id)}

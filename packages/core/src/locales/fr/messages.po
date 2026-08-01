@@ -872,6 +872,14 @@ msgstr "Cacher la clé privée"
 msgid "Hide value"
 msgstr "Cacher la valeur"
 
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds {passkeys} passkeys"
+msgstr "Contient {passkeys} clés d’accès"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds a passkey"
+msgstr "Contient une clé d’accès"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
 msgstr "Je l'ai sauvegardé, continuer"

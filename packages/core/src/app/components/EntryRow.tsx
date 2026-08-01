@@ -3,6 +3,7 @@ import {
 	AlertTriangle,
 	Check,
 	Copy,
+	KeyRound,
 	type LucideIcon,
 	MoreVertical,
 	Pencil,
@@ -22,6 +23,9 @@ interface EntryRowProps {
 	initials?: string;
 	/** Login-only "Breached" badge. */
 	leaked?: boolean;
+	/** Login-only: passkeys held by this entry. Marked on the row because deleting the entry
+	 * deletes them with it, so a duplicate carrying one is the copy worth keeping. */
+	passkeys?: number;
 	/** Quick-copy actions; empty hides the copy button. */
 	copyItems: CopyItem[];
 	onSelect: () => void;
@@ -40,6 +44,7 @@ export function EntryRow({
 	icon: Icon,
 	initials,
 	leaked,
+	passkeys = 0,
 	copyItems,
 	onSelect,
 	onEdit,
@@ -54,6 +59,7 @@ export function EntryRow({
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [copied, setCopied] = useState<string | null>(null);
+	const passkeyLabel = passkeys === 1 ? t`Holds a passkey` : t`Holds ${passkeys} passkeys`;
 	const copyRef = useRef<HTMLDivElement>(null);
 	const moreRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +143,13 @@ export function EntryRow({
 				<div className="flex-1 min-w-0">
 					<div className="flex items-baseline gap-2">
 						<h4 className="text-sm truncate">{name}</h4>
+						{passkeys > 0 && (
+							<KeyRound
+								className="w-3 h-3 text-primary shrink-0 self-center"
+								aria-label={passkeyLabel}
+								role="img"
+							/>
+						)}
 					</div>
 					<p className="text-xs text-muted-foreground truncate mt-0.5">{secondary}</p>
 				</div>
