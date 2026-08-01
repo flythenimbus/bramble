@@ -36,6 +36,12 @@ const passkeyCredentialSchema = z.object({
 	lastUsedAt: z.number().optional(),
 });
 
+// Mirror of PasswordChange. Kept in lockstep with the interface in useVault.
+const passwordChangeSchema = z.object({
+	value: z.string(),
+	changedAt: z.number(),
+});
+
 /** Runtime validation schema for a decrypted entry, by `type`. */
 export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type", [
 	z.object({
@@ -50,6 +56,7 @@ export const entryDataSchema: z.ZodType<EntryData> = z.discriminatedUnion("type"
 		autoSubmit: z.boolean().optional(),
 		subdomainMatch: z.enum(["etld1", "exact", "subdomain"]).optional(),
 		passkeys: z.array(passkeyCredentialSchema).optional(),
+		passwordChangelog: z.array(passwordChangeSchema).optional(),
 	}),
 	z.object({
 		...baseEntryFields,

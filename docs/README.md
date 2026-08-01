@@ -15,6 +15,7 @@ comments point here instead of repeating it.
 | [totp.md](totp.md) | Stored authenticator keys: accepted input shapes and the "only digits reach the page" model |
 | [recovery-codes.md](recovery-codes.md) | High-entropy offline recovery codes: format, entropy, normalization |
 | [vault-format.md](vault-format.md) | The VLT1 v2 on-disk binary layout and TLV slots |
+| [password-changelog.md](password-changelog.md) | Superseded passwords kept on a login for propagation lag: the cap, who may write the field, and where it must not leak |
 | [autofill.md](autofill.md) | Index, matching, the fetch-on-pick fill model, corner prompt, password generation |
 | [field-detection.md](field-detection.md) | Page field detection heuristics and fixtures |
 | [storage.md](storage.md) | The chrome.storage.local vault backend, crash recovery, legacy FSA migration, durability |

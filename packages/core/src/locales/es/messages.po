@@ -461,6 +461,10 @@ msgid "Copy address"
 msgstr "Copiar dirección"
 
 #: packages/core/src/app/entry-modes/login.tsx
+msgid "Copy previous password"
+msgstr "Copiar contraseña anterior"
+
+#: packages/core/src/app/entry-modes/login.tsx
 msgid "Copy verification code"
 msgstr "Copiar código de verificación"
 
@@ -533,6 +537,11 @@ msgstr "Crear bóveda"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Create your vault"
 msgstr "Cree su bóveda"
+
+#. placeholder {0}: formatDateTime(entry.createdAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Created {0}"
+msgstr "Creada {0}"
 
 #. placeholder {0}: formatDate(v.createdAt)
 #: packages/core/src/app/components/VaultChoiceList.tsx
@@ -845,6 +854,10 @@ msgstr "Ocultar frase de contraseña"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Hide password"
 msgstr "Ocultar contraseña"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Hide previous password"
+msgstr "Ocultar contraseña anterior"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Hide private key"
@@ -1287,6 +1300,11 @@ msgstr "Contraseña"
 msgid "Password"
 msgstr "Contraseña"
 
+#. placeholder {0}: formatDateTimeExact(lastChangedAt)
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Password changed {0}"
+msgstr "Contraseña cambiada {0}"
+
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Password for the file"
 msgstr "Contraseña para el archivo"
@@ -1449,6 +1467,11 @@ msgstr "Eliminar clave de acceso"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
 msgstr "Eliminar URL"
+
+#. placeholder {0}: formatDateTimeExact(change.changedAt)
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Replaced {0}"
+msgstr "Reemplazada {0}"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
@@ -1664,6 +1687,10 @@ msgstr "Mostrar frase de contraseña"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Show password"
 msgstr "Mostrar contraseña"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show previous password"
+msgstr "Mostrar contraseña anterior"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Show private key"
@@ -1979,6 +2006,11 @@ msgstr "Dispositivo sin nombre"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"
 msgstr "Actualizar contraseña"
+
+#. placeholder {0}: formatDateTime(entry.updatedAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Updated {0}"
+msgstr "Actualizada {0}"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Use Bramble for passkeys"

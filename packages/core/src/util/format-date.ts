@@ -15,3 +15,12 @@ export function formatDateTime(value: number | Date): string {
 		timeStyle: "short",
 	});
 }
+
+/** Localized medium date + time to the second, e.g. "Jan 13, 2026, 4:05:22 PM".
+ * For the password changelog, where two rotations can land seconds apart. */
+export function formatDateTimeExact(value: number | Date): string {
+	return i18n.date(typeof value === "number" ? new Date(value) : value, {
+		dateStyle: "medium",
+		timeStyle: "medium",
+	});
+}

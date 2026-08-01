@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EntryData } from "../hooks/useVault";
+import type { EntryData, LoginEntryData } from "../hooks/useVault";
 import { compareHlc, HybridClock } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import {
@@ -53,6 +53,15 @@ const login = (name: string): EntryData => ({
 	password: "p",
 });
 const note = (name: string): EntryData => ({ type: "note", name });
+// Login-typed variant, so login-only fields survive the union in an override.
+const loginWith = (name: string, over: Partial<LoginEntryData> = {}): LoginEntryData => ({
+	type: "login",
+	name,
+	urls: [],
+	username: "u",
+	password: "p",
+	...over,
+});
 
 // Wires the module to a fake crypto/storage/autofill plus an in-memory "disk"
 // that round-trips through the real encode/decode, so the persist primitive is
@@ -209,5 +218,108 @@ describe("createEntryMutations", () => {
 		await h.mutations.add(empty(), note("just a note"));
 		expect(h.indexCalls).toHaveLength(1);
 		expect(h.indexCalls[0]).toHaveLength(0); // notes never reach the index
+	});
+
+	it("logs the superseded password on a rotation, timestamped by the edit", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		const afterUpd = await h.mutations.update(afterAdd, id, loginWith("a", { password: "new" }));
+		const e = afterUpd.entries[0]!;
+		expect(e.type === "login" && e.passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
+	});
+
+	it("keeps the changelog across the encrypt/persist round trip", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		await h.mutations.update(afterAdd, id, loginWith("a", { password: "new" }));
+		// The fake encryptEntry stores `ct:<json>`, so the blob carries the serialized entry.
+		const payload = await h.mutations.readEntriesPayload();
+		const json = payload.entries[0]!.ciphertext.slice("ct:".length);
+		expect(JSON.parse(json).passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
+	});
+
+	it("logs nothing when an edit leaves the password alone", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "same" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		// Mirrors the breach-check write-back: same password, new metadata.
+		const afterUpd = await h.mutations.update(
+			afterAdd,
+			id,
+			loginWith("a", {
+				password: "same",
+				breach: { leaked: true, checkedAt: 5000 },
+			}),
+		);
+		const e = afterUpd.entries[0]!;
+		expect(e.type === "login" && e.passwordChangelog).toBeUndefined();
+	});
+
+	it("ignores a caller-supplied changelog and derives it from the stored entry", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		const afterUpd = await h.mutations.update(
+			afterAdd,
+			id,
+			loginWith("a", {
+				password: "new",
+				passwordChangelog: [{ value: "forged", changedAt: 1 }],
+			}),
+		);
+		const e = afterUpd.entries[0]!;
+		expect(e.type === "login" && e.passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
+	});
+
+	it("survives an edit form that drops the changelog, the way it drops passkeys", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		const rotated = await h.mutations.update(afterAdd, id, loginWith("a", { password: "new" }));
+		t = 9000;
+		// `login()` builds fresh data with no changelog key at all.
+		const renamed = await h.mutations.update(
+			rotated,
+			id,
+			loginWith("renamed", { password: "new" }),
+		);
+		const e = renamed.entries[0]!;
+		expect(e.type === "login" && e.passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
+	});
+
+	it("keeps the changelog when a use is recorded", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		const rotated = await h.mutations.update(afterAdd, id, loginWith("a", { password: "new" }));
+		t = 200_000;
+		const used = await h.mutations.touch(rotated, id);
+		const e = used.entries[0]!;
+		expect(e.type === "login" && e.passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
+	});
+
+	it("never leaks a superseded password into the autofill index", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), loginWith("a", { password: "old" }));
+		const id = afterAdd.entries[0]!.id;
+		t = 5000;
+		await h.mutations.update(afterAdd, id, loginWith("a", { password: "new" }));
+		const latest = h.indexCalls.at(-1)!;
+		expect(JSON.stringify(latest)).not.toContain("old");
 	});
 });

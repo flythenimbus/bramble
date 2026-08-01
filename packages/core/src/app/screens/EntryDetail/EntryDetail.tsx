@@ -3,6 +3,7 @@ import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
+import { formatDateTime } from "../../../util/format-date";
 import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
 import { CustomFieldsDetail } from "../../entry-modes/custom-fields";
@@ -112,6 +113,18 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 						<CustomFieldsDetail fields={entry.customFields} copied={copied} copy={copy} />
 					)}
 				</div>
+
+				{/* Absent on entries written before timestamps existed; backfilled on the next edit. */}
+				{(entry.createdAt !== undefined || entry.updatedAt !== undefined) && (
+					<div className="px-4 py-2.5 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+						{entry.createdAt !== undefined && (
+							<span>{t`Created ${formatDateTime(entry.createdAt)}`}</span>
+						)}
+						{entry.updatedAt !== undefined && (
+							<span>{t`Updated ${formatDateTime(entry.updatedAt)}`}</span>
+						)}
+					</div>
+				)}
 
 				{confirmDelete && (
 					<div className="p-4 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">

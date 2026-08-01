@@ -392,6 +392,10 @@ entry history list, recovering the lost value without ever decrypting it to merg
 that surfaces the conflict rather than resolving it silently. Both require adding a versions
 field to the entry payload; see "Deferred / known limitations".
 
+Not to be confused with the **password changelog** ([password-changelog.md](password-changelog.md)),
+which is already built: that keeps superseded passwords from *local* rotations inside the entry
+plaintext, and a conflict loser still drops its rows like any other edit.
+
 ## Deferred / known limitations (v1)
 
 - **VEK rotation is deferred.** The shared-VEK model makes rotation a group event (peers

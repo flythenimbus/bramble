@@ -11,6 +11,7 @@ import {
 	Eye,
 	EyeOff,
 	Globe,
+	History,
 	KeyRound,
 	Loader2,
 	Plus,
@@ -22,8 +23,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
 import { usePlatform } from "../../context/PlatformContext";
-import type { LoginEntry, LoginEntryData, PasskeyCredential } from "../../hooks/useVault";
-import { formatDate } from "../../util/format-date";
+import type {
+	LoginEntry,
+	LoginEntryData,
+	PasskeyCredential,
+	PasswordChange,
+} from "../../hooks/useVault";
+import { formatDate, formatDateTimeExact } from "../../util/format-date";
 import { parseTotp, totpAt } from "../../util/totp";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
@@ -528,6 +534,111 @@ function CountdownRing({ remaining, period }: { remaining: number; period: numbe
 	);
 }
 
+/**
+ * Superseded passwords, newest first. Collapsed it is a one-line footnote saying when
+ * the password last changed; expanded each row reveals and copies the old value, which
+ * is what gets you back in while a slow IdP still expects it.
+ */
+function PasswordChangelogField({
+	changelog,
+	copied,
+	copy,
+}: {
+	changelog: PasswordChange[];
+	copied: string | null;
+	copy: (label: string, value: string) => void;
+}) {
+	const { t } = useLingui();
+	const [open, setOpen] = useState(false);
+	const [revealed, setRevealed] = useState<ReadonlySet<number>>(new Set());
+
+	const toggleReveal = (i: number) => {
+		setRevealed((prev) => {
+			const next = new Set(prev);
+			if (!next.delete(i)) next.add(i);
+			return next;
+		});
+	};
+
+	// Non-empty by construction: the caller renders this only when there is a row.
+	const lastChangedAt = changelog[0]!.changedAt;
+
+	return (
+		<div className="space-y-1.5">
+			{/* `link` keeps the cva base's inline-flex, so the row hugs its text instead of
+			    stretching and centring the way a block-level flex button would. */}
+			<Button
+				variant="link"
+				size="none"
+				onClick={() => setOpen((v) => !v)}
+				className="gap-1.5 text-xs"
+				aria-expanded={open}
+			>
+				{open ? (
+					<ChevronDown className="w-3 h-3 shrink-0" />
+				) : (
+					<ChevronRight className="w-3 h-3 shrink-0" />
+				)}
+				<History className="w-3 h-3 shrink-0" />
+				<span className="truncate">
+					{t`Password changed ${formatDateTimeExact(lastChangedAt)}`}
+				</span>
+			</Button>
+
+			{open && (
+				<div className="space-y-1.5">
+					{changelog.map((change, i) => {
+						const copyName = `password-changelog-${i}`;
+						const isRevealed = revealed.has(i);
+						return (
+							<div
+								// biome-ignore lint/suspicious/noArrayIndexKey: two rotations can share a timestamp; position disambiguates
+								key={`${change.changedAt}-${i}`}
+								className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/50 bg-muted/20"
+							>
+								<div className="flex-1 min-w-0">
+									<span className="block text-sm font-mono truncate">
+										{isRevealed ? change.value : "•".repeat(Math.min(change.value.length, 16))}
+									</span>
+									<span className="block text-[10px] text-muted-foreground tabular-nums">
+										{t`Replaced ${formatDateTimeExact(change.changedAt)}`}
+									</span>
+								</div>
+								<Button
+									variant="ghost"
+									size="none"
+									onClick={() => toggleReveal(i)}
+									className="p-1.5 rounded-md"
+									aria-label={isRevealed ? t`Hide previous password` : t`Show previous password`}
+								>
+									{isRevealed ? (
+										<EyeOff className="w-3.5 h-3.5" />
+									) : (
+										<Eye className="w-3.5 h-3.5" />
+									)}
+								</Button>
+								<Button
+									variant="ghost"
+									size="none"
+									onClick={() => copy(copyName, change.value)}
+									className="p-1.5 rounded-md"
+									aria-label={t`Copy previous password`}
+								>
+									{copied === copyName ? (
+										<Check className="w-3.5 h-3.5 text-primary" />
+									) : (
+										<Copy className="w-3.5 h-3.5" />
+									)}
+								</Button>
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</div>
+	);
+}
+
 function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const login = entry as LoginEntry;
 	const { t } = useLingui();
@@ -585,6 +696,10 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					{showPassword ? login.password : "•".repeat(Math.min(login.password.length, 16))}
 				</span>
 			</DetailField>
+
+			{login.passwordChangelog && login.passwordChangelog.length > 0 && (
+				<PasswordChangelogField changelog={login.passwordChangelog} copied={copied} copy={copy} />
+			)}
 
 			{login.totp && <TotpField value={login.totp} copied={copied} copy={copy} />}
 

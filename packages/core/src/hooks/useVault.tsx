@@ -72,6 +72,18 @@ export interface PasskeyCredential {
 	lastUsedAt?: number;
 }
 
+/**
+ * One superseded password, kept so a rotation that hasn't propagated yet (an IdP
+ * can lag by minutes) is recoverable. `changedAt` is the epoch ms at which this
+ * value stopped being current, taken from the replacing edit's HLC wall time, so
+ * two rotations seconds apart stay distinguishable. Owned by `entry-mutations`:
+ * nothing else may write it. See docs/password-changelog.md.
+ */
+export interface PasswordChange {
+	value: string;
+	changedAt: number;
+}
+
 interface BaseEntryData {
 	name: string;
 	notes?: string;
@@ -101,6 +113,8 @@ export interface LoginEntryData extends BaseEntryData {
 	subdomainMatch?: SubdomainMatchMode;
 	/** Passkeys Bramble hosts for this site, in its authenticator role. */
 	passkeys?: PasskeyCredential[];
+	/** Superseded passwords, newest first, capped at MAX_PASSWORD_CHANGELOG. */
+	passwordChangelog?: PasswordChange[];
 }
 
 export interface CardEntryData extends BaseEntryData {

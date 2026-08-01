@@ -13,6 +13,7 @@ import type { EncryptedEntry, VaultBlob } from "../vault-format";
 import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
+import { withPasswordChangelog } from "./password-changelog";
 
 // Coalesce a burst of uses into one write.
 const USE_COALESCE_MS = 60_000;
@@ -118,12 +119,17 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			const c = await clock();
 			// hlc.wall is physical ms, so it doubles as the timestamp.
 			const hlc = c.send();
-			const entry: Entry = {
-				id: globalThis.crypto.randomUUID(),
-				...valid,
-				createdAt: valid.createdAt ?? hlc.wall,
-				updatedAt: hlc.wall,
-			};
+			// No prior entry, so this only strips a caller-supplied changelog.
+			const entry = withPasswordChangelog(
+				{
+					id: globalThis.crypto.randomUUID(),
+					...valid,
+					createdAt: valid.createdAt ?? hlc.wall,
+					updatedAt: hlc.wall,
+				},
+				undefined,
+				hlc.wall,
+			);
 			const stamps = new Map(current.stamps);
 			stamps.set(entry.id, hlc);
 			return persist({
@@ -143,12 +149,17 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 				const hlc = c.send();
 				const id = globalThis.crypto.randomUUID();
 				stamps.set(id, hlc);
-				return {
-					id,
-					...data,
-					createdAt: data.createdAt ?? hlc.wall,
-					updatedAt: data.updatedAt ?? hlc.wall,
-				};
+				// Imported entries start with no changelog; an import file cannot seed one.
+				return withPasswordChangelog(
+					{
+						id,
+						...data,
+						createdAt: data.createdAt ?? hlc.wall,
+						updatedAt: data.updatedAt ?? hlc.wall,
+					},
+					undefined,
+					hlc.wall,
+				);
 			});
 			return persist({
 				entries: [...current.entries, ...withIds],
@@ -164,14 +175,18 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			const prev = current.entries.find((e) => e.id === id);
 			const entries = current.entries.map((e) =>
 				e.id === id
-					? {
-							id,
-							...valid,
-							// Preserve create time (backfill legacy) and last-used across the edit.
-							createdAt: prev?.createdAt ?? valid.createdAt ?? hlc.wall,
-							updatedAt: hlc.wall,
-							lastUsedAt: valid.lastUsedAt ?? prev?.lastUsedAt,
-						}
+					? withPasswordChangelog(
+							{
+								id,
+								...valid,
+								// Preserve create time (backfill legacy) and last-used across the edit.
+								createdAt: prev?.createdAt ?? valid.createdAt ?? hlc.wall,
+								updatedAt: hlc.wall,
+								lastUsedAt: valid.lastUsedAt ?? prev?.lastUsedAt,
+							},
+							prev,
+							hlc.wall,
+						)
 					: e,
 			);
 			const stamps = new Map(current.stamps);
