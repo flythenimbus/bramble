@@ -12,6 +12,10 @@ function joinUrl(a: string, b: string): string {
 // The server's own explanation for a failed request, appended to the thrown error.
 // Sabre-based servers (Nextcloud, ownCloud) put it in <d:error><s:message>.
 async function reason(res: Response): Promise<string> {
+	// Nextcloud throttles an account after repeated failed sign-ins, so a 429 outlives
+	// the bad credentials that caused it: correcting them still fails until it expires.
+	if (res.status === 429)
+		return ": rate-limited by the server, which throttles after failed sign-ins. Check the address and credentials, then wait a few minutes and retry";
 	try {
 		const msg = xml.parse(await res.text())?.error?.message;
 		return typeof msg === "string" && msg.trim() ? `: ${msg.trim()}` : "";

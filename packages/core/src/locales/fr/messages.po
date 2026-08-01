@@ -699,6 +699,10 @@ msgstr "Entrez votre mot de passe maître pour autoriser le nouvel appareil. Cel
 msgid "Enter your master password to unlock your vault"
 msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Enter your Nextcloud WebDAV address, not the site you sign in to. Files, then Files settings, shows it at the bottom left; it looks like https://cloud.example.com/remote.php/dav/files/USERNAME/. Sign in with an app password, and write the backup folder below as a path, like /path/to/dir."
+msgstr "Saisissez l’adresse WebDAV de votre Nextcloud, et non celle du site de connexion. Dans Fichiers, puis Paramètres de Fichiers, elle s’affiche en bas à gauche ; elle ressemble à https://cloud.example.com/remote.php/dav/files/USERNAME/. Connectez-vous avec un mot de passe d’application et indiquez ci-dessous le dossier de sauvegarde sous forme de chemin, par exemple /chemin/vers/dossier."
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
 msgstr "Entrez votre code de récupération pour déverrouiller. Après la connexion, générez-en un nouveau dans les Paramètres."
@@ -2092,6 +2096,10 @@ msgstr "En attente d'un appareil pour rejoindre..."
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Waiting for your key…"
 msgstr "En attente de votre clé..."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "WebDAV URL"
+msgstr "URL WebDAV"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Website"

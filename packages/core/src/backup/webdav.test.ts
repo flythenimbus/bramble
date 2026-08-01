@@ -81,6 +81,16 @@ describe("createWebdavTarget", () => {
 		).rejects.toThrow("WebDAV PUT failed (401): CSRF check not passed.");
 	});
 
+	// Nextcloud's brute-force throttle keeps rejecting after the credentials are fixed.
+	it("explains a throttling 429", async () => {
+		route((_url, init) =>
+			init.method === "PUT" ? new Response("", { status: 429 }) : new Response("", { status: 201 }),
+		);
+		await expect(
+			createWebdavTarget(CFG).put("bramble/x.bramble", new Uint8Array([1])),
+		).rejects.toThrow("WebDAV PUT failed (429): rate-limited by the server");
+	});
+
 	it("still reports the status when the body is not sabre xml", async () => {
 		route((_url, init) =>
 			init.method === "PUT"

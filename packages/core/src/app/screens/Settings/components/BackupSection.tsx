@@ -1,3 +1,5 @@
+import type { MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
 	Boxes,
@@ -46,6 +48,15 @@ const oauthProviderOf = (providerId: string): OAuthProviderId | null =>
 		? (providerId as OAuthProviderId)
 		: null;
 
+/**
+ * Where one provider's form copy differs from its kind's default. Message descriptors, not
+ * strings: PROVIDERS is module scope, so these translate at render time via `i18n._`.
+ */
+interface ProviderCopy {
+	hint?: MessageDescriptor; // the setup line above the fields
+	serverUrlLabel?: MessageDescriptor;
+}
+
 interface ProviderDef {
 	id: string;
 	name: string; // brand name, not localized
@@ -57,6 +68,7 @@ interface ProviderDef {
 	region?: string;
 	serverUrl?: string;
 	needsServerUrl?: boolean;
+	copy?: ProviderCopy;
 }
 
 // Popular providers. Brand icons where we have them, lucide placeholders otherwise
@@ -130,6 +142,11 @@ const PROVIDERS: ProviderDef[] = [
 		Icon: NextCloud,
 		accent: "text-sky-500",
 		needsServerUrl: true,
+		// "Server URL" invites the Nextcloud root domain, which is not what the field takes.
+		copy: {
+			hint: msg`Enter your Nextcloud WebDAV address, not the site you sign in to. Files, then Files settings, shows it at the bottom left; it looks like https://cloud.example.com/remote.php/dav/files/USERNAME/. Sign in with an app password, and write the backup folder below as a path, like /path/to/dir.`,
+			serverUrlLabel: msg`WebDAV URL`,
+		},
 	},
 	{
 		id: "pcloud",
@@ -231,6 +248,20 @@ function ProviderModalHeader({ def, onClose }: { def: ProviderDef; onClose: () =
 			</Button>
 		</div>
 	);
+}
+
+/** The setup line above the credential fields: the tile's own copy, else its kind's. */
+function SetupHint({ def }: { def: ProviderDef }) {
+	const { i18n } = useLingui();
+	if (def.copy?.hint) return <>{i18n._(def.copy.hint)}</>;
+	if (def.kind === "s3")
+		return (
+			<Trans>
+				Create an access key with read and write access to a bucket, then paste it below. For the
+				bucket you can paste its full URL (https://host/bucket).
+			</Trans>
+		);
+	return <Trans>Enter your WebDAV address and an app password for your account.</Trans>;
 }
 
 /**
@@ -410,7 +441,7 @@ type ModalState = { step: "grid" } | { step: "form"; providerId: string; editing
  * VEK-wrapped; OAuth providers store a refresh token instead. See docs/cloud-storage-backups.md.
  */
 export function BackupSection() {
-	const { t } = useLingui();
+	const { t, i18n } = useLingui();
 	const backup = useBackup();
 	const { targets, runningIds } = backup;
 
@@ -648,14 +679,7 @@ export function BackupSection() {
 							<ProviderModalHeader def={modalDef} onClose={() => setModal(null)} />
 
 							<p className="text-xs text-muted-foreground">
-								{modalDef.kind === "s3" ? (
-									<Trans>
-										Create an access key with read and write access to a bucket, then paste it
-										below. For the bucket you can paste its full URL (https://host/bucket).
-									</Trans>
-								) : (
-									<Trans>Enter your WebDAV address and an app password for your account.</Trans>
-								)}
+								<SetupHint def={modalDef} />
 							</p>
 
 							{modalDef.kind === "s3" ? (
@@ -679,7 +703,11 @@ export function BackupSection() {
 							) : (
 								<>
 									<TextField
-										label={t`Server URL`}
+										label={
+											modalDef.copy?.serverUrlLabel
+												? i18n._(modalDef.copy.serverUrlLabel)
+												: t`Server URL`
+										}
 										value={serverUrl}
 										onChange={(e) => setServerUrl(e.target.value)}
 									/>
