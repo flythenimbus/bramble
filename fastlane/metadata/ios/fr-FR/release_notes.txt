@@ -1,7 +1,9 @@
-Nouveautés de cette version :
+Quoi de neuf dans cette version :
 
-- Déplacez vos identifiants directement dans Bramble depuis une autre application de mots de passe sur cet appareil, ou transférez-les dans l’autre sens. Aucun fichier d’export à créer, partager ou supprimer : le transfert se fait d’app à app, et vos clés d’accès et codes à usage unique suivent vos mots de passe. Nécessite iOS 26.
-- Les exports Bitwarden contenant des clés d’accès les importent désormais. Auparavant, les identifiants arrivaient mais les clés d’accès étaient laissées de côté.
-- Corrigé : les fichiers 1Password (.1pux) et KeePass (.kdbx) ne pouvaient pas être sélectionnés depuis Fichiers ou Drive. Ils apparaissaient grisés, ce qui empêchait de lancer l’importation.
+- Une connexion conserve désormais les derniers mots de passe ayant été remplacés, avec pour chacun le moment où il a cessé d’être le mot de passe actif. Certains sites mettent plusieurs minutes à appliquer un changement de mot de passe partout, et tant qu’ils ne l’ont pas fait, c’est l’ancien mot de passe qui fonctionne encore : cela vous offre une solution de repli au lieu de vous retrouver bloqué hors de votre compte. Les anciens mots de passe ne sont jamais renseignés ni recherchés, et ne quittent jamais votre appareil lors d’un export.
+- Chaque entrée affiche désormais sa date de création et de dernière modification.
+- Importer le même fichier deux fois ne duplique plus tout son contenu. Les doublons sont détectés avant l’aperçu, ainsi le nombre que vous confirmez est le nombre que vous obtenez, et tout élément déjà présent dans votre coffre-fort est compté comme ignoré à côté.
+- Lorsqu’une clé d’accès d’un export Bitwarden ne peut pas être importée, l’importation indique désormais le champ en erreur et la nature de l’erreur, au lieu d’un seul message couvrant les trois champs.
+- Correction : l’ajout d’un deuxième appareil pouvait laisser l’appareil invitant sans code de vérification à l’écran, si bien qu’il n’y avait rien à comparer ni à approuver.
 
-Pas de compte, pas de cloud. Tout reste sur vos appareils.
+Sans compte, sans cloud. Tout reste sur vos appareils.

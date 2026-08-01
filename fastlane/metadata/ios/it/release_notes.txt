@@ -1,7 +1,7 @@
-Cosa c'è di nuovo in questa versione:
+- Un login ora conserva le ultime password precedenti, ciascuna con il momento in cui ha smesso di essere quella corrente. Alcuni siti impiegano minuti per applicare un cambio di password ovunque e, fino a quel momento, la vecchia funziona ancora: questo le lascia una via per rientrare, anziché bloccarla fuori dal proprio account. Le vecchie password non vengono mai riempite automaticamente né cercate e non lasciano mai il dispositivo durante un’esportazione.
+- Ogni voce ora mostra la data di creazione e l’ultima modifica.
+- Importare due volte lo stesso file non duplica più tutto il contenuto. I duplicati vengono riconosciuti prima dell’anteprima, quindi il numero che Lei conferma corrisponde esattamente a ciò che viene importato, e gli elementi già presenti nel vault vengono contati come saltati accanto al totale.
+- Quando una passkey in un’esportazione Bitwarden non può essere importata, l’importazione ora indica il campo errato e il motivo specifico, invece di un unico messaggio che copriva tutte e tre le possibilità.
+- Risolto: l’aggiunta di un secondo dispositivo poteva lasciare il dispositivo invitante senza un codice di verifica sullo schermo, quindi non c’era nulla da confrontare né da approvare.
 
-- Sposti i suoi login direttamente in Bramble da un'altra app per password su questo dispositivo, oppure li invii nell'altra direzione. Non è necessario creare, condividere o eliminare file di esportazione: il trasferimento avviene da app ad app e le passkey e i codici monouso viaggiano insieme alle password. Richiede iOS 26.
-- Le esportazioni di Bitwarden che contengono passkey ora le importano. In precedenza, i login venivano importati ma le passkey rimanevano indietro.
-- Risolto: impossibile selezionare i file 1Password (.1pux) e KeePass (.kdbx) da File o Drive. Apparivano disattivati, quindi non era possibile avviare l'importazione.
-
-Nessun account, nessun cloud. Tutto rimane sui dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.

@@ -1,7 +1,9 @@
 Novedades de esta versión:
 
-- Mueva sus inicios de sesión directamente a Bramble desde otra aplicación de contraseñas en este dispositivo, o envíelos en la dirección opuesta. No hay ningún archivo de exportación que crear, compartir ni eliminar: la transferencia se realiza de aplicación a aplicación, y sus llaves de acceso y códigos de un solo uso viajan con sus contraseñas. Requiere iOS 26.
-- Las exportaciones de Bitwarden que contienen llaves de acceso ahora las importan. Antes, los inicios de sesión se importaban, pero las llaves de acceso se quedaban atrás.
-- Corregido: los archivos de 1Password (.1pux) y KeePass (.kdbx) no se podían seleccionar desde Archivos o Drive. Aparecían atenuados, por lo que no había forma de iniciar la importación.
+- Un inicio de sesión ahora conserva las últimas contraseñas de las que se cambió, cada una con el momento en que dejó de ser vigente. Algunos sitios tardan minutos en aplicar un cambio de contraseña en todas partes, y hasta que lo hacen, la antigua es la que sigue funcionando: esto le deja una vía de vuelta en lugar de bloquear el acceso a su propia cuenta. Las contraseñas antiguas nunca se rellenan ni se buscan, y nunca salen de su dispositivo en una exportación.
+- Cada entrada ahora muestra cuándo fue creada y la última vez que se modificó.
+- Importar el mismo archivo dos veces ya no duplica todo su contenido. Las repeticiones se detectan antes de la vista previa, por lo que el número que confirme es el número que obtendrá, y cualquier elemento que ya esté en su caja fuerte se cuenta como omitido, mostrándose al lado.
+- Cuando una llave de acceso de una exportación de Bitwarden no puede importarse, el proceso ahora indica el campo erróneo y cuál era el error, en lugar de un único mensaje para los tres casos.
+- Corregido: al añadir un segundo dispositivo, el dispositivo que invita podía quedarse sin código de verificación en pantalla, por lo que no había nada que comparar ni aprobar.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

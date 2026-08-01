@@ -1,7 +1,9 @@
 What's new in this release:
 
-- Move your logins straight into Bramble from another password app on this device, or send them the other way. There is no export file to create, share or delete: the handover happens app to app, and your passkeys and one-time codes travel with your passwords. Needs iOS 26.
-- Bitwarden exports that hold passkeys now bring them in. Before, the logins arrived and the passkeys were left behind.
-- Fixed: 1Password (.1pux) and KeePass (.kdbx) files could not be picked from Files or Drive. They showed as greyed out, so there was no way to start the import.
+- A login now keeps the last few passwords it was changed away from, each with the moment it stopped being current. Some sites take minutes to apply a password change everywhere, and until they do, the old one is what still works: this leaves you a way back in instead of locking you out of your own account. Old passwords are never filled or searched, and never leave your device in an export.
+- Every entry now shows when it was created and last changed.
+- Importing the same file twice no longer duplicates everything in it. Repeats are recognised before the preview, so the number you confirm is the number you get, and anything already in your vault is counted as skipped next to it.
+- When a passkey in a Bitwarden export cannot be brought in, the import now names the field that was wrong and what was wrong with it, instead of one message covering all three.
+- Fixed: adding a second device could leave the inviting device with no verification code on screen, so there was nothing to compare and nothing to approve.
 
 No account, no cloud. Everything stays on your devices.
