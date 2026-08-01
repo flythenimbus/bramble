@@ -59,8 +59,27 @@ async function chat(system, user) {
 }
 
 // Placeholders that must survive translation unchanged: {x}, %@, %lld, %s, %1$s, etc.
-const PLACEHOLDER = /\{[^}]+\}|%[0-9]*\$?[@a-z]+/gi;
+// The braced form is deliberately identifier-only, so the inner text of an ICU plural
+// ("{# selected}") reads as translatable copy rather than as a placeholder to preserve.
+const PLACEHOLDER = /\{\s*[\w.$]+\s*\}|%[0-9]*\$?[@a-z]+/gi;
 const placeholders = (s) => (s.match(PLACEHOLDER) ?? []).sort().join(",");
+
+// ICU plural/select: the argument and its form must survive, but each category's text is
+// exactly what we're asking to have translated. Comparing the whole message byte-for-byte
+// (what a naive `{[^}]+}` scan does) rejects every correct plural translation.
+const ICU_ARG = /\{\s*([\w.$]+)\s*,\s*(plural|selectordinal|select)\s*,/gi;
+const ICU_CATEGORY = /(?:^|[{\s])(zero|one|two|few|many|other|=\d+)\s*\{/gi;
+const icuArgs = (s) =>
+	[...s.matchAll(ICU_ARG)].map((m) => `${m[1]}:${m[2].toLowerCase()}`).sort().join(",");
+const icuCategories = (s) => new Set([...s.matchAll(ICU_CATEGORY)].map((m) => m[1]));
+
+// Every category the source declares must still be there. Extra ones are fine: a language
+// with richer plural rules than English (few/many) legitimately adds them.
+function icuMismatch(src, out) {
+	if (icuArgs(src) !== icuArgs(out)) return true;
+	const got = icuCategories(out);
+	return [...icuCategories(src)].some((c) => !got.has(c));
+}
 
 async function batchOnce(language, strings) {
 	const system =
@@ -76,7 +95,7 @@ async function batchOnce(language, strings) {
 	// A dropped/mangled placeholder (e.g. %@ -> @) breaks formatting at runtime; reject so
 	// the caller retries, then falls back to per-string.
 	strings.forEach((src, i) => {
-		if (placeholders(src) !== placeholders(out[i])) {
+		if (placeholders(src) !== placeholders(out[i]) || icuMismatch(src, out[i])) {
 			throw new Error(`placeholder mismatch in ${JSON.stringify(out[i])}`);
 		}
 	});
