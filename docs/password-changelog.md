@@ -25,9 +25,26 @@ Newest first, capped at `MAX_PASSWORD_CHANGELOG` (5). `changedAt` is the epoch
 ms at which that value *stopped* being current, so a row reads "this password
 was replaced at this time".
 
-The cap is deliberate. This is a propagation-lag safety net, not an audit trail:
-older values are dead weight that keeps a since-rotated secret alive in the
-vault long after it stops being useful.
+The cap is deliberate. This is a propagation-lag safety net, not an audit trail.
+
+### Retention is bounded by rotations, not by time
+
+Be precise about what the cap does, because "keeps the last 5" reads more
+reassuringly than it behaves. A row is evicted only when a **sixth rotation
+pushes it off the end**. Nothing expires on a timer.
+
+So a password you rotate once stays in the vault indefinitely, because most
+entries never get rotated five more times. In practice the cap bounds how much
+is kept, not how long.
+
+There is also no way to remove a row: no per-row delete, no "clear history", and
+no setting to stop recording. The only paths that drop a value are five further
+rotations or deleting the entry outright.
+
+That matters most in the case where you would most want it gone: rotating
+*because* a password was compromised, or saving a value pasted into the field by
+mistake. Both are retained like any other. This is a known limitation, not an
+oversight; see "Not included".
 
 ### Timestamp precision
 
@@ -76,9 +93,36 @@ of the vault:
   `searchText` haystack, not a field sweep.
 - **KDBX export** (`export/kdbx.ts`) maps named fields and writes
   `HistoryMaxItems=0`.
+- **Credential exchange** (`exchange/to-cxf.ts`) builds CXF credentials from
+  named fields, so the changelog does not leave for another manager or the OS.
+- **Native autofill** re-reads the vault rather than the index, but extracts keys
+  by name on both platforms (`VaultReader.kt`, `AutofillBridge.swift`), so an old
+  password can never be offered as a dataset.
 
 Each of these is safe by construction rather than by a filter, and
 `entry-mutations.test.ts` pins the autofill one.
+
+Copying a superseded value goes through the sensitive `clipboard.copy()` path,
+not `copyPlain`, so it inherits the timed clipboard auto-clear.
+
+## What it costs
+
+Retaining old passwords is a real trade, and the honest version is worth stating
+rather than leaving implicit. Every manager that ships password history accepts
+the same one.
+
+An attacker who can read the vault already holds the *current* password for the
+entry, so the marginal loss is not that account. It is:
+
+- **Reuse.** A superseded password may still be live on some other site that was
+  never migrated.
+- **The scheme.** A sequence like `Summer2025!` → `Summer2026!` → `Winter2026!`
+  reveals how the user generates passwords. That is worth more than any single
+  value, because it helps guess credentials the attacker never captured. A
+  changelog is a pattern oracle.
+
+Accepted deliberately: the feature is worthless without retaining the values, and
+the exposure only exists in a scenario where the vault is already lost.
 
 ## Sync
 
@@ -100,3 +144,7 @@ unrelated and deliberately named "changelog" to keep the two apart.
   Bramble produce rows.
 - **Export.** The changelog stays local to the vault.
 - **A retention setting.** The cap is a constant.
+- **Any way to purge.** No per-row delete, no "clear history", no off switch. If
+  the retention behaviour above turns out to bother real users, a clear action
+  plus a recording toggle is the fix, and both belong behind
+  `password-changelog.ts` so the edit form still cannot touch the field.
