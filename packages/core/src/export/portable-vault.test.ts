@@ -54,6 +54,16 @@ describe("sealPortableVaultFile", () => {
 		expect(JSON.parse(arg.entriesJson).entries).toHaveLength(2);
 	});
 
+	// importMany builds `{ id, ...data }` over an id it has already stamped, so an id left in
+	// the payload overwrites it and the write dies on "missing sync stamp for entry <id>".
+	it("strips vault-local ids, which would collide with the ones the importer mints", async () => {
+		const crypto = fakeCrypto();
+		await sealPortableVaultFile(crypto, [{ ...login("a"), id: "vault-local" }], "pw");
+		const arg = crypto.sealPortableVault.mock.calls[0]?.[0];
+		if (!arg) throw new Error("the core was never asked to seal anything");
+		expect(JSON.parse(arg.entriesJson).entries[0]).not.toHaveProperty("id");
+	});
+
 	it("refuses where the platform has no sealing call", async () => {
 		await expect(sealPortableVaultFile({}, [login("a")], "pw")).rejects.toThrow(/isn't available/);
 	});

@@ -22,20 +22,34 @@ import type { PortableVaultBlob } from "../wasm";
 /**
  * What a portable vault carries. Entries only: no stamps and no tombstones, because the
  * file is a snapshot to be merged into some other vault's history, not a sync participant.
- * Ids ride along so a re-import can recognise its own entries, but the importer mints new ones.
+ *
+ * Ids are stripped, and that is load-bearing rather than tidiness. `importMany` builds each
+ * entry as `{ id, ...data }` with a freshly minted id it has already stamped, so an `id` left
+ * inside the data silently overwrites it and the entry arrives carrying a stamp that belongs
+ * to a different id. The write then dies on "missing sync stamp for entry <id>". Ids are
+ * vault-local anyway: the receiving vault mints its own.
  */
 export interface PortableVaultPayload {
 	entries: EntryData[];
 }
 
+/** Drop the vault-local id from an entry, leaving the content the file is meant to carry. */
+function withoutId(entry: EntryData & { id?: string }): EntryData {
+	const { id: _id, ...data } = entry;
+	return data as EntryData;
+}
+
 /** Seal `entries` into .bramble bytes under a password chosen for the file. */
 export async function sealPortableVaultFile(
 	crypto: Pick<CryptoAdapter, "sealPortableVault">,
-	entries: readonly EntryData[],
+	// Takes entries WITH their ids, because that is what the vault holds, and strips them here
+	// (see PortableVaultPayload). Narrowing this to EntryData would just move the strip to
+	// every caller and invite one to forget.
+	entries: readonly (EntryData & { id?: string })[],
 	password: string,
 ): Promise<Uint8Array> {
 	if (!crypto.sealPortableVault) throw new Error("Exporting a .bramble isn't available here.");
-	const payload: PortableVaultPayload = { entries: [...entries] };
+	const payload: PortableVaultPayload = { entries: entries.map(withoutId) };
 	const sealed = await crypto.sealPortableVault({
 		entriesJson: JSON.stringify(payload),
 		password,
