@@ -8,13 +8,22 @@ import { PasswordField } from "../../../components/ui/password-field";
 import { Header } from "./Header";
 import { Shell } from "./Shell";
 
-/** Credential step for an encrypted .kdbx: its own master password plus an optional key file. */
+/**
+ * Credential step for any import that is behind a password: a .kdbx and its optional key
+ * file, or a .bramble sealed under a password chosen at export. The label and the key-file
+ * field are per-format, since only KeePass has key files.
+ */
 export function KdbxUnlock({
 	providerLabel,
+	passwordLabel,
+	allowKeyfile = true,
 	onOpen,
 	onBack,
 }: {
 	providerLabel: string;
+	passwordLabel: string;
+	/** KeePass only; a .bramble has no second factor. */
+	allowKeyfile?: boolean;
 	onOpen: (password: string, keyfileB64?: string) => Promise<void>;
 	onBack: () => void;
 }) {
@@ -49,24 +58,26 @@ export function KdbxUnlock({
 				className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-6 space-y-4"
 			>
 				<PasswordField
-					label={t`KeePass master password`}
+					label={passwordLabel}
 					autoFocus
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					error={error ?? undefined}
 				/>
-				<label className="flex flex-col gap-3">
-					<span className="text-sm">
-						<Trans>Key file (optional)</Trans>
-					</span>
-					<input
-						type="file"
-						// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
-						onClick={() => shell.notifyFilePickerOpening?.()}
-						onChange={(e) => setKeyfile(e.currentTarget.files?.[0] ?? null)}
-						className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background/50 file:px-3 file:py-1.5 file:text-sm hover:file:bg-background/80"
-					/>
-				</label>
+				{allowKeyfile && (
+					<label className="flex flex-col gap-3">
+						<span className="text-sm">
+							<Trans>Key file (optional)</Trans>
+						</span>
+						<input
+							type="file"
+							// Keep the vault unlocked while the OS picker backgrounds the app (mobile).
+							onClick={() => shell.notifyFilePickerOpening?.()}
+							onChange={(e) => setKeyfile(e.currentTarget.files?.[0] ?? null)}
+							className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background/50 file:px-3 file:py-1.5 file:text-sm hover:file:bg-background/80"
+						/>
+					</label>
+				)}
 				<div className="flex items-center justify-between gap-3">
 					<Button
 						variant="secondary"

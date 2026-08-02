@@ -30,7 +30,7 @@ const PARSERS: Record<ImportProvider, ImportParser> = {
  * Provider id. `keepass-kdbx` has no synchronous parser (opened in WASM), and
  * `credential-exchange` has no file at all (the OS hands us the payload).
  */
-type ImportProviderId = ImportProvider | "keepass-kdbx" | "credential-exchange";
+type ImportProviderId = ImportProvider | "keepass-kdbx" | "bramble" | "credential-exchange";
 
 /** UI-facing description of a supported import provider. Icons live in the UI layer. */
 export interface ImportProviderInfo {
@@ -54,6 +54,17 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 		label: "Another app on this device",
 		blurb: "Passwords, passkeys and codes, with no file in between",
 		viaSystem: true,
+	},
+	{
+		// Bramble's own format, so it is the only file import that keeps passkeys and
+		// password history. Sealed under the password chosen at export, not the master
+		// password. Second because it is the best file route where the user has one.
+		id: "bramble",
+		label: "Bramble (.bramble)",
+		blurb: "An export from another Bramble vault, passkeys included",
+		accept: ".bramble",
+		reads: "bytes",
+		needsCredential: true,
 	},
 	{
 		id: "bitwarden",

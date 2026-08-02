@@ -1042,7 +1042,7 @@ msgstr "Keep this screen open until pairing finishes."
 msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
 msgstr "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
 
-#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "KeePass master password"
 msgstr "KeePass master password"
 
@@ -1383,6 +1383,7 @@ msgid "Password changed {0}"
 msgstr "Password changed {0}"
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Password for the file"
 msgstr "Password for the file"
 
@@ -1884,6 +1885,14 @@ msgstr "Tap your key…"
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
 msgstr "That doesn't look like a Bramble backup (.bramble) file."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That doesn't look like a Bramble export (.bramble) file."
+msgstr "That doesn't look like a Bramble export (.bramble) file."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That password didn't open the file."
+msgstr "That password didn't open the file."
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "That password is incorrect."

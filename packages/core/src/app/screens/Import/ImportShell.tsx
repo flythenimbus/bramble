@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
+import { openPortableVaultFile, readPortableVaultFile } from "../../../export/portable-vault";
 import {
 	exchangeBlockedReason,
 	useExchangeAvailability,
@@ -18,7 +19,7 @@ import {
 	parseImport,
 	tallyByType,
 } from "../../../import";
-import { bytesToBase64 } from "../../../util/bytes";
+import { base64ToBytes, bytesToBase64 } from "../../../util/bytes";
 import { splitAlreadyImported } from "../../../vault/entry-identity";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
@@ -285,13 +286,10 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// (caught by KdbxUnlock) so a wrong password keeps the user on this step.
 	const openKdbxAndPreview = async (password: string, keyfileB64?: string) => {
 		if (!kdbxPending) return;
-		let entries: Awaited<ReturnType<typeof crypto.openKdbx>>;
-		try {
-			entries = await crypto.openKdbx({ fileB64: kdbxPending.fileB64, password, keyfileB64 });
-		} catch (err) {
-			throw new Error(kdbxErrorMessage(err));
-		}
-		const res = kdbxEntriesToResult(entries);
+		const res =
+			kdbxPending.provider.id === "bramble"
+				? await openBrambleFile(password)
+				: await openKdbxFile(password, keyfileB64);
 		if (res.imported.length === 0) {
 			throw new Error(t`No importable items were found in this database.`);
 		}
@@ -301,6 +299,32 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			);
 		setProvider(kdbxPending.provider);
 		setKdbxPending(null);
+	};
+
+	const openKdbxFile = async (password: string, keyfileB64?: string) => {
+		if (!kdbxPending) throw new Error("no pending file");
+		try {
+			const entries = await crypto.openKdbx({
+				fileB64: kdbxPending.fileB64,
+				password,
+				keyfileB64,
+			});
+			return kdbxEntriesToResult(entries);
+		} catch (err) {
+			throw new Error(kdbxErrorMessage(err));
+		}
+	};
+
+	// Bramble's own format. Entries come back already normalized, so unlike every foreign
+	// format there is nothing to map: passkeys and password history ride along untouched.
+	const openBrambleFile = async (password: string): Promise<ImportResult> => {
+		if (!kdbxPending) throw new Error("no pending file");
+		const file = readPortableVaultFile(base64ToBytes(kdbxPending.fileB64));
+		if (!file) throw new Error(t`That doesn't look like a Bramble export (.bramble) file.`);
+		const entries = await openPortableVaultFile(crypto, file, password);
+		// null is a wrong password, distinct from a file this can't read at all.
+		if (entries === null) throw new Error(t`That password didn't open the file.`);
+		return { imported: entries, byType: tallyByType(entries), skipped: 0, warnings: [] };
 	};
 
 	const runImport = async () => {
@@ -388,6 +412,12 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		return (
 			<KdbxUnlock
 				providerLabel={kdbxPending.provider.label}
+				passwordLabel={
+					kdbxPending.provider.id === "bramble"
+						? t`Password for the file`
+						: t`KeePass master password`
+				}
+				allowKeyfile={kdbxPending.provider.id !== "bramble"}
 				onOpen={openKdbxAndPreview}
 				onBack={() => {
 					setKdbxPending(null);

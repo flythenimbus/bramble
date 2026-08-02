@@ -1042,7 +1042,7 @@ msgstr "Mantenga esta pantalla abierta hasta que finalice el emparejamiento."
 msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
 msgstr "Guarde esto en un lugar seguro y sin conexión. Cualquiera que tenga este código puede desbloquear su bóveda, y es la única forma de volver a acceder si olvida su contraseña maestra y pierde sus claves de seguridad."
 
-#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "KeePass master password"
 msgstr "Contraseña maestra de KeePass"
 
@@ -1383,6 +1383,7 @@ msgid "Password changed {0}"
 msgstr "Contraseña cambiada {0}"
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Password for the file"
 msgstr "Contraseña para el archivo"
 
@@ -1884,6 +1885,14 @@ msgstr "Toque su llave..."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
 msgstr "Eso no parece un archivo de copia de seguridad de Bramble (.bramble)."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That doesn't look like a Bramble export (.bramble) file."
+msgstr "Eso no parece un archivo de exportación de Bramble (.bramble)."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That password didn't open the file."
+msgstr "Esa contraseña no abrió el archivo."
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "That password is incorrect."
