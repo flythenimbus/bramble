@@ -18,19 +18,49 @@ msgstr ""
 msgid "…and {0} more"
 msgstr "...y {0} más"
 
+#. placeholder {0}: ids.length
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+#~ msgid "{0, plural, one {# selected entry goes into the file.} other {# selected entries go into the file.}}"
+#~ msgstr "{0, plural, one {# entrada seleccionada va al archivo.} other {# entradas seleccionadas van al archivo.}}"
+
+#. placeholder {0}: ids.length
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "{0, plural, one {Delete # entry?} other {Delete # entries?}}"
+msgstr "{0, plural, one {¿Eliminar # entrada?} other {¿Eliminar # entradas?}}"
+
 #. placeholder {0}: fingerprint(d.publicKey)
 #. placeholder {1}: addedOn(d.addedAt)
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "{0} · added {1}"
 msgstr "{0} · añadido {1}"
 
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "{count, plural, one {# selected} other {# selected}}"
+msgstr "{count, plural, one {# seleccionado} other {# seleccionados}}"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+#~ msgid "{count, plural, one {Delete # entry?} other {Delete # entries?}}"
+#~ msgstr "{count, plural, one {¿Eliminar # entrada?} other {¿Eliminar # entradas?}}"
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "{duplicates} more were already in your vault and will not be added again."
 msgstr "{duplicates} más ya estaban en su caja fuerte y no se añadirán de nuevo."
 
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "{hiddenCount, plural, one {# hidden by the current filter} other {# hidden by the current filter}}"
+msgstr "{hiddenCount, plural, one {# oculto por el filtro actual} other {# ocultos por el filtro actual}}"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
+msgstr "{hiddenCount, plural, one {# de ellos está oculto por el filtro actual.} other {# de ellos están ocultos por el filtro actual.}}"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
+msgstr "{passkeys, plural, one {# passkey está almacenada en estas entradas y se elimina con ellas.} other {# passkeys están almacenadas en estas entradas y se eliminan con ellas.}}"
+
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
-msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {# llave de acceso} other {# llaves de acceso}}"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
@@ -85,6 +115,10 @@ msgstr "Acerca de"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Access key ID"
 msgstr "ID de clave de acceso"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Actions"
+msgstr "Acciones"
 
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Add"
@@ -243,6 +277,7 @@ msgid "Bucket"
 msgstr "Bucket"
 
 #: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -580,6 +615,7 @@ msgstr "Diariamente"
 msgid "Dark"
 msgstr "Oscuro"
 
+#: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Delete"
@@ -605,11 +641,16 @@ msgstr "Eliminar este depósito"
 msgid "Delete vault"
 msgstr "Eliminar almacén"
 
+#: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Deleting…"
 msgstr "Eliminando..."
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Deselect all"
+msgstr "Deseleccionar todo"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -640,6 +681,10 @@ msgstr "Desconectar"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Done"
 msgstr "Hecho"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Done selecting"
+msgstr "Finalizar selección"
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
@@ -1618,6 +1663,18 @@ msgstr "Clave de seguridad"
 msgid "Security keys"
 msgstr "Claves de seguridad"
 
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Select {name}"
+msgstr "Seleccionar {name}"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Select all"
+msgstr "Seleccionar todo"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Select items"
+msgstr "Seleccionar elementos"
+
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Send"
 msgstr "Enviar"
@@ -1847,6 +1904,14 @@ msgstr "Esta llave autenticadora no es válida y no puede generar códigos."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Esta copia de seguridad no tiene contraseña maestra, por lo que no se puede restaurar aquí."
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "This can't be undone, and the deletion syncs to your other devices."
+msgstr "Esto no se puede deshacer y la eliminación se sincroniza con sus otros dispositivos."
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+#~ msgid "This can't be undone. Any passkeys they hold are deleted with them, and the deletion syncs to your other devices."
+#~ msgstr "Esto no se puede deshacer. Las claves de acceso que contengan se eliminarán junto con ellos, y la eliminación se sincronizará en sus otros dispositivos."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This code has expired."

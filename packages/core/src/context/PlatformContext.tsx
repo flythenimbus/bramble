@@ -6,7 +6,7 @@ import type { CryptoAdapter } from "../adapters/crypto";
 import type { CredentialExchangeAdapter } from "../adapters/exchange";
 import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
-import { type CapabilityKey, can, type Target } from "../flags";
+import { type CapabilityKey, can, type Surface, surfaceOf, type Target } from "../flags";
 
 export interface Platform {
 	/** Build-target identity; resolves platform capabilities (flags.ts `can`). */
@@ -43,4 +43,13 @@ export function usePlatform(): Platform {
 /** Resolve a platform capability for the current build target. */
 export function useCan(cap: CapabilityKey): boolean {
 	return can(cap, usePlatform().target);
+}
+
+/**
+ * The current target's UI surface. Read this only for input-model differences
+ * (pointer vs touch: hover affordances, long-press); anything feature-shaped
+ * belongs in CAPABILITIES behind `useCan`.
+ */
+export function useSurface(): Surface {
+	return surfaceOf(usePlatform().target);
 }

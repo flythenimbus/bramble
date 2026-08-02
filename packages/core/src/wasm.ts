@@ -109,4 +109,33 @@ export interface VaultCrypto {
 		entries: { strings: { key: string; value: string; protected: boolean }[] }[],
 		password: string,
 	): Uint8Array;
+	/**
+	 * The sealed pieces of a portable vault, all base64. Returned rather than a finished
+	 * file so the VLT1 container keeps a single implementation, in `vault-format.ts`.
+	 */
+	seal_portable_vault?(
+		entriesJson: string,
+		password: string,
+		magicVersion: Uint8Array,
+	): PortableVaultBlob;
+	/** Entries JSON, or undefined when the password is wrong. Touches no session state. */
+	open_portable_vault?(
+		password: string,
+		file: PortableVaultBlob,
+		magicVersion: Uint8Array,
+	): string | undefined;
+}
+
+/**
+ * A portable vault's sealed pieces: a password slot plus the entries ciphertext, keyed by a
+ * fresh key that exists only for that file. See `seal_portable_vault` in core-rust.
+ */
+export interface PortableVaultBlob {
+	slotId: string;
+	salt: string;
+	verifier: string;
+	wrapIv: string;
+	wrappedVek: string;
+	entriesIv: string;
+	entriesCiphertext: string;
 }

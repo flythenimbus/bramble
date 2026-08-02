@@ -80,6 +80,7 @@ export function VaultHomeRoute() {
 			onSelectEntry={(entryId) => navigate({ to: "/vault/$entryId", params: { entryId } })}
 			onEditEntry={(entryId) => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
 			onDeleteEntry={deleteEntry}
+			entries={entries}
 			onUseEntry={(entryId) => void touchEntry(entryId)}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}

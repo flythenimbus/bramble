@@ -170,5 +170,22 @@ export function buildCryptoAdapter(
 			// message channel, which doesn't preserve a Uint8Array.
 			return bytesToBase64(wasm.save_kdbx4(i.entries, i.password));
 		},
+
+		// Both are absent on a binding layer that hasn't been regenerated with the portable
+		// vault calls yet (the mobile native module). Throwing a named error beats a
+		// TypeError on undefined, and the UI gates on the capability before getting here.
+		async sealPortableVault(i) {
+			const wasm = await getWasm();
+			if (!wasm.seal_portable_vault) throw new Error("Exporting a .bramble isn't available here.");
+			return wasm.seal_portable_vault(i.entriesJson, i.password, i.magicVersion);
+		},
+
+		async openPortableVault(i) {
+			const wasm = await getWasm();
+			if (!wasm.open_portable_vault) throw new Error("Opening a .bramble isn't available here.");
+			// undefined (not a throw) is the wrong-password answer, so the caller can tell
+			// a bad password from a corrupt file.
+			return wasm.open_portable_vault(i.password, i.file, i.magicVersion) ?? null;
+		},
 	};
 }

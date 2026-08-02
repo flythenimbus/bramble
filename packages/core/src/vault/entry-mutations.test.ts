@@ -139,6 +139,45 @@ describe("createEntryMutations", () => {
 		expect(payload.tombstones.map((t) => t.id)).toContain(id);
 	});
 
+	// The bulk-select path. Looping `remove` would re-encrypt and rewrite the whole
+	// vault once per selected entry, so the batch has to collapse to one write.
+	it("removeMany deletes the selection in a single disk write", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a"), login("b"), login("c")]);
+		const [a, b, c] = seeded.entries.map((e) => e.id) as [string, string, string];
+		const writesBefore = h.writes();
+
+		const next = await h.mutations.removeMany(seeded, [a, c]);
+		expect(next.entries.map((e) => e.id)).toEqual([b]);
+		expect(h.writes()).toBe(writesBefore + 1);
+	});
+
+	it("removeMany tombstones every id it removed", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a"), login("b"), login("c")]);
+		const [a, , c] = seeded.entries.map((e) => e.id) as [string, string, string];
+
+		const next = await h.mutations.removeMany(seeded, [a, c]);
+		expect(next.stamps.has(a)).toBe(false);
+		expect(next.stamps.has(c)).toBe(false);
+		// Distinct stamps, so a merge can order the two deletions against each other.
+		expect(compareHlc(next.tombstones.get(c)!, next.tombstones.get(a)!)).toBe(1);
+
+		const payload = await h.mutations.readEntriesPayload();
+		expect(payload.entries).toHaveLength(1);
+		expect(payload.tombstones.map((t) => t.id).sort()).toEqual([a, c].sort());
+	});
+
+	// An empty selection must not rewrite the vault just to change nothing.
+	it("removeMany is a no-op for an empty selection", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a")]);
+		const writesBefore = h.writes();
+		const next = await h.mutations.removeMany(seeded, []);
+		expect(next).toBe(seeded);
+		expect(h.writes()).toBe(writesBefore);
+	});
+
 	it("update replaces the entry and advances its stamp", async () => {
 		const h = harness();
 		const afterAdd = await h.mutations.add(empty(), login("a"));

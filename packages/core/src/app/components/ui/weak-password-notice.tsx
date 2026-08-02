@@ -1,6 +1,5 @@
 import { Trans } from "@lingui/react/macro";
-import { Check } from "lucide-react";
-import { cn } from "./utils";
+import { Checkbox } from "./checkbox";
 
 interface WeakPasswordNoticeProps {
 	message: string;
@@ -15,24 +14,9 @@ export function WeakPasswordNotice({ message, accepted, onAccept }: WeakPassword
 			<p className="text-muted-foreground">
 				<span className="text-yellow-500">⚠</span> {message}
 			</p>
-			<label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-foreground">
-				<input
-					type="checkbox"
-					checked={accepted}
-					onChange={(e) => onAccept(e.target.checked)}
-					className="peer sr-only"
-				/>
-				<span
-					className={cn(
-						"flex items-center justify-center w-4 h-4 rounded border transition-colors",
-						"peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50",
-						accepted ? "bg-primary border-primary" : "border-border bg-transparent",
-					)}
-				>
-					{accepted && <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />}
-				</span>
+			<Checkbox checked={accepted} onChange={onAccept}>
 				<Trans>Use this password anyway</Trans>
-			</label>
+			</Checkbox>
 		</div>
 	);
 }

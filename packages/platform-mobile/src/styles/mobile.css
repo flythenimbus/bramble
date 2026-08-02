@@ -28,3 +28,14 @@
 .min-h-screen {
 	min-height: 100%;
 }
+
+/*
+ * A long press on a vault-list row enters selection mode, so the OS must not treat
+ * it as a text gesture. `select-none` on the row covers the selection itself (see
+ * EntryRow); this kills WebKit's callout bubble, which has no Tailwind utility and
+ * fires on iOS even when the text isn't selectable. Scoped to the row: notes and
+ * passwords elsewhere stay selectable and copyable.
+ */
+[data-entry-row] {
+	-webkit-touch-callout: none;
+}

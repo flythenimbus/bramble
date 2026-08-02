@@ -275,6 +275,8 @@ export interface VaultActions {
 	importEntries(items: EntryData[]): Promise<void>;
 	updateEntry(id: string, data: EntryData): Promise<void>;
 	deleteEntry(id: string): Promise<void>;
+	/** Delete a bulk selection in one write. Each id is tombstoned, as with `deleteEntry`. */
+	deleteEntries(ids: string[]): Promise<void>;
 	/** Record a use (copy/fill): bumps only the entry's `lastUsedAt`. */
 	touchEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
@@ -929,6 +931,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (id: string) => commitEntries(await mutations.remove(snapshotEntries(), id)),
 		[mutations, snapshotEntries, commitEntries],
 	);
+	const deleteEntries = useCallback(
+		async (ids: string[]) => commitEntries(await mutations.removeMany(snapshotEntries(), ids)),
+		[mutations, snapshotEntries, commitEntries],
+	);
 	const touchEntry = useCallback(
 		async (id: string) => commitEntries(await mutations.touch(snapshotEntries(), id)),
 		[mutations, snapshotEntries, commitEntries],
@@ -1347,6 +1353,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			importEntries,
 			updateEntry,
 			deleteEntry,
+			deleteEntries,
 			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,
@@ -1379,6 +1386,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			importEntries,
 			updateEntry,
 			deleteEntry,
+			deleteEntries,
 			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,

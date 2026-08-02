@@ -1,3 +1,5 @@
+import type { PortableVaultBlob } from "../wasm";
+
 /** An entry encrypted under a per-entry DEK that is itself wrapped by the VEK. */
 export interface EncryptedPayload {
 	ciphertext: string;
@@ -170,4 +172,29 @@ export interface CryptoAdapter {
 	 * export path, which is every one but the extension today.
 	 */
 	saveKdbx?(input: SaveKdbxInput): Promise<string>;
+
+	/**
+	 * Seal `entriesJson` into a portable vault under a key generated for that file alone,
+	 * leaving the session VEK untouched. The caller frames the result as a VLT1 blob.
+	 * Unlike `saveKdbx` this is lossless, so it is the export that carries passkeys.
+	 *
+	 * Optional, like `saveKdbx`: a platform opts in once its binding layer exposes the
+	 * core calls, and the UI gates on their presence rather than showing a broken action.
+	 */
+	sealPortableVault?(input: SealPortableVaultInput): Promise<PortableVaultBlob>;
+	/** Open one. Resolves null for a wrong password, rejects for a corrupt file. */
+	openPortableVault?(input: OpenPortableVaultInput): Promise<string | null>;
+}
+
+export interface SealPortableVaultInput {
+	entriesJson: string;
+	/** Protects this file only; deliberately not the master password. */
+	password: string;
+	magicVersion: Uint8Array;
+}
+
+export interface OpenPortableVaultInput {
+	password: string;
+	file: PortableVaultBlob;
+	magicVersion: Uint8Array;
 }

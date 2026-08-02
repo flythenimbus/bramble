@@ -31,6 +31,11 @@ const SURFACE: Record<Target, Surface> = {
 	ios: "mobile",
 };
 
+/** The surface a target renders on: `extension` is pointer-driven, `mobile` is touch. */
+export function surfaceOf(target: Target): Surface {
+	return SURFACE[target];
+}
+
 type Capability =
 	| boolean
 	| { extension: boolean; mobile: boolean }

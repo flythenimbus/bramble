@@ -44,6 +44,8 @@ export interface EntryMutations {
 	importMany(current: VaultEntries, items: EntryData[]): Promise<VaultEntries>;
 	update(current: VaultEntries, id: string, data: EntryData): Promise<VaultEntries>;
 	remove(current: VaultEntries, id: string): Promise<VaultEntries>;
+	/** Delete a selection in one write (not N), each id getting its own tombstone. */
+	removeMany(current: VaultEntries, ids: string[]): Promise<VaultEntries>;
 	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/** Decrypt the on-disk entries payload (empty for a fresh vault). */
@@ -108,6 +110,26 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			throw new Error(`entry failed validation (${paths})`);
 		}
 		return data;
+	};
+
+	// One encrypt-and-write for the whole selection, so deleting 50 entries is a single
+	// disk write and a single autofill-index rebuild, not 50 of each. Each id gets its
+	// own stamp, so the tombstones stay individually comparable in a merge.
+	const removeMany = async (current: VaultEntries, ids: string[]): Promise<VaultEntries> => {
+		const doomed = new Set(ids);
+		if (doomed.size === 0) return current;
+		const c = await clock();
+		const stamps = new Map(current.stamps);
+		const tombstones = new Map(current.tombstones);
+		for (const id of doomed) {
+			stamps.delete(id);
+			tombstones.set(id, c.send());
+		}
+		return persist({
+			entries: current.entries.filter((e) => !doomed.has(e.id)),
+			stamps,
+			tombstones,
+		});
 	};
 
 	return {
@@ -212,14 +234,8 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 
 		// Write a tombstone so the delete survives a merge instead of being re-added
 		// by a stale peer.
-		remove: async (current, id) => {
-			const c = await clock();
-			const entries = current.entries.filter((e) => e.id !== id);
-			const stamps = new Map(current.stamps);
-			stamps.delete(id);
-			const tombstones = new Map(current.tombstones);
-			tombstones.set(id, c.send());
-			return persist({ entries, stamps, tombstones });
-		},
+		remove: (current, id) => removeMany(current, [id]),
+
+		removeMany,
 	};
 }
