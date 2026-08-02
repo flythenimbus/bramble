@@ -65,11 +65,9 @@ export const exportAction: BulkAction = {
 		return i18n._(msg`Export selection`);
 	},
 	icon: FileDown,
-	// Needs somewhere to write the file and a core that can seal one. Both are optional
-	// adapter members, so where either is missing the action is hidden rather than shown
-	// broken: mobile has no shell.exportBytes, and a binding layer without the portable
-	// vault calls has no sealPortableVault.
-	isAvailable: (platform) =>
-		Boolean(platform.shell.exportBytes && platform.crypto.sealPortableVault),
+	// Needs somewhere to write the file. Every platform's core can seal one, so the crypto
+	// is not part of the gate: buildCryptoAdapter always defines sealPortableVault and
+	// throws inside it if the binding layer is stale, which is the honest backstop.
+	isAvailable: (platform) => Boolean(platform.shell.exportBytes),
 	Dialog: ExportDialog,
 };

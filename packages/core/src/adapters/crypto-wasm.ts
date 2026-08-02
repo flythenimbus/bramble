@@ -185,7 +185,7 @@ export function buildCryptoAdapter(
 			if (!wasm.open_portable_vault) throw new Error("Opening a .bramble isn't available here.");
 			// undefined (not a throw) is the wrong-password answer, so the caller can tell
 			// a bad password from a corrupt file.
-			return wasm.open_portable_vault(i.password, i.file, i.magicVersion) ?? null;
+			return (await wasm.open_portable_vault(i.password, i.file, i.magicVersion)) ?? null;
 		},
 	};
 }

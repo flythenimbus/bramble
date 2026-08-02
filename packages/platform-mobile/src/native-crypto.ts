@@ -14,7 +14,7 @@ import type {
 	VekEncrypted,
 } from "@core/adapters/crypto";
 import { bytesToBase64 } from "@core/util/bytes";
-import type { VaultCrypto } from "@core/wasm";
+import type { PortableVaultBlob, VaultCrypto } from "@core/wasm";
 
 type KdbxEntry = { strings: { key: string; value: string; protected: boolean }[] };
 
@@ -79,6 +79,17 @@ interface NativeCryptoPlugin {
 		entries: { ciphertext: string; iv: string; wrappedDek: string; dekIv: string }[];
 	}): Promise<{ values: string[] }>;
 	encryptWithVek(o: { plaintext: string }): Promise<VekEncrypted>;
+	sealPortableVault(o: {
+		entriesJson: string;
+		password: string;
+		magicVersionB64: string;
+	}): Promise<PortableVaultBlob>;
+	// `value` is null for a wrong password; the bridge drops an undefined, so it is nullable.
+	openPortableVault(o: {
+		password: string;
+		file: PortableVaultBlob;
+		magicVersionB64: string;
+	}): Promise<{ value: string | null }>;
 	decryptWithVek(o: { ivB64: string; ciphertextB64: string }): Promise<{ value: string }>;
 	passkeyMakeCredential(o: { rpId: string; userVerified: boolean }): Promise<PasskeyRegistration>;
 	passkeyGetAssertion(o: {
@@ -234,6 +245,21 @@ const nativeModule: VaultCrypto = {
 		(await Native.decryptEntry({ ciphertext, iv, wrappedDek, dekIv })).value,
 	decrypt_entries: async (entries) => (await Native.decryptEntries({ entries })).values,
 	encrypt_with_vek: (plaintext) => Native.encryptWithVek({ plaintext }),
+	// magicVersion crosses the Capacitor bridge as base64: JSON has no byte arrays.
+	seal_portable_vault: (entriesJson, password, magicVersion) =>
+		Native.sealPortableVault({
+			entriesJson,
+			password,
+			magicVersionB64: bytesToBase64(magicVersion),
+		}),
+	open_portable_vault: async (password, file, magicVersion) =>
+		(
+			await Native.openPortableVault({
+				password,
+				file,
+				magicVersionB64: bytesToBase64(magicVersion),
+			})
+		).value ?? undefined,
 	decrypt_with_vek: async (iv, ciphertext) =>
 		(await Native.decryptWithVek({ ivB64: iv, ciphertextB64: ciphertext })).value,
 

@@ -31,6 +31,8 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "decryptEntry", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptEntries", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "encryptWithVek", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "sealPortableVault", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "openPortableVault", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "passkeyImportPkcs8", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
@@ -246,6 +248,44 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		do {
 			let p = try App.encryptWithVek(plaintext: pt)
 			call.resolve(["iv": p.iv, "ciphertext": p.ciphertext])
+		} catch { fail(call, error) }
+	}
+
+	// --- portable vault (.bramble export/import) ---
+	// Sealed under a key the core generates per file, so neither call reads or writes the
+	// session VEK; both work on a locked vault.
+
+	@objc func sealPortableVault(_ call: CAPPluginCall) {
+		guard let json = str(call, "entriesJson"), let pw = str(call, "password"),
+			let mv = bytes(call, "magicVersionB64") else { return }
+		do {
+			let v = try App.sealPortableVault(entriesJson: json, password: pw, magicVersion: mv)
+			call.resolve([
+				"slotId": v.slotId, "salt": v.salt, "verifier": v.verifier, "wrapIv": v.wrapIv,
+				"wrappedVek": v.wrappedVek, "entriesIv": v.entriesIv,
+				"entriesCiphertext": v.entriesCiphertext,
+			])
+		} catch { fail(call, error) }
+	}
+
+	@objc func openPortableVault(_ call: CAPPluginCall) {
+		guard let pw = str(call, "password"), let mv = bytes(call, "magicVersionB64"),
+			let f = call.getObject("file"),
+			let slotId = f["slotId"] as? String, let salt = f["salt"] as? String,
+			let verifier = f["verifier"] as? String, let wrapIv = f["wrapIv"] as? String,
+			let wrappedVek = f["wrappedVek"] as? String, let entriesIv = f["entriesIv"] as? String,
+			let entriesCiphertext = f["entriesCiphertext"] as? String
+		else {
+			call.reject("portable vault file is malformed")
+			return
+		}
+		do {
+			let file = PortableVault(
+				slotId: slotId, salt: salt, verifier: verifier, wrapIv: wrapIv,
+				wrappedVek: wrappedVek, entriesIv: entriesIv, entriesCiphertext: entriesCiphertext)
+			// nil is a wrong password, a normal answer rather than an error.
+			let json = try App.openPortableVault(password: pw, file: file, magicVersion: mv)
+			call.resolve(["value": json as Any])
 		} catch { fail(call, error) }
 	}
 

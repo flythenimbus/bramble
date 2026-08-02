@@ -255,6 +255,64 @@ class NativeCryptoPlugin : Plugin() {
         }
     }
 
+    // --- portable vault (.bramble export/import) ---
+    // Sealed under a key the core generates per file, so neither call reads or writes the
+    // session VEK; both work on a locked vault.
+
+    @PluginMethod
+    fun sealPortableVault(call: PluginCall) {
+        val json = str(call, "entriesJson") ?: return
+        val pw = str(call, "password") ?: return
+        val mv = bytes(call, "magicVersionB64") ?: return
+        call.runCrypto {
+            val v = uniffi.vault_crypto.sealPortableVault(json, pw, mv)
+            call.resolve(
+                JSObject()
+                    .put("slotId", v.slotId)
+                    .put("salt", v.salt)
+                    .put("verifier", v.verifier)
+                    .put("wrapIv", v.wrapIv)
+                    .put("wrappedVek", v.wrappedVek)
+                    .put("entriesIv", v.entriesIv)
+                    .put("entriesCiphertext", v.entriesCiphertext)
+            )
+        }
+    }
+
+    @PluginMethod
+    fun openPortableVault(call: PluginCall) {
+        val pw = str(call, "password") ?: return
+        val mv = bytes(call, "magicVersionB64") ?: return
+        val f = call.getObject("file")
+        if (f == null) {
+            call.reject("Missing file")
+            return
+        }
+        // getString is nullable: a field missing from the bridged object would otherwise
+        // reach Rust as an empty string and fail as a decode error rather than a clear one.
+        val file =
+            try {
+                fun field(key: String) = requireNotNull(f.getString(key)) { key }
+                uniffi.vault_crypto.PortableVault(
+                    slotId = field("slotId"),
+                    salt = field("salt"),
+                    verifier = field("verifier"),
+                    wrapIv = field("wrapIv"),
+                    wrappedVek = field("wrappedVek"),
+                    entriesIv = field("entriesIv"),
+                    entriesCiphertext = field("entriesCiphertext"),
+                )
+            } catch (e: IllegalArgumentException) {
+                call.reject("portable vault file is malformed")
+                return
+            }
+        call.runCrypto {
+            // null is a wrong password, a normal answer rather than an error.
+            val json = uniffi.vault_crypto.openPortableVault(pw, file, mv)
+            call.resolve(JSObject().put("value", json))
+        }
+    }
+
     @PluginMethod
     fun decryptWithVek(call: PluginCall) {
         val iv = str(call, "ivB64") ?: return

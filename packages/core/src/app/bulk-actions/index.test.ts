@@ -30,17 +30,10 @@ describe("availableBulkActions", () => {
 		expect(availableBulkActions(capable).map((a) => a.id)).toContain("export");
 	});
 
-	// Both are optional adapter members, and half a capability still cannot produce a file,
-	// so each absence has to hide the action on its own.
+	// The one real gate: a platform with no way to write a file cannot offer the action.
 	it("hides export without a file-save mechanism", () => {
-		const noSave = platform({}, { sealPortableVault: () => {} });
+		const noSave = platform({}, {});
 		expect(availableBulkActions(noSave).map((a) => a.id)).not.toContain("export");
-	});
-
-	// The mobile native binding layer until its uniffi bindings carry the portable vault calls.
-	it("hides export without a core that can seal one", () => {
-		const noSeal = platform({ exportBytes: () => {} }, {});
-		expect(availableBulkActions(noSeal).map((a) => a.id)).not.toContain("export");
 	});
 
 	it("keeps delete everywhere, since it needs nothing from the platform", () => {

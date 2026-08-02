@@ -102,9 +102,10 @@ export interface VaultCrypto {
 		keyfile?: Uint8Array,
 	): Awaitable<{ strings: { key: string; value: string; protected: boolean }[] }[]>;
 
-	/** KDBX4 export. Optional: only the WASM module implements it, since export is an
-	 * extension-only affordance (mobile has no shell.exportBytes). The mobile native
-	 * module deliberately omits it rather than carrying a stub that can't work. */
+	/** KDBX4 export. Optional: only the WASM module implements it. The mobile native module
+	 * deliberately omits it rather than carrying a stub that can't work, so KDBX export is
+	 * offered on the extension only. (Mobile does have shell.exportBytes, via Filesystem +
+	 * Share; it is the KDBX writer it lacks, not a way to save a file.) */
 	save_kdbx4?(
 		entries: { strings: { key: string; value: string; protected: boolean }[] }[],
 		password: string,
@@ -117,13 +118,13 @@ export interface VaultCrypto {
 		entriesJson: string,
 		password: string,
 		magicVersion: Uint8Array,
-	): PortableVaultBlob;
+	): Awaitable<PortableVaultBlob>;
 	/** Entries JSON, or undefined when the password is wrong. Touches no session state. */
 	open_portable_vault?(
 		password: string,
 		file: PortableVaultBlob,
 		magicVersion: Uint8Array,
-	): string | undefined;
+	): Awaitable<string | undefined>;
 }
 
 /**
