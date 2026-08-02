@@ -321,7 +321,7 @@ describe("parseBitwarden", () => {
 							password: "parent",
 							fido2Credentials: [
 								validPasskey({ credentialId: `b64.${"A".repeat(1365)}` }),
-								validPasskey({ userHandle: "A".repeat(87) }),
+								validPasskey({ userHandle: "A".repeat(1365) }),
 							],
 						},
 					},
@@ -341,6 +341,31 @@ describe("parseBitwarden", () => {
 		if (login?.type !== "login") throw new Error("expected retained login");
 		expect(login.passkeys).toBeUndefined();
 		expect(res.warnings).toHaveLength(2);
+	});
+
+	// PayPal issues a user.id past WebAuthn's 64-byte ceiling, and a provider that intercepts
+	// create() never applies the browser's TypeError. github issue #40.
+	it("imports a user handle that exceeds WebAuthn's 64-byte cap", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "www.paypal.com",
+						login: { fido2Credentials: [validPasskey({ userHandle: "A".repeat(87) })] },
+					},
+				],
+			}),
+			context,
+		);
+
+		expect(res.warnings).toEqual([]);
+		expect(res.imported[0]).toMatchObject({
+			type: "login",
+			// 87 base64url chars decode to 65 bytes, one past the spec ceiling.
+			passkeys: [{ userHandle: `${"A".repeat(87)}=` }],
+		});
 	});
 
 	it("rejects oversized PKCS#8 before conversion and retains the parent login", async () => {

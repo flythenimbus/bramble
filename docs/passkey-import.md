@@ -52,7 +52,7 @@ what was wrong with it:
 | Reason | Means |
 |---|---|
 | is empty | zero-length after decoding |
-| is longer than the N-byte maximum | over the cap; the cap is in the message (credential ID 1023, user handle 64, private key 1024) |
+| is longer than the N-byte maximum | over the cap; the cap is in the message (credential ID 1023, user handle 1023, private key 1024) |
 | is not valid unpadded base64url | contains `=`, `+`, `/`, or another character outside the base64url alphabet |
 | is neither a UUID nor a b64.-prefixed value | a `credentialId` in a third form we don't read |
 
@@ -67,18 +67,28 @@ older than the Rust. Rebuild with `pnpm core:build` and the platform's `ffi:buil
 
 The caps exist to bound what crosses the bridge, not to enforce the WebAuthn spec on someone
 else's data. Bramble stores and replays these bytes; it is not the relying party. So some of
-them are stricter than they need to be, and are worth revisiting when a real export trips one:
+them are stricter than they need to be.
 
-- **User handle, 64 bytes.** The WebAuthn ceiling for `user.id`. Relying parties do exceed it,
-  and rejecting the credential costs the user a passkey over a rule that binds the RP, not us.
+**The user handle cap was relaxed from 64 bytes to 1023**, matching the credential ID. 64 is
+WebAuthn's ceiling for `user.id`, and browsers enforce it by throwing a `TypeError` out of
+`navigator.credentials.create`. A password manager acting as the authenticator replaces that
+call, so the check never runs and a relying party past the ceiling still gets a credential
+stored. PayPal is one, and github issue #40 is the report: a Bitwarden export whose PayPal
+handle decodes past 64 bytes, skipped on import. Nothing downstream cared. The vault schema
+types `userHandle` as a plain string, and the CXF importer never bounded it at all, so the same
+credential imported fine over credential exchange and only the Bitwarden path refused it.
+
+The remaining two are still stricter than they need to be, and are worth revisiting when a real
+export trips one:
+
 - **Padding refused.** Canonical base64url is unpadded, but an exporter that pads is not
   producing something we cannot read.
 - **Empty user handle is fatal.** A non-discoverable credential legitimately has none, and the
   Bitwarden importer deliberately imports `discoverable: false` credentials
   (see below), so this combination is reachable by design.
 
-Changing any of these changes what is accepted, so it should follow a report naming the field,
-not precede one. Github issue #40 is the live example.
+Changing either changes what is accepted, so it should follow a report naming the field, not
+precede one.
 
 ## Discoverability
 

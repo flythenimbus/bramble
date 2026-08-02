@@ -77,7 +77,8 @@ const ENCRYPTED_ERROR =
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const UUID = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i;
 const MAX_CREDENTIAL_ID_BYTES = 1023;
-const MAX_USER_HANDLE_BYTES = 64;
+// Bounds the bridge, nothing more: WebAuthn's 64-byte user.id cap binds the RP, not us (#40).
+const MAX_USER_HANDLE_BYTES = 1023;
 const MAX_RP_ID_LENGTH = 253;
 // Cap bridge input at 1 KiB while allowing optional PKCS#8 metadata.
 const MAX_PKCS8_BYTES = 1024;
