@@ -79,6 +79,30 @@ export const CryptoSaveKdbxSchema = z.object({
 	password: z.string(),
 });
 
+// Portable vault (.bramble export/import). No VEK field: the core seals under a key it
+// generates per file, so these never touch the session key and carry no vaultId.
+const portableVaultBlob = z.object({
+	slotId: z.string(),
+	salt: z.string(),
+	verifier: z.string(),
+	wrapIv: z.string(),
+	wrappedVek: z.string(),
+	entriesIv: z.string(),
+	entriesCiphertext: z.string(),
+});
+
+export const CryptoSealPortableVaultSchema = z.object({
+	entriesJson: z.string(),
+	password: z.string(),
+	magicVersion,
+});
+
+export const CryptoOpenPortableVaultSchema = z.object({
+	password: z.string(),
+	file: portableVaultBlob,
+	magicVersion,
+});
+
 // Passkey provider (authenticator role). The crypto is pure, so no slot/VEK fields.
 export const CryptoPasskeyMakeSchema = z.object({
 	rpId: z.string(),

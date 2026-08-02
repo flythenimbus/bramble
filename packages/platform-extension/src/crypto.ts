@@ -5,11 +5,13 @@ import type {
 	EncryptedPayload,
 	KdbxRawEntry,
 	OpenKdbxInput,
+	OpenPortableVaultInput,
 	PasskeyAssertion,
 	PasskeyImportResult,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	SaveKdbxInput,
+	SealPortableVaultInput,
 	UnwrapPasswordSlotInput,
 	UnwrapWebauthnSlotInput,
 	VekEncrypted,
@@ -18,6 +20,7 @@ import type {
 	WrapPasswordSlotInput,
 	WrapWebauthnSlotInput,
 } from "@core/adapters/crypto";
+import type { PortableVaultBlob } from "@core/wasm";
 import type {
 	CryptoDecrypt,
 	CryptoDecryptBatch,
@@ -177,6 +180,21 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 		openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
 		// Reply is the .kdbx as base64; the message channel wouldn't preserve raw bytes.
 		saveKdbx: (input: SaveKdbxInput) => send<string>("CRYPTO_SAVE_KDBX", input),
+
+		// Portable vault (.bramble). Everything is already base64 except magicVersion, which
+		// goes as number[] like the slot ops: sendMessage mangles a Uint8Array.
+		sealPortableVault: (input: SealPortableVaultInput) =>
+			send<PortableVaultBlob>("CRYPTO_SEAL_PORTABLE_VAULT", {
+				entriesJson: input.entriesJson,
+				password: input.password,
+				magicVersion: Array.from(input.magicVersion),
+			}),
+		openPortableVault: (input: OpenPortableVaultInput) =>
+			send<string | null>("CRYPTO_OPEN_PORTABLE_VAULT", {
+				password: input.password,
+				file: input.file,
+				magicVersion: Array.from(input.magicVersion),
+			}),
 
 		passkeyMakeCredential: (rpId, userVerified) =>
 			send<PasskeyRegistration>("CRYPTO_PASSKEY_MAKE", {

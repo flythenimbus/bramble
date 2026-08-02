@@ -18,6 +18,11 @@ msgstr ""
 msgid "…and {0} more"
 msgstr "...y {0} más"
 
+#. placeholder {0}: entries.length
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{0, plural, one {# entry goes into the file, with its passkeys and history.} other {# entries go into the file, with their passkeys and history.}}"
+msgstr "{0, plural, one {# entrada va al archivo, con sus passkeys y su historial.} other {# entradas van al archivo, con sus passkeys y su historial.}}"
+
 #. placeholder {0}: ids.length
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 #~ msgid "{0, plural, one {# selected entry goes into the file.} other {# selected entries go into the file.}}"
@@ -51,6 +56,7 @@ msgid "{hiddenCount, plural, one {# hidden by the current filter} other {# hidde
 msgstr "{hiddenCount, plural, one {# oculto por el filtro actual} other {# ocultos por el filtro actual}}"
 
 #: packages/core/src/app/bulk-actions/delete.tsx
+#: packages/core/src/app/bulk-actions/export.tsx
 msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
 msgstr "{hiddenCount, plural, one {# de ellos está oculto por el filtro actual.} other {# de ellos están ocultos por el filtro actual.}}"
 
@@ -278,12 +284,12 @@ msgstr "Bucket"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
-#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -339,7 +345,7 @@ msgstr "Elija una bóveda diferente"
 msgid "Choose a master password"
 msgstr "Seleccione una contraseña maestra"
 
-#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Choose a password for the exported file."
 msgstr "Elija una contraseña para el archivo exportado."
 
@@ -419,7 +425,7 @@ msgstr "Confirmar contraseña maestra"
 msgid "Confirm new password"
 msgstr "Confirmar nueva contraseña"
 
-#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confirmar contraseña"
 
@@ -537,8 +543,12 @@ msgid "Couldn't verify your security key. Try again."
 msgstr "No se pudo verificar la clave de seguridad. Intente de nuevo."
 
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
-msgid "Couldn't write the .kdbx file."
-msgstr "No se pudo escribir el archivo .kdbx."
+#~ msgid "Couldn't write the .kdbx file."
+#~ msgstr "No se pudo escribir el archivo .kdbx."
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+msgid "Couldn't write the file."
+msgstr "No se pudo escribir el archivo."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Couldn't write to the vault."
@@ -781,6 +791,7 @@ msgstr "Caduca"
 msgid "Expires in {0} · keep this window open until pairing finishes"
 msgstr "Caduca en {0} · mantenga esta ventana abierta hasta que finalice el emparejamiento"
 
+#: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Export"
@@ -802,6 +813,15 @@ msgstr "Exportar como KeePass"
 msgid "Export as KeePass (.kdbx)"
 msgstr "Exportar como KeePass (.kdbx)"
 
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Export selection"
+msgstr "Exportar selección"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Export selection (.bramble)"
+msgstr "Exportar selección (.bramble)"
+
+#: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Exporting…"
 msgstr "Exportando…"
@@ -1362,7 +1382,7 @@ msgstr "Contraseña"
 msgid "Password changed {0}"
 msgstr "Contraseña cambiada {0}"
 
-#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Password for the file"
 msgstr "Contraseña para el archivo"
 
@@ -1414,6 +1434,10 @@ msgstr "Seleccione una contraseña maestra para proteger su bóveda."
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file — we don't keep a copy."
 msgstr "Elija una contraseña para el archivo exportado. Es distinta de su contraseña maestra y es la única forma de abrir el archivo: nosotros no guardamos una copia."
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file, so we don't keep a copy."
+msgstr "Elija una contraseña para el archivo exportado. Es independiente de su contraseña maestra y es la única forma de abrir el archivo, por lo que no guardamos una copia."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Please enter your master password"
@@ -1958,7 +1982,7 @@ msgstr "Esta contraseña apareció en una violación de datos conocida."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Esto elimina la bóveda de este dispositivo. Las copias sincronizadas en sus otros dispositivos no se ven afectadas, y esto no se puede deshacer aquí. Confirme para continuar."
 
-#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."
 msgstr "Las contraseñas no coinciden."
 

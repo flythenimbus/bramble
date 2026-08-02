@@ -27,10 +27,12 @@ import {
 	CryptoEncryptOuterSchema,
 	CryptoEncryptSchema,
 	CryptoOpenKdbxSchema,
+	CryptoOpenPortableVaultSchema,
 	CryptoPasskeyGetSchema,
 	CryptoPasskeyImportPkcs8Schema,
 	CryptoPasskeyMakeSchema,
 	CryptoSaveKdbxSchema,
+	CryptoSealPortableVaultSchema,
 	CryptoUnlockWithVekSchema,
 	CryptoUnwrapPasswordSlotSchema,
 	CryptoUnwrapWebauthnSlotSchema,
@@ -349,6 +351,29 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const p = CryptoSaveKdbxSchema.parse(payload);
 			if (!a.saveKdbx) throw new Error("KDBX export isn't available here.");
 			return a.saveKdbx({ entries: p.entries, password: p.password });
+		}
+
+		case "CRYPTO_SEAL_PORTABLE_VAULT": {
+			// Seals entries the caller passed in under a key the core generates for that
+			// file. Like CRYPTO_SAVE_KDBX it never touches the vault VEK, so no vaultId.
+			const p = CryptoSealPortableVaultSchema.parse(payload);
+			if (!a.sealPortableVault) throw new Error("Exporting a .bramble isn't available here.");
+			return a.sealPortableVault({
+				entriesJson: p.entriesJson,
+				password: p.password,
+				magicVersion: Uint8Array.from(p.magicVersion),
+			});
+		}
+
+		case "CRYPTO_OPEN_PORTABLE_VAULT": {
+			const p = CryptoOpenPortableVaultSchema.parse(payload);
+			if (!a.openPortableVault) throw new Error("Opening a .bramble isn't available here.");
+			// null (a wrong password) is a normal reply, not an error.
+			return a.openPortableVault({
+				password: p.password,
+				file: p.file,
+				magicVersion: Uint8Array.from(p.magicVersion),
+			});
 		}
 
 		case "CRYPTO_PASSKEY_MAKE": {

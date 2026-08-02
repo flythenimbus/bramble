@@ -13,8 +13,8 @@ beforeAll(() => {
 
 const platform = (shell: object, crypto: object) => ({ shell, crypto }) as unknown as Platform;
 
-/** Everything the export action needs to be able to write a file. */
-const capable = platform({ exportBytes: () => {} }, { saveKdbx: () => {} });
+/** Everything the export action needs: somewhere to write, and a core that can seal. */
+const capable = platform({ exportBytes: () => {} }, { sealPortableVault: () => {} });
 
 const login = (id: string): Entry => ({
 	id,
@@ -26,8 +26,30 @@ const login = (id: string): Entry => ({
 });
 
 describe("availableBulkActions", () => {
+	it("offers export where the platform can write a sealed file", () => {
+		expect(availableBulkActions(capable).map((a) => a.id)).toContain("export");
+	});
+
+	// Both are optional adapter members, and half a capability still cannot produce a file,
+	// so each absence has to hide the action on its own.
+	it("hides export without a file-save mechanism", () => {
+		const noSave = platform({}, { sealPortableVault: () => {} });
+		expect(availableBulkActions(noSave).map((a) => a.id)).not.toContain("export");
+	});
+
+	// The mobile native binding layer until its uniffi bindings carry the portable vault calls.
+	it("hides export without a core that can seal one", () => {
+		const noSeal = platform({ exportBytes: () => {} }, {});
+		expect(availableBulkActions(noSeal).map((a) => a.id)).not.toContain("export");
+	});
+
 	it("keeps delete everywhere, since it needs nothing from the platform", () => {
 		expect(availableBulkActions(platform({}, {})).map((a) => a.id)).toEqual(["delete"]);
+	});
+
+	it("puts the destructive action last", () => {
+		const ids = availableBulkActions(capable).map((a) => a.id);
+		expect(ids[ids.length - 1]).toBe("delete");
 	});
 });
 

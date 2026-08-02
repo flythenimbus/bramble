@@ -1,13 +1,14 @@
 import type { Platform } from "../../context/PlatformContext";
 import type { Entry } from "../../hooks/useVault";
 import { deleteAction } from "./delete";
+import { exportAction } from "./export";
 import type { BulkAction } from "./types";
 
 /**
  * Bulk-action registry: the extension point. Write a descriptor, register it here, and
  * the selection toolbar picks it up. Nothing else needs to change.
  */
-const bulkActions: BulkAction[] = [deleteAction];
+const bulkActions: BulkAction[] = [exportAction, deleteAction];
 
 /** Menu order. Destructive actions sit last, away from the pointer's resting place. */
 export function availableBulkActions(platform: Platform): BulkAction[] {
