@@ -258,6 +258,92 @@ fn wrap_vek_password_core(
     })
 }
 
+/// A portable vault: entries sealed under a key that exists only for this file, plus the
+/// password slot that unwraps it. Every field is base64, and together they are exactly what
+/// the TS side needs to frame a VLT1 blob (the container format stays in one language).
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct PortableVault {
+    pub slot_id: String,
+    pub salt: String,
+    pub verifier: String,
+    pub wrap_iv: String,
+    pub wrapped_vek: String,
+    pub entries_iv: String,
+    pub entries_ciphertext: String,
+}
+
+/// Seal entries into a portable vault under a FRESH key, never the session VEK.
+///
+/// This is what makes an exported subset independent of the vault it came from: the file's
+/// password guards a key that opens that file and nothing else. Sealing under the loaded VEK
+/// would turn any exported file into a second, weaker door to the whole vault. Generating the
+/// key here rather than via `generate_vek` is deliberate too, since that one *replaces* the
+/// session key.
+fn seal_portable_vault_core(
+    entries_json: &str,
+    password: &str,
+    magic_version: &[u8],
+) -> Result<PortableVault, CryptoError> {
+    let mut file_key = Zeroizing::new([0u8; KEY_LEN]);
+    random_bytes(file_key.as_mut_slice())?;
+    let mut salt = [0u8; SALT_LEN];
+    random_bytes(&mut salt)?;
+    let mut slot_id = [0u8; SLOT_ID_LEN];
+    random_bytes(&mut slot_id)?;
+    let mut entries_iv = [0u8; IV_LEN];
+    random_bytes(&mut entries_iv)?;
+    let mut wrap_iv = [0u8; IV_LEN];
+    random_bytes(&mut wrap_iv)?;
+
+    let entries_ct = aes_encrypt(file_key.as_slice(), &entries_iv, entries_json.as_bytes())?;
+    let kek = derive_kek(password, &salt)?;
+    let wrapped = aes_encrypt(kek.as_slice(), &wrap_iv, file_key.as_slice())?;
+    let verifier = compute_verifier(kek.as_slice(), magic_version, &slot_id);
+
+    Ok(PortableVault {
+        slot_id: B64.encode(slot_id),
+        salt: B64.encode(salt),
+        verifier: B64.encode(&verifier),
+        wrap_iv: B64.encode(wrap_iv),
+        wrapped_vek: B64.encode(&wrapped),
+        entries_iv: B64.encode(entries_iv),
+        entries_ciphertext: B64.encode(&entries_ct),
+    })
+}
+
+/// Open a portable vault, returning its entries JSON, or `None` when the password is wrong.
+/// Like the sealing side it touches no session state, so importing a file cannot disturb the
+/// vault that is already unlocked.
+#[allow(clippy::too_many_arguments)]
+fn open_portable_vault_core(
+    password: &str,
+    file: &PortableVault,
+    magic_version: &[u8],
+) -> Result<Option<String>, CryptoError> {
+    let salt = b64_decode(&file.salt)?;
+    let slot_id = b64_decode(&file.slot_id)?;
+    let verifier = b64_decode(&file.verifier)?;
+    let kek = derive_kek(password, &salt)?;
+
+    let computed = compute_verifier(kek.as_slice(), magic_version, &slot_id);
+    if !ct_eq(&computed, &verifier) {
+        return Ok(None);
+    }
+
+    let wrap_iv = iv_from(b64_decode(&file.wrap_iv)?)?;
+    let wrapped = b64_decode(&file.wrapped_vek)?;
+    let file_key = aes_decrypt(kek.as_slice(), &wrap_iv, &wrapped)?;
+
+    let entries_iv = iv_from(b64_decode(&file.entries_iv)?)?;
+    let entries_ct = b64_decode(&file.entries_ciphertext)?;
+    let plaintext = aes_decrypt(file_key.as_slice(), &entries_iv, &entries_ct)?;
+    String::from_utf8(plaintext.to_vec())
+        .map(Some)
+        .map_err(|e| err(format!("utf8: {e}")))
+}
+
 fn wrap_vek_webauthn_core(
     hmac_secret_b64: &str,
     slot_id_b64: &str,
@@ -569,6 +655,29 @@ mod wasm_exports {
         serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
     }
 
+    /// Seal entries into a portable vault under a fresh, file-only key.
+    #[wasm_bindgen]
+    pub fn seal_portable_vault(
+        entries_json: String,
+        password: String,
+        magic_version: Vec<u8>,
+    ) -> Result<JsValue, CryptoError> {
+        let sealed = seal_portable_vault_core(&entries_json, &password, &magic_version)?;
+        serde_wasm_bindgen::to_value(&sealed).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Open a portable vault. Returns the entries JSON, or null for a wrong password.
+    #[wasm_bindgen]
+    pub fn open_portable_vault(
+        password: String,
+        file: JsValue,
+        magic_version: Vec<u8>,
+    ) -> Result<Option<String>, CryptoError> {
+        let file: PortableVault =
+            serde_wasm_bindgen::from_value(file).map_err(|e| err(format!("deserialize: {e}")))?;
+        open_portable_vault_core(&password, &file, &magic_version)
+    }
+
     /// Mint a passkey (provider role) for `rp_id`. Returns credentialId, COSE public
     /// key, private key (to store in the entry), and the `none` attestation object.
     #[wasm_bindgen]
@@ -644,6 +753,26 @@ mod ffi_exports {
         encrypt_with_vek_core(&plaintext)
     }
 
+    /// Seal entries into a portable vault under a fresh, file-only key.
+    #[uniffi::export]
+    pub fn seal_portable_vault(
+        entries_json: String,
+        password: String,
+        magic_version: Vec<u8>,
+    ) -> Result<PortableVault, CryptoError> {
+        seal_portable_vault_core(&entries_json, &password, &magic_version)
+    }
+
+    /// Open a portable vault. Returns the entries JSON, or None for a wrong password.
+    #[uniffi::export]
+    pub fn open_portable_vault(
+        password: String,
+        file: PortableVault,
+        magic_version: Vec<u8>,
+    ) -> Result<Option<String>, CryptoError> {
+        open_portable_vault_core(&password, &file, &magic_version)
+    }
+
     /// Mint a passkey (provider role) for `rp_id`.
     #[uniffi::export]
     pub fn passkey_make_credential(
@@ -688,7 +817,9 @@ mod tests {
     // concurrently (cargo runs tests in parallel). Serialize them on a shared lock; `into_inner`
     // ignores poisoning so one failure doesn't cascade into a confusing second. Other tests use
     // the primitives directly and stay parallel.
-    static VEK_SLOT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // pub(crate) so portable_vault_tests can serialize against the same slot; a second
+    // lock would let the two modules race each other on the one global VEK.
+    pub(crate) static VEK_SLOT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Measure the configured vault Argon2id cost. Native release is a lower
     /// bound; browser WASM runs ~2-3x slower. Run with:
@@ -833,5 +964,97 @@ mod tests {
         let back = decrypt_entry(p.ciphertext, p.iv, p.wrapped_dek, p.dek_iv).unwrap();
         assert_eq!(back, json);
         lock();
+    }
+}
+
+// A portable vault is the "export these entries to a file" format. Its whole point is that
+// the file's key is not the vault's key, so these tests pin that property alongside the
+// round trip: sealing must never read or write the session VEK slot.
+#[cfg(test)]
+mod portable_vault_tests {
+    use super::*;
+    use crate::tests::VEK_SLOT_LOCK;
+
+    const MAGIC: &[u8] = b"VLT1";
+    const ENTRIES: &str = r#"{"entries":[{"id":"a","passkeys":[{"rpId":"github.com"}]}]}"#;
+
+    fn seal(password: &str) -> PortableVault {
+        seal_portable_vault_core(ENTRIES, password, MAGIC).expect("seal")
+    }
+
+    #[test]
+    fn round_trips_the_entries_json_verbatim() {
+        let file = seal("file-password");
+        let opened = open_portable_vault_core("file-password", &file, MAGIC).expect("open");
+        assert_eq!(opened.as_deref(), Some(ENTRIES));
+    }
+
+    // Passkeys are the reason this format exists rather than reusing the KDBX export, which
+    // cannot represent them at all.
+    #[test]
+    fn carries_nested_passkey_material_through() {
+        let file = seal("pw");
+        let opened = open_portable_vault_core("pw", &file, MAGIC)
+            .expect("open")
+            .expect("right password");
+        assert!(opened.contains("\"rpId\":\"github.com\""));
+    }
+
+    #[test]
+    fn rejects_a_wrong_password_without_erroring() {
+        let file = seal("right");
+        let opened = open_portable_vault_core("wrong", &file, MAGIC).expect("open");
+        assert_eq!(opened, None);
+    }
+
+    // A verifier is computed over the magic version, so a file from a future format cannot be
+    // silently opened by an older reader.
+    #[test]
+    fn rejects_a_different_magic_version() {
+        let file = seal("pw");
+        let opened = open_portable_vault_core("pw", &file, b"VLT9").expect("open");
+        assert_eq!(opened, None);
+    }
+
+    // The salt, slot id and both IVs are per-file, so the same entries under the same password
+    // must never produce identical ciphertext.
+    #[test]
+    fn seals_with_fresh_randomness_each_time() {
+        let a = seal("same");
+        let b = seal("same");
+        assert_ne!(a.entries_ciphertext, b.entries_ciphertext);
+        assert_ne!(a.wrapped_vek, b.wrapped_vek);
+        assert_ne!(a.salt, b.salt);
+        assert_ne!(a.slot_id, b.slot_id);
+    }
+
+    // The property the whole design rests on: cracking an exported file's password must not
+    // yield the key to the live vault. Sealing runs with a vault unlocked and must neither read
+    // that VEK nor leave it changed.
+    #[test]
+    fn never_touches_the_session_vek() {
+        let _guard = VEK_SLOT_LOCK.lock();
+        let vault_vek = generate_vek().expect("load a session VEK");
+
+        let file = seal("file-password");
+
+        assert_eq!(export_vek().expect("still unlocked"), vault_vek);
+        let opened = open_portable_vault_core("file-password", &file, MAGIC).expect("open");
+        assert_eq!(opened.as_deref(), Some(ENTRIES));
+        assert_eq!(export_vek().expect("still unlocked"), vault_vek);
+        lock();
+    }
+
+    // Sealing must work on a LOCKED vault too. Nothing about producing a file depends on a
+    // session key, and a caller that got this wrong would fail only for locked users.
+    #[test]
+    fn works_while_the_vault_is_locked() {
+        let _guard = VEK_SLOT_LOCK.lock();
+        lock();
+        let file = seal("pw");
+        assert!(is_locked());
+        let opened = open_portable_vault_core("pw", &file, MAGIC).expect("open");
+        assert_eq!(opened.as_deref(), Some(ENTRIES));
+        assert!(is_locked());
     }
 }
