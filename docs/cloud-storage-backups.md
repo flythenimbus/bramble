@@ -11,10 +11,18 @@ Fast-moving facts (provider API availability, SDK maturity) are dated **July
 
 ## The insight that shapes everything
 
-A Bramble backup is already client-side-encrypted ciphertext: the exported
-`.bramble` blob only opens with the master password, the same as a local export
-(see `vault-format.md` and `encrypted-import.md`). The storage provider never
-sees plaintext, whatever provider it is.
+A Bramble backup is already client-side-encrypted ciphertext: the backed-up
+`.bramble` blob is the vault's own bytes, so it only opens with the master password
+(see `vault-format.md`). The storage provider never sees plaintext, whatever
+provider it is.
+
+Note that `.bramble` now covers two things. A **backup** is the whole vault blob,
+copied byte for byte, and opens with the master password. A **portable vault** is a
+selection exported from the vault list, sealed under a password chosen for that file
+and holding no other key. Both are VLT1, so a reader takes either apart the same
+way; what differs is which key opens it and whether the entries inside are
+DEK-sealed. See [encrypted-import.md](encrypted-import.md). Only the backup is what
+this document is about.
 
 So the provider does **not** need to be zero-knowledge or end-to-end encrypted.
 "Private provider" is a nice-to-have, not a requirement. What actually matters:
@@ -164,8 +172,13 @@ possible later refinement.
 ### Restore
 
 Restore already exists: creating a new vault lets the user select a `.bramble`
-file to import, and a `.bramble` is the raw vault blob, so importing one is a
-full restore. No new restore flow is needed for this feature.
+file, and a backup `.bramble` is the raw vault blob, so opening one is a full
+restore. No new restore flow is needed for this feature.
+
+Restore replaces the vault on the device; it is not the same path as importing a
+portable vault, which merges. That split is deliberate: at setup time there is no
+vault to replace, and a user recovering from a backup wants exactly the state in
+the file.
 
 ### Helper text
 

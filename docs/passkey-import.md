@@ -1,8 +1,8 @@
 # Importing passkeys, and why one gets skipped
 
-Two paths bring passkeys in, and both can drop a single credential while importing everything
-around it. A dropped passkey is always reported in the preview, never silent, so a bug report
-that quotes the warning is usually diagnosable without a device.
+Two paths bring passkeys in from a *foreign* format, and both can drop a single credential while
+importing everything around it. A dropped passkey is always reported in the preview, never
+silent, so a bug report that quotes the warning is usually diagnosable without a device.
 
 - **A file** (Bitwarden JSON today): `core/src/import/bitwarden.ts`.
 - **An OS transfer** (FIDO credential exchange, iOS 26+): `core/src/exchange/from-cxf.ts`. See
@@ -11,6 +11,11 @@ that quotes the warning is usually diagnosable without a device.
 Both end at the same place: `crypto.passkeyImportPkcs8`, the Rust `passkey_import_pkcs8`, which
 parses the PKCS#8 key and rebuilds the COSE public half. That is deliberately the same code
 that mints a passkey, so an imported credential cannot drift in shape from a created one.
+
+A `.bramble` portable vault is the exception and skips all of this: its passkeys were minted by
+Bramble and are stored in Bramble's own representation, so they are carried verbatim with no
+conversion and nothing to drop. Everything below is about the conversion the other two paths
+need. See [encrypted-import.md](encrypted-import.md).
 
 ## What we store versus what arrives
 

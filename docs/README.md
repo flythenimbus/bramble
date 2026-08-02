@@ -19,7 +19,7 @@ comments point here instead of repeating it.
 | [autofill.md](autofill.md) | Index, matching, the fetch-on-pick fill model, corner prompt, password generation |
 | [field-detection.md](field-detection.md) | Page field detection heuristics and fixtures |
 | [storage.md](storage.md) | The chrome.storage.local vault backend, crash recovery, legacy FSA migration, durability |
-| [encrypted-import.md](encrypted-import.md) | Encrypted imports: KDBX4 internals + Bitwarden encrypted-JSON handling |
+| [encrypted-import.md](encrypted-import.md) | Encrypted imports: the `.bramble` portable vault, KDBX4 internals, Bitwarden encrypted-JSON handling, and the dedup every import shares |
 | [credential-exchange.md](credential-exchange.md) | FIDO credential exchange (CXF/CXP) on iOS: the wire format, the OS handoff, and why Android is out |
 | [passkey-import.md](passkey-import.md) | Importing passkeys from a file or an OS transfer: what is stored vs what arrives, and every reason one is skipped |
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |

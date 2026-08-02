@@ -101,6 +101,29 @@ zero state would silently drop the old key.
   settings, and similar single-use payloads are encrypted directly under the VEK
   with a random IV, skipping the per-entry DEK indirection.
 
+## Exported files use a key of their own
+
+`seal_portable_vault` / `open_portable_vault` are the one pair of calls that
+encrypt vault data under a key that is **not** the VEK. Exporting a selection as a
+`.bramble` generates a fresh 32-byte key for that file, seals the entries under it,
+and wraps it in a password slot keyed by the password the user chose for the export.
+
+This is a deliberate departure from everything above, and the reason is the threat
+model rather than convenience. An exported file leaves the device, and the password
+someone picks for a file is typically far weaker than their master password. Sealing
+it under the VEK would mean the file is a second door to the *whole* vault: crack
+that weaker password and you hold the key that decrypts every entry in the vault
+blob, including the ones that were never exported. A per-file key bounds the loss to
+exactly what was in the file.
+
+Both calls are session-free. They never read or write the VEK slot, so an export
+works on a locked vault and an import cannot disturb an unlocked one. Minting the
+key locally also avoids `generate_vek`, which *replaces* the session key: doing that
+mid-session is the multi-vault VEK hazard behind issue #27.
+
+See [encrypted-import.md](encrypted-import.md) for the file format and the import
+side.
+
 ## Session resume
 
 After Chrome kills the service worker, the offscreen document caches the VEK in
@@ -146,3 +169,11 @@ would make parallel tests racy. The round-trip and rejection tests
 (wrong secret, tampered verifier, tampered ciphertext, webauthn-vs-password KEK
 separation) lock in that a security key set up today keeps unlocking against any
 future build.
+
+`portable_vault_tests` covers the export format: the round trip, wrong-password and
+wrong-magic rejection, per-file randomness, and that nested passkey material
+survives verbatim. Two of them pin the property the design rests on — that sealing
+neither reads nor disturbs the session VEK, and works on a locked vault — so a
+refactor that quietly reached for `with_vek` would fail rather than silently turn
+every export into a copy of the vault key. Those two share the `VEK_SLOT_LOCK` used
+by the round-trip tests above, since they touch the global slot.

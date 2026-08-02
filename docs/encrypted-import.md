@@ -1,8 +1,11 @@
 # Encrypted vault imports
 
-How Bramble handles *encrypted* exports from other managers. Two formats are in
-play, at different levels of support:
+How Bramble handles *encrypted* imports. Three formats are in play, at different
+levels of support:
 
+- **Bramble `.bramble`** — our own portable vault, sealed at export under a password
+  chosen for the file. The only import that keeps passkeys and password history,
+  since the entries arrive already normalized. See [below](#bramble-portable-vault).
 - **KeePass KDBX4** — fully decrypted inside WASM and imported. See below.
 - **Bitwarden encrypted JSON** — *not* decrypted. Bramble detects it and tells the
   user what to do, because one of the two Bitwarden encrypted formats can't be
@@ -10,6 +13,50 @@ play, at different levels of support:
 
 Plain (unencrypted) exports — Bitwarden JSON, 1Password 1PUX, Proton Pass — go
 through their own parsers with no decryption step and are not covered here.
+
+Every one of them, encrypted or not, lands in the same place: `ImportShell` runs
+`splitAlreadyImported` (`core/vault/entry-identity.ts`) over the parsed entries
+before the preview, so re-importing a file adds nothing and says how many it
+skipped. Import always merges into the current vault. Replacing a vault wholesale
+is a different operation, restore-from-backup, described in
+[cloud-storage-backups.md](cloud-storage-backups.md).
+
+---
+
+# Bramble portable vault
+
+A `.bramble` written by **Actions → Export selection** in the vault list. It is a
+VLT1 blob like any other, so the existing restore path reads it too, but its
+contents are a plain `{ entries }` payload rather than a vault's own
+`EntriesPayload` of DEK-sealed records.
+
+Code: `seal_portable_vault` / `open_portable_vault` in
+`packages/core-rust/src/lib.rs`, framed by
+`packages/core/src/export/portable-vault.ts`.
+
+- **Its key is not the vault's key.** Sealing generates a fresh 32-byte key used
+  for that file alone, wrapped in a password slot under the password the user chose
+  at export. Sealing under the session VEK would mean that cracking one exported
+  file's password yields the key to every entry in the vault it came from, exported
+  or not. That is the entire reason these calls exist rather than reusing
+  `encrypt_with_vek` + `wrap_vek_password`.
+- **Session-free.** Neither call reads or writes the VEK slot, so an export works on
+  a locked vault and an import cannot disturb an unlocked one. Note that generating
+  the file key via `generate_vek` would *replace* the session key: that is the
+  multi-vault VEK hazard from issue #27, and it is why the core mints the key
+  locally instead.
+- **Framing lives in TypeScript.** The core returns the sealed pieces (slot fields,
+  entries IV and ciphertext) and `encodeVaultBlob` assembles them, so VLT1 keeps a
+  single implementation instead of gaining a second one in Rust.
+- **A full vault backup is refused, by name.** Its payload decrypts fine but holds
+  entries still sealed under per-entry DEKs; importing them would write entries whose
+  every field is ciphertext, so `openPortableVaultFile` detects that shape and points
+  the user at restore instead.
+- **Wrong password is not an error.** The core answers `None`/`null`, kept distinct
+  from a corrupt or non-Bramble file so the UI can say which happened.
+
+The password prompt is the shared credential step (`KdbxUnlock`), with the key-file
+field off: only KeePass has those.
 
 ---
 
