@@ -538,6 +538,13 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	if (replacedBuild === 0) fail(`no CURRENT_PROJECT_VERSION found in ${PBXPROJ}`);
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
 	const bumped = after !== before;
+
+	// Tagged by BUILD, not by marketing version. Uploading several builds at one marketing
+	// version is normal on TestFlight, and the build number above always advances, so a plain
+	// `<version>-ios` would collide on the second upload. Still ends in `-ios` so
+	// `git describe --match '*-ios'` (releaseNotes) can walk iOS tags.
+	const tag = `${version}-build${build}-ios`;
+	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 	if (bumped) writeFileSync(PBXPROJ, after);
 
 	// --ipa: dry run. Build the signed IPA to ~/Desktop (no upload), then revert the bump so the
@@ -565,18 +572,18 @@ function releaseIos(version: string, ipaOnly: boolean) {
 		fail("TestFlight build/upload failed; the version bump was reverted");
 	}
 
-	// Commit the version bump + push the branch. No git tag for iOS: the build is identified on
-	// TestFlight by its build number, so a tag per upload adds nothing. No GitHub release either
-	// (the binary lives on TestFlight; submit for App Store review manually in App Store Connect).
-	if (bumped) {
-		run(`git add ${PBXPROJ}`);
-		run(`git commit -m ${JSON.stringify(`chore(release): ios ${version} (build ${build})`)}`);
-		run(`git push origin ${branch}`);
-	} else {
-		console.log(`${PBXPROJ} already at version ${version}; nothing to commit`);
-	}
+	// Commit the version bump, then tag and push. The tag is the only durable pointer from an
+	// uploaded build back to the source that produced it: iOS is the one platform whose artifact
+	// never lands in the repo (no GitHub release, the binary lives on TestFlight), and a commit
+	// message is a string to grep for rather than a ref, so it does not survive a history rewrite.
+	//
+	// Still no GitHub release: there is no artifact to attach, and a release with no binary
+	// implies a download that does not exist. Submit for App Store review manually in App Store
+	// Connect.
+	commitTagPush(bumped, PBXPROJ, `chore(release): ios ${version} (build ${build})`, tag, branch);
 	console.log(
 		`\nreleased v${version} (build ${build}): uploaded to TestFlight (marketing version ${version}).` +
+			`\nTagged ${tag}.` +
 			"\nNext: in App Store Connect, attach build " +
 			`${build} to an App Store version and submit for review.`,
 	);
