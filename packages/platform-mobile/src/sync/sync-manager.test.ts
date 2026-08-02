@@ -1,6 +1,6 @@
 import type { VaultRegistry } from "@core/vault/vault-registry";
 import { VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Issue #27: on mobile every crypto op runs against ONE process-global VEK, so a merge that
 // resolves its target vault at write time can seal entries under vault B's key into vault A's
@@ -130,6 +130,16 @@ async function startSession(mod: Awaited<ReturnType<typeof loadManager>>) {
 	h.stateListener?.(false);
 	await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
 }
+
+// Pay the module graph's transform + import cost once, in a hook, rather than letting it land on
+// whichever test happens to call loadManager() first. `vi.resetModules()` clears the module
+// registry but not the transform cache, so that first call was ~15x slower than its siblings
+// (~900ms locally) and was charged against its own 5s timeout — which a loaded CI runner blew
+// through. Safe to warm: the module's top level only declares state, and beforeEach wipes
+// everything this touches in `h` before any test runs.
+beforeAll(async () => {
+	await import("./sync-manager");
+});
 
 beforeEach(() => {
 	h.meta.clear();
