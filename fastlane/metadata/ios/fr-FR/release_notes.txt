@@ -1,9 +1,9 @@
-Quoi de neuf dans cette version :
+Nouveautés de cette version :
 
-- Une connexion conserve désormais les derniers mots de passe ayant été remplacés, avec pour chacun le moment où il a cessé d’être le mot de passe actif. Certains sites mettent plusieurs minutes à appliquer un changement de mot de passe partout, et tant qu’ils ne l’ont pas fait, c’est l’ancien mot de passe qui fonctionne encore : cela vous offre une solution de repli au lieu de vous retrouver bloqué hors de votre compte. Les anciens mots de passe ne sont jamais renseignés ni recherchés, et ne quittent jamais votre appareil lors d’un export.
-- Chaque entrée affiche désormais sa date de création et de dernière modification.
-- Importer le même fichier deux fois ne duplique plus tout son contenu. Les doublons sont détectés avant l’aperçu, ainsi le nombre que vous confirmez est le nombre que vous obtenez, et tout élément déjà présent dans votre coffre-fort est compté comme ignoré à côté.
-- Lorsqu’une clé d’accès d’un export Bitwarden ne peut pas être importée, l’importation indique désormais le champ en erreur et la nature de l’erreur, au lieu d’un seul message couvrant les trois champs.
-- Correction : l’ajout d’un deuxième appareil pouvait laisser l’appareil invitant sans code de vérification à l’écran, si bien qu’il n’y avait rien à comparer ni à approuver.
+- Travaillez sur plusieurs entrées à la fois. Appuyez longuement sur un élément de la liste pour commencer la sélection, cochez-en autant que vous le souhaitez, puis agissez sur l’ensemble sélectionné. Lors de la suppression, une confirmation vous est demandée et vous indique combien d’éléments seront supprimés, y compris ceux masqués par la recherche en cours.
+- Exportez les entrées sélectionnées vers un fichier Bramble, protégé par un mot de passe que vous choisissez pour ce fichier plutôt que votre mot de passe maître. Il contient tout ce qu’une entrée détient, y compris les clés d’accès et les anciens mots de passe, ce qu’un export KeePass ne peut pas faire.
+- Ouvrez un fichier Bramble sur un autre appareil et il fusionne avec le coffre-fort existant au lieu de le remplacer. Tout ce qui se trouve déjà dans votre coffre-fort est reconnu et ignoré, ainsi importer le même fichier deux fois n’ajoute rien.
+- Correction : le bouton de copie sur chaque ligne était inaccessible sur iPhone. Il n’apparaissait que lorsqu’un pointeur survolait la ligne, ce qu’un écran tactile ne peut pas faire. Il est désormais toujours présent, et un appui prolongé ne sélectionne plus le texte sous-jacent.
+- Correction : les compteurs comme « 3 sélectionnés » s’affichaient en anglais quelle que soit la langue de l’application.
 
-Sans compte, sans cloud. Tout reste sur vos appareils.
+Aucun compte, aucun cloud. Tout reste sur vos appareils.

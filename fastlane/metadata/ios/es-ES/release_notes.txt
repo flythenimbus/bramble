@@ -1,9 +1,9 @@
 Novedades de esta versión:
 
-- Un inicio de sesión ahora conserva las últimas contraseñas de las que se cambió, cada una con el momento en que dejó de ser vigente. Algunos sitios tardan minutos en aplicar un cambio de contraseña en todas partes, y hasta que lo hacen, la antigua es la que sigue funcionando: esto le deja una vía de vuelta en lugar de bloquear el acceso a su propia cuenta. Las contraseñas antiguas nunca se rellenan ni se buscan, y nunca salen de su dispositivo en una exportación.
-- Cada entrada ahora muestra cuándo fue creada y la última vez que se modificó.
-- Importar el mismo archivo dos veces ya no duplica todo su contenido. Las repeticiones se detectan antes de la vista previa, por lo que el número que confirme es el número que obtendrá, y cualquier elemento que ya esté en su caja fuerte se cuenta como omitido, mostrándose al lado.
-- Cuando una llave de acceso de una exportación de Bitwarden no puede importarse, el proceso ahora indica el campo erróneo y cuál era el error, en lugar de un único mensaje para los tres casos.
-- Corregido: al añadir un segundo dispositivo, el dispositivo que invita podía quedarse sin código de verificación en pantalla, por lo que no había nada que comparar ni aprobar.
+- Trabaje en varias entradas a la vez. Mantenga pulsado cualquier elemento de la lista para empezar a seleccionar, marque tantos como quiera y luego actúe sobre todo el conjunto. Al eliminar, se le preguntará antes y se le indicará cuántas se van a eliminar, incluidas las que la búsqueda actual está ocultando.
+- Exporte las entradas que seleccionó a un archivo Bramble, protegido por una contraseña que elija para ese archivo en lugar de su contraseña maestra. Incluye todo lo que contiene una entrada, incluidas las claves de acceso y las contraseñas anteriores, algo que una exportación de KeePass no puede hacer.
+- Abra una exportación de Bramble en otro dispositivo y se fusionará con la caja fuerte que ya tiene en lugar de reemplazarla. Todo lo que ya esté en su caja fuerte se reconoce y se omite, por lo que importar el mismo archivo dos veces no añade nada.
+- Corregido: el botón de copiar en cada fila era inaccesible en el iPhone. Solo aparecía al pasar un puntero por encima de la fila, algo que una pantalla táctil no puede hacer. Ahora permanece visible siempre, y una pulsación larga ya no selecciona el texto que hay debajo.
+- Corregido: los recuentos como «3 seleccionados» se mostraban en inglés independientemente del idioma en que estuviera configurada la app.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

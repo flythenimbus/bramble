@@ -1,9 +1,9 @@
-Was ist neu in dieser Version:
+Neu in dieser Version:
 
-- Ein Login speichert nun die letzten Passwörter, von denen er geändert wurde, jeweils mit dem Zeitpunkt, zu dem sie nicht mehr aktuell waren. Manche Websites brauchen Minuten, bis eine Passwortänderung überall greift, und bis dahin funktioniert noch das alte Passwort: Damit haben Sie eine Rückzugsmöglichkeit, anstatt aus Ihrem eigenen Konto ausgesperrt zu werden. Alte Passwörter werden niemals ausgefüllt oder durchsucht und verlassen Ihr Gerät bei keinem Export.
-- Jeder Eintrag zeigt nun, wann er erstellt und zuletzt geändert wurde.
-- Beim erneuten Importieren derselben Datei wird nichts mehr dupliziert. Wiederholungen werden bereits vor der Vorschau erkannt, sodass die Anzahl, die Sie bestätigen, die ist, die Sie erhalten, und alle bereits in Ihrem Tresor vorhandenen Einträge werden daneben als übersprungen gezählt.
-- Wenn ein Passkey aus einem Bitwarden-Export nicht importiert werden kann, benennt der Import nun das fehlerhafte Feld und den Fehler darin, statt eine einzige Meldung für alle drei auszugeben.
-- Behoben: Beim Hinzufügen eines zweiten Geräts konnte es vorkommen, dass auf dem einladenden Gerät kein Bestätigungscode angezeigt wurde, sodass nichts zum Vergleichen und nichts zum Bestätigen vorhanden war.
+- Mehrere Einträge gleichzeitig bearbeiten. Tippen und halten Sie ein Element in der Liste, um die Auswahl zu starten, markieren Sie so viele wie gewünscht und führen Sie dann eine Aktion für die gesamte Gruppe aus. Vor dem Löschen werden Sie gefragt und erfahren, wie viele Einträge betroffen sind, einschließlich derer, die durch die aktuelle Suche ausgeblendet sind.
+- Exportieren Sie die ausgewählten Einträge in eine Bramble-Datei, geschützt mit einem von Ihnen gewählten Passwort für diese Datei – nicht mit Ihrem Master-Passwort. Sie enthält alles, was ein Eintrag umfasst, inklusive Passkeys und früherer Passwörter, was ein KeePass-Export nicht leisten kann.
+- Öffnen Sie einen Bramble-Export auf einem anderen Gerät, und er wird mit Ihrem bestehenden Tresor zusammengeführt, anstatt ihn zu ersetzen. Bereits im Tresor vorhandene Einträge werden erkannt und übersprungen, sodass das zweimalige Importieren derselben Datei nichts hinzufügt.
+- Behoben: Die Kopieren-Schaltfläche in jeder Zeile war auf dem iPhone nicht erreichbar. Sie erschien nur, wenn ein Mauszeiger über die Zeile bewegt wurde, was auf einem Touchscreen nicht möglich ist. Sie ist jetzt immer sichtbar, und langes Drücken wählt nicht mehr den darunterliegenden Text aus.
+- Behoben: Zählangaben wie „3 ausgewählt“ wurden unabhängig von der eingestellten App-Sprache auf Englisch angezeigt.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

@@ -1,7 +1,9 @@
-- Un login ora conserva le ultime password precedenti, ciascuna con il momento in cui ha smesso di essere quella corrente. Alcuni siti impiegano minuti per applicare un cambio di password ovunque e, fino a quel momento, la vecchia funziona ancora: questo le lascia una via per rientrare, anziché bloccarla fuori dal proprio account. Le vecchie password non vengono mai riempite automaticamente né cercate e non lasciano mai il dispositivo durante un’esportazione.
-- Ogni voce ora mostra la data di creazione e l’ultima modifica.
-- Importare due volte lo stesso file non duplica più tutto il contenuto. I duplicati vengono riconosciuti prima dell’anteprima, quindi il numero che Lei conferma corrisponde esattamente a ciò che viene importato, e gli elementi già presenti nel vault vengono contati come saltati accanto al totale.
-- Quando una passkey in un’esportazione Bitwarden non può essere importata, l’importazione ora indica il campo errato e il motivo specifico, invece di un unico messaggio che copriva tutte e tre le possibilità.
-- Risolto: l’aggiunta di un secondo dispositivo poteva lasciare il dispositivo invitante senza un codice di verifica sullo schermo, quindi non c’era nulla da confrontare né da approvare.
+Novità in questa versione:
 
-Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.
+- Agisca su più voci contemporaneamente. Tenga premuto un elemento nell'elenco per iniziare a selezionare, spunti quanti ne desidera, quindi agisca sull'intera selezione. L'eliminazione richiede prima una conferma e indica quante voci verranno eliminate, incluse quelle nascoste dalla ricerca corrente.
+- Esporti le voci selezionate in un file Bramble, protetto da una password scelta da Lei per quel file anziché la sua password principale. Include tutto ciò che una voce contiene, passkey e password precedenti comprese, cosa che un'esportazione KeePass non può fare.
+- Apra un'esportazione Bramble su un altro dispositivo e questa si unisce alla cassaforte che già possiede, invece di sostituirla. Ogni elemento già presente nella sua cassaforte viene riconosciuto e saltato, quindi importare lo stesso file due volte non aggiunge nulla.
+- Risolto: il pulsante Copia su ogni riga era irraggiungibile su iPhone. Appariva solo al passaggio del puntatore sulla riga, cosa impossibile su uno schermo touch. Ora è sempre visibile, e una pressione prolungata non seleziona più il testo sottostante.
+- Risolto: i conteggi come "3 selezionati" venivano mostrati in inglese indipendentemente dalla lingua impostata nell'app.
+
+Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

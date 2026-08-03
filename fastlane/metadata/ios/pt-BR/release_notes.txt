@@ -1,9 +1,9 @@
-O que há de novo nesta versão:
+Novidades nesta versão:
 
-- Agora, um login mantém as últimas senhas que foram substituídas, cada uma com o momento em que deixou de ser a atual. Alguns sites levam minutos para aplicar uma alteração de senha em todos os lugares e, até que isso aconteça, a senha antiga é a que ainda funciona: isso lhe dá um caminho de volta, em vez de bloqueá-lo para fora de sua própria conta. Senhas antigas nunca são preenchidas ou pesquisadas e nunca saem do seu dispositivo em uma exportação.
-- Agora, cada entrada mostra quando foi criada e a última vez que foi alterada.
-- Importar o mesmo arquivo duas vezes não duplica mais todo o seu conteúdo. As repetições são reconhecidas antes da visualização, então o número que você confirma é o número que você obtém, e tudo o que já estiver no seu cofre é contado como ignorado ao lado.
-- Quando uma chave de acesso em uma exportação do Bitwarden não pode ser importada, a importação agora informa o campo que estava errado e o que estava errado com ele, em vez de uma mensagem cobrindo todos os três.
-- Corrigido: adicionar um segundo dispositivo podia deixar o dispositivo que convida sem código de verificação na tela, então não havia nada para comparar e nada para aprovar.
+- Trabalhe com várias entradas de uma vez. Pressione e segure qualquer item da lista para começar a selecionar, marque quantos quiser e, em seguida, execute uma ação no conjunto todo. Ao excluir, uma confirmação é solicitada primeiro e informa quantos itens serão removidos, incluindo aqueles ocultos pela busca atual.
+- Exporte as entradas selecionadas para um arquivo Bramble, protegido por uma senha que você escolher para esse arquivo, em vez da sua senha mestra. Ele carrega tudo que uma entrada contém, incluindo chaves de acesso e senhas antigas, o que uma exportação KeePass não faz.
+- Abra uma exportação Bramble em outro dispositivo e ela será mesclada ao cofre que você já possui, em vez de substituí-lo. Tudo que já estiver no seu cofre é reconhecido e ignorado, portanto importar o mesmo arquivo duas vezes não adiciona nada.
+- Corrigido: o botão de copiar em cada linha estava inacessível no iPhone. Ele só aparecia quando um ponteiro pairava sobre a linha, o que é impossível em uma tela sensível ao toque. Agora ele está sempre visível e um toque prolongado não seleciona mais o texto subjacente.
+- Corrigido: contagens como "3 selecionados" eram exibidas em inglês, independentemente do idioma configurado no app.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

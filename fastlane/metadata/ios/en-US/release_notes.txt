@@ -1,9 +1,9 @@
 What's new in this release:
 
-- A login now keeps the last few passwords it was changed away from, each with the moment it stopped being current. Some sites take minutes to apply a password change everywhere, and until they do, the old one is what still works: this leaves you a way back in instead of locking you out of your own account. Old passwords are never filled or searched, and never leave your device in an export.
-- Every entry now shows when it was created and last changed.
-- Importing the same file twice no longer duplicates everything in it. Repeats are recognised before the preview, so the number you confirm is the number you get, and anything already in your vault is counted as skipped next to it.
-- When a passkey in a Bitwarden export cannot be brought in, the import now names the field that was wrong and what was wrong with it, instead of one message covering all three.
-- Fixed: adding a second device could leave the inviting device with no verification code on screen, so there was nothing to compare and nothing to approve.
+- Work on several entries at once. Press and hold any item in the list to start selecting, tick as many as you like, then act on the whole set. Deleting asks first and tells you how many are going, including any the current search is hiding.
+- Export the entries you picked to a Bramble file, protected by a password you choose for that file rather than your master password. It carries everything an entry holds, passkeys and past passwords included, which a KeePass export cannot.
+- Open a Bramble export on another device and it merges into the vault you already have instead of replacing it. Anything already in your vault is recognised and skipped, so importing the same file twice adds nothing.
+- Fixed: the copy button on each row was unreachable on iPhone. It only appeared when a pointer hovered over the row, which a touchscreen has no way to do. It is now always there, and a long press no longer selects the text underneath.
+- Fixed: counts like "3 selected" showed in English whatever language the app was set to.
 
 No account, no cloud. Everything stays on your devices.
