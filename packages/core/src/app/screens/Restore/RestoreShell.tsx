@@ -165,10 +165,16 @@ export function RestoreShell({
 					setDone(true);
 				}
 			} else {
-				// First/only vault on this device: fill it in place and unlock.
-				await storage.writeVaultBlob(picked.bytes); // snapshots the previous vault first
+				// First vault on this device: mint its registry record, fill it, and unlock in place.
+				// The write must NAME that id. An id-less write used to mint the record itself, and
+				// closing that hole (issue #27, ghost records) left this branch with nothing to write
+				// into on an empty registry, which is issue #41. The label field isn't shown here.
+				const newId = await createRecord();
+				await storage.writeVaultBlob(picked.bytes, newId);
 				await shell.resetSyncState?.(); // fresh sync identity; the restored vault isn't enrolled
-				await unlock(password); // reads the freshly-written blob and loads its VEK
+				// Name the vault: createRecord only just selected it via React state, so the `unlock`
+				// in hand still closes over no active id and would record null for the crypto layer.
+				await unlock(password, newId); // reads the freshly-written blob and loads its VEK
 				if (onRestored) onRestored({ addedNew: false });
 				else setDone(true);
 			}

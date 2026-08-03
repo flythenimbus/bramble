@@ -47,6 +47,59 @@ test("restoring a backup when a vault exists adds a new vault, never overwrites"
 	expect(vaultCount).toBe(2);
 });
 
+// The other half: restoring with NO vault on the device, which is what a fresh install and a
+// "backed up, then deleted the vault" device both look like. It has to mint the registry record
+// itself - storage refuses a blind write into an empty registry, so the branch that used to rely
+// on that write minting the record died with "no vault id, and no vault registered" (issue #41).
+test("restoring a backup with no vault on the device fills the first vault and unlocks it", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+
+	const sw = await backgroundWorker(context);
+	const b64 = await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults: { id: string }[];
+		};
+		const key = `vault-blob-b64:${reg.vaults[0]!.id}`;
+		return (await chrome.storage.local.get(key))[key] as string;
+	});
+	const dir = mkdtempSync(path.join(tmpdir(), "bramble-backup-"));
+	const file = path.join(dir, "backup.bramble");
+	writeFileSync(file, Buffer.from(b64, "base64"));
+
+	// Take the vault away, leaving the backup file: the issue's repro, and equivalent to a fresh
+	// install as far as the restore screen can tell (empty registry, no blob).
+	await setup.close();
+	await sw.evaluate(() => chrome.storage.local.clear());
+
+	const page = await context.newPage();
+	await page.goto(`${optionsUrl(extensionId)}?screen=restore`);
+	await page.locator('input[type="file"]').setInputFiles(file);
+	// The first-vault copy, not the "as a new vault" copy: this is the branch under test.
+	await expect(page.getByText(/as the vault on this device/i)).toBeVisible();
+	await page.locator('input[type="password"]').first().fill(STRONG_PW);
+	await page.getByRole("button", { name: /Restore vault/i }).click();
+
+	await expect(page.getByRole("heading", { name: /Vault restored/i })).toBeVisible();
+	// One vault, registered AND written: a record without a blob is the ghost the startup reaper
+	// exists to clean up, so assert the pair rather than just the count.
+	const state = await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults?: { id: string }[];
+		};
+		const ids = reg?.vaults?.map((v) => v.id) ?? [];
+		const key = `vault-blob-b64:${ids[0]}`;
+		return {
+			count: ids.length,
+			hasBlob: typeof (await chrome.storage.local.get(key))[key] === "string",
+		};
+	});
+	expect(state).toEqual({ count: 1, hasBlob: true });
+});
+
 // The "Add a vault" screen (shown once a vault exists) offers restoring a .bramble backup as a
 // new vault, via a tab that opens the restore flow.
 test("the Add-a-vault screen offers restoring a backup", async ({ context, extensionId }) => {

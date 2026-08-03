@@ -245,7 +245,9 @@ export interface VaultState {
 
 /** Vault actions. Referentially stable for the provider's lifetime. */
 export interface VaultActions {
-	unlock(password: string): Promise<void>;
+	/** `vaultId` names the vault when the caller just minted it and the registry's active id hasn't
+	 * caught up through React state yet (restore's first vault). Omit it to unlock the active one. */
+	unlock(password: string, vaultId?: string): Promise<void>;
 	lock(): Promise<void>;
 	/** Creates a new vault (parallel to any existing ones) and returns its initial plaintext recovery code (shown once). */
 	createVault(password: string, label?: string): Promise<string>;
@@ -612,7 +614,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Unlock with the master password, decrypt entries, and clear lock state. */
 	const unlock = useCallback(
-		async (password: string) => {
+		async (password: string, vaultId?: string) => {
 			setError(null);
 			// Read failures collapse to one generic message; raw decoder errors leak
 			// format internals and aren't actionable for end users.
@@ -628,7 +630,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// Record the active vault BEFORE the unwrap: the background starts sync the moment the
 			// unwrap succeeds (session.ts cryptoHandler), and reads this to pick which vault to sync.
 			// Awaited so the write lands first; otherwise the first sync targets the previous vault.
-			await shell.setActiveVault?.(activeId ?? null);
+			// An explicit id wins over `activeId`, which a caller that just minted this vault has not
+			// seen yet. Recording null there instead would leave every untagged crypto op with no
+			// vault to resolve, so the unwrapped VEK is cached nowhere and the load reads as locked.
+			await shell.setActiveVault?.(vaultId ?? activeId ?? null);
 			const ok = await crypto.unwrapVekPassword({
 				password,
 				saltB64: bytesToBase64(slot.salt),

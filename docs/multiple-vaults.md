@@ -965,6 +965,21 @@ Three ways one got created, all now closed:
   `reg.vaults[0]?.id`, and with an empty registry minted a record *before* writing the file.
   Anything failing in between left exactly this shape. It now throws: a blind write with an
   empty registry means the caller lost its vault id.
+
+  Restore was the one caller that legitimately wanted that mint, and closing the hole broke it
+  (github issue #41: `writeVaultBlob: no vault id, and no vault registered`, on a device whose
+  only vault had been backed up and deleted). `RestoreShell`'s no-vault branch now mints the
+  record itself and names the id in the write, matching `createVault`. Restoring *onto* an
+  existing vault was unaffected, since that branch already called `createRecord`, which is why
+  both e2e tests kept passing: each created a vault first, so neither entered the broken branch.
+
+  It needed a second half. `unlock()` records the active vault before the unwrap, and it read
+  `activeId`, which `createRecord` had only just set through React state, so the `unlock` in the
+  caller's hand still closed over `undefined` and recorded **null**. Untagged crypto ops resolve
+  their vault from exactly that key, so the unwrapped VEK was cached under no vault and the very
+  next decrypt answered "vault locked". `unlock(password, vaultId?)` takes the id explicitly for
+  the same reason `createVault` binds crypto with `withVault(newId)`: a just-minted vault is
+  never the one React state names yet.
 - **Merges landing in the wrong vault.** The mobile sync manager built its entries blob
   store with the raw adapter, so `writeEntriesBlob` (which passes no id) resolved to
   `reg.vaults[0]` while the store's own `readDecodedBlob` used the *active* vault. With more
