@@ -152,6 +152,9 @@ export interface EnrollOptions {
 	/** Inviter: a join attempt consumed the invite and failed, with a message only the user can act
 	 * on. Consuming failures only: a peer that never handshakes leaves the invite live. */
 	onEnrollFailed?: (message: string) => void;
+	/** Inviter: an attempt failed WITHOUT consuming the invite, so the code is still good. Distinct
+	 * from onEnrollFailed: the UI keeps the QR up and just notes it. */
+	onEnrollAttemptFailed?: (message: string) => void;
 	/** Mesh joiner + ICE fetch, overridden in tests with fakes. Same seam as MeshSessionOptions. */
 	join?: MeshSessionOptions["join"];
 	fetchIce?: MeshSessionOptions["fetchIce"];
@@ -242,8 +245,15 @@ export function makeEnrollHandler(
 			);
 		} catch (e) {
 			// Drop just this peer. The invite stays live (it was never claimed) so the real device
-			// can still arrive within the window.
+			// can still arrive within the window. Staying live is NOT the same as staying silent:
+			// reporting only invite-consuming failures left the inviter showing a QR with no hint
+			// that an attempt had come and gone, until expiry three minutes later (issue #37).
 			opts.report(`⚠ handshake with ${remotePubkey.slice(0, 8)} failed: ${(e as Error).message}`);
+			if (role === "inviter") {
+				opts.onEnrollAttemptFailed?.(
+					"A device tried to connect but didn't finish. This code still works: try again from the other device.",
+				);
+			}
 			peer.close();
 			return;
 		}

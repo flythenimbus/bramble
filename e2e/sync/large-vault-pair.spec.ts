@@ -41,16 +41,18 @@ async function importLargeVault(page: Page, extensionId: string): Promise<void> 
 		await page.getByRole("button", { name: /^Unlock$/i }).click();
 	}
 
-	// Each provider card owns a hidden file input; Bitwarden is the first.
-	await expect(page.getByText(/Bitwarden/i).first()).toBeVisible();
-	await page
-		.locator('input[type="file"]')
-		.first()
-		.setInputFiles({
-			name: "bitwarden-export.json",
-			mimeType: "application/json",
-			buffer: Buffer.from(bitwardenExport(ENTRY_COUNT), "utf8"),
-		});
+	// Scope to the Bitwarden card. Picking the first file input positionally broke the moment a
+	// provider was added above it, and landed on the .bramble password prompt instead.
+	const card = page
+		.locator("label")
+		.filter({ hasText: /Bitwarden/ })
+		.first();
+	await expect(card).toBeVisible();
+	await card.locator('input[type="file"]').setInputFiles({
+		name: "bitwarden-export.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(bitwardenExport(ENTRY_COUNT), "utf8"),
+	});
 
 	// Preview, then commit. Parsing + writing 400 entries is real crypto, so allow for it.
 	await expect(page.getByText(`${ENTRY_COUNT} items ready to import`)).toBeVisible({

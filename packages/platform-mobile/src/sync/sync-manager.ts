@@ -243,6 +243,7 @@ export async function startEnrollInvite(opts: {
 			emit({ kind: "enroll-expired" });
 		},
 		onEnrollFailed: (message) => emit({ kind: "enroll-failed", message }),
+		onEnrollAttemptFailed: (message) => emit({ kind: "enroll-attempt-failed", message }),
 		relayUrl: opts.relayUrl,
 		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,

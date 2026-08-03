@@ -439,20 +439,32 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		}
 	});
 
-	it("stays quiet when a failure leaves the invite live", async () => {
+	// Issue #37: the inviter dropped a peer whose handshake stalled and said nothing, so the user
+	// watched a QR that would never complete until it expired three minutes later. Staying live and
+	// staying silent are separate things; only the first was intended.
+	it("reports a stalled handshake without spending the invite", async () => {
 		vi.useFakeTimers();
 		try {
+			const onEnrollAttemptFailed = vi.fn();
 			const onEnrollFailed = vi.fn();
-			const handle = makeEnrollHandler("inviter", hostOpts({ onEnrollFailed }), vi.fn());
-			// Never completes the handshake, so the invite was never claimed.
+			const stop = vi.fn();
+			const handle = makeEnrollHandler(
+				"inviter",
+				hostOpts({ onEnrollAttemptFailed, onEnrollFailed }),
+				stop,
+			);
+			// Connects, then never finishes the handshake.
 			const { channel } = makeChannel(() => {});
-			const done = handle({ remotePubkey: "z", initiator: false, channel, close: vi.fn() });
+			const done = handle({ remotePubkey: "zzzzzzzz", initiator: false, channel, close: vi.fn() });
 			await vi.advanceTimersByTimeAsync(60_000);
 			await done;
 
-			// Tearing down the QR here would be wrong: the real device can still arrive, and any
-			// passer-by in the room could otherwise kill the invite just by connecting badly.
+			expect(onEnrollAttemptFailed).toHaveBeenCalledOnce();
+			expect(String(onEnrollAttemptFailed.mock.calls[0]?.[0])).toMatch(/still works|try again/i);
+			// Not the fatal one, and the session stays up: the real device may still be coming, and
+			// a stranger in the room must not be able to kill the invite by connecting badly.
 			expect(onEnrollFailed).not.toHaveBeenCalled();
+			expect(stop).not.toHaveBeenCalled();
 		} finally {
 			vi.useRealTimers();
 		}

@@ -588,6 +588,8 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 						broadcastSyncEvent({ kind: "enroll-expired" });
 					},
 					onEnrollFailed: (msg) => broadcastSyncEvent({ kind: "enroll-failed", message: msg }),
+					onEnrollAttemptFailed: (msg) =>
+						broadcastSyncEvent({ kind: "enroll-attempt-failed", message: msg }),
 					onJoined: (result) => broadcastSyncEvent({ kind: "joined", ...result }),
 					onJoinError: (msg) => broadcastSyncEvent({ kind: "join-error", message: msg }),
 					onEnrolled: (entryJson) => {

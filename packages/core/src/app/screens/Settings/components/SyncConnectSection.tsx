@@ -82,6 +82,8 @@ export function SyncConnectSection() {
 	const [hostExpired, setHostExpired] = useState(false);
 	/** A join attempt killed the invite. Replaces the code: a dead QR just gets scanned again. */
 	const [inviteError, setInviteError] = useState<string | null>(null);
+	/** An attempt failed WITHOUT spending the invite. Sits under the code, which is still good. */
+	const [attemptNote, setAttemptNote] = useState<string | null>(null);
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	// Master-password gate before adding a device: the re-entered password admission-signs the new
@@ -153,6 +155,10 @@ export function SyncConnectSection() {
 			// mounted for it (an extension popup closes on focus loss).
 			if (e.kind === "enroll-expired") setHostExpired(true);
 			if (e.kind === "enroll-failed") setInviteError(e.message || null);
+			// Non-fatal: the code is still live, so keep it up and just say what happened.
+			if (e.kind === "enroll-attempt-failed") setAttemptNote(e.message || null);
+			// A later attempt got further, so the earlier note is stale.
+			if (e.kind === "enroll-approval") setAttemptNote(null);
 		});
 		return off;
 	}, [shell]);
@@ -257,6 +263,7 @@ export function SyncConnectSection() {
 			// A fresh invite; clear the previous one's expiry/failure.
 			setHostExpired(false);
 			setInviteError(null);
+			setAttemptNote(null);
 			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined, password));
 			await refreshGroup();
 		});
@@ -594,6 +601,9 @@ export function SyncConnectSection() {
 										matching number on both devices before anything is sent.
 									</Trans>
 								</p>
+								{/* A failed attempt that did NOT spend the code, so it sits alongside rather
+								    than replacing it. */}
+								{attemptNote !== null && <p className="text-xs text-yellow-500">{attemptNote}</p>}
 								<div className="rounded-xl bg-white p-4">
 									<QRCodeSVG
 										value={pairingCode}
