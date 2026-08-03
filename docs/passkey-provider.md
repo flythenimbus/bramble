@@ -188,11 +188,95 @@ the real vault directly (same app -> no iOS-style bundle). Verified with
 (NDK) for the runtime `.so` + the regenerated Kotlin bindings, an API 34+ device, and the **origin**
 work below.
 
-**Origin (device-iteration TODO, same flavor as iOS `clientDataHash`):** browser callers carry the
-real web origin but reading it needs `CallingAppInfo.getOrigin(privilegedAllowlist)` with a
-browser allowlist. `res/raw/privileged_browsers.json` is currently empty, so browsers fall back to
-an `apk-key-hash` origin and the RP rejects it; populate it (a local copy of the Google-hosted
-allowlist - a static JSON, not a Play dependency) to make browser sign-in/registration verify.
+**Origin:** browser callers carry the real web origin but reading it needs
+`CallingAppInfo.getOrigin(privilegedAllowlist)` with a browser allowlist. That allowlist is
+`TrustedBrowsers.allowlistJson()`, built from the same `BROWSERS` map the autofill service uses to
+decide whether to honour a caller-supplied `webDomain`, so there is one source of truth for "is this
+really that browser" (there is no `res/raw/privileged_browsers.json`; an earlier draft planned one).
+
+Two different things stop a browser passkey working, at two different stages, and they look nothing
+alike. **Diagnose in this order** - most of a day went into rediscovering that the second one is
+not the first.
+
+**Stage 1: does the request reach us at all?** A Chromium browser that has not adopted Android
+Credential Manager sends `navigator.credentials.create()` to Google FIDO2 instead, and no
+third-party provider - Bramble, Bitwarden, any of them - is ever consulted. There is no prompt, and
+the RP reports `NotSupportedError`, which webauthn.io renders as "No available authenticator
+supported any of the specified pubKeyCredParams algorithms". That sentence is Chromium's, and it is
+also what a Bramble-side ES256 decline produces, which is exactly why that decline logs. Logcat
+separates them: a request that reached us leaves `CredentialManager: Provider session created` and
+starts the `app.bramble.mobile:autofill` process. Silence means stage 1, and nothing in Bramble can
+fix it. Note `BrambleCredentialService` itself logs nothing, so absence of `BrambleCredential` lines
+proves only that the *fulfill activity* didn't run; check for the process, not the tag.
+
+Reproduced on GrapheneOS (Pixel 8, Android 17), same site and build within one minute: **Vanadium
+prompts, unlocks and registers; Vivaldi and Brave produce no provider session at all**, with
+Bitwarden swapped in as the sole provider to rule out anything Bramble-specific.
+
+**Why Vanadium and not the others, precisely.** Chromium picks a WebAuthn backend at runtime
+(`components/webauthn/android`, `Barrier.Mode`): `ONLY_FIDO_2_API` (GMS Core), `ONLY_CRED_MAN`
+(Android 14+ Credential Manager), or `BOTH` in parallel. Stock Chromium still depends on the Play
+Services FIDO2 path, so on de-Googled or sandboxed-GMS Android it takes `ONLY_FIDO_2_API`, the
+dialog never opens, and **no provider is consulted at all**. That is
+[brave-browser#45415](https://github.com/brave/brave-browser/issues/45415), open since April 2025
+and not Brave-specific. GrapheneOS patched the dependency in
+[Vanadium](https://github.com/GrapheneOS/Vanadium), which is the entire reason Vanadium reaches us
+and Vivaldi and Brave do not; Cromite is reported to work too. So this is not "blame the browser",
+it is a known upstream bug with a named mechanism and a fork that fixed it.
+
+The one datum that does not fit: the #42 reporter says Bitwarden works in Vivaldi on their Pixel 10
+Pro. Under this model that requires their Vivaldi to be reaching CredMan, which on GrapheneOS is
+per-profile (Play Services can be enabled in one profile and not another). Until that is confirmed
+with a logcat from their device, treat it as unverified rather than as evidence that Bramble is
+being singled out. The check is one line: a request that reached *any* provider logs
+`CredentialManager: starting executeCreateCredential with callingPackage: com.vivaldi.browser`.
+
+Not the difference, though both are real: Bitwarden also declares
+`android.credentials.TYPE_PASSWORD_CREDENTIAL` in its capabilities where we declare only
+`TYPE_PUBLIC_KEY_CREDENTIAL`, and it runs its service in the main process where ours is
+`android:process=":autofill"`. Neither is worth copying - we deliberately leave passwords to the
+AutofillService, and our filtering passes today (`Option of type:
+androidx.credentials.TYPE_PUBLIC_KEY_CREDENTIAL meets all filteringconditions`).
+
+**Stage 2: is the caller in `BROWSERS`?** Only reached once stage 1 passes. A missing entry does
+*not* stop the prompt: `getOrigin` throws for a non-allowlisted caller, we fall through to building
+clientDataJSON from the caller's `apk-key-hash` origin, sign that, and the browser replaces it with
+the real one. The RP then compares mismatched hashes and rejects with `NotAllowedError`, which sites
+render as timeout/cancelled copy ("The request either timed out, was canceled or the device is
+already registered"). `warnUnverifiedBrowserHash` logs the caller's package **and its signing
+fingerprints** precisely so the fix is a copy-paste into `BROWSERS`.
+
+`BROWSERS` is a hand-curated subset: 6 entries from Google's GPM privileged-apps list, 3 privacy
+browsers absent from it (Vanadium, IronFox, Fennec F-Droid) read on-device, and Vivaldi. As of
+2026-08-02 the GPM list carries 70 packages, so ~62 remain unlisted and each would fail at stage 2
+once it cleared stage 1. Syncing the full list would close that class, at the cost of extending the
+autofill `webDomain` trust to those packages, so it is a deliberate decision rather than a
+mechanical one.
+
+Vivaldi's entry was added while diagnosing #42 and is **not a fix for it** - that report's failure is
+in the get flow below, not origin trust. It is kept because it is correct and verified: Vivaldi
+self-signs all three channels rather than using Play App Signing (`CN=Vivaldi browser, O=Vivaldi
+Technologies AS`), so the sideloaded and Play builds share one key, checked against the downloaded
+APK on 2026-08-02. Worth doing per browser, since a vendor on Play App Signing would ship a
+different cert than GPM lists.
+
+## The get flow returns an unlock action, never entries (#42)
+
+`onBeginGetCredentialRequest` returns a single `AuthenticationAction` and **never**
+`credentialEntries`, unconditionally - the vault is encrypted, so the sandboxed `:autofill` process
+cannot enumerate passkeys there. Two consequences:
+
+- The system renders the *locked provider* layout (`authentication_action_key` in the
+  CredentialSelector logs), not a normal credential row. The #42 reporter, on a Pixel 10 Pro, gets
+  that row "hidden at the footer of the display" and cannot tap it, so sign-in dead-ends. On a
+  Pixel 8 the same build renders it fine and completes, which is why this was missed.
+- Sign-in costs **two system sheets**: unlock action -> our unlock activity -> a second sheet of
+  entries -> sign. Providers that list entries directly get one.
+
+Returning real `PublicKeyCredentialEntry` rows would fix both, and is what every other provider
+does. It needs an rpId -> credential index readable while locked. iOS already has one, but
+`mobileAutofill.setIndex` is gated `if (!isIos) return`, so Android has nothing to read: this is
+real work, not a flag. Until then the untappable row is the blocker, and it is device-dependent.
 
 The original plan (still accurate):
 
