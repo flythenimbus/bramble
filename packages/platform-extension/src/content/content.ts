@@ -5,7 +5,7 @@
 // (the cached query result and the auto-open silence flag); the picker reports
 // user actions back through callbacks.
 
-import { maybeEmitSpaSubmit, onPasswordEnter } from "./capture";
+import { maybeCommitCapture, onPasswordEnter } from "./capture";
 import { api } from "./content-api";
 import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
@@ -241,9 +241,9 @@ function showFor(field: HTMLInputElement): void {
 function onDomChange(): void {
 	// The DOM changed: drop the cached field model so the next read re-parses.
 	invalidatePageFields();
-	// SPA submit fallback: a password the user just edited whose field has now
-	// vanished within the submit window is treated as a submit.
-	maybeEmitSpaSubmit();
+	// Commit checkpoint: an armed capture whose password field has now gone, or a
+	// password the user just edited whose field vanished within the submit window.
+	maybeCommitCapture();
 	const now = Date.now();
 	if (now - lastCheck < 500) return;
 	lastCheck = now;
@@ -294,7 +294,7 @@ document.addEventListener(
 		if (!e.isTrusted) return;
 		// Drive the open iframe dropdown with the keyboard first.
 		if (picker.handleKey(e)) return;
-		onPasswordEnter(e);
+		onPasswordEnter(e.key, composedTarget(e));
 	},
 	true,
 );

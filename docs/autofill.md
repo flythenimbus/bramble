@@ -82,6 +82,43 @@ When the vault is locked, the query result still carries `hasPotentialMatch`
 without decrypting the index), enough to show a "locked, unlock to autofill" hint
 without exposing data.
 
+## Capturing a submitted credential
+
+`capture.ts` decides *when* a typed password counts as submitted. Every path
+starts from the same buffer: a trusted `input` on a `type=password` field records
+the value (our own `fillField` dispatches are untrusted and don't count).
+
+Two commit policies, because they face opposite constraints:
+
+- **Native `submit`, and Enter inside a password field**: emit **synchronously**.
+  These usually precede a full page navigation, which destroys the content
+  script, so anything deferred would be lost.
+- **A click on a submit control** (`<button>` / `<input type=submit|image|button>`):
+  **arm, don't emit.** Formless SPA logins fire no `submit` event at all, so the
+  click is the only signal. The credential is snapshotted at click time, because
+  by the time we commit the form is gone and there is nothing left to read. The
+  commit waits for that password field to stop being rendered, which is the
+  evidence the login actually went through. A failed login leaves the field on
+  screen and the attempt expires unsaved after `ARM_WINDOW_MS`.
+
+Arming is narrow on purpose. Sites put secondary actions right beside the
+password field (skanetrafiken's "Glömt lösenord?" is a `<span role="button">`,
+its show-password toggle is a `role="checkbox"` label), and arming on those risks
+offering to save a password that was never submitted. Role-based pseudo-buttons
+are therefore excluded; relaxing that is safe only because the commit gate, not
+the arm gate, is what prevents the prompt.
+
+While armed, the commit condition is polled (`ARM_POLL_MS`, bounded by the arm
+window) rather than left to the MutationObserver, which only watches `childList`
+and would miss a form hidden by a class on an ancestor. `hashchange`/`popstate`
+also drive a check; `history.pushState` fires no event and cannot be patched from
+a content script's isolated world, so it is not a signal we can use.
+
+Re-typing the password disarms any pending attempt, which is the ordinary
+retry-after-failure path. A legacy fallback still fires when a password field
+vanishes within 1500ms of the last keystroke, covering submits driven by
+mechanisms none of the above observe.
+
 ## The corner prompt
 
 When the user submits a login form with credentials Bramble does not have, or

@@ -130,8 +130,17 @@ their own). Exercised by `signup-detect.dom.test.ts`.
 ## Fixtures
 
 `fixtures/sites.dom.test.ts` runs the detectors against real HTML captured from
-sites (GitHub, BMO, Discord, Twitch, Amazon, Microsoft, and others). This locks
-in behaviour on real-world quirks: honeypots, off-screen hidden fields, missing
-`<form>` wrappers, custom component libraries, GitHub's tokenless `name="otp"`
-2FA field, BMO's card-number-as-login, and invisible Turnstile that must not block
-autofill.
+sites (GitHub, BMO, Discord, Twitch, Amazon, Microsoft, Skånetrafiken, and
+others). This locks in behaviour on real-world quirks: honeypots, off-screen
+hidden fields, missing `<form>` wrappers, custom component libraries, GitHub's
+tokenless `name="otp"` 2FA field, BMO's card-number-as-login, and invisible
+Turnstile that must not block autofill.
+
+`skanetrafiken-login` is the counter-example worth keeping in mind: it was
+reported as a non-English detection failure (issue #46), but the site ships
+correct `autocomplete` tokens, so the Swedish labels are never consulted and both
+fields resolve on rung 1. What actually failed there was save capture, not
+detection, and the same fixture drives `content/capture.dom.test.ts`. The
+language gap is real but lives elsewhere: rungs 4 and 5 are English-only, so a
+non-English **two-step** page (identifier first, no password field yet) resolves
+no username at all, and `NEGATIVE_HINT_RE` misses non-English search boxes.

@@ -549,3 +549,34 @@ describe("biteasy.co — sign in with invisible/managed Cloudflare Turnstile", (
 		expect(hasInteractiveCaptcha()).toBe(false);
 	});
 });
+
+describe("skanetrafiken.se — Mitt konto (Swedish, formless)", () => {
+	// Reported as a non-English detection failure (issue #46). It isn't: the site
+	// ships correct autocomplete tokens, so the Swedish labels are never read. The
+	// real gap was save capture, which this fixture also drives in
+	// content/capture.dom.test.ts.
+	it("identifies the login + password fields despite Swedish labels", () => {
+		loadFixture("skanetrafiken-login");
+		const { username, password } = detectLoginFields();
+		expect(username?.id).toBe("email");
+		expect(password?.id).toBe("password");
+	});
+
+	it("has no <form> and a non-submit login button", () => {
+		loadFixture("skanetrafiken-login");
+		expect(document.querySelectorAll("form")).toHaveLength(0);
+		expect(document.querySelector<HTMLButtonElement>("#submit")?.type).toBe("button");
+	});
+
+	it("doesn't mistake the hidden 'verifieringskod' field for an OTP box", () => {
+		// Swedish for "verification code", so OTP_HINT_RE (English) can't match it.
+		loadFixture("skanetrafiken-login");
+		expect(document.getElementById("token")).not.toBeNull();
+		expect(otpInputs()).toEqual([]);
+	});
+
+	it("doesn't detect any card fields", () => {
+		loadFixture("skanetrafiken-login");
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+});

@@ -61,7 +61,7 @@ vi.mock("./lifecycle", () => ({
 	onTeardown: vi.fn(),
 }));
 vi.mock("./corner-prompt", () => ({ handleCornerPromptShow: vi.fn(), queryCornerPrompt: vi.fn() }));
-vi.mock("./capture", () => ({ maybeEmitSpaSubmit: vi.fn(), onPasswordEnter: vi.fn() }));
+vi.mock("./capture", () => ({ maybeCommitCapture: vi.fn(), onPasswordEnter: vi.fn() }));
 const fillPasswordFields = vi.fn(() => true);
 vi.mock("./fill", () => ({
 	fillCard: vi.fn(),
