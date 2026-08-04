@@ -119,6 +119,14 @@ retry-after-failure path. A legacy fallback still fires when a password field
 vanishes within 1500ms of the last keystroke, covering submits driven by
 mechanisms none of the above observe.
 
+"Stops being rendered" is the load-bearing wording, and it is not the same as
+"is removed". Verified against skanetrafiken's own application, replayed from a
+HAR recording (`e2e/hars/`): on a successful login it swaps in the account view
+and leaves the password input **connected to the document at 0x0**. A gate keyed
+on detachment alone never fires there, which is also why the legacy fallback,
+whose check is a bare `input[type=password]` selector with no visibility filter,
+could not have saved on that site even inside its window.
+
 ## The corner prompt
 
 When the user submits a login form with credentials Bramble does not have, or

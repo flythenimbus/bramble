@@ -64,7 +64,9 @@ describe("formless SPA login (skanetrafiken fixture)", () => {
 		loadFixture("skanetrafiken-login");
 		email = document.getElementById("email") as HTMLInputElement;
 		password = document.getElementById("password") as HTMLInputElement;
-		submitBtn = document.getElementById("submit") as HTMLButtonElement;
+		// Four elements share id="submit" (the reset-password modals reuse it), so
+		// getElementById would hand back a modal's button. Scope to the login form.
+		submitBtn = document.querySelector(".st-login-form__actions button") as HTMLButtonElement;
 		email.value = "resenar@example.se";
 		password.value = "korrekt-häst";
 		notePasswordEdit(password);
@@ -73,6 +75,7 @@ describe("formless SPA login (skanetrafiken fixture)", () => {
 	it("has no form and a non-submit login button", () => {
 		expect(document.querySelectorAll("form")).toHaveLength(0);
 		expect(submitBtn.type).toBe("button");
+		expect(submitBtn.textContent).toMatch(/Logga in/);
 	});
 
 	it("captures once the login goes through and the form is torn down", () => {
