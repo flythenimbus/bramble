@@ -3,8 +3,145 @@ export interface LoginFields {
 	password: HTMLInputElement | null;
 }
 
-export const USERNAME_HINT_RE = /email|e-mail|user|login|account|signin|sign-in/i;
-const NEGATIVE_HINT_RE = /search|captcha|coupon|otp|code/i;
+// --- Hint lexicons --------------------------------------------------------
+// Alternation sources, one term per line so a term can be added or removed
+// without touching its neighbours. Conventions, which the tests in
+// detection.i18n.dom.test.ts and detection.otp.dom.test.ts enforce:
+//
+//   - Terms must stand alone. The "name" half of "nom d'utilisateur" / "nombre
+//     de usuario" is deliberately absent: a bare "name" would claim every
+//     cardholder and full-name field on the web.
+//   - Short ASCII terms are \b-bounded, so pt "conta" cannot match "contact".
+//     Non-Latin terms are not: \b is ASCII-only, and CJK has no word separators.
+//   - Accented forms are alternated with their stripped spelling, because
+//     name/id attributes usually drop the diacritic while the label keeps it.
+//
+// Android's StructureParser.kt holds its own English-only copy of these
+// heuristics and is NOT generated from here. See docs/field-detection.md.
+
+/** Builds a case-insensitive alternation from a term list. */
+function alternation(terms: string[]): RegExp {
+	return new RegExp(terms.join("|"), "i");
+}
+
+// Decides rungs 4 and 5 of detectLoginFields only, which run when the page has
+// no password field, no autocomplete token and no email input: in practice,
+// identifier-first pages.
+export const USERNAME_HINT_RE = alternation([
+	// en
+	"email",
+	"e-mail",
+	"\\bmail\\b",
+	"user",
+	"login",
+	"account",
+	"signin",
+	"sign-in",
+	// de
+	"benutzer",
+	"nutzername",
+	"anmeldename",
+	"anmeld",
+	"kundennummer",
+	// nl
+	"gebruiker",
+	"inloggen",
+	"aanmelden",
+	// sv
+	"anv(ä|a)ndare",
+	"anv(ä|a)ndarnamn",
+	"logga.?in",
+	"inloggning",
+	"\\be.?post\\b",
+	"mejl",
+	// da, no
+	"brugernavn",
+	"brukernavn",
+	"logg.?inn",
+	"log.?ind",
+	// fi
+	"k(ä|a)ytt(ä|a)j(ä|a)",
+	"s(ä|a)hk(ö|o)posti",
+	"kirjaudu",
+	// fr
+	"utilisateur",
+	"identifiant",
+	"courriel",
+	"connexion",
+	"se.?connecter",
+	"\\bcompte\\b",
+	// es
+	"usuario",
+	"correo",
+	"iniciar.?sesi(ó|o)n",
+	"\\bsesi(ó|o)n\\b",
+	"\\bcuenta\\b",
+	"\\bacceso\\b",
+	// pt
+	"utilizador",
+	"usu(á|a)rio",
+	"\\bconta\\b",
+	"iniciar.?sess(ã|a)o",
+	// it
+	"utente",
+	"\\baccedi\\b",
+	"\\baccesso\\b",
+	"credenziali",
+	"posta.?elettronica",
+	// pl
+	"u(ż|z)ytkownik",
+	"zaloguj",
+	"logowanie",
+	"\\bkonto\\b",
+	// tr
+	"kullan(ı|i)c(ı|i)",
+	"\\be.?posta\\b",
+	"giri(ş|s)",
+	"hesap",
+	// ru
+	"логин",
+	"пользовател",
+	"почта",
+	"вход",
+	"уч(ё|е)тная",
+	// ja, zh, ko
+	"ユーザー",
+	"メール",
+	"ログイン",
+	"用户",
+	"邮箱",
+	"登录",
+	"登入",
+	"帳號",
+	"账号",
+	"사용자",
+	"이메일",
+	"로그인",
+]);
+
+// Localized search terms matter more than they look: rung 1 picks the password's
+// nearest preceding text input, so an untranslated search box in the header wins
+// and the username gets typed into it.
+const NEGATIVE_HINT_RE = alternation([
+	"search",
+	"captcha",
+	"coupon",
+	"otp",
+	"code",
+	// de, nl
+	"suche",
+	"suchen",
+	"zoek",
+	// fr, es, it, pt, sv
+	"recherche",
+	"buscar",
+	"b(ú|u)squeda",
+	"\\bbusca\\b",
+	"\\bcerca\\b",
+	"ricerca",
+	"pesquisa",
+	"\\bs(ö|o)k\\b",
+]);
 
 const USERNAME_TEXT_SELECTOR =
 	'input[type="text"]:not([readonly]):not([disabled]), input[type="email"]:not([readonly]):not([disabled]), input[type="tel"]:not([readonly]):not([disabled]), input:not([type]):not([readonly]):not([disabled])';
@@ -245,10 +382,167 @@ export function isCardField(c: CardFields, el: HTMLInputElement): boolean {
 	);
 }
 
-export const OTP_HINT_RE =
-	/one.?time|\botp\b|2fa|mfa|two.?factor|authenticator|auth.?code|login.?code|verif(y|ication).?code|confirmation.?code|passcode|\btotp\b|6.?digit/i;
-// Keeps card/address/coupon fields out of OTP detection (CVV is also handled by isCardField).
-export const OTP_NEGATIVE_RE = /card|coupon|promo|postal|\bzip\b|country|address|phone/i;
+// A booster, not the primary signal: the structural rungs in otpInputs are what
+// carry the non-English pages no word list reaches.
+export const OTP_HINT_RE = alternation([
+	// en. The abbreviations are bounded on letters rather than \b so they still
+	// match inside `idTxtBx_SAOTCC_OTC`, where the underscore is a word character
+	// and \b therefore fails.
+	"(?<![a-z])(otp|otc|totp)(?![a-z])",
+	"one.?time",
+	"2fa",
+	"mfa",
+	"two.?factor",
+	"authenticator",
+	"auth.?code",
+	"login.?code",
+	"verif(y|ication).?code",
+	"confirmation.?code",
+	"passcode",
+	"6.?digit",
+	// de
+	"einmal(code|passwort|kennwort)",
+	"best(ä|ae)tigungscode",
+	"sicherheitscode",
+	"verifizierungscode",
+	"pr(ü|ue)fcode",
+	// fr
+	"code de (v(é|e)rification|s(é|e)curit(é|e))",
+	"code (à|a) usage unique",
+	// es
+	"c(ó|o)digo de (verificaci(ó|o)n|seguridad|confirmaci(ó|o)n)",
+	// it
+	"codice di (verifica|sicurezza)",
+	// pt
+	"c(ó|o)digo de verifica(ç|c)(ã|a)o",
+	// nl
+	"verificatiecode",
+	"beveiligingscode",
+	// sv
+	"verifieringskod",
+	"s(ä|a)kerhetskod",
+	"eng(å|a)ngskod",
+]);
+
+// "Code" on its own is far too common (gift, referral, country, area, discount)
+// to accept as a signal, so it only counts when the field is also code-shaped.
+const WEAK_CODE_RE = alternation([
+	"\\bcode\\b",
+	"\\bkod\\b",
+	"\\bkode\\b",
+	"\\bc(ó|o)digo\\b",
+	"\\bcodice\\b",
+]);
+
+// Keeps card/address/coupon fields out of OTP detection (CVV is also handled by
+// isCardField). Redeemable-code fields are excluded here rather than left to the
+// weak-code rung, which would otherwise claim "gift code" on a checkout page.
+export const OTP_NEGATIVE_RE = alternation([
+	// en
+	"card",
+	"coupon",
+	"promo",
+	"postal",
+	"\\bzip\\b",
+	"country",
+	"address",
+	"phone",
+	"gift",
+	"referral",
+	"invite",
+	"discount",
+	"voucher",
+	"redeem",
+	// de
+	"karte",
+	"gutschein",
+	"postleitzahl",
+	"\\bplz\\b",
+	"adresse",
+	"telefon",
+	// fr
+	"carte",
+	"pays",
+	"t(é|e)l(é|e)phone",
+	// es
+	"tarjeta",
+	"pa(í|i)s",
+	"direcci(ó|o)n",
+	"tel(é|e)fono",
+	// it, sv
+	"tessera",
+	"postnummer",
+	"adress",
+]);
+
+const SEGMENT_TYPES = new Set(["text", "tel", "number", ""]);
+// A run this long of single-character boxes is a code widget and nothing else;
+// split date and product-key inputs use wider fields. Deliberately structural,
+// so it works on pages whose prose we can't read.
+const SEGMENTED_MIN_BOXES = 4;
+// Bounds for a code typed into one field. Below 4 is a CVV or a PIN, above 8 is
+// prose; both ends are also covered by OTP_NEGATIVE_RE and the card scan.
+const CODE_MIN_LEN = 4;
+const CODE_MAX_LEN = 8;
+const DIGIT_PATTERN_RE = /\\d|\[0-9\]|\[\\d\]/;
+
+/** True for input types that could hold a one-time code. */
+function isOtpCandidateType(el: HTMLInputElement): boolean {
+	return !["password", "hidden", "checkbox", "radio", "submit", "button"].includes(el.type);
+}
+
+/** True if the field is length-bounded like a typed code. */
+function isCodeLength(el: HTMLInputElement): boolean {
+	return el.maxLength >= CODE_MIN_LEN && el.maxLength <= CODE_MAX_LEN;
+}
+
+/** True if the field declares digits-only entry, via inputmode, type, or pattern. */
+function isNumericEntry(el: HTMLInputElement): boolean {
+	const mode = el.getAttribute("inputmode")?.toLowerCase() ?? "";
+	if (mode === "numeric" || mode === "tel" || mode === "decimal") return true;
+	if (el.type === "tel" || el.type === "number") return true;
+	return DIGIT_PATTERN_RE.test(el.getAttribute("pattern") ?? "");
+}
+
+/**
+ * A segmented code widget found purely by shape: SEGMENTED_MIN_BOXES or more
+ * single-character inputs sharing a parent. Language-independent, and the only
+ * thing that finds these widgets when the site tags no box with a hint or an
+ * autocomplete token.
+ */
+function segmentedRun(doc: Document): HTMLInputElement[] {
+	const byParent = new Map<Element, HTMLInputElement[]>();
+	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+		if (el.maxLength !== 1 || !SEGMENT_TYPES.has(el.type)) continue;
+		if (OTP_NEGATIVE_RE.test(attrHint(el))) continue;
+		const parent = el.parentElement;
+		if (!parent) continue;
+		const run = byParent.get(parent);
+		if (run) run.push(el);
+		else byParent.set(parent, [el]);
+	}
+	for (const run of byParent.values()) {
+		if (run.length >= SEGMENTED_MIN_BOXES) return run;
+	}
+	return [];
+}
+
+/**
+ * A lone digits-only field of code length. The weakest rung, so it only fires
+ * when exactly one field on the page qualifies: more than one means we can't
+ * tell which is the code, and guessing would fill the wrong box.
+ */
+function loneNumericCode(doc: Document, card: CardFields): HTMLInputElement[] {
+	const found: HTMLInputElement[] = [];
+	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+		if (!isOtpCandidateType(el)) continue;
+		if (isCardField(card, el)) continue;
+		if (!isCodeLength(el) || !isNumericEntry(el)) continue;
+		if (OTP_NEGATIVE_RE.test(attrHint(el)) || OTP_NEGATIVE_RE.test(labelText(el, doc))) continue;
+		found.push(el);
+	}
+	return found.length === 1 ? found : [];
+}
 
 /** Contiguous DOM run of single-char text-like inputs that `seed` belongs to (segmented OTP widget). */
 export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
@@ -267,12 +561,17 @@ export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
 /**
  * Inputs making up the one-time-code entry, in DOM order. Usually one field;
  * some sites split it into N single-char boxes. Empty array when none found.
+ *
+ * Four rungs, strongest first. The two structural ones exist because the hint
+ * list only covers languages someone thought to add: a run of single-character
+ * boxes and a digits-only field of code length are the same shape in every
+ * language. See docs/field-detection.md.
  */
 export function otpInputs(
 	doc: Document = document,
 	precomputedCard?: CardFields,
 ): HTMLInputElement[] {
-	// Multiple `one-time-code` tokens means a segmented widget tagging every box.
+	// 1. Multiple `one-time-code` tokens means a segmented widget tagging every box.
 	const tokened = deepQueryAll<HTMLInputElement>(
 		'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
 		doc,
@@ -281,30 +580,39 @@ export function otpInputs(
 
 	// Reuse a card scan from parsePageFields when given; otherwise compute it lazily.
 	const card = precomputedCard ?? detectCardFields(doc);
+	// 2. Attribute and label hints.
 	let hinted: HTMLInputElement | null = null;
 	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
-		if (el.type === "password" || el.type === "hidden" || el.type === "checkbox") continue;
-		if (el.type === "radio" || el.type === "submit" || el.type === "button") continue;
+		if (!isOtpCandidateType(el)) continue;
 		if (isCardField(card, el)) continue;
 		const hint = attrHint(el);
 		if (OTP_NEGATIVE_RE.test(hint)) continue;
-		if (OTP_HINT_RE.test(hint)) {
+		if (OTP_HINT_RE.test(hint) || (WEAK_CODE_RE.test(hint) && isCodeLength(el))) {
 			hinted = el;
 			break;
 		}
 		const lbl = labelText(el, doc);
-		if (lbl && !OTP_NEGATIVE_RE.test(lbl) && OTP_HINT_RE.test(lbl)) {
+		if (!lbl || OTP_NEGATIVE_RE.test(lbl)) continue;
+		if (OTP_HINT_RE.test(lbl) || (WEAK_CODE_RE.test(lbl) && isCodeLength(el))) {
 			hinted = el;
 			break;
 		}
 	}
-	if (!hinted) return [];
-	// A single-char field is one box of a segmented widget; gather the whole run.
-	if (hinted.maxLength === 1) {
-		const group = segmentedSiblings(hinted);
-		if (group.length >= 2) return group;
+	if (hinted) {
+		// A single-char field is one box of a segmented widget; gather the whole run.
+		if (hinted.maxLength === 1) {
+			const group = segmentedSiblings(hinted);
+			if (group.length >= 2) return group;
+		}
+		return [hinted];
 	}
-	return [hinted];
+
+	// 3. Structural: an untagged run of single-character boxes.
+	const run = segmentedRun(doc);
+	if (run.length > 0) return run;
+
+	// 4. Structural: a lone digits-only field of code length.
+	return loneNumericCode(doc, card);
 }
 
 // Match only interactive captchas; v3/invisible variants run transparently and

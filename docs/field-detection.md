@@ -29,7 +29,27 @@ first hit:
 5. Associated `<label>` text.
 
 Negative hints (`search`, `captcha`, `coupon`, `otp`, `code`) filter out
-look-alikes at each rung.
+look-alikes at each rung, and carry localized search terms. Those matter more
+than they look: rung 1 takes the password's nearest preceding text input, so an
+untranslated search box in the header wins and the username gets typed into it.
+
+Rungs 1 to 3 are language-free and carry ordinary login forms on any site. Rungs
+4 and 5 read prose, so `USERNAME_HINT_RE` carries localized identifier terms
+(issue #46). They decide only the shape rung 1 cannot help with: an
+**identifier-first** page, where the password lives on a later step and there is
+no password field to anchor to.
+
+Two rules keep that list from doing damage. Every term must stand alone, so the
+"name" half of *nom d'utilisateur* / *nombre de usuario* is deliberately absent —
+a bare "name" would claim every cardholder and full-name field. And short ASCII
+terms are `\b`-bounded, so Portuguese `conta` cannot match `contact`; non-Latin
+terms are not, because `\b` is ASCII-only and CJK has no word separators.
+Accented forms are alternated with their stripped spelling, since `name`/`id`
+attributes usually drop the diacritic while the visible label keeps it.
+
+Exercised by `content/detection.i18n.dom.test.ts`, which tests both directions:
+missing a username costs autofill, but claiming the wrong field types the login
+into a search box, which is worse.
 
 ## Card fields
 
@@ -41,12 +61,41 @@ field (number, CVV, or expiry) before the card picker is offered.
 
 ## OTP fields
 
-`otpInputs` first looks for `autocomplete~="one-time-code"` tokens. Failing that,
-it searches by hint (`OTP_HINT_RE`) while excluding card, coupon, promo, postal,
-and address fields (`OTP_NEGATIVE_RE`). A matched single-character input is
-treated as one box of a **segmented widget**: the contiguous run of
-single-character text-like siblings is gathered in DOM order
-(`segmentedSiblings`).
+`otpInputs` runs a four-rung ladder, strongest first:
+
+1. `autocomplete~="one-time-code"` tokens. Several matches means a segmented
+   widget tagging every box, so all of them are returned.
+2. Attribute then label hints (`OTP_HINT_RE`), excluding card, coupon, promo,
+   postal, address and redeemable-code fields (`OTP_NEGATIVE_RE`). A matched
+   single-character input is one box of a **segmented widget**, so the contiguous
+   run of single-character siblings is gathered (`segmentedSiblings`). The word
+   "code" on its own (`WEAK_CODE_RE`) is too common to trust, so it only counts
+   when the field is also length-bounded like a code.
+3. **Structural:** an untagged run of `SEGMENTED_MIN_BOXES` (4) or more
+   single-character inputs sharing a parent. Nothing else on the web is shaped
+   like that, and it needs no readable text.
+4. **Structural:** a lone digits-only field of code length (`maxlength` 4-8 plus
+   `inputmode`/`type`/`pattern` evidence). The weakest rung, so it fires only
+   when exactly one field qualifies; more than one and we'd be guessing which box
+   the code belongs in.
+
+Rungs 3 and 4 exist because rung 2 only covers languages someone thought to add.
+Issue #47 was reported as broken TOTP autofill on Microsoft and otto.de; a corpus
+of 17 realistic 2FA shapes found only 4 detected, and the misses were every
+localized phrasing of "verification code" plus every untagged segmented widget.
+The corpus is now `content/detection.otp.dom.test.ts` — add rows there rather
+than editing the regex blind.
+
+`OTP_HINT_RE` also carries localized terms, and bounds `otp`/`otc`/`totp` on
+letters rather than `\b` so they match inside `idTxtBx_SAOTCC_OTC`, where the
+underscore is a word character and `\b` fails. Android's `StructureParser.kt`
+holds its own copy of these heuristics and is **not** kept in sync
+automatically.
+
+Visibility is deliberately not filtered here, matching the rest of the module, so
+a hidden 2FA field on a login step is still found (see the skanetrafiken
+fixture). That is harmless: `kindOf` ranks OTP last, so login and card fields
+still win.
 
 ## Captcha
 

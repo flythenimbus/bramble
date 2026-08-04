@@ -568,11 +568,15 @@ describe("skanetrafiken.se — Mitt konto (Swedish, formless)", () => {
 		expect(document.querySelector<HTMLButtonElement>("#submit")?.type).toBe("button");
 	});
 
-	it("doesn't mistake the hidden 'verifieringskod' field for an OTP box", () => {
-		// Swedish for "verification code", so OTP_HINT_RE (English) can't match it.
+	it("detects the 'verifieringskod' field as the one-time-code box", () => {
+		// Swedish for "verification code". This asserted the opposite until the
+		// localized hints landed for issue #47: the field was invisible to us, which
+		// is the same failure the reporter hit on non-English 2FA pages. The field
+		// is hidden on the login step, and otpInputs deliberately doesn't filter on
+		// visibility, so it is found here too; login still wins for the visible
+		// fields because kindOf ranks OTP last.
 		loadFixture("skanetrafiken-login");
-		expect(document.getElementById("token")).not.toBeNull();
-		expect(otpInputs()).toEqual([]);
+		expect(otpInputs().map((el) => el.id)).toEqual(["token"]);
 	});
 
 	it("doesn't detect any card fields", () => {
