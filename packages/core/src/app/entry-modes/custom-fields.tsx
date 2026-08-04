@@ -6,7 +6,7 @@ import type { CustomField } from "../../hooks/useVault";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextField } from "../components/ui/text-field";
-import { DetailField } from "./DetailField";
+import { DetailField, DetailValue } from "./DetailField";
 
 /** Form-side shape of a custom field: the persisted `hidden` boolean becomes a "text"/"password" type. */
 export interface CustomFieldFormValue {
@@ -186,9 +186,9 @@ export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailP
 							) : undefined
 						}
 					>
-						<span className={`text-sm truncate ${field.hidden ? "font-mono" : ""}`}>
+						<DetailValue mono={field.hidden} wrap={field.hidden && !masked}>
 							{masked ? "•".repeat(Math.min(field.value.length, 16)) : field.value || "-"}
-						</span>
+						</DetailValue>
 					</DetailField>
 				);
 			})}

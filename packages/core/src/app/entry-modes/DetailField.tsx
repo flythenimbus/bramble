@@ -2,6 +2,29 @@ import { useLingui } from "@lingui/react/macro";
 import { Check, Copy } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "../components/ui/button";
+import { cn } from "../components/ui/utils";
+
+interface DetailValueProps {
+	children: ReactNode;
+	mono?: boolean;
+	// Revealed secrets wrap instead of truncating: they are revealed to be read.
+	wrap?: boolean;
+}
+
+/** Value text for a detail row. Block-level because `truncate` on an inline span spills past the border. */
+export function DetailValue({ children, mono, wrap }: DetailValueProps) {
+	return (
+		<span
+			className={cn(
+				"block text-sm",
+				mono && "font-mono",
+				wrap ? "break-all max-h-40 overflow-y-auto" : "truncate",
+			)}
+		>
+			{children}
+		</span>
+	);
+}
 
 interface DetailFieldProps {
 	label: string;

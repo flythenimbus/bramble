@@ -10,7 +10,7 @@ import { Button } from "../components/ui/button";
 import { SecretArea } from "../components/ui/secret-area";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
-import { DetailField } from "./DetailField";
+import { DetailField, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
 /** OpenSSH SHA-256 fingerprint of `publicKey`. undefined until derived (async) and on parse failure. */
@@ -137,7 +137,7 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					copyName="fingerprint"
 					onCopy={() => copy("fingerprint", fingerprint)}
 				>
-					<span className="text-sm font-mono truncate">{fingerprint}</span>
+					<DetailValue mono>{fingerprint}</DetailValue>
 				</DetailField>
 			)}
 
@@ -182,9 +182,9 @@ function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 						</Button>
 					}
 				>
-					<span className="text-sm font-mono truncate">
+					<DetailValue mono wrap={showPassphrase}>
 						{showPassphrase ? key.passphrase : "•".repeat(Math.min(key.passphrase.length, 16))}
-					</span>
+					</DetailValue>
 				</DetailField>
 			)}
 

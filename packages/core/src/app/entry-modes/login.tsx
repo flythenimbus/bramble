@@ -35,7 +35,7 @@ import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
-import { DetailField } from "./DetailField";
+import { DetailField, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryFieldsProps, EntryMode } from "./types";
 
 /** The login form's value shape. (Custom fields are host-owned and shared across modes, so not listed here.) */
@@ -597,9 +597,9 @@ function PasswordChangelogField({
 								className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/50 bg-muted/20"
 							>
 								<div className="flex-1 min-w-0">
-									<span className="block text-sm font-mono truncate">
+									<DetailValue mono wrap={isRevealed}>
 										{isRevealed ? change.value : "•".repeat(Math.min(change.value.length, 16))}
-									</span>
+									</DetailValue>
 									<span className="block text-[10px] text-muted-foreground tabular-nums">
 										{t`Replaced ${formatDateTimeExact(change.changedAt)}`}
 									</span>
@@ -672,7 +672,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="username"
 				onCopy={() => copy("username", login.username)}
 			>
-				<span className="text-sm truncate">{login.username || "-"}</span>
+				<DetailValue>{login.username || "-"}</DetailValue>
 			</DetailField>
 
 			<DetailField
@@ -692,9 +692,9 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					</Button>
 				}
 			>
-				<span className="text-sm font-mono truncate">
+				<DetailValue mono wrap={showPassword}>
 					{showPassword ? login.password : "•".repeat(Math.min(login.password.length, 16))}
-				</span>
+				</DetailValue>
 			</DetailField>
 
 			{login.passwordChangelog && login.passwordChangelog.length > 0 && (

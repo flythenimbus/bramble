@@ -9,7 +9,7 @@ import { cardBrand } from "../../util/card";
 import { Button } from "../components/ui/button";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
-import { DetailField } from "./DetailField";
+import { DetailField, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
 interface CardFormValues {
@@ -127,7 +127,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 				copyName="cardholder name"
 				onCopy={() => copy("cardholder name", card.cardholderName)}
 			>
-				<span className="text-sm truncate">{card.cardholderName || "-"}</span>
+				<DetailValue>{card.cardholderName || "-"}</DetailValue>
 			</DetailField>
 
 			<DetailField
@@ -147,9 +147,9 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					</Button>
 				}
 			>
-				<span className="text-sm font-mono truncate">
+				<DetailValue mono wrap={showNumber}>
 					{showNumber ? card.number : `•••• ${lastFour(card.number)}`}
-				</span>
+				</DetailValue>
 			</DetailField>
 
 			<div className="grid grid-cols-2 gap-3">
@@ -159,7 +159,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					copyName="expiry"
 					onCopy={() => copy("expiry", expiry)}
 				>
-					<span className="text-sm font-mono truncate">{expiry || "-"}</span>
+					<DetailValue mono>{expiry || "-"}</DetailValue>
 				</DetailField>
 
 				<DetailField
@@ -179,9 +179,9 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 						</Button>
 					}
 				>
-					<span className="text-sm font-mono truncate">
+					<DetailValue mono wrap={showCvv}>
 						{showCvv ? card.cvv : "•".repeat(card.cvv.length)}
-					</span>
+					</DetailValue>
 				</DetailField>
 			</div>
 
