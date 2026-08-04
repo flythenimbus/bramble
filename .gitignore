@@ -33,6 +33,12 @@ packages/platform-extension/public/wasm/
 *.iam.gserviceaccount.com.json
 bramble-502002-*.json
 
+# Pre-disclosure security notes. A writeup of an unfixed vulnerability in a released
+# build is a public disclosure the moment it lands here, so it stays out of the tree
+# until the fix ships (see SECURITY.md). The published writeup is docs/sec-audit-*.md,
+# committed with the fix, as GHSA-x4f5 was.
+docs/private/
+
 # Local env (API keys, never tracked)
 .env.local
 .env*.local
