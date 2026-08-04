@@ -41,7 +41,13 @@ const allOrigins = process.argv.includes("--all-origins");
 const origin = new URL(url).hostname.replace(/^www\./, "");
 const extra = (arg("--origins", "") || "").split(",").filter(Boolean);
 const hosts = [origin, ...extra].map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-const urlFilter = new RegExp(`https?://[^/]*(${hosts.join("|")})`);
+// Skipping stylesheets, fonts and images typically halves the recording. Only do
+// it once a spec confirms layout isn't load-bearing for what it asserts: our
+// rendered/hidden checks read getBoundingClientRect, so a site that hides via a
+// stylesheet class rather than an inline style would need its CSS kept.
+const skip = (arg("--skip", "") || "").split(",").filter(Boolean);
+const skipRe = skip.length ? `(?!.*\\.(${skip.join("|")})(\\?|$))` : "";
+const urlFilter = new RegExp(`^${skipRe}https?://[^/]*(${hosts.join("|")})`);
 
 mkdirSync(HAR_DIR, { recursive: true });
 const harPath = path.join(HAR_DIR, `${name}.har.zip`);

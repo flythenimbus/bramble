@@ -57,6 +57,23 @@ per spec. **No credential is ever sent anywhere**: every request is served or
 stubbed locally, so driving a "successful login" costs the real site nothing and
 needs no account.
 
+## Size
+
+`--skip css,png,woff2,...` drops assets from the recording. Measure before
+reaching for it: on skanetrafiken it saved only 128KB of 1.1MB, because the bulk
+is JS and the zip already compresses text hard. That is a poor trade against
+losing real layout, which is most of why a HAR beats a DOM snapshot, so this
+recording keeps everything. Image-heavy sites are where the flag pays.
+
+Only skip stylesheets once a spec confirms layout isn't load-bearing for what it
+asserts. Ours read `getBoundingClientRect`, and they pass with CSS blanked
+because skanetrafiken hides the panel inline rather than via a class; a site that
+hid it with a stylesheet rule would need its CSS kept.
+
+The cost that actually matters is **churn, not size**. A `.zip` is already
+compressed, so git cannot delta it: every re-record stores another full copy in
+history forever. Re-record deliberately, not routinely.
+
 ## Staleness
 
 These are snapshots and they go stale, exactly like the DOM fixtures. They are
