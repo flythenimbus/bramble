@@ -1,0 +1,42 @@
+---
+title: A month of shipping a local-first password manager
+description: "What changed in Bramble since the Show HN a month ago: iOS and Firefox, multiple vaults, encrypted cloud backups, P2P sync hardening, and reproducible Android builds."
+pubDate: 2026-08-05
+---
+
+A month ago I posted Bramble on [Hacker News](https://news.ycombinator.com/item?id=48766242).
+
+What's Bramble: a local-first password manager where the vault stays on your devices and syncs
+directly between them over WebRTC, with a [Nostr](https://nostr.com) relay doing introductions
+only. Here's what changed in the month since:
+
+**iOS** is out of review and [on the App Store](https://apps.apple.com/us/app/bramble-password-manager/id6783071787),
+so it's now the extension plus both mobile apps sharing one vault format and one Rust crypto core.
+It has since picked up device-passcode unlock (opt-in), one-time codes in the keyboard, and Apple's
+credential exchange (CXF), which moves a vault in or out through the OS transfer flow, passkeys
+included.
+
+**[Firefox](https://addons.mozilla.org/firefox/addon/bramble/)** is out also! Firefox's event page
+has no `RTCPeerConnection` at all, where Chromium gets it via an offscreen document. Peers now
+negotiate relay-forwarding as a fallback, so if either side can't open a data channel the frames go
+over the relay instead. Still Noise e2e, so the relay only ever sees ciphertext.
+
+Next we have **multiple vaults**, each with its own master password and its own key. This now opens
+up multi-user situations. It was a common request across the board so I'm happy it landed!
+
+**Backups**, because data loss was the top worry in the last thread. Scheduled encrypted backups
+now go to Dropbox, any S3-compatible bucket, or your own WebDAV (NextCloud supported!), as many
+targets as you want on their own schedule.
+
+**P2P hardening.** Roster entries are signed with per-device Ed25519 keys and verified before
+merge, revocation is enforced on live sessions, and large vaults chunk across Noise frames. Pairing
+got the most work, after a critical advisory someone filed against it
+([GHSA-x4f5-4wq4-c6c8](https://github.com/flythenimbus/bramble/security/advisories/GHSA-x4f5-4wq4-c6c8)).
+Invites are single-use with a 3 minute expiry, the joiner is identified before anything is sent,
+and both devices compare a 12-digit number before the transfer goes through.
+
+**Android** is still a sideloadable APK with no Play Services and nothing else from Google, and the
+build is now reproducible against a Debian container matching F-Droid's buildserver. Still pending
+approval to join the F-Droid store though.
+
+Source is on [GitHub](https://github.com/flythenimbus/bramble). Happy to answer any questions!

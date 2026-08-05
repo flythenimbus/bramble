@@ -2,25 +2,33 @@
 import Footer from "@/components/Footer.astro";
 import Header from "@/components/Header.astro";
 import Layout from "@/layouts/Layout.astro";
+import { formatPostDate } from "@/posts";
 import "@/styles/prose.css";
 
 interface Props {
 	title: string;
-	description?: string;
-	path?: string;
-	/** Optional line under the heading, e.g. "Effective date: 23 June 2026". */
-	meta?: string;
+	description: string;
+	pubDate: Date;
+	path: string;
 }
 
-const { title, description, path, meta } = Astro.props;
+const { title, description, pubDate, path } = Astro.props;
 ---
 
 <Layout title={title} description={description} path={path}>
 	<Header />
 	<main class="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-		<header class="mb-10">
+		<a
+			href="/blog"
+			class="text-sm text-muted-foreground transition-colors hover:text-foreground"
+		>
+			&larr; All posts
+		</a>
+		<header class="mt-8 mb-10">
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-			{meta && <p class="mt-3 text-sm text-muted-foreground">{meta}</p>}
+			<p class="mt-3 text-sm text-muted-foreground">
+				<time datetime={pubDate.toISOString()}>{formatPostDate(pubDate)}</time>
+			</p>
 		</header>
 		<article class="prose">
 			<slot />

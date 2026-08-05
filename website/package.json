@@ -12,16 +12,17 @@
 		"deploy": "astro build && wrangler pages deploy"
 	},
 	"dependencies": {
+		"@astrojs/mdx": "^7.0.5",
 		"@tabler/icons": "^3.45.0",
 		"@tailwindcss/forms": "^0.5.11",
 		"@vault/theme": "workspace:*",
-		"astro": "^7.1.1",
+		"astro": "^7.1.6",
 		"clsx": "^2.1.1",
 		"tailwind-merge": "^3.6.0",
 		"tailwind-variants": "^3.2.2"
 	},
 	"devDependencies": {
-		"@astrojs/check": "^0.9.9",
+		"@astrojs/check": "^0.9.10",
 		"@tailwindcss/vite": "^4",
 		"sharp": "^0.35.3",
 		"tailwindcss": "^4",
