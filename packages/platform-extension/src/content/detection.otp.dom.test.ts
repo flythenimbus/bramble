@@ -40,6 +40,21 @@ describe("otp: explicit tokens (strongest rung)", () => {
 			"d6",
 		]);
 	});
+
+	// Verbatim from vercel.com's email-code screen: the `input-otp` library that
+	// shadcn/ui ships, and the shape behind most React "six boxes" widgets. The
+	// boxes are painted divs; the real field is ONE transparent maxlength=6 input
+	// absolutely positioned over them. Worth pinning precisely because it looks
+	// segmented and isn't: a change that "fixes" segmented detection by splitting
+	// on appearance would break it, and the whole code belongs in this one field.
+	it("treats a painted-boxes widget as the single field it really is", () => {
+		const html =
+			'<div style="position:absolute;inset:0;pointer-events:none">' +
+			'<input id="a" autocomplete="one-time-code" aria-label="Verification code sent to x@example.com"' +
+			' data-1p-ignore="true" data-lpignore="true" data-input-otp="true" inputmode="numeric"' +
+			' maxlength="6" value="" name="digits"></div>';
+		expect(ids(html)).toEqual(["a"]);
+	});
 });
 
 describe("otp: attribute and label hints", () => {
@@ -47,9 +62,27 @@ describe("otp: attribute and label hints", () => {
 		expect(ids('<input id="a" name="otp" type="text">')).toEqual(["a"]);
 	});
 
-	it("finds Microsoft's name=otc", () => {
+	// Verbatim from login.live.com's code screen, the field issue #47 was filed
+	// about. Note there is no autocomplete attribute at all, so the token rung
+	// never fires; before the #47 work this field was invisible to us entirely.
+	// Three rungs claim it now: `otc` in name/id, "Code" plus maxlength=8, and
+	// type=tel plus maxlength=8. Any one of them alone would do.
+	const MICROSOFT_OTC =
+		'<input id="otc-confirmation-input" data-testid="otc-confirmation-input" name="otc"' +
+		' placeholder="Code" type="tel" maxlength="8" aria-label="Enter the code you received"' +
+		' aria-describedby="oneTimeCodeDescription" class="ext-input ext-text-box" value="">';
+
+	it("finds Microsoft's live code field", () => {
+		expect(ids(MICROSOFT_OTC)).toEqual(["otc-confirmation-input"]);
+	});
+
+	it("still finds it when the name is stripped, on shape alone", () => {
+		// maxlength=8 is the top of the code-length band; 9 would drop to the
+		// abbreviation rung only.
 		expect(
-			ids('<input id="a" name="otc" type="tel" placeholder="Code" autocomplete="off">'),
+			ids(
+				MICROSOFT_OTC.replace(' name="otc"', "").replace('id="otc-confirmation-input"', 'id="a"'),
+			),
 		).toEqual(["a"]);
 	});
 
