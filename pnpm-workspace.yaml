@@ -3,6 +3,7 @@ packages:
   - packages/core
   - packages/platform-extension
   - packages/platform-mobile
+  - packages/platform-desktop
   - website
   - nostr-relay/cf-worker
 

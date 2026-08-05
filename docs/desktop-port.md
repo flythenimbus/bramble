@@ -38,6 +38,42 @@ and is marked `[unverified]`. Do a research pass before committing to any of tho
   already syncs. Desktop becomes the only client that can *use* those keys, with no vault-format,
   sync, or importer change.
 
+## Implementation status (built so far, branch `feat/desktop`)
+
+**Phase 0 is done and the vertical slice is proven.** The app builds and boots on macOS, the
+React UI renders in WKWebView, and a frontend call reaches a Rust command and hits the
+filesystem. The sections below this one are the original forward-looking analysis (still
+accurate for the unbuilt parts); this section is the ground truth.
+
+- **`core-rust` as a plain cargo dependency: CONFIRMED.** The decisive bet works. A new
+  `native` feature (`native = ["dep:snow", "dep:k256"]`, with `ffi = ["native", "dep:uniffi"]`
+  layered on it) builds the crate with neither binding layer. The existing `ffi_exports`
+  module was widened to `any(ffi, native)` with `#[cfg_attr(feature = "ffi", uniffi::export)]`
+  rather than copied into a third block, so the struct-returning calls have one body. All
+  three feature configurations check clean and the 1296 existing tests still pass.
+- **`packages/platform-desktop`**: Vite + React SPA mirroring platform-mobile, plus `src-tauri`
+  scaffolded by the 2.11.4 CLI (tauri 2.11.3, tauri-build 2.6.3) so the config matches the
+  shipped schema rather than being hand-written.
+- **The VEK lives in the Rust process.** `src-tauri/src/crypto.rs` exposes 19 commands wrapping
+  `vault_crypto` directly. The core's structs already serialize camelCase, so results land in
+  the shapes `@core/adapters/crypto` declares with no mapping layer. `decryptEntries` batches
+  in Rust, so opening a vault is one IPC round trip rather than one per entry.
+- **Storage is native files** (`src-tauri/src/storage.rs`): temp-plus-rename atomic writes and
+  a `.bak` snapshot before every overwrite, which is stronger than the extension's backend.
+- **`flags.ts` widened.** `Target` gained `desktop`. `Surface` was renamed to `pointer`/`touch`,
+  because desktop is pointer-driven but needed its own capability axis regardless: `popOut` has
+  to be `false` on desktop despite being `true` for the other pointer target. So capabilities
+  now resolve through a separate `Family` (`extension` / `mobile` / `desktop`) and `Surface`
+  means input model only, which is what its doc comment always claimed.
+
+Not yet wired, and deliberately loud about it rather than silently broken: passkey provider and
+KDBX import (both sit behind private modules in core-rust that need a re-export), autofill of any
+kind, sync, and biometric unlock. The security-key slot commands *are* wired since they cost
+nothing, but `securityKeys` stays `false` for desktop because the webview cannot produce an
+hmac-secret.
+
+Run it with `pnpm run desktop:dev`.
+
 ## Why Tauri, and why the mobile Tauri rejection does not transfer
 
 Commit `ca82927d` switched the mobile plan from Tauri to Capacitor. That decision was specifically

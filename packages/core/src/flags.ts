@@ -21,55 +21,94 @@ export const flags: Flags = flagsJson;
 // Platform.target). Unlike the Rust-mirrored `flags` above, a value may vary by target; each entry
 // is a bare bool, { extension, mobile }, or { chromium, firefox, android, ios }. Methods stay on the adapter.
 
-export type Target = "chromium" | "firefox" | "android" | "ios";
-export type Surface = "extension" | "mobile";
+export type Target = "chromium" | "firefox" | "android" | "ios" | "desktop";
+/** Input model, and nothing else: hover affordances vs long-press. */
+export type Surface = "pointer" | "touch";
 
 const SURFACE: Record<Target, Surface> = {
+	chromium: "pointer",
+	firefox: "pointer",
+	android: "touch",
+	ios: "touch",
+	desktop: "pointer",
+};
+
+/**
+ * How a target is built and hosted. Most capabilities vary along this axis rather than the
+ * input one, which is why the two are separate: desktop is pointer-driven like the
+ * extension but shares almost none of its host APIs (no tabs, no popup, no offscreen).
+ */
+type Family = "extension" | "mobile" | "desktop";
+
+const FAMILY: Record<Target, Family> = {
 	chromium: "extension",
 	firefox: "extension",
 	android: "mobile",
 	ios: "mobile",
+	desktop: "desktop",
 };
 
-/** The surface a target renders on: `extension` is pointer-driven, `mobile` is touch. */
+/** The input model a target renders for. */
 export function surfaceOf(target: Target): Surface {
 	return SURFACE[target];
 }
 
 type Capability =
 	| boolean
-	| { extension: boolean; mobile: boolean }
-	| { chromium: boolean; firefox: boolean; android: boolean; ios: boolean };
+	| Record<Family, boolean>
+	| { chromium: boolean; firefox: boolean; android: boolean; ios: boolean; desktop: boolean };
 
 export const CAPABILITIES = {
-	popOut: { extension: true, mobile: false },
-	cameraScan: { extension: false, mobile: true },
-	// Not shipped on mobile yet.
-	cloudBackup: { extension: true, mobile: false },
+	// Desktop is already a window, so there is nothing to detach into.
+	popOut: { extension: true, mobile: false, desktop: false },
+	// Desktop webcams exist, but webview camera access is inconsistent across the three
+	// engines; pairing codes are pasted instead. See docs/desktop-port.md.
+	cameraScan: { extension: false, mobile: true, desktop: false },
+	// Not shipped on mobile yet. Desktop is the natural host (an always-on machine) but
+	// needs `connectBackupOAuth` on its shell adapter first.
+	cloudBackup: { extension: true, mobile: false, desktop: false },
 	// Firefox's moz-extension origin is rejected as a WebAuthn RP; mobile has no `prf`.
-	securityKeys: { chromium: true, firefox: false, android: false, ios: false },
-	// Corner-prompt / Android autofill save; no iOS save surface.
-	saveCapture: { chromium: true, firefox: true, android: true, ios: false },
+	// Desktop webviews have no usable WebAuthn at all, so it waits on a native CTAP path.
+	securityKeys: { chromium: true, firefox: false, android: false, ios: false, desktop: false },
+	// Corner-prompt / Android autofill save; no iOS save surface. Desktop has no page of
+	// its own to capture from; the extension keeps doing this even once the two are paired.
+	saveCapture: { chromium: true, firefox: true, android: true, ios: false, desktop: false },
 	// In-app runtime toggle for the passkey provider (extension only; mobile's provider is OS-managed).
-	passkeyProviderToggle: { chromium: true, firefox: true, android: false, ios: false },
+	passkeyProviderToggle: {
+		chromium: true,
+		firefox: true,
+		android: false,
+		ios: false,
+		desktop: false,
+	},
 	// OS-driven credential exchange (FIDO CXP): app-to-app transfer of logins and passkeys with
 	// no file in between. iOS 26+ only. Android's routing lives in Google Play services, which
 	// we don't ship; the extension has no such API. See docs/credential-exchange.md.
-	credentialExchange: { chromium: false, firefox: false, android: false, ios: true },
+	credentialExchange: {
+		chromium: false,
+		firefox: false,
+		android: false,
+		ios: true,
+		desktop: false,
+	},
 	// Filter the file picker by extension. Extension only: the native document pickers on
 	// Android and iOS match on MIME type and grey out extensions they can't map, which is every
 	// container format we read (.1pux, .kdbx, .bramble). Mobile omits `accept` so the file is
 	// selectable at all. See github issue #36.
-	filePickerAcceptFilter: { extension: true, mobile: false },
+	// Desktop's native dialogs filter by extension properly, unlike the mobile pickers.
+	filePickerAcceptFilter: { extension: true, mobile: false, desktop: true },
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
-	lockOnScreenLock: { extension: true, mobile: false },
+	// Desktop OSes emit a real screen-lock signal, but nothing subscribes to it yet.
+	lockOnScreenLock: { extension: true, mobile: false, desktop: false },
 	// SIMULTANEOUS multi-vault sync: several vaults each syncing on their own connection at once.
 	// Extension only. Mobile is single-active - its sync-manager targets the active vault's namespaced
 	// keys, and only the vault you're in syncs. This flag no longer gates any UI (join + per-vault
 	// biometric/autofill have landed on mobile); it just describes that capability difference. The
 	// remaining mobile Tier 2 is searching all vaults in autofill at once. See docs/multiple-vaults.md.
-	perVaultSync: { extension: true, mobile: false },
+	// Desktop is single-active like mobile: the spotlight bar and the app both search the
+	// one unlocked vault, which is a settled product decision, not a gap.
+	perVaultSync: { extension: true, mobile: false, desktop: false },
 } satisfies Record<string, Capability>;
 
 export type CapabilityKey = keyof typeof CAPABILITIES;
@@ -78,5 +117,5 @@ export type CapabilityKey = keyof typeof CAPABILITIES;
 export function can(cap: CapabilityKey, target: Target): boolean {
 	const v = CAPABILITIES[cap];
 	if (typeof v === "boolean") return v;
-	return "chromium" in v ? v[target] : v[SURFACE[target]];
+	return "chromium" in v ? v[target] : v[FAMILY[target]];
 }

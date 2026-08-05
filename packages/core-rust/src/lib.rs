@@ -32,22 +32,37 @@ use wasm_bindgen::prelude::*;
 
 type HmacSha256 = Hmac<Sha256>;
 
+// The `allow(dead_code)` on the modules below is scoped to the desktop build (`native`
+// without `ffi`): they compile there, but the shell has no caller yet and neither binding
+// layer's attributes are present to make them reachable, so every function reads as dead.
+// The wasm and ffi builds keep full dead-code linting. Drop each allow as the desktop app
+// grows into that module. See docs/desktop-port.md.
+
 // KDBX4 import compiles into both layers: import runs in the main app, which uses
 // native crypto under Lockdown Mode, so `open_kdbx4` is on the FFI surface too.
+#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod kdbx;
 // Passkey authenticator (provider role): mint/assert WebAuthn credentials for other
 // sites. Pure + sync, compiled into both layers. See docs/passkey-provider.md.
+#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod passkey;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
+#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod roster_sig;
 // Build-time feature flags, generated from packages/core/src/flags.json (one source shared with TS).
 mod flags;
-// Sync handshake/nostr compile into both layers: device sync must run natively so it
-// works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding.
-#[cfg(any(feature = "wasm", feature = "ffi"))]
+// Sync handshake/nostr compile into every layer: device sync must run natively so it
+// works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding; the
+// desktop build takes them bare via `native` (which `ffi` implies).
+// The desktop build (`native` without `ffi`) compiles these but has no caller until its
+// sync hub lands, and neither binding layer's attributes are there to make them reachable.
+// Drop the allow once the hub consumes them. See docs/desktop-port.md phase 3.
+#[cfg(any(feature = "wasm", feature = "native"))]
+#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod handshake;
-#[cfg(any(feature = "wasm", feature = "ffi"))]
+#[cfg(any(feature = "wasm", feature = "native"))]
+#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod nostr;
 // Native WebRTC data channel: iOS only (its WKWebView on capacitor:// has no
 // RTCPeerConnection). Pure-Rust webrtc-rs behind uniffi; gated by `webrtc` (which
@@ -714,14 +729,20 @@ mod wasm_exports {
     }
 }
 
-// ---- FFI binding layer (uniffi -> Swift + Kotlin) ----
-// The struct-returning calls hand back the record directly (no JS-value hop).
-#[cfg(feature = "ffi")]
+// ---- Native binding layer (uniffi -> Swift + Kotlin; plain Rust for the desktop app) ----
+// The struct-returning calls hand back the record directly (no JS-value hop), which is
+// what the desktop build wants too: it links the crate as an ordinary cargo dependency
+// and calls these directly, so uniffi's attribute is conditional and the bodies are
+// shared rather than copied into a third block. See docs/desktop-port.md.
+#[cfg(any(feature = "ffi", feature = "native"))]
+pub use ffi_exports::*;
+
+#[cfg(any(feature = "ffi", feature = "native"))]
 mod ffi_exports {
     use super::*;
 
     /// Wrap the in-memory VEK under a KEK derived from `password` + `salt`.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn wrap_vek_password(
         password: String,
         salt_b64: String,
@@ -732,7 +753,7 @@ mod ffi_exports {
     }
 
     /// Wrap the in-memory VEK under a KEK derived from an authenticator hmac-secret.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn wrap_vek_webauthn(
         hmac_secret_b64: String,
         slot_id_b64: String,
@@ -742,19 +763,19 @@ mod ffi_exports {
     }
 
     /// Encrypt an entry: random DEK encrypts the plaintext, VEK wraps the DEK.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn encrypt_entry(plaintext_json: String) -> Result<EncryptedPayload, CryptoError> {
         encrypt_entry_core(&plaintext_json)
     }
 
     /// Encrypt plaintext directly under the VEK (no per-item DEK).
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn encrypt_with_vek(plaintext: String) -> Result<MasterEncrypted, CryptoError> {
         encrypt_with_vek_core(&plaintext)
     }
 
     /// Seal entries into a portable vault under a fresh, file-only key.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn seal_portable_vault(
         entries_json: String,
         password: String,
@@ -764,7 +785,7 @@ mod ffi_exports {
     }
 
     /// Open a portable vault. Returns the entries JSON, or None for a wrong password.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn open_portable_vault(
         password: String,
         file: PortableVault,
@@ -774,7 +795,7 @@ mod ffi_exports {
     }
 
     /// Mint a passkey (provider role) for `rp_id`.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn passkey_make_credential(
         rp_id: String,
         user_verified: bool,
@@ -783,7 +804,7 @@ mod ffi_exports {
     }
 
     /// Convert a standard-base64 P-256 PKCS#8 private key into stored key material.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn passkey_import_pkcs8(
         pkcs8_b64: String,
     ) -> Result<crate::passkey::PasskeyImportResult, CryptoError> {
@@ -791,7 +812,7 @@ mod ffi_exports {
     }
 
     /// Assert a stored passkey: sign authenticatorData || clientDataHash with its key.
-    #[uniffi::export]
+    #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn passkey_get_assertion(
         rp_id: String,
         private_key_b64: String,

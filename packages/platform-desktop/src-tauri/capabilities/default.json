@@ -1,0 +1,14 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "Permissions the main vault window needs. Commands defined by this crate (crypto_*, storage_*) are not gated here; only plugin surfaces are.",
+	"windows": ["main"],
+	"permissions": [
+		"core:default",
+		"clipboard-manager:allow-write-text",
+		"clipboard-manager:allow-read-text",
+		"clipboard-manager:allow-clear",
+		"dialog:allow-save",
+		"opener:allow-open-url"
+	]
+}

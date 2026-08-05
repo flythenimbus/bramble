@@ -70,7 +70,7 @@ export function EntryRow({
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
 	// Touch has no hover, so the row's controls can't hide behind it.
-	const touch = useSurface() === "mobile";
+	const touch = useSurface() === "touch";
 	const [copyOpen, setCopyOpen] = useState(false);
 	const [moreOpen, setMoreOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);

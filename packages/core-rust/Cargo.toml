@@ -30,10 +30,15 @@ wasm = [
     "dep:snow",
     "dep:k256",
 ]
+# Binding-free native build: the desktop app (Tauri) links this crate as an ordinary
+# cargo dependency and calls the functions directly, so it wants the sync modules with
+# neither binding layer's attributes. Carries snow/k256 for handshake + nostr; `ffi`
+# builds on it rather than duplicating the list. See docs/desktop-port.md.
+native = ["dep:snow", "dep:k256"]
 # Native FFI binding layer: uniffi -> Swift + Kotlin for the iOS autofill credential
-# provider and Lockdown-Mode-safe (JIT-free) main-app crypto. Carries snow/k256 too so
-# sync handshake + nostr run natively on device (no WASM under Lockdown Mode).
-ffi = ["dep:uniffi", "dep:snow", "dep:k256"]
+# provider and Lockdown-Mode-safe (JIT-free) main-app crypto. Inherits snow/k256 from
+# `native` so sync handshake + nostr run natively on device (no WASM under Lockdown Mode).
+ffi = ["native", "dep:uniffi"]
 # Native WebRTC data channel (iOS only): iOS WKWebView on the capacitor:// scheme has
 # no RTCPeerConnection, so the P2P sync transport runs on the pure-Rust `webrtc` crate
 # behind a uniffi bridge + a JS shim. Implies ffi (the exports are uniffi). Excluded from

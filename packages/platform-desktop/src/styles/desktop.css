@@ -1,0 +1,21 @@
+/* Desktop-only chrome. @core/styles/index.css carries the shared theme and tokens. */
+
+/* The extension's popup is a fixed 800x600-ish surface; a desktop window is resizable, so
+   the app fills it and @core's own layout handles the width. */
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+/* Native apps don't let you drag-select the whole UI. Inputs and secrets stay selectable. */
+body {
+	user-select: none;
+}
+
+input,
+textarea,
+[data-selectable] {
+	user-select: text;
+}
