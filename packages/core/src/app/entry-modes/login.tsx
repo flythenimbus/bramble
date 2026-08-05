@@ -30,7 +30,7 @@ import type {
 	PasswordChange,
 } from "../../hooks/useVault";
 import { formatDate, formatDateTimeExact } from "../../util/format-date";
-import { parseTotp, totpAt } from "../../util/totp";
+import { classifyScannedQr, parseTotp, type QrScanFailure, totpAt } from "../../util/totp";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
@@ -55,6 +55,12 @@ interface LoginFormValues {
 	 * save never drops them. Minted by the provider, not added from this form. */
 	passkeys: PasskeyCredential[];
 }
+
+/** QR-scan state. `failed` carries why, so the hint can say what actually happened. */
+type TotpScanState =
+	| { kind: "idle" }
+	| { kind: "scanning" }
+	| { kind: "failed"; failure: QrScanFailure; vendor?: string };
 
 /** Generate a 16-char password by unbiased rejection sampling over the charset. */
 function randomPassword(): string {
@@ -86,7 +92,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		remove: removeUrl,
 	} = useFieldArray({ control, name: "urls" });
 	const [advancedOpen, setAdvancedOpen] = useState(false);
-	const [totpScan, setTotpScan] = useState<"idle" | "scanning" | "error">("idle");
+	const [totpScan, setTotpScan] = useState<TotpScanState>({ kind: "idle" });
 	const [showTotp, setShowTotp] = useState(false);
 	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
 	const [initialPassword] = useState(() => getValues("password"));
@@ -112,17 +118,35 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 
 	// Accept a scanned QR only if it parses as a usable TOTP, so a stray QR can't land a junk key.
 	const scanTotp = async () => {
-		setTotpScan("scanning");
+		setTotpScan({ kind: "scanning" });
 		try {
-			const decoded = await shell.scanQrFromActiveTab();
-			if (decoded && parseTotp(decoded)) {
-				setValue("totp", decoded.trim(), { shouldDirty: true });
-				setTotpScan("idle");
+			const { uri, failure, vendor } = classifyScannedQr(await shell.scanQrFromActiveTab());
+			if (uri) {
+				setValue("totp", uri, { shouldDirty: true });
+				setTotpScan({ kind: "idle" });
 			} else {
-				setTotpScan("error");
+				setTotpScan({ kind: "failed", failure: failure ?? "not-totp", vendor });
 			}
 		} catch {
-			setTotpScan("error");
+			setTotpScan({ kind: "failed", failure: "not-found" });
+		}
+	};
+
+	const scanHint = () => {
+		if (totpScan.kind !== "failed") {
+			return t`Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key.`;
+		}
+		switch (totpScan.failure) {
+			case "vendor-app":
+				// The whole point of naming the app: the way out is a link the site
+				// hides behind "Can't scan?" or similar, and nobody finds it by guessing.
+				return t`That QR sets up ${totpScan.vendor ?? "another authenticator app"}, so it holds no key to save. On the site, choose to use a different authenticator app, then scan the code it offers.`;
+			case "migration":
+				return t`That QR is an authenticator export holding several accounts, not a setup code. Add each account from its own site instead.`;
+			case "not-totp":
+				return t`A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key.`;
+			default:
+				return t`No QR code found on the page. Make sure it's visible, then retry, or paste the setup key.`;
 		}
 	};
 
@@ -274,12 +298,12 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 								variant="ghost"
 								size="none"
 								onClick={scanTotp}
-								disabled={totpScan === "scanning"}
+								disabled={totpScan.kind === "scanning"}
 								className="p-1.5 rounded-md"
 								aria-label={t`Scan QR code from current webpage`}
 								title={t`Scan authenticator QR code from current webpage`}
 							>
-								{totpScan === "scanning" ? (
+								{totpScan.kind === "scanning" ? (
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
 								) : (
 									<Camera className="w-3.5 h-3.5" />
@@ -300,12 +324,10 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				/>
 				<p
 					className={`text-xs mt-1.5 ${
-						totpScan === "error" ? "text-destructive" : "text-muted-foreground"
+						totpScan.kind === "failed" ? "text-destructive" : "text-muted-foreground"
 					}`}
 				>
-					{totpScan === "error"
-						? t`No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key.`
-						: t`Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key.`}
+					{scanHint()}
 				</p>
 			</div>
 

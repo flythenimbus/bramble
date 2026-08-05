@@ -113,6 +113,10 @@ msgstr "Un appareil s'est connecté avec votre code d'appairage. Vérifiez qu'il
 msgid "A one-time backup code that unlocks your vault if you're locked out."
 msgstr "Code de sauvegarde unique qui déverrouille votre coffre en cas de blocage."
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key."
+msgstr "Un code QR a été trouvé, mais ce n'est pas un code de configuration d'authentificateur. Ouvrez la page 2FA du site ou collez la clé de configuration."
+
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "About"
@@ -1187,8 +1191,8 @@ msgid "New password"
 msgstr "Nouveau mot de passe"
 
 #: packages/core/src/app/entry-modes/login.tsx
-msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
-msgstr "Aucun code QR d'authentificateur trouvé sur la page. Assurez-vous qu'il est visible, puis réessayez ou collez la clé de configuration."
+#~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
+#~ msgstr "Aucun code QR d'authentificateur trouvé sur la page. Assurez-vous qu'il est visible, puis réessayez ou collez la clé de configuration."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "No importable items were found in this database."
@@ -1205,6 +1209,10 @@ msgstr "Aucun élément trouvé correspondant à votre recherche."
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "No QR code detected. Try again, or paste the code."
 msgstr "Aucun code QR détecté. Réessayez ou collez le code."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "No QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
+msgstr "Aucun code QR trouvé sur la page. Assurez-vous qu'il est visible, puis réessayez, ou collez la clé de configuration."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "No recovery code yet. Generate one as a backup way in."
@@ -1897,6 +1905,15 @@ msgstr "Ce mot de passe n’a pas permis d’ouvrir le fichier."
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "That password is incorrect."
 msgstr "Ce mot de passe est incorrect."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "That QR is an authenticator export holding several accounts, not a setup code. Add each account from its own site instead."
+msgstr "Ce QR est un export d'authentificateur contenant plusieurs comptes, pas un code de configuration. Ajoutez chaque compte depuis son propre site."
+
+#. placeholder {0}: totpScan.vendor ?? "another authenticator app"
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "That QR sets up {0}, so it holds no key to save. On the site, choose to use a different authenticator app, then scan the code it offers."
+msgstr "Ce QR configure {0} et ne contient donc aucune clé à enregistrer. Sur le site, choisissez d'utiliser une autre application d'authentification, puis scannez le code proposé."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "That transfer didn't contain anything we could import."
