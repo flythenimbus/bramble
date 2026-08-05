@@ -9,6 +9,7 @@ import type {
 } from "@core/adapters/autofill";
 import { decodeEntriesPayload } from "@core/sync";
 import { parseTotp, totpAt } from "@core/util/totp";
+import { extractHostname } from "@core/vault/autofill-index";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
 import {
 	type DedupeOutcome,
@@ -232,15 +233,13 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 			const projectedCustomFields =
 				customFields && customFields.length > 0 ? customFields : undefined;
 			if (data.type === "login") {
-				const hostnames: string[] = [];
-				for (const u of data.urls) {
-					if (!u) continue;
-					try {
-						hostnames.push(new URL(u).hostname);
-					} catch {
-						hostnames.push(u);
-					}
-				}
+				// Shares extractHostname with the popup's projection so the two can't
+				// drift; in particular both must drop app URIs rather than index a
+				// package name as a hostname.
+				const hostnames = data.urls
+					.filter((u): u is string => !!u)
+					.map(extractHostname)
+					.filter((h) => h.length > 0);
 				newIndex.set(enc.id, {
 					type: "login",
 					id: enc.id,

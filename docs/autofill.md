@@ -37,6 +37,53 @@ The query hostname is derived from the **verified message sender**
 (`sender.origin` / `sender.url` / `sender.tab.url`), not from the message body, so
 a content script cannot request matches for a different domain.
 
+### App URIs are not web hosts
+
+An entry's URL list can contain identifiers for a mobile app rather than a
+website. Bramble never writes these, but importers carry them through verbatim:
+`androidapp://com.example` is Bitwarden's convention, `android://<cert-hash>@com.example`
+is Google Password Manager's. `isAppUri` recognises them and `extractHostname`
+returns empty for them, so they stay out of the match index and out of the
+persisted known-hostname registry.
+
+Before that, the package name was indexed as if it were a hostname:
+`androidapp://se.skanetrafiken.washington` became the "host"
+`se.skanetrafiken.washington`, which `registrableDomain` reduced to
+`skanetrafiken.washington`. That could never match a page, but it was stored,
+persisted and counted toward the locked-state "you probably have a login here"
+hint (issue #46).
+
+### Why a package name is never turned into a domain
+
+Reversing a package name looks like it would fix cross-platform matching:
+`se.skanetrafiken.washington` reverses to `washington.skanetrafiken.se`, whose
+registrable domain is `skanetrafiken.se`, which is correct here. It is not sound.
+`com.google.android.youtube` reverses to `google.com`, not `youtube.com`, and
+nothing stops an app from choosing a package name in someone else's namespace.
+
+Android already declines the equivalent inference in the other direction, with a
+written rationale in `StructureParser.kt`: `webDomain` is attacker-controllable
+and the package name is not a web identity, so a non-browser caller gets no
+host-based auto-match at all and the user opens the full searchable list instead.
+Deriving domains from packages in the extension would put the browser in the
+position of trusting a binding the mobile app refuses to trust.
+
+Digital Asset Links (`https://<domain>/.well-known/assetlinks.json`) is the
+standard way to make the binding authoritative, and was considered and rejected
+for now: it needs a network fetch per domain from the extension, which leaks
+which sites the user holds entries for, and it exists to enable *silent*
+matching, which is the part Android declined.
+
+### Planned: offer the link instead of inferring it
+
+Not built. When an entry holds an app URI whose reversed package resolves to a
+real registrable domain, the entry editor should offer to add that website —
+"this entry came from an Android app that looks like skanetrafiken.se, add it?"
+— rather than matching on it silently. One click writes an ordinary `https://`
+URL and the existing matcher takes over, with no new matching path, no network
+call, and the guess visible to the person who can confirm it. `appIdFromUri`
+exists for this and has no other caller.
+
 ## The fill model: secrets fetched only on explicit pick
 
 A single login match does **not** auto-inject the password on page load. Doing so
