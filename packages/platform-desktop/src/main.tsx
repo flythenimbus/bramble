@@ -1,7 +1,7 @@
 import { App, OptionsApp, type OptionsScreen, type Platform, PlatformProvider } from "@core/index";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import "@core/styles/index.css";
+import "./styles/index.css";
 import "./styles/desktop.css";
 import { desktopAutofill } from "./adapters/autofill";
 import { desktopClipboard } from "./adapters/clipboard";

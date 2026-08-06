@@ -96,6 +96,7 @@ pub fn run() {
             storage::storage_remove_meta,
             storage::shell_export_bytes,
             spotlight::spotlight_hide,
+            spotlight::spotlight_set_height,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

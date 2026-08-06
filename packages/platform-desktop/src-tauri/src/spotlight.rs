@@ -8,7 +8,23 @@
 //! from launch; this module gives it the parts config cannot express: the native blur behind
 //! the webview, the hotkey that toggles it, and dismissal on focus loss.
 
-use tauri::{AppHandle, LogicalPosition, Manager, WebviewWindow};
+use std::sync::Mutex;
+
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
+
+/// Where the panel's top-left was placed when it opened. The panel grows downward as results
+/// appear, so the anchor has to survive a resize: macOS measures a window from its bottom-left
+/// corner, and letting height changes push the top around would make the search field move
+/// under the user mid-keystroke.
+static ANCHOR: Mutex<Option<(f64, f64)>> = Mutex::new(None);
+
+/// Height of the search row on its own, matching the `h-16` header in spotlight.tsx. What the
+/// panel collapses to when there is nothing to show. Kept in step with that class by hand: if
+/// it drifts low the panel opens short and jumps once the webview measures itself.
+const COLLAPSED_HEIGHT: f64 = 64.0;
+
+/// Never let the panel outgrow this, however many results match.
+const MAX_HEIGHT: f64 = 460.0;
 
 /// Must match the window label in tauri.conf.json.
 pub const LABEL: &str = "spotlight";
@@ -65,6 +81,14 @@ pub fn toggle(app: &AppHandle) {
         let _ = window.hide();
         return;
     }
+    // Open collapsed. The webview clears its query on focus and will ask to grow if anything
+    // matches; starting at the last size would flash an empty results area first.
+    if let Ok(scale) = window.scale_factor() {
+        if let Ok(size) = window.outer_size() {
+            let width = size.to_logical::<f64>(scale).width;
+            let _ = window.set_size(LogicalSize::new(width, COLLAPSED_HEIGHT));
+        }
+    }
     position(app, &window);
     let _ = window.show();
     let _ = window.set_focus();
@@ -93,11 +117,15 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
     let work = area.size.to_logical::<f64>(scale);
     let panel = size.to_logical::<f64>(scale);
 
-    let _ = window.set_position(LogicalPosition::new(
-        origin.x + (work.width - panel.width) / 2.0,
-        // Golden-ish rather than centred: sits where the eye already is.
-        origin.y + (work.height - panel.height) * 0.28,
-    ));
+    let x = origin.x + (work.width - panel.width) / 2.0;
+    // Golden-ish rather than centred: sits where the eye already is.
+    let y = origin.y + (work.height - panel.height) * 0.28;
+    log::info!(
+        "spotlight position: cursor=({:.0},{:.0}) work={:.0}x{:.0}@({:.0},{:.0}) panel={:.0}x{:.0} -> ({:.0},{:.0})",
+        cursor.x, cursor.y, work.width, work.height, origin.x, origin.y, panel.width, panel.height, x, y
+    );
+    *ANCHOR.lock().unwrap() = Some((x, y));
+    let _ = window.set_position(LogicalPosition::new(x, y));
 }
 
 pub fn hide(app: &AppHandle) {
@@ -111,4 +139,36 @@ pub fn hide(app: &AppHandle) {
 #[tauri::command]
 pub fn spotlight_hide(app: AppHandle) {
     hide(&app);
+}
+
+/// Track the content height, so the panel is a bare search field until there is something to
+/// show and grows only as far as it needs.
+///
+/// This is the content-fitting the main window deliberately does not do, and the difference
+/// is not inconsistency. A vault window that moves under you is wrong; a launcher that does
+/// not is broken, because an empty results area is dead space the user has to look past.
+/// The content here is also bounded and deterministic, which is what made it unworkable on
+/// the main window's internally-scrolling screens.
+#[tauri::command]
+pub fn spotlight_set_height(app: AppHandle, height: f64) {
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    let target = height.clamp(COLLAPSED_HEIGHT, MAX_HEIGHT);
+    let Ok(scale) = window.scale_factor() else {
+        return;
+    };
+    let current = match window.outer_size() {
+        Ok(size) => size.to_logical::<f64>(scale),
+        Err(_) => return,
+    };
+    if (current.height - target).abs() < 1.0 {
+        return;
+    }
+    let _ = window.set_size(LogicalSize::new(current.width, target));
+    // Re-pin the top-left. Without this the panel appears to crawl up the screen as it
+    // grows, because the origin macOS keeps fixed is the opposite corner.
+    if let Some((x, y)) = *ANCHOR.lock().unwrap() {
+        let _ = window.set_position(LogicalPosition::new(x, y));
+    }
 }

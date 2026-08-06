@@ -1,0 +1,19 @@
+/*
+ * Tailwind entry for the desktop build.
+ *
+ * This file exists for one reason. @core's tailwind.css declares `@import 'tailwindcss'
+ * source(none)` with a single `@source` scoped to packages/core, so Tailwind only ever scans
+ * core for class names. Any utility used in THIS package that core does not also happen to
+ * use is silently not generated: the class lands in the DOM, matches no rule, and does
+ * nothing. It fails quietly, which is the worst way for a style to fail.
+ *
+ * The extension and mobile never noticed because their own tsx files are thin mounts whose
+ * classes all exist in core anyway. The desktop package is the first with markup of its own
+ * (the spotlight panel), so it is the first to need its own source glob.
+ *
+ * Imported rather than aliased so the whole thing is one Tailwind compilation and the
+ * `@source` below participates in it.
+ */
+
+@import "../../../core/src/styles/index.css";
+@source '../**/*.{js,ts,jsx,tsx}';

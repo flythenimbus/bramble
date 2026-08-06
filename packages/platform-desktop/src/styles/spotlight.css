@@ -7,10 +7,15 @@
  * view's own corner radius (see spotlight.rs), not from CSS, for the same reason.
  */
 
+/*
+ * Deliberately no height here. The window tracks the panel's content (see
+ * spotlight_set_height), so the content must be free to have an intrinsic height for there
+ * to be anything to measure. Pinning these to 100% would make the measurement circular:
+ * the content would report exactly the window height whatever was inside it.
+ */
 html,
 body,
 #root {
-	height: 100%;
 	margin: 0;
 	background: transparent;
 }
