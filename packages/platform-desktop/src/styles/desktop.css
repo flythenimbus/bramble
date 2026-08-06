@@ -18,6 +18,19 @@ body {
 	margin: 0;
 }
 
+/*
+ * Let the single-column screens fill the window. Auth, VaultPicker and ErrorBoundary cap
+ * their column at max-w-md (448) because the extension popup is 500 wide, which on a 600
+ * window just leaves dead margin either side.
+ *
+ * The `:not([role="dialog"])` is load-bearing rather than defensive: modal.tsx builds its
+ * panel with the same max-w-md, and three call sites pass `className="max-w-md"` into it, so
+ * without the guard this would stretch every dialog in the app to the full window too.
+ */
+#root .max-w-md:not([role="dialog"]) {
+	max-width: none;
+}
+
 /* Native apps don't let you drag-select the whole UI. Inputs and secrets stay selectable. */
 body {
 	user-select: none;
