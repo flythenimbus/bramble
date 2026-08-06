@@ -29,3 +29,8 @@ log = "0.4"
 # carries snow/k256 for the sync modules. This is what keeps the VEK in this process
 # rather than in the webview. See docs/desktop-port.md.
 vault-crypto = { path = "../../core-rust", default-features = false, features = ["native"] }
+
+[dev-dependencies]
+# Each storage test gets its own data dir, so they can run in parallel and clean up after
+# themselves. The suite writes real files: the code under test is the filesystem behaviour.
+tempfile = "3"
