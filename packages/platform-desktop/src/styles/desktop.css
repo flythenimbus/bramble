@@ -1,11 +1,20 @@
-/* Desktop-only chrome. @core/styles/index.css carries the shared theme and tokens. */
+/*
+ * Desktop-only chrome, loaded after @core styles so these win. Applies to the desktop
+ * build only (imported from main.tsx); the extension and mobile are unaffected.
+ *
+ * @core deliberately sets no page width: App.tsx is just a router, and the host owns its
+ * dimensions. The extension pins its popup in popup.html (500x550) and mobile takes the
+ * viewport, so desktop does it here plus the window size in tauri.conf.json.
+ */
 
-/* The extension's popup is a fixed 800x600-ish surface; a desktop window is resizable, so
-   the app fills it and @core's own layout handles the width. */
+/*
+ * Deliberately no `height: 100%` chain. @core's shells size themselves against the viewport
+ * (`h-screen` on AppLayout and Auth, `min-h-screen` on OptionsApp), so one buys nothing here.
+ * No width cap either: the window is a fixed 600x580 and cannot be resized, so there is no
+ * maximised case to defend against.
+ */
 html,
-body,
-#root {
-	height: 100%;
+body {
 	margin: 0;
 }
 

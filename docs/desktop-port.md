@@ -72,7 +72,22 @@ kind, sync, and biometric unlock. The security-key slot commands *are* wired sin
 nothing, but `securityKeys` stays `false` for desktop because the webview cannot produce an
 hmac-secret.
 
-Run it with `pnpm run desktop:dev`.
+Run it with `pnpm dev:desktop`. `build:desktop` bundles it, `test:desktop` runs the shell's
+cargo tests.
+
+The window is a fixed, non-resizable 600x580, in the same spirit as the extension's
+500x550 popup. An earlier attempt sized it to each screen's content and was dropped: the
+measurement is genuinely awkward (@core's screens are fixed-height boxes that scroll
+internally, so neither `documentElement.scrollHeight` nor the scroller's own `scrollHeight`
+reports the content height), and even working it made the window move about under the user.
+A fixed window is the better fit for a UI that is popup-dimensioned anyway.
+
+**Debugging note.** `console.log` from the webview does not reach the `tauri dev` terminal,
+and both `osascript` and Quartz window queries need Accessibility permission the terminal will
+not have. The way to get diagnostics out is `@tauri-apps/plugin-log` (the Rust half is already
+registered for debug builds) plus `"log:default"` in `capabilities/default.json`; `info()` then
+prints to the dev terminal. Worth re-adding for the duration of a debugging session and
+removing afterwards.
 
 ## Why Tauri, and why the mobile Tauri rejection does not transfer
 
