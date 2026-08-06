@@ -5,7 +5,11 @@
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
 mod crypto;
+mod spotlight;
 mod storage;
+
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 /// Version of the shared Rust crypto core this binary linked. Exists to prove the
 /// core-rust-as-a-cargo-dependency path end to end, which is the bet Tauri was picked on;
@@ -29,7 +33,36 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Registered here rather than in the builder chain because with_shortcuts is
+            // fallible and setup is where a `?` has somewhere to go.
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_shortcuts([spotlight::HOTKEY])?
+                    .with_handler(|app, _shortcut, event| {
+                        // Fires on press AND release; acting on both would toggle twice and
+                        // leave the panel exactly as it was.
+                        if event.state() == ShortcutState::Pressed {
+                            spotlight::toggle(app);
+                        }
+                    })
+                    .build(),
+            )?;
+
+            if let Some(window) = app.get_webview_window(spotlight::LABEL) {
+                spotlight::apply_backdrop(&window);
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // A quick-access panel that outlives the user's attention is clutter, and on
+            // macOS an always-on-top window with no dock entry is awkward to dismiss any
+            // other way.
+            if window.label() == spotlight::LABEL {
+                if let WindowEvent::Focused(false) = event {
+                    spotlight::hide(&window.app_handle().clone());
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             core_version,
@@ -62,6 +95,7 @@ pub fn run() {
             storage::storage_set_meta,
             storage::storage_remove_meta,
             storage::shell_export_bytes,
+            spotlight::spotlight_hide,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

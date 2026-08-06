@@ -29,5 +29,14 @@ export default defineConfig({
 	build: {
 		outDir: "dist",
 		emptyOutDir: true,
+		rollupOptions: {
+			// Two documents in one bundle: the main vault window and the quick-access panel.
+			// They are separate entries rather than routes because they are separate OS
+			// windows, and the panel must not carry the whole app's boot cost to open.
+			input: {
+				main: resolve(__dirname, "index.html"),
+				spotlight: resolve(__dirname, "spotlight.html"),
+			},
+		},
 	},
 });

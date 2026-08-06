@@ -1,0 +1,27 @@
+/*
+ * The quick-access panel. Loaded after @core styles so these win.
+ *
+ * The window is transparent so the native blur behind the webview shows through, which means
+ * the page itself must paint nothing: any background colour here would sit on top of the
+ * NSVisualEffectView and hide the effect entirely. The rounded corners come from the blur
+ * view's own corner radius (see spotlight.rs), not from CSS, for the same reason.
+ */
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+	background: transparent;
+}
+
+body {
+	/* A floating panel has nothing worth drag-selecting, and a stray selection highlight
+	   over the blur looks like a rendering fault. The search field opts back in. */
+	user-select: none;
+	overflow: hidden;
+}
+
+input {
+	user-select: text;
+}

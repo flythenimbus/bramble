@@ -1,0 +1,11 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "spotlight",
+	"description": "Permissions the quick-access panel needs. Separate from the main window's capability because this one is deliberately narrow: the panel is always-on-top and always alive, so it gets the smallest surface that still lets it dismiss itself and copy a credential. Commands defined by this crate are not gated here; only plugin surfaces are.",
+	"windows": ["spotlight"],
+	"permissions": [
+		"core:default",
+		"clipboard-manager:allow-write-text",
+		"clipboard-manager:allow-clear"
+	]
+}

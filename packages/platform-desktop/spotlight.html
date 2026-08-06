@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Forced dark: the panel sits on the macOS HudWindow material, which is dark in both
+     system appearances, so following the light theme would put dark text on a dark blur.
+     `theme-ready` is not decoration: @vault/theme paints an opaque anti-flash background on
+     html and body until it is present, and `html:not(.theme-ready)` outspecifies a plain
+     `html` rule, so without it the panel stays opaque and hides the blur behind it. The
+     class means "the theme is settled", which for a window hardcoded to dark is true at
+     parse time. -->
+<html lang="en" class="dark theme-ready">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="color-scheme" content="dark" />
+		<title>Bramble Quick Access</title>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/spotlight.tsx"></script>
+	</body>
+</html>

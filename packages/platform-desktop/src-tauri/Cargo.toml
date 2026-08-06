@@ -15,7 +15,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.3", features = [] }
+# macos-private-api is what allows a transparent window, which the spotlight panel needs so
+# the native blur behind its webview shows through. It rules out the Mac App Store; Bramble
+# ships direct downloads, so that is not a channel being given up. See docs/desktop-port.md.
+tauri = { version = "2.11.3", features = ["macos-private-api"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -29,6 +32,14 @@ log = "0.4"
 # carries snow/k256 for the sync modules. This is what keeps the VEK in this process
 # rather than in the webview. See docs/desktop-port.md.
 vault-crypto = { path = "../../core-rust", default-features = false, features = ["native"] }
+# The spotlight window's backdrop blur. CSS backdrop-filter cannot do this: it blurs what is
+# behind an element within the same page, and the desktop behind a transparent window is not
+# in that compositing tree. This inserts the native view (NSVisualEffectView / Acrylic) that
+# can. No Linux implementation exists, where it degrades to an opaque panel.
+window-vibrancy = "0.8.0"
+# The spotlight hotkey. Registering it needs no extra OS permission on macOS; typing INTO
+# another app later will (Accessibility), but that is auto-type's problem, not this one.
+tauri-plugin-global-shortcut = "2.3.2"
 
 [dev-dependencies]
 # Each storage test gets its own data dir, so they can run in parallel and clean up after

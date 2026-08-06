@@ -10,6 +10,7 @@
 		"beforeBuildCommand": "pnpm run build"
 	},
 	"app": {
+		"macOSPrivateApi": true,
 		"windows": [
 			{
 				"label": "main",
@@ -19,6 +20,22 @@
 				"center": true,
 				"resizable": false,
 				"fullscreen": false
+			},
+			{
+				"label": "spotlight",
+				"url": "spotlight.html",
+				"title": "Bramble Quick Access",
+				"width": 640,
+				"height": 400,
+				"center": true,
+				"visible": false,
+				"focus": false,
+				"decorations": false,
+				"transparent": true,
+				"alwaysOnTop": true,
+				"skipTaskbar": true,
+				"resizable": false,
+				"shadow": true
 			}
 		],
 		"security": {
