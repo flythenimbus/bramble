@@ -7,6 +7,7 @@
 mod crypto;
 mod lifetime;
 mod pairing;
+mod socket;
 mod spotlight;
 mod storage;
 
@@ -55,6 +56,20 @@ pub fn run() {
                 spotlight::apply_backdrop(&window);
             }
             lifetime::install_tray(app.handle())?;
+
+            // The browser proxy's end of the pipe. Bound at startup rather than on first
+            // pairing: an extension that is already paired reconnects whenever its browser
+            // starts, without the user doing anything.
+            match storage::data_dir(app.handle()) {
+                // Not fatal. A vault manager with no browser link is still a vault manager,
+                // and refusing to launch over it would be a worse failure than losing fill.
+                Ok(root) => {
+                    if let Err(e) = socket::listen(&root) {
+                        log::error!("browser socket unavailable: {e}");
+                    }
+                }
+                Err(e) => log::error!("browser socket: no data dir: {e}"),
+            }
             Ok(())
         })
         .on_window_event(|window, event| match event {

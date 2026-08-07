@@ -334,7 +334,7 @@ fn claim_attempt() -> Option<String> {
 
 /// The 32-byte PSK the handshake wants, derived from the typed code. Domain-separated so the
 /// code cannot collide with key material from elsewhere.
-fn psk_for(code: &str) -> String {
+pub(crate) fn psk_for(code: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(PSK_INFO);
     // Case-fold: the alphabet is uppercase and users will type lowercase.
@@ -390,7 +390,7 @@ pub fn accept_pairing(root: &Path, label: &str) -> Res<Handshake> {
 /// peer's static key is allowlisted, which is the only place a peer is ever added: a wrong
 /// code fails the AEAD before reaching here, so completion is the proof.
 #[allow(dead_code)]
-pub fn read_message(root: &Path, hs: &Handshake, message_b64: &str) -> Res<Option<String>> {
+pub fn read_message(root: &Path, hs: &Handshake, message_b64: &str) -> Res<Step> {
     let result = handshake::handshake_read(hs.session_id, message_b64.to_string())
         .map_err(|e| format!("handshake read: {e:?}"))?;
     if result.done {
@@ -402,7 +402,17 @@ pub fn read_message(root: &Path, hs: &Handshake, message_b64: &str) -> Res<Optio
             cancel_pairing();
         }
     }
-    Ok(result.message)
+    Ok(Step {
+        message: result.message,
+        done: result.done,
+    })
+}
+
+/// One turn of a handshake: what to send back, if anything, and whether that was the last.
+#[allow(dead_code)]
+pub struct Step {
+    pub message: Option<String>,
+    pub done: bool,
 }
 
 fn add_peer(root: &Path, public_key: &str, label: &str) -> Res<()> {
@@ -426,6 +436,15 @@ pub fn close(hs: &Handshake) {
 /// Sessions are process-global in `vault_crypto`, so tests that pair must not interleave.
 #[cfg(test)]
 static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+/// Shared with the socket tests, which drive this module over a real connection and would
+/// otherwise race it for the global session registry and the pending code.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    *TEST_STORE.lock().unwrap() = None;
+    guard
+}
 
 #[cfg(test)]
 mod tests {
@@ -457,7 +476,9 @@ mod tests {
     fn pair(root: &Path, code: &str, label: &str) -> Res<String> {
         let (ext_pub, ext_session, msg1) = extension_pairs(code)?;
         let hs = accept_pairing(root, label)?;
-        let msg2 = read_message(root, &hs, &msg1)?.ok_or("expected msg2")?;
+        let msg2 = read_message(root, &hs, &msg1)?
+            .message
+            .ok_or("expected msg2")?;
         let msg3 = handshake::handshake_read(ext_session, msg2)
             .map_err(|e| format!("{e:?}"))?
             .message
