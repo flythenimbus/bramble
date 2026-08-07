@@ -5,10 +5,11 @@
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
 mod crypto;
+mod lifetime;
 mod spotlight;
 mod storage;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 /// Version of the shared Rust crypto core this binary linked. Exists to prove the
@@ -52,17 +53,24 @@ pub fn run() {
             if let Some(window) = app.get_webview_window(spotlight::LABEL) {
                 spotlight::apply_backdrop(&window);
             }
+            lifetime::install_tray(app.handle())?;
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
+            // Hide rather than destroy. Tauri quits once every window is gone, so closing
+            // this one would take the global hotkey and the tray with it, and there would be
+            // no way back into the app.
+            WindowEvent::CloseRequested { api, .. } if window.label() == lifetime::MAIN => {
+                api.prevent_close();
+                lifetime::hide_main(&window.app_handle().clone());
+            }
             // A quick-access panel that outlives the user's attention is clutter, and on
             // macOS an always-on-top window with no dock entry is awkward to dismiss any
             // other way.
-            if window.label() == spotlight::LABEL {
-                if let WindowEvent::Focused(false) = event {
-                    spotlight::hide(&window.app_handle().clone());
-                }
+            WindowEvent::Focused(false) if window.label() == spotlight::LABEL => {
+                spotlight::hide(&window.app_handle().clone());
             }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             core_version,
@@ -98,6 +106,18 @@ pub fn run() {
             spotlight::spotlight_hide,
             spotlight::spotlight_set_height,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        // Built rather than run directly so RunEvent is reachable: the dock icon survives a
+        // hidden window on macOS, and clicking it has to bring the vault back.
+        .run(|app, event| match event {
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => lifetime::show_main(app),
+            // The window is only ever hidden now, so the process would otherwise linger with
+            // no UI and no way to reach it. Quit is the tray's job.
+            RunEvent::ExitRequested { .. } => {}
+            _ => {
+                let _ = app;
+            }
+        });
 }

@@ -103,3 +103,33 @@ await Promise.all(
 	PNGS.map(([name, size]) => sharp(shaped).resize(size, size).png().toFile(join(OUT_DIR, name))),
 );
 console.log(`shaped ${PNGS.map(([n]) => n).join(", ")}`);
+
+// ---- menu bar icon ----
+//
+// A template image, which is a different thing from a small app icon: macOS ignores a
+// template's colour entirely and renders its ALPHA channel, so the icon inverts itself
+// against a light or dark menu bar for free. Shipping the app icon here instead would put a
+// black rounded square in the menu bar that vanishes in dark mode.
+//
+// The source is a white glyph on black, so its luminance is already the shape we want; it
+// becomes the alpha channel of an all-black image. 44px is 22pt at 2x, the menu bar's height.
+
+const TRAY_PX = 44;
+
+const glyphAlpha = await sharp(SOURCE)
+	.greyscale()
+	// The source has a wide black margin for the app-icon grid. Left in, the glyph would
+	// render at about half the menu bar's height.
+	.trim()
+	.resize(TRAY_PX, TRAY_PX, { fit: "contain", background: { r: 0, g: 0, b: 0 } })
+	.toColourspace("b-w")
+	.raw()
+	.toBuffer();
+
+await sharp({
+	create: { width: TRAY_PX, height: TRAY_PX, channels: 3, background: { r: 0, g: 0, b: 0 } },
+})
+	.joinChannel(glyphAlpha, { raw: { width: TRAY_PX, height: TRAY_PX, channels: 1 } })
+	.png()
+	.toFile(join(OUT_DIR, "tray.png"));
+console.log(`tray.png (${TRAY_PX}px template, alpha from source luminance)`);

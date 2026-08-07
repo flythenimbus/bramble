@@ -18,7 +18,7 @@ tauri-build = { version = "2.6.3", features = [] }
 # macos-private-api is what allows a transparent window, which the spotlight panel needs so
 # the native blur behind its webview shows through. It rules out the Mac App Store; Bramble
 # ships direct downloads, so that is not a channel being given up. See docs/desktop-port.md.
-tauri = { version = "2.11.3", features = ["macos-private-api"] }
+tauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
