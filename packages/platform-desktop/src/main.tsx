@@ -6,6 +6,7 @@ import "./styles/desktop.css";
 import { desktopAutofill } from "./adapters/autofill";
 import { desktopClipboard } from "./adapters/clipboard";
 import { desktopCrypto } from "./adapters/crypto";
+import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { desktopStorage } from "./adapters/storage";
 
@@ -16,6 +17,7 @@ const platform: Platform = {
 	autofill: desktopAutofill,
 	shell: desktopShell,
 	clipboard: desktopClipboard,
+	pairing: desktopPairing,
 	// biometric: Touch ID / Windows Hello is phase 1; nothing on Linux.
 	// exchange: iOS only.
 };
