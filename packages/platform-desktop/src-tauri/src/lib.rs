@@ -5,6 +5,7 @@
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
 mod crypto;
+mod index_store;
 mod lifetime;
 mod manifest;
 mod pairing;
@@ -149,6 +150,8 @@ pub fn run() {
             pairing::pairing_list,
             pairing::pairing_forget,
             pairing::pairing_public_key,
+            index_store::link_set_index,
+            index_store::link_clear_index,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
