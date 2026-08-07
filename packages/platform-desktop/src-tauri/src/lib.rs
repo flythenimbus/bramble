@@ -18,6 +18,7 @@ mod storage;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
+use tauri_plugin_log::{Target, TargetKind};
 
 /// Version of the shared Rust crypto core this binary linked. Exists to prove the
 /// core-rust-as-a-cargo-dependency path end to end, which is the bet Tauri was picked on;
@@ -34,13 +35,25 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Logging is registered in release too, not just debug. A release build used to
+            // be entirely silent, so when pairing refused a connection there was nowhere at
+            // all to find out why: no stdout, no file, and a UI that showed nothing. Stdout
+            // for `pnpm dev:desktop`, a file for a build someone is actually running.
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(if cfg!(debug_assertions) {
+                        log::LevelFilter::Debug
+                    } else {
+                        log::LevelFilter::Info
+                    })
+                    .targets([
+                        Target::new(TargetKind::Stdout),
+                        Target::new(TargetKind::LogDir {
+                            file_name: Some("bramble".into()),
+                        }),
+                    ])
+                    .build(),
+            )?;
 
             // Registered here rather than in the builder chain because with_shortcuts is
             // fallible and setup is where a `?` has somewhere to go.

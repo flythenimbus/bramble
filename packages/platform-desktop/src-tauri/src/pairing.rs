@@ -169,9 +169,16 @@ fn entry() -> Res<keyring::Entry> {
 #[cfg(test)]
 static TEST_STORE: Mutex<Option<String>> = Mutex::new(None);
 
+/// How many times the storage leaf was consulted, so a test can assert the credential store
+/// is not hit per call. Each hit is a password prompt on a machine whose signature the
+/// keychain does not recognise.
+#[cfg(test)]
+static STORE_READS: Mutex<u32> = Mutex::new(0);
+
 fn read_raw() -> Res<Option<String>> {
     #[cfg(test)]
     {
+        *STORE_READS.lock().unwrap() += 1;
         Ok(TEST_STORE.lock().unwrap().clone())
     }
     #[cfg(not(test))]
@@ -206,25 +213,31 @@ fn write_raw(raw: &str) -> Res<()> {
 /// into a wall of password prompts. It cannot change while the process runs, so reading it
 /// once is not just an optimisation. A signed, notarised build has a stable signature and
 /// prompts once ever, but the caching is worth having regardless.
-static CACHED: Mutex<Option<Identity>> = Mutex::new(None);
+/// Two layers of Option on purpose. The outer says whether the store has been consulted at
+/// all; the inner is what it said. Caching only the hit was not enough: a device whose key has
+/// gone missing looks up nothing to cache, so every attempt went back to the credential store
+/// and prompted again. An absent key is just as stable a fact as a present one.
+static CACHED: Mutex<Option<Option<Identity>>> = Mutex::new(None);
 
 fn load_identity() -> Res<Option<Identity>> {
     if let Some(cached) = CACHED.lock().unwrap().clone() {
-        return Ok(Some(cached));
+        return Ok(cached);
     }
-    let Some(raw) = read_raw()? else {
-        return Ok(None);
+    let found = match read_raw()? {
+        Some(raw) => Some(
+            serde_json::from_str::<Identity>(&raw)
+                .map_err(|e| format!("parse stored identity: {e}"))?,
+        ),
+        None => None,
     };
-    let id: Identity =
-        serde_json::from_str(&raw).map_err(|e| format!("parse stored identity: {e}"))?;
-    *CACHED.lock().unwrap() = Some(id.clone());
-    Ok(Some(id))
+    *CACHED.lock().unwrap() = Some(found.clone());
+    Ok(found)
 }
 
 fn store_identity(id: &Identity) -> Res<()> {
     let raw = serde_json::to_string(id).map_err(|e| format!("encode identity: {e}"))?;
     write_raw(&raw)?;
-    *CACHED.lock().unwrap() = Some(id.clone());
+    *CACHED.lock().unwrap() = Some(Some(id.clone()));
     Ok(())
 }
 
@@ -261,7 +274,7 @@ fn identity(root: &Path) -> Res<(String, String)> {
     }
 
     if !file.peers.is_empty() {
-        return Err("paired browsers exist but the pairing key is gone from the credential store; re-pair them".into());
+        return Err("This device's pairing key is missing from the keychain, so the browsers listed below can no longer connect. Disconnect them here to start again.".into());
     }
 
     let kp = handshake::handshake_generate_keypair().map_err(|e| format!("keygen: {e:?}"))?;
@@ -477,6 +490,7 @@ mod tests {
         let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         *TEST_STORE.lock().unwrap() = None;
         *CACHED.lock().unwrap() = None;
+        *STORE_READS.lock().unwrap() = 0;
         guard
     }
 
@@ -504,6 +518,50 @@ mod tests {
         close(&hs);
         handshake::handshake_close(ext_session);
         Ok(ext_pub)
+    }
+
+    #[test]
+    fn a_missing_key_is_looked_up_once_not_once_per_attempt() {
+        // The regression that produced five macOS password prompts in a row. Caching only a
+        // successful lookup meant a device whose key had gone missing went back to the
+        // credential store on every single attempt, and each visit prompted.
+        let _g = setup();
+        let d = root();
+        let stranger = handshake::handshake_generate_keypair().unwrap();
+        add_peer(d.path(), &stranger.public_key, "orphan").unwrap();
+
+        for _ in 0..5 {
+            assert!(public_key(d.path()).is_err(), "should stay broken");
+        }
+        assert_eq!(
+            *STORE_READS.lock().unwrap(),
+            1,
+            "an absent key is as stable a fact as a present one"
+        );
+    }
+
+    #[test]
+    fn a_present_key_is_read_once_however_many_connections() {
+        let _g = setup();
+        let d = root();
+        public_key(d.path()).unwrap();
+        let after_first = *STORE_READS.lock().unwrap();
+        for _ in 0..5 {
+            public_key(d.path()).unwrap();
+        }
+        assert_eq!(*STORE_READS.lock().unwrap(), after_first);
+    }
+
+    #[test]
+    fn the_missing_key_error_tells_the_user_how_to_recover() {
+        // The message is the only place the recovery appears; the UI shows it verbatim.
+        let _g = setup();
+        let d = root();
+        let stranger = handshake::handshake_generate_keypair().unwrap();
+        add_peer(d.path(), &stranger.public_key, "orphan").unwrap();
+
+        let err = public_key(d.path()).unwrap_err();
+        assert!(err.contains("Disconnect"), "no recovery offered: {err}");
     }
 
     #[test]
@@ -697,8 +755,8 @@ mod tests {
         *CACHED.lock().unwrap() = None;
 
         // Generating a new identity here would leave a browser listed that can never connect.
-        let err = public_key(d.path()).unwrap_err();
-        assert!(err.contains("re-pair"), "unhelpful error: {err}");
+        // What the message SAYS is asserted separately; this is about the guard firing.
+        assert!(public_key(d.path()).is_err());
     }
 
     #[test]

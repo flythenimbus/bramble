@@ -40,6 +40,13 @@ export interface PairingAdapter {
 	/** Whether a code is still outstanding, so the UI can stop showing an expired one. */
 	isOpen(): Promise<boolean>;
 	list(): Promise<PairedBrowser[]>;
+	/**
+	 * This device's own pairing identity. Exists to be *shown when it fails*: if the key has
+	 * gone from the OS credential store while browsers are still listed, nothing else in this
+	 * interface notices, and the user sees a browser that simply never connects. The rejection
+	 * message carries the recovery.
+	 */
+	identity(): Promise<string>;
 	/** Revoke a browser. Its next connection fails, because its key is no longer accepted. */
 	forget(publicKey: string): Promise<boolean>;
 }

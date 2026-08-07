@@ -11,5 +11,6 @@ export const desktopPairing: PairingAdapter = {
 	cancel: () => invoke<void>("pairing_cancel"),
 	isOpen: () => invoke<boolean>("pairing_is_open"),
 	list: () => invoke<PairedBrowser[]>("pairing_list"),
+	identity: () => invoke<string>("pairing_public_key"),
 	forget: (publicKey) => invoke<boolean>("pairing_forget", { publicKey }),
 };

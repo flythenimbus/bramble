@@ -220,8 +220,10 @@ pub fn listen(root: &Path) -> std::io::Result<()> {
             // needs.
             thread::spawn(move || {
                 if let Err(e) = serve(&root, &mut stream) {
-                    // Logged, never sent: see `serve`.
-                    log::debug!("socket connection refused: {e}");
+                    // Logged, never sent: see `serve`. At warn rather than debug because
+                    // this is the only place the reason exists, and a refusal the user did
+                    // not expect is exactly what they will be trying to diagnose.
+                    log::warn!("socket connection refused: {e}");
                 }
             });
         }
