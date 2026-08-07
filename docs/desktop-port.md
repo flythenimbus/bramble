@@ -65,6 +65,21 @@ accurate for the unbuilt parts); this section is the ground truth.
   to be `false` on desktop despite being `true` for the other pointer target. So capabilities
   now resolve through a separate `Family` (`extension` / `mobile` / `desktop`) and `Surface`
   means input model only, which is what its doc comment always claimed.
+- **Storage is tested; 21 tests, weighted at the paths that lose data.** `storage.rs` is split
+  into an `ops` layer parameterised on the data dir and `#[tauri::command]` wrappers that only
+  resolve it, because the commands took an `AppHandle` purely to find that directory and so
+  none of the logic could run without a live Tauri app. The two that matter are both issue #27:
+  reading the backup must not restore it, and restoring must *not* snapshot first, or it
+  overwrites the only good copy with the bad bytes. Verified by mutation, not by the suite
+  going green: making restore symmetrical with write fails exactly one test.
+- **The spotlight panel exists, as a shell.** A second window in the same process (one VEK, no
+  cross-process handoff), hidden and transparent, toggled by `CmdOrCtrl+Shift+Space`, with a
+  native `NSVisualEffectView` behind the webview. It collapses to the search row until there
+  is a query and grows anchored at its top-left. No results yet: that is the next slice.
+- **The app outlives its main window.** Closing hides rather than destroys, a tray icon is the
+  route back, and on macOS the Dock icon follows the window via the activation policy
+  (`Regular` ↔ `Accessory`). Needed for the spotlight to be reachable at all, and the same
+  scaffolding the sync hub will want.
 
 Not yet wired, and deliberately loud about it rather than silently broken: passkey provider and
 KDBX import (both sit behind private modules in core-rust that need a re-export), autofill of any
@@ -81,6 +96,23 @@ measurement is genuinely awkward (@core's screens are fixed-height boxes that sc
 internally, so neither `documentElement.scrollHeight` nor the scroller's own `scrollHeight`
 reports the content height), and even working it made the window move about under the user.
 A fixed window is the better fit for a UI that is popup-dimensioned anyway.
+
+**Two constraints this took on.** Transparency for the spotlight panel needs Tauri's
+`macos-private-api` feature, which rules out the Mac App Store; Bramble ships direct downloads,
+so no channel is given up, but it is now a real constraint. And `Accessory` policy means the
+app leaves Cmd+Tab while its window is hidden, and that with no Dock icon there is nothing to
+click, so the tray is the only route back.
+
+**Trap: Tailwind only scans `packages/core`.** `@core/styles/tailwind.css` declares
+`@import 'tailwindcss' source(none)` with a single `@source` scoped to core, so a utility used
+in a *platform* package that core does not also happen to use is never generated. The class
+lands in the DOM, matches no rule, and does nothing, which is the worst way for a style to
+fail. The extension and mobile never noticed because their own `.tsx` files are thin mounts
+whose classes all exist in core anyway; desktop is the first package with markup of its own.
+Fixed with `packages/platform-desktop/src/styles/index.css`, which imports core's stylesheet
+and adds its own `@source`. Anything styled directly in the other platform packages will need
+the same. Check the built CSS rather than the screen: a missing utility looks identical to one
+that is simply not doing what you expected.
 
 **Debugging note.** `console.log` from the webview does not reach the `tauri dev` terminal,
 and both `osascript` and Quartz window queries need Accessibility permission the terminal will
@@ -402,14 +434,17 @@ webview only has to render React, not do crypto, transport, or WebAuthn.
 
 Each phase retires a risk.
 
-- **Phase 0, walking skeleton.** `packages/platform-desktop` (Vite + React, mirroring
-  platform-mobile) plus `src-tauri` as a cargo workspace member. The `native` feature split. UI boots
-  on all three OSes.
-- **Phase 1, vault MVP.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK held in Rust,
-  create/unlock/CRUD/import. `Target` and `CAPABILITIES` widened.
-- **Phase 2, spotlight.** Global hotkey, vibrancy, non-activating panel, combobox UI,
-  `spotlightActions` on `EntryMode`, inline unlock. Actions limited to clipboard and Cmd+O/Cmd+E, so
-  it is useful before any IPC exists.
+- **Phase 0, walking skeleton. DONE**, on macOS only: `packages/platform-desktop` (Vite + React,
+  mirroring platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux
+  and Windows are still unbuilt, so risk 1 is not actually retired.
+- **Phase 1, vault MVP. MOSTLY DONE.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK
+  held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. Outstanding: KDBX import
+  and the passkey provider (both need core-rust re-exports), and biometric unlock.
+- **Phase 2, spotlight. IN PROGRESS.** Shell done (window, hotkey, vibrancy, collapse-to-search,
+  tray and app lifetime). Next: a metadata-only search index held in Rust and pushed from the
+  main window, `spotlightActions` on `EntryMode`, and the combobox with Cmd+O / Cmd+E. Actions
+  stay clipboard-only until Phase 4, so it is useful before any IPC exists. The non-activating
+  panel (risk 2) is deliberately deferred to when auto-type makes it matter.
 - **Phase 3, sync hub.** Native WebRTC shim port, tray residency, scheduled backups.
 - **Phase 4, browser integration.** Proxy binary, host manifests, Noise pairing plus the approval
   dialog, fill routing. Enter becomes a real fill in the browser.
