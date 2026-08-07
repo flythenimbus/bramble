@@ -50,7 +50,8 @@ accurate for the unbuilt parts); this section is the ground truth.
   layered on it) builds the crate with neither binding layer. The existing `ffi_exports`
   module was widened to `any(ffi, native)` with `#[cfg_attr(feature = "ffi", uniffi::export)]`
   rather than copied into a third block, so the struct-returning calls have one body. All
-  three feature configurations check clean and the 1296 existing tests still pass.
+  three feature configurations check clean and the crate's tests still pass: 58 under the
+  default wasm features, 51 under `native`, the difference being the wasm-only modules.
 - **`packages/platform-desktop`**: Vite + React SPA mirroring platform-mobile, plus `src-tauri`
   scaffolded by the 2.11.4 CLI (tauri 2.11.3, tauri-build 2.6.3) so the config matches the
   shipped schema rather than being hand-written.

@@ -358,6 +358,11 @@ pub fn handshake_close(session_id: u32) {
 }
 
 // ---- struct-returning exports (same name per layer; only one compiles) ----
+//
+// The non-wasm arm is `any(ffi, native)` rather than `ffi`, so the desktop shell gets these
+// bare, as ordinary Rust, with `#[cfg_attr(feature = "ffi", uniffi::export)]` adding the
+// binding only where uniffi is present. One body per function rather than a third copy to
+// keep in step; lib.rs's compile_error keeps wasm and native from ever colliding here.
 
 /// Generate a device static X25519 keypair for enrollment. The private key must be
 /// stored locally only; the public key goes in the roster.
@@ -367,8 +372,8 @@ pub fn handshake_generate_keypair() -> Result<JsValue, CryptoError> {
     serde_wasm_bindgen::to_value(&generate_keypair_core()?).map_err(|e| ce(format!("serialize: {e}")))
 }
 
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_generate_keypair() -> Result<KeypairResult, CryptoError> {
     generate_keypair_core()
 }
@@ -384,8 +389,8 @@ pub fn handshake_start_initiator(
         .map_err(|e| ce(format!("serialize: {e}")))
 }
 
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_start_initiator(
     local_priv_b64: String,
     remote_pub_b64: String,
@@ -405,8 +410,8 @@ pub fn handshake_enroll_initiator(
         .map_err(|e| ce(format!("serialize: {e}")))
 }
 
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_enroll_initiator(
     local_priv_b64: String,
     psk_b64: String,
@@ -422,8 +427,8 @@ pub fn handshake_read(session_id: u32, message_b64: String) -> Result<JsValue, C
         .map_err(|e| ce(format!("serialize: {e}")))
 }
 
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn handshake_read(session_id: u32, message_b64: String) -> Result<ReadResult, CryptoError> {
     read_core(session_id, &message_b64)
 }

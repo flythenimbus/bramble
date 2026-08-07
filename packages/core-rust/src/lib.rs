@@ -55,12 +55,13 @@ mod flags;
 // Sync handshake/nostr compile into every layer: device sync must run natively so it
 // works under Lockdown Mode (no WASM). Each module carries a wasm + an ffi binding; the
 // desktop build takes them bare via `native` (which `ffi` implies).
-// The desktop build (`native` without `ffi`) compiles these but has no caller until its
-// sync hub lands, and neither binding layer's attributes are there to make them reachable.
-// Drop the allow once the hub consumes them. See docs/desktop-port.md phase 3.
+// `handshake` is public because the desktop shell links this crate as an ordinary cargo
+// dependency and calls it as Rust, with no binding layer in between: the extension pairing
+// reuses these exact patterns (XXpsk3 to pair, KK once both statics are known). wasm and ffi
+// consumers still go through their generated bindings and are unaffected.
 #[cfg(any(feature = "wasm", feature = "native"))]
-#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
-mod handshake;
+pub mod handshake;
+// nostr has no native caller yet; its turn comes with the sync hub. See docs/desktop-port.md.
 #[cfg(any(feature = "wasm", feature = "native"))]
 #[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod nostr;
@@ -74,8 +75,11 @@ mod webrtc;
 // The two binding layers are mutually exclusive: each owns the bare public names
 // (`generate_vek`, ...), so enabling both would collide. wasm-pack uses `wasm`; the
 // native build uses `--no-default-features --features ffi`.
-#[cfg(all(feature = "wasm", feature = "ffi"))]
-compile_error!("vault-crypto: enable either `wasm` or `ffi`, not both");
+// Widened from wasm+ffi to wasm+native: `ffi` implies `native`, so this still catches the
+// original pair, and it now also catches wasm+native, where the bare exports the desktop uses
+// would collide with the wasm ones under the same names.
+#[cfg(all(feature = "wasm", feature = "native"))]
+compile_error!("vault-crypto: enable either `wasm` or `native`/`ffi`, not both");
 
 #[cfg(feature = "ffi")]
 uniffi::setup_scaffolding!();
