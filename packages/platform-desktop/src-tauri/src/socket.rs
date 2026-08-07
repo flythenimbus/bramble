@@ -23,7 +23,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::pairing;
+use vault_crypto::handshake;
+
+use crate::{index_store, pairing};
 
 /// Chrome caps a native-messaging frame at 1 MB. Nothing this protocol carries comes near it,
 /// so a larger frame is a bug or an attempt to exhaust memory, not a big credential.
@@ -93,6 +95,116 @@ impl Reply {
 #[serde(rename_all = "camelCase")]
 struct HandshakeFrame {
     message: String,
+}
+
+/// An application frame, sealed under the completed Noise session. Everything after the
+/// handshake is one of these; the proxy relays them without being able to read them.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SealedFrame {
+    sealed: String,
+}
+
+/// What the browser can ask for once authenticated.
+#[derive(Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
+enum Request {
+    /// Metadata for a hostname. Never answers with a secret.
+    Query { hostname: String },
+    /// The credential for one entry, which is the call that hands one over.
+    Fetch { id: String },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Answer {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    /// Set for a query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matches: Option<Vec<index_store::MatchSummary>>,
+    /// Set for a fetch, and only then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    totp: Option<String>,
+}
+
+impl Answer {
+    fn error(msg: &str) -> Self {
+        Self {
+            ok: false,
+            error: Some(msg.to_string()),
+            matches: None,
+            username: None,
+            password: None,
+            totp: None,
+        }
+    }
+}
+
+/// Serve application traffic over the established session until the browser goes away.
+///
+/// Every answer is gated on the vault being unlocked. That is the single biggest bound on
+/// what a stolen pairing key is worth: it turns permanent silent access into access during
+/// the windows the user was already working in. See docs/desktop-port.md.
+fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String> {
+    loop {
+        let Some(frame) = read_frame(stream).map_err(|e| format!("read: {e}"))? else {
+            return Ok(());
+        };
+        let sealed: SealedFrame =
+            serde_json::from_slice(&frame).map_err(|e| format!("bad sealed frame: {e}"))?;
+
+        let plaintext = handshake::handshake_decrypt(session_id, sealed.sealed)
+            .map_err(|e| format!("decrypt: {e:?}"))?;
+        let answer = match serde_json::from_str::<Request>(&plaintext) {
+            Ok(request) => answer_for(request),
+            Err(e) => Answer::error(&format!("bad request: {e}")),
+        };
+
+        let body = serde_json::to_string(&answer).map_err(|e| format!("encode answer: {e}"))?;
+        let sealed_out = handshake::handshake_encrypt(session_id, body)
+            .map_err(|e| format!("encrypt: {e:?}"))?;
+        let out = serde_json::json!({ "sealed": sealed_out });
+        write_frame(
+            stream,
+            &serde_json::to_vec(&out).map_err(|e| format!("encode frame: {e}"))?,
+        )
+        .map_err(|e| format!("write: {e}"))?;
+    }
+}
+
+fn answer_for(request: Request) -> Answer {
+    // Locked means locked, for metadata as much as for secrets: which sites you hold accounts
+    // for is worth protecting on its own.
+    if vault_crypto::is_locked() {
+        return Answer::error("locked");
+    }
+    match request {
+        Request::Query { hostname } => Answer {
+            ok: true,
+            error: None,
+            matches: Some(index_store::query(&hostname)),
+            username: None,
+            password: None,
+            totp: None,
+        },
+        Request::Fetch { id } => match index_store::secret_for(&id) {
+            Some(entry) => Answer {
+                ok: true,
+                error: None,
+                matches: None,
+                username: Some(entry.username),
+                password: Some(entry.password),
+                totp: entry.totp,
+            },
+            None => Answer::error("unknown entry"),
+        },
+    }
 }
 
 fn read_frame(stream: &mut UnixStream) -> std::io::Result<Option<Vec<u8>>> {
@@ -189,10 +301,9 @@ fn drive(
         let done = step.done;
         reply(stream, &Reply::step(step.message, done)).map_err(|e| format!("write: {e}"))?;
         if done {
-            // The session is authenticated from here. Carrying application traffic over it is
-            // the next slice; for now the caller has proved who it is and that is the whole
-            // job of this connection.
-            return Ok(());
+            // Authenticated from here, so the same connection carries application traffic,
+            // sealed under the session the handshake just established.
+            return serve_session(handshake.session_id, stream);
         }
     }
 }
@@ -349,6 +460,98 @@ mod tests {
         assert_eq!(reply["ok"], true, "reconnect refused: {reply}");
         assert_eq!(reply["done"], true, "KK should finish in one round trip");
         handshake::handshake_close(start.session_id);
+    }
+
+    /// Pair, then drive one sealed request over the session the handshake established.
+    fn ask(dir: &TempDir, request: serde_json::Value) -> serde_json::Value {
+        let code = pairing::begin_pairing().unwrap();
+        let (client_priv, client_pub) = pair_over_socket(dir, &code).unwrap();
+
+        let app_pub = pairing::public_key(dir.path()).unwrap();
+        let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({
+            "kind": "hello", "v": 1, "publicKey": client_pub
+        }));
+        client.send(serde_json::json!({ "message": start.message }));
+        let reply = client.recv();
+        assert_eq!(reply["done"], true, "handshake did not complete");
+        // KK is two messages: the responder's reply has to be fed back or this side stays
+        // mid-handshake and cannot encrypt, which is invisible until something tries to.
+        handshake::handshake_read(
+            start.session_id,
+            reply["message"].as_str().expect("msg2").to_string(),
+        )
+        .unwrap();
+
+        let sealed = handshake::handshake_encrypt(start.session_id, request.to_string()).unwrap();
+        client.send(serde_json::json!({ "sealed": sealed }));
+        let reply = client.recv();
+        let plain = handshake::handshake_decrypt(
+            start.session_id,
+            reply["sealed"].as_str().expect("sealed reply").to_string(),
+        )
+        .unwrap();
+        handshake::handshake_close(start.session_id);
+        serde_json::from_str(&plain).unwrap()
+    }
+
+    #[test]
+    fn a_query_over_the_link_returns_metadata_and_no_secret() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        vault_crypto::unlock_with_vek(vault_crypto::generate_vek().unwrap()).unwrap();
+        index_store::set(vec![index_store::IndexEntry {
+            id: "a".into(),
+            kind: "login".into(),
+            name: "GitHub".into(),
+            hostnames: vec!["github.com".into()],
+            username: "octocat".into(),
+            password: "hunter2".into(),
+            totp: None,
+        }]);
+
+        let answer = ask(
+            &dir,
+            serde_json::json!({ "op": "query", "hostname": "github.com" }),
+        );
+
+        assert_eq!(answer["ok"], true, "{answer}");
+        assert_eq!(answer["matches"][0]["secondary"], "octocat");
+        // The point of splitting query from fetch. Asserted on the wire, not on the type.
+        assert!(
+            !answer.to_string().contains("hunter2"),
+            "a query put a password on the wire: {answer}"
+        );
+        index_store::clear();
+        vault_crypto::lock();
+    }
+
+    #[test]
+    fn a_locked_vault_answers_nothing_at_all() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        vault_crypto::lock();
+        index_store::set(vec![index_store::IndexEntry {
+            id: "a".into(),
+            kind: "login".into(),
+            name: "GitHub".into(),
+            hostnames: vec!["github.com".into()],
+            username: "octocat".into(),
+            password: "hunter2".into(),
+            totp: None,
+        }]);
+
+        let answer = ask(
+            &dir,
+            serde_json::json!({ "op": "query", "hostname": "github.com" }),
+        );
+
+        // Not even the metadata: which sites you hold accounts for is worth protecting, and
+        // this gate is the biggest single bound on what a stolen pairing key is worth.
+        assert_eq!(answer["ok"], false);
+        assert_eq!(answer["error"], "locked");
+        index_store::clear();
     }
 
     #[test]
