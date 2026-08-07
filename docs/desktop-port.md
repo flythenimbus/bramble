@@ -396,9 +396,53 @@ Native messaging has a per-message size cap (believed 1MB host to extension on C
 
 ### Deferred: extension unlock delegation
 
-1Password lets the extension delegate unlock to the desktop app, which is what makes its biometric
-unlock feel seamless. That is coherent here too, but it must stay additive: the extension keeps
-working standalone exactly as today and only gains "unlock via desktop app" when paired. Not v1.
+Unlocking twice for one action is the obvious wart in a paired setup, and 1Password's answer
+(delegate the extension's unlock to the desktop app) is coherent here too. It stays additive:
+the extension keeps working standalone exactly as today and only gains this when paired. Not
+v1, and the reason is a dependency rather than a preference.
+
+**Prerequisite: they have to be the same vault.** The extension's vault is sealed under its own
+VEK, and the desktop can only unlock it if it holds that VEK, which happens only if the two are
+sync peers, because sync is what shares a VEK across devices. Desktop sync is Phase 3. So this
+feature sits behind it, which is easy to miss when it looks like a small piece of UX.
+
+**Do not ship the VEK.** The obvious implementation hands the VEK over the paired channel at
+unlock and lets the extension's existing crypto path take over unchanged. It is a small change
+and it quietly undoes the whole point of the channel. Today a stolen pairing key yields one
+credential at a time, only while the vault is unlocked. Put the VEK on that socket and the same
+theft yields the entire vault, decryptable offline, forever, including after the user locks and
+including entries they never opened. Same compromise, categorically different loss. It also
+walks straight through the metadata-only rule above: "secrets for one entry at the moment of
+use" is not a boundary if the master key goes over the wire at session start.
+
+**Delegate the operations instead.** In delegated mode the extension's crypto adapter routes to
+the desktop rather than to its own offscreen document, and no VEK ever crosses. The extension's
+plaintext exposure is unchanged (it already holds decrypted entries in memory after a normal
+unlock); what changes is custody of the key, which never leaves the Rust process.
+
+That leaves one refinement worth taking. The vault list needs a name and username per entry,
+and entries are encrypted whole, so a naive delegated list means "decrypt everything" at
+session start. The desktop should instead return a **redacted projection** for listing, holding
+back password and secret fields, and full plaintext only for the entry actually being used. It
+can do that because it is the side holding the plaintext. A full dump of a delegated session
+then yields no passwords at all, which is what makes this option genuinely better rather than
+merely differently shaped.
+
+Costs, stated honestly: this is a real refactor of the extension's crypto adapter rather than a
+new message type, and the extension depends on the desktop staying alive for the whole
+delegated session. Writes need a decision too, since encryption also routes to the desktop and
+the two vaults then have to reconcile through sync.
+
+Three invariants, whichever way the details land:
+
+- **Lock propagates.** If the desktop locks and the extension stays open, the feature has
+  extended an unlocked session past the point the user believes they ended it, which is worse
+  than not having it.
+- **The handover is gated on a user gesture** (Touch ID once biometric unlock lands). Not
+  because it stops a key holder outright, but because it makes the attempt *visible*: a prompt
+  appears that the user did not ask for.
+- **Delegated mode is opt-in and reversible**, and standalone remains the default. The
+  extension is publicly released; this cannot become a dependency for existing users.
 
 ## Auto-type and native-app matching
 
