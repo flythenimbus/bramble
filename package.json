@@ -8,7 +8,7 @@
 		"prepare": "git config core.hooksPath .githooks",
 		"build": "pnpm --filter @vault/platform-extension run build:chromium",
 		"build:firefox": "pnpm --filter @vault/platform-extension run build:firefox",
-		"build:desktop": "APPLE_SIGNING_IDENTITY=\"${APPLE_SIGNING_IDENTITY-Developer ID Application: Webvana Inc. (BHGR3PP64J)}\" pnpm --filter @vault/platform-desktop run build:app",
+		"build:desktop": "set -a; [ -f .env.local ] && . ./.env.local; set +a; pnpm --filter @vault/platform-desktop run build:app",
 		"bundle": "pnpm --filter @vault/platform-extension run bundle:chromium && node scripts/sign.ts --optional",
 		"bundle:firefox": "pnpm --filter @vault/platform-extension run bundle:firefox",
 		"dev": "trap 'kill 0' INT TERM; pnpm run dev:chrome & pnpm run dev:firefox & pnpm run dev:website & wait",
