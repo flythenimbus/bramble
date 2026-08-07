@@ -141,7 +141,15 @@ interface RosterSignWasm {
  * sync-transport views (handshake / nostr / roster). The module exports them all; VaultCrypto is
  * intentionally crypto-only (see @core/wasm), so the host composes the full view here — this is why
  * getWasm can hand every case a fully typed module without per-call casts. */
-type HostWasm = VaultCrypto &
+/** The one handshake export the sync transport never needed: it keeps its sessions for the
+ * life of the connection, whereas a desktop pairing is a few round trips and then done, so the
+ * session has to be released. Declared here rather than widening the shared sync types. */
+interface LinkWasm {
+	handshake_close(sessionId: number): void;
+}
+
+type HostWasm = LinkWasm &
+	VaultCrypto &
 	RosterSyncWasm &
 	EnrollWasm &
 	KeypairWasm &
@@ -530,6 +538,41 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				// Generate only — the background persists it (the host has no chrome.storage).
 				const w = await getWasm();
 				return { ok: true, data: w.handshake_generate_keypair() };
+			}
+			case "LINK_ENROLL_INITIATOR": {
+				// Pairing with the desktop app: XXpsk3 keyed on the code the user typed. The
+				// background holds the native port but has no WASM, so the handshake runs here
+				// and it relays the messages. See background/desktop-link.ts.
+				const w = await getWasm();
+				const { privateKey, psk } = payload as { privateKey: string; psk: string };
+				return { ok: true, data: w.handshake_enroll_initiator(privateKey, psk) };
+			}
+			case "LINK_START_INITIATOR": {
+				// Reconnecting to an already-paired desktop app: KK against its known static key.
+				const w = await getWasm();
+				const { privateKey, remotePublicKey } = payload as {
+					privateKey: string;
+					remotePublicKey: string;
+				};
+				return { ok: true, data: w.handshake_start_initiator(privateKey, remotePublicKey) };
+			}
+			case "LINK_READ": {
+				const w = await getWasm();
+				const { sessionId, message } = payload as { sessionId: number; message: string };
+				return { ok: true, data: w.handshake_read(sessionId, message) };
+			}
+			case "LINK_REMOTE_STATIC": {
+				// The desktop app's static key, learned during pairing so later KK handshakes
+				// have something to authenticate against.
+				const w = await getWasm();
+				const { sessionId } = payload as { sessionId: number };
+				return { ok: true, data: w.handshake_remote_static(sessionId) };
+			}
+			case "LINK_CLOSE": {
+				const w = await getWasm();
+				const { sessionId } = payload as { sessionId: number };
+				w.handshake_close(sessionId);
+				return { ok: true };
 			}
 			case "SYNC_GENERATE_SIGNING_KEY": {
 				// Ed25519 roster-signing keypair (Item A). Generate only; the background persists it.

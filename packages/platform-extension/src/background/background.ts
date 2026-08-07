@@ -23,6 +23,7 @@ import { CLIPBOARD_ALARM, runClipboardClear } from "./clipboard";
 import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
 import { getLockOnScreenLock, PREF_AUTOLOCK_MINUTES } from "./prefs";
 import { setReady } from "./router";
+import "./desktop-link";
 import {
 	AUTOLOCK_ALARM,
 	clearSession,

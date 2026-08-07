@@ -4,6 +4,7 @@ import "@core/styles/index.css";
 import { extensionAutofill } from "./autofill";
 import { extensionClipboard } from "./clipboard";
 import { extensionCrypto } from "./crypto";
+import { extensionDesktopLink } from "./desktop-link";
 import { extensionShell, extensionTarget } from "./shell";
 import { extensionStorage } from "./storage";
 import { connectViewPort } from "./view-port";
@@ -19,6 +20,7 @@ const platform: Platform = {
 	autofill: extensionAutofill,
 	shell: extensionShell,
 	clipboard: extensionClipboard,
+	desktopLink: extensionDesktopLink,
 };
 
 async function boot() {

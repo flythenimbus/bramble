@@ -16,8 +16,10 @@ import { cn } from "../../components/ui/utils";
 import { AboutSection } from "./components/AboutSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { BackupSection } from "./components/BackupSection";
+import { BrowserPairingSection } from "./components/BrowserPairingSection";
 import { DataSection } from "./components/DataSection";
 import { DeleteVaultSection } from "./components/DeleteVaultSection";
+import { DesktopLinkSection } from "./components/DesktopLinkSection";
 import { GeneralSection } from "./components/GeneralSection";
 import { SecuritySection } from "./components/SecuritySection";
 import { SupportSection } from "./components/SupportSection";
@@ -116,7 +118,15 @@ export function Settings() {
 						{canCloudBackup && <BackupSection />}
 					</>
 				)}
-				{tab === "sync" && <SyncConnectSection />}
+				{tab === "sync" && (
+					<div className="space-y-4">
+						<SyncConnectSection />
+						{/* Renders itself away where the platform has no pairing adapter. */}
+						<BrowserPairingSection />
+						{/* The mirror image, on the extension. Also renders itself away. */}
+						<DesktopLinkSection />
+					</div>
+				)}
 				{tab === "about" && (
 					<>
 						<AboutSection />

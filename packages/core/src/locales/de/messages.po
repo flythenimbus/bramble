@@ -302,6 +302,10 @@ msgstr "Einträge von 1Password, Bitwarden, KeePass, Proton Pass, Apple oder Goo
 msgid "Bring your logins, cards and notes over from another manager"
 msgstr "Migrieren Sie Ihre Anmeldedaten, Karten und Notizen von einem anderen Manager"
 
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Browser extension"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bucket"
 msgstr "Bucket"
@@ -313,6 +317,7 @@ msgstr "Bucket"
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
@@ -474,9 +479,27 @@ msgstr "Bestätigen Sie Ihr Master-Passwort, um den Wiederherstellungscode zurü
 msgid "Confirm your new password"
 msgstr "Neues Passwort bestätigen"
 
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Connect"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Connect {name}"
 msgstr "{name} verbinden"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connect a browser"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Connected"
+msgstr ""
+
+#. placeholder {0}: formatDate(browser.pairedAt)
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connected {0}"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Connecting to your other device…"
@@ -699,6 +722,10 @@ msgstr "Lösche..."
 msgid "Deselect all"
 msgstr "Alle abwählen"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop app"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Gerätecode"
@@ -719,9 +746,14 @@ msgstr "Master-Passwort deaktivieren?"
 msgid "Disabling…"
 msgstr "Deaktivierung..."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Disconnect"
 msgstr "Verbindung trennen"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Disconnect this browser"
+msgstr ""
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
@@ -779,6 +811,10 @@ msgstr "Geben Sie den Pairing-Code von Ihrem anderen Gerät ein, um dessen Treso
 msgid "Enter the password for your {providerLabel} database"
 msgstr "Geben Sie das Passwort für Ihre {providerLabel}-Datenbank ein"
 
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Enter this code in the Bramble browser extension."
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Enter your current password"
 msgstr "Geben Sie Ihr aktuelles Passwort ein"
@@ -831,6 +867,10 @@ msgstr "Läuft in {0} ab · Fenster geöffnet lassen, bis die Kopplung abgeschlo
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "expiry"
 msgstr "Ablauf"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Expires in {minutes}:{seconds}. It can only be used once."
+msgstr ""
 
 #: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
@@ -890,6 +930,10 @@ msgstr "Feldname"
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Files are read on this device only. Nothing is uploaded. Delete the export file once you're done."
 msgstr "Dateien werden nur auf diesem Gerät gelesen. Es wird nichts hochgeladen. Löschen Sie die Exportdatei, sobald Sie fertig sind."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Fill logins from the Bramble extension without unlocking twice."
+msgstr ""
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Filter by type"
@@ -1146,6 +1190,15 @@ msgstr "Lassen Sie die Anmeldefelder leer, um Ihre gespeicherten Daten zu behalt
 msgid "Light"
 msgstr "Leuchte"
 
+#. placeholder {0}: formatDate(status.pairedAt)
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked {0}"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked to the Bramble desktop app."
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock the vault and require autofill auth after inactivity"
 msgstr "Tresor sperren und nach Inaktivität die Autoverfüllungsbestätigung erfordern"
@@ -1243,6 +1296,10 @@ msgstr "Neuer {modeLabel}"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "New password"
 msgstr "Neues Passwort"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "No answer. Is Bramble running on this computer?"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -1352,6 +1409,10 @@ msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Ma
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Öffnen Sie ein verschlüsseltes .bramble-Backup und machen Sie es zum Tresor auf diesem Gerät."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open Bramble on this computer, go to Settings and choose Connect a browser, then enter the code it shows."
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Open Bramble on your other device and scan the code, or paste it there."
 msgstr "Öffnen Sie Bramble auf Ihrem anderen Gerät und scannen Sie den Code oder fügen Sie diesen ein."
@@ -1400,6 +1461,7 @@ msgstr "Übersicht"
 msgid "Pair with another device"
 msgstr "Mit einem anderen Gerät koppeln"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Kopplungscode"
@@ -1956,6 +2018,10 @@ msgstr "Tippen Sie, um erneut zu scannen"
 msgid "Tap your key…"
 msgstr "Tappen Sie Ihren Schlüssel..."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Test"
+msgstr ""
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
 msgstr "Dies sieht nicht wie eine Bramble-Backup-Datei (.bramble) aus."
@@ -1996,6 +2062,14 @@ msgstr "Diese Übertragung ist fehlgeschlagen."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "That year is outside the range cards use."
 msgstr "Dieses Jahr liegt außerhalb des für Karten gültigen Bereichs."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop app answered."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop app did not accept that code."
+msgstr ""
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

@@ -3,7 +3,9 @@ import type { AutofillAdapter } from "../adapters/autofill";
 import type { BiometricUnlock } from "../adapters/biometric";
 import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
+import type { DesktopLinkAdapter } from "../adapters/desktop-link";
 import type { CredentialExchangeAdapter } from "../adapters/exchange";
+import type { PairingAdapter } from "../adapters/pairing";
 import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
 import { type CapabilityKey, can, type Surface, surfaceOf, type Target } from "../flags";
@@ -20,6 +22,11 @@ export interface Platform {
 	biometric?: BiometricUnlock;
 	/** OS-driven credential exchange (FIDO CXP). iOS 26+ only; undefined elsewhere. */
 	exchange?: CredentialExchangeAdapter;
+	/** Pairing with a browser extension over a local channel. Desktop only; undefined
+	 * elsewhere, where the Settings section then does not render. */
+	pairing?: PairingAdapter;
+	/** The other end of `pairing`: linking this browser to the desktop app. Extension only. */
+	desktopLink?: DesktopLinkAdapter;
 }
 
 const PlatformContext = createContext<Platform | null>(null);
