@@ -6,6 +6,7 @@
 
 mod crypto;
 mod lifetime;
+mod manifest;
 mod pairing;
 mod socket;
 // Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
@@ -60,6 +61,10 @@ pub fn run() {
                 spotlight::apply_backdrop(&window);
             }
             lifetime::install_tray(app.handle())?;
+
+            // Rewritten every launch, not installed once: the manifest carries an absolute
+            // path to the proxy, so an app update or a move silently breaks every browser.
+            manifest::refresh();
 
             // The browser proxy's end of the pipe. Bound at startup rather than on first
             // pairing: an extension that is already paired reconnects whenever its browser
