@@ -93,7 +93,7 @@ struct PairingFile {
 }
 
 /// Both halves together, so the two can never drift apart across separate stores.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Identity {
     private_key: String,
@@ -198,18 +198,34 @@ fn write_raw(raw: &str) -> Res<()> {
     }
 }
 
+/// The identity once read, because the credential store can prompt on every access.
+///
+/// macOS ties a keychain item's ACL to the reading binary's code signature. A development
+/// build is re-signed on each `cargo build`, so it looks like a different application every
+/// time and the "Always Allow" never sticks; reading per connection then turns a working link
+/// into a wall of password prompts. It cannot change while the process runs, so reading it
+/// once is not just an optimisation. A signed, notarised build has a stable signature and
+/// prompts once ever, but the caching is worth having regardless.
+static CACHED: Mutex<Option<Identity>> = Mutex::new(None);
+
 fn load_identity() -> Res<Option<Identity>> {
+    if let Some(cached) = CACHED.lock().unwrap().clone() {
+        return Ok(Some(cached));
+    }
     let Some(raw) = read_raw()? else {
         return Ok(None);
     };
-    serde_json::from_str(&raw)
-        .map(Some)
-        .map_err(|e| format!("parse stored identity: {e}"))
+    let id: Identity =
+        serde_json::from_str(&raw).map_err(|e| format!("parse stored identity: {e}"))?;
+    *CACHED.lock().unwrap() = Some(id.clone());
+    Ok(Some(id))
 }
 
 fn store_identity(id: &Identity) -> Res<()> {
     let raw = serde_json::to_string(id).map_err(|e| format!("encode identity: {e}"))?;
-    write_raw(&raw)
+    write_raw(&raw)?;
+    *CACHED.lock().unwrap() = Some(id.clone());
+    Ok(())
 }
 
 /// This device's static keypair, generated on first call and stable after.
@@ -460,6 +476,7 @@ mod tests {
     fn setup() -> std::sync::MutexGuard<'static, ()> {
         let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         *TEST_STORE.lock().unwrap() = None;
+        *CACHED.lock().unwrap() = None;
         guard
     }
 
@@ -663,8 +680,10 @@ mod tests {
         let code = begin_pairing().unwrap();
         pair(d.path(), &code, "chrome").unwrap();
 
-        // The credential store is replaced, as a restore from another machine would.
+        // A restore from another machine: different credential store, same allowlist file.
+        // The cache goes too, because this is a scenario a fresh process would meet.
         *TEST_STORE.lock().unwrap() = None;
+        *CACHED.lock().unwrap() = None;
         public_key(d.path()).unwrap_err();
     }
 
@@ -675,6 +694,7 @@ mod tests {
         let stranger = handshake::handshake_generate_keypair().unwrap();
         add_peer(d.path(), &stranger.public_key, "orphan").unwrap();
         *TEST_STORE.lock().unwrap() = None;
+        *CACHED.lock().unwrap() = None;
 
         // Generating a new identity here would leave a browser listed that can never connect.
         let err = public_key(d.path()).unwrap_err();
