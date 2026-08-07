@@ -527,11 +527,20 @@ All `[unverified]`. Linux is the weak column in every row, and WebKitGTK is the 
 renderer already noted at `mobile-port.md:697`. The native-Rust strategy contains the damage: the
 webview only has to render React, not do crypto, transport, or WebAuthn.
 
-**Bundling gap.** The host manifest names an absolute path to the proxy, resolved as a sibling
-of the running binary. In development both sit in `target/debug`, but a bundle needs the proxy
-in `Contents/MacOS`, and no bundler wiring puts it there. So `build:desktop` today produces an
-app that writes a manifest pointing at a binary that is not present, and the browser link would
-fail with Chrome's usual silence. This has to be fixed before any signed build is worth testing.
+**Bundling.** The host manifest names an absolute path to the proxy, resolved as a sibling of
+the running binary, so a bundle needs the proxy in `Contents/MacOS`. Tauri's `externalBin` puts
+it there and signs it as a nested binary, which notarization requires. `scripts/stage-proxy.mjs`
+builds and stages it, writing a placeholder first to break a circularity: the proxy is a binary
+in the same crate as the app, so building it runs `tauri-build`, which validates that every
+`externalBin` already exists.
+
+A signed build is verified working: `codesign --verify --deep --strict` clean, and the app
+rewrites every browser's manifest to a proxy path inside the bundle. Notarization is not done,
+which only matters for machines other than the one that built it.
+
+**Signing is not optional for this feature.** macOS ties a keychain item's ACL to the reading
+binary's code signature, so an unsigned build looks like a different application on every build
+and prompts for the login password. See risk 5.
 
 ## Risks to retire early
 
