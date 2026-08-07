@@ -77,6 +77,11 @@ accurate for the unbuilt parts); this section is the ground truth.
   cross-process handoff), hidden and transparent, toggled by `CmdOrCtrl+Shift+Space`, with a
   native `NSVisualEffectView` behind the webview. It collapses to the search row until there
   is a query and grows anchored at its top-left. No results yet: that is the next slice.
+- **The browser link works end to end.** Verified in Vivaldi through both UIs: the desktop
+  app shows a code, the extension takes it, and `Test` then reconnects over KK with no code.
+  The chain is the desktop's socket, a native-messaging proxy Chrome spawns, a host manifest
+  the app installs for every Chromium browser present, and the extension's own client. The
+  pairing key lives in the OS credential store; the allowlist is a file beside the vault.
 - **The app outlives its main window.** Closing hides rather than destroys, a tray icon is the
   route back, and on macOS the Dock icon follows the window via the activation policy
   (`Regular` ↔ `Accessory`). Needed for the spotlight to be reachable at all, and the same
@@ -522,6 +527,12 @@ All `[unverified]`. Linux is the weak column in every row, and WebKitGTK is the 
 renderer already noted at `mobile-port.md:697`. The native-Rust strategy contains the damage: the
 webview only has to render React, not do crypto, transport, or WebAuthn.
 
+**Bundling gap.** The host manifest names an absolute path to the proxy, resolved as a sibling
+of the running binary. In development both sit in `target/debug`, but a bundle needs the proxy
+in `Contents/MacOS`, and no bundler wiring puts it there. So `build:desktop` today produces an
+app that writes a manifest pointing at a binary that is not present, and the browser link would
+fail with Chrome's usual silence. This has to be fixed before any signed build is worth testing.
+
 ## Risks to retire early
 
 1. **WebKitGTK rendering and window transparency on Linux.** The UI is Tailwind-heavy and WebKit is
@@ -533,7 +544,15 @@ webview only has to render React, not do crypto, transport, or WebAuthn.
 4. **The macOS Accessibility TCC prompt.** Users bounce off it. Needs a real onboarding flow, not a
    raw system dialog.
 5. **Code signing and notarization on macOS, SmartScreen on Windows.** `release-signing.md` is
-   precedent but desktop notarization is new ground.
+   precedent but desktop notarization is new ground. **Browser pairing now depends on this**,
+   which is the part that is easy to miss: macOS ties a keychain item's ACL to the reading
+   binary's code signature, so an unsigned or ad-hoc-signed build looks like a different
+   application on every build and prompts for the login password each time. Ship it unsigned
+   and every user gets a password prompt on every launch, which for a password manager reads
+   as something being wrong. A Developer ID signature is stable across builds and updates, so
+   it should prompt zero times. `[unverified: no signed desktop build exists yet, so the
+   zero-prompt claim and ACL survival across updates are both inference from how macOS ACLs
+   work rather than something observed]`
 6. **webrtc-rs interop with the extension's browser WebRTC on desktop.** Already proven iOS to
    extension, so low risk, but unproven on this path.
 
