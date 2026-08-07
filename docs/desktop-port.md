@@ -289,33 +289,95 @@ malicious dependency in an unrelated project must not be able to open that socke
 GitHub password, which would bypass the master password entirely. That is the same class of problem
 as the GHSA pairing-code issue: a bearer secret worth the vault.
 
-### The minimum viable pairing
+### The pairing
 
-The irreducible requirement is **one user-confirmed pairing**, because a human click is the only
-thing a same-user process cannot produce. Almost everything from the P2P design drops out:
+Each side generates a long-lived static keypair on first run. On first connect they exchange
+public keys, the user confirms, and each stores the other's public key in an allowlist. Every
+connection after that is a mutual proof of possession against those allowlisted keys, with no
+user interaction. Concretely, `Noise_XX` for the pairing handshake (neither side knows the
+other's static key yet) and `Noise_KK` afterwards (both do). `snow` is already a dependency
+and supports both, so this is roughly 100 lines rather than a bespoke scheme, and "we reused
+the audited handshake" is a far easier line in a review.
 
-- **Drop the SAS compare.** It exists because two sync devices are physically apart. Here both
-  endpoints are on the same screen: show "Chrome wants to connect" with the extension ID and let the
-  user approve.
-- **Drop the relay, Nostr signaling, roster, and admission logic.** All of that solves distance and
-  multi-device state that does not exist here.
-- **Keep static keys and one handshake.** Not for confidentiality (anyone who can sniff a local unix
-  socket already has the access needed to read process memory) but so the **proxy is an untrusted
-  relay rather than a trusted component**. With a bearer token, replacing the proxy binary captures
-  the token; with static-key authentication a swapped proxy can only relay.
+The private key never crosses the socket, so a passive observer learns nothing replayable and
+a swapped proxy binary cannot impersonate either end. **The proxy is deliberately an untrusted
+relay**; it holds no key material at all.
 
-Use `snow`, already a dependency, for a `Noise_KK` exchange rather than designing a bespoke token
-scheme. It is roughly 100 lines, and reusing the audited handshake is a far easier line in a
-security review. The heavy parts of the P2P stack (roster, signaling, admission) do not come along.
+Almost everything from the P2P design drops out. **The SAS compare goes**: it exists because
+two sync devices are physically apart, whereas here both endpoints are on the same screen, so
+"Chrome wants to connect" plus the extension ID is the whole ceremony. **The relay, Nostr
+signaling, roster and admission logic go too**: they solve distance and multi-device state
+that does not exist on one machine.
 
-Add peer-credential checks (`SO_PEERCRED`, `GetNamedPipeClientProcessId`, macOS code-signature
-validation by PID) as defence in depth. They are decent on macOS and Windows, weak on Linux where
-there is no signature to check, and they have PID-reuse races, so they are a second lock, never the
-only one `[unverified]`.
+### What the pairing does not cover
 
-For reference, 1Password is not open either: it verifies the browser's code signature against known
-signed builds and requires an explicit first-run opt-in. The seamlessness is that you approve once
-and never think about it again, not that authentication is absent.
+One-time pairing authenticates the **channel**, not each **request**. Treating the first as if
+it delivered the second is the mistake this section exists to prevent.
+
+**The pairing key is a bearer credential at rest.** The extension's half lives in
+`chrome.storage.local`, a file in the browser profile. Malware that can read that directory
+can extract it and impersonate the extension indefinitely, silently, with no further clicks.
+
+That is a **privilege escalation over what such malware already had**, which is the part worth
+sitting with. It could already read the extension's vault blob, but that is encrypted and
+needs the master password. A stolen pairing key against a running, unlocked desktop app turns
+"I have an encrypted blob" into "I have a live oracle for plaintext credentials". Same file
+access, materially larger blast radius. This is the same residual risk 1Password and KeePassXC
+carry; it is not disqualifying, but "you approve once" is doing less work than it sounds like.
+
+Five controls make it defensible. The first two carry most of the weight:
+
+1. **Gate every credential answer on the vault being unlocked.** This is the single biggest
+   bound: it turns "permanent silent access" into "access during windows you were already
+   working in", and kills the exfiltration-at-3am case outright.
+2. **Metadata only for queries; secrets only on an explicit fill.** "Do you have an entry for
+   github.com?" returns a name and an id. The credential crosses the socket for one entry at
+   the moment of use. Malware enumerating the vault learns which sites have accounts, which is
+   bad, but not the passwords.
+3. **Keep the desktop's private key in the macOS Keychain**, `WhenUnlockedThisDeviceOnly` with
+   an ACL requiring the app's code signature, rather than a file beside the vault. Does not
+   protect the extension's half, but stops the trivial symmetric theft `[unverified]`.
+4. **Verify the connecting process** (`LOCAL_PEERPID` then a code-signature check). See below
+   for why this is weaker than it looks.
+5. **Make fills visible.** A tray flash or notification per fill means bulk exfiltration is not
+   silent.
+
+Deliberately *not* on that list: **origin binding**. The extension asserts the active tab's
+origin, so an attacker holding the key simply lies about it. It is hygiene, not a boundary.
+
+### Code-signature checks, and where they actually help
+
+Worth being precise, because the obvious target is the wrong one.
+
+**Verifying the proxy's signature is nearly worthless here**, and for a good reason: the proxy
+is untrusted by design. It holds no key and can only relay, so an attacker gains nothing by
+replacing it, and checking the signature of a component that could not have compromised
+anything protects nothing. Malware can also just run the genuine signed proxy itself.
+
+**Verifying the proxy's parent process does add something.** Chrome passes the calling
+extension's origin to the native host as `argv[1]`, but a local process can run the proxy
+directly with a forged argv. If the app requires that the proxy was spawned by a signed
+browser binary, that attack needs code injection into a real browser rather than just running
+a binary. This is roughly what 1Password does `[unverified]`.
+
+Both are defence in depth on top of the keypair, never a substitute: without the extension's
+private key, neither forged argv nor a replaced proxy gets an attacker anything. On Linux
+there is no signature to check at all, and peer-PID checks carry a reuse race, so this layer
+degrades to nothing there.
+
+For reference, 1Password is not open either: it verifies the browser's code signature and
+requires an explicit first-run opt-in. The seamlessness is that you approve once and never
+think about it again, not that authentication is absent.
+
+### Open decision: per-fill confirmation
+
+Whether a request can *require* a confirmation (a click, or Touch ID once biometric unlock
+lands) on top of the paired channel. Default off, because prompting on every fill destroys the
+feature, but KeePassXC offers it and some users will want high-value entries gated even on a
+paired channel.
+
+Build the request protocol so a response can be "needs confirmation" from the start. It is
+cheap now and awkward to retrofit, because it changes the shape of every request.
 
 ### Routing
 
