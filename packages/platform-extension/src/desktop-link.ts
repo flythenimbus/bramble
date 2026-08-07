@@ -20,6 +20,14 @@ export const extensionDesktopLink: DesktopLinkAdapter = {
 		await dispatch("DESKTOP_LINK_PAIR", { code });
 	},
 	connect: () => dispatch<boolean>("DESKTOP_LINK_CONNECT"),
+	query: async (hostname) => {
+		const answer = await dispatch<{ ok: boolean; error?: string; matches?: unknown[] }>(
+			"DESKTOP_LINK_QUERY",
+			{ hostname },
+		);
+		if (!answer.ok) throw new Error(answer.error ?? "query failed");
+		return (answer.matches ?? []) as { id: string; name: string; secondary: string }[];
+	},
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},

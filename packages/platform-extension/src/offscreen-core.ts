@@ -146,6 +146,8 @@ interface RosterSignWasm {
  * session has to be released. Declared here rather than widening the shared sync types. */
 interface LinkWasm {
 	handshake_close(sessionId: number): void;
+	handshake_encrypt(sessionId: number, plaintext: string): string;
+	handshake_decrypt(sessionId: number, ciphertextB64: string): string;
 }
 
 type HostWasm = LinkWasm &
@@ -567,6 +569,18 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				const w = await getWasm();
 				const { sessionId } = payload as { sessionId: number };
 				return { ok: true, data: w.handshake_remote_static(sessionId) };
+			}
+			case "LINK_SEAL": {
+				// Application traffic over the established session. The proxy relays these
+				// without being able to read them, which is what keeps it an untrusted relay.
+				const w = await getWasm();
+				const { sessionId, plaintext } = payload as { sessionId: number; plaintext: string };
+				return { ok: true, data: w.handshake_encrypt(sessionId, plaintext) };
+			}
+			case "LINK_OPEN": {
+				const w = await getWasm();
+				const { sessionId, sealed } = payload as { sessionId: number; sealed: string };
+				return { ok: true, data: w.handshake_decrypt(sessionId, sealed) };
 			}
 			case "LINK_CLOSE": {
 				const w = await getWasm();

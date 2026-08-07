@@ -289,6 +289,10 @@ msgstr "Bramble ha encontrado un error inesperado. Su bóveda está segura: perm
 msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 msgstr "Bramble es gratuito y de código abierto. Si le resulta útil, una propina ayuda a mantenerlo en funcionamiento. Escanee un código con su billetera o copie la dirección. Gracias."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Bramble is running but locked. Unlock it there first."
+msgstr ""
+
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Breached"
@@ -1228,6 +1232,10 @@ msgstr "Se ha guardado el inicio de sesión para {0}"
 msgid "Logins"
 msgstr "Credenciales"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Look up a site"
+msgstr ""
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
@@ -2064,11 +2072,15 @@ msgid "That year is outside the range cards use."
 msgstr "Ese año está fuera del rango que utilizan las tarjetas."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "The desktop app answered."
-msgstr ""
+#~ msgid "The desktop app answered."
+#~ msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app did not accept that code."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop vault has {found} matching logins."
 msgstr ""
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx

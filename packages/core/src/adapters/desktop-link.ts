@@ -25,6 +25,12 @@ export interface DesktopLinkAdapter {
 	pair(code: string): Promise<void>;
 	/** Reconnect over the established keys. True when the desktop app accepted. */
 	connect(): Promise<boolean>;
+	/**
+	 * Ask the desktop app what it holds for a hostname. Answers with metadata only: id, name
+	 * and a secondary line, never a credential. Rejects with "locked" when the desktop vault
+	 * is locked, which covers the metadata too.
+	 */
+	query(hostname: string): Promise<{ id: string; name: string; secondary: string }[]>;
 	/** Forget the desktop app on this side. Revoking on the app's side is separate; doing
 	 * both is what fully severs the link. */
 	unlink(): Promise<void>;

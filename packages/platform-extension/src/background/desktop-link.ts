@@ -151,6 +151,45 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 	}
 }
 
+/** One authenticated request. Opens a session, asks, closes.
+ *
+ * A session per request rather than a held-open one, for now: the browser spawns a fresh proxy
+ * anyway, and a long-lived port would need reconnect handling for a link that is idle most of
+ * the time. */
+export async function askDesktop(request: Record<string, unknown>): Promise<any> {
+	const state = await loadState();
+	if (!state) throw new Error("Not linked to the desktop app.");
+
+	const start = (await offscreen("LINK_START_INITIATOR", {
+		privateKey: state.privateKey,
+		remotePublicKey: state.appPublicKey,
+	})) as { sessionId: number; message: string };
+
+	const session = new NativeSession();
+	try {
+		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
+		const reply = await session.request({ message: start.message });
+		if (reply?.ok !== true || reply?.done !== true) throw new Error("The desktop app refused.");
+		if (reply.message) {
+			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
+		}
+
+		const sealed = (await offscreen("LINK_SEAL", {
+			sessionId: start.sessionId,
+			plaintext: JSON.stringify(request),
+		})) as string;
+		const answer = await session.request({ sealed });
+		const plain = (await offscreen("LINK_OPEN", {
+			sessionId: start.sessionId,
+			sealed: answer.sealed,
+		})) as string;
+		return JSON.parse(plain);
+	} finally {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		session.close();
+	}
+}
+
 /** Reconnect over KK, which is what every session after the first one does. */
 export async function connectToDesktop(): Promise<boolean> {
 	const state = await loadState();
@@ -165,7 +204,15 @@ export async function connectToDesktop(): Promise<boolean> {
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
-		return reply?.ok === true && reply?.done === true;
+		if (reply?.ok !== true || reply?.done !== true) return false;
+
+		// KK is two messages. Feeding the responder's reply back is what puts this side into
+		// transport mode; without it the session stays mid-handshake, which looks like success
+		// right up until something tries to encrypt over it.
+		if (reply.message) {
+			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
+		}
+		return true;
 	} finally {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
@@ -216,6 +263,15 @@ on(
 on(
 	"DESKTOP_LINK_STATUS",
 	extensionOnly(async () => ({ ok: true, data: await desktopLinkStatus() })),
+);
+
+on(
+	"DESKTOP_LINK_QUERY",
+	extensionOnly(async (message) => {
+		const hostname = String((message as { hostname?: unknown }).hostname ?? "");
+		if (!hostname) return { ok: false, error: "no hostname" };
+		return { ok: true, data: await askDesktop({ op: "query", hostname }) };
+	}),
 );
 
 on(
