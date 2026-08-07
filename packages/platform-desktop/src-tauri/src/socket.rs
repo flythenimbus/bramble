@@ -278,8 +278,8 @@ mod tests {
         dir
     }
 
-    /// Complete a pairing over the socket, returning the client's public key.
-    fn pair_over_socket(dir: &TempDir, code: &str) -> Result<String, String> {
+    /// Complete a pairing over the socket, returning the client's keypair.
+    fn pair_over_socket(dir: &TempDir, code: &str) -> Result<(String, String), String> {
         let kp = handshake::handshake_generate_keypair().unwrap();
         let start =
             handshake::handshake_enroll_initiator(kp.private_key.clone(), pairing::psk_for(code))
@@ -307,7 +307,7 @@ mod tests {
             return Err(format!("not done: {done}"));
         }
         handshake::handshake_close(start.session_id);
-        Ok(kp.public_key)
+        Ok((kp.private_key, kp.public_key))
     }
 
     #[test]
@@ -316,11 +316,57 @@ mod tests {
         let dir = started();
         let code = pairing::begin_pairing().unwrap();
 
-        let client_pub = pair_over_socket(&dir, &code).unwrap();
+        let (_, client_pub) = pair_over_socket(&dir, &code).unwrap();
 
         let peers = pairing::paired_peers(dir.path()).unwrap();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].public_key, client_pub);
+    }
+
+    #[test]
+    fn a_paired_client_reconnects_over_the_socket_without_a_code() {
+        // The everyday path, and the one that runs every time a browser starts. Pairing is
+        // the rare event; this is the one that has to keep working.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let code = pairing::begin_pairing().unwrap();
+        let (client_priv, client_pub) = pair_over_socket(&dir, &code).unwrap();
+
+        // No pairing window open, no code anywhere: KK authenticates from the allowlist alone.
+        assert!(!pairing::pairing_open());
+        let app_pub = pairing::public_key(dir.path()).unwrap();
+        let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
+
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({
+            "kind": "hello", "v": 1, "publicKey": client_pub
+        }));
+        client.send(serde_json::json!({ "message": start.message }));
+
+        let reply = client.recv();
+        assert_eq!(reply["ok"], true, "reconnect refused: {reply}");
+        assert_eq!(reply["done"], true, "KK should finish in one round trip");
+        handshake::handshake_close(start.session_id);
+    }
+
+    #[test]
+    fn a_revoked_client_cannot_reconnect() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        let code = pairing::begin_pairing().unwrap();
+        let (_, client_pub) = pair_over_socket(&dir, &code).unwrap();
+
+        assert!(pairing::forget_peer(dir.path(), &client_pub).unwrap());
+
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({
+            "kind": "hello", "v": 1, "publicKey": client_pub
+        }));
+        assert_eq!(
+            client.recv()["ok"],
+            false,
+            "revocation must actually revoke"
+        );
     }
 
     #[test]
