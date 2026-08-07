@@ -51,6 +51,13 @@ const MAX_ATTEMPTS: u8 = 5;
 /// anywhere else in the system.
 const PSK_INFO: &[u8] = b"bramble/desktop/extension-pairing/psk/v1";
 
+/// Where the static keypair lives in the OS credential store. Unused under test, which
+/// swaps the storage leaf rather than the store.
+#[cfg_attr(test, allow(dead_code))]
+const KEYCHAIN_SERVICE: &str = "app.bramble.desktop";
+#[cfg_attr(test, allow(dead_code))]
+const KEYCHAIN_ACCOUNT: &str = "extension-pairing-identity";
+
 /// A browser that completed pairing and may now open authenticated sessions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -63,20 +70,34 @@ pub struct PairedPeer {
     pub paired_at: u64,
 }
 
-/// On-disk pairing state.
+/// On-disk pairing state: the allowlist, and a copy of the identity's public half.
 ///
-/// The private key sits in a 0600 file beside the vault. That is the weakest part of this
-/// module and it is deliberate for now: the macOS Keychain, with an ACL requiring the app's
-/// code signature, is where it belongs, and moving it there is tracked in docs/desktop-port.md.
-/// It changes nothing about the threat already documented, since the extension's half lives
-/// in the browser profile regardless.
+/// No private key. That lives in the OS credential store (see `identity`), so a process that
+/// can read this file learns who is paired but gains nothing it could authenticate with.
+///
+/// `public_key` is kept here as a fingerprint of the identity these peers were paired
+/// against, and is checked on every load. Without it, an allowlist that outlived its
+/// keypair would silently pair against a freshly generated identity and every browser in the
+/// list would stop working with no indication why.
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PairingFile {
-    private_key: String,
+    #[serde(default)]
     public_key: String,
     #[serde(default)]
     peers: Vec<PairedPeer>,
+    /// An earlier build kept the private key here. Read only so it can be migrated into the
+    /// credential store and removed; never written back.
+    #[serde(default, skip_serializing)]
+    private_key: String,
+}
+
+/// Both halves together, so the two can never drift apart across separate stores.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Identity {
+    private_key: String,
+    public_key: String,
 }
 
 /// A pairing the user has opened but no extension has completed yet.
@@ -134,14 +155,104 @@ fn restrict(p: &Path) -> Res<()> {
     Ok(())
 }
 
+#[cfg_attr(test, allow(dead_code))]
+fn entry() -> Res<keyring::Entry> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|e| format!("credential store unavailable: {e}"))
+}
+
+// Only the storage leaf is swapped under test, so everything above it (generation, the
+// migration, the fingerprint check) is the shipped code path. keyring's own mock store is not
+// usable here: it hands out a fresh credential per `Entry::new` rather than persisting, which
+// is deliberate on its part but makes "is the identity stable" untestable through it. The two
+// keyring calls themselves stay uncovered by unit tests and are exercised when the app runs.
+#[cfg(test)]
+static TEST_STORE: Mutex<Option<String>> = Mutex::new(None);
+
+fn read_raw() -> Res<Option<String>> {
+    #[cfg(test)]
+    {
+        Ok(TEST_STORE.lock().unwrap().clone())
+    }
+    #[cfg(not(test))]
+    {
+        match entry()?.get_password() {
+            Ok(raw) => Ok(Some(raw)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(format!("credential store read: {e}")),
+        }
+    }
+}
+
+fn write_raw(raw: &str) -> Res<()> {
+    #[cfg(test)]
+    {
+        *TEST_STORE.lock().unwrap() = Some(raw.to_string());
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        entry()?
+            .set_password(raw)
+            .map_err(|e| format!("credential store write: {e}"))
+    }
+}
+
+fn load_identity() -> Res<Option<Identity>> {
+    let Some(raw) = read_raw()? else {
+        return Ok(None);
+    };
+    serde_json::from_str(&raw)
+        .map(Some)
+        .map_err(|e| format!("parse stored identity: {e}"))
+}
+
+fn store_identity(id: &Identity) -> Res<()> {
+    let raw = serde_json::to_string(id).map_err(|e| format!("encode identity: {e}"))?;
+    write_raw(&raw)
+}
+
 /// This device's static keypair, generated on first call and stable after.
+///
+/// Held in the OS credential store: the macOS Keychain, the Windows Credential Manager, or
+/// the Linux secret service. Beyond keeping it out of a readable file, the macOS keychain
+/// item carries an ACL naming the app that created it, so another binary reading it prompts
+/// the user rather than succeeding silently the way a 0600 file would.
 fn identity(root: &Path) -> Res<(String, String)> {
     let mut file = read_file(root)?;
+
+    // An earlier build kept the private key in pairing.json. Move it rather than generating
+    // a new one, which would orphan every browser already paired against it.
     if !file.private_key.is_empty() {
-        return Ok((file.private_key, file.public_key));
+        if load_identity()?.is_none() {
+            store_identity(&Identity {
+                private_key: std::mem::take(&mut file.private_key),
+                public_key: file.public_key.clone(),
+            })?;
+        }
+        file.private_key = String::new();
+        write_file(root, &file)?;
     }
+
+    if let Some(id) = load_identity()? {
+        // The allowlist names peers that authenticate against a specific key. If the stored
+        // identity is not that key, those entries are meaningless and continuing would look
+        // like every browser spontaneously failing to connect.
+        if !file.public_key.is_empty() && file.public_key != id.public_key {
+            return Err("pairing identity does not match the stored allowlist".into());
+        }
+        return Ok((id.private_key, id.public_key));
+    }
+
+    if !file.peers.is_empty() {
+        return Err("paired browsers exist but the pairing key is gone from the credential store; re-pair them".into());
+    }
+
     let kp = handshake::handshake_generate_keypair().map_err(|e| format!("keygen: {e:?}"))?;
-    file.private_key = kp.private_key.clone();
+    store_identity(&Identity {
+        private_key: kp.private_key.clone(),
+        public_key: kp.public_key.clone(),
+    })?;
     file.public_key = kp.public_key.clone();
     write_file(root, &file)?;
     Ok((kp.private_key, kp.public_key))
@@ -325,6 +436,14 @@ mod tests {
         tempfile::tempdir().expect("temp dir")
     }
 
+    /// Serialise, and clear the identity so each test starts fresh: the credential store is
+    /// process-global where the temp dirs are not.
+    fn setup() -> std::sync::MutexGuard<'static, ()> {
+        let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_STORE.lock().unwrap() = None;
+        guard
+    }
+
     /// Drive the extension's half in-process. The real one runs this in WASM through the same
     /// `vault_crypto::handshake`, so the protocol under test is the shipped one.
     fn extension_pairs(code: &str) -> Res<(String, u32, String)> {
@@ -351,7 +470,7 @@ mod tests {
 
     #[test]
     fn identity_is_stable_across_calls() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let first = public_key(d.path()).unwrap();
         assert_eq!(public_key(d.path()).unwrap(), first);
@@ -360,7 +479,7 @@ mod tests {
 
     #[test]
     fn pairing_allowlists_the_peer() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let code = begin_pairing().unwrap();
         let ext_pub = pair(d.path(), &code, "chrome-extension://abc").unwrap();
@@ -373,7 +492,7 @@ mod tests {
 
     #[test]
     fn a_wrong_code_never_completes() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         begin_pairing().unwrap();
         // The attacker guesses. XXpsk3 mixes the PSK in, so this fails inside the AEAD
@@ -384,7 +503,7 @@ mod tests {
 
     #[test]
     fn no_pairing_window_means_no_pairing() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         cancel_pairing();
         // A process connecting while the user is not pairing gets nowhere, whatever it claims.
@@ -393,7 +512,7 @@ mod tests {
 
     #[test]
     fn the_code_is_single_use() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let code = begin_pairing().unwrap();
         pair(d.path(), &code, "first").unwrap();
@@ -405,7 +524,7 @@ mod tests {
 
     #[test]
     fn the_code_burns_after_repeated_failures() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         begin_pairing().unwrap();
         for _ in 0..MAX_ATTEMPTS {
@@ -417,7 +536,7 @@ mod tests {
 
     #[test]
     fn an_expired_code_is_refused() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let code = begin_pairing().unwrap();
         // Reach in and age it, rather than sleeping out a three-minute TTL.
@@ -429,7 +548,7 @@ mod tests {
 
     #[test]
     fn a_paired_peer_reconnects_without_a_code() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let code = begin_pairing().unwrap();
         let ext_pub = pair(d.path(), &code, "chrome").unwrap();
@@ -442,7 +561,7 @@ mod tests {
 
     #[test]
     fn an_unpaired_peer_is_refused_even_with_a_real_key() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let stranger = handshake::handshake_generate_keypair().unwrap();
         assert!(accept_known(d.path(), &stranger.public_key).is_err());
@@ -450,7 +569,7 @@ mod tests {
 
     #[test]
     fn forgetting_a_peer_revokes_it() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let code = begin_pairing().unwrap();
         let ext_pub = pair(d.path(), &code, "chrome").unwrap();
@@ -462,7 +581,7 @@ mod tests {
 
     #[test]
     fn re_pairing_replaces_rather_than_duplicates() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         let kp = handshake::handshake_generate_keypair().unwrap();
         add_peer(d.path(), &kp.public_key, "old").unwrap();
@@ -475,7 +594,7 @@ mod tests {
 
     #[test]
     fn a_damaged_state_file_errors_rather_than_resetting() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let d = root();
         public_key(d.path()).unwrap();
         fs::write(path(d.path()), b"{ truncated").unwrap();
@@ -486,8 +605,64 @@ mod tests {
     }
 
     #[test]
+    fn a_legacy_file_key_migrates_into_the_credential_store() {
+        let _g = setup();
+        let d = root();
+        // What the previous build wrote: the private key inline.
+        let kp = handshake::handshake_generate_keypair().unwrap();
+        fs::write(
+            path(d.path()),
+            serde_json::json!({
+                "privateKey": kp.private_key,
+                "publicKey": kp.public_key,
+                "peers": [],
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        // Same identity, not a fresh one: regenerating would orphan every paired browser.
+        assert_eq!(public_key(d.path()).unwrap(), kp.public_key);
+        assert!(
+            read_raw().unwrap().is_some(),
+            "key should now be in the store"
+        );
+
+        let on_disk = fs::read_to_string(path(d.path())).unwrap();
+        assert!(
+            !on_disk.contains(&kp.private_key),
+            "private key should no longer be on disk"
+        );
+    }
+
+    #[test]
+    fn an_allowlist_from_another_identity_is_refused() {
+        let _g = setup();
+        let d = root();
+        let code = begin_pairing().unwrap();
+        pair(d.path(), &code, "chrome").unwrap();
+
+        // The credential store is replaced, as a restore from another machine would.
+        *TEST_STORE.lock().unwrap() = None;
+        public_key(d.path()).unwrap_err();
+    }
+
+    #[test]
+    fn peers_without_a_stored_key_are_refused_rather_than_silently_reset() {
+        let _g = setup();
+        let d = root();
+        let stranger = handshake::handshake_generate_keypair().unwrap();
+        add_peer(d.path(), &stranger.public_key, "orphan").unwrap();
+        *TEST_STORE.lock().unwrap() = None;
+
+        // Generating a new identity here would leave a browser listed that can never connect.
+        let err = public_key(d.path()).unwrap_err();
+        assert!(err.contains("re-pair"), "unhelpful error: {err}");
+    }
+
+    #[test]
     fn codes_use_an_unambiguous_alphabet() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = setup();
         let code = begin_pairing().unwrap();
         assert_eq!(code.len(), CODE_LEN);
         assert!(

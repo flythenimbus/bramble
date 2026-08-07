@@ -48,3 +48,15 @@ base64 = "0.23.1"
 # Each storage test gets its own data dir, so they can run in parallel and clean up after
 # themselves. The suite writes real files: the code under test is the filesystem behaviour.
 tempfile = "3"
+
+# The pairing private key lives in the OS credential store, not a file. Backends are
+# per-platform and their deps do not cross-compile, so each target picks its own: the
+# secret-service one pulls dbus, which has no business in a macOS build.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
