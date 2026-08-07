@@ -8,6 +8,10 @@ mod crypto;
 mod lifetime;
 mod pairing;
 mod socket;
+// Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
+// SOCKET_NAME from it and the rest is live over there.
+#[allow(dead_code)]
+mod socket_addr;
 mod spotlight;
 mod storage;
 

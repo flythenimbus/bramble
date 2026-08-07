@@ -5,6 +5,9 @@ description = "Bramble password manager"
 edition = "2021"
 publish = false
 rust-version = "1.77.2"
+# Required once the proxy made this a two-binary package: `tauri dev` shells out to a bare
+# `cargo run`, which refuses to guess between them.
+default-run = "bramble-desktop"
 
 [lib]
 # Tauri's own convention: main.rs is a shim over a lib so a mobile entry point can share it.
@@ -60,3 +63,10 @@ keyring = { version = "3.6.3", features = ["windows-native"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+# The native-messaging host Chrome spawns. Its own bin rather than a mode of the app binary:
+# the browser starts it on every launch, so it must not carry Tauri's startup cost, and
+# keeping it separate is what lets it stay a byte pump that links almost nothing.
+[[bin]]
+name = "bramble-proxy"
+path = "src/bin/proxy.rs"

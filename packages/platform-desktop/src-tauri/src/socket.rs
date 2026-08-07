@@ -34,7 +34,7 @@ const MAX_FRAME: u32 = 1024 * 1024;
 const PROTOCOL_VERSION: u32 = 1;
 
 pub fn socket_path(root: &Path) -> PathBuf {
-    root.join("bramble.sock")
+    root.join(crate::socket_addr::SOCKET_NAME)
 }
 
 /// What a fresh connection wants.
