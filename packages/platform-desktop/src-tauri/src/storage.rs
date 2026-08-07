@@ -184,7 +184,7 @@ mod ops {
 
 // ---- Tauri commands: resolve the data dir, then defer to `ops` ----
 
-fn data_dir(app: &AppHandle) -> CmdResult<PathBuf> {
+pub(crate) fn data_dir(app: &AppHandle) -> CmdResult<PathBuf> {
     let dir = app
         .path()
         .app_data_dir()

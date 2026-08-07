@@ -40,6 +40,9 @@ window-vibrancy = "0.8.0"
 # The spotlight hotkey. Registering it needs no extra OS permission on macOS; typing INTO
 # another app later will (Accessibility), but that is auto-type's problem, not this one.
 tauri-plugin-global-shortcut = "2.3.2"
+sha2 = "0.10.9"
+getrandom = "0.3.4"
+base64 = "0.23.1"
 
 [dev-dependencies]
 # Each storage test gets its own data dir, so they can run in parallel and clean up after

@@ -6,6 +6,7 @@
 
 mod crypto;
 mod lifetime;
+mod pairing;
 mod spotlight;
 mod storage;
 
@@ -105,6 +106,12 @@ pub fn run() {
             storage::shell_export_bytes,
             spotlight::spotlight_hide,
             spotlight::spotlight_set_height,
+            pairing::pairing_begin,
+            pairing::pairing_cancel,
+            pairing::pairing_is_open,
+            pairing::pairing_list,
+            pairing::pairing_forget,
+            pairing::pairing_public_key,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
