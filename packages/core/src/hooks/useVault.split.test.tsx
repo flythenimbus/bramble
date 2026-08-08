@@ -1,10 +1,16 @@
 /** @vitest-environment happy-dom */
+import { i18n } from "@lingui/core";
+import { I18nProvider } from "@lingui/react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import { useVault, useVaultActions, useVaultState, VaultProvider } from "./useVault";
 
 afterEach(cleanup);
+
+// VaultProvider translates the errors it rejects with; an empty catalog keeps source strings.
+i18n.load("en", {});
+i18n.activate("en");
 
 // A platform that flips a piece of reactive state through a real action (lock, which resets
 // entries + isLocked) without needing crypto/decrypt, so we can observe which consumers
@@ -51,12 +57,14 @@ function renderSplit() {
 
 	const { platform } = makePlatform();
 	render(
-		<PlatformProvider platform={platform}>
-			<VaultProvider>
-				<StateConsumer />
-				<ActionConsumer />
-			</VaultProvider>
-		</PlatformProvider>,
+		<I18nProvider i18n={i18n}>
+			<PlatformProvider platform={platform}>
+				<VaultProvider>
+					<StateConsumer />
+					<ActionConsumer />
+				</VaultProvider>
+			</PlatformProvider>
+		</I18nProvider>,
 	);
 
 	return {

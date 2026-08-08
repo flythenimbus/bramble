@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY } from "../session-keys";
@@ -316,18 +317,18 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 	try {
 		const response = await sendToOffscreen(message, vekEpoch);
 		if (installsOrReplacesVek && !vekStore.vekMutationIsCurrent(vekEpoch!)) {
-			return { ok: false, error: "VEK session changed" };
+			return { ok: false, error: CRYPTO_SESSION_CHANGED };
 		}
 		if (response.ok) {
 			if (type === "CRYPTO_GENERATE_VEK") {
 				await refreshActiveVaultId();
 				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
-					return { ok: false, error: "VEK session changed" };
+					return { ok: false, error: CRYPTO_SESSION_CHANGED };
 				}
 				advanceAutofillSession();
 				await scheduleAutoLock();
 				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
-					return { ok: false, error: "VEK session changed" };
+					return { ok: false, error: CRYPTO_SESSION_CHANGED };
 				}
 				void broadcastLockState(false, autofillSessionGeneration);
 			} else if (type === "CRYPTO_UNLOCK_WITH_VEK" || type === "CRYPTO_ROTATE_VEK") {
@@ -335,7 +336,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				// cache seam as slot unlocks, so old autofill work cannot cross either.
 				await refreshActiveVaultId();
 				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
-					return { ok: false, error: "VEK session changed" };
+					return { ok: false, error: CRYPTO_SESSION_CHANGED };
 				}
 				advanceAutofillSession();
 			} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
@@ -348,12 +349,12 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 					// triggers is answered "locked" and the page keeps its "Vault locked" row.
 					await refreshActiveVaultId();
 					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
-						return { ok: false, error: "VEK session changed" };
+						return { ok: false, error: CRYPTO_SESSION_CHANGED };
 					}
 					advanceAutofillSession();
 					await scheduleAutoLock();
 					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
-						return { ok: false, error: "VEK session changed" };
+						return { ok: false, error: CRYPTO_SESSION_CHANGED };
 					}
 					void maybeStartSync(vekEpoch); // begin continuous sync if this vault is in a group
 					const sessionCurrent = () => vekStore.vekMutationIsCurrent(vekEpoch!);

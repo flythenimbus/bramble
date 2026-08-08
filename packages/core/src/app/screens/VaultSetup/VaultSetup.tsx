@@ -2,6 +2,7 @@ import { Trans } from "@lingui/react/macro";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { BackButton } from "../../components/ui/back-button";
 import { RestoreShell } from "../Restore/RestoreShell";
@@ -59,6 +60,7 @@ export function VaultSetup({
 }: VaultSetupProps) {
 	const [busy, setBusy] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const cryptoError = useCryptoErrorMessage();
 	const form = useForm<VaultSetupFormValues>({
 		defaultValues: { masterPassword: "", confirmPassword: "", label: "" },
 	});
@@ -72,7 +74,7 @@ export function VaultSetup({
 		try {
 			await onCreate(masterPassword, label);
 		} catch (e) {
-			setSubmitError((e as Error).message);
+			setSubmitError(cryptoError(e));
 		} finally {
 			setBusy(false);
 		}

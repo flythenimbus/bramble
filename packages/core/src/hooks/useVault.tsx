@@ -1,3 +1,4 @@
+import { useLingui } from "@lingui/react/macro";
 import {
 	createContext,
 	type ReactNode,
@@ -334,6 +335,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		biometric,
 		exchange,
 	} = usePlatform();
+	// Vault actions reject with copy the screens render directly, so it has to be translated
+	// here rather than at each call site. Internal invariants below stay untranslated on purpose.
+	const { t } = useLingui();
 	// The app operates on one vault at a time; bind its id so this provider's blob reads and
 	// writes address the active vault. Metadata stays device-global. See useVaultRegistry.
 	const {
@@ -627,9 +631,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				slot = findPasswordSlot(blob);
 			} catch (e) {
 				console.error("[vault] failed to read vault blob:", e);
-				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
+				throw new Error(t`Couldn't open this vault. The file may be missing or unreadable.`);
 			}
-			if (!slot) throw new Error("This vault has no password set.");
+			if (!slot) throw new Error(t`This vault has no password set.`);
 			// Record the active vault BEFORE the unwrap: the background starts sync the moment the
 			// unwrap succeeds (session.ts cryptoHandler), and reads this to pick which vault to sync.
 			// Awaited so the write lands first; otherwise the first sync targets the previous vault.
@@ -646,13 +650,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				wrappedVekB64: bytesToBase64(slot.wrappedVek),
 				magicVersion: verifierPrefix(),
 			});
-			if (!ok) throw new Error("Incorrect master password");
+			if (!ok) throw new Error(t`Incorrect master password`);
 			await loadEntries();
 			setIsLocked(false);
 			// Commit any corner-prompt capture parked while locked, now that the VEK is live.
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell, activeId],
+		[readDecodedBlob, crypto, loadEntries, shell, activeId, t],
 	);
 
 	/** Lock the vault: clear the VEK, autofill index, and decrypted state. */
@@ -691,12 +695,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				wrappedVekB64: bytesToBase64(slot.wrappedVek),
 				magicVersion: verifierPrefix(),
 			});
-			if (!ok) throw new Error("Security-key unlock failed (verifier mismatch).");
+			if (!ok) throw new Error(t`Security-key unlock failed (verifier mismatch).`);
 			await loadEntries();
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[crypto, loadEntries, shell, activeId],
+		[crypto, loadEntries, shell, activeId, t],
 	);
 
 	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
@@ -708,10 +712,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			slots = findWebauthnSlots(blob);
 		} catch (e) {
 			console.error("[vault] failed to read vault blob:", e);
-			throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
+			throw new Error(t`Couldn't open this vault. The file may be missing or unreadable.`);
 		}
 		if (slots.length === 0) {
-			throw new Error("No security key registered on this vault.");
+			throw new Error(t`No security key registered on this vault.`);
 		}
 
 		// First tap uses slot[0]'s salt; if a different credential with a
@@ -720,18 +724,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		const firstAttempt = await getPrfSecret(slots, firstSalt);
 		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
 		if (!used) {
-			throw new Error("Authenticator returned an unknown credential.");
+			throw new Error(t`Authenticator returned an unknown credential.`);
 		}
 		let hmacSecret = firstAttempt.hmacSecret;
 		if (needsSaltMismatchRetry(used, firstSalt)) {
 			const second = await getPrfSecret([used], used.salt);
 			used = matchSlotByCredentialId([used], second.rawId);
-			if (!used) throw new Error("Authenticator returned an unknown credential.");
+			if (!used) throw new Error(t`Authenticator returned an unknown credential.`);
 			hmacSecret = second.hmacSecret;
 		}
 
 		await finishWebauthnUnlock(used, hmacSecret);
-	}, [readDecodedBlob, finishWebauthnUnlock]);
+	}, [readDecodedBlob, finishWebauthnUnlock, t]);
 
 	/**
 	 * Prove possession of a registered key (a tap) without touching lock state.
@@ -758,7 +762,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (label: string) => {
 			setError(null);
 			if (await crypto.isLocked()) {
-				throw new Error("Unlock the vault before adding a security key.");
+				throw new Error(t`Unlock the vault before adding a security key.`);
 			}
 			const { blob } = await readDecodedBlob();
 
@@ -789,7 +793,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 			await refreshSlotMetadata();
 		},
-		[crypto, readDecodedBlob, storage, refreshSlotMetadata],
+		[crypto, readDecodedBlob, storage, refreshSlotMetadata, t],
 	);
 
 	/** Remove a security-key slot and its stored label. */
@@ -856,20 +860,20 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1
 	 * blob, so it is safe at rest and still needs the master password to open). */
 	const exportVault = useCallback(async () => {
-		if (!shell.exportBytes) throw new Error("Export isn't available here.");
+		if (!shell.exportBytes) throw new Error(t`Export isn't available here.`);
 		const bytes = await storage.readVaultBlob();
 		const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 		await shell.exportBytes(`bramble-vault-${stamp}.bramble`, bytes, "application/octet-stream");
-	}, [shell, storage]);
+	}, [shell, storage, t]);
 
 	/** Export to a KeePass .kdbx under a password the user picks for the file. Reads the
 	 * already-decrypted entries (so it needs an unlocked vault) and re-encrypts them in
 	 * WASM; the vault's own key never leaves. */
 	const exportKdbx = useCallback(
 		async (password: string) => {
-			if (!shell.exportBytes) throw new Error("Export isn't available here.");
-			if (!crypto.saveKdbx) throw new Error("KDBX export isn't available here.");
-			if (!password) throw new Error("Choose a password for the exported file.");
+			if (!shell.exportBytes) throw new Error(t`Export isn't available here.`);
+			if (!crypto.saveKdbx) throw new Error(t`KDBX export isn't available here.`);
+			if (!password) throw new Error(t`Choose a password for the exported file.`);
 			const b64 = await crypto.saveKdbx({
 				entries: toKdbxEntries(latestRef.current.entries),
 				password,
@@ -881,15 +885,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				"application/octet-stream",
 			);
 		},
-		[shell, crypto],
+		[shell, crypto, t],
 	);
 
 	/** Send the decrypted entries to another app through the OS. The payload is built inside
 	 * the callback, which the adapter runs only after the user has picked a destination. */
 	const exportToApp = useCallback(async () => {
-		if (!exchange) throw new Error("Transferring to another app isn't available here.");
+		if (!exchange) throw new Error(t`Transferring to another app isn't available here.`);
 		return exportToOs(exchange, latestRef.current.entries, shell.appName);
-	}, [exchange, shell.appName]);
+	}, [exchange, shell.appName, t]);
 
 	/** Re-encrypt all entries with their stamps plus the tombstone list, and write
 	 * a new blob; the slot list is unchanged. Stamps come from the caller so a
@@ -992,11 +996,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				if (!ok) throw new Error("password slot failed post-write verify");
 			} catch {
 				await storage.restoreVaultFromBackup().catch(() => false);
-				throw new Error("Couldn't save the master password. Please try again.");
+				throw new Error(t`Couldn't save the master password. Please try again.`);
 			}
 			await refreshSlotMetadata();
 		},
-		[readDecodedBlob, wrapPasswordSlot, storage, crypto, refreshSlotMetadata],
+		[readDecodedBlob, wrapPasswordSlot, storage, crypto, refreshSlotMetadata, t],
 	);
 
 	/** Change the master password. Requires the vault unlocked; does not rotate the VEK. */
@@ -1004,15 +1008,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (newPassword: string) => {
 			setError(null);
 			if (await crypto.isLocked()) {
-				throw new Error("Unlock the vault before changing the master password.");
+				throw new Error(t`Unlock the vault before changing the master password.`);
 			}
 			const { blob } = await readDecodedBlob();
 			if (!findPasswordSlot(blob)) {
-				throw new Error("This vault has no master password to change.");
+				throw new Error(t`This vault has no master password to change.`);
 			}
 			await writeMasterPasswordSlot(newPassword);
 		},
-		[crypto, readDecodedBlob, writeMasterPasswordSlot],
+		[crypto, readDecodedBlob, writeMasterPasswordSlot, t],
 	);
 
 	/** Set (or re-enable) the master password. Requires the vault unlocked. */
@@ -1020,31 +1024,31 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (password: string) => {
 			setError(null);
 			if (await crypto.isLocked()) {
-				throw new Error("Unlock the vault before setting a master password.");
+				throw new Error(t`Unlock the vault before setting a master password.`);
 			}
 			await writeMasterPasswordSlot(password);
 		},
-		[crypto, writeMasterPasswordSlot],
+		[crypto, writeMasterPasswordSlot, t],
 	);
 
 	/** Remove the master-password slot. Requires the vault unlocked and a security key (invariant B). */
 	const disableMasterPassword = useCallback(async () => {
 		setError(null);
 		if (await crypto.isLocked()) {
-			throw new Error("Unlock the vault before disabling the master password.");
+			throw new Error(t`Unlock the vault before disabling the master password.`);
 		}
 		const { blob } = await readDecodedBlob();
 		// Throws (invariant B) if no security key remains to unlock with.
 		const newBlob = removePasswordSlot(blob);
 		await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 		await refreshSlotMetadata();
-	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata]);
+	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata, t]);
 
 	/** Generate (or reset) the recovery code. Requires the vault unlocked; returns the plaintext once. */
 	const generateRecoveryCode = useCallback(async (): Promise<string> => {
 		setError(null);
 		if (await crypto.isLocked()) {
-			throw new Error("Unlock the vault before generating a recovery code.");
+			throw new Error(t`Unlock the vault before generating a recovery code.`);
 		}
 		const { blob } = await readDecodedBlob();
 		const code = makeRecoveryCode();
@@ -1053,7 +1057,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 		await refreshSlotMetadata();
 		return code;
-	}, [crypto, readDecodedBlob, wrapRecoverySlot, storage, refreshSlotMetadata]);
+	}, [crypto, readDecodedBlob, wrapRecoverySlot, storage, refreshSlotMetadata, t]);
 
 	/** Unlock by trying the code against every recovery slot. */
 	const unlockWithRecoveryCode = useCallback(
@@ -1065,9 +1069,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				slots = findRecoverySlots(blob);
 			} catch (e) {
 				console.error("[vault] failed to read vault blob:", e);
-				throw new Error("Couldn't open this vault. The file may be missing or unreadable.");
+				throw new Error(t`Couldn't open this vault. The file may be missing or unreadable.`);
 			}
-			if (slots.length === 0) throw new Error("This vault has no recovery code.");
+			if (slots.length === 0) throw new Error(t`This vault has no recovery code.`);
 			// See unlock(): record the active vault before the unwrap so sync-on-unlock targets it.
 			await shell.setActiveVault?.(activeId ?? null);
 			const normalized = normalizeRecoveryCode(code);
@@ -1087,12 +1091,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					break;
 				}
 			}
-			if (!opened) throw new Error("Incorrect recovery code");
+			if (!opened) throw new Error(t`Incorrect recovery code`);
 			await loadEntries();
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell, activeId],
+		[readDecodedBlob, crypto, loadEntries, shell, activeId, t],
 	);
 
 	// Re-probe the gate's availability + enabled state. Called on mount and whenever the
@@ -1121,13 +1125,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
 	const enableBiometric = useCallback(async () => {
-		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
+		if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
 		if (latestRef.current.isLocked)
-			throw new Error("Unlock the vault before enabling biometric unlock.");
-		if (!activeId) throw new Error("No vault is selected.");
+			throw new Error(t`Unlock the vault before enabling biometric unlock.`);
+		if (!activeId) throw new Error(t`No vault is selected.`);
 		await enableBiometricUnlock(crypto, biometric, activeId);
 		setBiometricEnabled(true);
-	}, [biometric, crypto, activeId]);
+	}, [biometric, crypto, activeId, t]);
 
 	/** Forget this vault's biometric-cached VEK. */
 	const disableBiometric = useCallback(async () => {
@@ -1140,8 +1144,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * longer decrypts this vault, e.g. after a reset) disables itself and surfaces a
 	 * fall-back-to-password error. */
 	const unlockWithBiometric = useCallback(async () => {
-		if (!biometric) throw new Error("Biometric unlock isn't available on this device.");
-		if (!activeId) throw new Error("No vault is selected.");
+		if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
+		if (!activeId) throw new Error(t`No vault is selected.`);
 		setError(null);
 		await biometricUnlockFlow({
 			crypto,
@@ -1152,7 +1156,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		});
 		setIsLocked(false);
 		void shell.flushPendingCornerCapture().catch(() => {});
-	}, [biometric, crypto, loadEntries, shell, activeId]);
+	}, [biometric, crypto, loadEntries, shell, activeId, t]);
 
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.

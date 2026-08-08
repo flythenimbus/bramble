@@ -212,6 +212,10 @@ msgstr "Risiko besteht"
 msgid "Authenticator key (TOTP)"
 msgstr "Authentifizierungsschlüssel (TOTP)"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Authenticator returned an unknown credential."
+msgstr "Der Authenticator hat eine unbekannte Anmeldeinformation zurückgegeben."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Auto-lock timeout"
 msgstr "Automatische Sperrzeit"
@@ -260,6 +264,14 @@ msgstr "Aufzubewahrende Sicherungen"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Biometric unlock"
 msgstr "Biometrische Entsperrung"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Biometric unlock isn't available on this device."
+msgstr "Die biometrische Entsperrung ist auf diesem Gerät nicht verfügbar."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
+msgstr "Bramble konnte den Schlüsselspeicher dieses Geräts nicht sicher aktualisieren, daher blieb der Tresor gesperrt. Versuchen Sie es erneut."
 
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
@@ -350,6 +362,7 @@ msgid "Choose a master password"
 msgstr "Wählen Sie ein Master-Passwort"
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/hooks/useVault.tsx
 msgid "Choose a password for the exported file."
 msgstr "Passwort für die exportierte Datei wählen"
 
@@ -517,6 +530,10 @@ msgstr "Verifizierungscode kopieren"
 msgid "Couldn't open this database."
 msgstr "Die Datenbank konnte nicht geöffnet werden."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Couldn't open this vault. The file may be missing or unreadable."
+msgstr "Dieser Tresor konnte nicht geöffnet werden. Die Datei fehlt möglicherweise oder ist nicht lesbar."
+
 #: packages/core/src/hooks/useExchangeAvailability.tsx
 msgid "Couldn't reach the transfer service on this device."
 msgstr "Der Übertragungsdienst auf diesem Gerät konnte nicht erreicht werden."
@@ -533,6 +550,10 @@ msgstr "Datei konnte nicht gelesen werden."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Couldn't restore this backup."
 msgstr "Dieses Backup konnte nicht wiederhergestellt werden."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Couldn't save the master password. Please try again."
+msgstr "Das Master-Passwort konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
 
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Couldn't unlock the vault."
@@ -817,6 +838,10 @@ msgstr "Als KeePass exportieren"
 msgid "Export as KeePass (.kdbx)"
 msgstr "Als KeePass (.kdbx) exportieren"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Export isn't available here."
+msgstr "Export ist hier nicht verfügbar."
+
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "Export selection"
 msgstr "Auswahl exportieren"
@@ -996,12 +1021,17 @@ msgstr "Importiere..."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/hooks/useVault.tsx
 msgid "Incorrect master password"
 msgstr "Falsches Master-Passwort"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Incorrect master password for this backup."
 msgstr "Falsches Master-Passwort für dieses Backup."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Incorrect recovery code"
+msgstr "Falscher Wiederherstellungscode"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Is this your device?"
@@ -1033,6 +1063,10 @@ msgstr "Einem Gerät beitreten"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Join vault"
 msgstr "Tresor beitreten"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "KDBX export isn't available here."
+msgstr "KDBX-Export ist hier nicht verfügbar."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Keep the invite open on your other device while the vault transfers."
@@ -1226,10 +1260,18 @@ msgstr "Auf diesen Websites wurde keine Karte gespeichert. Entfernen Sie sie, um
 msgid "No save card on this site. Remove to start prompting again."
 msgstr "Auf dieser Website wurde keine Karte gespeichert. Entfernen Sie sie, um die Abfrage erneut zu starten."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "No security key registered on this vault."
+msgstr "Für diesen Tresor ist kein Sicherheitsschlüssel registriert."
+
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "No transfer is waiting. Start one from the other app and pick {0}."
 msgstr "Es wartet keine Übertragung. Starten Sie eine in der anderen App und wählen Sie {0}."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "No vault is selected."
+msgstr "Kein Tresor ausgewählt."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Nostr relay URL"
@@ -1696,6 +1738,10 @@ msgstr "Sicherheitsschlüssel"
 msgid "Security keys"
 msgstr "Sicherheitsschlüssel"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Security-key unlock failed (verifier mismatch)."
+msgstr "Entsperrung mit Sicherheitsschlüssel fehlgeschlagen (Verifizierer stimmt nicht überein)."
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Select {name}"
 msgstr "{name} auswählen"
@@ -1931,6 +1977,10 @@ msgstr "Die Datei, die Sie mit „Backup exportieren“ oder einem Cloud-Backup 
 msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
 msgstr "Der Signalisierungs-Relay, der Geräte einführt. Standardmäßig auf den gehosteten Relay eingestellt; richten Sie ihn auf Ihren eigenen oder einen öffentlichen Nostr-Relay."
 
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "The vault was locked or switched while that was in progress. Try again."
+msgstr "Der Tresor wurde gesperrt oder gewechselt, während der Vorgang ausgeführt wurde. Versuchen Sie es erneut."
+
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Theme"
 msgstr "Thema"
@@ -2008,6 +2058,18 @@ msgstr "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Dadurch wird der Tresor von diesem Gerät entfernt. Synchronisierte Kopien auf Ihren anderen Geräten sind nicht betroffen, und dieser Vorgang kann hier nicht rückgängig gemacht werden. Bestätigen Sie, um fortzufahren."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no master password to change."
+msgstr "Dieser Tresor hat kein Master-Passwort, das geändert werden kann."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no password set."
+msgstr "Dieser Tresor hat kein festgelegtes Passwort."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no recovery code."
+msgstr "Dieser Tresor hat keinen Wiederherstellungscode."
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."
 msgstr "Diese Passwörter stimmen nicht überein."
@@ -2060,6 +2122,10 @@ msgstr "Die Übertragung zwischen Apps erfordert iOS 26."
 msgid "Transferring between apps needs iOS 26. This device is on iOS {version}."
 msgstr "Die Übertragung zwischen Apps erfordert iOS 26. Dieses Gerät verwendet iOS {version}."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Transferring to another app isn't available here."
+msgstr "Die Übertragung an eine andere App ist hier nicht verfügbar."
+
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Try again"
 msgstr "Erneut versuchen"
@@ -2076,6 +2142,30 @@ msgstr "Typ"
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock"
 msgstr "Entsperren"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before adding a security key."
+msgstr "Entsperren Sie den Tresor, bevor Sie einen Sicherheitsschlüssel hinzufügen."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before changing the master password."
+msgstr "Entsperren Sie den Tresor, bevor Sie das Master-Passwort ändern."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before disabling the master password."
+msgstr "Entsperren Sie den Tresor, bevor Sie das Master-Passwort deaktivieren."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before enabling biometric unlock."
+msgstr "Entsperren Sie den Tresor, bevor Sie die biometrische Entsperrung aktivieren."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before generating a recovery code."
+msgstr "Entsperren Sie den Tresor, bevor Sie einen Wiederherstellungscode generieren."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before setting a master password."
+msgstr "Entsperren Sie den Tresor, bevor Sie ein Master-Passwort festlegen."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock Vault"

@@ -1,3 +1,4 @@
+import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	autofillSessionCapability,
@@ -135,7 +136,7 @@ describe("CRYPTO_ session state sync", () => {
 
 		await bg.send({ type: "CRYPTO_LOCK" });
 		release?.(defaultOffscreen({ type }));
-		expect((await pending).resp).toEqual({ ok: false, error: "VEK session changed" });
+		expect((await pending).resp).toEqual({ ok: false, error: CRYPTO_SESSION_CHANGED });
 		expect(bg.state.session[VEK_KEY]).toBeUndefined();
 		expect(
 			bg.state.tabMessages.filter(
@@ -164,7 +165,7 @@ describe("CRYPTO_ session state sync", () => {
 		const lock = bg.send({ type: "CRYPTO_LOCK" });
 		await bg.flush();
 		releaseSet?.();
-		expect((await unlock).resp).toEqual({ ok: false, error: "VEK session changed" });
+		expect((await unlock).resp).toEqual({ ok: false, error: CRYPTO_SESSION_CHANGED });
 		await lock;
 		expect(bg.state.session[VEK_KEY]).toBeUndefined();
 		const session = await import("./session");

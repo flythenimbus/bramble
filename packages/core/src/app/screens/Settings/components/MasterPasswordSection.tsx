@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertTriangle, Asterisk } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useCryptoErrorMessage } from "../../../../hooks/useCryptoErrorMessage";
 import { useVault } from "../../../../hooks/useVault";
 import {
 	masterPasswordHardError,
@@ -31,6 +32,7 @@ export function MasterPasswordSection() {
 		disableMasterPassword,
 	} = useVault();
 	const { t } = useLingui();
+	const cryptoError = useCryptoErrorMessage();
 	const hasSecurityKey = securityKeys.length > 0;
 	// "change" reveals current+new+confirm; "set" reveals new+confirm (re-enable
 	// or first-time on a key-only vault); null = form closed.
@@ -93,7 +95,7 @@ export function MasterPasswordSection() {
 			reset();
 			setFormMode(null);
 		} catch (e) {
-			setFormError((e as Error).message);
+			setFormError(cryptoError(e));
 		}
 	};
 
@@ -119,7 +121,7 @@ export function MasterPasswordSection() {
 			await disableMasterPassword();
 			setConfirmingDisable(false);
 		} catch (e) {
-			setDisableError((e as Error).message);
+			setDisableError(cryptoError(e));
 		} finally {
 			setDisabling(false);
 		}

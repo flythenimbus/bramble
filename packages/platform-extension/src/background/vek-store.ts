@@ -7,6 +7,7 @@
 // service-worker restart rehydrates it. Imports no other background module, so session.ts
 // and offscreen-client.ts can both use it without a cycle. See docs/multiple-vaults.md.
 
+import { CRYPTO_PERSISTENCE_FAILED } from "@core/adapters/crypto";
 import { api } from "../platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
 
@@ -68,8 +69,9 @@ function serializeMutation<T>(commit: () => Promise<T>): Promise<T> {
 	return run;
 }
 
+/** Code first so the UI can translate it; the rest is console detail and is never rendered. */
 function persistenceError(action: string, cause: unknown): Error {
-	return new Error(`VEK session persistence ${action} failed: ${String(cause)}`);
+	return new Error(`${CRYPTO_PERSISTENCE_FAILED}: ${action} failed: ${String(cause)}`);
 }
 
 function activeValue(value: unknown): string | null {
@@ -294,7 +296,7 @@ export async function setVek(
 ): Promise<boolean> {
 	return serializeMutation(async () => {
 		if (!vekMutationIsCurrent(expectedEpoch)) return false;
-		if (persistencePoisoned) throw new Error("VEK session persistence requires lock cleanup");
+		if (persistencePoisoned) throw new Error(`${CRYPTO_PERSISTENCE_FAILED}: requires lock cleanup`);
 		const key = vekKey(vaultId);
 		durableVekCandidates.add(key);
 		veks.set(vaultId, vekB64);
@@ -323,7 +325,7 @@ export async function setVek(
 export async function removeVek(vaultId: string): Promise<void> {
 	beginVekMutation();
 	await serializeMutation(async () => {
-		if (persistencePoisoned) throw new Error("VEK session persistence requires lock cleanup");
+		if (persistencePoisoned) throw new Error(`${CRYPTO_PERSISTENCE_FAILED}: requires lock cleanup`);
 		const key = vekKey(vaultId);
 		veks.delete(vaultId);
 		mru = mru.filter((id) => id !== vaultId);

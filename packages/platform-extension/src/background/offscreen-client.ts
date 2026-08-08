@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
 import { type HostResponse, handleHostMessage } from "../offscreen-core";
 import { api } from "../platform-api";
 import * as vekStore from "./vek-store";
@@ -110,7 +111,7 @@ export async function sendToOffscreen(
 		}
 		return (await vekStore.setVek(vaultId, vekB64, expectedVekEpoch))
 			? { ok: true, data: null }
-			: { ok: false, error: "VEK session changed" };
+			: { ok: false, error: CRYPTO_SESSION_CHANGED };
 	}
 
 	// USE-VEK ops: inject the target vault's vek; fail fast (no offscreen trip) when locked.
@@ -128,7 +129,7 @@ export async function sendToOffscreen(
 		const res = await deliver(message);
 		if (res.ok && typeof res.data === "string" && vaultId !== null) {
 			if (!(await vekStore.setVek(vaultId, res.data, expectedVekEpoch))) {
-				return { ok: false, error: "VEK session changed" };
+				return { ok: false, error: CRYPTO_SESSION_CHANGED };
 			}
 		}
 		return res;
@@ -139,7 +140,7 @@ export async function sendToOffscreen(
 		const data = res.data as { ok: boolean; vekB64?: string };
 		if (data.ok && typeof data.vekB64 === "string" && vaultId !== null) {
 			if (!(await vekStore.setVek(vaultId, data.vekB64, expectedVekEpoch))) {
-				return { ok: false, error: "VEK session changed" };
+				return { ok: false, error: CRYPTO_SESSION_CHANGED };
 			}
 		}
 		return { ok: true, data: data.ok };

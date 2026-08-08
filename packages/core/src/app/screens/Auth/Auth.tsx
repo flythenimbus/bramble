@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
+import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { displayLabel } from "../../../vault/vault-registry";
@@ -52,6 +53,7 @@ export function Auth() {
 	const canSecurityKeys = useCan("securityKeys");
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
+	const cryptoError = useCryptoErrorMessage();
 	const appName = shell.appName;
 	const onPopOut = canPopOut ? popOut : undefined;
 
@@ -82,7 +84,7 @@ export function Auth() {
 		} catch (e) {
 			// Keep the typed value; the inline field error is the failure signal.
 			// Do not resetField here: in RHF v7 it clears the error and makes failures silent.
-			setError("masterPassword", { message: (e as Error).message }, { shouldFocus: true });
+			setError("masterPassword", { message: cryptoError(e) }, { shouldFocus: true });
 		} finally {
 			setBusy(false);
 		}
@@ -93,7 +95,7 @@ export function Auth() {
 		try {
 			await shell.openSetup();
 		} catch (e) {
-			setError("masterPassword", { message: (e as Error).message });
+			setError("masterPassword", { message: cryptoError(e) });
 		} finally {
 			setBusy(false);
 		}
@@ -105,7 +107,7 @@ export function Auth() {
 			await unlockWithSecurityKey();
 		} catch (e) {
 			// Surface in the same field-error region as a wrong master password.
-			setError("masterPassword", { message: (e as Error).message });
+			setError("masterPassword", { message: cryptoError(e) });
 		} finally {
 			setBusy(false);
 		}
@@ -117,7 +119,7 @@ export function Auth() {
 			await unlockWithBiometric();
 		} catch (e) {
 			// A user cancel surfaces here too; the password form stays available below.
-			setError("masterPassword", { message: (e as Error).message });
+			setError("masterPassword", { message: cryptoError(e) });
 		} finally {
 			setBusy(false);
 		}
@@ -130,7 +132,7 @@ export function Auth() {
 		try {
 			await unlockWithRecoveryCode(recoveryCode);
 		} catch (err) {
-			setRecoveryError((err as Error).message);
+			setRecoveryError(cryptoError(err));
 		} finally {
 			setBusy(false);
 		}

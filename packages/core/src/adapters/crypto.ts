@@ -105,6 +105,15 @@ export interface SaveKdbxInput {
 	password: string;
 }
 
+/**
+ * Stable codes a platform adapter puts at the START of a rejection message, so the UI can show
+ * translated copy instead of internal wording. Anything after the code is diagnostic detail for
+ * the console and is never rendered. Defined here rather than per-platform so the extension and
+ * mobile agree; see `useCryptoErrorMessage`.
+ */
+export const CRYPTO_SESSION_CHANGED = "vek_session_changed";
+export const CRYPTO_PERSISTENCE_FAILED = "vek_persistence_failed";
+
 /** Vault crypto operations (VEK lifecycle, slot wrap/unwrap, entry encryption, KeePass import). */
 export interface CryptoAdapter {
 	// Return an adapter bound to a specific vault id, so every VEK-scoped op it sends targets
