@@ -63,3 +63,57 @@ describe("toListItem", () => {
 		expect(item.searchText).toContain("pin");
 	});
 });
+
+const card = (over: Partial<Extract<Entry, { type: "card" }>> = {}): Entry => ({
+	id: "c1",
+	type: "card",
+	name: "Personal Visa",
+	cardholderName: "Jane Doe",
+	number: "4242424242424242",
+	expMonth: "04",
+	expYear: "2030",
+	cvv: "123",
+	...over,
+});
+
+/** The copy menu's labels, in the order the row offers them. */
+function labels(entry: Entry): string[] {
+	return toListItem(entry, true).copyItems.map((i) => i.label);
+}
+
+describe("card copy items", () => {
+	it("offers the number, the expiry and the CVV", () => {
+		expect(labels(card())).toEqual(["card number", "expiry", "CVV"]);
+	});
+
+	it("formats the expiry the way the detail view does", () => {
+		const expiry = toListItem(card(), true).copyItems.find((i) => i.label === "expiry");
+		expect(expiry?.value).toBe("04 / 2030");
+	});
+
+	it("copies the CVV verbatim", () => {
+		const cvv = toListItem(card(), true).copyItems.find((i) => i.label === "CVV");
+		expect(cvv?.value).toBe("123");
+	});
+
+	it("omits the expiry when neither month nor year is set", () => {
+		expect(labels(card({ expMonth: "", expYear: "" }))).toEqual(["card number", "CVV"]);
+	});
+
+	it("still offers a half-filled expiry", () => {
+		const item = toListItem(card({ expMonth: "04", expYear: "" }), true);
+		expect(item.copyItems.find((i) => i.label === "expiry")?.value).toBe("04");
+	});
+
+	it("omits the CVV when it is empty", () => {
+		expect(labels(card({ cvv: "" }))).toEqual(["card number", "expiry"]);
+	});
+
+	it("omits the number when it is empty", () => {
+		expect(labels(card({ number: "" }))).toEqual(["expiry", "CVV"]);
+	});
+
+	it("offers nothing for an entirely empty card", () => {
+		expect(labels(card({ number: "", expMonth: "", expYear: "", cvv: "" }))).toEqual([]);
+	});
+});

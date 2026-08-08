@@ -34,6 +34,11 @@ function cardSubtitle(card: CardEntryData): string {
 	return [brand, tail].filter(Boolean).join(" ");
 }
 
+/** "04 / 2030". Shared so the detail view and the list's copy menu agree. */
+function cardExpiry(card: CardEntryData): string {
+	return [card.expMonth, card.expYear].filter(Boolean).join(" / ");
+}
+
 function CardFields() {
 	const { register } = useFormContext<CardFormValues>();
 	const { t } = useLingui();
@@ -117,7 +122,7 @@ function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const { t } = useLingui();
 	const [showNumber, setShowNumber] = useState(false);
 	const [showCvv, setShowCvv] = useState(false);
-	const expiry = [card.expMonth, card.expYear].filter(Boolean).join(" / ");
+	const expiry = cardExpiry(card);
 
 	return (
 		<>
@@ -256,7 +261,12 @@ export const cardMode: EntryMode = {
 		return {
 			icon: CreditCard,
 			secondary: cardSubtitle(card) || i18n._(msg`Payment card`),
-			copyItems: [{ label: i18n._(msg`card number`), value: card.number }],
+			// Each is omitted when empty rather than offering a row that copies nothing.
+			copyItems: [
+				...(card.number ? [{ label: i18n._(msg`card number`), value: card.number }] : []),
+				...(cardExpiry(card) ? [{ label: i18n._(msg`expiry`), value: cardExpiry(card) }] : []),
+				...(card.cvv ? [{ label: i18n._(msg`CVV`), value: card.cvv }] : []),
+			],
 		};
 	},
 

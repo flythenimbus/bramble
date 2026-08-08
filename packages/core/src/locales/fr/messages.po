@@ -816,6 +816,10 @@ msgstr "Expiration"
 msgid "Expires in {0} · keep this window open until pairing finishes"
 msgstr "Expire dans {0} · gardez cette fenêtre ouverte jusqu'à la fin de l'appairage"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "expiry"
+msgstr "Expiration"
+
 #: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
