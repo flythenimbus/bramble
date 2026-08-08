@@ -28,11 +28,27 @@ import { CHUNK_BYTES } from "./secure-channel";
 
 const b64 = (len: number) => bytesToBase64(new Uint8Array(len));
 
-/** Turn the event loop under fake timers until `cond` holds, without advancing the clock. For
+/**
+ * Turn the event loop under fake timers until `cond` holds, without advancing the clock. For
  * waiting on a promise chain that includes real WebCrypto, where a fixed number of ticks is a
- * race rather than a barrier. */
+ * race rather than a barrier.
+ *
+ * Bounded in real time rather than iterations. The previous bound of 200 spins buys about 5ms of
+ * real time, which is enough only because on an idle machine the crypto has already resolved
+ * before the first check. Under a parallel `pnpm -r run test` it needs longer, the spins are
+ * exhausted almost immediately, and the wait fails having barely waited.
+ *
+ * `vi.getRealSystemTime()` is the clock to use here: the fake timers freeze `Date.now()`,
+ * `process.hrtime()` and `performance.now()` alike, so a deadline built on any of those never
+ * arrives and this spins until the runner kills the test.
+ */
+// Under vitest's 5s default testTimeout on purpose, so a genuine hang surfaces as the labelled
+// error below rather than an unlabelled "Test timed out" from the runner.
+const FLUSH_TIMEOUT_MS = 3_000;
+
 async function flushUntil(cond: () => boolean, label: string): Promise<void> {
-	for (let i = 0; i < 200; i++) {
+	const deadline = vi.getRealSystemTime() + FLUSH_TIMEOUT_MS;
+	while (vi.getRealSystemTime() < deadline) {
 		if (cond()) return;
 		await vi.advanceTimersByTimeAsync(0);
 	}
