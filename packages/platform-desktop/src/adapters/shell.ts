@@ -14,6 +14,16 @@ import {
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/keys";
+import {
+	approveEnrollment,
+	getPendingEnrollApproval,
+	onSyncEvent,
+	onSyncStatus,
+	startEnrollInvite,
+	startEnrollJoin,
+	stopEnrollInvite,
+	stopSync,
+} from "../sync/transport";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
 let appVersion = "0.0.0";
@@ -76,16 +86,14 @@ export const desktopShell: ShellAdapter = {
 	syncAdmissionSign,
 	resetSyncState,
 
-	// The transport itself is the next slice. These stay honest about that rather than
-	// pretending: an enrollment that silently did nothing would be worse than one that says
-	// it cannot run. See docs/desktop-port.md.
-	stopSyncSpike: async () => {},
-	onSyncStatus: () => () => {},
-	onSyncEvent: () => () => {},
-	startEnrollInvite: async () => {
-		throw new Error("Device sync is not wired on desktop yet");
-	},
-	startEnrollJoin: async () => {
-		throw new Error("Device sync is not wired on desktop yet");
-	},
+	// Enrollment, running in this webview: WKWebView has WebRTC, so @core's transport and
+	// relay client work unchanged. See ../sync/transport.
+	stopSyncSpike: stopSync,
+	stopEnrollInvite,
+	onSyncStatus,
+	onSyncEvent,
+	startEnrollInvite,
+	startEnrollJoin,
+	approveEnrollment,
+	getPendingEnrollApproval,
 };

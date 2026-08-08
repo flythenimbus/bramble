@@ -11,6 +11,7 @@
 // mapping layer whose only job is to undo a rename. See docs/desktop-port.md.
 
 import { invoke } from "@tauri-apps/api/core";
+import { desktopCrypto } from "./adapters/crypto";
 
 interface Keypair {
 	privateKey: string;
@@ -27,7 +28,47 @@ interface ReadResult {
 	done: boolean;
 }
 
+/**
+ * The vault-crypto slice @core/sync needs, in the wasm module's positional shape.
+ *
+ * The desktop crypto adapter already wraps every one of these, but with named-object arguments
+ * and camelCase, because that is what @core/adapters/crypto declares. @core/sync was written
+ * against the wasm exports instead, so this translates rather than duplicating: one call each,
+ * no second path to the same command that could drift from the first.
+ */
+const cryptoSlice = {
+	export_vek: () => desktopCrypto.exportVek(),
+	unlock_with_vek: (vekB64: string) => desktopCrypto.unlockWithVek(vekB64),
+	generate_salt: () => desktopCrypto.generateSalt(),
+	generate_slot_id: () => desktopCrypto.generateSlotId(),
+	wrap_vek_password: (
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		magicVersion: Uint8Array,
+	) => desktopCrypto.wrapVekPassword({ password, saltB64, slotIdB64, magicVersion }),
+	wrap_vek_webauthn: (hmacSecretB64: string, slotIdB64: string, magicVersion: Uint8Array) =>
+		desktopCrypto.wrapVekWebauthn({ hmacSecretB64, slotIdB64, magicVersion }),
+	encrypt_with_vek: (plaintext: string) => desktopCrypto.encryptWithVek(plaintext),
+	verify_password_slot: (
+		password: string,
+		saltB64: string,
+		slotIdB64: string,
+		verifierB64: string,
+		magicVersion: Uint8Array,
+	) =>
+		desktopCrypto.verifyPasswordSlot({
+			password,
+			saltB64,
+			slotIdB64,
+			verifierB64,
+			magicVersion,
+		}),
+};
+
 export const desktopSyncCrypto = {
+	...cryptoSlice,
+
 	// --- Noise: XXpsk3 to enroll a new device, KK once both statics are known ---
 	handshake_generate_keypair: (): Promise<Keypair> => invoke("sync_handshake_generate_keypair"),
 	handshake_start_initiator: (privB64: string, remotePubB64: string): Promise<StartResult> =>
