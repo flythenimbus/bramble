@@ -516,13 +516,15 @@ rather than re-resolving the active vault per call. Desktop needs that more than
 not less: the process outlives the window, so a session can be running with no UI on screen.
 `src/sync/roster.test.ts` pins the routing half, ported from mobile's.
 
-**Known gap: host-side admission signing.** `ShellAdapter` lets a host admission-sign a joiner's
-roster entry and write the roster itself; the extension does that because Firefox's event page
-outlives the popup, and a lost write leaves the joiner rejected as "not in roster" when it
-reconnects. Mobile leaves it to the UI, and desktop currently matches mobile. Desktop has
-Firefox's hazard in worse form, since the vault window can close while the process keeps running,
-so the UI doing the write is exactly the arrangement that fails. See the comment on
-`startEnrollInvite` in `src/sync/transport.ts`.
+**Host-side admission signing** is done, unlike on mobile. `ShellAdapter` lets the host
+admission-sign a joiner's roster entry and write the roster itself; the extension does that
+because Firefox's event page outlives the popup, and a lost write leaves the joiner rejected as
+"not in roster" when it reconnects, which reads as a pairing that worked and then silently
+didn't. Desktop has that hazard in worse form, since closing the vault window does not end the
+process, so an invite can outlive the UI entirely. `admitJoiner` in `src/sync/transport.ts` does
+the write before announcing the enrollment, which also orders it ahead of the UI's identical
+write instead of racing it. The vault is pinned at invite time, like the VEK, so a vault switch
+while the code is on screen cannot enrol the joiner into a group whose vault it was never given.
 
 ## Required `core-rust` change
 
@@ -605,10 +607,10 @@ Each phase retires a risk.
   main window, `spotlightActions` on `EntryMode`, and the combobox with Cmd+O / Cmd+E. Actions
   stay clipboard-only until Phase 4, so it is useful before any IPC exists. The non-activating
   panel (risk 2) is deliberately deferred to when auto-type makes it matter.
-- **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join) and ongoing roster sync both
-  run in the vault window on the webview's own WebRTC, with the crypto routed to Rust. Device
-  identity lives in the OS credential store. Outstanding: host-side admission signing, and the
-  tray residency and scheduled backups that are the actual "hub" part.
+- **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join), host-side admission signing,
+  and ongoing roster sync all run in the vault window on the webview's own WebRTC, with the
+  crypto routed to Rust. Device identity lives in the OS credential store. Outstanding: the tray
+  residency and scheduled backups that are the actual "hub" part, and a two-device test.
 - **Phase 4, browser integration.** Proxy binary, host manifests, Noise pairing plus the approval
   dialog, fill routing. Enter becomes a real fill in the browser.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

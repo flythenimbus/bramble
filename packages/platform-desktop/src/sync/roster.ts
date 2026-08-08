@@ -25,10 +25,12 @@ import {
 	type HybridClock,
 	makeClock,
 	mergeRemoteRoster,
+	type RosterEntry,
 	type RosterPayload,
 	type StorageAdapter,
 	SYNC_LAST_SYNCED_KEY,
 } from "@core/index";
+import { addDevice } from "@core/sync/roster";
 import { syncKeyFor } from "@core/sync/sync-keys";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
@@ -63,6 +65,24 @@ async function activeVaultId(): Promise<string | undefined> {
 	if (active) return active;
 	const registry = parseRegistry(await desktopStorage.getMeta(VAULT_REGISTRY_KEY));
 	return registry.vaults.length === 1 ? registry.vaults[0]?.id : undefined;
+}
+
+/** The vault an enrollment should read and write, resolved once at invite time. */
+export const syncTargetVaultId = activeVaultId;
+
+/**
+ * Merge a device into a vault's stored roster. Used by the enroll host to add a joiner it has
+ * just admitted, so the write does not depend on the vault window still being open.
+ *
+ * A CRDT union, so it never revokes an existing device, and idempotent with the same write from
+ * the UI: the entry is identical and the merge is order-independent.
+ */
+export async function addToLocalRoster(vaultId: string, device: RosterEntry): Promise<void> {
+	const key = syncKeyFor(GROUP_KEY, vaultId);
+	const group = await desktopStorage.getMeta<GroupConfig>(key);
+	if (!group) return; // no group to add to; the invite was for a vault that has since gone
+	await desktopStorage.setMeta(key, { ...group, roster: addDevice(group.roster, device) });
+	emit({ kind: "roster" });
 }
 
 let clockCache: { vaultId: string; clock: Promise<HybridClock> } | null = null;

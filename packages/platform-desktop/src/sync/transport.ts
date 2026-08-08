@@ -10,13 +10,62 @@
 // and never crosses into the webview. That is the only structural difference from mobile.
 
 import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } from "@core/index";
+import { canonicalRosterEntry, RosterEntrySchema } from "@core/sync/roster";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { desktopCrypto } from "../adapters/crypto";
 import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
-import { clearSyncIdentity, deviceKeypair } from "./keys";
-import { clearGroupState, stopRosterSync } from "./roster";
+import { clearSyncIdentity, deviceKeypair, syncAdmissionSign } from "./keys";
+import { addToLocalRoster, clearGroupState, stopRosterSync, syncTargetVaultId } from "./roster";
+
+/** The inviter's material for admitting a joiner: a re-entered password and who is admitting. */
+interface Admission {
+	password: string;
+	saltB64: string;
+	adminId: string;
+}
+
+/**
+ * Admission-sign a freshly joined device and add it to this vault's roster, in the process that
+ * ran the enrollment rather than in the window that started it.
+ *
+ * The window can be closed the moment the code is handed over, and on desktop closing it does not
+ * end the process, so the UI's own copy of this write is the half that can go missing. Losing it
+ * leaves the joiner rejected as "not in roster" when it comes back for ongoing sync, which reads
+ * as a pairing that worked and then silently didn't. Idempotent with the UI write: Ed25519 is
+ * deterministic over the same canonical entry, and the roster merge is a union.
+ *
+ * Failure is reported, not thrown: the enrollment itself succeeded, and the UI may still land its
+ * own write. See docs/p2p-sync-revocation-hardening.md.
+ */
+async function admitJoiner(
+	vaultId: string,
+	admission: Admission | undefined,
+	entryJson: string,
+): Promise<void> {
+	try {
+		const entry = RosterEntrySchema.parse(JSON.parse(entryJson));
+		// No admission material means this device cannot admit (security-key-only, or no password
+		// re-entered). The joiner still goes in the roster, just unsigned.
+		const admitted = admission
+			? {
+					...entry,
+					admission: {
+						by: admission.adminId,
+						sig: await syncAdmissionSign(
+							admission.password,
+							admission.saltB64,
+							canonicalRosterEntry(entry),
+						),
+					},
+				}
+			: entry;
+		await addToLocalRoster(vaultId, admitted);
+	} catch (e) {
+		report(`sync: could not add the new device to the roster (${(e as Error).message})`);
+	}
+}
 
 // ---- the enrollment approval ----
 
@@ -57,18 +106,14 @@ export async function startEnrollInvite(opts: {
 	entries: EntriesPayload;
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 	recoverySlots?: WireRecoverySlot[];
-	// NOT accepted, deliberately, and this will have to change. ShellAdapter declares an
-	// `admission` field so a host can admission-sign a joiner's entry and write the roster
-	// itself; the extension does that because Firefox's event page outlives the popup that
-	// would otherwise do it, and a lost write leaves the joiner rejected as "not in roster"
-	// when it reconnects. Mobile does not, and leaves it to the UI. Desktop matches mobile for
-	// now because the host-side write needs roster storage that arrives with ongoing sync.
-	//
-	// Desktop has Firefox's hazard though, and worse: the vault window can be closed while this
-	// process keeps running, so the UI doing the write is exactly the arrangement that fails.
-	// See docs/desktop-port.md.
+	/** Lets this process admit the joiner itself rather than relying on the window. See admitJoiner. */
+	admission?: Admission;
 }): Promise<void> {
 	const { privateKey, publicKey } = await deviceKeypair();
+	// Pinned now, for the same reason the VEK is: an invite stays open as long as the code is on
+	// screen, and the roster this enrollment writes to must be the one the user is sharing, not
+	// whichever vault they switched to before the joiner arrived.
+	const vaultId = await syncTargetVaultId();
 	// Captured now, while the user is demonstrably in the vault they are sharing. The VEK is
 	// process-global and an invite stays open as long as the code is on screen, so reading it
 	// at send time would ship whichever vault they had switched to by then, handing the joiner
@@ -97,7 +142,14 @@ export async function startEnrollInvite(opts: {
 		},
 		onEnrollFailed: (message) => emit({ kind: "enroll-failed", message }),
 		onEnrollAttemptFailed: (message) => emit({ kind: "enroll-attempt-failed", message }),
-		onEnrolled: (entryJson) => emit({ kind: "enrolled", entryJson }),
+		// Write the roster here FIRST, then tell the UI. It does the same write, so ordering the
+		// two makes its read see this one rather than racing it.
+		onEnrolled: (entryJson) => {
+			void (async () => {
+				if (vaultId) await admitJoiner(vaultId, opts.admission, entryJson);
+				emit({ kind: "enrolled", entryJson });
+			})();
+		},
 		relayUrl: opts.relayUrl,
 		iceUrl: opts.iceUrl,
 		groupKeyB64: opts.groupKeyB64,
