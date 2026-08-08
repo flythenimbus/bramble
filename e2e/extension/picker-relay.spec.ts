@@ -14,6 +14,8 @@ import { createVault, openPopup, seedExampleCard } from "./helpers";
 
 const MERCHANT = "https://merchant.example";
 const PCI = "https://pci.example";
+// A third origin, for the nested case: merchant -> wallet -> pci.
+const WALLET = "https://wallet.example";
 
 /** The merchant frame: labels and an empty container, exactly like Shopify's checkout. */
 const CHECKOUT = `<!doctype html><html><head><title>Checkout</title></head>
@@ -52,14 +54,59 @@ const TALL_FRAME = CARD_FRAME.replace(
 	'body style="margin:0;height:800px"',
 );
 
-async function serve(page: Page, cardFrameHtml = CARD_FRAME): Promise<void> {
-	await page.context().route(/^https:\/\/(merchant|pci)\.example\//, (route) => {
+// merchant -> wallet -> pci, so the anchor has to accumulate two frame offsets on its way up.
+const NESTED_CHECKOUT = `<!doctype html><html><head><title>Checkout</title></head>
+<body style="margin:0">
+	<div style="height:200px">Order summary</div>
+	<iframe id="walletframe" src="${WALLET}/wallet" frameborder="0"
+		style="height:120px;width:500px;border:0;display:block"></iframe>
+</body></html>`;
+
+const WALLET_FRAME = `<!doctype html><html><head><title>wallet</title></head>
+<body style="margin:0">
+	<div style="height:20px"></div>
+	<iframe id="cardframe" src="${PCI}/number" frameborder="0" scrolling="no"
+		style="height:47px;width:432px;border:0;display:block"></iframe>
+</body></html>`;
+
+type ServeOpts = {
+	cardFrameHtml?: string;
+	/** Replaces the merchant document (used for the nested tree). */
+	topHtml?: string;
+	/** Extra response headers on the merchant document, e.g. COEP. */
+	topHeaders?: Record<string, string>;
+};
+
+async function serve(page: Page, opts: ServeOpts = {}): Promise<void> {
+	const { cardFrameHtml = CARD_FRAME, topHtml = CHECKOUT, topHeaders = {} } = opts;
+	await page.context().route(/^https:\/\/(merchant|wallet|pci)\.example\//, (route) => {
 		const url = route.request().url();
 		if (route.request().resourceType() !== "document") {
 			return route.fulfill({ status: 200, body: "" });
 		}
-		const body = url.startsWith(PCI) ? cardFrameHtml : CHECKOUT;
-		return route.fulfill({ body, headers: { "content-type": "text/html" } });
+		// When the top document sets COEP, its nested documents have to assert COEP (and
+		// CORP) too or they are blocked outright, leaving nothing to test. Applied only
+		// then, so the non-COEP tests keep plain frames.
+		const topIsCoep = "cross-origin-embedder-policy" in topHeaders;
+		const frameHeaders: Record<string, string> = {
+			"content-type": "text/html",
+			...(topIsCoep
+				? {
+						"cross-origin-resource-policy": "cross-origin",
+						"cross-origin-embedder-policy": "require-corp",
+					}
+				: {}),
+		};
+		if (url.startsWith(PCI)) {
+			return route.fulfill({ body: cardFrameHtml, headers: frameHeaders });
+		}
+		if (url.startsWith(WALLET)) {
+			return route.fulfill({ body: WALLET_FRAME, headers: frameHeaders });
+		}
+		return route.fulfill({
+			body: topHtml,
+			headers: { "content-type": "text/html", ...topHeaders },
+		});
 	});
 }
 
@@ -196,7 +243,7 @@ test("a card frame with room still renders the picker locally", async ({
 	// does, and nothing is relayed to the top frame.
 	await setUp(context, extensionId);
 	const page = await context.newPage();
-	await serve(page, TALL_FRAME);
+	await serve(page, { cardFrameHtml: TALL_FRAME });
 	await page.goto(`${MERCHANT}/`);
 	await page.locator("#cardframe").evaluate((el) => {
 		(el as HTMLIFrameElement).style.height = "600px";
@@ -255,5 +302,78 @@ test("dismisses the relayed picker when the field's frame scrolls it away", asyn
 	await page.keyboard.press("Escape");
 
 	await expect.poll(() => hostCount(page), { timeout: 10_000 }).toBe(0);
+	await expect(cardFrame(page).locator("#number")).toHaveValue("");
+});
+
+test("accumulates offsets through an intermediate frame", async ({ context, extensionId }) => {
+	// merchant -> wallet -> pci. Each hop adds its own frame offset, and only the top frame hosts.
+	// Unit tests cover the arithmetic; nothing had run a two-hop relay in a real browser.
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, { topHtml: NESTED_CHECKOUT });
+	await page.goto(`${MERCHANT}/`);
+
+	const ui = await openPicker(page);
+
+	expect(ui.parentFrame()).toBe(page.mainFrame());
+	expect(await hostCount(page)).toBe(1);
+
+	// The host lands below the card field's real position on screen: 200 (summary) + 20 (wallet
+	// padding) + 47 (frame) puts the field's bottom near 267, and the picker sits just under it.
+	const box = await page.locator('div[id^="tp-"]').boundingBox();
+	expect(box?.y ?? 0).toBeGreaterThan(240);
+	expect(box?.y ?? 0).toBeLessThan(300);
+
+	await ui.locator("[data-entry-id]").click();
+	await expect(cardFrame(page).locator("#number")).toHaveValue("4242424242424242", {
+		timeout: 15_000,
+	});
+});
+
+test("survives scrolling without the watchdog tearing the host down", async ({
+	context,
+	extensionId,
+}) => {
+	// The top frame destroys the host the moment it stops being legible, which runs every frame.
+	// A real checkout scrolls, so a false positive here would make the picker vanish mid-use.
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, {
+		topHtml: CHECKOUT.replace("</body>", '<div style="height:2000px"></div></body>'),
+	});
+	await page.goto(`${MERCHANT}/`);
+
+	await openPicker(page);
+	expect(await hostCount(page)).toBe(1);
+
+	await page.mouse.wheel(0, 120);
+	await page.waitForTimeout(600);
+
+	expect(await hostCount(page)).toBe(1);
+	// And it is still anchored to the field rather than stranded where it started.
+	const field = await cardFrame(page).locator("#number").boundingBox();
+	const host = await page.locator('div[id^="tp-"]').boundingBox();
+	expect(Math.abs((host?.y ?? 0) - ((field?.y ?? 0) + (field?.height ?? 0)))).toBeLessThan(20);
+});
+
+test("degrades to no picker under COEP require-corp on the top frame", async ({
+	context,
+	extensionId,
+}) => {
+	// COEP blocks the extension iframe, and the relayed path deliberately has no shadow-DOM
+	// fallback: one in the top frame would put summaries in the merchant's own document. So this
+	// must simply show nothing, and above all must not fill.
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, { topHeaders: { "cross-origin-embedder-policy": "require-corp" } });
+	await page.goto(`${MERCHANT}/`);
+
+	await cardFrame(page).locator("#number").click();
+	await page.waitForTimeout(3000);
+
+	// No rows anywhere, and the card frame did not fall back to drawing a clipped dropdown.
+	const ui = uiFrame(page);
+	if (ui) await expect(ui.locator("[data-entry-id]")).toHaveCount(0);
+	expect(await hostCount(cardFrame(page))).toBe(0);
 	await expect(cardFrame(page).locator("#number")).toHaveValue("");
 });
