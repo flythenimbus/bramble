@@ -31,7 +31,12 @@ import {
 } from "./handshake";
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
-import { type MeshSession, type MeshSessionOptions, startMeshSession } from "./peer-session";
+import {
+	type MeshSession,
+	type MeshSessionOptions,
+	type PeerSource,
+	startMeshSession,
+} from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
 import { withTimeout } from "./with-timeout";
 
@@ -158,6 +163,10 @@ export interface EnrollOptions {
 	/** Mesh joiner + ICE fetch, overridden in tests with fakes. Same seam as MeshSessionOptions. */
 	join?: MeshSessionOptions["join"];
 	fetchIce?: MeshSessionOptions["fetchIce"];
+	/** Take peers from here rather than the relay mesh. See PeerSource. The ceremony is unchanged:
+	 * a local pipe still runs its own XXpsk3 with a fresh pairing code and its own SAS, because an
+	 * older pairing of the pipe is not consent to hand over the vault today. */
+	peerSource?: PeerSource;
 }
 
 export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promise<MeshSession> {
@@ -176,6 +185,7 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 		onStop: () => clearTimeout(expiry),
 		join: opts.join,
 		fetchIce: opts.fetchIce,
+		peerSource: opts.peerSource,
 	});
 	// A LOCAL timer, not a wall-clock comparison against the code's `exp`, so clock skew cannot
 	// stretch the window. See docs/p2p-sync.md "Pairing code".

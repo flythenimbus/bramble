@@ -20,7 +20,7 @@ import type { Channel } from "./channel";
 import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./handshake";
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
-import { type MeshSession, startMeshSession } from "./peer-session";
+import { type MeshSession, type PeerSource, startMeshSession } from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
 import { withTimeout } from "./with-timeout";
 
@@ -73,6 +73,8 @@ export interface RosterSyncOptions {
 	fetchLocalRoster?: () => Promise<string>;
 	/** Merge a peer's roster (JSON) into the local one + persist. */
 	pushRemoteRoster?: (json: string) => Promise<void>;
+	/** Take peers from here rather than the relay mesh. See PeerSource. */
+	peerSource?: PeerSource;
 }
 
 /** What a peer broadcast carries: entries always, the roster when wired. */
@@ -187,6 +189,7 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 		wasm: opts.wasm,
 		report: opts.report,
 		epochRooms: true, // rotate the (long-lived, high-traffic) sync room per epoch
+		peerSource: opts.peerSource,
 		onPeer: (peer) => syncPeer(opts, peer, peers),
 		onStop: () => {
 			if (timer) clearInterval(timer);
