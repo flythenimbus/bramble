@@ -355,12 +355,13 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
 						return { ok: false, error: "VEK session changed" };
 					}
-					void maybeStartSync(); // begin continuous sync if this vault is in a group
-					void runDueBackups(); // back up any target that's due, now that the VEK is live
+					void maybeStartSync(vekEpoch); // begin continuous sync if this vault is in a group
+					const sessionCurrent = () => vekStore.vekMutationIsCurrent(vekEpoch!);
+					void runDueBackups(sessionCurrent); // back up any target that's due, now that the VEK is live
 					void broadcastLockState(false, autofillSessionGeneration);
 					// If this unlock was reached from a page's "Vault locked" row, the pop-out has
 					// done its job: get it off the form the user is going back to.
-					void closeUnlockPopout();
+					void closeUnlockPopout(sessionCurrent);
 				}
 			}
 		}

@@ -110,4 +110,33 @@ describe("maybeStartSync (per-vault)", () => {
 		const started = sendToOffscreen.mock.calls.some((c) => c[0].type === "SYNC_ROSTER_SYNC");
 		expect(started).toBe(false);
 	});
+
+	it("does not resume a held sync start after stopSync wins", async () => {
+		stubChrome(
+			{
+				[VAULT_REGISTRY_KEY]: two,
+				"sync.group:b": { groupKey: "GROUP_B", roster: roster("b") },
+				"sync.deviceKeypair:b": { privateKey: "bpriv", publicKey: "bpub" },
+			},
+			{ [ACTIVE_VAULT_SESSION_KEY]: "b" },
+		);
+		const chrome = globalThis.chrome as any;
+		const originalGet = chrome.storage.local.get;
+		let releaseGroup: ((value: unknown) => void) | undefined;
+		chrome.storage.local.get = vi.fn((key: string) => {
+			if (key === "sync.group:b") {
+				return new Promise((resolve) => {
+					releaseGroup = resolve;
+				});
+			}
+			return originalGet(key);
+		});
+		const { maybeStartSync, stopSync } = await loadSync();
+		const starting = maybeStartSync();
+		await vi.waitFor(() => expect(releaseGroup).toBeTypeOf("function"));
+		await stopSync();
+		releaseGroup?.({ "sync.group:b": { groupKey: "GROUP_B", roster: roster("b") } });
+		await starting;
+		expect(sendToOffscreen.mock.calls.some((c) => c[0].type === "SYNC_ROSTER_SYNC")).toBe(false);
+	});
 });

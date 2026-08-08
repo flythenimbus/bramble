@@ -226,14 +226,36 @@ const syncHostSuspends = typeof api.offscreen === "undefined";
 // (top-level resume, unlock, and the keepalive alarm can all fire in one lifetime). A fresh
 // lifetime (after a suspend) resets it, so a woken event page reconnects.
 let syncRunning = false;
+let syncEpoch = 0;
+let stopInFlight: Promise<void> = Promise.resolve();
 
 /** Start the roster-sync host if the active vault is enrolled. Caller ensures unlocked. */
-export async function maybeStartSync(): Promise<void> {
+export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
+	const requireActiveVek = expectedVekEpoch !== undefined;
+	const vekEpoch = expectedVekEpoch ?? vekStore.vekMutationSnapshot();
+	const startEpoch = syncEpoch;
+	// A later unlock must not race an older asynchronous disconnect. Wait for the stop to reach
+	// the host before a new roster session can be started.
+	await stopInFlight;
+	if (
+		startEpoch !== syncEpoch ||
+		!vekStore.vekMutationIsCurrent(vekEpoch) ||
+		(requireActiveVek && vekStore.activeVaultLocked())
+	) {
+		return;
+	}
 	const ctx = await resolveSyncVault();
-	if (!ctx) return;
+	if (!ctx || startEpoch !== syncEpoch || !vekStore.vekMutationIsCurrent(vekEpoch)) return;
 	const group = await getStoredGroup(ctx);
 	const kp = await getStoredKeypair(ctx);
-	if (!group || !kp) return;
+	if (
+		!group ||
+		!kp ||
+		startEpoch !== syncEpoch ||
+		!vekStore.vekMutationIsCurrent(vekEpoch) ||
+		(requireActiveVek && vekStore.activeVaultLocked())
+	)
+		return;
 	if (syncRunning) return;
 	syncRunning = true;
 	if (syncHostSuspends) api.alarms.create(SYNC_KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
@@ -245,13 +267,27 @@ export async function maybeStartSync(): Promise<void> {
 		devicePrivB64: kp.privateKey,
 		devicePubB64: kp.publicKey,
 	};
+	if (
+		startEpoch !== syncEpoch ||
+		!vekStore.vekMutationIsCurrent(vekEpoch) ||
+		(requireActiveVek && vekStore.activeVaultLocked())
+	) {
+		syncRunning = false;
+		return;
+	}
 	await sendToOffscreen({ type: "SYNC_ROSTER_SYNC", payload });
 }
 
 export async function stopSync(): Promise<void> {
+	const stopEpoch = ++syncEpoch;
 	syncRunning = false;
-	if (syncHostSuspends) await api.alarms.clear(SYNC_KEEPALIVE_ALARM);
-	await sendToOffscreen({ type: "SYNC_DISCONNECT" }).catch(() => {});
+	stopInFlight = (async () => {
+		if (syncHostSuspends) await api.alarms.clear(SYNC_KEEPALIVE_ALARM);
+		// If a newer stop superseded this one, it will deliver the disconnect instead.
+		if (stopEpoch !== syncEpoch) return;
+		await sendToOffscreen({ type: "SYNC_DISCONNECT" }).catch(() => {});
+	})();
+	await stopInFlight;
 }
 
 // Read + decrypt the active vault's outer blob. Returns the blob (for its slots, carried

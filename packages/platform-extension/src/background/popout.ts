@@ -107,14 +107,18 @@ async function popoutOpen(
  * the last view would re-lock the vault we just unlocked (see view-lock.ts), and a parked corner
  * capture, which the unlocking view still has to flush (and confirm) before it goes away.
  */
-export async function closeUnlockPopout(): Promise<void> {
+export async function closeUnlockPopout(sessionCurrent: () => boolean = () => true): Promise<void> {
 	try {
+		if (!sessionCurrent()) return;
 		const stored = await api.storage.session.get(POPOUT_UNLOCK_WINDOW_KEY);
+		if (!sessionCurrent()) return;
 		const id = stored[POPOUT_UNLOCK_WINDOW_KEY];
 		if (typeof id !== "number") return;
 		await api.storage.session.remove([POPOUT_UNLOCK_WINDOW_KEY]);
 		if ((await getAutoLockMinutes()) < 0) return;
+		if (!sessionCurrent()) return;
 		const parked = await api.storage.session.get(CORNER_HANDOFF_KEY);
+		if (!sessionCurrent()) return;
 		if (parked[CORNER_HANDOFF_KEY]) return;
 		await api.windows.remove(id).catch(() => undefined);
 		// It was the tracked pop-out too; drop that so the next request opens a fresh window.

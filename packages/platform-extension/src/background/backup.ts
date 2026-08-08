@@ -97,22 +97,33 @@ async function hashVaults(vaults: VaultBackup[]): Promise<string> {
 	return sha256Hex(concatBytes(parts));
 }
 
-export async function runDueBackups(): Promise<void> {
-	if (running || vaultLocked()) return;
+export async function runDueBackups(
+	sessionCurrent: () => boolean = () => !vaultLocked(),
+): Promise<void> {
+	if (running || !sessionCurrent()) return;
 	running = true;
 	try {
 		const result = await runScheduledBackups(
 			{
-				loadTargets: async () =>
-					(await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY)) ?? [],
-				saveTargets: (targets) => extensionStorage.setMeta(BACKUP_TARGETS_KEY, targets),
-				readVaults,
-				hashVaults,
-				decryptSecrets,
+				loadTargets: async () => {
+					if (!sessionCurrent()) return [];
+					return (await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY)) ?? [];
+				},
+				saveTargets: async (targets) => {
+					if (sessionCurrent()) await extensionStorage.setMeta(BACKUP_TARGETS_KEY, targets);
+				},
+				readVaults: async () => (sessionCurrent() ? readVaults() : []),
+				hashVaults: async (vaults) => (sessionCurrent() ? hashVaults(vaults) : ""),
+				decryptSecrets: async (target) => {
+					if (!sessionCurrent()) throw new Error("vault session changed");
+					return decryptSecrets(target);
+				},
 				upload: async (t, secrets, vaults) => {
+					if (!sessionCurrent()) throw new Error("vault session changed");
 					const target = createTarget(toProviderConfig(t, secrets));
 					// Sequential per vault: the offscreen crypto host is shared and can't race.
 					for (const v of vaults) {
+						if (!sessionCurrent()) throw new Error("vault session changed");
 						const prefix = vaultBackupPrefix(backupPrefix(t), v.id, v.isDefault);
 						await runBackup(target, v.blob, { prefix, keep: t.keep });
 					}
