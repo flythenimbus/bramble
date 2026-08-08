@@ -22,10 +22,12 @@ document identity, so the race survived it.
 
 | Target | Affected | Fixed in |
 |---|---|---|
-| Chromium extension | all through 1.14.1 | _pending release_ |
-| Firefox extension | all through 1.11.1 | _pending release_ |
+| Chromium extension | 1.0.0 through 1.14.1 (all releases) | 1.14.2 |
+| Firefox extension | 1.0.1 through 1.11.1 (all releases) | 1.11.2 |
 
-Mobile is unaffected: the native credential providers do not use this transport.
+Mobile is unaffected: the native credential providers do not use this transport, so unlike
+GHSA-x4f5 this is not a mutual change and no device is stranded by another sitting on an older
+build. The two extension targets version independently and were released together.
 
 ## The finding
 
