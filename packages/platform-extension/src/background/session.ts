@@ -62,7 +62,11 @@ export function autofillSessionIsCurrent(generation: number): boolean {
 	return autofillSessionIsStable(generation) && !vaultLocked();
 }
 
-/** Capture the current unlocked vault session for a decrypted cache or async operation. */
+/**
+ * Capture the current unlocked vault session for a decrypted cache or async operation.
+ * `generation` prevents lock/unlock ABA; `vaultId` prevents an active-vault replacement
+ * from reusing a cache that happened to be built under the same process.
+ */
 export function autofillSessionOwner(): AutofillSessionOwner | null {
 	const vaultId = getActiveVaultId();
 	if (vaultId === null || !autofillSessionIsCurrent(autofillSessionGeneration)) return null;
@@ -101,6 +105,17 @@ function advanceAutofillSession(): void {
 	autofillSessionToken = nextAutofillSessionToken();
 }
 
+/**
+ * One active-vault transition has two consumers: VEK epoch invalidation and autofill ownership.
+ * Keep them together and deduplicate on the effective value, because `storage.onChanged` can be
+ * delivered after a direct session read has already observed the same write.
+ */
+function applyActiveVaultTransition(value: unknown): boolean {
+	if (!vekStore.applyActiveVaultId(value)) return false;
+	advanceAutofillSession();
+	return true;
+}
+
 function autofillGetSessionOwner(): MessageEnvelope {
 	const owner = autofillSessionOwner();
 	return owner === null
@@ -108,13 +123,15 @@ function autofillGetSessionOwner(): MessageEnvelope {
 		: { ok: true, data: { vaultId: owner.vaultId, token: owner.token } };
 }
 
-// The router awaits background hydration before invoking handlers. Observe a privileged lock
-// message in the dispatch task itself so continuation revalidation already sees the transition,
-// even when hydration or active-vault resolution is held. The actual handler consumes this
-// depth-counted transition and closes it in its normal finally block.
+// The router awaits background hydration before invoking handlers. Its synchronous pre-dispatch
+// hook starts an incoming privileged lock before that await, so continuation revalidation cannot
+// slip through a held hydration. The handler consumes this depth in its normal finally block.
 onBeforeDispatch((message, sender) => {
-	if (message?.type !== "CRYPTO_LOCK" || !isExtensionSender(sender)) return;
+	if (message?.type !== "CRYPTO_LOCK" || !isExtensionSender(sender)) {
+		return;
+	}
 	beginAutofillLockTransition();
+	vekStore.beginVekMutation();
 	prestartedCryptoLocks++;
 });
 
@@ -125,7 +142,9 @@ onBeforeDispatch((message, sender) => {
 api.storage.onChanged.addListener((changes, area) => {
 	if (area !== "session") return;
 	const change = changes[ACTIVE_VAULT_SESSION_KEY];
-	if (change && vekStore.applyActiveVaultId(change.newValue)) advanceAutofillSession();
+	if (change && !vekStore.consumeExpectedActiveStorageChange(change)) {
+		applyActiveVaultTransition(change.newValue);
+	}
 });
 
 /** True when the ACTIVE vault has no cached VEK: the lock predicate the singleton services
@@ -149,7 +168,9 @@ export function requireActiveVaultId(): string {
 
 /** Refresh the active-vault mirror from session before a lock check that races an unlock. */
 export async function refreshActiveVaultId(): Promise<string | null> {
-	return vekStore.refreshActiveVaultId();
+	const stored = await vekStore.readStoredActiveVaultId();
+	if (stored !== undefined) applyActiveVaultTransition(stored);
+	return vekStore.getActiveVaultId();
 }
 
 /** Every currently-unlocked vault id, most-recently-unlocked first. Used by backup to retry a
@@ -184,9 +205,13 @@ export async function scheduleAutoLock(): Promise<void> {
  * contexts, so they can't watch storage.session for the VEK; without this push a page's autofill
  * dropdown keeps showing a stale "Vault locked" after an unlock (and stale matches after a lock).
  * Best-effort per tab; tabs with no content script (chrome://, the store) just reject. */
-async function broadcastLockState(locked: boolean): Promise<void> {
+async function broadcastLockState(
+	locked: boolean,
+	generation = autofillSessionGeneration,
+): Promise<void> {
 	try {
 		const tabs = await api.tabs.query({});
+		if (generation !== autofillSessionGeneration) return;
 		for (const tab of tabs) {
 			if (tab.id === undefined) continue;
 			void api.tabs
@@ -215,15 +240,24 @@ export async function clearSession(): Promise<void> {
 	// This is synchronous on entry, before any VEK/session cleanup await. A caller may
 	// already have begun a wider CRYPTO_LOCK transition; the counter keeps that safe.
 	beginAutofillLockTransition();
+	vekStore.beginVekMutation();
 	try {
 		// Content must cancel a pending fill/submit before the VEK/session cleanup awaits.
 		// This remains best-effort, but initiating it here closes the timer race locally.
-		void broadcastLockState(true);
+		void broadcastLockState(true, autofillSessionGeneration);
 		clearIndex();
 		void stopSync();
-		await vekStore.clearAllVeks();
+		let durableCleanupError: unknown;
+		try {
+			await vekStore.clearAllVeks();
+		} catch (error) {
+			// The caller must see this failure, but other sensitive session cleanup and the alarm
+			// teardown still belong to this lock attempt.
+			durableCleanupError = error;
+		}
 		await removeHandoffKeys();
 		void api.alarms.clear(AUTOLOCK_ALARM);
+		if (durableCleanupError) throw durableCleanupError;
 	} finally {
 		endAutofillLockTransition();
 	}
@@ -260,6 +294,9 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 				(typeof message.vaultId === "string" ? message.vaultId : null) ??
 				(await vekStore.resolveActiveVaultId());
 			const response = await sendToOffscreen(message); // zeroize the scratch slot
+			// The UI may have selected a vault just before dispatch while its storage event is still
+			// queued. Apply that value before deciding whether this is the active-vault lock.
+			await refreshActiveVaultId();
 			if (vaultId !== null) await lockVault(vaultId);
 			else await clearSession();
 			return response;
@@ -267,27 +304,39 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 			endAutofillLockTransition();
 		}
 	}
-	const installsOrReplacesVek =
-		type === "CRYPTO_GENERATE_VEK" ||
-		type === "CRYPTO_UNWRAP_PASSWORD_SLOT" ||
-		type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT" ||
-		type === "CRYPTO_UNLOCK_WITH_VEK" ||
-		type === "CRYPTO_ROTATE_VEK";
-	// sendToOffscreen installs a recovered/generated VEK before its own storage await
-	// completes. Hold this nested-safe transition across that entire seam.
+	const installsOrReplacesVek = vekStore.replacesVek(type);
+	// Apply a just-written active id before capturing the install epoch. A storage event may arrive
+	// after this direct read; applyActiveVaultTransition then recognizes the same value and does
+	// nothing, rather than invalidating this completed unlock.
+	if (installsOrReplacesVek) await refreshActiveVaultId();
+	// sendToOffscreen installs a recovered/generated VEK before its own storage await completes.
+	// Hold this nested-safe transition across that entire seam.
+	const vekEpoch = installsOrReplacesVek ? vekStore.beginVekMutation() : undefined;
 	if (installsOrReplacesVek) beginAutofillLockTransition();
 	try {
-		const response = await sendToOffscreen(message);
+		const response = await sendToOffscreen(message, vekEpoch);
+		if (installsOrReplacesVek && !vekStore.vekMutationIsCurrent(vekEpoch!)) {
+			return { ok: false, error: "VEK session changed" };
+		}
 		if (response.ok) {
 			if (type === "CRYPTO_GENERATE_VEK") {
 				await refreshActiveVaultId();
+				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
+					return { ok: false, error: "VEK session changed" };
+				}
 				advanceAutofillSession();
 				await scheduleAutoLock();
-				void broadcastLockState(false);
+				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
+					return { ok: false, error: "VEK session changed" };
+				}
+				void broadcastLockState(false, autofillSessionGeneration);
 			} else if (type === "CRYPTO_UNLOCK_WITH_VEK" || type === "CRYPTO_ROTATE_VEK") {
 				// Rollback/recovery unlocks and rotation replace the active VEK in the same
 				// cache seam as slot unlocks, so old autofill work cannot cross either.
 				await refreshActiveVaultId();
+				if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
+					return { ok: false, error: "VEK session changed" };
+				}
 				advanceAutofillSession();
 			} else if (type === "CRYPTO_UNWRAP_PASSWORD_SLOT" || type === "CRYPTO_UNWRAP_WEBAUTHN_SLOT") {
 				// The unwrap reply was stripped to a boolean; true means the VEK was recovered and
@@ -298,11 +347,17 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 					// Refresh it BEFORE announcing the unlock, or the autofill re-query the broadcast
 					// triggers is answered "locked" and the page keeps its "Vault locked" row.
 					await refreshActiveVaultId();
+					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
+						return { ok: false, error: "VEK session changed" };
+					}
 					advanceAutofillSession();
 					await scheduleAutoLock();
+					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
+						return { ok: false, error: "VEK session changed" };
+					}
 					void maybeStartSync(); // begin continuous sync if this vault is in a group
 					void runDueBackups(); // back up any target that's due, now that the VEK is live
-					void broadcastLockState(false);
+					void broadcastLockState(false, autofillSessionGeneration);
 					// If this unlock was reached from a page's "Vault locked" row, the pop-out has
 					// done its job: get it off the form the user is going back to.
 					void closeUnlockPopout();

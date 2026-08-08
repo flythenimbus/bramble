@@ -72,12 +72,22 @@ api.runtime.onStartup.addListener(() => {
 // exempts it. See docs/firefox-port.md "Storage durability".
 void navigator.storage?.persist?.().catch(() => {});
 
+/** Auto-lock callers cannot return an error envelope, but must still zeroize the crypto host if
+ * durable session cleanup rejects. clearSession has already failed closed in memory; log the
+ * retry-worthy persistence failure and always finish the host-side lock. */
+async function lockFromBackground(source: string): Promise<void> {
+	try {
+		await clearSession();
+	} catch (error) {
+		console.error(`[titanpass:bg] ${source} session cleanup failed`, error);
+	} finally {
+		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
+	}
+}
+
 api.alarms.onAlarm.addListener((alarm) => {
 	if (alarm.name === AUTOLOCK_ALARM) {
-		void (async () => {
-			await clearSession();
-			await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
-		})();
+		void lockFromBackground("auto-lock");
 		return;
 	}
 	if (alarm.name === CLIPBOARD_ALARM) {
@@ -99,10 +109,7 @@ api.alarms.onAlarm.addListener((alarm) => {
 // Manual lock via the user-bound `lock-vault` shortcut (declared without a default chord).
 api.commands?.onCommand.addListener((command) => {
 	if (command !== "lock-vault") return;
-	void (async () => {
-		await clearSession();
-		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
-	})();
+	void lockFromBackground("lock command");
 });
 
 // "Immediate" auto-lock: lock when the last extension view (popup / pop-out / options)
@@ -118,8 +125,7 @@ api.idle?.onStateChanged.addListener((state) => {
 	if (vaultLocked()) return;
 	void (async () => {
 		if (!(await getLockOnScreenLock())) return;
-		await clearSession();
-		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
+		await lockFromBackground("screen lock");
 	})();
 });
 

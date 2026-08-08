@@ -83,7 +83,10 @@ const USE_VEK = new Set([
  *    lock taxonomy. Non-CRYPTO_* messages (SYNC_*, clipboard, qr) pass through untouched.
  * The offscreen retains no key state, so there is no re-injection on document recreation.
  */
-export async function sendToOffscreen(message: Record<string, unknown>): Promise<HostResponse> {
+export async function sendToOffscreen(
+	message: Record<string, unknown>,
+	expectedVekEpoch: number = vekStore.vekMutationSnapshot(),
+): Promise<HostResponse> {
 	await ensureOffscreen();
 	const type = message.type as string | undefined;
 	if (typeof type !== "string" || !type.startsWith("CRYPTO_")) return deliver(message);
@@ -105,8 +108,9 @@ export async function sendToOffscreen(message: Record<string, unknown>): Promise
 		if (vaultId === null || typeof vekB64 !== "string") {
 			return { ok: false, error: "unlock needs a vault id and vek" };
 		}
-		await vekStore.setVek(vaultId, vekB64);
-		return { ok: true, data: null };
+		return (await vekStore.setVek(vaultId, vekB64, expectedVekEpoch))
+			? { ok: true, data: null }
+			: { ok: false, error: "VEK session changed" };
 	}
 
 	// USE-VEK ops: inject the target vault's vek; fail fast (no offscreen trip) when locked.
@@ -123,7 +127,9 @@ export async function sendToOffscreen(message: Record<string, unknown>): Promise
 	if (type === "CRYPTO_GENERATE_VEK" || type === "CRYPTO_ROTATE_VEK") {
 		const res = await deliver(message);
 		if (res.ok && typeof res.data === "string" && vaultId !== null) {
-			await vekStore.setVek(vaultId, res.data);
+			if (!(await vekStore.setVek(vaultId, res.data, expectedVekEpoch))) {
+				return { ok: false, error: "VEK session changed" };
+			}
 		}
 		return res;
 	}
@@ -132,7 +138,9 @@ export async function sendToOffscreen(message: Record<string, unknown>): Promise
 		if (!res.ok) return res;
 		const data = res.data as { ok: boolean; vekB64?: string };
 		if (data.ok && typeof data.vekB64 === "string" && vaultId !== null) {
-			await vekStore.setVek(vaultId, data.vekB64);
+			if (!(await vekStore.setVek(vaultId, data.vekB64, expectedVekEpoch))) {
+				return { ok: false, error: "VEK session changed" };
+			}
 		}
 		return { ok: true, data: data.ok };
 	}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	autofillSessionCapability,
 	defaultOffscreen,
 	extensionSender,
 	loadBackground,
@@ -113,6 +114,249 @@ describe("CRYPTO_ session state sync", () => {
 		expect(bg.state.session["popout.handoff"]).toBeUndefined();
 		expect(bg.state.alarms[AUTOLOCK]).toBeUndefined();
 	});
+
+	it.each([
+		"CRYPTO_GENERATE_VEK",
+		"CRYPTO_UNWRAP_PASSWORD_SLOT",
+	])("does not resurrect a VEK or broadcast unlocked when held %s completes after lock", async (type) => {
+		let release: ((response: ReturnType<typeof defaultOffscreen>) => void) | undefined;
+		const bg = await loadBackground({
+			offscreen: (message) =>
+				message.type === type
+					? new Promise((resolve) => {
+							release = resolve;
+						})
+					: defaultOffscreen(message),
+			openTabs: [{ id: 1 }],
+		});
+		const pending = bg.send({ type });
+		await bg.flush();
+		expect(release).toBeTypeOf("function");
+
+		await bg.send({ type: "CRYPTO_LOCK" });
+		release?.(defaultOffscreen({ type }));
+		expect((await pending).resp).toEqual({ ok: false, error: "VEK session changed" });
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+		expect(
+			bg.state.tabMessages.filter(
+				(message) =>
+					message.message.type === "VAULT_LOCK_STATE" && message.message.payload.locked === false,
+			),
+		).toHaveLength(0);
+	});
+
+	it("serializes a held VEK persistence commit behind a later lock and rolls it back", async () => {
+		const bg = await loadBackground({ openTabs: [{ id: 1 }] });
+		const originalSet = bg.chrome.storage.session.set;
+		let releaseSet: (() => void) | undefined;
+		bg.chrome.storage.session.set = vi.fn((value: Record<string, unknown>) => {
+			if (VEK_KEY in value) {
+				return new Promise<void>((resolve) => {
+					releaseSet = resolve;
+				});
+			}
+			return originalSet(value);
+		});
+
+		const unlock = bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "LATE" } });
+		await bg.flush();
+		expect(releaseSet).toBeTypeOf("function");
+		const lock = bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		releaseSet?.();
+		expect((await unlock).resp).toEqual({ ok: false, error: "VEK session changed" });
+		await lock;
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+		const session = await import("./session");
+		expect(session.vaultLocked()).toBe(true);
+	});
+
+	it("does not invalidate an unlock or its index lease when delayed active-id notification repeats a refresh", async () => {
+		const bg = await loadBackground({ deferSessionStorageChanges: true });
+		// The shell write resolves first, as Chrome permits; its onChanged notification remains
+		// queued while the background refreshes the same value before starting the unwrap.
+		await bg.chrome.storage.session.set({ "vault.activeId": "v2" });
+		const unlocked = await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		expect(unlocked.resp).toEqual({ ok: true, data: true });
+		const lease = await autofillSessionCapability(bg);
+
+		bg.flushSessionStorageChanges();
+		expect(await autofillSessionCapability(bg)).toEqual(lease);
+		expect(
+			(
+				await bg.send(
+					{
+						type: "AUTOFILL_SET_INDEX",
+						payload: { entries: [], owner: lease },
+					},
+					extensionSender,
+				)
+			).resp,
+		).toEqual({ ok: true, data: null });
+	});
+
+	it("consumes a delayed local lock removal before a same-vault reactivation event", async () => {
+		const bg = await loadBackground({
+			sessionSeed: { [VEK_KEY]: "SEED" },
+			deferSessionStorageChanges: true,
+			openTabs: [{ id: 1 }],
+		});
+		await bg.send({ type: "CRYPTO_LOCK" });
+		// The picker immediately chooses the same vault again. The background refresh sees the new
+		// value before either delayed storage event is delivered and installs a fresh VEK under it.
+		await bg.chrome.storage.session.set({ "vault.activeId": "v1" });
+		expect((await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" })).resp).toEqual({
+			ok: true,
+			data: true,
+		});
+		await bg.flush();
+		const lease = await autofillSessionCapability(bg);
+		expect(bg.state.alarms[AUTOLOCK]).toBeDefined();
+
+		// Deliver the old clearAllVeks removal, then the new UI set: this is the harmful ordering
+		// value-only deduplication could not distinguish. The old event is consumed by its local
+		// receipt; the new same-value event is a harmless no-op.
+		bg.flushSessionStorageChanges();
+		expect(await autofillSessionCapability(bg)).toEqual(lease);
+		expect((await bg.send({ type: "CRYPTO_IS_LOCKED" })).resp).toEqual({ ok: true, data: false });
+		expect(
+			(
+				await bg.send(
+					{ type: "AUTOFILL_SET_INDEX", payload: { entries: [], owner: lease } },
+					extensionSender,
+				)
+			).resp,
+		).toEqual({ ok: true, data: null });
+		expect(
+			bg.state.tabMessages.some(
+				(message) =>
+					message.message.type === "VAULT_LOCK_STATE" && message.message.payload.locked === false,
+			),
+		).toBe(true);
+	});
+
+	it("reports a failed stale-install rollback instead of treating it as a clean session change", async () => {
+		const bg = await loadBackground();
+		const originalSet = bg.chrome.storage.session.set;
+		const originalRemove = bg.chrome.storage.session.remove;
+		let releaseSet: (() => void) | undefined;
+		let failRollbackRemove = true;
+		bg.chrome.storage.session.set = vi.fn((value: Record<string, unknown>) => {
+			if (VEK_KEY in value) {
+				void originalSet(value); // model a browser commit whose completion is delayed
+				return new Promise<void>((resolve) => {
+					releaseSet = resolve;
+				});
+			}
+			return originalSet(value);
+		});
+		bg.chrome.storage.session.remove = vi.fn((keys: string | string[]) => {
+			const list = Array.isArray(keys) ? keys : [keys];
+			if (failRollbackRemove && list.includes(VEK_KEY)) {
+				failRollbackRemove = false;
+				return Promise.reject(new Error("rollback remove rejected"));
+			}
+			return originalRemove(keys);
+		});
+
+		const unlock = bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "LATE" } });
+		await bg.flush();
+		const lock = bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		releaseSet?.();
+		expect((await unlock).resp).toMatchObject({
+			ok: false,
+			error: expect.stringContaining("rollback"),
+		});
+		// The queued full lock retries cleanup after the failed rollback; this is not an orphan that
+		// can reappear when a worker starts again.
+		await lock;
+		await bg.flush();
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+	});
+
+	it("reports a rejected MRU write while rolling back a stale install", async () => {
+		const bg = await loadBackground();
+		const originalSet = bg.chrome.storage.session.set;
+		let releaseSet: (() => void) | undefined;
+		let rejectRollbackMru = true;
+		bg.chrome.storage.session.set = vi.fn((value: Record<string, unknown>) => {
+			if (VEK_KEY in value) {
+				void originalSet(value);
+				return new Promise<void>((resolve) => {
+					releaseSet = resolve;
+				});
+			}
+			if (rejectRollbackMru && "vault.unlockedMru" in value) {
+				rejectRollbackMru = false;
+				return Promise.reject(new Error("rollback MRU write rejected"));
+			}
+			return originalSet(value);
+		});
+
+		const unlock = bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "LATE" } });
+		await bg.flush();
+		const lock = bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		releaseSet?.();
+		expect((await unlock).resp).toMatchObject({
+			ok: false,
+			error: expect.stringContaining("rollback"),
+		});
+		await lock;
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+	});
+
+	it("fails a full lock whose durable cleanup is rejected and a restart still refuses the orphan", async () => {
+		const bg = await loadBackground({
+			sessionSeed: { [VEK_KEY]: "SEED", "vault.vek:orphan": "ORPHAN", "vault.unlockedMru": ["v1"] },
+		});
+		const originalRemove = bg.chrome.storage.session.remove;
+		bg.chrome.storage.session.remove = vi.fn((keys: string | string[]) => {
+			const list = Array.isArray(keys) ? keys : [keys];
+			return list.includes(VEK_KEY)
+				? Promise.reject(new Error("full lock remove rejected"))
+				: originalRemove(keys);
+		});
+
+		const locked = await bg.send({ type: "CRYPTO_LOCK" });
+		expect(locked.resp).toMatchObject({
+			ok: false,
+			error: expect.stringContaining("lock cleanup"),
+		});
+		const session = await import("./session");
+		expect(session.vaultLocked()).toBe(true);
+
+		// A durable lock marker was written before removal. A fresh worker treats retained VEK keys
+		// as cleanup residue rather than an unlocked session, then removes them when storage works.
+		const restarted = await loadBackground({ sessionSeed: { ...bg.state.session } });
+		const restartedSession = await import("./session");
+		expect(restartedSession.vaultLocked()).toBe(true);
+		expect(restarted.state.session[VEK_KEY]).toBeUndefined();
+		expect(restarted.state.session["vault.vek:orphan"]).toBeUndefined();
+		expect(restarted.state.session["vault.activeId"]).toBeUndefined();
+	});
+
+	it("reports a rejected lock marker write even when the best-effort key removal succeeds", async () => {
+		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
+		const originalSet = bg.chrome.storage.session.set;
+		bg.chrome.storage.session.set = vi.fn((value: Record<string, unknown>) =>
+			"vault.vek.locked" in value
+				? Promise.reject(new Error("lock marker write rejected"))
+				: originalSet(value),
+		);
+
+		const locked = await bg.send({ type: "CRYPTO_LOCK" });
+		expect(locked.resp).toMatchObject({
+			ok: false,
+			error: expect.stringContaining("lock cleanup"),
+		});
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+		const restarted = await loadBackground({ sessionSeed: { ...bg.state.session } });
+		const restartedSession = await import("./session");
+		expect(restartedSession.vaultLocked()).toBe(true);
+		expect(restarted.state.session[VEK_KEY]).toBeUndefined();
+	});
 });
 
 describe("lock triggers (alarm / command / idle)", () => {
@@ -123,6 +367,23 @@ describe("lock triggers (alarm / command / idle)", () => {
 		await bg.flush();
 		expect(bg.state.session[VEK_KEY]).toBeUndefined();
 		expect(bg.state.offscreenCalls.map((m) => m.type)).toContain("CRYPTO_LOCK");
+	});
+
+	it("the auto-lock alarm still zeroizes offscreen when durable VEK cleanup rejects", async () => {
+		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
+		const originalRemove = bg.chrome.storage.session.remove;
+		bg.chrome.storage.session.remove = vi.fn((keys: string | string[]) => {
+			const list = Array.isArray(keys) ? keys : [keys];
+			return list.includes(VEK_KEY)
+				? Promise.reject(new Error("auto-lock cleanup rejected"))
+				: originalRemove(keys);
+		});
+
+		bg.fireAlarm(AUTOLOCK);
+		await bg.flush();
+		expect(bg.state.offscreenCalls.map((m) => m.type)).toContain("CRYPTO_LOCK");
+		const session = await import("./session");
+		expect(session.vaultLocked()).toBe(true);
 	});
 
 	it("the lock-vault command locks; other commands are ignored", async () => {
@@ -199,6 +460,29 @@ describe("lock-state broadcast to content scripts", () => {
 		await bg.flush();
 		expect(resp).toEqual({ ok: true, data: null });
 		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+	});
+
+	it("suppresses a held older unlock broadcast after a later lock", async () => {
+		const bg = await loadBackground({ openTabs: [{ id: 1 }] });
+		let releaseFirstQuery: (() => void) | undefined;
+		let queryCount = 0;
+		bg.chrome.tabs.query = vi.fn(() =>
+			queryCount++ === 0
+				? new Promise((resolve) => {
+						releaseFirstQuery = () => resolve([{ id: 1 }]);
+					})
+				: Promise.resolve([{ id: 1 }]),
+		);
+		const unlock = bg.send({ type: "CRYPTO_GENERATE_VEK" });
+		await bg.flush();
+		expect(releaseFirstQuery).toBeTypeOf("function");
+		await bg.send({ type: "CRYPTO_LOCK" });
+		releaseFirstQuery?.();
+		await unlock;
+		await bg.flush();
+		expect(
+			lockStateMsgs(bg).filter((message) => message.message.payload.locked === false),
+		).toHaveLength(0);
 	});
 });
 
