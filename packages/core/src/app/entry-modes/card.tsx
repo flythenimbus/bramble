@@ -5,7 +5,7 @@ import { CreditCard, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CardEntryData } from "../../hooks/useVault";
-import { cardBrand } from "../../util/card";
+import { CARD_NUMBER_MAX_INPUT, cardBrand, cardNumberIssue } from "../../util/card";
 import { Button } from "../components/ui/button";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -40,10 +40,29 @@ function cardExpiry(card: CardEntryData): string {
 }
 
 function CardFields() {
-	const { register } = useFormContext<CardFormValues>();
+	const {
+		register,
+		formState: { errors },
+	} = useFormContext<CardFormValues>();
 	const { t } = useLingui();
 	const [showNumber, setShowNumber] = useState(false);
 	const [showCvv, setShowCvv] = useState(false);
+
+	/** Localizes a schema issue. An empty number is allowed; only a filled one must be valid. */
+	const validateNumber = (value: string): string | true => {
+		switch (cardNumberIssue(value ?? "")) {
+			case "non-digit":
+				return t`Use only digits, spaces or dashes.`;
+			case "length":
+				return t`A card number is 12 to 19 digits.`;
+			case "brand-length":
+				return t`That isn't the right number of digits for this type of card.`;
+			case "checksum":
+				return t`Check the digits; that isn't a valid card number.`;
+			default:
+				return true;
+		}
+	};
 
 	return (
 		<>
@@ -60,6 +79,8 @@ function CardFields() {
 				inputMode="numeric"
 				autoComplete="off"
 				className="font-mono"
+				error={errors.number?.message as string | undefined}
+				maxLength={CARD_NUMBER_MAX_INPUT}
 				endAdornment={
 					<Button
 						variant="ghost"
@@ -71,7 +92,7 @@ function CardFields() {
 						{showNumber ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 					</Button>
 				}
-				{...register("number")}
+				{...register("number", { validate: validateNumber })}
 			/>
 
 			<div className="grid grid-cols-3 gap-3">

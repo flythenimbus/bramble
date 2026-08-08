@@ -105,6 +105,10 @@ msgstr "30 Sekunden"
 msgid "5 minutes"
 msgstr "5 Minuten"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A card number is 12 to 19 digits."
+msgstr "Eine Kartennummer besteht aus 12 bis 19 Ziffern."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
 msgstr "Ein Gerät hat sich mit Ihrem Kopplungscode verbunden. Prüfen Sie, ob genau diese Nummer auf dem anderen Gerät angezeigt wird, und genehmigen Sie dann. Ihr Tresor wurde noch nicht gesendet."
@@ -344,6 +348,10 @@ msgstr "Master-Passwort ändern"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Check passwords for breaches"
 msgstr "Passwörter auf Sicherheitslücken prüfen"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Check the digits; that isn't a valid card number."
+msgstr "Überprüfen Sie die Ziffern; das ist keine gültige Kartennummer."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
@@ -1948,6 +1956,10 @@ msgstr "Dies sieht nicht wie eine Bramble-Backup-Datei (.bramble) aus."
 msgid "That doesn't look like a Bramble export (.bramble) file."
 msgstr "Das sieht nicht nach einer Bramble-Exportdatei (.bramble) aus."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That isn't the right number of digits for this type of card."
+msgstr "Das ist nicht die richtige Anzahl an Ziffern für diesen Kartentyp."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "That password didn't open the file."
 msgstr "Dieses Passwort hat die Datei nicht geöffnet."
@@ -2240,6 +2252,10 @@ msgstr "Bramble für Passkeys verwenden"
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Verwenden Sie helles, dunkles oder passendes System"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use only digits, spaces or dashes."
+msgstr "Verwenden Sie nur Ziffern, Leerzeichen oder Bindestriche."
 
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"

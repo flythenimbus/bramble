@@ -105,6 +105,10 @@ msgstr "30 secondi"
 msgid "5 minutes"
 msgstr "5 minuti"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A card number is 12 to 19 digits."
+msgstr "Un numero di carta contiene da 12 a 19 cifre."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
 msgstr "Un dispositivo si è connesso con il suo codice di abbinamento. Controlli che mostri esattamente questo numero, quindi approvi. La sua cassaforte non è stata ancora inviata."
@@ -344,6 +348,10 @@ msgstr "Cambiare la password principale"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Check passwords for breaches"
 msgstr "Controllare le password per violazioni"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Check the digits; that isn't a valid card number."
+msgstr "Controlli le cifre; non è un numero di carta valido."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
@@ -1948,6 +1956,10 @@ msgstr "Questo non sembra un file di backup Bramble (.bramble)."
 msgid "That doesn't look like a Bramble export (.bramble) file."
 msgstr "Non sembra un file di esportazione Bramble (.bramble)."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That isn't the right number of digits for this type of card."
+msgstr "Non è il numero corretto di cifre per questo tipo di carta."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "That password didn't open the file."
 msgstr "Quella password non ha aperto il file."
@@ -2240,6 +2252,10 @@ msgstr "Usa Bramble per le chiavi di accesso"
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Utilizza chiaro, scuro o quello del sistema"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use only digits, spaces or dashes."
+msgstr "Utilizzare solo cifre, spazi o trattini."
 
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"

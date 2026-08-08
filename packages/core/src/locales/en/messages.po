@@ -105,6 +105,10 @@ msgstr "30 seconds"
 msgid "5 minutes"
 msgstr "5 minutes"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A card number is 12 to 19 digits."
+msgstr "A card number is 12 to 19 digits."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
 msgstr "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
@@ -344,6 +348,10 @@ msgstr "Change your master password"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Check passwords for breaches"
 msgstr "Check passwords for breaches"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Check the digits; that isn't a valid card number."
+msgstr "Check the digits; that isn't a valid card number."
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
@@ -1948,6 +1956,10 @@ msgstr "That doesn't look like a Bramble backup (.bramble) file."
 msgid "That doesn't look like a Bramble export (.bramble) file."
 msgstr "That doesn't look like a Bramble export (.bramble) file."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That isn't the right number of digits for this type of card."
+msgstr "That isn't the right number of digits for this type of card."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "That password didn't open the file."
 msgstr "That password didn't open the file."
@@ -2240,6 +2252,10 @@ msgstr "Use Bramble for passkeys"
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Use light, dark, or match your system"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use only digits, spaces or dashes."
+msgstr "Use only digits, spaces or dashes."
 
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"
