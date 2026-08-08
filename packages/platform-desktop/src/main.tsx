@@ -9,6 +9,7 @@ import { desktopCrypto } from "./adapters/crypto";
 import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { desktopStorage } from "./adapters/storage";
+import { initRosterSync } from "./sync/roster";
 
 const platform: Platform = {
 	target: "desktop",
@@ -34,6 +35,9 @@ function Root() {
 			),
 		[],
 	);
+
+	// Ongoing sync follows the lock state from here on: it starts on unlock and stops on lock.
+	useEffect(() => initRosterSync(), []);
 
 	if (view === "app") return <App />;
 	return (

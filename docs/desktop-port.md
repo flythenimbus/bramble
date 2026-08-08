@@ -490,15 +490,39 @@ and mobile builds never pay for them, exactly as `webrtc` is gated for iOS.
 Require per-signature approval (biometric where available). The pitch: private keys never touch disk
 unencrypted and every use is explicitly approved.
 
-## Sync transport: reuse the native WebRTC path
+## Sync transport: the webview's own WebRTC, on macOS
 
-Desktop webviews have inconsistent WebRTC support and WebKitGTK is the weak link `[unverified]`.
-Rather than gamble on three implementations, reuse the `webrtc` cargo feature (webrtc-rs), already
-device-proven on iOS, across all three desktop OSes. That is *more* consistent than Electron, since
-it is one Rust implementation rather than whatever each Chromium build ships.
+The plan here was to reuse the `webrtc` cargo feature (webrtc-rs), already device-proven on iOS,
+on the assumption that desktop webviews have inconsistent WebRTC support. **That assumption was
+wrong on macOS.** WKWebView in a Tauri window exposes `RTCPeerConnection`, `RTCDataChannel` and
+`WebSocket`, so `@core`'s transport, relay client and merge engine run in the vault window
+unchanged. iOS needed the native path because *its* WKWebView does not expose them; the desktop
+one does. Nothing of webrtc-rs is needed here.
 
-`packages/platform-mobile/src/native-webrtc.ts` is the template. The shim's interface is unchanged;
-it needs Tauri `invoke`/`listen` in place of Capacitor `registerPlugin`/`addListener`.
+What could not move into the webview is the crypto, because the VEK lives in the Rust process
+and never crosses the IPC boundary. `src/sync-crypto.ts` is the whole difference from mobile: the
+same snake_case names `@core/sync` calls, each one an `invoke` of a Rust command wrapping
+`handshake` / `nostr` / `roster_sig`. It is named against the wasm exports rather than the repo's
+usual camelCase deliberately, because `@core/sync` was written against those names and renaming
+would only add a layer whose job is to undo the rename.
+
+Windows (WebView2, Chromium) is near-certain to work the same way; WebKitGTK is the open
+question `[unverified]`, and it is where webrtc-rs would come back if it comes back at all.
+
+**Ongoing sync** (`src/sync/roster.ts`) mirrors mobile's `sync-manager.ts`, including all of its
+issue-#27 pinning: the session binds to one vault id for its lifetime, merges are serialised, a
+merge that outlives its session is dropped rather than written, and the blob store is pinned
+rather than re-resolving the active vault per call. Desktop needs that more than mobile does,
+not less: the process outlives the window, so a session can be running with no UI on screen.
+`src/sync/roster.test.ts` pins the routing half, ported from mobile's.
+
+**Known gap: host-side admission signing.** `ShellAdapter` lets a host admission-sign a joiner's
+roster entry and write the roster itself; the extension does that because Firefox's event page
+outlives the popup, and a lost write leaves the joiner rejected as "not in roster" when it
+reconnects. Mobile leaves it to the UI, and desktop currently matches mobile. Desktop has
+Firefox's hazard in worse form, since the vault window can close while the process keeps running,
+so the UI doing the write is exactly the arrangement that fails. See the comment on
+`startEnrollInvite` in `src/sync/transport.ts`.
 
 ## Required `core-rust` change
 
@@ -562,8 +586,9 @@ and prompts for the login password. See risk 5.
    it should prompt zero times. `[unverified: no signed desktop build exists yet, so the
    zero-prompt claim and ACL survival across updates are both inference from how macOS ACLs
    work rather than something observed]`
-6. **webrtc-rs interop with the extension's browser WebRTC on desktop.** Already proven iOS to
-   extension, so low risk, but unproven on this path.
+6. ~~**webrtc-rs interop with the extension's browser WebRTC on desktop.**~~ Retired by not
+   happening: macOS WKWebView has its own WebRTC, so desktop talks to peers with the same browser
+   APIs the extension does. Returns only if WebKitGTK turns out to lack them.
 
 ## Proposed plan
 
@@ -580,7 +605,10 @@ Each phase retires a risk.
   main window, `spotlightActions` on `EntryMode`, and the combobox with Cmd+O / Cmd+E. Actions
   stay clipboard-only until Phase 4, so it is useful before any IPC exists. The non-activating
   panel (risk 2) is deliberately deferred to when auto-type makes it matter.
-- **Phase 3, sync hub.** Native WebRTC shim port, tray residency, scheduled backups.
+- **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join) and ongoing roster sync both
+  run in the vault window on the webview's own WebRTC, with the crypto routed to Rust. Device
+  identity lives in the OS credential store. Outstanding: host-side admission signing, and the
+  tray residency and scheduled backups that are the actual "hub" part.
 - **Phase 4, browser integration.** Proxy binary, host manifests, Noise pairing plus the approval
   dialog, fill routing. Enter becomes a real fill in the browser.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

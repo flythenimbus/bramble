@@ -99,8 +99,11 @@ export async function syncAdmissionSign(
  *
  * Sync identity belongs to the vault, not the machine: carrying the old keypair into a new
  * vault would leave this device claiming a roster seat in a group it is no longer part of.
+ *
+ * Half of a reset. The group state and the live session go with it, in ../sync/transport's
+ * resetSyncState, which is what the shell calls.
  */
-export async function resetSyncState(): Promise<void> {
+export async function clearSyncIdentity(): Promise<void> {
 	await invoke("secure_delete", { key: DEVICE_KEYPAIR_KEY });
 	await invoke("secure_delete", { key: SIGNING_KEY_KEY });
 }

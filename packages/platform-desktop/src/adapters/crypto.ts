@@ -23,6 +23,7 @@ import type {
 	WrapWebauthnSlotInput,
 } from "@core/adapters/crypto";
 import { invoke } from "@tauri-apps/api/core";
+import { markLocked, markUnlocked, onExternalChange, onExternalLock } from "./vault-session";
 
 /**
  * `magicVersion` is a Uint8Array in the adapter contract; Tauri's IPC is JSON, and the
@@ -42,17 +43,32 @@ export const desktopCrypto: CryptoAdapter = {
 	// bind to (the extension needs one because its background serves every open view).
 	// See docs/multiple-vaults.md "Per-vault VEK".
 
-	generateVek: () => invoke<string>("crypto_generate_vek"),
-	unlockWithVek: (vekB64) => invoke<void>("crypto_unlock_with_vek", { vekB64 }),
+	// Every path that leaves the VEK loaded reports the transition, and only after the Rust
+	// side confirms: roster sync runs on this signal, and a merge cannot decrypt anything
+	// while locked. buildCryptoAdapter fires the same four for the platforms built on it;
+	// this adapter is hand-written, so the four are marked individually. See ./vault-session.
+	generateVek: async () => {
+		const vek = await invoke<string>("crypto_generate_vek");
+		markUnlocked();
+		return vek;
+	},
+	unlockWithVek: async (vekB64) => {
+		await invoke<void>("crypto_unlock_with_vek", { vekB64 });
+		markUnlocked();
+	},
 	exportVek: () => invoke<string>("crypto_export_vek"),
 	rotateVek: () => invoke<string>("crypto_rotate_vek"),
-	lock: () => invoke<void>("crypto_lock"),
+	lock: async () => {
+		await invoke<void>("crypto_lock");
+		markLocked();
+	},
 	isLocked: () => invoke<boolean>("crypto_is_locked"),
 
-	// Nothing outside this webview locks or mutates the vault yet. The sync hub and the
-	// spotlight window both will, and both will emit a Tauri event these subscribe to.
-	onExternalLock: () => () => {},
-	onExternalChange: () => () => {},
+	// Sync merges write entries out of band, so the open list has to be told. A lock from
+	// outside this webview (the spotlight window, an idle timeout in the shell) does not exist
+	// yet; when it does it will emit a Tauri event that calls markLocked.
+	onExternalLock,
+	onExternalChange,
 
 	generateSalt: () => invoke<string>("crypto_generate_salt"),
 	generateSlotId: () => invoke<string>("crypto_generate_slot_id"),
@@ -64,8 +80,10 @@ export const desktopCrypto: CryptoAdapter = {
 			slotIdB64: input.slotIdB64,
 			magicVersion: bytes(input.magicVersion),
 		}),
-	unwrapVekPassword: (input: UnwrapPasswordSlotInput) =>
-		invoke<boolean>("crypto_unwrap_vek_password", {
+	// The ordinary unlock: a wrong password returns false rather than throwing, so the
+	// transition is reported on the result, not on the call completing.
+	unwrapVekPassword: async (input: UnwrapPasswordSlotInput) => {
+		const ok = await invoke<boolean>("crypto_unwrap_vek_password", {
 			password: input.password,
 			saltB64: input.saltB64,
 			slotIdB64: input.slotIdB64,
@@ -73,7 +91,10 @@ export const desktopCrypto: CryptoAdapter = {
 			wrapIvB64: input.wrapIvB64,
 			wrappedVekB64: input.wrappedVekB64,
 			magicVersion: bytes(input.magicVersion),
-		}),
+		});
+		if (ok) markUnlocked();
+		return ok;
+	},
 	verifyPasswordSlot: (input: VerifyPasswordSlotInput) =>
 		invoke<boolean>("crypto_verify_password_slot", {
 			password: input.password,
@@ -92,15 +113,18 @@ export const desktopCrypto: CryptoAdapter = {
 			slotIdB64: input.slotIdB64,
 			magicVersion: bytes(input.magicVersion),
 		}),
-	unwrapVekWebauthn: (input: UnwrapWebauthnSlotInput) =>
-		invoke<boolean>("crypto_unwrap_vek_webauthn", {
+	unwrapVekWebauthn: async (input: UnwrapWebauthnSlotInput) => {
+		const ok = await invoke<boolean>("crypto_unwrap_vek_webauthn", {
 			hmacSecretB64: input.hmacSecretB64,
 			slotIdB64: input.slotIdB64,
 			verifierB64: input.verifierB64,
 			wrapIvB64: input.wrapIvB64,
 			wrappedVekB64: input.wrappedVekB64,
 			magicVersion: bytes(input.magicVersion),
-		}),
+		});
+		if (ok) markUnlocked();
+		return ok;
+	},
 	verifyWebauthnSlot: (input: VerifyWebauthnSlotInput) =>
 		invoke<boolean>("crypto_verify_webauthn_slot", {
 			hmacSecretB64: input.hmacSecretB64,

@@ -6,24 +6,25 @@ import type { OptionsScreen, ShellAdapter } from "@core/adapters/shell";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
+import { onSyncEvent, onSyncStatus } from "../sync/bus";
 import {
-	resetSyncState,
 	signRoster,
 	syncAdmissionPublicKey,
 	syncAdmissionSign,
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/keys";
+import { ACTIVE_VAULT_KEY, retargetActiveVault } from "../sync/roster";
 import {
 	approveEnrollment,
 	getPendingEnrollApproval,
-	onSyncEvent,
-	onSyncStatus,
+	resetSyncState,
 	startEnrollInvite,
 	startEnrollJoin,
 	stopEnrollInvite,
 	stopSync,
 } from "../sync/transport";
+import { desktopStorage } from "./storage";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
 let appVersion = "0.0.0";
@@ -76,6 +77,20 @@ export const desktopShell: ShellAdapter = {
 
 	// No corner prompt without the extension bridge (phase 4), so nothing is ever parked.
 	flushPendingCornerCapture: async () => false,
+
+	// Which vault the app is in. Sync reads it to target that vault's namespaced keys, and
+	// the registry restores it on reopen. Written on unlock, left in place on lock.
+	//
+	// Retarget sync BEFORE recording the new id: the live session is pinned to the old vault,
+	// and a merge landing after the id moves but before the session stops writes into the
+	// wrong vault's file (issue #27). retargetActiveVault stops it and drains any merge.
+	setActiveVault: async (vaultId) => {
+		await retargetActiveVault(vaultId ?? null);
+		await (vaultId == null
+			? desktopStorage.removeMeta(ACTIVE_VAULT_KEY)
+			: desktopStorage.setMeta(ACTIVE_VAULT_KEY, vaultId));
+	},
+	getActiveVault: async () => (await desktopStorage.getMeta<string>(ACTIVE_VAULT_KEY)) ?? null,
 
 	// This device's sync identity. Real: the keypairs live in the OS credential store and
 	// only their public halves ever leave here. See ../sync/keys.

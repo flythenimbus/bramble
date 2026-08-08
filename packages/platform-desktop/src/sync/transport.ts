@@ -9,48 +9,14 @@
 // The crypto still comes from the Rust side (`desktopSyncCrypto`), because the VEK lives there
 // and never crosses into the webview. That is the only structural difference from mobile.
 
-import type {
-	EntriesPayload,
-	RosterEntry,
-	RosterPayload,
-	SyncEvent,
-	WireRecoverySlot,
-} from "@core/index";
+import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } from "@core/index";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { desktopCrypto } from "../adapters/crypto";
 import { desktopSyncCrypto } from "../sync-crypto";
-import { deviceKeypair } from "./keys";
-
-// ---- status and events ----
-
-const statusSubs = new Set<(s: string) => void>();
-const eventSubs = new Set<(e: SyncEvent) => void>();
-
-/** Recent status, replayed to a late subscriber. Sync can start on unlock, long before anyone
- * opens Settings, and a panel that mounted afterwards would otherwise show nothing at all. */
-const statusHistory: string[] = [];
-
-const report = (s: string) => {
-	statusHistory.push(s);
-	if (statusHistory.length > 50) statusHistory.shift();
-	for (const cb of statusSubs) cb(s);
-};
-
-const emit = (e: SyncEvent) => {
-	for (const cb of eventSubs) cb(e);
-};
-
-export function onSyncStatus(cb: (s: string) => void): () => void {
-	statusSubs.add(cb);
-	for (const s of statusHistory) cb(s);
-	return () => statusSubs.delete(cb);
-}
-
-export function onSyncEvent(cb: (e: SyncEvent) => void): () => void {
-	eventSubs.add(cb);
-	return () => eventSubs.delete(cb);
-}
+import { emit, report } from "./bus";
+import { clearSyncIdentity, deviceKeypair } from "./keys";
+import { clearGroupState, stopRosterSync } from "./roster";
 
 // ---- the enrollment approval ----
 
@@ -190,10 +156,24 @@ export async function stopEnrollInvite(): Promise<void> {
 	report("invite closed");
 }
 
-/** Full teardown: enrollment and any ongoing session. */
+/** Full teardown: enrollment and the ongoing roster session both. */
 export async function stopSync(): Promise<void> {
 	settleApproval(false);
 	session?.stop();
 	session = null;
+	stopRosterSync();
 	report("disconnected");
+}
+
+/**
+ * Wipe every trace of sync from this device, for new-vault creation. @core's createVault calls
+ * this through the shell.
+ *
+ * Order matters: stop the mesh before the keys it authenticates with are gone, or the session
+ * keeps running against a group this device can no longer prove membership of.
+ */
+export async function resetSyncState(): Promise<void> {
+	await stopSync();
+	await clearGroupState();
+	await clearSyncIdentity();
 }
