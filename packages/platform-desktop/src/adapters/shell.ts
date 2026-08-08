@@ -6,6 +6,14 @@ import type { OptionsScreen, ShellAdapter } from "@core/adapters/shell";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
+import {
+	resetSyncState,
+	signRoster,
+	syncAdmissionPublicKey,
+	syncAdmissionSign,
+	syncDevicePublicKey,
+	syncSigningPublicKey,
+} from "../sync/keys";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
 let appVersion = "0.0.0";
@@ -59,13 +67,21 @@ export const desktopShell: ShellAdapter = {
 	// No corner prompt without the extension bridge (phase 4), so nothing is ever parked.
 	flushPendingCornerCapture: async () => false,
 
-	// Sync is phase 3. These satisfy the contract without pretending to work.
+	// This device's sync identity. Real: the keypairs live in the OS credential store and
+	// only their public halves ever leave here. See ../sync/keys.
+	syncDevicePublicKey,
+	syncSigningPublicKey,
+	signRoster,
+	syncAdmissionPublicKey,
+	syncAdmissionSign,
+	resetSyncState,
+
+	// The transport itself is the next slice. These stay honest about that rather than
+	// pretending: an enrollment that silently did nothing would be worse than one that says
+	// it cannot run. See docs/desktop-port.md.
 	stopSyncSpike: async () => {},
 	onSyncStatus: () => () => {},
 	onSyncEvent: () => () => {},
-	syncDevicePublicKey: async () => {
-		throw new Error("Device sync is not wired on desktop yet");
-	},
 	startEnrollInvite: async () => {
 		throw new Error("Device sync is not wired on desktop yet");
 	},

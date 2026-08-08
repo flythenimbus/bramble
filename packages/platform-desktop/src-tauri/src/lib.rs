@@ -12,6 +12,7 @@ mod pairing;
 mod socket;
 // Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
 // SOCKET_NAME from it and the rest is live over there.
+mod secure_store;
 #[allow(dead_code)]
 mod socket_addr;
 mod spotlight;
@@ -153,6 +154,9 @@ pub fn run() {
             pairing::pairing_public_key,
             index_store::link_set_index,
             index_store::link_clear_index,
+            secure_store::secure_get,
+            secure_store::secure_set,
+            secure_store::secure_delete,
             sync_crypto::sync_handshake_generate_keypair,
             sync_crypto::sync_handshake_start_initiator,
             sync_crypto::sync_handshake_start_responder,

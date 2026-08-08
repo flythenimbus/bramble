@@ -51,10 +51,6 @@ const MAX_ATTEMPTS: u8 = 5;
 /// anywhere else in the system.
 const PSK_INFO: &[u8] = b"bramble/desktop/extension-pairing/psk/v1";
 
-/// Where the static keypair lives in the OS credential store. Unused under test, which
-/// swaps the storage leaf rather than the store.
-#[cfg_attr(test, allow(dead_code))]
-const KEYCHAIN_SERVICE: &str = "app.bramble.desktop";
 #[cfg_attr(test, allow(dead_code))]
 const KEYCHAIN_ACCOUNT: &str = "extension-pairing-identity";
 
@@ -157,8 +153,7 @@ fn restrict(p: &Path) -> Res<()> {
 
 #[cfg_attr(test, allow(dead_code))]
 fn entry() -> Res<keyring::Entry> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        .map_err(|e| format!("credential store unavailable: {e}"))
+    crate::secure_store::entry(KEYCHAIN_ACCOUNT)
 }
 
 // Only the storage leaf is swapped under test, so everything above it (generation, the
