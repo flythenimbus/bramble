@@ -868,13 +868,13 @@ msgstr "Expires"
 msgid "Expires in {0} · keep this window open until pairing finishes"
 msgstr "Expires in {0} · keep this window open until pairing finishes"
 
-#: packages/core/src/app/entry-modes/card.tsx
-msgid "expiry"
-msgstr "expiry"
-
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Expires in {minutes}:{seconds}. It can only be used once."
 msgstr "Expires in {minutes}:{seconds}. It can only be used once."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "expiry"
+msgstr "expiry"
 
 #: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx

@@ -291,7 +291,7 @@ msgstr "O Bramble é gratuito e de código aberto. Se for útil para você, uma 
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Bramble is running but locked. Unlock it there first."
-msgstr ""
+msgstr "O Bramble está em execução, mas bloqueado. Desbloqueie-o lá primeiro."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -308,7 +308,7 @@ msgstr "Migre seus logins, cartões e notas de outro gerenciador"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Browser extension"
-msgstr ""
+msgstr "Extensão do navegador"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bucket"
@@ -486,7 +486,7 @@ msgstr "Confirmar nova senha"
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Connect"
-msgstr ""
+msgstr "Conectar"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Connect {name}"
@@ -494,16 +494,16 @@ msgstr "Conectar {name}"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Connect a browser"
-msgstr ""
+msgstr "Conectar um navegador"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Connected"
-msgstr ""
+msgstr "Conectado"
 
 #. placeholder {0}: formatDate(browser.pairedAt)
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Connected {0}"
-msgstr ""
+msgstr "Conectado {0}"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Connecting to your other device…"
@@ -728,7 +728,7 @@ msgstr "Desmarcar todos"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Desktop app"
-msgstr ""
+msgstr "Aplicativo de desktop"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -757,7 +757,7 @@ msgstr "Desconectar"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Disconnect this browser"
-msgstr ""
+msgstr "Desconectar este navegador"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
@@ -817,7 +817,7 @@ msgstr "Insira a senha para o banco de dados {providerLabel}"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Enter this code in the Bramble browser extension."
-msgstr ""
+msgstr "Insira este código na extensão do navegador do Bramble."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Enter your current password"
@@ -868,13 +868,13 @@ msgstr "Expira"
 msgid "Expires in {0} · keep this window open until pairing finishes"
 msgstr "Expira em {0} · mantenha esta janela aberta até a conclusão do pareamento"
 
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Expires in {minutes}:{seconds}. It can only be used once."
+msgstr "Expira em {minutes}:{seconds}. Pode ser utilizado apenas uma vez."
+
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "expiry"
 msgstr "Validade"
-
-#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
-msgid "Expires in {minutes}:{seconds}. It can only be used once."
-msgstr ""
 
 #: packages/core/src/app/bulk-actions/export.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
@@ -937,7 +937,7 @@ msgstr "Os arquivos são lidos apenas neste dispositivo. Nada é enviado. Exclua
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Fill logins from the Bramble extension without unlocking twice."
-msgstr ""
+msgstr "Preencher logins da extensão do Bramble sem desbloquear duas vezes."
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Filter by type"
@@ -1197,11 +1197,11 @@ msgstr "Luz"
 #. placeholder {0}: formatDate(status.pairedAt)
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Linked {0}"
-msgstr ""
+msgstr "Vinculado {0}"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Linked to the Bramble desktop app."
-msgstr ""
+msgstr "Vinculado ao aplicativo de desktop do Bramble."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock the vault and require autofill auth after inactivity"
@@ -1234,7 +1234,7 @@ msgstr "Logins"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Look up a site"
-msgstr ""
+msgstr "Pesquisar um site"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1307,7 +1307,7 @@ msgstr "Nova senha"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "No answer. Is Bramble running on this computer?"
-msgstr ""
+msgstr "Sem resposta. O Bramble está em execução neste computador?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -1419,7 +1419,7 @@ msgstr "Abra um backup .bramble criptografado e torne-o o cofre neste dispositiv
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Open Bramble on this computer, go to Settings and choose Connect a browser, then enter the code it shows."
-msgstr ""
+msgstr "Abra o Bramble neste computador, acesse as Configurações e escolha Conectar um navegador; em seguida, insira o código que ele exibe."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Open Bramble on your other device and scan the code, or paste it there."
@@ -2028,7 +2028,7 @@ msgstr "Toque sua chave..."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Test"
-msgstr ""
+msgstr "Testar"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
@@ -2077,11 +2077,11 @@ msgstr "Esse ano está fora do intervalo utilizado pelos cartões."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app did not accept that code."
-msgstr ""
+msgstr "O aplicativo de desktop não aceitou esse código."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop vault has {found} matching logins."
-msgstr ""
+msgstr "O cofre de desktop possui {found} logins correspondentes."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
