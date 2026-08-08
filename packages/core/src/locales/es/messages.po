@@ -110,8 +110,12 @@ msgid "A card number is 12 to 19 digits."
 msgstr "El número de tarjeta consta de 12 a 19 dígitos."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
-msgstr "Un dispositivo se ha conectado con su código de emparejamiento. Compruebe que muestra este número exacto y después apruebe. Su caja fuerte aún no se ha enviado."
+msgid "A device has connected with your pairing code. Check that it is showing these exact symbols, then approve. Your vault has not been sent yet."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
+#~ msgstr "Un dispositivo se ha conectado con su código de emparejamiento. Compruebe que muestra este número exacto y después apruebe. Su caja fuerte aún no se ha enviado."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "A one-time backup code that unlocks your vault if you're locked out."
@@ -196,6 +200,10 @@ msgstr "Añadida al crear una clave de acceso en un sitio con Bramble. Elimine p
 msgid "Advanced"
 msgstr "Avanzado"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Aeroplane"
+msgstr ""
+
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "All"
 msgstr "Todos"
@@ -208,9 +216,17 @@ msgstr "Bloquee también la bóveda cada vez que se bloquee la pantalla de su co
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un punto final que devuelve sus propios servidores ICE en formato JSON. Por defecto utiliza los del retransmisor."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Anchor"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Appearance"
 msgstr "Apariencia"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Apple"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -269,6 +285,22 @@ msgstr "Las copias de seguridad se realizan según el esfuerzo disponible, no en
 msgid "Backups to keep"
 msgstr "Copias de seguridad a conservar"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Ball"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Banana"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Bell"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Bicycle"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Biometric unlock"
 msgstr "Desbloqueo biométrico"
@@ -276,6 +308,10 @@ msgstr "Desbloqueo biométrico"
 #: packages/core/src/hooks/useVault.tsx
 msgid "Biometric unlock isn't available on this device."
 msgstr "El desbloqueo biométrico no está disponible en este dispositivo."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Book"
+msgstr ""
 
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
@@ -314,6 +350,18 @@ msgstr "Extensión del navegador"
 msgid "Bucket"
 msgstr "Bucket"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Butterfly"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cactus"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cake"
+msgstr ""
+
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
@@ -345,6 +393,10 @@ msgstr "Nombre del titular de la tarjeta"
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Cards"
 msgstr "Tarjetas"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cat"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Change"
@@ -416,6 +468,10 @@ msgstr "Borrar después de"
 msgid "Clipboard auto-clear"
 msgstr "Limpieza automática de portapapeles"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Clock"
+msgstr ""
+
 #: packages/core/src/app/components/ui/modal.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
@@ -426,6 +482,10 @@ msgstr "Cerrar"
 #: packages/core/src/app/screens/Import/components/Shell.tsx
 msgid "Close import"
 msgstr "Cerrar importación"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cloud"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Cloud backups"
@@ -564,6 +624,10 @@ msgstr "Copiar contraseña anterior"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Copy verification code"
 msgstr "Copiar código de verificación"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Corn"
+msgstr ""
 
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Couldn't open this database."
@@ -759,6 +823,10 @@ msgstr "Desconectar"
 msgid "Disconnect this browser"
 msgstr "Desconectar este navegador"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Dog"
+msgstr ""
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
@@ -786,6 +854,10 @@ msgstr "Editar {modeLabel}"
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Edit entry"
 msgstr "Editar entrada"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Elephant"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Enable autofill"
@@ -947,6 +1019,26 @@ msgstr "Filtrar por tipo"
 msgid "Fingerprint"
 msgstr "Huella dactilar"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Fire"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Fish"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Flag"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Flower"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Folder"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Frequency"
 msgstr "Frecuencia"
@@ -976,6 +1068,18 @@ msgstr "Generar contraseña"
 msgid "Generate strong password"
 msgstr "Generar contraseña segura"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Gift"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Glasses"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Globe"
+msgstr ""
+
 #: packages/core/src/app/components/ui/back-button.tsx
 msgid "Go back"
 msgstr "Regresar"
@@ -984,13 +1088,33 @@ msgstr "Regresar"
 msgid "Go to vault"
 msgstr "Ir al bóveda"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Guitar"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hammer"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file."
 msgstr "Transfiera sus inicios de sesión, códigos y claves de acceso directamente a otra aplicación de contraseñas en este dispositivo. No se escribe nada en un archivo."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hat"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
 msgstr "¿Tiene un código de emparejamiento de otro dispositivo? Agregue una bóveda y seleccione \""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Headphones"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Heart"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Hidden"
@@ -1038,13 +1162,25 @@ msgstr "Contiene {passkeys} llaves de acceso"
 msgid "Holds a passkey"
 msgstr "Contiene una llave de acceso"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Horse"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hourglass"
+msgstr ""
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
 msgstr "Lo he guardado, continuar"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "If the numbers differ, someone else is trying to join. Reject it there and start again with a new code."
-msgstr "Si los números no coinciden, alguien está intentando unirse. Rechácelo en ese dispositivo y comience de nuevo con un código nuevo."
+#~ msgid "If the numbers differ, someone else is trying to join. Reject it there and start again with a new code."
+#~ msgstr "Si los números no coinciden, alguien está intentando unirse. Rechácelo en ese dispositivo y comience de nuevo con un código nuevo."
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "If they differ, someone else is trying to join. Reject it there and start again with a new code."
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Immediate"
@@ -1103,8 +1239,13 @@ msgstr "¿Es este su dispositivo?"
 
 #. placeholder {0}: approval.label
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "It calls itself \"{0}\". Only the number above proves who it is."
-msgstr "Se identifica como \""
+#~ msgid "It calls itself \"{0}\". Only the number above proves who it is."
+#~ msgstr "Se identifica como \""
+
+#. placeholder {0}: approval.label
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "It calls itself \"{0}\". Only the symbols above prove who it is."
+msgstr ""
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "item"
@@ -1147,6 +1288,10 @@ msgstr "Guarde esto en un lugar seguro y sin conexión. Cualquiera que tenga est
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "KeePass master password"
 msgstr "Contraseña maestra de KeePass"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Key"
+msgstr ""
 
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Key file (optional)"
@@ -1194,6 +1339,10 @@ msgstr "Deje los campos de credenciales en blanco para conservar los que guardó
 msgid "Light"
 msgstr "Luz"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Light bulb"
+msgstr ""
+
 #. placeholder {0}: formatDate(status.pairedAt)
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Linked {0}"
@@ -1202,6 +1351,14 @@ msgstr "Vinculado {0}"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Linked to the Bramble desktop app."
 msgstr "Vinculado a la aplicación de escritorio de Bramble."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Lion"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Lock"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Lock the vault and require autofill auth after inactivity"
@@ -1271,9 +1428,17 @@ msgstr "Mensualmente"
 msgid "Months run from 1 to 12."
 msgstr "Los meses van del 1 al 12."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Moon"
+msgstr ""
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "More options"
 msgstr "Más opciones"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Mushroom"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1384,8 +1549,12 @@ msgid "Nothing to import"
 msgstr "Nada que importar"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "Numbers match, approve"
-msgstr "Los números coinciden, apruebe"
+#~ msgid "Numbers match, approve"
+#~ msgstr "Los números coinciden, apruebe"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Octopus"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Off"
@@ -1398,6 +1567,10 @@ msgstr "Desactivado. Usted desbloquea con una llave de seguridad."
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Offer to save logins"
 msgstr "Ofrecer guardar credenciales"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Older version on the other device? Compare this instead:"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
@@ -1477,6 +1650,14 @@ msgstr "Código de emparejamiento"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."
 msgstr "No se completó el emparejamiento."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Panda"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Paperclip"
+msgstr ""
 
 #. placeholder {0}: info.loginName
 #: packages/core/src/app/components/PasskeySavedToast.tsx
@@ -1568,6 +1749,14 @@ msgstr "Prefijo de ruta (opcional)"
 msgid "Payment card"
 msgstr "Tarjeta de pago"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pencil"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Penguin"
+msgstr ""
+
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
 msgstr "Seleccione una contraseña maestra para proteger su bóveda."
@@ -1579,6 +1768,18 @@ msgstr "Elija una contraseña para el archivo exportado. Es distinta de su contr
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file, so we don't keep a copy."
 msgstr "Elija una contraseña para el archivo exportado. Es independiente de su contraseña maestra y es la única forma de abrir el archivo, por lo que no guardamos una copia."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pig"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pin"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pizza"
+msgstr ""
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Please enter your master password"
@@ -1611,6 +1812,10 @@ msgstr "Clave pública"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Public key"
 msgstr "Clave pública"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rabbit"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Re-enter the password"
@@ -1746,6 +1951,22 @@ msgstr "Restaurando…"
 msgid "Review what we found in your {0} export"
 msgstr "Revise lo que encontramos en la exportación de {0}"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Robot"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rocket"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rooster"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Santa"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Save"
 msgstr "Guardar"
@@ -1802,6 +2023,10 @@ msgstr "Escanee esto en su otro dispositivo o copie el código siguiente. Manté
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
 msgstr "Escaneando…"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Scissors"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Search vault"
@@ -1955,6 +2180,10 @@ msgstr "Sitios que ha silenciado"
 msgid "Skip your password on this device with {name}."
 msgstr "Omitir su contraseña en este dispositivo con {name}."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Smiley"
+msgstr ""
+
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Something went wrong"
 msgstr "Ha ocurrido un error"
@@ -1966,6 +2195,10 @@ msgstr "Ordenar"
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 msgid "Source code"
 msgstr "Código fuente"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Spanner"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
@@ -1983,6 +2216,10 @@ msgstr "Detiene la sincronización de este dispositivo y lo mantiene solo para u
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Store sensitive text"
 msgstr "Almacenar texto sensible"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Strawberry"
+msgstr ""
 
 #: packages/core/src/app/components/ui/master-password-meter.tsx
 msgid "Strength"
@@ -2025,6 +2262,10 @@ msgstr "Toque para escanear de nuevo"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap your key…"
 msgstr "Toque su llave..."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Telephone"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Test"
@@ -2102,6 +2343,10 @@ msgstr "Tema"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "There's no vendor reset. Memorize this password and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be recovered."
 msgstr "No hay restablecimiento del proveedor. Memorice esta contraseña y guarde el código de recuperación que recibirá a continuación en un lugar seguro. Si pierde ambos, su bóveda no podrá ser recuperada."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "They match, approve"
+msgstr ""
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
@@ -2188,6 +2433,10 @@ msgstr "Esta bóveda no tiene un código de recuperación."
 msgid "Those passwords don't match."
 msgstr "Las contraseñas no coinciden."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Thumbs up"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
 msgstr "Tiempo de espera agotado"
@@ -2228,6 +2477,10 @@ msgstr "Total de elementos"
 msgid "Touch ID"
 msgstr "Touch ID"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Train"
+msgstr ""
+
 #: packages/core/src/hooks/useExchangeAvailability.tsx
 msgid "Transferring between apps needs iOS 26."
 msgstr "Transferir entre aplicaciones requiere iOS 26."
@@ -2240,6 +2493,18 @@ msgstr "Transferir entre aplicaciones requiere iOS 26. Este dispositivo usa iOS 
 msgid "Transferring to another app isn't available here."
 msgstr "La transferencia a otra app no está disponible aquí."
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Tree"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Trophy"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Trumpet"
+msgstr ""
+
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Try again"
 msgstr "Intentar de nuevo"
@@ -2248,9 +2513,21 @@ msgstr "Intentar de nuevo"
 msgid "TURN / ICE servers URL"
 msgstr "URL de servidores TURN / ICE"
 
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Turtle"
+msgstr ""
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Type"
 msgstr "Tipo"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Umbrella"
+msgstr ""
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Unicorn"
+msgstr ""
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -2515,8 +2792,12 @@ msgid "Your new recovery code"
 msgstr "Código de recuperación nuevo"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
-msgid "Your other device is showing a number. Confirm it there only if it matches this one."
-msgstr "Su otro dispositivo muestra un número. Confírmelo allí solo si coincide con este."
+#~ msgid "Your other device is showing a number. Confirm it there only if it matches this one."
+#~ msgstr "Su otro dispositivo muestra un número. Confírmelo allí solo si coincide con este."
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Your other device is showing the same symbols. Confirm it there only if they match these."
+msgstr ""
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Your vault is empty. Add your first item."

@@ -118,7 +118,9 @@ export const EnrollApproveMsgSchema = z.object({ approved: z.boolean() });
 /** offscreen -> popup: an approval the host is still waiting on, so a reopened popup can resume
  * the prompt rather than stranding it. Null when there is none. */
 export const PendingEnrollApprovalSchema = z
-	.object({ sas: z.string(), label: z.string() })
+	// sasEmoji is optional so an offscreen that predates the emoji SAS still parses; the popup
+	// falls back to comparing digits. See @core/sync/pairing-sas.
+	.object({ sas: z.string(), sasEmoji: z.array(z.number().int()).optional(), label: z.string() })
 	.nullable();
 export type PendingEnrollApproval = z.infer<typeof PendingEnrollApprovalSchema>;
 
@@ -130,6 +132,7 @@ export const SyncEventMsgSchema = z.object({
 	entryJson: z.string().optional(),
 	message: z.string().optional(),
 	sas: z.string().optional(),
+	sasEmoji: z.array(z.number().int()).optional(),
 	label: z.string().optional(),
 });
 export type SyncEventMsg = z.infer<typeof SyncEventMsgSchema>;

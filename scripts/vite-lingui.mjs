@@ -13,6 +13,10 @@ import babel from "vite-plugin-babel";
 export function linguiMacroPlugin() {
 	return babel({
 		enforce: "pre",
+		// .tsx only, deliberately. A macro in a plain .ts would need this transform wherever that
+		// module is imported, including test configs that carry no Babel (the extension's), and it
+		// fails at runtime with a missing babel-plugin-macros rather than at build time. Keep
+		// message descriptors in .tsx modules; see @core/sync/sas-emoji for a table split that way.
 		include: /\.tsx$/,
 		exclude: /node_modules/,
 		babelConfig: {

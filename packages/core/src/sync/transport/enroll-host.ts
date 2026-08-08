@@ -20,7 +20,7 @@ import {
 	type RosterPayload,
 	type WireRecoverySlot,
 } from "..";
-import { pairingSas } from "../pairing-sas";
+import { type PairingSas, pairingSas } from "../pairing-sas";
 import type { Channel } from "./channel";
 import {
 	type Awaitable,
@@ -143,9 +143,9 @@ export interface EnrollOptions {
 	onEnrolled?: (entryJson: string) => void;
 	/** Inviter: show the SAS + the joiner's label, resolving with the user's answer. REQUIRED (no
 	 * "approved" fallback). `label` is joiner-chosen, so it is context, never proof. */
-	approve?: (sas: string, label: string) => Promise<boolean>;
+	approve?: (sas: PairingSas, label: string) => Promise<boolean>;
 	/** Joiner: the SAS to show while the other device waits for the user to confirm it. */
-	onSas?: (sas: string) => void;
+	onSas?: (sas: PairingSas) => void;
 	/** Inviter: the invite window closed. Fired BEFORE stop(), so the host can settle a prompt
 	 * still waiting on `approve`; the UI's countdown is not authoritative (it may not be running). */
 	onInviteExpired?: () => void;
@@ -317,7 +317,9 @@ async function serveJoiner(opts: EnrollOptions, channel: Channel, sess: Session)
 	const entry = await recvJoinerHello(opts, channel, sess);
 	if (!entry) return; // reason already reported
 	const sas = await pairingSas(opts.psk, opts.devicePubB64, sess.remoteStatic);
-	opts.report(`confirm this code matches on the other device: ${sas}`);
+	// The status line stays digits-only: it is a log, and the emoji belong where the user is
+	// actually being asked to compare them.
+	opts.report(`confirm this code matches on the other device: ${sas.digits}`);
 	if (!(await opts.approve(sas, entry.label))) {
 		// Burned, not re-armed: a rejection means the code reached someone it shouldn't have.
 		opts.report("⚠ pairing rejected: this code is now dead, generate a new one");

@@ -16,6 +16,7 @@ import {
 } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { formatDate } from "../../../../util/format-date";
+import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -651,19 +652,17 @@ export function SyncConnectSection() {
 						</h2>
 						<p className="text-xs text-muted-foreground">
 							<Trans>
-								A device has connected with your pairing code. Check that it is showing this exact
-								number, then approve. Your vault has not been sent yet.
+								A device has connected with your pairing code. Check that it is showing these exact
+								symbols, then approve. Your vault has not been sent yet.
 							</Trans>
 						</p>
-						<p className="text-center font-mono text-3xl tracking-[0.2em] tabular-nums">
-							{approval.sas}
-						</p>
+						<SasDisplay digits={approval.sas} emoji={approval.sasEmoji} />
 						{approval.label && (
 							// The label is chosen by whoever is joining, so it is context, not evidence. Said
 							// plainly here rather than left to be read as confirmation.
 							<p className="text-center text-xs text-muted-foreground">
 								<Trans>
-									It calls itself "{approval.label}". Only the number above proves who it is.
+									It calls itself "{approval.label}". Only the symbols above prove who it is.
 								</Trans>
 							</p>
 						)}
@@ -672,7 +671,7 @@ export function SyncConnectSection() {
 								<Trans>Reject</Trans>
 							</Button>
 							<Button variant="secondary" size="sm" onClick={() => answerApproval(true)}>
-								<Trans>Numbers match, approve</Trans>
+								<Trans>They match, approve</Trans>
 							</Button>
 						</div>
 					</div>

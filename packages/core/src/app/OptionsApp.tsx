@@ -32,11 +32,19 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	// authenticated and cleared when the join settles either way (so a retry never shows a stale
 	// number). Held here rather than in VaultProvider: the setup screen is its only consumer.
 	const [joinSas, setJoinSas] = useState<string | null>(null);
+	// The emoji form of the same SAS, held alongside rather than derived: the digits are lossy, so
+	// the indices have to come from the host that derived them.
+	const [joinSasEmoji, setJoinSasEmoji] = useState<number[] | null>(null);
 	useEffect(
 		() =>
 			shell.onSyncEvent((e) => {
-				if (e.kind === "sas") setJoinSas(e.sas ?? null);
-				else if (e.kind === "joined" || e.kind === "join-error") setJoinSas(null);
+				if (e.kind === "sas") {
+					setJoinSas(e.sas ?? null);
+					setJoinSasEmoji(e.sasEmoji ?? null);
+				} else if (e.kind === "joined" || e.kind === "join-error") {
+					setJoinSas(null);
+					setJoinSasEmoji(null);
+				}
 			}),
 		[shell],
 	);
@@ -111,6 +119,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			joining={joining}
 			joinError={joinError}
 			joinSas={joinSas}
+			joinSasEmoji={joinSasEmoji}
 			onRestore={({ addedNew }) => {
 				if (onComplete) onComplete();
 				else setDone(addedNew ? "added" : "opened");

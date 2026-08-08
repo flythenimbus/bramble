@@ -105,8 +105,12 @@ let syncSession: MeshSession | null = null;
  * entirely) while the joiner sits on an open channel with nothing sent yet. Held state lets a
  * reopened popup pick the prompt back up instead of stranding the joiner until the invite expires.
  */
-let pendingApproval: { sas: string; label: string; settle: (approved: boolean) => void } | null =
-	null;
+let pendingApproval: {
+	sas: string;
+	sasEmoji: number[];
+	label: string;
+	settle: (approved: boolean) => void;
+} | null = null;
 
 /** Answer (and clear) the pending approval. A no-op when there isn't one, which is what a stale
  * click from a popup that reopened after the invite already ended looks like. */
@@ -513,6 +517,7 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					data: pendingApproval
 						? ({
 								sas: pendingApproval.sas,
+								sasEmoji: pendingApproval.sasEmoji,
 								label: pendingApproval.label,
 							} satisfies NonNullable<PendingEnrollApproval>)
 						: null,
@@ -633,10 +638,15 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					// unless this resolves true. See docs/p2p-sync.md "Pairing code".
 					approve: (sas, label) =>
 						new Promise<boolean>((resolve) => {
-							pendingApproval = { sas, label, settle: resolve };
-							broadcastSyncEvent({ kind: "enroll-approval", sas, label });
+							pendingApproval = { sas: sas.digits, sasEmoji: sas.emoji, label, settle: resolve };
+							broadcastSyncEvent({
+								kind: "enroll-approval",
+								sas: sas.digits,
+								sasEmoji: sas.emoji,
+								label,
+							});
 						}),
-					onSas: (sas) => broadcastSyncEvent({ kind: "sas", sas }),
+					onSas: (sas) => broadcastSyncEvent({ kind: "sas", sas: sas.digits, sasEmoji: sas.emoji }),
 					// The window closed. Refuse any prompt still parked here (nothing can be sent
 					// after this) and tell the UI, which may have lost its own countdown when the
 					// popup closed and reopened.

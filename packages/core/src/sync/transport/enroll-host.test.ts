@@ -511,11 +511,15 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		await handle(peer.peer);
 
 		expect(approve).toHaveBeenCalledOnce();
-		const [sas, label] = approve.mock.calls[0] as unknown as [string, string];
-		expect(sas).toMatch(/^\d{4} \d{4} \d{4}$/);
+		const [sas, label] = approve.mock.calls[0] as unknown as [
+			{ digits: string; emoji: number[] },
+			string,
+		];
+		expect(sas.digits).toMatch(/^\d{4} \d{4} \d{4}$/);
+		expect(sas.emoji).toHaveLength(7);
 		expect(label).toBe(ownEntry.label);
 		// Both sides must derive the same value: the inviter from (own key, proved joiner key).
-		expect(sas).toBe(await pairingSas(b64(32), b64(16), "joinerpub"));
+		expect(sas).toEqual(await pairingSas(b64(32), b64(16), "joinerpub"));
 		expect(peer.sent.length).toBeGreaterThan(0);
 	});
 

@@ -207,10 +207,13 @@ export interface ShellAdapter {
 	getPendingEnrollApproval?(): Promise<EnrollApproval | null>;
 }
 
-/** The inviter-side confirmation prompt: the number to compare, and who is asking. */
+/** The inviter-side confirmation prompt: the value to compare, and who is asking. */
 export interface EnrollApproval {
-	/** The 12-digit SAS both devices derive. This is the check. */
+	/** The 12-digit SAS both devices derive. */
 	sas: string;
+	/** The same bits as seven emoji indices, which is what the user compares. Optional because a
+	 * host that predates the emoji SAS sends only `sas`; see @core/sync/pairing-sas. */
+	sasEmoji?: number[];
 	/** The joining device's self-declared label. Attacker-controlled: context, never proof. */
 	label: string;
 }
@@ -227,6 +230,8 @@ export interface SyncEvent {
 	message?: string;
 	/** For kind "enroll-approval" (inviter) and "sas" (joiner): the pairing SAS to display. */
 	sas?: string;
+	/** The same SAS as emoji indices. Optional: absent from a host that predates them. */
+	sasEmoji?: number[];
 	/** For kind "enroll-approval": the joining device's label. Context for the user, not proof. */
 	label?: string;
 	/** For kind "synced": epoch ms of the reconcile, carrying the "last synced" tick to the UI (mobile). */

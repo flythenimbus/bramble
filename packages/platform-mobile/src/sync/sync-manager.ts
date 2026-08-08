@@ -8,6 +8,7 @@ import {
 	decodeEntriesPayload,
 	decodeRoster,
 	decodeVaultBlob,
+	type EnrollApproval,
 	type EntriesPayload,
 	encodeEntriesPayload,
 	encodeRoster,
@@ -189,8 +190,12 @@ let session: MeshSession | null = null;
  * it in the offscreen: the joiner is on an open channel with nothing sent, and the UI that has to
  * answer may be remounted (or backgrounded) before it does. See ShellAdapter.approveEnrollment.
  */
-let pendingApproval: { sas: string; label: string; settle: (approved: boolean) => void } | null =
-	null;
+let pendingApproval: {
+	sas: string;
+	sasEmoji: number[];
+	label: string;
+	settle: (approved: boolean) => void;
+} | null = null;
 
 function settleApproval(approved: boolean): void {
 	const pending = pendingApproval;
@@ -204,8 +209,10 @@ export async function approveEnrollment(approved: boolean): Promise<void> {
 }
 
 /** The prompt still outstanding, for a UI that mounted after it was raised. */
-export async function getPendingEnrollApproval(): Promise<{ sas: string; label: string } | null> {
-	return pendingApproval ? { sas: pendingApproval.sas, label: pendingApproval.label } : null;
+export async function getPendingEnrollApproval(): Promise<EnrollApproval | null> {
+	if (!pendingApproval) return null;
+	const { sas, sasEmoji, label } = pendingApproval;
+	return { sas, sasEmoji, label };
 }
 
 export async function startEnrollInvite(opts: {
@@ -233,8 +240,8 @@ export async function startEnrollInvite(opts: {
 		// Park the transfer on the user's answer: authenticated is not the same as authorized.
 		approve: (sas, label) =>
 			new Promise<boolean>((resolve) => {
-				pendingApproval = { sas, label, settle: resolve };
-				emit({ kind: "enroll-approval", sas, label });
+				pendingApproval = { sas: sas.digits, sasEmoji: sas.emoji, label, settle: resolve };
+				emit({ kind: "enroll-approval", sas: sas.digits, sasEmoji: sas.emoji, label });
 			}),
 		// The window closed: refuse anything still parked on the prompt (nothing can be sent after
 		// this) and tell the UI, rather than leaving a dead prompt on screen.
@@ -284,7 +291,7 @@ export async function startEnrollJoin(opts: {
 		devicePrivB64: privateKey,
 		wasm,
 		report,
-		onSas: (sas) => emit({ kind: "sas", sas }),
+		onSas: (sas) => emit({ kind: "sas", sas: sas.digits, sasEmoji: sas.emoji }),
 		onJoined: (r) => emit({ kind: "joined", vaultBlobB64: r.vaultBlobB64, roster: r.roster }),
 		onJoinError: (message) => emit({ kind: "join-error", message }),
 	});

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { SasDisplay } from "../../components/SasDisplay";
 import { BackButton } from "../../components/ui/back-button";
 import { RestoreShell } from "../Restore/RestoreShell";
 import { JoinCard } from "./components/JoinCard";
@@ -27,8 +28,11 @@ interface VaultSetupProps {
 	/** The last join failure, surfaced in the join form. */
 	joinError?: string | null;
 	/** The pairing SAS, once the channel is authenticated: the user compares it against the same
-	 * number on the inviting device before approving there. Absent until then. */
+	 * value on the inviting device before approving there. Absent until then. */
 	joinSas?: string | null;
+	/** The same SAS as emoji indices, which is the form the user compares. Absent from a host that
+	 * predates the emoji SAS, leaving the digits as the only comparison. */
+	joinSasEmoji?: number[] | null;
 	/** Restore a .bramble backup (the "Restore from backup" tab; rendered inline like the others).
 	 * Called on success so the parent drives the terminal screen; `addedNew` marks a restored-into-new
 	 * locked vault vs the first vault unlocked in place. Absent where restore isn't supported (mobile). */
@@ -53,6 +57,7 @@ export function VaultSetup({
 	joining,
 	joinError,
 	joinSas,
+	joinSasEmoji,
 	onRestore,
 	mobile,
 	adding,
@@ -103,19 +108,21 @@ export function VaultSetup({
 					</h1>
 					{joinSas ? (
 						<>
-							{/* The comparison is the whole defence, so the number is the loudest thing on
-							    screen and the instruction is one sentence. */}
+							{/* The comparison is the whole defence, so it is the loudest thing on screen and
+							    the instruction is one sentence. */}
 							<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
 								<Trans>
-									Your other device is showing a number. Confirm it there only if it matches this
-									one.
+									Your other device is showing the same symbols. Confirm it there only if they match
+									these.
 								</Trans>
 							</p>
-							<p className="mt-6 font-mono text-3xl tracking-[0.2em] tabular-nums">{joinSas}</p>
+							<div className="mt-6">
+								<SasDisplay digits={joinSas} emoji={joinSasEmoji ?? undefined} large />
+							</div>
 							<p className="mt-4 text-xs text-muted-foreground">
 								<Trans>
-									If the numbers differ, someone else is trying to join. Reject it there and start
-									again with a new code.
+									If they differ, someone else is trying to join. Reject it there and start again
+									with a new code.
 								</Trans>
 							</p>
 							{/* Backgrounding here isn't survivable: the OS suspends the app and the connection

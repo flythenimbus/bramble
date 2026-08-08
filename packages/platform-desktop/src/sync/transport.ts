@@ -9,7 +9,13 @@
 // The crypto still comes from the Rust side (`desktopSyncCrypto`), because the VEK lives there
 // and never crosses into the webview. That is the only structural difference from mobile.
 
-import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } from "@core/index";
+import type {
+	EnrollApproval,
+	EntriesPayload,
+	RosterEntry,
+	RosterPayload,
+	WireRecoverySlot,
+} from "@core/index";
 import { canonicalRosterEntry, RosterEntrySchema } from "@core/sync/roster";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
@@ -77,7 +83,12 @@ let session: MeshSession | null = null;
  * answer can be closed and reopened before it does. Closing the vault window does not end the
  * process here, which makes that more likely, not less.
  */
-let pendingApproval: { sas: string; label: string; settle: (ok: boolean) => void } | null = null;
+let pendingApproval: {
+	sas: string;
+	sasEmoji: number[];
+	label: string;
+	settle: (ok: boolean) => void;
+} | null = null;
 
 function settleApproval(approved: boolean): void {
 	const pending = pendingApproval;
@@ -91,8 +102,10 @@ export async function approveEnrollment(approved: boolean): Promise<void> {
 }
 
 /** The prompt still outstanding, for a window that mounted after it was raised. */
-export async function getPendingEnrollApproval(): Promise<{ sas: string; label: string } | null> {
-	return pendingApproval ? { sas: pendingApproval.sas, label: pendingApproval.label } : null;
+export async function getPendingEnrollApproval(): Promise<EnrollApproval | null> {
+	if (!pendingApproval) return null;
+	const { sas, sasEmoji, label } = pendingApproval;
+	return { sas, sasEmoji, label };
 }
 
 // ---- enrollment ----
@@ -131,8 +144,8 @@ export async function startEnrollInvite(opts: {
 		// Park the transfer on the user's answer: authenticated is not authorized.
 		approve: (sas, label) =>
 			new Promise<boolean>((resolve) => {
-				pendingApproval = { sas, label, settle: resolve };
-				emit({ kind: "enroll-approval", sas, label });
+				pendingApproval = { sas: sas.digits, sasEmoji: sas.emoji, label, settle: resolve };
+				emit({ kind: "enroll-approval", sas: sas.digits, sasEmoji: sas.emoji, label });
 			}),
 		// The window closed: refuse anything parked on the prompt, and say so rather than
 		// leaving a dead prompt on screen.
@@ -188,7 +201,7 @@ export async function startEnrollJoin(opts: {
 		devicePrivB64: privateKey,
 		wasm: desktopSyncCrypto,
 		report,
-		onSas: (sas) => emit({ kind: "sas", sas }),
+		onSas: (sas) => emit({ kind: "sas", sas: sas.digits, sasEmoji: sas.emoji }),
 		onJoined: (r) => emit({ kind: "joined", vaultBlobB64: r.vaultBlobB64, roster: r.roster }),
 		onJoinError: (message) => emit({ kind: "join-error", message }),
 	});
