@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type BackgroundHarness,
-	extensionSender,
 	loadBackground,
 	pageSender,
+	setAutofillIndex,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 
@@ -24,7 +24,7 @@ async function unlocked(extra?: {
 	localSeed?: Record<string, unknown>;
 }): Promise<BackgroundHarness> {
 	const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" }, ...extra });
-	await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
+	await setAutofillIndex(bg, [LOGIN]);
 	return bg;
 }
 

@@ -33,7 +33,7 @@ export interface VaultEntries {
 export interface EntryMutationsDeps {
 	crypto: Pick<CryptoAdapter, "encryptEntry" | "encryptWithVek" | "decryptWithVek">;
 	storage: Pick<StorageAdapter, "writeVaultBlob">;
-	autofill: Pick<AutofillAdapter, "setIndex">;
+	autofill: Pick<AutofillAdapter, "beginIndexUpdate" | "setIndex">;
 	readDecodedBlob: () => Promise<{ blob: VaultBlob }>;
 	/** Lazily resolves this device's HLC; mutations stamp new writes from it. */
 	clock: () => Promise<HybridClock>;
@@ -94,8 +94,9 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 	// never drift from disk. Returns `next` only after the write succeeds, so a
 	// failed write leaves the caller's state untouched.
 	const persist = async (next: VaultEntries): Promise<VaultEntries> => {
+		const indexLease = await autofill.beginIndexUpdate?.();
 		await writeEntriesBlob(await buildPayload(next));
-		await autofill.setIndex(toAutofillIndex(next.entries));
+		await autofill.setIndex(toAutofillIndex(next.entries), indexLease);
 		return next;
 	};
 

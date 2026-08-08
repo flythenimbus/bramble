@@ -22,10 +22,14 @@ import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
 import {
+	type AutofillSessionCapability,
+	type AutofillSessionOwner,
+	autofillSessionCapabilityIsCurrent,
 	autofillSessionIsCurrent,
 	autofillSessionIsStable,
+	autofillSessionOwner,
+	autofillSessionOwnerIsCurrent,
 	autofillSessionSnapshot,
-	getActiveVaultId,
 	scheduleAutoLock,
 	vaultLocked,
 } from "./session";
@@ -35,9 +39,53 @@ const HOSTNAMES_KEY = "autofill.knownHostnames";
 
 // In-memory caches. The decrypted autofill index is never persisted (plaintext
 // secrets); it stays null after a SW restart until the popup re-pushes it via
-// AUTOFILL_SET_INDEX or it is rebuilt from disk while the VEK is cached.
-let autofillIndex: Map<string, IndexEntry> | null = null;
+// AUTOFILL_SET_INDEX or it is rebuilt from disk while the VEK is cached. Its
+// owner is as important as its contents: an older async rebuild must never be
+// usable (or publishable) after a lock/unlock or active-vault replacement.
+type AutofillIndexCache = Readonly<{
+	owner: AutofillSessionOwner;
+	entries: Map<string, IndexEntry>;
+}>;
+
+let autofillIndex: AutofillIndexCache | null = null;
+let cacheRevision = 0;
+let hydrationInFlight: Readonly<{
+	owner: AutofillSessionOwner;
+	revision: number;
+	promise: Promise<boolean>;
+}> | null = null;
 const knownHostnames = new Set<string>();
+
+function sameOwner(left: AutofillSessionOwner, right: AutofillSessionOwner): boolean {
+	return (
+		left.vaultId === right.vaultId &&
+		left.generation === right.generation &&
+		left.token === right.token
+	);
+}
+
+/** The live index only if it belongs to the current unlocked vault/key session. */
+function currentIndex(): Map<string, IndexEntry> | null {
+	const owner = autofillSessionOwner();
+	if (owner && autofillIndex && sameOwner(autofillIndex.owner, owner)) return autofillIndex.entries;
+	// Drop stale plaintext as soon as it is observed. Incrementing revision also prevents an
+	// older hydration from publishing after a clear or active-vault transition.
+	if (autofillIndex) {
+		autofillIndex = null;
+		cacheRevision++;
+	}
+	return null;
+}
+
+function publishIndex(
+	owner: AutofillSessionOwner,
+	revision: number,
+	entries: Map<string, IndexEntry>,
+): boolean {
+	if (cacheRevision !== revision || !autofillSessionOwnerIsCurrent(owner)) return false;
+	autofillIndex = { owner, entries };
+	return true;
+}
 
 // Load the persisted hostname registry so the locked-state hint survives SW
 // restarts. Awaited (with the session hydration) before any handler runs.
@@ -63,32 +111,35 @@ async function persistKnownHostnames(): Promise<void> {
 /** Drop the in-memory index (called on lock). */
 export function clearIndex(): void {
 	autofillIndex = null;
+	cacheRevision++;
 }
 
 /** The index entry for `id`, or undefined when the index is absent/missing it. */
 export function getIndexEntry(id: string): IndexEntry | undefined {
-	return autofillIndex?.get(id);
+	return currentIndex()?.get(id);
 }
 
 /** Insert a freshly-saved login into the live index and register its hostnames. */
 export async function addLoginEntry(entry: LoginIndexEntry): Promise<void> {
-	if (!autofillIndex) return;
-	autofillIndex.set(entry.id, entry);
+	const index = currentIndex();
+	if (!index) return;
+	index.set(entry.id, entry);
 	for (const h of entry.hostnames) knownHostnames.add(h);
 	await persistKnownHostnames();
 }
 
 /** Overwrite a login's cached username/password after a corner-prompt update. */
 export function updateLoginCredentials(id: string, username: string, password: string): void {
-	const entry = autofillIndex?.get(id);
+	const index = currentIndex();
+	const entry = index?.get(id);
 	if (entry && entry.type === "login") {
-		autofillIndex?.set(id, { ...entry, username, password });
+		index?.set(id, { ...entry, username, password });
 	}
 }
 
 /** Classify a captured credential against the live index (null index degrades to save). */
 export function dedupeCapture(hostname: string, username: string, password: string): DedupeOutcome {
-	return dedupeCaptureFn(autofillIndex, hostname, username, password);
+	return dedupeCaptureFn(currentIndex(), hostname, username, password);
 }
 
 /** Masked card label for the dropdown, e.g. "Visa •••• 1234". */
@@ -105,7 +156,8 @@ function queryResult(
 	hasCard: boolean,
 	hasOtp: boolean,
 ): QueryResult {
-	if (!autofillIndex || vaultLocked()) {
+	const index = currentIndex();
+	if (!index || vaultLocked()) {
 		const pageDomain = registrableDomain(hostname);
 		let hasPotentialMatch = false;
 		for (const h of knownHostnames) {
@@ -119,7 +171,7 @@ function queryResult(
 	const logins: MatchSummary[] = [];
 	const cards: MatchSummary[] = [];
 	const otps: MatchSummary[] = [];
-	for (const entry of autofillIndex.values()) {
+	for (const entry of index.values()) {
 		if (entry.type === "login") {
 			if (!hostnameMatches(entry, hostname)) continue;
 			if (hasLogin) {
@@ -149,7 +201,7 @@ function queryResult(
 
 /** Resolve an entry to its fill payload. TOTP is computed live; the seed never ships. */
 function fetchFill(entryId: string): FillPayload {
-	const entry = autofillIndex?.get(entryId);
+	const entry = currentIndex()?.get(entryId);
 	if (!entry) throw new Error(`entry not found: ${entryId}`);
 	if (entry.type === "login") {
 		let totp: string | undefined;
@@ -193,15 +245,6 @@ function pageSenderHostname(sender: chrome.runtime.MessageSender): string | null
 	return hostname || null;
 }
 
-const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-function optionalRequestId(message: any): string | undefined | null {
-	if (!("requestId" in message)) return undefined;
-	return typeof message.requestId === "string" && CANONICAL_UUID.test(message.requestId)
-		? message.requestId
-		: null;
-}
-
 function validQueryFlags(message: any): boolean {
 	return ["hasLogin", "hasCard", "hasOtp"].every(
 		(key) => !(key in message) || typeof message[key] === "boolean",
@@ -224,31 +267,55 @@ function validSelectPayload(payload: unknown): payload is {
 	);
 }
 
+function validSessionCapability(value: unknown): value is AutofillSessionCapability {
+	if (!value || typeof value !== "object") return false;
+	const capability = value as Record<string, unknown>;
+	return (
+		typeof capability.vaultId === "string" &&
+		capability.vaultId.length > 0 &&
+		capability.vaultId.length <= 256 &&
+		typeof capability.token === "string" &&
+		capability.token.length > 0 &&
+		capability.token.length <= 256
+	);
+}
+
+function validSetIndexPayload(payload: unknown): payload is {
+	entries: IndexEntry[];
+	owner: AutofillSessionCapability;
+} {
+	if (!payload || typeof payload !== "object") return false;
+	const value = payload as Record<string, unknown>;
+	return Array.isArray(value.entries) && validSessionCapability(value.owner);
+}
+
+function validClearIndexPayload(payload: unknown): payload is { owner: AutofillSessionCapability } {
+	if (!payload || typeof payload !== "object") return false;
+	return validSessionCapability((payload as Record<string, unknown>).owner);
+}
+
 /** A login may be filled only on a page its hostname matches; cards are site-agnostic. See docs/autofill.md. */
 function authorizeFill(entryId: string, pageHostname: string): void {
-	const entry = autofillIndex?.get(entryId);
+	const entry = currentIndex()?.get(entryId);
 	if (entry?.type === "login" && !hostnameMatches(entry, pageHostname)) {
 		throw new Error("entry is not offered on this origin");
 	}
 }
 
-/** Rebuild autofillIndex from disk when the SW idle-killed it but the VEK is cached. Idempotent. */
-export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
-	if (autofillIndex !== null) return true;
-	if (vaultLocked()) return false;
-	// Rebuild from the ACTIVE vault's blob + VEK (not the primary's): autofill serves whichever
-	// vault is unlocked now. See docs/multiple-vaults.md "Autofill".
-	const vaultId = getActiveVaultId();
-	if (vaultId === null) return false;
+/** Build and publish one index only if its vault/key session still owns the cache. */
+async function hydrateIndexForOwner(
+	owner: AutofillSessionOwner,
+	revision: number,
+): Promise<boolean> {
 	try {
-		const blob = await readAndDecodeVault(vaultId);
+		const blob = await readAndDecodeVault(owner.vaultId);
+		const discoveredHostnames = new Set<string>();
 		if (blob.entriesCiphertext.length === 0) {
-			autofillIndex = new Map();
-			return true;
+			return publishIndex(owner, revision, new Map());
 		}
 		const outerResp = await sendToOffscreen({
 			type: "CRYPTO_DECRYPT_OUTER",
-			vaultId,
+			vaultId: owner.vaultId,
 			payload: {
 				iv: bytesToBase64(blob.entriesIv),
 				ciphertext: bytesToBase64(blob.entriesCiphertext),
@@ -262,7 +329,7 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 		for (const enc of encryptedEntries) {
 			const dec = await sendToOffscreen({
 				type: "CRYPTO_DECRYPT",
-				vaultId,
+				vaultId: owner.vaultId,
 				payload: {
 					ciphertext: enc.ciphertext,
 					iv: enc.iv,
@@ -298,7 +365,7 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 					autoSubmit: data.autoSubmit,
 					subdomainMatch: data.subdomainMatch,
 				});
-				for (const h of hostnames) knownHostnames.add(h);
+				for (const h of hostnames) discoveredHostnames.add(h);
 			} else if (data.type === "card") {
 				newIndex.set(enc.id, {
 					type: "card",
@@ -315,35 +382,89 @@ export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
 			}
 			// Notes / ssh-keys are not autofillable.
 		}
-		autofillIndex = newIndex;
+		if (!publishIndex(owner, revision, newIndex)) return false;
+		for (const hostname of discoveredHostnames) knownHostnames.add(hostname);
 		await persistKnownHostnames();
-		return true;
+		// A transition while persisting host hints makes this result unavailable to callers; the
+		// next reader will discard the no-longer-owned plaintext index.
+		return autofillSessionOwnerIsCurrent(owner);
 	} catch (e) {
 		console.warn("[titanpass:bg] hydrateAutofillIndexFromDisk failed", e);
 		return false;
 	}
 }
 
+/** Rebuild the current session's index after an SW restart. Concurrent readers share one build. */
+export async function hydrateAutofillIndexFromDisk(): Promise<boolean> {
+	const owner = autofillSessionOwner();
+	if (!owner) return false;
+	if (currentIndex() !== null) return true;
+	const revision = cacheRevision;
+	if (
+		hydrationInFlight &&
+		hydrationInFlight.revision === revision &&
+		sameOwner(hydrationInFlight.owner, owner)
+	) {
+		return hydrationInFlight.promise;
+	}
+	const promise = hydrateIndexForOwner(owner, revision).finally(() => {
+		if (hydrationInFlight?.promise === promise) hydrationInFlight = null;
+	});
+	hydrationInFlight = { owner, revision, promise };
+	return promise;
+}
+
 // --- Handlers ---
 
-async function autofillSetIndex(message: any): Promise<MessageEnvelope> {
-	const entries = message.payload as IndexEntry[];
-	autofillIndex = new Map();
+async function autofillSetIndex(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	if (!validSetIndexPayload(message.payload)) return { ok: false, error: "invalid_request" };
+	const { entries, owner: capability } = message.payload;
+	if (!autofillSessionCapabilityIsCurrent(capability)) {
+		return { ok: false, error: "unavailable" };
+	}
+	const owner = autofillSessionOwner();
+	if (!owner || owner.vaultId !== capability.vaultId || owner.token !== capability.token) {
+		return { ok: false, error: "unavailable" };
+	}
+	const index = new Map<string, IndexEntry>();
 	knownHostnames.clear();
 	for (const entry of entries) {
-		autofillIndex.set(entry.id, entry);
+		index.set(entry.id, entry);
 		// Register every hostname a login covers so the locked-state hint lights up on all of them.
 		if (entry.type === "login") {
 			for (const h of entry.hostnames) knownHostnames.add(h);
 		}
 	}
+	cacheRevision++;
+	autofillIndex = { owner, entries: index };
 	await persistKnownHostnames();
 	await scheduleAutoLock();
-	return { ok: true, data: null };
+	return autofillSessionOwnerIsCurrent(owner) && autofillSessionCapabilityIsCurrent(capability)
+		? { ok: true, data: null }
+		: { ok: false, error: "unavailable" };
 }
 
-async function autofillClearIndex(): Promise<MessageEnvelope> {
-	autofillIndex = null;
+async function autofillClearIndex(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	// Lock is intentionally idempotent: crypto.lock zeroizes first, so the view can no longer
+	// acquire a capability for its follow-up cache cleanup. An ownerless clear is safe only then;
+	// while unlocked every clear remains capability-bound to reject stale ABA messages.
+	if (message.payload === undefined && vaultLocked()) {
+		clearIndex();
+		return { ok: true, data: null };
+	}
+	if (!validClearIndexPayload(message.payload)) return { ok: false, error: "invalid_request" };
+	if (!autofillSessionCapabilityIsCurrent(message.payload.owner)) {
+		return { ok: false, error: "unavailable" };
+	}
+	clearIndex();
 	return { ok: true, data: null };
 }
 
@@ -353,6 +474,22 @@ async function autofillFind(
 ): Promise<MessageEnvelope> {
 	// Adapter path trusts the body's hostname; restrict to extension pages.
 	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	const owner = autofillSessionOwner();
+	// A locked view may receive only the non-secret locked-state hint. It must not become an
+	// unlocked summary request if an unlock races its hydration await.
+	if (!owner) {
+		return vaultLocked()
+			? {
+					ok: true,
+					data: queryResult(
+						(message.payload as { hostname: string }).hostname,
+						(message.payload as { hasLogin?: boolean }).hasLogin !== false,
+						(message.payload as { hasCard?: boolean }).hasCard === true,
+						(message.payload as { hasOtp?: boolean }).hasOtp === true,
+					),
+				}
+			: { ok: false, error: "unavailable" };
+	}
 	await hydrateAutofillIndexFromDisk();
 	const { hostname, hasLogin, hasCard, hasOtp } = message.payload as {
 		hostname: string;
@@ -360,6 +497,12 @@ async function autofillFind(
 		hasCard?: boolean;
 		hasOtp?: boolean;
 	};
+	if (!autofillSessionOwnerIsCurrent(owner)) return { ok: false, error: "unavailable" };
+	const result = queryResult(hostname, hasLogin !== false, hasCard === true, hasOtp === true);
+	if (result.locked) return { ok: true, data: result };
+	await scheduleAutoLock();
+	if (!autofillSessionOwnerIsCurrent(owner)) return { ok: false, error: "unavailable" };
+	// Construct the summary after the final await/check, matching the secret-fetch ordering.
 	return {
 		ok: true,
 		data: queryResult(hostname, hasLogin !== false, hasCard === true, hasOtp === true),
@@ -372,21 +515,22 @@ async function autofillFetch(
 ): Promise<MessageEnvelope> {
 	// Unscoped secret fetch by id: extension pages only (see autofillFind).
 	if (!isExtensionSender(sender)) return { ok: false, error: "forbidden" };
+	const owner = autofillSessionOwner();
+	if (!owner) return { ok: false, error: "unavailable" };
 	await hydrateAutofillIndexFromDisk();
-	const { entryId } = message.payload as { entryId: string };
-	const data = fetchFill(entryId);
 	await scheduleAutoLock();
-	return { ok: true, data };
+	if (!autofillSessionOwnerIsCurrent(owner)) return { ok: false, error: "unavailable" };
+	// Build plaintext only after every await and the final session-ownership check.
+	const { entryId } = message.payload as { entryId: string };
+	return { ok: true, data: fetchFill(entryId) };
 }
 
 async function autofillQuery(
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ): Promise<MessageEnvelope> {
-	const requestId = optionalRequestId(message);
 	const hostname = pageSenderHostname(sender);
-	if (requestId === null || !validQueryFlags(message))
-		return { ok: false, error: "invalid_request" };
+	if (!validQueryFlags(message)) return { ok: false, error: "invalid_request" };
 	// Hostname is derived from the verified sender, never the message body. The result
 	// returns through this request's response channel; it is never tab/frame-addressed.
 	if (!hostname) return { ok: false, error: "forbidden" };
@@ -400,7 +544,7 @@ async function autofillQuery(
 		// Sliding session: any autofill activity extends the timer.
 		if (!result.locked) await scheduleAutoLock();
 		if (!autofillSessionIsStable(generation)) return { ok: false, error: "unavailable" };
-		return { ok: true, data: result, ...(requestId === undefined ? {} : { requestId }) };
+		return { ok: true, data: result };
 	} catch {
 		return { ok: false, error: "unavailable" };
 	}
@@ -410,9 +554,8 @@ async function autofillSelect(
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ): Promise<MessageEnvelope> {
-	const requestId = optionalRequestId(message);
 	const hostname = pageSenderHostname(sender);
-	if (requestId === null || !validSelectPayload(message.payload)) {
+	if (!validSelectPayload(message.payload)) {
 		return { ok: false, error: "invalid_request" };
 	}
 	if (!hostname) return { ok: false, error: "forbidden" };
@@ -435,7 +578,6 @@ async function autofillSelect(
 				otpOnly: !!message.payload.otpOnly,
 				sessionGeneration: generation,
 			},
-			...(requestId === undefined ? {} : { requestId }),
 		};
 	} catch {
 		// Do not expose entry ids, values, or implementation errors to a page sender.

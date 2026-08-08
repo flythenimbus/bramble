@@ -6,6 +6,7 @@ import {
 	loadBackground,
 	type OffscreenResponse,
 	pageSender,
+	setAutofillIndex,
 	TEST_ACTIVE_VAULT,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
@@ -96,7 +97,7 @@ async function unlocked(): Promise<BackgroundHarness> {
 		sessionSeed: { [TEST_VEK_KEY]: "SEED" },
 		offscreen: commitOffscreen,
 	});
-	await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
+	await setAutofillIndex(bg, [LOGIN]);
 	return bg;
 }
 
@@ -288,7 +289,7 @@ describe("commit: CORNER_FLUSH_HANDOFF after unlock", () => {
 			},
 			offscreen: commitOffscreen,
 		});
-		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
+		await setAutofillIndex(bg, [LOGIN]);
 
 		const { resp } = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(resp).toEqual({ ok: true, data: true });
@@ -327,14 +328,13 @@ describe("commit: CORNER_FLUSH_HANDOFF after unlock", () => {
 			},
 			offscreen: commitOffscreen,
 		});
-		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [LOGIN] }, extensionSender);
-
 		const early = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(early.resp).toEqual({ ok: false, error: "vault still locked" });
 		expect(bg.state.session["cornerPrompt.handoff"]).toBeDefined();
 
 		// The active id lands; the next flush re-reads it and commits the parked capture.
 		await bg.chrome.storage.session.set({ "vault.activeId": TEST_ACTIVE_VAULT });
+		await setAutofillIndex(bg, [LOGIN]);
 		const late = await bg.send({ type: "CORNER_FLUSH_HANDOFF" });
 		expect(late.resp).toEqual({ ok: true, data: true });
 		expect(bg.state.session["cornerPrompt.handoff"]).toBeUndefined();

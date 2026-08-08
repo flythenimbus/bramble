@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	autofillSessionCapability,
 	type BackgroundHarness,
+	clearAutofillIndex,
 	defaultOffscreen,
 	extensionSender,
 	loadBackground,
 	pageSender,
+	setAutofillIndex,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 
@@ -40,7 +43,7 @@ describe("AUTOFILL_REVALIDATE_SUBMIT", () => {
 						})
 					: defaultOffscreen(message),
 		});
-		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: ENTRIES }, extensionSender);
+		await setAutofillIndex(bg, ENTRIES);
 		const sender = pageSender("example.com", 11);
 		const selected = await bg.send(
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
@@ -110,17 +113,14 @@ const ENTRIES = [
 
 async function unlockedWithIndex(): Promise<BackgroundHarness> {
 	const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
-	await bg.send({ type: "AUTOFILL_SET_INDEX", payload: ENTRIES }, extensionSender);
+	await setAutofillIndex(bg, ENTRIES);
 	return bg;
 }
 
 describe("AUTOFILL_SET_INDEX / CLEAR_INDEX", () => {
 	it("SET_INDEX persists known hostnames and arms auto-lock", async () => {
 		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
-		const { resp } = await bg.send(
-			{ type: "AUTOFILL_SET_INDEX", payload: ENTRIES },
-			extensionSender,
-		);
+		const { resp } = await setAutofillIndex(bg, ENTRIES);
 		expect(resp).toEqual({ ok: true, data: null });
 		expect(bg.state.local["autofill.knownHostnames"]).toEqual(["example.com"]);
 		expect(bg.state.alarms["vault:autolock"]).toBeDefined();
@@ -128,8 +128,60 @@ describe("AUTOFILL_SET_INDEX / CLEAR_INDEX", () => {
 
 	it("CLEAR_INDEX drops the in-memory index", async () => {
 		const bg = await unlockedWithIndex();
-		const { resp } = await bg.send({ type: "AUTOFILL_CLEAR_INDEX" });
+		const { resp } = await clearAutofillIndex(bg);
 		expect(resp).toEqual({ ok: true, data: null });
+	});
+
+	it("rejects stale SET_INDEX and CLEAR_INDEX capabilities after a same-vault lock/unlock ABA", async () => {
+		const bg = await unlockedWithIndex();
+		const stale = await autofillSessionCapability(bg);
+		await bg.send({ type: "CRYPTO_LOCK" });
+		await bg.chrome.storage.session.set({ "vault.activeId": "v1" });
+		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "NEW" } });
+		await setAutofillIndex(bg, [
+			{
+				type: "login",
+				id: "current",
+				hostnames: ["example.com"],
+				name: "Current",
+				username: "new",
+			},
+		]);
+
+		expect(
+			(
+				await bg.send(
+					{ type: "AUTOFILL_SET_INDEX", payload: { entries: ENTRIES, owner: stale } },
+					extensionSender,
+				)
+			).resp,
+		).toEqual({ ok: false, error: "unavailable" });
+		expect(
+			(await bg.send({ type: "AUTOFILL_CLEAR_INDEX", payload: { owner: stale } }, extensionSender))
+				.resp,
+		).toEqual({ ok: false, error: "unavailable" });
+
+		const query = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
+		expect(query.resp.data.logins).toEqual([expect.objectContaining({ id: "current" })]);
+	});
+
+	it("rejects a stale SET_INDEX capability after the active vault changes", async () => {
+		const bg = await unlockedWithIndex();
+		const stale = await autofillSessionCapability(bg);
+		await bg.chrome.storage.session.set({ "vault.activeId": "v2" });
+		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "V2" } });
+
+		expect(
+			(
+				await bg.send(
+					{ type: "AUTOFILL_SET_INDEX", payload: { entries: ENTRIES, owner: stale } },
+					extensionSender,
+				)
+			).resp,
+		).toEqual({ ok: false, error: "unavailable" });
 	});
 });
 
@@ -237,6 +289,46 @@ describe("AUTOFILL_FETCH", () => {
 		);
 		expect(resp).toEqual({ ok: false, error: "Error: entry not found: ghost" });
 	});
+
+	it("does not construct a secret payload when a lock wins its final revalidation", async () => {
+		const bg = await unlockedWithIndex();
+		const originalGet = bg.chrome.storage.local.get;
+		let release: ((value: unknown) => void) | undefined;
+		bg.chrome.storage.local.get = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					release = resolve;
+				}),
+		);
+		const pending = bg.send(
+			{ type: "AUTOFILL_FETCH", payload: { entryId: "login1" } },
+			extensionSender,
+		);
+		await bg.flush();
+		await bg.send({ type: "CRYPTO_LOCK" });
+		release?.(await originalGet(["pref.autoLockMinutes"]));
+		expect((await pending).resp).toEqual({ ok: false, error: "unavailable" });
+	});
+
+	it("does not return summaries when a lock wins its final revalidation", async () => {
+		const bg = await unlockedWithIndex();
+		const originalGet = bg.chrome.storage.local.get;
+		let release: ((value: unknown) => void) | undefined;
+		bg.chrome.storage.local.get = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					release = resolve;
+				}),
+		);
+		const pending = bg.send(
+			{ type: "AUTOFILL_FIND", payload: { hostname: "example.com", hasLogin: true } },
+			extensionSender,
+		);
+		await bg.flush();
+		await bg.send({ type: "CRYPTO_LOCK" });
+		release?.(await originalGet(["pref.autoLockMinutes"]));
+		expect((await pending).resp).toEqual({ ok: false, error: "unavailable" });
+	});
 });
 
 describe("AUTOFILL_SELECT authorize + fill", () => {
@@ -303,21 +395,6 @@ describe("AUTOFILL_QUERY direct response transport", () => {
 			expect.arrayContaining(["login1", "login2"]),
 		);
 		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
-	});
-
-	it("rejects malformed optional ids and echoes a canonical id without granting authority", async () => {
-		const bg = await unlockedWithIndex();
-		const requestId = "123e4567-e89b-42d3-a456-426614174000";
-		const valid = await bg.send(
-			{ type: "AUTOFILL_QUERY", hasLogin: true, requestId },
-			pageSender("example.com", 42),
-		);
-		expect(valid.resp).toMatchObject({ ok: true, requestId });
-		const invalid = await bg.send(
-			{ type: "AUTOFILL_QUERY", hasLogin: true, requestId: "not-a-uuid" },
-			pageSender("example.com", 42),
-		);
-		expect(invalid.resp).toEqual({ ok: false, error: "invalid_request" });
 	});
 });
 

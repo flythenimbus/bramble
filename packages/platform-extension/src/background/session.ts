@@ -9,7 +9,7 @@ import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
 import { sendToOffscreen } from "./offscreen-client";
 import { closeUnlockPopout, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
-import { extensionOnly, type MessageEnvelope, onPrefix } from "./router";
+import { extensionOnly, type MessageEnvelope, on, onBeforeDispatch, onPrefix } from "./router";
 import { maybeStartSync, stopSync } from "./sync";
 import * as vekStore from "./vek-store";
 
@@ -23,6 +23,29 @@ export const AUTOLOCK_ALARM = "vault:autolock";
 let autofillSessionGeneration = 0;
 let lockTransitions = 0;
 let prestartedCryptoLocks = 0;
+let autofillSessionTokenSerial = 0;
+
+function nextAutofillSessionToken(): string {
+	try {
+		return crypto.randomUUID();
+	} catch {
+		return `autofill-session-${++autofillSessionTokenSerial}`;
+	}
+}
+
+let autofillSessionToken = nextAutofillSessionToken();
+
+/** The vault/key session that owns decrypted autofill data. */
+export type AutofillSessionOwner = Readonly<{
+	vaultId: string;
+	generation: number;
+	token: string;
+}>;
+
+export type AutofillSessionCapability = Readonly<{
+	vaultId: string;
+	token: string;
+}>;
 
 /** Snapshot used by an autofill request before it awaits hydration or scheduling work. */
 export function autofillSessionSnapshot(): number {
@@ -39,9 +62,32 @@ export function autofillSessionIsCurrent(generation: number): boolean {
 	return autofillSessionIsStable(generation) && !vaultLocked();
 }
 
+/** Capture the current unlocked vault session for a decrypted cache or async operation. */
+export function autofillSessionOwner(): AutofillSessionOwner | null {
+	const vaultId = getActiveVaultId();
+	if (vaultId === null || !autofillSessionIsCurrent(autofillSessionGeneration)) return null;
+	return { vaultId, generation: autofillSessionGeneration, token: autofillSessionToken };
+}
+
+/** True only while an owner still names this exact unlocked active-vault session. */
+export function autofillSessionOwnerIsCurrent(owner: AutofillSessionOwner): boolean {
+	return (
+		getActiveVaultId() === owner.vaultId &&
+		autofillSessionIsCurrent(owner.generation) &&
+		autofillSessionToken === owner.token
+	);
+}
+
+/** Match an extension view's issued capability to the current active-vault session. */
+export function autofillSessionCapabilityIsCurrent(capability: AutofillSessionCapability): boolean {
+	const owner = autofillSessionOwner();
+	return owner !== null && owner.vaultId === capability.vaultId && owner.token === capability.token;
+}
+
 /** Begin/end are depth-counted because CRYPTO_LOCK and clearSession can nest. */
 function beginAutofillLockTransition(): void {
 	autofillSessionGeneration++;
+	autofillSessionToken = nextAutofillSessionToken();
 	lockTransitions++;
 }
 
@@ -52,25 +98,24 @@ function endAutofillLockTransition(): void {
 /** A successful unlock or active-vault replacement invalidates old autofill work. */
 function advanceAutofillSession(): void {
 	autofillSessionGeneration++;
+	autofillSessionToken = nextAutofillSessionToken();
+}
+
+function autofillGetSessionOwner(): MessageEnvelope {
+	const owner = autofillSessionOwner();
+	return owner === null
+		? { ok: false, error: "unavailable" }
+		: { ok: true, data: { vaultId: owner.vaultId, token: owner.token } };
 }
 
 // The router awaits background hydration before invoking handlers. Observe a privileged lock
 // message in the dispatch task itself so continuation revalidation already sees the transition,
 // even when hydration or active-vault resolution is held. The actual handler consumes this
 // depth-counted transition and closes it in its normal finally block.
-api.runtime.onMessage.addListener((message, sender) => {
-	// Outbound background -> offscreen traffic is visible to this listener too. It is
-	// already enclosed by the initiating lock path and must not leave an unconsumed prestart.
-	if (
-		message?.target === "offscreen" ||
-		message?.type !== "CRYPTO_LOCK" ||
-		!isExtensionSender(sender)
-	) {
-		return false;
-	}
+onBeforeDispatch((message, sender) => {
+	if (message?.type !== "CRYPTO_LOCK" || !isExtensionSender(sender)) return;
 	beginAutofillLockTransition();
 	prestartedCryptoLocks++;
-	return false;
 });
 
 // The shell selects an active vault by writing this session key directly. Treat a
@@ -80,7 +125,7 @@ api.runtime.onMessage.addListener((message, sender) => {
 api.storage.onChanged.addListener((changes, area) => {
 	if (area !== "session") return;
 	const change = changes[ACTIVE_VAULT_SESSION_KEY];
-	if (change && change.oldValue !== change.newValue) advanceAutofillSession();
+	if (change && vekStore.applyActiveVaultId(change.newValue)) advanceAutofillSession();
 });
 
 /** True when the ACTIVE vault has no cached VEK: the lock predicate the singleton services
@@ -273,3 +318,7 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 // CRYPTO_* reaches the offscreen crypto host (incl. CRYPTO_EXPORT_VEK); only extension
 // pages may drive it, never a content script. See docs/sec-audit-7726.md (A3).
 onPrefix("CRYPTO_", extensionOnly(cryptoHandler));
+on(
+	"AUTOFILL_GET_SESSION_OWNER",
+	extensionOnly(async () => autofillGetSessionOwner()),
+);

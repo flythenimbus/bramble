@@ -47,6 +47,8 @@ export interface ChromeMockOptions {
 	hasOpenPopup?: boolean;
 	/** Tabs chrome.tabs.query({}) resolves to (lock-state broadcast fan-out). */
 	openTabs?: Array<{ id?: number; url?: string }>;
+	/** Model Chrome delivering session onChanged after set/remove has already resolved. */
+	deferSessionStorageChanges?: boolean;
 }
 
 export interface BackgroundHarness {
@@ -65,6 +67,41 @@ export interface BackgroundHarness {
 	fireConnect: (name?: string) => { disconnect: () => void };
 	/** Drain pending microtasks + timers so async listener work settles. */
 	flush: () => Promise<void>;
+	/** Deliver deferred session storage notifications, if that mode was requested. */
+	flushSessionStorageChanges: () => void;
+}
+
+type AutofillSessionCapability = { vaultId: string; token: string };
+
+/** Exercise the same session-bound cache-mutation protocol used by extensionAutofill. */
+export async function autofillSessionCapability(
+	bg: BackgroundHarness,
+): Promise<AutofillSessionCapability> {
+	const { resp } = await bg.send({ type: "AUTOFILL_GET_SESSION_OWNER" }, extensionSender);
+	if (!resp?.ok) throw new Error(resp?.error ?? "missing autofill session capability");
+	return resp.data as AutofillSessionCapability;
+}
+
+export async function setAutofillIndex(
+	bg: BackgroundHarness,
+	entries: unknown[],
+): Promise<{ handled: boolean; resp: any }> {
+	return bg.send(
+		{
+			type: "AUTOFILL_SET_INDEX",
+			payload: { entries, owner: await autofillSessionCapability(bg) },
+		},
+		extensionSender,
+	);
+}
+
+export async function clearAutofillIndex(
+	bg: BackgroundHarness,
+): Promise<{ handled: boolean; resp: any }> {
+	return bg.send(
+		{ type: "AUTOFILL_CLEAR_INDEX", payload: { owner: await autofillSessionCapability(bg) } },
+		extensionSender,
+	);
 }
 
 interface HarnessState {
@@ -83,6 +120,7 @@ interface HarnessState {
 	 * every listener (not just the last), so the background legitimately registers more than one
 	 * (the router dispatcher + the SYNC_STATUS console mirror); the harness must model that. */
 	messageListeners: Array<(...args: any[]) => any>;
+	pendingSessionStorageChanges: Array<Record<string, unknown>>;
 }
 
 // Node's URL gives chrome-extension:// an opaque "null" origin, so use an https
@@ -164,6 +202,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		listeners: {},
 		storageChangedListeners: [],
 		messageListeners: [],
+		pendingSessionStorageChanges: [],
 	};
 	let hasDoc = false;
 	const offscreen = opts.offscreen ?? defaultOffscreen;
@@ -177,14 +216,37 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		return out;
 	};
 
-	const area = (store: Record<string, unknown>) => ({
+	const emitStorageChanges = (changes: Record<string, unknown>, areaName: string) => {
+		if (Object.keys(changes).length === 0) return;
+		for (const listener of state.storageChangedListeners) listener(changes, areaName);
+	};
+
+	const area = (store: Record<string, unknown>, areaName: string) => ({
 		get: vi.fn(async (query?: unknown) => read(store, query ?? null)),
 		set: vi.fn(async (obj: Record<string, unknown>) => {
+			const changes: Record<string, unknown> = {};
+			for (const [key, value] of Object.entries(obj)) {
+				if (!Object.is(store[key], value)) changes[key] = { oldValue: store[key], newValue: value };
+			}
 			Object.assign(store, obj);
+			if (areaName === "session" && opts.deferSessionStorageChanges) {
+				if (Object.keys(changes).length > 0) state.pendingSessionStorageChanges.push(changes);
+			} else {
+				emitStorageChanges(changes, areaName);
+			}
 		}),
 		remove: vi.fn(async (keyOrKeys: string | string[]) => {
 			const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys];
-			for (const k of keys) delete store[k];
+			const changes: Record<string, unknown> = {};
+			for (const k of keys) {
+				if (k in store) changes[k] = { oldValue: store[k], newValue: undefined };
+				delete store[k];
+			}
+			if (areaName === "session" && opts.deferSessionStorageChanges) {
+				if (Object.keys(changes).length > 0) state.pendingSessionStorageChanges.push(changes);
+			} else {
+				emitStorageChanges(changes, areaName);
+			}
 		}),
 	});
 
@@ -225,8 +287,8 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			}),
 		},
 		storage: {
-			session: area(session),
-			local: area(local),
+			session: area(session, "session"),
+			local: area(local, "local"),
 			onChanged: {
 				addListener: (fn: any) => {
 					state.storageChangedListeners.push(fn);
@@ -350,5 +412,10 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 			};
 		},
 		flush,
+		flushSessionStorageChanges: () => {
+			for (const changes of state.pendingSessionStorageChanges.splice(0)) {
+				for (const listener of state.storageChangedListeners) listener(changes, "session");
+			}
+		},
 	};
 }

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { extensionSender, loadBackground, pageSender } from "../test/test-harness";
+import {
+	clearAutofillIndex,
+	extensionSender,
+	loadBackground,
+	pageSender,
+	setAutofillIndex,
+	TEST_VEK_KEY,
+} from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -20,14 +27,15 @@ describe("router dispatch", () => {
 	});
 
 	it("dispatches a registered exact handler and wraps the envelope", async () => {
-		const bg = await loadBackground();
-		const { handled, resp } = await bg.send({ type: "AUTOFILL_CLEAR_INDEX" });
+		const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" } });
+		const { handled, resp } = await clearAutofillIndex(bg);
 		expect(handled).toBe(true);
 		expect(resp).toEqual({ ok: true, data: null });
 	});
 
 	it("routes the CRYPTO_ prefix to the dedicated handler and returns the raw offscreen envelope", async () => {
-		const bg = await loadBackground();
+		const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" } });
+		await setAutofillIndex(bg, []);
 		const { handled, resp } = await bg.send({ type: "CRYPTO_GENERATE_VEK" });
 		expect(handled).toBe(true);
 		// Raw offscreen envelope, NOT re-wrapped as { ok: true, data: { ok, data } }.
@@ -35,8 +43,8 @@ describe("router dispatch", () => {
 	});
 
 	it("wraps a thrown handler error as { ok: false, error: String(err) }", async () => {
-		// AUTOFILL_FETCH from an extension page while locked -> fetchFill throws.
-		const bg = await loadBackground();
+		const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" } });
+		await setAutofillIndex(bg, []);
 		const { resp } = await bg.send(
 			{ type: "AUTOFILL_FETCH", payload: { entryId: "missing" } },
 			extensionSender,
@@ -75,8 +83,8 @@ describe("router dispatch", () => {
 	it("awaits hydration before running handlers (seeded VEK is visible)", async () => {
 		// Seed an unlocked session; AUTOFILL_QUERY should schedule the auto-lock
 		// alarm only when unlocked, proving hydration completed first.
-		const bg = await loadBackground({ sessionSeed: { "vault.vek": "SEED" } });
-		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: [] }, extensionSender);
+		const bg = await loadBackground({ sessionSeed: { [TEST_VEK_KEY]: "SEED" } });
+		await setAutofillIndex(bg, []);
 		const before = { ...bg.state.alarms };
 		await bg.send(
 			{ type: "AUTOFILL_QUERY", hasLogin: true },

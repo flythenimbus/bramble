@@ -4,6 +4,7 @@ import {
 	extensionSender,
 	loadBackground,
 	pageSender,
+	setAutofillIndex,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 
@@ -204,15 +205,9 @@ describe("lock-state broadcast to content scripts", () => {
 describe("vault lock state drives query results", () => {
 	it("an unlocked index serves matches; a lock makes the same query report locked", async () => {
 		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
-		await bg.send(
-			{
-				type: "AUTOFILL_SET_INDEX",
-				payload: [
-					{ type: "login", id: "a", hostnames: ["example.com"], name: "Example", username: "u" },
-				],
-			},
-			extensionSender,
-		);
+		await setAutofillIndex(bg, [
+			{ type: "login", id: "a", hostnames: ["example.com"], name: "Example", username: "u" },
+		]);
 		const unlocked = await bg.send(
 			{ type: "AUTOFILL_FIND", payload: { hostname: "example.com", hasLogin: true } },
 			extensionSender,
@@ -253,13 +248,9 @@ describe("vault lock state drives query results", () => {
 describe("sender hostname is taken from the verified sender, not the body", () => {
 	it("AUTOFILL_QUERY derives the hostname from the sender origin", async () => {
 		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
-		await bg.send(
-			{
-				type: "AUTOFILL_SET_INDEX",
-				payload: [{ type: "login", id: "a", hostnames: ["real.com"], name: "Real", username: "u" }],
-			},
-			extensionSender,
-		);
+		await setAutofillIndex(bg, [
+			{ type: "login", id: "a", hostnames: ["real.com"], name: "Real", username: "u" },
+		]);
 		// Body claims evil.com but the sender is real.com: only real.com's summaries
 		// return on the initiating response channel (never as a tab/frame push).
 		const { resp } = await bg.send(
@@ -280,22 +271,16 @@ describe("sender hostname is taken from the verified sender, not the body", () =
 describe("autofill session transition ordering", () => {
 	async function unlockedWithLogin(options: Parameters<typeof loadBackground>[0] = {}) {
 		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" }, ...options });
-		await bg.send(
+		await setAutofillIndex(bg, [
 			{
-				type: "AUTOFILL_SET_INDEX",
-				payload: [
-					{
-						type: "login",
-						id: "login",
-						hostnames: ["example.com"],
-						name: "Example",
-						username: "alice",
-						password: "secret",
-					},
-				],
+				type: "login",
+				id: "login",
+				hostnames: ["example.com"],
+				name: "Example",
+				username: "alice",
+				password: "secret",
 			},
-			extensionSender,
-		);
+		]);
 		return bg;
 	}
 

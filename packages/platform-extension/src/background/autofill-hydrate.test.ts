@@ -106,4 +106,84 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 		expect(resp.data).toMatchObject({ locked: true, logins: [] });
 		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
 	});
+
+	it("never publishes a rebuild that completed after lock and active-vault replacement", async () => {
+		let releaseOldDecrypt: ((response: OffscreenResponse) => void) | undefined;
+		const bg = await loadBackground({
+			sessionSeed: { [TEST_VEK_KEY]: "OLD" },
+			offscreen: (message) => {
+				if (message.type === "CRYPTO_DECRYPT_OUTER") {
+					const old = message.vaultId === "v1";
+					return {
+						ok: true,
+						data: JSON.stringify({
+							entries: [
+								{
+									id: old ? "old-login" : "new-login",
+									ciphertext: "c",
+									iv: "i",
+									wrappedDek: "w",
+									dekIv: "d",
+									hlc: { wall: 1, counter: 0, node: "seed" },
+								},
+							],
+							tombstones: [],
+						}),
+					};
+				}
+				if (message.type === "CRYPTO_DECRYPT") {
+					const response = {
+						ok: true,
+						data: JSON.stringify({
+							type: "login",
+							name: message.vaultId === "v1" ? "Old vault" : "New vault",
+							urls: ["https://example.com"],
+							username: message.vaultId === "v1" ? "old" : "new",
+							password: message.vaultId === "v1" ? "old-secret" : "new-secret",
+						}),
+					};
+					if (message.vaultId !== "v1") return response;
+					return new Promise((resolve) => {
+						releaseOldDecrypt = resolve;
+					});
+				}
+				return defaultOffscreen(message);
+			},
+		});
+
+		const staleQuery = bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
+		await bg.flush();
+		expect(releaseOldDecrypt).toBeTypeOf("function");
+
+		await bg.send({ type: "CRYPTO_LOCK" });
+		bg.state.session["vault.activeId"] = "v2";
+		bg.fireStorageChanged({ "vault.activeId": { oldValue: "v1", newValue: "v2" } }, "session");
+		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "NEW" } });
+		releaseOldDecrypt?.({
+			ok: true,
+			data: JSON.stringify({
+				type: "login",
+				name: "Old vault",
+				urls: ["https://example.com"],
+				username: "old",
+				password: "old-secret",
+			}),
+		});
+		expect((await staleQuery).resp).toEqual({ ok: false, error: "unavailable" });
+
+		const current = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
+		expect(current.resp.data).toMatchObject({
+			locked: false,
+			logins: [{ id: "new-login", name: "New vault", secondary: "new" }],
+		});
+		expect(current.resp.data.logins.map((entry: { id: string }) => entry.id)).not.toContain(
+			"old-login",
+		);
+	});
 });

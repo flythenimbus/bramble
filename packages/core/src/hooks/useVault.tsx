@@ -459,12 +459,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Decrypt all entries and push the autofill index. */
 	const loadEntries = useCallback(async () => {
+		// Bind the eventual plaintext cache publish to the unlocked session that started this
+		// load, before any blob read/decrypt await can cross a lock/unlock or vault switch.
+		const indexLease = await autofill.beginIndexUpdate?.();
 		const { blob } = await readDecodedBlob();
 		if (blob.entriesCiphertext.length === 0) {
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
 			setEntries([]);
-			await autofill.setIndex([]);
+			await autofill.setIndex([], indexLease);
 			return;
 		}
 		// A blob that decodes but won't decrypt is the issue-#27 signature; recover from the
@@ -513,7 +516,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			return { id: enc.id, ...data };
 		});
 		setEntries(decrypted);
-		await autofill.setIndex(toAutofillIndex(decrypted));
+		await autofill.setIndex(toAutofillIndex(decrypted), indexLease);
 	}, [readDecodedBlob, crypto, storage, autofill, ensureClock]);
 
 	// On mount (and when the active vault resolves): detect an existing vault handle and

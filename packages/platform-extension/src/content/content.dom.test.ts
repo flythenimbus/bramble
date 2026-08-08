@@ -7,6 +7,7 @@ import {
 	extensionSender,
 	loadBackground,
 	pageSender,
+	setAutofillIndex,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 import { invalidatePageFields } from "./field-model";
@@ -834,22 +835,16 @@ describe("content: deferred direct response cancellation", () => {
 						})
 					: defaultOffscreen(message),
 		});
-		await bg.send(
+		await setAutofillIndex(bg, [
 			{
-				type: "AUTOFILL_SET_INDEX",
-				payload: [
-					{
-						type: "login",
-						id: "login1",
-						hostnames: ["example.com"],
-						name: "Example",
-						username: "me",
-						password: "secret",
-					},
-				],
+				type: "login",
+				id: "login1",
+				hostnames: ["example.com"],
+				name: "Example",
+				username: "me",
+				password: "secret",
 			},
-			extensionSender,
-		);
+		]);
 		const sender = pageSender("example.com", 1);
 		const selected = await bg.send(
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },

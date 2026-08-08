@@ -172,10 +172,16 @@ export interface CornerPromptResponse {
 }
 
 export interface AutofillAdapter {
+	/**
+	 * Optional platform lease captured before work that reads/decrypts vault data. Passing it back
+	 * to setIndex lets a platform reject a lock/unlock ABA or active-vault switch at commit time.
+	 * Core treats it as opaque so native providers need not know about extension session details.
+	 */
+	beginIndexUpdate?(): Promise<unknown>;
 	/** Popup-side: push the unlocked vault's searchable index to the background so autofill works while the popup is closed. */
-	setIndex(entries: IndexEntry[]): Promise<void>;
+	setIndex(entries: IndexEntry[], lease?: unknown): Promise<void>;
 	/** Clear the pushed index (on lock). */
-	clearIndex(): Promise<void>;
+	clearIndex(lease?: unknown): Promise<void>;
 	/**
 	 * Mobile only: erase the OS credential provider's stored copy of the vault (the
 	 * VEK-encrypted bundle, the password slot, passkeys, and registered identities).

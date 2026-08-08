@@ -53,8 +53,16 @@ export const vekStoreHydration = (async () => {
 api.storage.session.onChanged?.addListener?.((changes) => {
 	const change = changes[ACTIVE_VAULT_SESSION_KEY];
 	if (!change) return;
-	activeId = typeof change.newValue === "string" ? change.newValue : null;
+	applyActiveVaultId(change.newValue);
 });
+
+/** Apply one active-vault storage value, returning true only for an effective replacement. */
+export function applyActiveVaultId(value: unknown): boolean {
+	const next = typeof value === "string" ? value : null;
+	if (activeId === next) return false;
+	activeId = next;
+	return true;
+}
 
 // --- reads (synchronous; the in-memory map is the source of truth) ---
 
@@ -96,7 +104,7 @@ export async function refreshActiveVaultId(): Promise<string | null> {
 	try {
 		const r = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
 		const v = r[ACTIVE_VAULT_SESSION_KEY];
-		activeId = typeof v === "string" ? v : null;
+		applyActiveVaultId(v);
 	} catch {
 		// Keep the current mirror; the caller's lock check is no worse off than before.
 	}

@@ -11,9 +11,11 @@ export type MessageHandler = (
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ) => Promise<MessageEnvelope>;
+export type BeforeDispatchHandler = (message: any, sender: chrome.runtime.MessageSender) => void;
 
 const messageHandlers = new Map<string, MessageHandler>();
 const prefixHandlers: Array<readonly [string, MessageHandler]> = [];
+const beforeDispatchHandlers: BeforeDispatchHandler[] = [];
 
 // Gates every dispatch on hydration (session VEK + known hostnames) loading once.
 let ready: Promise<unknown> = Promise.resolve();
@@ -26,6 +28,11 @@ export function on(type: string, handler: MessageHandler): void {
 /** Register a handler for every message `type` sharing a prefix (e.g. "CRYPTO_"). */
 export function onPrefix(prefix: string, handler: MessageHandler): void {
 	prefixHandlers.push([prefix, handler]);
+}
+
+/** Register synchronous work that must happen before the router awaits hydration. */
+export function onBeforeDispatch(handler: BeforeDispatchHandler): void {
+	beforeDispatchHandlers.push(handler);
 }
 
 /**
@@ -69,6 +76,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.target === "offscreen") return false;
 	const handler = resolveHandler(message?.type as string | undefined);
 	if (!handler) return false;
+	for (const beforeDispatch of beforeDispatchHandlers) beforeDispatch(message, sender);
 	void (async () => {
 		await ready;
 		try {
