@@ -16,6 +16,7 @@ mod socket;
 mod socket_addr;
 mod spotlight;
 mod storage;
+mod sync_crypto;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
@@ -152,6 +153,26 @@ pub fn run() {
             pairing::pairing_public_key,
             index_store::link_set_index,
             index_store::link_clear_index,
+            sync_crypto::sync_handshake_generate_keypair,
+            sync_crypto::sync_handshake_start_initiator,
+            sync_crypto::sync_handshake_start_responder,
+            sync_crypto::sync_handshake_enroll_initiator,
+            sync_crypto::sync_handshake_enroll_responder,
+            sync_crypto::sync_handshake_read,
+            sync_crypto::sync_handshake_encrypt,
+            sync_crypto::sync_handshake_decrypt,
+            sync_crypto::sync_handshake_remote_static,
+            sync_crypto::sync_handshake_close,
+            sync_crypto::sync_nostr_generate_key,
+            sync_crypto::sync_nostr_public_key,
+            sync_crypto::sync_nostr_sign,
+            sync_crypto::sync_nostr_verify,
+            sync_crypto::sync_roster_sig_generate_key,
+            sync_crypto::sync_roster_sig_public_key,
+            sync_crypto::sync_roster_sign,
+            sync_crypto::sync_roster_verify,
+            sync_crypto::sync_roster_admission_public_key,
+            sync_crypto::sync_roster_admission_sign,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

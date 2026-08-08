@@ -113,8 +113,8 @@ pub fn nostr_generate_key() -> Result<JsValue, CryptoError> {
     serde_wasm_bindgen::to_value(&generate_key_core()?).map_err(|e| ce(format!("serialize: {e}")))
 }
 
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn nostr_generate_key() -> Result<NostrKey, CryptoError> {
     generate_key_core()
 }

@@ -48,8 +48,7 @@ mod kdbx;
 mod passkey;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
-#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
-mod roster_sig;
+pub mod roster_sig;
 // Build-time feature flags, generated from packages/core/src/flags.json (one source shared with TS).
 mod flags;
 // Sync handshake/nostr compile into every layer: device sync must run natively so it
@@ -61,10 +60,11 @@ mod flags;
 // consumers still go through their generated bindings and are unaffected.
 #[cfg(any(feature = "wasm", feature = "native"))]
 pub mod handshake;
-// nostr has no native caller yet; its turn comes with the sync hub. See docs/desktop-port.md.
+// Public for the same reason as `handshake`: the desktop shell links this crate as an
+// ordinary dependency and re-exposes these to its webview as commands, because its sync host
+// runs in the webview (which has WebRTC) while the crypto stays in this process.
 #[cfg(any(feature = "wasm", feature = "native"))]
-#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
-mod nostr;
+pub mod nostr;
 // Native WebRTC data channel: iOS only (its WKWebView on capacitor:// has no
 // RTCPeerConnection). Pure-Rust webrtc-rs behind uniffi; gated by `webrtc` (which
 // implies ffi). Excluded from the wasm build (webrtc-rs won't target wasm32) and the
