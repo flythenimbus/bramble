@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,12 +37,8 @@ const staged = join(tauri, "binaries");
 const target = join(staged, `bramble-proxy-${triple}`);
 mkdirSync(staged, { recursive: true });
 
-// Break a circularity before it bites. The proxy is a binary in the same crate as the app, so
-// building it runs tauri-build, which validates that every `externalBin` already exists, which
-// is the very thing this script is about to produce. A placeholder satisfies that check for
-// the duration of the proxy's own compile and is overwritten below, well before the bundler
-// ever reads it.
-if (!existsSync(target)) writeFileSync(target, "");
+// The placeholder that breaks the build-order circularity lives in src-tauri/build.rs, so
+// that a bare `cargo test` works too and not just a build driven from here.
 
 // Release, to match what `tauri build` produces for the app itself. A debug proxy in a release
 // bundle would work but ship a much larger binary with debug info in it.
