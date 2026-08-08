@@ -118,9 +118,7 @@ jobs:
       # This fixture proves the browser's response-channel/navigation primitive only. Production
       # content/background unit tests enforce Bramble's direct request/reply transport on top of it.
       - name: Prove request/reply browser primitive
-        env:
-          TRANSPORT_BROWSERS: chromium
-        run: pnpm run test:transport-race
+        run: pnpm run test:transport-race --project=chromium
 
   transport-contract-firefox:
     name: Security (document-bound transport, Firefox ${{ matrix.firefox-version }})
@@ -145,10 +143,9 @@ jobs:
           firefox-version: ${{ matrix.firefox-version }}
       - name: Prove request/reply navigation transport
         env:
-          TRANSPORT_BROWSERS: firefox
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
           FIREFOX_HEADLESS: "0"
-        run: xvfb-run -a pnpm run test:transport-race
+        run: xvfb-run -a pnpm run test:transport-race --project=firefox
 
   # Browser-driven tests: a real Chromium with the extension loaded. Kept out of the `build` job
   # because it is minutes slower and has a different flake profile.

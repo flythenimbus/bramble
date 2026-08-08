@@ -5,6 +5,9 @@ import { defineConfig } from "@playwright/test";
 // Run: `pnpm test:e2e`. These are excluded from the vitest unit suites (different runner).
 export default defineConfig({
 	testDir: "./e2e/extension",
+	// The transport-race gate lives here too but loads its own contract fixture rather than the
+	// built extension, so it needs no build and runs from playwright.transport.config.ts.
+	testIgnore: /transport-race\.(chromium|firefox)\.spec\.ts$/,
 	// Extension tests share a persistent profile and (for sync) a local relay on a fixed port,
 	// so run them serially rather than in parallel workers.
 	fullyParallel: false,

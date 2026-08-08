@@ -1,13 +1,18 @@
 # End-to-end tests (Playwright)
 
-Three suites, each with its own config, because they need different things attached. Only the
-first is CI-safe.
+Four suites, each with its own config, because they need different things attached. Only the first
+two are CI-safe.
 
 | Suite | Command | Needs | What it reaches |
 | --- | --- | --- | --- |
-| `extension/` | `pnpm test:e2e` | nothing | popup + background/offscreen + storage glue |
+| `extension/` | `pnpm test:e2e` | a built extension | popup + background/offscreen + storage glue |
+| `extension/transport-race/` | `pnpm test:transport-race` | `FIREFOX_BINARY` for the Firefox project | the browser's own request/reply primitive |
 | `sync/` | `pnpm test:e2e:sync` | nothing (servers auto-start) | two peers pairing over real WebRTC |
 | `android/` | `pnpm test:e2e:android` | a device attached | the **shipped** app: uniffi Rust core, native storage |
+
+The transport-race gate lives under `extension/` but is `testIgnore`d from `playwright.config.ts`:
+it loads its own tiny fixture rather than the built extension, so it needs no build and runs in
+seconds.
 
 ## Prerequisites (once)
 
@@ -21,9 +26,41 @@ Every suite launches a real extension profile, so build it after source changes:
 pnpm --filter @vault/platform-extension build:chromium
 ```
 
-## Document-bound transport contract
+## `extension/transport-race/` — the document-bound transport gate
 
-`pnpm run test:transport-race` runs a small test-only extension against real Chromium and Firefox. It requires Playwright Chromium plus `FIREFOX_BINARY` pointing at official Mozilla Firefox current or Firefox 128+. CI exercises both current Firefox and the 128 compatibility floor. Firefox must run headed (`FIREFOX_HEADLESS=0`) under Xvfb so the BFCache case is meaningful; CI does this with `xvfb-run -a`. Locally, install Chromium with `pnpm exec playwright install chromium` and run `TRANSPORT_BROWSERS=chromium pnpm run test:transport-race` when Firefox is unavailable; use the default `all` in CI or when `FIREFOX_BINARY` is set. The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with same-origin and cross-origin B documents. Its separate BFCache case uses a top-level A → B → Back navigation because subframe history entries are not independently BFCache-restorable; it proves frame ID 0, a stable restored-A nonce, and inert replies. A replacement document must never observe the sentinel; a failure means this request/reply design must not ship or fall back to frame targeting. The only approved fallback is explicit exact-`documentId` targeting with the Firefox support floor raised to 153.
+The security gate for GHSA-xm22-vwcg-9jqg. Two Playwright projects run the same three races:
+
+```sh
+pnpm test:transport-race --project=chromium     # no Firefox needed
+FIREFOX_BINARY=/path/to/firefox FIREFOX_HEADLESS=0 pnpm test:transport-race --project=firefox
+pnpm test:transport-race                        # both; needs FIREFOX_BINARY
+```
+
+- `transport-race/harness.ts` owns the fixture server and **every** assertion, so both browsers are
+  held to an identical contract. Each spec supplies only a way to open a URL.
+- Chromium is driven by Playwright directly. **Firefox is driven by `web-ext`**, because Playwright
+  cannot install a Firefox add-on (extensions are Chromium-only, persistent-context-only). For that
+  project Playwright is just the runner.
+- Firefox must run headed (`FIREFOX_HEADLESS=0`) under Xvfb for the BFCache case to be meaningful;
+  CI does this with `xvfb-run -a`, across both current Firefox and the 128 compatibility floor.
+- A missing `FIREFOX_BINARY` **fails** rather than skipping. A silently skipped security gate is a
+  hole.
+- `retries: 0` on purpose: a race that only passes on retry is a failure.
+
+The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with
+same-origin and cross-origin B documents. The BFCache case uses a top-level A → B → Back navigation
+because subframe history entries are not independently BFCache-restorable; it proves frame ID 0, a
+stable restored-A nonce, and inert replies. Before asserting nobody saw the sentinel, the harness
+first asserts the frame **was** reused by two documents with **different** nonces: that positive
+control is what makes a green run mean anything, since it proves a frame-addressed reply would have
+landed in B.
+
+A replacement document must never observe the sentinel. A failure means this request/reply design
+must not ship, and must not fall back to frame targeting. The only approved fallback is explicit
+exact-`documentId` targeting with the Firefox support floor raised to 153.
+
+The fixture is deliberately a tiny test-only extension, never Bramble: it proves the *browser's*
+primitive. That Bramble uses that primitive is proven by the extension unit tests.
 
 ---
 
