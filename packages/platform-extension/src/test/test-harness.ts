@@ -40,7 +40,7 @@ export interface ChromeMockOptions {
 	/** Seed chrome.storage.local before hydration runs. */
 	localSeed?: Record<string, unknown>;
 	/** Override the fake offscreen crypto responder. */
-	offscreen?: (msg: AnyMsg) => OffscreenResponse;
+	offscreen?: (msg: AnyMsg) => OffscreenResponse | Promise<OffscreenResponse>;
 	/** What chrome.windows.getLastFocused resolves to (qr capture). */
 	lastFocusedWindow?: { id?: number };
 	/** Expose chrome.action.openPopup (Chrome 127+). */
@@ -77,6 +77,8 @@ interface HarnessState {
 	windowsCreated: AnyMsg[];
 	windowsRemoved: number[];
 	listeners: Record<string, ((...args: any[]) => any) | undefined>;
+	/** storage.onChanged also permits multiple listeners (vek/session plus background policy). */
+	storageChangedListeners: Array<(changes: Record<string, unknown>, area: string) => void>;
 	/** All runtime.onMessage listeners, in registration order. Chrome dispatches a message to
 	 * every listener (not just the last), so the background legitimately registers more than one
 	 * (the router dispatcher + the SYNC_STATUS console mirror); the harness must model that. */
@@ -160,6 +162,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		windowsCreated: [],
 		windowsRemoved: [],
 		listeners: {},
+		storageChangedListeners: [],
 		messageListeners: [],
 	};
 	let hasDoc = false;
@@ -226,7 +229,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			local: area(local),
 			onChanged: {
 				addListener: (fn: any) => {
-					state.listeners.storageChanged = fn;
+					state.storageChangedListeners.push(fn);
 				},
 			},
 		},
@@ -328,7 +331,9 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 		fireAlarm: (name) => state.listeners.alarm?.({ name }),
 		fireCommand: (command) => state.listeners.command?.(command),
 		fireIdle: (s) => state.listeners.idle?.(s),
-		fireStorageChanged: (changes, area2) => state.listeners.storageChanged?.(changes, area2),
+		fireStorageChanged: (changes, area2) => {
+			for (const listener of state.storageChangedListeners) listener(changes, area2);
+		},
 		fireInstalled: () => state.listeners.installed?.(),
 		fireStartup: () => state.listeners.startup?.(),
 		fireConnect: (name = "tp-view") => {

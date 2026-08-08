@@ -44,3 +44,24 @@ export function safeSendMessage(message: unknown): void {
 		runTeardown();
 	}
 }
+
+/**
+ * Send a one-shot request and return its direct response. A synchronous context failure
+ * means this content script has been orphaned; a rejected/closed response channel is a
+ * normal quiet cancellation (for example, navigation while the background is awaiting).
+ */
+export async function safeRequest<T>(message: unknown): Promise<T | undefined> {
+	if (!isExtensionAlive()) return undefined;
+	let response: Promise<T>;
+	try {
+		response = api.runtime.sendMessage(message) as Promise<T>;
+	} catch {
+		markExtensionDead();
+		return undefined;
+	}
+	try {
+		return await response;
+	} catch {
+		return undefined;
+	}
+}

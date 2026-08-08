@@ -53,6 +53,24 @@ export type FillPayload =
 			isAuto?: boolean;
 	  };
 
+export type AutofillQueryResponse = { ok: true; data: QueryResult } | { ok: false; error: string };
+
+export type AutofillSelectResponse =
+	| {
+			ok: true;
+			data: {
+				payload: FillPayload;
+				isAuto: boolean;
+				otpOnly: boolean;
+				sessionGeneration: number;
+			};
+	  }
+	| { ok: false; error: string };
+
+export type AutofillSubmitRevalidationResponse =
+	| { ok: true; data: { sessionGeneration: number } }
+	| { ok: false; error: string };
+
 // Mirror of `CornerPromptPayload` in `@core/adapters/autofill`; duplicated to
 // keep the content script a flat bundle with no cross-package runtime imports.
 export type CornerPromptPayload =

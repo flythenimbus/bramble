@@ -21,6 +21,10 @@ Every suite launches a real extension profile, so build it after source changes:
 pnpm --filter @vault/platform-extension build:chromium
 ```
 
+## Document-bound transport contract
+
+`pnpm run test:transport-race` runs a small test-only extension against real Chromium and Firefox. It requires Playwright Chromium plus `FIREFOX_BINARY` pointing at official Mozilla Firefox current or Firefox 128+. CI exercises both current Firefox and the 128 compatibility floor. Firefox must run headed (`FIREFOX_HEADLESS=0`) under Xvfb so the BFCache case is meaningful; CI does this with `xvfb-run -a`. Locally, install Chromium with `pnpm exec playwright install chromium` and run `TRANSPORT_BROWSERS=chromium pnpm run test:transport-race` when Firefox is unavailable; use the default `all` in CI or when `FIREFOX_BINARY` is set. The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with same-origin and cross-origin B documents. Its separate BFCache case uses a top-level A → B → Back navigation because subframe history entries are not independently BFCache-restorable; it proves frame ID 0, a stable restored-A nonce, and inert replies. A replacement document must never observe the sentinel; a failure means this request/reply design must not ship or fall back to frame targeting. The only approved fallback is explicit exact-`documentId` targeting with the Firefox support floor raised to 153.
+
 ---
 
 ## `extension/` — the default suite

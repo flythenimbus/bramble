@@ -44,6 +44,7 @@
 		"test:e2e:android": "playwright test --config playwright.android.config.ts",
 		"test:e2e:sync": "playwright test --config playwright.sync.config.ts",
 		"test:e2e:build": "pnpm --filter @vault/platform-extension run build:chromium && playwright test",
+		"test:transport-race": "node e2e/transport-race/run.mjs",
 		"typecheck": "pnpm -r run typecheck",
 		"i18n:extract": "lingui extract",
 		"i18n:translate": "node --env-file-if-exists=.env.local scripts/i18n-translate.mjs",

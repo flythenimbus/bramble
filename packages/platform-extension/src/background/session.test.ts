@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { extensionSender, loadBackground, pageSender, TEST_VEK_KEY } from "../test/test-harness";
+import {
+	defaultOffscreen,
+	extensionSender,
+	loadBackground,
+	pageSender,
+	TEST_VEK_KEY,
+} from "../test/test-harness";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -254,20 +260,136 @@ describe("sender hostname is taken from the verified sender, not the body", () =
 			},
 			extensionSender,
 		);
-		// Body claims evil.com but the sender is real.com: the tab message must be
-		// for real.com's matches.
-		await bg.send(
+		// Body claims evil.com but the sender is real.com: only real.com's summaries
+		// return on the initiating response channel (never as a tab/frame push).
+		const { resp } = await bg.send(
 			{ type: "AUTOFILL_QUERY", hostname: "evil.com", hasLogin: true },
 			pageSender("real.com", 42),
 		);
-		const pushed = bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES");
-		expect(pushed?.tabId).toBe(42);
-		expect(pushed?.message.payload.logins).toHaveLength(1);
+		expect(resp.data.logins).toHaveLength(1);
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
 	});
 
 	it("AUTOFILL_QUERY with no verifiable origin is rejected", async () => {
 		const bg = await loadBackground();
 		const { resp } = await bg.send({ type: "AUTOFILL_QUERY", hasLogin: true }, {});
-		expect(resp).toEqual({ ok: false, error: "no verifiable origin on sender" });
+		expect(resp).toEqual({ ok: false, error: "forbidden" });
+	});
+});
+
+describe("autofill session transition ordering", () => {
+	async function unlockedWithLogin(options: Parameters<typeof loadBackground>[0] = {}) {
+		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" }, ...options });
+		await bg.send(
+			{
+				type: "AUTOFILL_SET_INDEX",
+				payload: [
+					{
+						type: "login",
+						id: "login",
+						hostnames: ["example.com"],
+						name: "Example",
+						username: "alice",
+						password: "secret",
+					},
+				],
+			},
+			extensionSender,
+		);
+		return bg;
+	}
+
+	it.each([
+		["CRYPTO_GENERATE_VEK", {}],
+		["CRYPTO_UNWRAP_PASSWORD_SLOT", {}],
+		["CRYPTO_UNWRAP_WEBAUTHN_SLOT", {}],
+		["CRYPTO_ROTATE_VEK", {}],
+	] as const)("rejects select while %s is awaiting the VEK seam", async (type, extra) => {
+		let release: ((response: ReturnType<typeof defaultOffscreen>) => void) | undefined;
+		const bg = await unlockedWithLogin({
+			offscreen: (message) =>
+				message.type === type
+					? new Promise((resolve) => {
+							release = resolve;
+						})
+					: defaultOffscreen(message),
+		});
+		const transition = bg.send({ type, ...extra });
+		await bg.flush();
+		expect(release).toBeTypeOf("function");
+		const select = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login" } },
+			pageSender("example.com", 1),
+		);
+		expect(select.resp).toEqual({ ok: false, error: "unavailable" });
+		release?.(defaultOffscreen({ type }));
+		await transition;
+	});
+
+	it("rejects select while UNLOCK_WITH_VEK has made the VEK visible but its storage write is held", async () => {
+		const bg = await unlockedWithLogin();
+		const originalSet = bg.chrome.storage.session.set;
+		let release: (() => void) | undefined;
+		bg.chrome.storage.session.set = vi.fn((value: Record<string, unknown>) => {
+			if (VEK_KEY in value) {
+				return new Promise<void>((resolve) => {
+					release = resolve;
+				});
+			}
+			return originalSet(value);
+		});
+		const transition = bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "NEW" } });
+		await bg.flush();
+		expect(release).toBeTypeOf("function");
+		const select = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login" } },
+			pageSender("example.com", 1),
+		);
+		expect(select.resp).toEqual({ ok: false, error: "unavailable" });
+		release?.();
+		await transition;
+	});
+
+	it("rejects a select held across an active-vault session replacement", async () => {
+		const bg = await unlockedWithLogin();
+		const originalGet = bg.chrome.storage.local.get;
+		let release: ((value: unknown) => void) | undefined;
+		bg.chrome.storage.local.get = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					release = resolve;
+				}),
+		);
+		const select = bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login" } },
+			pageSender("example.com", 1),
+		);
+		await bg.flush();
+		expect(release).toBeTypeOf("function");
+		bg.fireStorageChanged(
+			{ "vault.activeId": { oldValue: "v1", newValue: "replacement" } },
+			"session",
+		);
+		release?.(await originalGet(["pref.autoLockMinutes"]));
+		expect((await select).resp).toEqual({ ok: false, error: "unavailable" });
+	});
+
+	it("initiates the lock broadcast before deferred session cleanup resolves", async () => {
+		const bg = await unlockedWithLogin({ openTabs: [{ id: 1 }] });
+		const session = await import("./session");
+		let release!: () => void;
+		const heldCleanup = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		bg.chrome.storage.session.remove = vi.fn(() => heldCleanup);
+		const clearing = session.clearSession();
+		await bg.flush();
+		expect(
+			bg.state.tabMessages.some(
+				(message) => message.message.type === "VAULT_LOCK_STATE" && message.message.payload.locked,
+			),
+		).toBe(true);
+		release?.();
+		await clearing;
 	});
 });

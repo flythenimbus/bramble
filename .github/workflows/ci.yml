@@ -101,6 +101,55 @@ jobs:
           path: packages/platform-extension/dist-chromium
           retention-days: 1
 
+  transport-contract-chromium:
+    name: Security (document-bound transport, Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      # This fixture proves the browser's response-channel/navigation primitive only. Production
+      # content/background unit tests enforce Bramble's direct request/reply transport on top of it.
+      - name: Prove request/reply browser primitive
+        env:
+          TRANSPORT_BROWSERS: chromium
+        run: pnpm run test:transport-race
+
+  transport-contract-firefox:
+    name: Security (document-bound transport, Firefox ${{ matrix.firefox-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        firefox-version: ["128.0", latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+      - name: Install Firefox ${{ matrix.firefox-version }}
+        id: firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: ${{ matrix.firefox-version }}
+      - name: Prove request/reply navigation transport
+        env:
+          TRANSPORT_BROWSERS: firefox
+          FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+          FIREFOX_HEADLESS: "0"
+        run: xvfb-run -a pnpm run test:transport-race
+
   # Browser-driven tests: a real Chromium with the extension loaded. Kept out of the `build` job
   # because it is minutes slower and has a different flake profile.
   #

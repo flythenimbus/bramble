@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type BackgroundHarness,
+	defaultOffscreen,
 	extensionSender,
 	loadBackground,
 	pageSender,
@@ -9,6 +10,69 @@ import {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+});
+
+describe("AUTOFILL_REVALIDATE_SUBMIT", () => {
+	it("accepts only the generation issued with a current page selection", async () => {
+		const bg = await unlockedWithIndex();
+		const sender = pageSender("example.com", 11);
+		const selected = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			sender,
+		);
+		const sessionGeneration = selected.resp.data.sessionGeneration as number;
+		expect(
+			(await bg.send({ type: "AUTOFILL_REVALIDATE_SUBMIT", sessionGeneration }, sender)).resp,
+		).toEqual({ ok: true, data: { sessionGeneration } });
+		expect(
+			(await bg.send({ type: "AUTOFILL_REVALIDATE_SUBMIT", sessionGeneration: "0" }, sender)).resp,
+		).toEqual({ ok: false, error: "invalid_request" });
+	});
+
+	it("rejects the issued generation from the synchronous start of a held lock", async () => {
+		let release: ((response: ReturnType<typeof defaultOffscreen>) => void) | undefined;
+		const bg = await loadBackground({
+			sessionSeed: { [VEK_KEY]: "SEED" },
+			offscreen: (message) =>
+				message.type === "CRYPTO_LOCK"
+					? new Promise((resolve) => {
+							release = resolve;
+						})
+					: defaultOffscreen(message),
+		});
+		await bg.send({ type: "AUTOFILL_SET_INDEX", payload: ENTRIES }, extensionSender);
+		const sender = pageSender("example.com", 11);
+		const selected = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			sender,
+		);
+		const sessionGeneration = selected.resp.data.sessionGeneration as number;
+
+		const locking = bg.send({ type: "CRYPTO_LOCK" });
+		await bg.flush();
+		expect(release).toBeTypeOf("function");
+		expect(
+			(await bg.send({ type: "AUTOFILL_REVALIDATE_SUBMIT", sessionGeneration }, sender)).resp,
+		).toEqual({ ok: false, error: "unavailable" });
+		release?.(defaultOffscreen({ type: "CRYPTO_LOCK" }));
+		await locking;
+	});
+
+	it("does not treat outbound offscreen lock delivery as a new lock request", async () => {
+		const bg = await unlockedWithIndex();
+		const sender = pageSender("example.com", 11);
+		const selected = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			sender,
+		);
+		const sessionGeneration = selected.resp.data.sessionGeneration as number;
+
+		const outbound = await bg.send({ target: "offscreen", type: "CRYPTO_LOCK" });
+		expect(outbound.handled).toBe(false);
+		expect(
+			(await bg.send({ type: "AUTOFILL_REVALIDATE_SUBMIT", sessionGeneration }, sender)).resp,
+		).toEqual({ ok: true, data: { sessionGeneration } });
+	});
 });
 
 const VEK_KEY = TEST_VEK_KEY;
@@ -176,40 +240,34 @@ describe("AUTOFILL_FETCH", () => {
 });
 
 describe("AUTOFILL_SELECT authorize + fill", () => {
-	it("fills a login on a matching origin, echoes isAuto/otpOnly, and targets the requesting frame", async () => {
+	it("returns a login only on the original response channel and emits no tab fill", async () => {
 		const bg = await unlockedWithIndex();
 		const { resp } = await bg.send(
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1", isAuto: false, otpOnly: false } },
 			pageSender("example.com", 11, 7),
 		);
-		expect(resp).toEqual({ ok: true });
-		const fill = bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL");
-		expect(fill?.tabId).toBe(11);
-		// The decrypted secret must be delivered ONLY to the frame that requested it,
-		// never broadcast to the whole tab (a co-resident cross-origin iframe would harvest it).
-		expect(fill?.options).toEqual({ frameId: 7 });
-		expect(fill?.message.payload).toMatchObject({
-			kind: "login",
-			username: "alice",
-			password: "pw1",
-			isAuto: false,
-			otpOnly: false,
+		expect(resp).toMatchObject({
+			ok: true,
+			data: {
+				payload: { kind: "login", username: "alice", password: "pw1" },
+				isAuto: false,
+				otpOnly: false,
+			},
 		});
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL")).toBeUndefined();
 	});
 
-	it("fails closed (sends no fill) when the sender carries no frame id", async () => {
+	it("fails closed when the sender is not a page content sender", async () => {
 		const bg = await unlockedWithIndex();
 		const noFrame = {
 			origin: "https://example.com",
 			url: "https://example.com/login",
-			tab: { id: 11, windowId: 1, url: "https://example.com/login" },
 		};
 		const { resp } = await bg.send(
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
 			noFrame,
 		);
-		expect(resp).toEqual({ ok: true });
-		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL")).toBeUndefined();
+		expect(resp).toEqual({ ok: false, error: "forbidden" });
 	});
 
 	it("refuses to fill a login on a non-matching origin (clickjacking / wrong-site guard)", async () => {
@@ -218,7 +276,7 @@ describe("AUTOFILL_SELECT authorize + fill", () => {
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
 			pageSender("evil.com", 11),
 		);
-		expect(resp).toEqual({ ok: false, error: "Error: entry is not offered on this origin" });
+		expect(resp).toEqual({ ok: false, error: "unavailable" });
 		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL")).toBeUndefined();
 	});
 
@@ -228,8 +286,70 @@ describe("AUTOFILL_SELECT authorize + fill", () => {
 			{ type: "AUTOFILL_SELECT", payload: { entryId: "card1", otpOnly: false } },
 			pageSender("some-shop.example", 12),
 		);
-		expect(resp).toEqual({ ok: true });
-		const fill = bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL");
-		expect(fill?.message.payload.kind).toBe("card");
+		expect(resp).toMatchObject({ ok: true, data: { payload: { kind: "card" } } });
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_FILL")).toBeUndefined();
+	});
+});
+
+describe("AUTOFILL_QUERY direct response transport", () => {
+	it("derives the sender hostname, returns summaries directly, and sends no tab message", async () => {
+		const bg = await unlockedWithIndex();
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hostname: "evil.com", hasLogin: true },
+			pageSender("example.com", 42),
+		);
+		expect(resp.ok).toBe(true);
+		expect(resp.data.logins.map((login: { id: string }) => login.id)).toEqual(
+			expect.arrayContaining(["login1", "login2"]),
+		);
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
+	});
+
+	it("rejects malformed optional ids and echoes a canonical id without granting authority", async () => {
+		const bg = await unlockedWithIndex();
+		const requestId = "123e4567-e89b-42d3-a456-426614174000";
+		const valid = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true, requestId },
+			pageSender("example.com", 42),
+		);
+		expect(valid.resp).toMatchObject({ ok: true, requestId });
+		const invalid = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true, requestId: "not-a-uuid" },
+			pageSender("example.com", 42),
+		);
+		expect(invalid.resp).toEqual({ ok: false, error: "invalid_request" });
+	});
+});
+
+describe("AUTOFILL_SELECT session transitions", () => {
+	it("fails a select held across lock, including lock-to-unlock ABA", async () => {
+		const bg = await unlockedWithIndex();
+		const originalGet = bg.chrome.storage.local.get;
+		let release: ((value: unknown) => void) | undefined;
+		bg.chrome.storage.local.get = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					release = resolve;
+				}),
+		);
+		const pending = bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			pageSender("example.com", 11),
+		);
+		await Promise.resolve();
+		await bg.send({ type: "CRYPTO_LOCK" });
+		bg.chrome.storage.local.get = originalGet;
+		await bg.send({ type: "CRYPTO_GENERATE_VEK" });
+		release?.(await originalGet(["pref.autoLockMinutes"]));
+		expect((await pending).resp).toEqual({ ok: false, error: "unavailable" });
+	});
+
+	it("rejects a select that begins while the vault is locked", async () => {
+		const bg = await loadBackground();
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			pageSender("example.com", 11),
+		);
+		expect(resp).toEqual({ ok: false, error: "unavailable" });
 	});
 });

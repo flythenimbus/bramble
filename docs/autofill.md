@@ -22,7 +22,15 @@ held in background memory only, never persisted (see [storage.md](storage.md)).
 - **Notes and SSH keys** never participate in autofill.
 
 A content-script `query` says which field kinds the page exposes (`hasLogin`,
-`hasCard`, `hasOtp`), so the background only returns the relevant lists.
+`hasCard`, `hasOtp`), so the background only returns the relevant lists. Query
+summaries and selected fill payloads return only on that initiating runtime
+request's one-shot response channel. They are never later addressed to a tab or
+frame: a frame can navigate and retain its frame id while its document changes.
+The content script keeps each selection as a one-shot intent bound to the exact
+field it was picked from. Lock-state changes, pagehide (including bfcache), a
+hidden or unfocused page, trusted user interaction, replacement fields, and
+extension teardown cancel that intent. The optional 50 ms auto-submit continuation
+is similarly bound to the same live password field and rechecks for CAPTCHAs.
 
 ## Hostname matching and subdomain policy
 
@@ -93,7 +101,8 @@ could read it. Instead:
 1. On focusing a candidate field, the dropdown shows the matching entries
    (`query` returns only summaries: name plus a username or masked `•••• 1234`).
 2. The user picks one.
-3. Only then does `fetchFill` return the actual secrets for that entry.
+3. Only then does the page-bound `AUTOFILL_SELECT` response return the actual
+   secrets for that entry.
 
 Cards always used this safer pattern; logins and OTP codes follow it too.
 
@@ -106,7 +115,8 @@ stored card. The capture listeners gate on `isTrusted` for the same reason.
 
 The background re-checks the pick as defense-in-depth (`authorizeFill`): on
 `AUTOFILL_SELECT` it resolves the chosen entry and, **for a login**, requires
-`hostnameMatches` against the *verified sender* before returning secrets, so a
+`hostnameMatches` against the *verified sender* before returning secrets on the
+same request's response channel, so a
 leaked or guessed entry id can't be filled on a non-matching site. Cards are
 deliberately exempt (site-agnostic by design); their only barrier is the
 trusted-gesture gate above, plus the visibility/anti-overlay checks that arrive
@@ -216,7 +226,7 @@ times out and the content script falls back to the closed-shadow dropdown.
 The iframe holds **no secrets**. It receives only summaries (name + masked
 secondary) over `postMessage` and reports the user's pick back; the fill still
 happens in the content script against the real page inputs, and the background
-still returns secrets only to the content-script tab. The trust hinges on two
+returns secrets only to the initiating content script's original request. The trust hinges on two
 origin checks the page can't forge:
 
 - The content script honors an iframe message only when `event.source ===

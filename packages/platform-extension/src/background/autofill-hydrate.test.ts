@@ -74,12 +74,6 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 	}
 }
 
-/** The AUTOFILL_MATCHES payload the background pushed back to the querying frame. */
-function matches(bg: Awaited<ReturnType<typeof loadBackground>>): any {
-	return bg.state.tabMessages.filter((m) => m.message.type === "AUTOFILL_MATCHES").at(-1)?.message
-		.payload;
-}
-
 describe("autofill query with no pushed index (rebuild from disk)", () => {
 	it("answers with the vault's logins, not 'locked'", async () => {
 		// Unlocked (a VEK is cached) but no view ever pushed an index: exactly the state a page is
@@ -88,20 +82,28 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 			sessionSeed: { [TEST_VEK_KEY]: "SEED" },
 			offscreen: diskOffscreen,
 		});
-		await bg.send({ type: "AUTOFILL_QUERY", hasLogin: true }, pageSender("example.com", 4));
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
 		await bg.flush();
 
-		expect(matches(bg)).toMatchObject({
+		expect(resp.data).toMatchObject({
 			locked: false,
 			logins: [{ id: "login1", name: "Example", secondary: "alice" }],
 		});
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
 	});
 
 	it("reports locked when the vault really is locked", async () => {
 		const bg = await loadBackground({ offscreen: diskOffscreen });
-		await bg.send({ type: "AUTOFILL_QUERY", hasLogin: true }, pageSender("example.com", 4));
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
 		await bg.flush();
 
-		expect(matches(bg)).toMatchObject({ locked: true, logins: [] });
+		expect(resp.data).toMatchObject({ locked: true, logins: [] });
+		expect(bg.state.tabMessages.find((m) => m.message.type === "AUTOFILL_MATCHES")).toBeUndefined();
 	});
 });

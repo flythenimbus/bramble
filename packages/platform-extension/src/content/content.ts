@@ -25,11 +25,19 @@ import {
 	fillPasswordFields,
 	submitFromField,
 } from "./fill";
-import { onTeardown, safeSendMessage } from "./lifecycle";
+import { onTeardown, safeRequest, safeSendMessage } from "./lifecycle";
 import { generatePassword } from "./password-gen";
 import { picker } from "./picker";
 import { isPasswordChangeForm, shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
-import type { CornerPromptPayload, FillPayload, MatchSummary, QueryResult } from "./types";
+import type {
+	AutofillQueryResponse,
+	AutofillSelectResponse,
+	AutofillSubmitRevalidationResponse,
+	CornerPromptPayload,
+	FillPayload,
+	MatchSummary,
+	QueryResult,
+} from "./types";
 
 let mutationObserver: MutationObserver | null = null;
 
@@ -47,6 +55,191 @@ let reshowField: HTMLInputElement | null = null;
 // unlock there's no active host to refresh; we re-surface matches on this field instead.
 let pendingUnlockField: HTMLInputElement | null = null;
 let lastCheck = 0;
+let queryGeneration = 0;
+let submitGeneration = 0;
+
+type TargetKind = "login" | "card" | "otp";
+type ActiveFill = {
+	target: HTMLInputElement;
+	targetKind: TargetKind;
+};
+
+let activeFill: ActiveFill | null = null;
+
+function cancelFill(): void {
+	activeFill = null;
+	submitGeneration++;
+}
+
+function cancelSubmit(): void {
+	submitGeneration++;
+}
+
+function cancelOperations(): void {
+	queryGeneration++;
+	cancelFill();
+}
+
+function documentIsActive(): boolean {
+	return document.visibilityState === "visible" && document.hasFocus();
+}
+
+function currentTargetKind(target: HTMLInputElement): TargetKind | null {
+	invalidatePageFields();
+	if (
+		!target.isConnected ||
+		target.ownerDocument !== document ||
+		target.disabled ||
+		target.readOnly
+	) {
+		return null;
+	}
+	return kindOf(getPageFields(), target);
+}
+
+function isPickerInteractionTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof Node)) return false;
+	const host = picker.activeHost();
+	return !!host && (host.contains(target) || picker.clickIsOnAnchor(target));
+}
+
+function responsePayload(v: unknown): {
+	payload: FillPayload;
+	isAuto: boolean;
+	otpOnly: boolean;
+	sessionGeneration: number;
+} | null {
+	if (!v || typeof v !== "object") return null;
+	const data = v as Record<string, unknown>;
+	if (data.isAuto !== true && data.isAuto !== false) return null;
+	if (data.otpOnly !== true && data.otpOnly !== false) return null;
+	if (!Number.isSafeInteger(data.sessionGeneration) || (data.sessionGeneration as number) < 0)
+		return null;
+	const payload = data.payload as FillPayload | undefined;
+	if (!validFillPayload(payload)) return null;
+	return {
+		payload,
+		isAuto: data.isAuto,
+		otpOnly: data.otpOnly,
+		sessionGeneration: data.sessionGeneration as number,
+	};
+}
+
+function validCustomFields(value: unknown): boolean {
+	return (
+		value === undefined ||
+		(Array.isArray(value) &&
+			value.every(
+				(field) =>
+					field &&
+					typeof field === "object" &&
+					typeof (field as { key?: unknown }).key === "string" &&
+					typeof (field as { value?: unknown }).value === "string",
+			))
+	);
+}
+
+function validFillPayload(payload: FillPayload | undefined): payload is FillPayload {
+	if (!payload || typeof payload !== "object" || !validCustomFields(payload.customFields))
+		return false;
+	if (payload.kind === "login") {
+		return (
+			typeof payload.username === "string" &&
+			typeof payload.password === "string" &&
+			(payload.totp === undefined || typeof payload.totp === "string") &&
+			(payload.autoSubmit === undefined || typeof payload.autoSubmit === "boolean")
+		);
+	}
+	return (
+		payload.kind === "card" &&
+		typeof payload.cardholderName === "string" &&
+		typeof payload.number === "string" &&
+		typeof payload.expMonth === "string" &&
+		typeof payload.expYear === "string" &&
+		typeof payload.cvv === "string"
+	);
+}
+
+function payloadMatchesTarget(
+	targetKind: TargetKind,
+	payload: FillPayload,
+	otpOnly: boolean,
+): boolean {
+	if (targetKind === "card") return payload.kind === "card" && !otpOnly;
+	if (targetKind === "otp") return payload.kind === "login" && otpOnly;
+	return payload.kind === "login" && !otpOnly;
+}
+
+function delayedSubmitIsEligible(passwordField: HTMLInputElement, generation: number): boolean {
+	invalidatePageFields();
+	return (
+		generation === submitGeneration &&
+		documentIsActive() &&
+		passwordField.isConnected &&
+		passwordField.ownerDocument === document &&
+		!passwordField.disabled &&
+		!passwordField.readOnly &&
+		getPageFields().login.password === passwordField &&
+		!hasInteractiveCaptcha()
+	);
+}
+
+async function continueAutoSubmit(
+	passwordField: HTMLInputElement,
+	generation: number,
+	sessionGeneration: number,
+): Promise<void> {
+	if (!delayedSubmitIsEligible(passwordField, generation)) return;
+	const response = await safeRequest<AutofillSubmitRevalidationResponse>({
+		type: "AUTOFILL_REVALIDATE_SUBMIT",
+		sessionGeneration,
+	});
+	if (
+		!response?.ok ||
+		response.data.sessionGeneration !== sessionGeneration ||
+		!delayedSubmitIsEligible(passwordField, generation)
+	) {
+		return;
+	}
+	submitFromField(passwordField);
+}
+
+function applySelectResponse(
+	intent: ActiveFill,
+	response: AutofillSelectResponse | undefined,
+): void {
+	// Consume before validating or filling: a response can never be replayed locally.
+	if (activeFill !== intent) return;
+	activeFill = null;
+	if (!response?.ok) return;
+	const data = responsePayload(response.data);
+	if (!data || !documentIsActive() || currentTargetKind(intent.target) !== intent.targetKind)
+		return;
+	if (!payloadMatchesTarget(intent.targetKind, data.payload, data.otpOnly)) return;
+
+	picker.removeDropdown();
+	if (data.payload.kind === "card") {
+		fillCard(data.payload);
+		fillCustomFields(data.payload.customFields);
+		return;
+	}
+	if (data.otpOnly) {
+		fillOtp(data.payload.totp);
+		return;
+	}
+	const { filled, passwordField } = fillForm(
+		data.payload.username,
+		data.payload.password,
+		data.isAuto,
+	);
+	fillCustomFields(data.payload.customFields);
+	fillOtp(data.payload.totp);
+	if (!filled || !data.payload.autoSubmit || !passwordField) return;
+	const generation = ++submitGeneration;
+	setTimeout(() => {
+		void continueAutoSubmit(passwordField, generation, data.sessionGeneration);
+	}, 50);
+}
 
 // The generated password offered on a given field, cached so re-renders don't
 // churn a new one each frame. Regenerate replaces it; the WeakMap forgets fields
@@ -109,14 +302,25 @@ function applyGeneratedPassword(field: HTMLInputElement): void {
 
 /** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
 function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
+	const target = picker.anchorField();
+	const targetKind = target ? currentTargetKind(target) : null;
+	if (!target || !targetKind) return;
 	// Manual selection counts as an explicit dismissal; silence auto-redisplay
 	// (e.g. a re-query landing mid-fill) until the user re-engages a field.
 	if (!isAuto) silenceAutoOpen = true;
+	// Capture the actual anchor and its kind before removal. Never re-find by selector
+	// when the response arrives: an identical replacement is a different target.
+	const intent: ActiveFill = {
+		target,
+		targetKind,
+	};
+	cancelFill();
+	activeFill = intent;
 	picker.remove();
-	safeSendMessage({
+	void safeRequest<AutofillSelectResponse>({
 		type: "AUTOFILL_SELECT",
-		payload: { entryId, hostname: location.hostname, isAuto, otpOnly },
-	});
+		payload: { entryId, isAuto, otpOnly },
+	}).then((response) => applySelectResponse(intent, response));
 }
 
 function focusedCandidate(): HTMLInputElement | null {
@@ -187,12 +391,15 @@ function queryAutofill(): void {
 	const hasOtp = fields.otp.length > 0;
 	if (!hasLogin && !hasCard && !hasOtp) return;
 
-	safeSendMessage({
+	const generation = ++queryGeneration;
+	void safeRequest<AutofillQueryResponse>({
 		type: "AUTOFILL_QUERY",
-		hostname: location.hostname,
 		hasLogin,
 		hasCard,
 		hasOtp,
+	}).then((response) => {
+		if (generation !== queryGeneration || !response?.ok) return;
+		handleResult(response.data);
 	});
 }
 
@@ -253,15 +460,18 @@ function onDomChange(): void {
 // The picker reports user actions through callbacks; the policy lives here.
 picker.onPick((entryId, otpOnly) => selectMatch(entryId, false, otpOnly));
 picker.onUnlockRequest((field) => {
+	cancelOperations();
 	// The click dismissed the picker; remember the field so the unlock broadcast can re-surface here.
 	pendingUnlockField = field;
 	// `reason` marks this pop-out as a step in the fill flow, so it closes itself on unlock.
 	safeSendMessage({ type: "POPOUT_OPEN", payload: { reason: "unlock" } });
 });
 picker.onDismiss(() => {
+	cancelOperations();
 	silenceAutoOpen = true;
 });
 picker.onUseSuggested(() => {
+	cancelOperations();
 	const field = picker.anchorField();
 	if (!field) return;
 	// Using the suggestion is an explicit choice: fill, offer to save, then silence
@@ -271,6 +481,7 @@ picker.onUseSuggested(() => {
 	picker.remove();
 });
 picker.onRegenerate(() => {
+	cancelOperations();
 	const field = picker.anchorField();
 	if (!field) return;
 	const pw = generatePassword();
@@ -283,6 +494,7 @@ picker.onRegenerate(() => {
 onTeardown(() => {
 	mutationObserver?.disconnect();
 	mutationObserver = null;
+	cancelOperations();
 });
 
 // Enter inside a password field that drives no real `<form>` submit (lone
@@ -292,6 +504,7 @@ document.addEventListener(
 	"keydown",
 	(e) => {
 		if (!e.isTrusted) return;
+		cancelOperations();
 		// Drive the open iframe dropdown with the keyboard first.
 		if (picker.handleKey(e)) return;
 		onPasswordEnter(e.key, composedTarget(e));
@@ -300,12 +513,6 @@ document.addEventListener(
 );
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-	if (message?.type === "AUTOFILL_MATCHES") {
-		handleResult(message.payload as QueryResult | undefined);
-		sendResponse({ ok: true });
-		return false;
-	}
-
 	if (message?.type === "CORNER_PROMPT_SHOW") {
 		handleCornerPromptShow(message.payload as CornerPromptPayload);
 		sendResponse({ ok: true });
@@ -313,6 +520,10 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	}
 
 	if (message?.type === "VAULT_LOCK_STATE") {
+		// Either direction invalidates local response and delayed-submit work. A lock→unlock
+		// ABA cannot revive a request that began before the transition: cancellation invalidates
+		// both the pending fill identity and delayed-submit generation.
+		cancelOperations();
 		// The background pushes lock changes here since content scripts can't watch
 		// storage.session. Keep the cached flag honest and refresh whatever is open so a
 		// stale "Vault locked" row clears on unlock (and stale matches hide on lock).
@@ -346,42 +557,6 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		return false;
 	}
 
-	if (message?.type === "AUTOFILL_FILL") {
-		const payload = message.payload as FillPayload;
-		picker.removeDropdown();
-		if (payload.kind === "card") {
-			const filled = fillCard(payload);
-			fillCustomFields(payload.customFields);
-			sendResponse({ ok: filled });
-			return false;
-		}
-		// 2FA step: fill only the one-time-code field, nothing else.
-		if (payload.otpOnly) {
-			sendResponse({ ok: fillOtp(payload.totp) });
-			return false;
-		}
-		const { filled, passwordField } = fillForm(
-			payload.username,
-			payload.password,
-			!!payload.isAuto,
-		);
-		fillCustomFields(payload.customFields);
-		// Combined login+2FA form: an explicit login pick also fills the OTP
-		// field. No-op when the page has no OTP field.
-		fillOtp(payload.totp);
-		if (filled && payload.autoSubmit) {
-			// Defer one tick so framework state (React controlled inputs) settles
-			// before submit handlers read field values. Re-check for a late-rendered
-			// captcha and skip submit if present (the user must solve it).
-			setTimeout(() => {
-				if (hasInteractiveCaptcha()) return;
-				submitFromField(passwordField);
-			}, 50);
-		}
-		sendResponse({ ok: filled });
-		return false;
-	}
-
 	return false;
 });
 
@@ -398,6 +573,17 @@ function bootstrap(): void {
 		"focusin",
 		(e) => {
 			const target = composedTarget(e);
+			if (e.isTrusted && !isPickerInteractionTarget(target)) cancelSubmit();
+			// Do not treat extension-picker iframe focus as page deactivation. A real focus
+			// change anywhere else in the page does supersede a picker-anchor operation.
+			if (
+				e.isTrusted &&
+				activeFill &&
+				target !== activeFill.target &&
+				!isPickerInteractionTarget(target)
+			) {
+				cancelOperations();
+			}
 			if (!isCandidate(getPageFields(), target)) return;
 			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
@@ -414,6 +600,7 @@ function bootstrap(): void {
 			// fillForm dispatches synthetic input/change events; reacting would
 			// reopen the dropdown the user just dismissed. Only trust real events.
 			if (!e.isTrusted) return;
+			cancelOperations();
 			const target = composedTarget(e);
 			if (!isCandidate(getPageFields(), target)) return;
 			silenceAutoOpen = false;
@@ -445,11 +632,27 @@ function bootstrap(): void {
 	// `<label>` doesn't race us into an "open + immediate close" flash, and the
 	// same listener detects re-engagement when the dropdown is closed.
 	document.addEventListener(
+		"pointerdown",
+		(e) => {
+			const target = composedTarget(e);
+			if (e.isTrusted && !isPickerInteractionTarget(target)) cancelSubmit();
+			if (e.isTrusted && activeFill && !isPickerInteractionTarget(target)) {
+				cancelOperations();
+			}
+		},
+		true,
+	);
+
+	document.addEventListener(
 		"mousedown",
 		(e) => {
+			const target = composedTarget(e);
+			if (e.isTrusted && !isPickerInteractionTarget(target)) cancelSubmit();
+			if (e.isTrusted && activeFill && !isPickerInteractionTarget(target)) {
+				if (target !== activeFill.target) cancelOperations();
+			}
 			const host = picker.activeHost();
 			if (host) {
-				const target = composedTarget(e);
 				if (target instanceof Node) {
 					// Clicks inside a cross-origin iframe never reach here.
 					if (host.contains(target)) return;
@@ -460,7 +663,6 @@ function bootstrap(): void {
 				return;
 			}
 			// Picker closed: a mousedown on a candidate field is re-engagement.
-			const target = composedTarget(e);
 			if (isCandidate(getPageFields(), target)) {
 				silenceAutoOpen = false;
 				// Re-click on the already-focused field fires no focusin, so show ourselves.
@@ -471,6 +673,23 @@ function bootstrap(): void {
 	);
 	window.addEventListener("scroll", () => picker.reposition(), true);
 	window.addEventListener("resize", () => picker.reposition(), true);
+	window.addEventListener("pagehide", () => cancelOperations(), true);
+	window.addEventListener("pageshow", (e) => {
+		if (e.persisted) {
+			cancelOperations();
+			cachedResult = null;
+			queryAutofill();
+		}
+	});
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState !== "visible") cancelOperations();
+	});
+	window.addEventListener("blur", () => {
+		// Moving focus into the authenticated picker iframe keeps the top document focused.
+		setTimeout(() => {
+			if (!document.hasFocus()) cancelOperations();
+		}, 0);
+	});
 }
 
 if (document.readyState === "loading") {

@@ -21,7 +21,14 @@ import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
-import { getActiveVaultId, scheduleAutoLock, vaultLocked } from "./session";
+import {
+	autofillSessionIsCurrent,
+	autofillSessionIsStable,
+	autofillSessionSnapshot,
+	getActiveVaultId,
+	scheduleAutoLock,
+	vaultLocked,
+} from "./session";
 import { bytesToBase64, readAndDecodeVault } from "./vault-io";
 
 const HOSTNAMES_KEY = "autofill.knownHostnames";
@@ -177,6 +184,44 @@ function senderHostname(sender: chrome.runtime.MessageSender): string {
 		if (src) return new URL(src).hostname;
 	} catch {}
 	return "";
+}
+
+/** Content-script-only requests must have a browser-verified page sender. */
+function pageSenderHostname(sender: chrome.runtime.MessageSender): string | null {
+	if (isExtensionSender(sender) || sender.tab?.id === undefined) return null;
+	const hostname = senderHostname(sender);
+	return hostname || null;
+}
+
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function optionalRequestId(message: any): string | undefined | null {
+	if (!("requestId" in message)) return undefined;
+	return typeof message.requestId === "string" && CANONICAL_UUID.test(message.requestId)
+		? message.requestId
+		: null;
+}
+
+function validQueryFlags(message: any): boolean {
+	return ["hasLogin", "hasCard", "hasOtp"].every(
+		(key) => !(key in message) || typeof message[key] === "boolean",
+	);
+}
+
+function validSelectPayload(payload: unknown): payload is {
+	entryId: string;
+	isAuto?: boolean;
+	otpOnly?: boolean;
+} {
+	if (!payload || typeof payload !== "object") return false;
+	const p = payload as Record<string, unknown>;
+	return (
+		typeof p.entryId === "string" &&
+		p.entryId.length > 0 &&
+		p.entryId.length <= 256 &&
+		(p.isAuto === undefined || typeof p.isAuto === "boolean") &&
+		(p.otpOnly === undefined || typeof p.otpOnly === "boolean")
+	);
 }
 
 /** A login may be filled only on a page its hostname matches; cards are site-agnostic. See docs/autofill.md. */
@@ -338,56 +383,78 @@ async function autofillQuery(
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ): Promise<MessageEnvelope> {
-	const tabId = sender.tab?.id;
-	// Hostname is derived from the verified sender, never the message body.
-	const hostname = senderHostname(sender);
-	if (!hostname) return { ok: false, error: "no verifiable origin on sender" };
-	await hydrateAutofillIndexFromDisk();
-	const hasLogin = message.hasLogin !== false;
-	const hasCard = message.hasCard === true;
-	const hasOtp = message.hasOtp === true;
-	const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
-	// Sliding session: any autofill activity extends the timer.
-	if (!result.locked) await scheduleAutoLock();
-	// Reply only to the frame that queried; never broadcast the match list to sibling
-	// frames (a page can host a co-resident cross-origin iframe running this same script).
-	if (tabId !== undefined && sender.frameId !== undefined) {
-		await api.tabs
-			.sendMessage(
-				tabId,
-				{ type: "AUTOFILL_MATCHES", payload: result },
-				{ frameId: sender.frameId },
-			)
-			.catch(() => {});
+	const requestId = optionalRequestId(message);
+	const hostname = pageSenderHostname(sender);
+	if (requestId === null || !validQueryFlags(message))
+		return { ok: false, error: "invalid_request" };
+	// Hostname is derived from the verified sender, never the message body. The result
+	// returns through this request's response channel; it is never tab/frame-addressed.
+	if (!hostname) return { ok: false, error: "forbidden" };
+	const generation = autofillSessionSnapshot();
+	try {
+		await hydrateAutofillIndexFromDisk();
+		const hasLogin = message.hasLogin !== false;
+		const hasCard = message.hasCard === true;
+		const hasOtp = message.hasOtp === true;
+		const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
+		// Sliding session: any autofill activity extends the timer.
+		if (!result.locked) await scheduleAutoLock();
+		if (!autofillSessionIsStable(generation)) return { ok: false, error: "unavailable" };
+		return { ok: true, data: result, ...(requestId === undefined ? {} : { requestId }) };
+	} catch {
+		return { ok: false, error: "unavailable" };
 	}
-	return { ok: true };
 }
 
 async function autofillSelect(
 	message: any,
 	sender: chrome.runtime.MessageSender,
 ): Promise<MessageEnvelope> {
-	const { entryId, isAuto, otpOnly } = message.payload as {
-		entryId: string;
-		isAuto?: boolean;
-		otpOnly?: boolean;
-	};
-	// Re-check the login against the verified page origin.
-	authorizeFill(entryId, senderHostname(sender));
-	const fill = fetchFill(entryId);
-	await scheduleAutoLock();
-	// Deliver the decrypted secret ONLY to the frame that requested (and was authorized
-	// for) this pick. Broadcasting to the tab would hand the credential/card to every
-	// frame, including a co-resident cross-origin iframe. Fail closed if no frame id.
-	if (sender.tab?.id !== undefined && sender.frameId !== undefined) {
-		// Echo isAuto (auto-retry vs explicit pick) and otpOnly (fill only the OTP field).
-		await api.tabs.sendMessage(
-			sender.tab.id,
-			{ type: "AUTOFILL_FILL", payload: { ...fill, isAuto: !!isAuto, otpOnly: !!otpOnly } },
-			{ frameId: sender.frameId },
-		);
+	const requestId = optionalRequestId(message);
+	const hostname = pageSenderHostname(sender);
+	if (requestId === null || !validSelectPayload(message.payload)) {
+		return { ok: false, error: "invalid_request" };
 	}
-	return { ok: true };
+	if (!hostname) return { ok: false, error: "forbidden" };
+	const generation = autofillSessionSnapshot();
+	// A request that began while locked (or a transition was already underway) must
+	// never become eligible merely because an unlock completes during its await.
+	if (!autofillSessionIsCurrent(generation)) return { ok: false, error: "unavailable" };
+	try {
+		await hydrateAutofillIndexFromDisk();
+		await scheduleAutoLock();
+		// Do every authorization and plaintext operation synchronously after the last await.
+		if (!autofillSessionIsCurrent(generation)) return { ok: false, error: "unavailable" };
+		authorizeFill(message.payload.entryId, hostname);
+		const payload = fetchFill(message.payload.entryId);
+		return {
+			ok: true,
+			data: {
+				payload,
+				isAuto: !!message.payload.isAuto,
+				otpOnly: !!message.payload.otpOnly,
+				sessionGeneration: generation,
+			},
+			...(requestId === undefined ? {} : { requestId }),
+		};
+	} catch {
+		// Do not expose entry ids, values, or implementation errors to a page sender.
+		return { ok: false, error: "unavailable" };
+	}
+}
+
+async function autofillRevalidateSubmit(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	if (!pageSenderHostname(sender)) return { ok: false, error: "forbidden" };
+	const generation = message.sessionGeneration;
+	if (!Number.isSafeInteger(generation) || generation < 0) {
+		return { ok: false, error: "invalid_request" };
+	}
+	return autofillSessionIsCurrent(generation)
+		? { ok: true, data: { sessionGeneration: generation } }
+		: { ok: false, error: "unavailable" };
 }
 
 on("AUTOFILL_SET_INDEX", autofillSetIndex);
@@ -396,3 +463,4 @@ on("AUTOFILL_FIND", autofillFind);
 on("AUTOFILL_FETCH", autofillFetch);
 on("AUTOFILL_QUERY", autofillQuery);
 on("AUTOFILL_SELECT", autofillSelect);
+on("AUTOFILL_REVALIDATE_SUBMIT", autofillRevalidateSubmit);
