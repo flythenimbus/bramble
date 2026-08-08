@@ -47,6 +47,10 @@ let persistencePoisoned = false;
 // module initiates so session.ts can consume their delayed notifications instead of applying an
 // older local removal after a newer UI selection has already been refreshed.
 let activeWriteRevision = 0;
+// Bounded, because a receipt whose notification never arrives would otherwise live forever and
+// could later swallow a genuine external change that happens to carry the same old/new pair.
+// Only one active-id write is ever in flight, so anything this old is already unmatchable.
+const MAX_PENDING_ACTIVE_CHANGES = 8;
 const pendingActiveStorageChanges: Array<{
 	revision: number;
 	oldValue: string | null;
@@ -80,6 +84,9 @@ function expectActiveStorageChange(oldValue: unknown, newValue: unknown) {
 		newValue: activeValue(newValue),
 	};
 	pendingActiveStorageChanges.push(expected);
+	while (pendingActiveStorageChanges.length > MAX_PENDING_ACTIVE_CHANGES) {
+		pendingActiveStorageChanges.shift();
+	}
 	return expected;
 }
 

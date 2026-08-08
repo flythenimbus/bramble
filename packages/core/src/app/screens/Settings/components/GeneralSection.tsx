@@ -147,8 +147,11 @@ export function GeneralSection() {
 						checked={prefs.autofillQuickType}
 						onChange={(enabled) =>
 							void (async () => {
+								// Lease first: platforms that bind the cache to a vault session reject an
+								// unleased re-index rather than stamping it with whatever owner is current.
+								const lease = await autofill.beginIndexUpdate?.();
 								await update("autofillQuickType", enabled);
-								await autofill.setIndex(toAutofillIndex(entries));
+								await autofill.setIndex(toAutofillIndex(entries), lease);
 							})()
 						}
 						label={t`Toggle keyboard suggestions`}

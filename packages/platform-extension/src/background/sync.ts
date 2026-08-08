@@ -229,33 +229,55 @@ let syncRunning = false;
 let syncEpoch = 0;
 let stopInFlight: Promise<void> = Promise.resolve();
 
+/**
+ * Why a start was abandoned, when the reason is that the vault session moved underneath it.
+ *
+ * These gates are correct but silent, and sync self-heals from a later blob write or keepalive
+ * tick, so a genuine regression here would look like "sync is occasionally late" and be very hard
+ * to place. Say so in the log instead. Deliberately NOT logged for the ordinary no-op cases (no
+ * sync group, already running): those are the common path for anyone not using sync.
+ */
+function abandonStart(stage: string, startEpoch: number, vekEpoch: number): void {
+	console.warn(
+		`[titanpass:bg] sync start abandoned at ${stage}: the vault session moved`,
+		// Process-local counters only; no key material, vault id or roster data.
+		{
+			stopSuperseded: startEpoch !== syncEpoch,
+			vekEpochStale: !vekStore.vekMutationIsCurrent(vekEpoch),
+			activeVaultLocked: vekStore.activeVaultLocked(),
+		},
+	);
+}
+
 /** Start the roster-sync host if the active vault is enrolled. Caller ensures unlocked. */
 export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 	const requireActiveVek = expectedVekEpoch !== undefined;
 	const vekEpoch = expectedVekEpoch ?? vekStore.vekMutationSnapshot();
 	const startEpoch = syncEpoch;
+	const sessionMoved = () =>
+		startEpoch !== syncEpoch ||
+		!vekStore.vekMutationIsCurrent(vekEpoch) ||
+		(requireActiveVek && vekStore.activeVaultLocked());
 	// A later unlock must not race an older asynchronous disconnect. Wait for the stop to reach
 	// the host before a new roster session can be started.
 	await stopInFlight;
-	if (
-		startEpoch !== syncEpoch ||
-		!vekStore.vekMutationIsCurrent(vekEpoch) ||
-		(requireActiveVek && vekStore.activeVaultLocked())
-	) {
+	if (sessionMoved()) {
+		abandonStart("the disconnect barrier", startEpoch, vekEpoch);
 		return;
 	}
 	const ctx = await resolveSyncVault();
-	if (!ctx || startEpoch !== syncEpoch || !vekStore.vekMutationIsCurrent(vekEpoch)) return;
+	if (!ctx) return; // this vault simply isn't enrolled; not a failure
+	if (sessionMoved()) {
+		abandonStart("resolving the vault", startEpoch, vekEpoch);
+		return;
+	}
 	const group = await getStoredGroup(ctx);
 	const kp = await getStoredKeypair(ctx);
-	if (
-		!group ||
-		!kp ||
-		startEpoch !== syncEpoch ||
-		!vekStore.vekMutationIsCurrent(vekEpoch) ||
-		(requireActiveVek && vekStore.activeVaultLocked())
-	)
+	if (!group || !kp) return; // no group or keypair yet; not a failure
+	if (sessionMoved()) {
+		abandonStart("reading the group", startEpoch, vekEpoch);
 		return;
+	}
 	if (syncRunning) return;
 	syncRunning = true;
 	if (syncHostSuspends) api.alarms.create(SYNC_KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
@@ -267,11 +289,8 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 		devicePrivB64: kp.privateKey,
 		devicePubB64: kp.publicKey,
 	};
-	if (
-		startEpoch !== syncEpoch ||
-		!vekStore.vekMutationIsCurrent(vekEpoch) ||
-		(requireActiveVek && vekStore.activeVaultLocked())
-	) {
+	if (sessionMoved()) {
+		abandonStart("the final check before handing the roster to the host", startEpoch, vekEpoch);
 		syncRunning = false;
 		return;
 	}

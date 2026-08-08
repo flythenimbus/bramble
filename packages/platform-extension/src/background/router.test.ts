@@ -94,3 +94,60 @@ describe("router dispatch", () => {
 		expect("vault:autolock" in before).toBe(true); // SET_INDEX already scheduled it
 	});
 });
+
+// The pre-dispatch hook exists so a lock transition starts before the router awaits hydration.
+// session.ts takes depth-counted state there that only the HANDLER's `finally` releases, so any
+// path that runs the hook but skips the handler strands that state for the worker's lifetime and
+// silently disables autofill (autofillSessionIsStable stays false) until a restart.
+describe("router pre-dispatch safety", () => {
+	async function loadRouter() {
+		vi.resetModules();
+		let listener:
+			| ((message: unknown, sender: unknown, sendResponse: (r: unknown) => void) => unknown)
+			| undefined;
+		vi.stubGlobal("chrome", {
+			runtime: {
+				// sender.ts computes the extension origin at import time.
+				getURL: (path: string) => `chrome-extension://router-test/${path}`,
+				onMessage: { addListener: (fn: typeof listener) => (listener = fn) },
+			},
+		});
+		const router = await import("./router");
+		return { router, dispatch: () => listener };
+	}
+
+	it("still runs the handler when the hydration promise rejects", async () => {
+		const { router, dispatch } = await loadRouter();
+		router.setReady(Promise.reject(new Error("hydration exploded")));
+		const handler = vi.fn(async () => ({ ok: true as const, data: null }));
+		router.on("PROBE", handler);
+
+		const responded = new Promise((resolve) => {
+			dispatch()?.({ type: "PROBE" }, {}, resolve);
+		});
+		await expect(responded).resolves.toEqual({ ok: true, data: null });
+		expect(handler).toHaveBeenCalledTimes(1);
+	});
+
+	it("dispatches even when a pre-dispatch hook throws", async () => {
+		const { router, dispatch } = await loadRouter();
+		router.setReady(Promise.resolve());
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		router.onBeforeDispatch(() => {
+			throw new Error("hook exploded");
+		});
+		const handler = vi.fn(async () => ({ ok: true as const, data: null }));
+		router.on("PROBE", handler);
+
+		let keptChannelOpen: unknown;
+		const responded = new Promise((resolve) => {
+			keptChannelOpen = dispatch()?.({ type: "PROBE" }, {}, resolve);
+		});
+		// `true` is what keeps the one-shot response channel open; a thrown hook must not lose it.
+		expect(keptChannelOpen).toBe(true);
+		await expect(responded).resolves.toEqual({ ok: true, data: null });
+		expect(handler).toHaveBeenCalledTimes(1);
+		expect(error).toHaveBeenCalled();
+		error.mockRestore();
+	});
+});

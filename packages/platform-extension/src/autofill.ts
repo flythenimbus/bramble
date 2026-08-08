@@ -37,11 +37,11 @@ function capabilityFromLease(lease: unknown): AutofillSessionCapability {
 export const extensionAutofill: AutofillAdapter = {
 	beginIndexUpdate: sessionCapability,
 
+	// A missing lease is a caller bug, not a fallback: re-acquiring the capability here would
+	// stamp plaintext read under an older session with the CURRENT owner, which is exactly the
+	// lock/unlock ABA that beginIndexUpdate exists to catch. Fail loudly instead.
 	setIndex: async (entries: IndexEntry[], lease?: unknown) =>
-		send("AUTOFILL_SET_INDEX", {
-			entries,
-			owner: lease === undefined ? await sessionCapability() : capabilityFromLease(lease),
-		}),
+		send("AUTOFILL_SET_INDEX", { entries, owner: capabilityFromLease(lease) }),
 
 	clearIndex: async (lease?: unknown) => {
 		const owner = lease === undefined ? await sessionCapability().catch(() => undefined) : lease;

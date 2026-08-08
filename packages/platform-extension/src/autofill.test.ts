@@ -26,6 +26,17 @@ describe("extensionAutofill session lease", () => {
 		});
 	});
 
+	// Re-acquiring a capability here would stamp plaintext read under an older session with the
+	// current owner: the exact ABA beginIndexUpdate exists to catch. It must fail, not fall back.
+	it("rejects an index publish that carries no lease, rather than acquiring one", async () => {
+		const sendMessage = vi.fn().mockResolvedValue({ ok: true, data: null });
+		vi.stubGlobal("chrome", { runtime: { sendMessage } });
+		const { extensionAutofill } = await import("./autofill");
+
+		await expect(extensionAutofill.setIndex([])).rejects.toThrow("invalid autofill index lease");
+		expect(sendMessage).not.toHaveBeenCalled();
+	});
+
 	it("clears idempotently after lock when no new lease can be issued", async () => {
 		const sendMessage = vi
 			.fn()
@@ -49,7 +60,7 @@ describe("extensionAutofill session lease", () => {
 			async (message: Record<string, unknown>) => (await bg.send(message, extensionSender)).resp,
 		);
 		bg.chrome.runtime.sendMessage = routeThroughBackground;
-		await extensionAutofill.setIndex([]);
+		await extensionAutofill.setIndex([], await extensionAutofill.beginIndexUpdate?.());
 		bg.chrome.runtime.sendMessage = offscreenSend;
 		await bg.send({ type: "CRYPTO_LOCK" });
 		bg.chrome.runtime.sendMessage = routeThroughBackground;

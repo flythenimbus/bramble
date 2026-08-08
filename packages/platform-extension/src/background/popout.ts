@@ -107,7 +107,9 @@ async function popoutOpen(
  * the last view would re-lock the vault we just unlocked (see view-lock.ts), and a parked corner
  * capture, which the unlocking view still has to flush (and confirm) before it goes away.
  */
-export async function closeUnlockPopout(sessionCurrent: () => boolean = () => true): Promise<void> {
+// `sessionCurrent` is required, not defaulted: a default of "always current" would silently
+// disarm the staleness check for any future caller that forgot to pass one.
+export async function closeUnlockPopout(sessionCurrent: () => boolean): Promise<void> {
 	try {
 		if (!sessionCurrent()) return;
 		const stored = await api.storage.session.get(POPOUT_UNLOCK_WINDOW_KEY);

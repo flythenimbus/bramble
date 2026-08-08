@@ -47,9 +47,17 @@ export function extensionOnly(handler: MessageHandler): MessageHandler {
 			: Promise.resolve({ ok: false, error: "forbidden" });
 }
 
-/** Set the promise the dispatcher awaits before running any handler. */
+/**
+ * Set the promise the dispatcher awaits before running any handler. Rejection is swallowed on
+ * purpose: the dispatcher gates on hydration having FINISHED, not on it having succeeded, and a
+ * pre-dispatch hook may already hold state that only the handler's own `finally` releases. A
+ * rejecting `ready` would skip the handler and strand that state for the worker's lifetime.
+ */
 export function setReady(promise: Promise<unknown>): void {
-	ready = promise;
+	ready = promise.then(
+		() => undefined,
+		() => undefined,
+	);
 }
 
 /**
@@ -76,7 +84,15 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.target === "offscreen") return false;
 	const handler = resolveHandler(message?.type as string | undefined);
 	if (!handler) return false;
-	for (const beforeDispatch of beforeDispatchHandlers) beforeDispatch(message, sender);
+	// A throwing hook must not abort the listener: that would return undefined instead of `true`,
+	// closing the response channel AND skipping the handler that releases what the hook took.
+	for (const beforeDispatch of beforeDispatchHandlers) {
+		try {
+			beforeDispatch(message, sender);
+		} catch (err) {
+			console.error("[titanpass:bg] pre-dispatch hook failed", err);
+		}
+	}
 	void (async () => {
 		await ready;
 		try {
