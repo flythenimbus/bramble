@@ -55,8 +55,17 @@ function isTrustworthy(host: HTMLElement): boolean {
 	return top === host || host.contains(top) || top.contains(host);
 }
 
+/**
+ * A relayed rect is in this frame's VIEWPORT coordinates, but the host is
+ * position:absolute, so it is placed in DOCUMENT coordinates. Without the scroll
+ * offset the picker is drawn scrollY pixels too high, which on a checkout you had to
+ * scroll down to reach puts it off-screen entirely, and the watchdog below then
+ * destroys it for being illegible. Matches positionHostElement in picker.ts.
+ */
 function position(h: Hosted): void {
-	h.host.style.transform = `translate3d(${h.rect.x}px, ${h.rect.y + h.rect.height + 2}px, 0)`;
+	const x = h.rect.x + window.scrollX;
+	const y = h.rect.y + h.rect.height + window.scrollY + 2;
+	h.host.style.transform = `translate3d(${x}px, ${y}px, 0)`;
 	h.host.style.width = `${pickerWidth(h.rect.width)}px`;
 }
 

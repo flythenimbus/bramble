@@ -348,6 +348,8 @@ test("survives scrolling without the watchdog tearing the host down", async ({
 
 	await page.mouse.wheel(0, 120);
 	await page.waitForTimeout(600);
+	// Guard against a vacuous pass: if the page never moved, this proves nothing.
+	expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(50);
 
 	expect(await hostCount(page)).toBe(1);
 	// And it is still anchored to the field rather than stranded where it started.
@@ -376,4 +378,37 @@ test("degrades to no picker under COEP require-corp on the top frame", async ({
 	if (ui) await expect(ui.locator("[data-entry-id]")).toHaveCount(0);
 	expect(await hostCount(cardFrame(page))).toBe(0);
 	await expect(cardFrame(page).locator("#number")).toHaveValue("");
+});
+
+test("anchors correctly when the picker opens on an already-scrolled page", async ({
+	context,
+	extensionId,
+}) => {
+	// The Shopify case: the payment step is far down the page, so the field is clicked with the
+	// document already scrolled. The host is position:absolute, i.e. DOCUMENT coordinates, while a
+	// relayed rect is viewport coordinates, so the scroll offset has to be added or the picker is
+	// drawn scrollY pixels too high - off-screen entirely on a real checkout.
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, {
+		topHtml: CHECKOUT.replace(
+			'<div style="height:300px">Order summary</div>',
+			'<div style="height:1200px">Order summary</div>',
+		).replace("</body>", '<div style="height:1200px"></div></body>'),
+	});
+	await page.goto(`${MERCHANT}/`);
+
+	// Scroll the field into view BEFORE opening the picker.
+	await page.evaluate(() => window.scrollTo(0, 900));
+	await page.waitForTimeout(200);
+	expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+
+	const ui = await openPicker(page);
+	expect(ui.parentFrame()).toBe(page.mainFrame());
+
+	const field = await cardFrame(page).locator("#number").boundingBox();
+	const host = await page.locator('div[id^="tp-"]').boundingBox();
+	// Sits just under the field, and on screen.
+	expect(Math.abs((host?.y ?? 0) - ((field?.y ?? 0) + (field?.height ?? 0)))).toBeLessThan(20);
+	expect(host?.y ?? -1).toBeGreaterThan(0);
 });
