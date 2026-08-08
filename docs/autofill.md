@@ -251,6 +251,73 @@ on-screen, legibly sized, opaque, visible, unclipped, and not overlaid
 clickjacking page that hides/moves/overlays the iframe to coax a real click - the
 case that matters being cards, which are offered on every site.
 
+### Relayed placement: hosted-fields checkouts
+
+A card input on a hosted-fields checkout (Shopify, Stripe Elements, Braintree,
+Adyen) lives in a cross-origin iframe sized to the input itself; Shopify's is 47px
+tall with `scrolling="no"`. A picker mounted in that document is positioned below
+the field, and therefore below the frame's viewport, and an iframe cannot paint
+outside its own box. The field was always detected; there was simply nowhere to
+draw, so nothing appeared at all.
+
+The fix splits **who owns the element** from **who owns the conversation**:
+
+- The **top frame** creates, parks, sizes and destroys the iframe element
+  (`relay-host.ts`). It never sees summaries or picks.
+- The **field's frame** keeps the channel with the UI document
+  (`relay-client.ts`), exactly as a non-relayed picker does. It still calls
+  `AUTOFILL_SELECT` on its own verified background channel and fills its own
+  inputs, so the secret path is unchanged and no background message types were
+  added.
+
+Geometry walks up the frame tree in `frame-relay.ts`, each hop adding its frame
+element's box plus border and padding. A hop is honoured only when `event.source`
+is the `contentWindow` of a frame element in that document, which a script in that
+frame cannot impersonate. **Only geometry and an opaque relay id travel this way**:
+every hop is a `message` event on a window the page shares with us, so summaries,
+entry ids and secrets must never ride it.
+
+The **UI announces itself** and the field's frame **pins the announcement whose
+`event.origin` is one of our own extension origins**. That check is the whole trust
+boundary, so it must never be relaxed to a bare `chrome-extension://` scheme test,
+which any installed extension would pass.
+
+The handshake runs in that direction and not the other because `window.frames`
+exposes only *document-tree* child browsing contexts, and the host parks the UI
+inside a **closed shadow root**, which puts it in a shadow tree. The field's frame
+therefore cannot reach the UI by index at all: `window.top.length` counts 1, not 2.
+The UI can still walk outward from `window.top`, so it does the announcing. This
+was found by e2e, not by reasoning, and reversing it keeps the closed shadow root
+without weakening anything, since the pin was always decided by origin rather than
+by who spoke first.
+A content script cannot use `runtime.getURL()` for this: under `use_dynamic_url`
+that returns a per-session GUID origin while the document reports the static
+`chrome-extension://<id>`. `ext-origin.ts` accepts both, since both are ours.
+
+Four checks carry the security of the relayed path, all in `relay-client.ts`:
+
+1. The UI window is pinned from a probe reply on one of our origins, and never
+   rebinds.
+2. Summaries are posted to that pinned window with an exact `targetOrigin`, never
+   `"*"`.
+3. An inbound message is honoured only when `event.source` **and** `event.origin`
+   both match the pinned peer.
+4. A pick must name an entry we actually rendered.
+
+Check 4 exists because the UI document is reachable by anything in the tab, so it
+is treated as untrusted plumbing rather than a trusted peer. A page that posts rows
+into it can relabel what is on screen (which it could equally do with its own DOM),
+but it cannot name an entry we did not offer, cannot make a pick reach us from
+anywhere but the pinned window, and cannot produce a pick at all without a genuine
+user click inside the UI document.
+
+The anti-clickjacking guard moves with the element. Because the pick never passes
+through the top frame, `pickIsTrustworthy()` cannot run at pick time, so
+`relay-host.ts` evaluates the same conditions continuously on its rAF loop and
+destroys the host the moment it stops being legible. That is prevention rather than
+detection, and the page cannot suppress it: the verdict comes from computed style
+the top frame reads itself, not from any message.
+
 Keyboard nav works without moving focus off the page field: when the iframe is
 open, the content script forwards only Up/Down/Enter/Escape to it as `UI_KEY`
 (never characters). The iframe moves a highlight and reports back whether a row

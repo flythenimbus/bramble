@@ -83,6 +83,20 @@ export async function seedExampleLogin(popup: Page) {
 	await expect(popup.getByText("Example Login")).toBeVisible();
 }
 
+/** Seed one payment card. Cards are offered on any payment form, so it needs no URL. */
+export async function seedExampleCard(popup: Page) {
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill("Personal Visa");
+	await popup.getByLabel("Cardholder name", { exact: true }).fill("Alice Example");
+	await popup.getByLabel("Card number", { exact: true }).fill("4242424242424242");
+	await popup.getByLabel("Month (MM)", { exact: true }).fill("04");
+	await popup.getByLabel("Year (YY)", { exact: true }).fill("2030");
+	await popup.getByLabel("CVV", { exact: true }).fill("123");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+	await expect(popup.getByText("Personal Visa")).toBeVisible();
+}
+
 /** From an unlocked popup, open Settings and select the Device sync panel. */
 export async function gotoSync(page: Page) {
 	await page.getByRole("button", { name: "Settings" }).click();

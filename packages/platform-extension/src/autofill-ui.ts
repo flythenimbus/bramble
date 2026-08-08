@@ -21,6 +21,20 @@ type Inbound =
 
 // Page origin (from the iframe src): outbound posts pin to it, inbound is checked against it.
 const PARENT_ORIGIN = new URLSearchParams(location.search).get("parentOrigin") ?? "";
+// Relayed mode: our element is hosted by the top frame but the field lives in some
+// other frame, which answers our probe and becomes the peer we exchange rows and picks
+// with. The host frame only ever gets our height. See docs/autofill.md.
+const RELAY_ID = new URLSearchParams(location.search).get("relayId") ?? "";
+const RELAYED = RELAY_ID.length > 0;
+const HERE = "tp-ui-here";
+// The announcement has to come FROM here: our host parks us in a closed shadow root,
+// and `window.frames` exposes only document-tree child browsing contexts, so the
+// field's frame cannot reach us by index. We can still walk outward from the top.
+const ANNOUNCE_INTERVAL_MS = 100;
+const ANNOUNCE_ATTEMPTS = 25;
+const MAX_FRAME_DEPTH = 8;
+const MAX_FRAMES_VISITED = 128;
+let peer: { win: Window; origin: string } | null = null;
 
 let otpOnly = false;
 // Navigable rows in render order: an optional leading "suggest a password" row,
@@ -30,8 +44,19 @@ let rows: NavRow[] = [];
 let highlight = -1;
 
 function post(message: unknown): void {
+	if (RELAYED) {
+		// Pinned to the peer's exact origin, so rows reach that frame and nothing else.
+		if (peer) peer.win.postMessage(message, peer.origin);
+		return;
+	}
 	if (!PARENT_ORIGIN) return;
 	window.parent.postMessage(message, PARENT_ORIGIN);
+}
+
+/** Our rendered height, always to the frame that owns our element (never the peer). */
+function postHeight(height: number): void {
+	if (!PARENT_ORIGIN) return;
+	window.parent.postMessage({ type: "UI_RESIZE", height }, PARENT_ORIGIN);
 }
 
 /** Uppercase avatar initials: first letter of the first two words, else first two letters. */
@@ -244,8 +269,7 @@ function render(bodyHtml: string): void {
 	document.body.innerHTML = `<style>${STYLE}</style><div class="tp-list" role="listbox">${bodyHtml}</div>`;
 	requestAnimationFrame(() => {
 		const list = document.body.querySelector(".tp-list");
-		const height = list ? Math.ceil(list.getBoundingClientRect().height) : 0;
-		post({ type: "UI_RESIZE", height });
+		postHeight(list ? Math.ceil(list.getBoundingClientRect().height) : 0);
 	});
 }
 
@@ -305,9 +329,20 @@ document.addEventListener("mousedown", (e) => {
 	}
 });
 
+const CONTENT_TYPES = new Set(["RENDER_MATCHES", "RENDER_LOCKED", "UI_KEY"]);
+
 window.addEventListener("message", (e) => {
-	if (e.source !== window.parent) return;
-	if (PARENT_ORIGIN && e.origin !== PARENT_ORIGIN) return;
+	if (RELAYED) {
+		// Adopt whoever sends us rows as the peer we answer. Anything in the tab can
+		// post here, so this binding is not a trust decision: the peer re-checks our
+		// origin, our source, and that a picked id is one it actually rendered.
+		const type = (e.data as { type?: string } | undefined)?.type;
+		if (!e.source || !type || !CONTENT_TYPES.has(type)) return;
+		peer = { win: e.source as Window, origin: e.origin };
+	} else {
+		if (e.source !== window.parent) return;
+		if (PARENT_ORIGIN && e.origin !== PARENT_ORIGIN) return;
+	}
 	const msg = e.data as Inbound | undefined;
 	switch (msg?.type) {
 		case "RENDER_MATCHES": {
@@ -341,5 +376,69 @@ window.addEventListener("message", (e) => {
 	}
 });
 
-// Tell the parent we're live so it can push the first RENDER_MATCHES.
-post({ type: "AUTOFILL_UI_READY" });
+/**
+ * Announce ourselves to every frame in the tab. Carries only our relay id, and the
+ * receiver decides whether to trust it by checking our origin, which it can do and we
+ * cannot forge. Repeats briefly because the field's frame may still be starting up.
+ */
+function announce(): void {
+	const message = { __tp: HERE, relayId: RELAY_ID };
+	let visited = 0;
+	const walk = (win: Window, depth: number): void => {
+		if (depth > MAX_FRAME_DEPTH || visited >= MAX_FRAMES_VISITED) return;
+		let length = 0;
+		try {
+			length = win.length;
+		} catch {
+			return;
+		}
+		for (let i = 0; i < length; i++) {
+			if (visited >= MAX_FRAMES_VISITED) return;
+			let child: Window | null = null;
+			try {
+				child = win[i] ?? null;
+			} catch {
+				continue;
+			}
+			if (!child || child === window) continue;
+			visited++;
+			try {
+				child.postMessage(message, "*");
+			} catch {
+				// Frames come and go mid-walk.
+			}
+			walk(child, depth + 1);
+		}
+	};
+	let root: Window = window;
+	try {
+		root = window.top ?? window;
+	} catch {
+		root = window;
+	}
+	if (root !== window) {
+		try {
+			root.postMessage(message, "*");
+		} catch {
+			// Ignore.
+		}
+	}
+	walk(root, 0);
+}
+
+if (RELAYED) {
+	// Stop as soon as a peer starts talking to us; otherwise give the field's frame a
+	// short window to come up.
+	let left = ANNOUNCE_ATTEMPTS;
+	announce();
+	const timer = setInterval(() => {
+		if (peer || --left <= 0) {
+			clearInterval(timer);
+			return;
+		}
+		announce();
+	}, ANNOUNCE_INTERVAL_MS);
+} else {
+	// Tell the parent we're live so it can push the first RENDER_MATCHES.
+	post({ type: "AUTOFILL_UI_READY" });
+}

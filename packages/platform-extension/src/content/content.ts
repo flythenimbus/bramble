@@ -25,9 +25,19 @@ import {
 	fillPasswordFields,
 	submitFromField,
 } from "./fill";
+import { installFrameRelay, type RelayRect } from "./frame-relay";
 import { onTeardown, safeRequest, safeSendMessage } from "./lifecycle";
 import { generatePassword } from "./password-gen";
 import { picker } from "./picker";
+import {
+	closeRelayed,
+	installRelayClient,
+	keyToRelayed,
+	relayedPickerIsOpen,
+	repositionRelayed,
+	showRelayed,
+} from "./relay-client";
+import { closeRelayHost, showRelayHost } from "./relay-host";
 import { isPasswordChangeForm, shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
 import type {
 	AutofillQueryResponse,
@@ -82,6 +92,108 @@ function cancelOperations(): void {
 
 function documentIsActive(): boolean {
 	return document.visibilityState === "visible" && document.hasFocus();
+}
+
+// --- Picker placement -------------------------------------------------------
+// A hosted-fields card input sits in an iframe barely taller than the input, where a
+// dropdown is clipped away. Then an ancestor hosts the element and this frame keeps
+// the conversation with it. See docs/autofill.md.
+
+const frameRelay = installFrameRelay({ window, document });
+// The field a relayed picker belongs to; picker.anchorField() is null in that mode.
+let relayedField: HTMLInputElement | null = null;
+let relayedHighlight = false;
+
+function rectOf(field: HTMLInputElement): RelayRect {
+	const r = field.getBoundingClientRect();
+	return { x: r.left, y: r.top, width: r.width, height: r.height };
+}
+
+function shouldRelay(field: HTMLInputElement): boolean {
+	return !frameRelay.isTop() && frameRelay.needsRelay(rectOf(field));
+}
+
+/** The field the visible picker belongs to, whichever renderer is showing it. */
+function anchorField(): HTMLInputElement | null {
+	return picker.anchorField() ?? relayedField;
+}
+
+function dropRelayed(): void {
+	relayedField = null;
+	relayedHighlight = false;
+	if (relayedPickerIsOpen()) closeRelayed();
+}
+
+/** True when a picker of either kind is on screen. */
+function pickerIsOpen(): boolean {
+	return !!picker.activeHost() || relayedPickerIsOpen();
+}
+
+/** Keep whichever picker is showing pinned to its field as the page moves. */
+function repositionPicker(): void {
+	picker.reposition();
+	if (relayedField) repositionRelayed(rectOf(relayedField));
+}
+
+/** Dismiss whichever picker is showing. */
+function removePicker(): void {
+	picker.remove();
+	dropRelayed();
+}
+
+function showMatchesFor(
+	matches: MatchSummary[],
+	field: HTMLInputElement,
+	opts?: { otpOnly?: boolean; suggest?: { password: string } },
+): void {
+	if (matches.length === 0 && !opts?.suggest) return;
+	if (!shouldRelay(field)) {
+		dropRelayed();
+		picker.showMatches(matches, field, opts);
+		return;
+	}
+	picker.remove();
+	relayedField = field;
+	showRelayed(rectOf(field), {
+		kind: "matches",
+		matches,
+		otpOnly: opts?.otpOnly === true,
+		suggest: opts?.suggest,
+	});
+}
+
+/** Arrow/Enter/Escape for a relayed picker; the field is here, the rows are upstairs. */
+function handleRelayedKey(e: KeyboardEvent): boolean {
+	if (!relayedPickerIsOpen() || deepActiveElement() !== relayedField) return false;
+	if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+		e.preventDefault();
+		keyToRelayed(e.key);
+		return true;
+	}
+	if (e.key === "Escape") {
+		e.preventDefault();
+		silenceAutoOpen = true;
+		dropRelayed();
+		return true;
+	}
+	// Enter only picks when a row is highlighted; otherwise the form submits normally.
+	if (e.key === "Enter" && relayedHighlight) {
+		e.preventDefault();
+		keyToRelayed("Enter");
+		return true;
+	}
+	return false;
+}
+
+function showLockedFor(field: HTMLInputElement): void {
+	if (!shouldRelay(field)) {
+		dropRelayed();
+		picker.showLocked(field);
+		return;
+	}
+	picker.remove();
+	relayedField = field;
+	showRelayed(rectOf(field), { kind: "locked" });
 }
 
 function currentTargetKind(target: HTMLInputElement): TargetKind | null {
@@ -269,11 +381,11 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 	// On an account-creation / password-rotation form, offer only the suggestion. Existing logins
 	// aren't useful when making or rotating a credential and would clutter the prompt.
 	if (suggest) {
-		picker.showMatches([], field, { suggest });
+		showMatchesFor([], field, { suggest });
 		return;
 	}
 	if (logins.length === 0) return;
-	picker.showMatches(logins, field);
+	showMatchesFor(logins, field);
 }
 
 /**
@@ -283,8 +395,8 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
  */
 function showLockedPicker(field: HTMLInputElement, hasPotentialMatch: boolean): void {
 	const suggest = maybeSuggest(field, hasPotentialMatch);
-	if (suggest) picker.showMatches([], field, { suggest });
-	else picker.showLocked(field);
+	if (suggest) showMatchesFor([], field, { suggest });
+	else showLockedFor(field);
 }
 
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */
@@ -302,7 +414,7 @@ function applyGeneratedPassword(field: HTMLInputElement): void {
 
 /** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
 function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
-	const target = picker.anchorField();
+	const target = anchorField();
 	const targetKind = target ? currentTargetKind(target) : null;
 	if (!target || !targetKind) return;
 	// Manual selection counts as an explicit dismissal; silence auto-redisplay
@@ -317,6 +429,7 @@ function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
 	cancelFill();
 	activeFill = intent;
 	picker.remove();
+	dropRelayed();
 	void safeRequest<AutofillSelectResponse>({
 		type: "AUTOFILL_SELECT",
 		payload: { entryId, isAuto, otpOnly },
@@ -371,12 +484,12 @@ function handleResult(result: QueryResult | undefined): void {
 
 	const kind = kindOf(getPageFields(), target);
 	if (kind === "card") {
-		if (result.cards.length > 0) picker.showMatches(result.cards, target);
+		if (result.cards.length > 0) showMatchesFor(result.cards, target);
 		return;
 	}
 	if (kind === "otp") {
 		const otps = result.otps ?? [];
-		if (otps.length > 0) picker.showMatches(otps, target, { otpOnly: true });
+		if (otps.length > 0) showMatchesFor(otps, target, { otpOnly: true });
 		return;
 	}
 	// login
@@ -416,7 +529,7 @@ function showFor(field: HTMLInputElement): void {
 	}
 	const kind = kindOf(getPageFields(), field);
 	if (kind === "card") {
-		if (cachedResult.cards.length > 0) picker.showMatches(cachedResult.cards, field);
+		if (cachedResult.cards.length > 0) showMatchesFor(cachedResult.cards, field);
 		else queryAutofill();
 		return;
 	}
@@ -427,7 +540,7 @@ function showFor(field: HTMLInputElement): void {
 		} else if (otps.length > 1 || !field.value) {
 			// A single match auto-fills on load; only re-offer the picker on a
 			// choice or an empty field.
-			picker.showMatches(otps, field, { otpOnly: true });
+			showMatchesFor(otps, field, { otpOnly: true });
 		}
 		return;
 	}
@@ -435,7 +548,7 @@ function showFor(field: HTMLInputElement): void {
 		// No cached matches: offer a strong password if this looks like a signup
 		// form, and (re)query in case matches exist but weren't cached yet.
 		const suggest = maybeSuggest(field, false);
-		if (suggest) picker.showMatches([], field, { suggest });
+		if (suggest) showMatchesFor([], field, { suggest });
 		queryAutofill();
 		return;
 	}
@@ -472,29 +585,69 @@ picker.onDismiss(() => {
 });
 picker.onUseSuggested(() => {
 	cancelOperations();
-	const field = picker.anchorField();
+	const field = anchorField();
 	if (!field) return;
 	// Using the suggestion is an explicit choice: fill, offer to save, then silence
 	// auto-redisplay until the user re-engages.
 	applyGeneratedPassword(field);
 	silenceAutoOpen = true;
 	picker.remove();
+	dropRelayed();
 });
 picker.onRegenerate(() => {
 	cancelOperations();
-	const field = picker.anchorField();
+	const field = anchorField();
 	if (!field) return;
 	const pw = generatePassword();
 	suggestionFor.set(field, pw);
 	// Suggestion-only prompt (no matches), matching showLoginPicker.
-	picker.showMatches([], field, { suggest: { password: pw } });
+	showMatchesFor([], field, { suggest: { password: pw } });
 });
+
+// The top frame lends its document to descendants that have no room to draw; every
+// other frame keeps its own conversation with the UI it borrows. Only one of these
+// runs per frame.
+if (frameRelay.isTop()) {
+	frameRelay.onAnchor(showRelayHost);
+	frameRelay.onClose(closeRelayHost);
+} else {
+	installRelayClient(frameRelay, {
+		onPick: (entryId, otpOnly) => selectMatch(entryId, false, otpOnly),
+		onHighlight: (active) => {
+			relayedHighlight = active;
+		},
+		onPopout: () => {
+			cancelOperations();
+			const field = relayedField;
+			dropRelayed();
+			pendingUnlockField = field;
+			safeSendMessage({ type: "POPOUT_OPEN", payload: { reason: "unlock" } });
+		},
+		onUseSuggested: () => {
+			cancelOperations();
+			const field = relayedField;
+			if (!field) return;
+			applyGeneratedPassword(field);
+			silenceAutoOpen = true;
+			dropRelayed();
+		},
+		onRegenerate: () => {
+			cancelOperations();
+			const field = relayedField;
+			if (!field) return;
+			const pw = generatePassword();
+			suggestionFor.set(field, pw);
+			showMatchesFor([], field, { suggest: { password: pw } });
+		},
+	});
+}
 
 // Disconnect the observer when the extension context is torn down.
 onTeardown(() => {
 	mutationObserver?.disconnect();
 	mutationObserver = null;
 	cancelOperations();
+	dropRelayed();
 });
 
 // Enter inside a password field that drives no real `<form>` submit (lone
@@ -507,6 +660,7 @@ document.addEventListener(
 		cancelOperations();
 		// Drive the open iframe dropdown with the keyboard first.
 		if (picker.handleKey(e)) return;
+		if (handleRelayedKey(e)) return;
 		onPasswordEnter(e.key, composedTarget(e));
 	},
 	true,
@@ -534,20 +688,20 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			// Lock only matters when a picker is open: swap to the "Vault locked" row on the focused
 			// field (or keep the strong-password suggestion, which needs no vault), or hide stale
 			// matches when focus has left. A fresh lock invalidates any pending unlock.
-			if (picker.activeHost()) {
+			if (pickerIsOpen()) {
 				if (focused) showLockedPicker(focused, cachedResult?.hasPotentialMatch ?? false);
-				else picker.remove();
+				else removePicker();
 			}
 			pendingUnlockField = null;
 		} else {
 			// Unlock: re-surface matches on the focused field, the open picker's anchor (toolbar/pop-out
 			// unlock leaves the locked row up but moves focus off the page — issue #20), or the field the
 			// user clicked "unlock" from (that click dismissed the picker, so there's no active host).
-			const anchor = picker.activeHost() ? picker.anchorField() : null;
+			const anchor = pickerIsOpen() ? anchorField() : null;
 			const pending = pendingUnlockField?.isConnected ? pendingUnlockField : null;
 			pendingUnlockField = null;
 			const field = focused ?? anchor ?? pending;
-			picker.remove();
+			removePicker();
 			if (field) {
 				reshowField = field;
 				queryAutofill();
@@ -662,6 +816,14 @@ function bootstrap(): void {
 				picker.remove();
 				return;
 			}
+			// A relayed picker has no host in this document, so a click anywhere here
+			// other than its own field is a dismissal. Clicks on the rows land in the
+			// top frame and never reach this listener.
+			if (relayedPickerIsOpen() && target !== relayedField) {
+				silenceAutoOpen = true;
+				dropRelayed();
+				return;
+			}
 			// Picker closed: a mousedown on a candidate field is re-engagement.
 			if (isCandidate(getPageFields(), target)) {
 				silenceAutoOpen = false;
@@ -671,8 +833,8 @@ function bootstrap(): void {
 		},
 		true,
 	);
-	window.addEventListener("scroll", () => picker.reposition(), true);
-	window.addEventListener("resize", () => picker.reposition(), true);
+	window.addEventListener("scroll", () => repositionPicker(), true);
+	window.addEventListener("resize", () => repositionPicker(), true);
 	window.addEventListener("pagehide", () => cancelOperations(), true);
 	window.addEventListener("pageshow", (e) => {
 		if (e.persisted) {
