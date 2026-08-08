@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cardBrand, cardDigits, cardNumberIssue, luhnValid } from "./card";
+import {
+	cardBrand,
+	cardCvvIssue,
+	cardDigits,
+	cardExpMonthIssue,
+	cardExpYearIssue,
+	cardNumberIssue,
+	luhnValid,
+} from "./card";
 
 // The vendors' own published test numbers: every one is a real, checksum-valid
 // number of the length that brand actually issues.
@@ -84,5 +92,79 @@ describe("cardNumberIssue", () => {
 	it("reports the length problem before the checksum", () => {
 		// A too-short number usually fails Luhn too; the length message is the useful one.
 		expect(cardNumberIssue("1234")).toBe("length");
+	});
+});
+
+describe("cardExpMonthIssue", () => {
+	it("accepts every real month, padded or not", () => {
+		for (const m of ["1", "01", "9", "09", "10", "11", "12"]) {
+			expect(cardExpMonthIssue(m), m).toBeNull();
+		}
+	});
+
+	it("treats empty as the form's business", () => {
+		expect(cardExpMonthIssue("")).toBeNull();
+	});
+
+	it("rejects a month that does not exist", () => {
+		expect(cardExpMonthIssue("0")).toBe("range");
+		expect(cardExpMonthIssue("00")).toBe("range");
+		expect(cardExpMonthIssue("13")).toBe("range");
+		expect(cardExpMonthIssue("99")).toBe("range");
+	});
+
+	it("rejects anything that is not one or two digits", () => {
+		expect(cardExpMonthIssue("ab")).toBe("non-digit");
+		expect(cardExpMonthIssue("1.5")).toBe("non-digit");
+		expect(cardExpMonthIssue("012")).toBe("non-digit");
+	});
+});
+
+describe("cardExpYearIssue", () => {
+	it("accepts two-digit and full 20xx years", () => {
+		for (const y of ["30", "00", "99", "2030", "2000", "2099"]) {
+			expect(cardExpYearIssue(y), y).toBeNull();
+		}
+	});
+
+	it("treats empty as the form's business", () => {
+		expect(cardExpYearIssue("")).toBeNull();
+	});
+
+	it("rejects a length no card uses", () => {
+		expect(cardExpYearIssue("3")).toBe("length");
+		expect(cardExpYearIssue("203")).toBe("length");
+		expect(cardExpYearIssue("20300")).toBe("length");
+	});
+
+	it("rejects a full year outside the plausible century", () => {
+		expect(cardExpYearIssue("1999")).toBe("range");
+		expect(cardExpYearIssue("2100")).toBe("range");
+	});
+
+	it("rejects non-digits", () => {
+		expect(cardExpYearIssue("20a0")).toBe("non-digit");
+	});
+});
+
+describe("cardCvvIssue", () => {
+	it("accepts three and four digits", () => {
+		expect(cardCvvIssue("123")).toBeNull();
+		expect(cardCvvIssue("1234")).toBeNull();
+		expect(cardCvvIssue("007")).toBeNull();
+	});
+
+	it("treats empty as the form's business", () => {
+		expect(cardCvvIssue("")).toBeNull();
+	});
+
+	it("rejects a length no card uses", () => {
+		expect(cardCvvIssue("12")).toBe("length");
+		expect(cardCvvIssue("12345")).toBe("length");
+	});
+
+	it("rejects non-digits", () => {
+		expect(cardCvvIssue("12a")).toBe("non-digit");
+		expect(cardCvvIssue("1 2")).toBe("non-digit");
 	});
 });

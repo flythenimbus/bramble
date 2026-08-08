@@ -121,6 +121,10 @@ msgstr "Codice di backup usa e getta che sblocca il tuo Vault in caso di blocco.
 msgid "A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key."
 msgstr "È stato trovato un codice QR, ma non è un codice di configurazione per l'autenticatore. Apri la pagina 2FA del sito o incolla la chiave di configurazione."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A security code is 3 or 4 digits."
+msgstr "Il codice di sicurezza è di 3 o 4 cifre."
+
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "About"
@@ -1202,6 +1206,10 @@ msgstr "Mese (MM)"
 msgid "Monthly"
 msgstr "Mensile"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Months run from 1 to 12."
+msgstr "I mesi vanno da 1 a 12."
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "More options"
 msgstr "Altre opzioni"
@@ -1985,6 +1993,10 @@ msgstr "Quel trasferimento non conteneva nulla che potessimo importare."
 msgid "That transfer didn't go through."
 msgstr "Quel trasferimento non è riuscito."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That year is outside the range cards use."
+msgstr "Quell'anno non rientra nell'intervallo accettato dalle carte."
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
 msgstr "Quello salvato con Esporta un backup, o un backup cloud."
@@ -2249,6 +2261,10 @@ msgstr "Aggiornato {0}"
 msgid "Use Bramble for passkeys"
 msgstr "Usa Bramble per le chiavi di accesso"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use digits only."
+msgstr "Usare solo cifre."
+
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Utilizza chiaro, scuro o quello del sistema"
@@ -2361,6 +2377,10 @@ msgstr "Cancellare le password dopo la copia"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Working…"
 msgstr "In corso..."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Write the year as YY or YYYY."
+msgstr "Scrivere l'anno come YY o YYYY."
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"

@@ -99,3 +99,54 @@ test("still allows a card saved without a number", async ({ context, extensionId
 
 	await expect(popup.getByText("Test card")).toBeVisible();
 });
+
+test("refuses a month that does not exist", async ({ context, extensionId }) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await openCardForm(popup);
+
+	await popup.getByLabel("Month (MM)", { exact: true }).fill("13");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+
+	await expect(popup.getByText(/Months run from 1 to 12/i)).toBeVisible();
+});
+
+test("refuses a year of the wrong shape", async ({ context, extensionId }) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await openCardForm(popup);
+
+	await popup.getByLabel("Year (YY)", { exact: true }).fill("203");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+
+	await expect(popup.getByText(/year as YY or YYYY/i)).toBeVisible();
+});
+
+test("refuses a security code of the wrong length", async ({ context, extensionId }) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await openCardForm(popup);
+
+	await popup.getByLabel("CVV", { exact: true }).fill("12");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+
+	await expect(popup.getByText(/3 or 4 digits/i)).toBeVisible();
+});
+
+test("saves a fully filled, valid card", async ({ context, extensionId }) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await openCardForm(popup);
+
+	await popup.getByLabel("Card number", { exact: true }).fill("4242 4242 4242 4242");
+	await popup.getByLabel("Month (MM)", { exact: true }).fill("04");
+	await popup.getByLabel("Year (YY)", { exact: true }).fill("2030");
+	await popup.getByLabel("CVV", { exact: true }).fill("123");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+
+	await expect(popup.getByText("Test card")).toBeVisible();
+});

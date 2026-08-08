@@ -61,7 +61,8 @@ export type CardNumberIssue = "non-digit" | "length" | "brand-length" | "checksu
 // the call site, so the schema stays free of UI strings. `abort` keeps the checks
 // ordered, so a too-short number reports its length instead of the checksum failure
 // that a wrong length also causes.
-const fails = (code: CardNumberIssue) => ({ error: code, abort: true }) as const;
+type CardIssue = CardNumberIssue | CardExpMonthIssue | CardExpYearIssue | CardCvvIssue;
+const fails = (code: CardIssue) => ({ error: code, abort: true }) as const;
 
 /**
  * A payment card number as a person writes it: separators tolerated, checksum
@@ -87,8 +88,77 @@ export const CardNumberSchema = z
 
 /** What is wrong with a card number, or null when it is plausible (or empty). */
 export function cardNumberIssue(number: string): CardNumberIssue | null {
-	if (!number.trim()) return null;
-	const result = CardNumberSchema.safeParse(number);
+	return issueOf(CardNumberSchema, number, "checksum");
+}
+
+/** Runs a field schema over a trimmed value, treating empty as nothing to check. */
+function issueOf<T extends string>(
+	schema: z.ZodType<string>,
+	value: string,
+	fallback: T,
+): T | null {
+	if (!value?.trim()) return null;
+	const result = schema.safeParse(value);
 	if (result.success) return null;
-	return (result.error.issues[0]?.message ?? "checksum") as CardNumberIssue;
+	return (result.error.issues[0]?.message ?? fallback) as T;
+}
+
+export type CardExpMonthIssue = "non-digit" | "range";
+export type CardExpYearIssue = "non-digit" | "length" | "range";
+export type CardCvvIssue = "non-digit" | "length";
+
+// Cards carry a 4-digit year only as "20xx"; anything else is a typo rather than an
+// issuer we have not heard of.
+const MIN_FULL_YEAR = 2000;
+const MAX_FULL_YEAR = 2099;
+
+/** Expiry month, written as 1-12 or zero-padded. */
+export const CardExpMonthSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.refine((v) => /^\d{1,2}$/.test(v), fails("non-digit"))
+	.refine((v) => {
+		const m = Number(v);
+		return m >= 1 && m <= 12;
+	}, fails("range"));
+
+/** Expiry year, either two digits or a full 20xx. */
+export const CardExpYearSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.refine((v) => /^\d+$/.test(v), fails("non-digit"))
+	.refine((v) => v.length === 2 || v.length === 4, fails("length"))
+	.refine((v) => {
+		if (v.length === 2) return true;
+		const y = Number(v);
+		return y >= MIN_FULL_YEAR && y <= MAX_FULL_YEAR;
+	}, fails("range"));
+
+/**
+ * Security code: three digits, four on Amex. Not cross-checked against the card
+ * number, which may be blank or from an issuer we cannot identify, so the length is
+ * accepted as a range rather than pinned to a brand we might have guessed wrong.
+ */
+export const CardCvvSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.refine((v) => /^\d+$/.test(v), fails("non-digit"))
+	.refine((v) => v.length === 3 || v.length === 4, fails("length"));
+
+/** What is wrong with an expiry month, or null when it is plausible (or empty). */
+export function cardExpMonthIssue(month: string): CardExpMonthIssue | null {
+	return issueOf(CardExpMonthSchema, month, "range");
+}
+
+/** What is wrong with an expiry year, or null when it is plausible (or empty). */
+export function cardExpYearIssue(year: string): CardExpYearIssue | null {
+	return issueOf(CardExpYearSchema, year, "range");
+}
+
+/** What is wrong with a security code, or null when it is plausible (or empty). */
+export function cardCvvIssue(cvv: string): CardCvvIssue | null {
+	return issueOf(CardCvvSchema, cvv, "length");
 }

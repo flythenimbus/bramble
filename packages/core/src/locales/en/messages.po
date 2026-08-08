@@ -121,6 +121,10 @@ msgstr "A one-time backup code that unlocks your vault if you're locked out."
 msgid "A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key."
 msgstr "A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A security code is 3 or 4 digits."
+msgstr "A security code is 3 or 4 digits."
+
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
 msgid "About"
@@ -1202,6 +1206,10 @@ msgstr "Month (MM)"
 msgid "Monthly"
 msgstr "Monthly"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Months run from 1 to 12."
+msgstr "Months run from 1 to 12."
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "More options"
 msgstr "More options"
@@ -1985,6 +1993,10 @@ msgstr "That transfer didn't contain anything we could import."
 msgid "That transfer didn't go through."
 msgstr "That transfer didn't go through."
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That year is outside the range cards use."
+msgstr "That year is outside the range cards use."
+
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
 msgstr "The one you saved with Export a backup, or a cloud backup."
@@ -2249,6 +2261,10 @@ msgstr "Updated {0}"
 msgid "Use Bramble for passkeys"
 msgstr "Use Bramble for passkeys"
 
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use digits only."
+msgstr "Use digits only."
+
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Use light, dark, or match your system"
 msgstr "Use light, dark, or match your system"
@@ -2361,6 +2377,10 @@ msgstr "Wipe copied passwords after"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Working…"
 msgstr "Working…"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Write the year as YY or YYYY."
+msgstr "Write the year as YY or YYYY."
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"

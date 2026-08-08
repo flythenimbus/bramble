@@ -5,7 +5,14 @@ import { CreditCard, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CardEntryData } from "../../hooks/useVault";
-import { CARD_NUMBER_MAX_INPUT, cardBrand, cardNumberIssue } from "../../util/card";
+import {
+	CARD_NUMBER_MAX_INPUT,
+	cardBrand,
+	cardCvvIssue,
+	cardExpMonthIssue,
+	cardExpYearIssue,
+	cardNumberIssue,
+} from "../../util/card";
 import { Button } from "../components/ui/button";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -64,6 +71,41 @@ function CardFields() {
 		}
 	};
 
+	const validateMonth = (value: string): string | true => {
+		switch (cardExpMonthIssue(value ?? "")) {
+			case "non-digit":
+				return t`Use digits only.`;
+			case "range":
+				return t`Months run from 1 to 12.`;
+			default:
+				return true;
+		}
+	};
+
+	const validateYear = (value: string): string | true => {
+		switch (cardExpYearIssue(value ?? "")) {
+			case "non-digit":
+				return t`Use digits only.`;
+			case "length":
+				return t`Write the year as YY or YYYY.`;
+			case "range":
+				return t`That year is outside the range cards use.`;
+			default:
+				return true;
+		}
+	};
+
+	const validateCvv = (value: string): string | true => {
+		switch (cardCvvIssue(value ?? "")) {
+			case "non-digit":
+				return t`Use digits only.`;
+			case "length":
+				return t`A security code is 3 or 4 digits.`;
+			default:
+				return true;
+		}
+	};
+
 	return (
 		<>
 			<TextField label={t`Name`} type="text" autoComplete="off" {...register("name")} />
@@ -102,7 +144,8 @@ function CardFields() {
 					inputMode="numeric"
 					autoComplete="off"
 					maxLength={2}
-					{...register("expMonth")}
+					error={errors.expMonth?.message as string | undefined}
+					{...register("expMonth", { validate: validateMonth })}
 				/>
 				<TextField
 					label={t`Year (YY)`}
@@ -110,7 +153,8 @@ function CardFields() {
 					inputMode="numeric"
 					autoComplete="off"
 					maxLength={4}
-					{...register("expYear")}
+					error={errors.expYear?.message as string | undefined}
+					{...register("expYear", { validate: validateYear })}
 				/>
 				<TextField
 					label={t`CVV`}
@@ -118,6 +162,7 @@ function CardFields() {
 					inputMode="numeric"
 					autoComplete="off"
 					maxLength={4}
+					error={errors.cvv?.message as string | undefined}
 					endAdornment={
 						<Button
 							variant="ghost"
@@ -129,7 +174,7 @@ function CardFields() {
 							{showCvv ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
 						</Button>
 					}
-					{...register("cvv")}
+					{...register("cvv", { validate: validateCvv })}
 				/>
 			</div>
 
