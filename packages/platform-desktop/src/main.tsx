@@ -1,4 +1,5 @@
 import { App, OptionsApp, type OptionsScreen, type Platform, PlatformProvider } from "@core/index";
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/index.css";
@@ -9,6 +10,7 @@ import { desktopCrypto } from "./adapters/crypto";
 import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { desktopStorage } from "./adapters/storage";
+import { onVaultStateChange } from "./adapters/vault-session";
 import { initRosterSync } from "./sync/roster";
 
 const platform: Platform = {
@@ -38,6 +40,17 @@ function Root() {
 
 	// Ongoing sync follows the lock state from here on: it starts on unlock and stops on lock.
 	useEffect(() => initRosterSync(), []);
+
+	// Locking clears the search index, so a panel left open would go on accepting typing and
+	// answering "No matches" to everything the vault still holds. Dismiss it instead: the hotkey
+	// already routes to this window while locked, so there is a way back.
+	useEffect(
+		() =>
+			onVaultStateChange((locked) => {
+				if (locked) void invoke("spotlight_hide");
+			}),
+		[],
+	);
 
 	if (view === "app") return <App />;
 	return (

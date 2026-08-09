@@ -81,6 +81,14 @@ pub fn toggle(app: &AppHandle) {
         let _ = window.hide();
         return;
     }
+    // A locked vault has no index: it is cleared on lock, so the panel would open, accept
+    // typing, and answer "No matches" to everything — which is not what is happening. Send the
+    // user where they can actually do something instead, since unlocking is the only next step
+    // from here anyway.
+    if vault_crypto::is_locked() {
+        crate::lifetime::show_main(app);
+        return;
+    }
     // Open collapsed. The webview clears its query on focus and will ask to grow if anything
     // matches; starting at the last size would flash an empty results area first.
     if let Ok(scale) = window.scale_factor() {
