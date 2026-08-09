@@ -1384,6 +1384,10 @@ msgstr "Collegato {0}"
 msgid "Linked to the Bramble desktop app."
 msgstr "Collegato all'app desktop di Bramble."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked to this browser, but the app shares a different vault, not this one."
+msgstr "Collegato a questo browser, ma l'app condivide un vault diverso, non questo."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
 msgstr "Leone"
@@ -2499,6 +2503,10 @@ msgstr "Questo vault non ha una password impostata."
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no recovery code."
 msgstr "Questo vault non ha un codice di recupero."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault syncs with the desktop app."
+msgstr "Questo vault si sincronizza con l'app desktop."
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."

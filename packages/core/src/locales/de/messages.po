@@ -1384,6 +1384,10 @@ msgstr "Verknüpft {0}"
 msgid "Linked to the Bramble desktop app."
 msgstr "Mit der Bramble-Desktop-App verknüpft."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked to this browser, but the app shares a different vault, not this one."
+msgstr "Mit diesem Browser verknüpft, aber die App verwendet einen anderen Tresor, nicht diesen."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
 msgstr "Löwe"
@@ -2499,6 +2503,10 @@ msgstr "Dieser Tresor hat kein festgelegtes Passwort."
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no recovery code."
 msgstr "Dieser Tresor hat keinen Wiederherstellungscode."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault syncs with the desktop app."
+msgstr "Dieser Tresor wird mit der Desktop-App synchronisiert."
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."

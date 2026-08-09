@@ -32,6 +32,7 @@ export const extensionDesktopLink: DesktopLinkAdapter = {
 	// there is none: the app arms one only while its dialog is open, and a version that predates
 	// this arms none at all, so "no invite" is an ordinary answer and not a fault.
 	claimSyncInvite: () => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE"),
+	desktopSyncKey: () => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY"),
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},

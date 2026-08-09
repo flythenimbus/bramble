@@ -95,6 +95,9 @@ vi.mock("../adapters/vault-session", () => ({
 // Returning a stored pair keeps startRoster off the generation path, which isn't what's under test.
 vi.mock("./keys", () => ({
 	deviceKeypair: async () => ({ privateKey: "p", publicKey: "P" }),
+	// Published on unlock so a paired browser can ask which device this is. Best effort, and
+	// nothing here depends on it.
+	publishSyncIdentity: async () => {},
 }));
 vi.mock("../sync-crypto", () => ({ desktopSyncCrypto: {} }));
 

@@ -21,6 +21,10 @@ const h = vi.hoisted(() => ({
 	joinLabel: null as string | undefined | null,
 	joinFails: false,
 	invite: null as string | null,
+	activeVault: "v1",
+	/** The app's sync device key, and which vaults have it in their roster. */
+	desktopKey: null as string | null,
+	rosterOf: new Map<string, string[]>(),
 }));
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
@@ -40,7 +44,10 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 }));
 
 vi.mock("../../../../hooks/useVaultRegistry", () => ({
-	useVaultRegistry: () => ({ vaults: h.vaults }),
+	useVaultRegistry: () => ({
+		vaults: h.vaults,
+		syncKey: (k: string) => `${k}:${h.activeVault}`,
+	}),
 }));
 
 // A code carrying a known group, so the "already sharing" check has something to match.
@@ -55,13 +62,18 @@ const platform = {
 		getMeta: async (key: string) => {
 			const id = key.split(":")[1] ?? "";
 			const group = h.groupOf.get(id);
-			return group ? { groupKey: group } : undefined;
+			if (!group) return undefined;
+			return {
+				groupKey: group,
+				roster: { devices: (h.rosterOf.get(id) ?? []).map((publicKey) => ({ publicKey })) },
+			};
 		},
 	},
 	shell: { onSyncEvent: () => () => {} },
 	desktopLink: {
 		status: async () => ({ paired: true, pairedAt: 1 }),
 		claimSyncInvite: async () => h.invite,
+		desktopSyncKey: async () => h.desktopKey,
 		unlink: async () => {},
 	},
 } as unknown as Platform;
@@ -94,6 +106,9 @@ afterEach(() => {
 	h.joinLabel = null;
 	h.joinFails = false;
 	h.invite = null;
+	h.activeVault = "v1";
+	h.desktopKey = null;
+	h.rosterOf.clear();
 });
 
 describe("what a desktop connect will do to this browser", () => {
@@ -213,5 +228,43 @@ describe("carrying this vault's entries across", () => {
 		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
 		expect(h.steps).toEqual(["join"]);
 		expect(h.imported).toBeNull();
+	});
+});
+
+describe("whether the vault on screen is the one the app shares", () => {
+	it("says so when the app's device is in this vault's roster", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "GROUP");
+		h.rosterOf.set("v1", ["desktop-key", "browser-key"]);
+		h.desktopKey = "desktop-key";
+		mount();
+
+		expect(await screen.findByText(/this vault syncs with the desktop app/i)).toBeTruthy();
+	});
+
+	it("says the app shares a different vault when its device is absent here", async () => {
+		// The bug: the link is per-BROWSER and a sync group is per-VAULT, so "Connected" was true
+		// of the browser while implying something about whichever vault you were standing in.
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "GROUP");
+		h.rosterOf.set("v1", ["browser-key"]);
+		h.desktopKey = "desktop-key";
+		mount();
+
+		expect(await screen.findByText(/shares a different vault/i)).toBeTruthy();
+	});
+
+	it("claims nothing when the app is not running to answer", async () => {
+		// Not derived from the live sync session for this reason: a closed app would otherwise
+		// make a perfectly good pairing read as "not shared".
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "GROUP");
+		h.rosterOf.set("v1", ["desktop-key"]);
+		h.desktopKey = null;
+		mount();
+
+		expect(await screen.findByText(/^Linked /i)).toBeTruthy();
+		expect(screen.queryByText(/shares a different vault/i)).toBeNull();
+		expect(screen.queryByText(/this vault syncs with/i)).toBeNull();
 	});
 });

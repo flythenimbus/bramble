@@ -159,6 +159,7 @@ pub fn run() {
             socket::link_sync_peers,
             socket::link_arm_sync_invite,
             socket::link_clear_sync_invite,
+            socket::link_set_sync_identity,
             secure_store::secure_get,
             secure_store::secure_set,
             secure_store::secure_delete,

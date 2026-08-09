@@ -30,7 +30,15 @@ export function DesktopLinkSection() {
 	const { t } = useLingui();
 	const { startJoin, importEntries } = useVaultActions();
 	const { entries } = useVault();
-	const { vaults } = useVaultRegistry();
+	const { vaults, syncKey } = useVaultRegistry();
+	/**
+	 * Whether the vault on screen is one the desktop app shares.
+	 *
+	 * The link is per-BROWSER and a sync group is per-VAULT, so "Connected" was true of the
+	 * browser while implying something about whichever vault you were standing in. Undefined
+	 * while unknown (the app may not be running), which the copy treats as "cannot say".
+	 */
+	const [sharesThisVault, setSharesThisVault] = useState<boolean | undefined>(undefined);
 	const [status, setStatus] = useState<DesktopLinkStatus | null>(null);
 	const [code, setCode] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -86,6 +94,28 @@ export function DesktopLinkSection() {
 		},
 		[vaults, storage],
 	);
+
+	// Ask the app who it is and look for it in THIS vault's roster. The comparison happens here,
+	// against a roster this browser already holds, so the app discloses nothing about its vaults.
+	// Deliberately not derived from the live sync session: that answers "is it syncing right now",
+	// which reads as "not shared" whenever the app simply is not running.
+	useEffect(() => {
+		if (!desktopLink?.desktopSyncKey || !status?.paired) return;
+		let cancelled = false;
+		void (async () => {
+			const key = await desktopLink.desktopSyncKey?.().catch(() => null);
+			if (cancelled) return;
+			if (!key) return setSharesThisVault(undefined);
+			const group = await storage
+				.getMeta<{ roster?: { devices?: { publicKey: string }[] } }>(syncKey("sync.group"))
+				.catch(() => undefined);
+			if (cancelled) return;
+			setSharesThisVault((group?.roster?.devices ?? []).some((d) => d.publicKey === key));
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [desktopLink, status?.paired, storage, syncKey]);
 
 	// The joiner's half of the comparison. Raised once the channel is authenticated and cleared
 	// when the join settles either way, so a retry never shows a stale one.
@@ -211,9 +241,15 @@ export function DesktopLinkSection() {
 					icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
 					title={t`Connected`}
 					subtitle={
-						status.pairedAt
-							? t`Linked ${formatDate(status.pairedAt)}`
-							: t`Linked to the Bramble desktop app.`
+						// Says what the link IS: a browser-wide connection. Whether this particular
+						// vault rides it is the separate fact underneath.
+						sharesThisVault === true
+							? t`This vault syncs with the desktop app.`
+							: sharesThisVault === false
+								? t`Linked to this browser, but the app shares a different vault, not this one.`
+								: status.pairedAt
+									? t`Linked ${formatDate(status.pairedAt)}`
+									: t`Linked to the Bramble desktop app.`
 					}
 				>
 					{/* The only control left once Test went, so it takes the row's slot rather

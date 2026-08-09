@@ -461,6 +461,23 @@ on(
 );
 
 on(
+	"DESKTOP_LINK_SYNC_KEY",
+	// The app's own sync key. Null rather than an error when it is not running: the UI says less
+	// in that case rather than claiming something it cannot check.
+	extensionOnly(async () => {
+		try {
+			const answer = (await askDesktop({ op: "syncIdentity" })) as {
+				ok?: boolean;
+				identity?: string;
+			};
+			return { ok: true, data: answer?.ok === true ? (answer.identity ?? null) : null };
+		} catch {
+			return { ok: true, data: null };
+		}
+	}),
+);
+
+on(
 	"LINK_SYNC_SEND",
 	// The offscreen runs sync but the port lives here, so its outbound frames come through this.
 	// False rather than an error when the link is down: the app may simply not be running, and

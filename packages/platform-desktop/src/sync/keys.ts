@@ -65,6 +65,22 @@ export async function syncDevicePublicKey(): Promise<string> {
 	return (await deviceKeypair()).publicKey;
 }
 
+/**
+ * Tell the shell this device's sync key, so a paired browser can ask whether the vault it is
+ * looking at is one this app shares.
+ *
+ * Published rather than read on demand: the private half is in the OS credential store, and
+ * reaching for that from the socket thread would raise a Keychain prompt the user did not ask
+ * for. Best effort, because a browser that gets no answer simply says less.
+ */
+export async function publishSyncIdentity(): Promise<void> {
+	try {
+		await invoke("link_set_sync_identity", { publicKey: await syncDevicePublicKey() });
+	} catch {
+		// No link, no identity to publish. Nothing downstream depends on it.
+	}
+}
+
 export async function syncSigningPublicKey(): Promise<string> {
 	return (await signingKeypair()).publicKey;
 }

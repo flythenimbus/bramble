@@ -1384,6 +1384,10 @@ msgstr "Vinculado {0}"
 msgid "Linked to the Bramble desktop app."
 msgstr "Vinculado ao aplicativo de desktop do Bramble."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked to this browser, but the app shares a different vault, not this one."
+msgstr "Vinculado a este navegador, mas o app compartilha um cofre diferente, não este."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
 msgstr "Leão"
@@ -2499,6 +2503,10 @@ msgstr "Este cofre não possui senha definida."
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no recovery code."
 msgstr "Este cofre não possui código de recuperação."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault syncs with the desktop app."
+msgstr "Este cofre sincroniza com o app para desktop."
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."

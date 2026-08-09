@@ -40,7 +40,7 @@ import { desktopStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
 import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
-import { deviceKeypair } from "./keys";
+import { deviceKeypair, publishSyncIdentity } from "./keys";
 import { linkPeerSource } from "./link-peers";
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
@@ -282,7 +282,10 @@ export async function retargetActiveVault(next: string | null): Promise<void> {
 export function initRosterSync(): () => void {
 	return onVaultStateChange((locked) => {
 		if (locked) stopRosterSync();
-		else void maybeStartRosterSync();
+		else {
+			void publishSyncIdentity();
+			void maybeStartRosterSync();
+		}
 	});
 }
 

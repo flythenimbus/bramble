@@ -40,6 +40,17 @@ export interface DesktopLinkAdapter {
 	 * goes straight to `startJoin`.
 	 */
 	claimSyncInvite?(): Promise<string | null>;
+	/**
+	 * The desktop app's sync device key, so the UI can tell whether the vault on screen is one
+	 * the app shares. The link is per-BROWSER but a sync group is per-VAULT, so "connected" is
+	 * true of the browser while saying nothing about the vault you happen to be standing in.
+	 *
+	 * A public key, published in the roster to every group member already, and it describes the
+	 * device rather than any vault: the comparison happens here, against rosters this browser
+	 * already holds, so nothing about the app's vaults is disclosed. Null when the app is not
+	 * running or predates this.
+	 */
+	desktopSyncKey?(): Promise<string | null>;
 	/** Forget the desktop app on this side. Revoking on the app's side is separate; doing
 	 * both is what fully severs the link. */
 	unlink(): Promise<void>;

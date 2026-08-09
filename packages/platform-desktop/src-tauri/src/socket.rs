@@ -127,6 +127,15 @@ enum Request {
     /// this browser last week authenticated it, and authentication is not consent to hand over
     /// the vault today. See docs/desktop-port.md.
     SyncInvite,
+    /// This app's sync device public key, so a browser can work out whether the vault it is
+    /// looking at is one this app shares.
+    ///
+    /// Answered whether or not the vault is locked, unlike everything else here, and that is
+    /// safe rather than an oversight: the key identifies this DEVICE, not any vault, and it is
+    /// published in the roster to every group member already. Nothing about which vault is open
+    /// leaves the app; the browser compares it against its own rosters and draws its own
+    /// conclusion.
+    SyncIdentity,
     /// One frame of device sync, on its way to the webview that runs the sync host.
     ///
     /// Not request/response like the other two: sync is a conversation, and either side speaks
@@ -150,6 +159,9 @@ struct Answer {
     /// Set for a sync-invite claim, and only then.
     #[serde(skip_serializing_if = "Option::is_none")]
     invite: Option<String>,
+    /// Set for a sync-identity request, and only then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identity: Option<String>,
     /// Set for a fetch, and only then.
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
@@ -166,10 +178,30 @@ impl Answer {
             error: Some(msg.to_string()),
             matches: None,
             invite: None,
+            identity: None,
             username: None,
             password: None,
             totp: None,
         }
+    }
+}
+
+/// This device's sync public key, published by the webview at startup.
+///
+/// Held here rather than read on demand because the private half lives in the OS credential
+/// store, and touching that from a socket thread would put a Keychain prompt in front of the
+/// user at a moment they did not ask for anything.
+static SYNC_IDENTITY: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn sync_identity() -> &'static Mutex<Option<String>> {
+    SYNC_IDENTITY.get_or_init(|| Mutex::new(None))
+}
+
+/// Publish this device's sync public key for browsers to ask about.
+#[tauri::command]
+pub fn link_set_sync_identity(public_key: String) {
+    if let Ok(mut slot) = sync_identity().lock() {
+        *slot = Some(public_key);
     }
 }
 
@@ -403,17 +435,35 @@ fn read_loop(
 
 fn answer_for(request: Request) -> Answer {
     // Locked means locked, for metadata as much as for secrets: which sites you hold accounts
-    // for is worth protecting on its own.
-    if vault_crypto::is_locked() {
+    // for is worth protecting on its own. SyncIdentity is the one exception, handled first,
+    // because it says nothing about any vault.
+    if vault_crypto::is_locked() && !matches!(request, Request::SyncIdentity) {
         return Answer::error("locked");
     }
     match request {
+        // Before the lock gate below, deliberately: see the variant's comment.
+        Request::SyncIdentity => {
+            return match sync_identity().lock().ok().and_then(|s| s.clone()) {
+                Some(public_key) => Answer {
+                    ok: true,
+                    error: None,
+                    matches: None,
+                    invite: None,
+                    identity: Some(public_key),
+                    username: None,
+                    password: None,
+                    totp: None,
+                },
+                None => Answer::error("no identity"),
+            };
+        }
         Request::SyncInvite => match claim_invite() {
             Some(payload) => Answer {
                 ok: true,
                 error: None,
                 matches: None,
                 invite: Some(payload),
+                identity: None,
                 username: None,
                 password: None,
                 totp: None,
@@ -427,6 +477,7 @@ fn answer_for(request: Request) -> Answer {
             error: None,
             matches: Some(index_store::query(&hostname)),
             invite: None,
+            identity: None,
             username: None,
             password: None,
             totp: None,
@@ -437,6 +488,7 @@ fn answer_for(request: Request) -> Answer {
                 error: None,
                 matches: None,
                 invite: None,
+                identity: None,
                 username: Some(entry.username),
                 password: Some(entry.password),
                 totp: entry.totp,
