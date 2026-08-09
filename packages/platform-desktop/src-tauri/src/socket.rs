@@ -24,6 +24,7 @@ use std::{
         mpsc, Mutex, OnceLock,
     },
     thread,
+    time::{Duration, Instant},
 };
 
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,13 @@ enum Request {
     Query { hostname: String },
     /// The credential for one entry, which is the call that hands one over.
     Fetch { id: String },
+    /// The invite a browser needs to join this vault's sync group.
+    ///
+    /// Answered ONLY while the user has an invite armed, which means they clicked the button and
+    /// re-entered their master password moments ago. An established link is not enough: pairing
+    /// this browser last week authenticated it, and authentication is not consent to hand over
+    /// the vault today. See docs/desktop-port.md.
+    SyncInvite,
     /// One frame of device sync, on its way to the webview that runs the sync host.
     ///
     /// Not request/response like the other two: sync is a conversation, and either side speaks
@@ -139,6 +147,9 @@ struct Answer {
     /// Set for a query.
     #[serde(skip_serializing_if = "Option::is_none")]
     matches: Option<Vec<index_store::MatchSummary>>,
+    /// Set for a sync-invite claim, and only then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invite: Option<String>,
     /// Set for a fetch, and only then.
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
@@ -154,11 +165,59 @@ impl Answer {
             ok: false,
             error: Some(msg.to_string()),
             matches: None,
+            invite: None,
             username: None,
             password: None,
             totp: None,
         }
     }
+}
+
+/// The sync invite a browser may claim, and when it stops being claimable.
+///
+/// Deliberately narrow: one invite, single-use, and short-lived. It carries the enrollment PSK,
+/// which is a bearer secret worth the vault, so the window it exists in is the window the user is
+/// looking at a code on screen.
+static ARMED_INVITE: OnceLock<Mutex<Option<ArmedInvite>>> = OnceLock::new();
+
+struct ArmedInvite {
+    payload: String,
+    expires_at: Instant,
+}
+
+fn armed() -> &'static Mutex<Option<ArmedInvite>> {
+    ARMED_INVITE.get_or_init(|| Mutex::new(None))
+}
+
+/// Arm the invite a browser can claim, for `ttl_ms`. Replaces any previous one: a new invite
+/// supersedes, so an abandoned one cannot be claimed later.
+#[tauri::command]
+pub fn link_arm_sync_invite(payload: String, ttl_ms: u64) -> Result<(), String> {
+    let mut slot = armed().lock().map_err(|_| "invite lock poisoned")?;
+    *slot = Some(ArmedInvite {
+        payload,
+        expires_at: Instant::now() + Duration::from_millis(ttl_ms),
+    });
+    Ok(())
+}
+
+/// Disarm, for a dialog the user closed. Dismissing is a refusal.
+#[tauri::command]
+pub fn link_clear_sync_invite() {
+    if let Ok(mut slot) = armed().lock() {
+        *slot = None;
+    }
+}
+
+/// Take the armed invite, if there is a live one. Single-use: claiming it disarms it, so a second
+/// browser racing for the same code gets nothing.
+fn claim_invite() -> Option<String> {
+    let mut slot = armed().lock().ok()?;
+    let invite = slot.take()?;
+    if Instant::now() > invite.expires_at {
+        return None; // expired: dropped by the take above
+    }
+    Some(invite.payload)
 }
 
 /// The webview, once the app has one. Absent under `cargo test`, where emitting is a no-op:
@@ -349,10 +408,25 @@ fn answer_for(request: Request) -> Answer {
         return Answer::error("locked");
     }
     match request {
+        Request::SyncInvite => match claim_invite() {
+            Some(payload) => Answer {
+                ok: true,
+                error: None,
+                matches: None,
+                invite: Some(payload),
+                username: None,
+                password: None,
+                totp: None,
+            },
+            // No invite armed. Indistinguishable from expired or already claimed on purpose:
+            // all three mean the same thing to a caller, which is "ask the user again".
+            None => Answer::error("no invite"),
+        },
         Request::Query { hostname } => Answer {
             ok: true,
             error: None,
             matches: Some(index_store::query(&hostname)),
+            invite: None,
             username: None,
             password: None,
             totp: None,
@@ -362,6 +436,7 @@ fn answer_for(request: Request) -> Answer {
                 ok: true,
                 error: None,
                 matches: None,
+                invite: None,
                 username: Some(entry.username),
                 password: Some(entry.password),
                 totp: entry.totp,
@@ -723,6 +798,123 @@ mod tests {
             }
             panic!("peer registered={} never happened", want);
         }
+    }
+
+    /// State the lock state this test needs. The vault is process-global, so a test that leaves
+    /// it unlocked would otherwise decide whether the next one passes.
+    fn unlocked() {
+        vault_crypto::unlock_with_vek(vault_crypto::generate_vek().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_locked_vault_hands_out_no_invite_even_when_one_is_armed() {
+        // Consistent with every other answer, and not merely defensive: enrollment sends the vault
+        // itself, which needs the VEK, so an invite claimed while locked could not be completed.
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        let mut link = Linked::open(&dir);
+        vault_crypto::lock();
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false);
+
+        // And it was not spent by the refusal: unlocking and asking again works, so a lock that
+        // happened to land mid-pairing costs the user a retry rather than a fresh code.
+        unlocked();
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["invite"], "the-invite");
+
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_browser_gets_the_sync_invite_only_while_one_is_armed() {
+        // The whole point of arming: an established link authenticates a browser, and
+        // authentication is not consent to hand over the vault. Pairing happened whenever it
+        // happened; the invite exists only while the user is looking at a code.
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_clear_sync_invite();
+        let mut link = Linked::open(&dir);
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false, "answered with no invite armed");
+
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true, "refused an armed invite: {answer}");
+        assert_eq!(answer["invite"], "the-invite");
+
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn an_invite_is_single_use() {
+        // Two browsers can race for one code. The second must get nothing, or a code the user
+        // showed once would enrol every caller that saw it.
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        let mut link = Linked::open(&dir);
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], true);
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false, "the invite was claimable twice");
+
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn an_expired_invite_is_not_claimable() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 0).unwrap();
+        let mut link = Linked::open(&dir);
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false);
+
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn arming_again_supersedes_the_previous_invite() {
+        // An abandoned invite must not stay claimable behind the current one.
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("stale".into(), 60_000).unwrap();
+        link_arm_sync_invite("current".into(), 60_000).unwrap();
+        let mut link = Linked::open(&dir);
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["invite"], "current");
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false, "the stale invite was still there");
+
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn dismissing_the_dialog_disarms() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        link_clear_sync_invite();
+        let mut link = Linked::open(&dir);
+
+        link.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(link.recv()["ok"], false);
+
+        handshake::handshake_close(link.session_id);
     }
 
     #[test]
