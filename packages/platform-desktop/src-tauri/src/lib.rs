@@ -89,6 +89,7 @@ pub fn run() {
                 // Not fatal. A vault manager with no browser link is still a vault manager,
                 // and refusing to launch over it would be a worse failure than losing fill.
                 Ok(root) => {
+                    socket::attach(app.handle().clone());
                     if let Err(e) = socket::listen(&root) {
                         log::error!("browser socket unavailable: {e}");
                     }
@@ -154,6 +155,8 @@ pub fn run() {
             pairing::pairing_public_key,
             index_store::link_set_index,
             index_store::link_clear_index,
+            socket::link_sync_send,
+            socket::link_sync_peers,
             secure_store::secure_get,
             secure_store::secure_set,
             secure_store::secure_delete,

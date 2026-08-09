@@ -14,14 +14,20 @@
 //! messaging uses, so the proxy can pump bytes between the two without parsing anything.
 
 use std::{
+    collections::HashMap,
     fs,
     io::{Read, Write},
     os::unix::net::{UnixListener, UnixStream},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc, Mutex, OnceLock,
+    },
     thread,
 };
 
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
 
 use vault_crypto::handshake;
 
@@ -113,6 +119,15 @@ enum Request {
     Query { hostname: String },
     /// The credential for one entry, which is the call that hands one over.
     Fetch { id: String },
+    /// One frame of device sync, on its way to the webview that runs the sync host.
+    ///
+    /// Not request/response like the other two: sync is a conversation, and either side speaks
+    /// first. The frame is already sealed under sync's OWN Noise session, keyed by the two
+    /// devices' roster identities, so this layer relays it without being able to read it. That
+    /// is Noise inside Noise, deliberately: the outer session authenticates this browser
+    /// INSTALL to this app, the inner one authenticates a roster DEVICE to the group, and only
+    /// the inner identity is the one revocation acts on. See docs/desktop-port.md.
+    Sync { frame: String },
 }
 
 #[derive(Serialize)]
@@ -146,12 +161,133 @@ impl Answer {
     }
 }
 
+/// The webview, once the app has one. Absent under `cargo test`, where emitting is a no-op:
+/// the socket is exercised directly there, with no window to deliver an event to.
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+/// Outbound queues, one per live link, keyed by the browser's static public key.
+///
+/// A single queue per link is what keeps the Noise nonce sequence honest. Answers and pushed
+/// sync frames come from different threads, and Noise numbers its transport frames in order, so
+/// two threads encrypting concurrently would produce frames the far side cannot decrypt in the
+/// order they arrive. Everything outbound goes through here as plaintext and is sealed by the
+/// one writer thread that drains it.
+/// The generation distinguishes one link to a browser from its replacement: a reconnect
+/// registers a new one, and the connection it displaced must not remove it on the way out.
+static OUTBOXES: OnceLock<Mutex<HashMap<String, (u64, mpsc::Sender<String>)>>> = OnceLock::new();
+static NEXT_LINK: AtomicU64 = AtomicU64::new(1);
+
+fn outboxes() -> &'static Mutex<HashMap<String, (u64, mpsc::Sender<String>)>> {
+    OUTBOXES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Give the socket a window to notify. Separate from `listen` because the link works without
+/// one: a browser can be connected and answering fills while no window is open, and the tests
+/// exercise the socket with no app at all.
+pub fn attach(app: AppHandle) {
+    let _ = APP.set(app);
+}
+
+fn emit(event: &str, payload: serde_json::Value) {
+    if let Some(app) = APP.get() {
+        let _ = app.emit(event, payload);
+    }
+}
+
+/// Hand a frame from the webview's sync host to one browser. Errors when that browser is not
+/// connected, which is ordinary: a peer that went away is not a failure of the caller.
+#[tauri::command]
+pub fn link_sync_send(peer_id: String, frame: String) -> Result<(), String> {
+    let queued = {
+        let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
+        match boxes.get(&peer_id) {
+            Some((_, tx)) => tx
+                .send(serde_json::json!({ "sync": frame }).to_string())
+                .is_ok(),
+            None => false,
+        }
+    };
+    if queued {
+        Ok(())
+    } else {
+        Err("no such peer".into())
+    }
+}
+
+/// The browsers connected right now, so a webview that opened after they did can pick them up
+/// rather than waiting for a reconnect that may not come until the browser restarts.
+#[tauri::command]
+pub fn link_sync_peers() -> Vec<String> {
+    outboxes()
+        .lock()
+        .map(|b| b.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
 /// Serve application traffic over the established session until the browser goes away.
 ///
 /// Every answer is gated on the vault being unlocked. That is the single biggest bound on
 /// what a stolen pairing key is worth: it turns permanent silent access into access during
 /// the windows the user was already working in. See docs/desktop-port.md.
 fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String> {
+    // The browser's static key: stable across reconnects and distinct per install, so it is what
+    // the webview addresses a peer by. Two profiles of one browser share an extension id but not
+    // this, which is why nothing keys on the id.
+    let peer_id = handshake::handshake_remote_static(session_id)
+        .map_err(|e| format!("remote static: {e:?}"))?;
+    let mut writer = stream
+        .try_clone()
+        .map_err(|e| format!("clone stream: {e}"))?;
+
+    let (tx, rx) = mpsc::channel::<String>();
+    let link = NEXT_LINK.fetch_add(1, Ordering::Relaxed);
+    if let Ok(mut boxes) = outboxes().lock() {
+        // A reconnect supersedes: the old stream is already dead or dying, and leaving its queue
+        // in place would send this browser's frames into a socket nobody reads.
+        boxes.insert(peer_id.clone(), (link, tx.clone()));
+    }
+    let pump = thread::spawn(move || {
+        // Ends when every sender is dropped, which is the read loop finishing plus the registry
+        // entry going. No separate shutdown signal to get wrong.
+        for plaintext in rx {
+            let Ok(sealed) = handshake::handshake_encrypt(session_id, plaintext) else {
+                return;
+            };
+            let out = serde_json::json!({ "sealed": sealed });
+            let Ok(bytes) = serde_json::to_vec(&out) else {
+                return;
+            };
+            if write_frame(&mut writer, &bytes).is_err() {
+                return;
+            }
+        }
+    });
+
+    emit("link-peer-connected", serde_json::json!({ "peerId": peer_id }));
+    let result = read_loop(session_id, &peer_id, stream, &tx);
+
+    // Deregister before dropping our sender, so nothing queues onto a link that is closing.
+    if let Ok(mut boxes) = outboxes().lock() {
+        // Only if it is still ours: a reconnect may have replaced it while this one was closing.
+        if boxes.get(&peer_id).is_some_and(|(held, _)| *held == link) {
+            boxes.remove(&peer_id);
+        }
+    }
+    drop(tx);
+    let _ = pump.join();
+    emit(
+        "link-peer-disconnected",
+        serde_json::json!({ "peerId": peer_id }),
+    );
+    result
+}
+
+fn read_loop(
+    session_id: u32,
+    peer_id: &str,
+    stream: &mut UnixStream,
+    out: &mpsc::Sender<String>,
+) -> Result<(), String> {
     loop {
         let Some(frame) = read_frame(stream).map_err(|e| format!("read: {e}"))? else {
             return Ok(());
@@ -161,20 +297,23 @@ fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String>
 
         let plaintext = handshake::handshake_decrypt(session_id, sealed.sealed)
             .map_err(|e| format!("decrypt: {e:?}"))?;
+
+        // Sync frames are relayed, not answered: the webview replies in its own time, or not at
+        // all. Everything else is request/response and gets exactly one answer.
+        if let Ok(Request::Sync { frame }) = serde_json::from_str::<Request>(&plaintext) {
+            emit(
+                "link-sync-frame",
+                serde_json::json!({ "peerId": peer_id, "frame": frame }),
+            );
+            continue;
+        }
         let answer = match serde_json::from_str::<Request>(&plaintext) {
             Ok(request) => answer_for(request),
             Err(e) => Answer::error(&format!("bad request: {e}")),
         };
-
         let body = serde_json::to_string(&answer).map_err(|e| format!("encode answer: {e}"))?;
-        let sealed_out = handshake::handshake_encrypt(session_id, body)
-            .map_err(|e| format!("encrypt: {e:?}"))?;
-        let out = serde_json::json!({ "sealed": sealed_out });
-        write_frame(
-            stream,
-            &serde_json::to_vec(&out).map_err(|e| format!("encode frame: {e}"))?,
-        )
-        .map_err(|e| format!("write: {e}"))?;
+        // A closed queue means the writer died; the connection is over either way.
+        out.send(body).map_err(|_| "link closed".to_string())?;
     }
 }
 
@@ -204,6 +343,8 @@ fn answer_for(request: Request) -> Answer {
             },
             None => Answer::error("unknown entry"),
         },
+        // Handled before this, in read_loop: sync is relayed to the webview, not answered here.
+        Request::Sync { .. } => Answer::error("sync frames are not answered"),
     }
 }
 
@@ -494,6 +635,135 @@ mod tests {
         .unwrap();
         handshake::handshake_close(start.session_id);
         serde_json::from_str(&plain).unwrap()
+    }
+
+    /// A paired client holding its session open, so both directions can be driven on one link.
+    /// `ask` tears its connection down after a single request; sync needs one that stays up.
+    struct Linked {
+        client: Client,
+        session_id: u32,
+        public_key: String,
+    }
+
+    impl Linked {
+        fn open(dir: &TempDir) -> Self {
+            let code = pairing::begin_pairing().unwrap();
+            let (client_priv, client_pub) = pair_over_socket(dir, &code).unwrap();
+            let app_pub = pairing::public_key(dir.path()).unwrap();
+            let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
+            let mut client = Client::connect(dir.path());
+            client.send(serde_json::json!({
+                "kind": "hello", "v": 1, "publicKey": client_pub
+            }));
+            client.send(serde_json::json!({ "message": start.message }));
+            let reply = client.recv();
+            assert_eq!(reply["done"], true, "handshake did not complete");
+            handshake::handshake_read(
+                start.session_id,
+                reply["message"].as_str().expect("msg2").to_string(),
+            )
+            .unwrap();
+            Self {
+                client,
+                session_id: start.session_id,
+                public_key: client_pub,
+            }
+        }
+
+        fn send(&mut self, body: serde_json::Value) {
+            let sealed =
+                handshake::handshake_encrypt(self.session_id, body.to_string()).unwrap();
+            self.client.send(serde_json::json!({ "sealed": sealed }));
+        }
+
+        fn recv(&mut self) -> serde_json::Value {
+            let reply = self.client.recv();
+            let plain = handshake::handshake_decrypt(
+                self.session_id,
+                reply["sealed"].as_str().expect("sealed").to_string(),
+            )
+            .unwrap();
+            serde_json::from_str(&plain).unwrap()
+        }
+
+        /// Wait for this link to appear in (or leave) the registry. Registration happens on the
+        /// connection's own thread, so it is not ordered against the test's next statement.
+        fn await_registered(&self, want: bool) {
+            for _ in 0..200 {
+                if link_sync_peers().contains(&self.public_key) == want {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            panic!("peer registered={} never happened", want);
+        }
+    }
+
+    #[test]
+    fn the_app_can_push_a_sync_frame_to_a_connected_browser() {
+        // Sync is a conversation, not request/response: the app has to be able to speak first,
+        // which the original strict answer-per-request loop could not do.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link_sync_send(link.public_key.clone(), "hello-from-app".into()).expect("push");
+
+        assert_eq!(link.recv()["sync"], "hello-from-app");
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_sync_frame_from_the_browser_is_relayed_rather_than_answered() {
+        // It goes to the webview, so there is nothing to reply with. Answering anyway would put a
+        // frame on the wire that the browser would mis-read as the response to its next request.
+        let _g = pairing::test_lock();
+        let dir = started();
+        vault_crypto::unlock_with_vek(vault_crypto::generate_vek().unwrap()).unwrap();
+        index_store::set(vec![]);
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link.send(serde_json::json!({ "op": "sync", "frame": "from-browser" }));
+        // The next request's answer is the proof: if the sync frame had produced one, this would
+        // read that instead and the link would be one frame out of step from here on.
+        link.send(serde_json::json!({ "op": "query", "hostname": "example.com" }));
+
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true);
+        assert!(answer["matches"].is_array(), "got {answer}");
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn pushing_to_a_browser_that_is_not_connected_fails_rather_than_hanging() {
+        let _g = pairing::test_lock();
+        let _dir = started();
+        assert!(link_sync_send("not-a-peer".into(), "frame".into()).is_err());
+    }
+
+    #[test]
+    fn a_browser_that_goes_away_stops_being_a_peer() {
+        // Otherwise the webview keeps broadcasting into a queue nobody drains, and the device
+        // list shows a browser that closed.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let link = Linked::open(&dir);
+        link.await_registered(true);
+        let public_key = link.public_key.clone();
+        let session_id = link.session_id;
+
+        drop(link); // closes the socket, as a browser shutting down does
+
+        for _ in 0..200 {
+            if !link_sync_peers().contains(&public_key) {
+                handshake::handshake_close(session_id);
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("peer stayed registered after disconnect");
     }
 
     #[test]
