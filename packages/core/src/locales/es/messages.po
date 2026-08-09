@@ -326,8 +326,8 @@ msgid "Bramble is free and open source. If it's useful to you, a tip helps keep 
 msgstr "Bramble es gratuito y de código abierto. Si le resulta útil, una propina ayuda a mantenerlo en funcionamiento. Escanee un código con su billetera o copie la dirección. Gracias."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Bramble is running but locked. Unlock it there first."
-msgstr "Bramble está en ejecución pero bloqueado. Desbloquéelo allí primero."
+#~ msgid "Bramble is running but locked. Unlock it there first."
+#~ msgstr "Bramble está en ejecución pero bloqueado. Desbloquéelo allí primero."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1409,8 +1409,8 @@ msgid "Logins"
 msgstr "Credenciales"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Look up a site"
-msgstr "Buscar un sitio"
+#~ msgid "Look up a site"
+#~ msgstr "Buscar un sitio"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1492,8 +1492,8 @@ msgid "New password"
 msgstr "Nueva contraseña"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "No answer. Is Bramble running on this computer?"
-msgstr "Sin respuesta. ¿Está Bramble en ejecución en este equipo?"
+#~ msgid "No answer. Is Bramble running on this computer?"
+#~ msgstr "Sin respuesta. ¿Está Bramble en ejecución en este equipo?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -2302,8 +2302,8 @@ msgid "Telephone"
 msgstr "Teléfono"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Test"
-msgstr "Probar"
+#~ msgid "Test"
+#~ msgstr "Probar"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
@@ -2367,8 +2367,8 @@ msgstr "La aplicación de escritorio ha ofrecido compartir su caja fuerte con es
 #~ msgstr "La aplicación de escritorio ha ofrecido compartir su bóveda con este navegador. Introduzca la contraseña maestra que usa allí, luego confirme los símbolos que muestra."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "The desktop vault has {found} matching logins."
-msgstr "La caja fuerte de escritorio tiene {found} inicios de sesión coincidentes."
+#~ msgid "The desktop vault has {found} matching logins."
+#~ msgstr "La caja fuerte de escritorio tiene {found} inicios de sesión coincidentes."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

@@ -326,8 +326,8 @@ msgid "Bramble is free and open source. If it's useful to you, a tip helps keep 
 msgstr "Bramble ist kostenlos und Open Source. Falls es für Sie nützlich ist, hilft ein Trinkgeld, es am Laufen zu halten. Scannen Sie einen Code mit Ihrer Wallet oder kopieren Sie die Adresse. Vielen Dank."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Bramble is running but locked. Unlock it there first."
-msgstr "Bramble läuft, ist aber gesperrt. Entsperren Sie es dort zuerst."
+#~ msgid "Bramble is running but locked. Unlock it there first."
+#~ msgstr "Bramble läuft, ist aber gesperrt. Entsperren Sie es dort zuerst."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1409,8 +1409,8 @@ msgid "Logins"
 msgstr "Anmeldedaten"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Look up a site"
-msgstr "Website suchen"
+#~ msgid "Look up a site"
+#~ msgstr "Website suchen"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1492,8 +1492,8 @@ msgid "New password"
 msgstr "Neues Passwort"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "No answer. Is Bramble running on this computer?"
-msgstr "Keine Antwort. Läuft Bramble auf diesem Computer?"
+#~ msgid "No answer. Is Bramble running on this computer?"
+#~ msgstr "Keine Antwort. Läuft Bramble auf diesem Computer?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -2302,8 +2302,8 @@ msgid "Telephone"
 msgstr "Telefon"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Test"
-msgstr "Testen"
+#~ msgid "Test"
+#~ msgstr "Testen"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
@@ -2367,8 +2367,8 @@ msgstr "Die Desktop-App hat angeboten, ihren Tresor mit diesem Browser zu teilen
 #~ msgstr "Die Desktop-App hat angeboten, ihren Tresor mit diesem Browser zu teilen. Geben Sie das dort verwendete Master-Passwort ein und bestätigen Sie dann die angezeigten Symbole."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "The desktop vault has {found} matching logins."
-msgstr "Der Desktop-Tresor hat {found} passende Logins."
+#~ msgid "The desktop vault has {found} matching logins."
+#~ msgstr "Der Desktop-Tresor hat {found} passende Logins."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

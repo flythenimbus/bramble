@@ -30,9 +30,6 @@ export function DesktopLinkSection() {
 	const [code, setCode] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [reachable, setReachable] = useState<boolean | null>(null);
-	const [found, setFound] = useState<number | null>(null);
-	const [probe, setProbe] = useState("github.com");
 	/** The invite the app handed over, waiting on the master password that unlocks the copy. */
 	const [invite, setInvite] = useState<string | null>(null);
 	const [invitePassword, setInvitePassword] = useState("");
@@ -125,36 +122,10 @@ export function DesktopLinkSection() {
 		}
 	};
 
-	// Asks a real question rather than just completing a handshake: the point of the link is
-	// that vault data crosses it, so the check that proves it works should make that happen.
-	const test = async () => {
-		setBusy(true);
-		setError(null);
-		setReachable(null);
-		try {
-			const host = new URL(probe.startsWith("http") ? probe : `https://${probe}`).hostname;
-			const matches = await desktopLink.query(host);
-			setFound(matches.length);
-			setReachable(true);
-		} catch (e) {
-			setReachable(false);
-			setError(
-				e instanceof Error && e.message === "locked"
-					? t`Bramble is running but locked. Unlock it there first.`
-					: e instanceof Error
-						? e.message
-						: String(e),
-			);
-		} finally {
-			setBusy(false);
-		}
-	};
-
 	const unlink = async () => {
 		setBusy(true);
 		try {
 			await desktopLink.unlink();
-			setReachable(null);
 			await refresh();
 		} finally {
 			setBusy(false);
@@ -188,44 +159,21 @@ export function DesktopLinkSection() {
 	return (
 		<Section icon={<Monitor className="w-4 h-4" />} title={t`Desktop app`}>
 			{status?.paired ? (
-				<>
-					<Row
-						icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
-						title={t`Connected`}
-						subtitle={
-							status.pairedAt
-								? t`Linked ${formatDate(status.pairedAt)}`
-								: t`Linked to the Bramble desktop app.`
-						}
-					>
-						<Button variant="secondary" size="sm" disabled={busy} onClick={() => void test()}>
-							<Trans>Test</Trans>
-						</Button>
-					</Row>
-
-					<div className="space-y-2">
-						<TextField
-							label={t`Look up a site`}
-							value={probe}
-							autoComplete="off"
-							spellCheck={false}
-							onChange={(e) => setProbe(e.target.value)}
-						/>
-						{reachable !== null && (
-							<p className="text-xs text-muted-foreground">
-								{reachable ? (
-									<Trans>The desktop vault has {found} matching logins.</Trans>
-								) : (
-									<Trans>No answer. Is Bramble running on this computer?</Trans>
-								)}
-							</p>
-						)}
-					</div>
-
+				<Row
+					icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
+					title={t`Connected`}
+					subtitle={
+						status.pairedAt
+							? t`Linked ${formatDate(status.pairedAt)}`
+							: t`Linked to the Bramble desktop app.`
+					}
+				>
+					{/* The only control left once Test went, so it takes the row's slot rather
+					    than sitting under an otherwise empty one. */}
 					<Button variant="ghost" size="sm" disabled={busy} onClick={() => void unlink()}>
 						<Trans>Disconnect</Trans>
 					</Button>
-				</>
+				</Row>
 			) : (
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">

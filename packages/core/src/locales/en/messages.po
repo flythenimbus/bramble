@@ -326,8 +326,8 @@ msgid "Bramble is free and open source. If it's useful to you, a tip helps keep 
 msgstr "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Bramble is running but locked. Unlock it there first."
-msgstr "Bramble is running but locked. Unlock it there first."
+#~ msgid "Bramble is running but locked. Unlock it there first."
+#~ msgstr "Bramble is running but locked. Unlock it there first."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1409,8 +1409,8 @@ msgid "Logins"
 msgstr "Logins"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Look up a site"
-msgstr "Look up a site"
+#~ msgid "Look up a site"
+#~ msgstr "Look up a site"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -1492,8 +1492,8 @@ msgid "New password"
 msgstr "New password"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "No answer. Is Bramble running on this computer?"
-msgstr "No answer. Is Bramble running on this computer?"
+#~ msgid "No answer. Is Bramble running on this computer?"
+#~ msgstr "No answer. Is Bramble running on this computer?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -2302,8 +2302,8 @@ msgid "Telephone"
 msgstr "Telephone"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Test"
-msgstr "Test"
+#~ msgid "Test"
+#~ msgstr "Test"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
@@ -2367,8 +2367,8 @@ msgstr "The desktop app offered to share its vault with this browser. Enter the 
 #~ msgstr "The desktop app offered to share its vault with this browser. Enter the master password you use there, then confirm the symbols it shows."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "The desktop vault has {found} matching logins."
-msgstr "The desktop vault has {found} matching logins."
+#~ msgid "The desktop vault has {found} matching logins."
+#~ msgstr "The desktop vault has {found} matching logins."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
