@@ -3,7 +3,7 @@
 // docs/desktop-port.md for the interaction model they implement.
 
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowDown, ArrowUp, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/index.css";
@@ -145,6 +145,16 @@ function Spotlight() {
 					}
 					label="Navigate"
 				/>
+				{/* Filling is what the panel is FOR, so it gets the key that needs no modifier and
+				    no explanation. Highlight a result, press Enter, done. */}
+				<Hint
+					keys={
+						<Key>
+							<CornerDownLeft className="w-3 h-3" aria-hidden />
+						</Key>
+					}
+					label="Fill"
+				/>
 				<Hint
 					keys={
 						<>
@@ -153,15 +163,6 @@ function Spotlight() {
 						</>
 					}
 					label="Open in Bramble"
-				/>
-				<Hint
-					keys={
-						<>
-							<Key>{MOD}</Key>
-							<Key>F</Key>
-						</>
-					}
-					label="Autofill"
 				/>
 			</div>
 		</div>
