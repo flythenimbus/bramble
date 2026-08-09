@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
 	meta: new Map<string, unknown>(),
 	blobWrites: [] as { vaultId: string | undefined }[],
 	rosterOpts: null as Record<string, (...a: never[]) => unknown> | null,
+	/** Every session started, in order: one per transport. */
+	starts: [] as Record<string, unknown>[],
 	sessionStops: 0,
 	stateListener: null as ((locked: boolean) => void) | null,
 	// Swapped per test to drive what a "merge" does.
@@ -46,7 +48,10 @@ vi.mock("@core/vault-format", async (importOriginal) => ({
 
 vi.mock("@core/sync/transport/roster-sync", () => ({
 	startRosterSync: async (opts: Record<string, (...a: never[]) => unknown>) => {
-		h.rosterOpts = opts;
+		h.starts.push(opts);
+		// The relay session is started first; its callbacks are the ones these tests drive. Both
+		// sessions share one apply chain, so either would do.
+		h.rosterOpts ??= opts;
 		return {
 			stop: () => {
 				h.sessionStops++;
@@ -138,6 +143,7 @@ beforeEach(() => {
 	h.meta.clear();
 	h.blobWrites.length = 0;
 	h.rosterOpts = null;
+	h.starts.length = 0;
 	h.sessionStops = 0;
 	h.stateListener = null;
 	h.applyRemote = async () => {};
@@ -231,6 +237,22 @@ describe("retargetActiveVault", () => {
 	});
 });
 
+describe("transports", () => {
+	it("runs one session over the relay and one over the browser link", async () => {
+		// Two sessions rather than one: a phone is only reachable through the relay, and a browser
+		// on this machine is reachable without it, including with no network at all.
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadRoster();
+		await startSession(mod);
+
+		expect(h.starts).toHaveLength(2);
+		expect(h.starts.filter((o) => o.peerSource === undefined)).toHaveLength(1);
+		expect(h.starts.filter((o) => o.peerSource !== undefined)).toHaveLength(1);
+	});
+});
+
 describe("activeVaultId resolution", () => {
 	it("starts no session when several vaults are registered and none is recorded active", async () => {
 		// Guessing vaults[0] here points sync at a vault the user is not in.
@@ -262,9 +284,10 @@ describe("lock state", () => {
 		const mod = await loadRoster();
 		await startSession(mod);
 
-		// While locked the VEK is gone from the Rust process, so a merge could not decrypt.
+		// While locked the VEK is gone from the Rust process, so a merge could not decrypt. Both
+		// transports stop: a lock is about the key, not about how peers are reached.
 		h.stateListener?.(true);
-		expect(h.sessionStops).toBe(1);
+		expect(h.sessionStops).toBe(2);
 
 		h.rosterOpts = null;
 		h.stateListener?.(false);

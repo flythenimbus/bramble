@@ -41,6 +41,7 @@ import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-sess
 import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { deviceKeypair } from "./keys";
+import { linkPeerSource } from "./link-peers";
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
@@ -129,8 +130,18 @@ function makeBlobStore(vaultId: string) {
 	});
 }
 
-let rosterSession: MeshSession | null = null;
-/** The vault the live session syncs. Null when nothing is running. */
+/**
+ * The live sessions: one over the relay, reaching phones and browsers anywhere, and one over the
+ * native link, reaching browsers on this machine.
+ *
+ * Two sessions rather than one combined source, because they are genuinely different transports
+ * with different failure modes, and a relay outage should not take the local pipe down with it.
+ * They need no coordination beyond what is already here: both merge through the same serialised
+ * chain below, so a browser's payload and a phone's cannot interleave their read-modify-write of
+ * one blob.
+ */
+let rosterSessions: MeshSession[] = [];
+/** The vault the live sessions sync. Null when nothing is running. */
 let sessionVaultId: string | null = null;
 /** Bumped on every teardown or retarget. A merge captures it on entry and refuses to write if
  * it has moved, so an apply that began before a vault switch cannot land after it. */
@@ -151,14 +162,15 @@ async function startRoster(): Promise<void> {
 	const relay = (await desktopStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
 	const iceUrl = (await desktopStorage.getMeta<string>(ICE_KEY)) ?? "";
 
-	rosterSession?.stop();
+	for (const session of rosterSessions) session.stop();
+	rosterSessions = [];
 	// Everything below is pinned to THIS vaultId for the life of the session. A retarget stops
 	// the session and bumps the gen rather than letting a running one follow the active vault.
 	const blobStore = makeBlobStore(vaultId);
 	const gen = sessionGen;
 	sessionVaultId = vaultId;
 
-	rosterSession = await startRosterSync({
+	const common = {
 		relayUrl: relay,
 		iceUrl,
 		groupKeyB64: group.groupKey,
@@ -217,11 +229,18 @@ async function startRoster(): Promise<void> {
 			applyInFlight = run.catch(() => {});
 			await run;
 		},
-	});
+	} satisfies Parameters<typeof startRosterSync>[0];
+
+	rosterSessions = [
+		await startRosterSync(common),
+		// Browsers paired to this app, over the pipe they already have. Started second so a relay
+		// failure does not cost the local peers, which are the ones that work offline.
+		await startRosterSync({ ...common, peerSource: linkPeerSource }),
+	];
 }
 
 async function maybeStartRosterSync(): Promise<void> {
-	if (rosterSession) return;
+	if (rosterSessions.length > 0) return;
 	try {
 		await startRoster();
 	} catch (e) {
@@ -230,8 +249,8 @@ async function maybeStartRosterSync(): Promise<void> {
 }
 
 export function stopRosterSync(): void {
-	rosterSession?.stop();
-	rosterSession = null;
+	for (const session of rosterSessions) session.stop();
+	rosterSessions = [];
 	sessionVaultId = null;
 	// Invalidate any merge still queued: it captured the old gen and must not write.
 	sessionGen++;

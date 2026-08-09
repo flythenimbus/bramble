@@ -214,13 +214,30 @@ pub fn link_sync_send(peer_id: String, frame: String) -> Result<(), String> {
     }
 }
 
+/// One connected browser, as reported to a webview catching up.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectedPeer {
+    pub peer_id: String,
+    /// The same generation the events carry, so a catch-up entry and an event about the same
+    /// connection are recognisably the same connection rather than two.
+    pub link: u64,
+}
+
 /// The browsers connected right now, so a webview that opened after they did can pick them up
 /// rather than waiting for a reconnect that may not come until the browser restarts.
 #[tauri::command]
-pub fn link_sync_peers() -> Vec<String> {
+pub fn link_sync_peers() -> Vec<ConnectedPeer> {
     outboxes()
         .lock()
-        .map(|b| b.keys().cloned().collect())
+        .map(|b| {
+            b.iter()
+                .map(|(peer_id, (link, _))| ConnectedPeer {
+                    peer_id: peer_id.clone(),
+                    link: *link,
+                })
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -263,8 +280,15 @@ fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String>
         }
     });
 
-    emit("link-peer-connected", serde_json::json!({ "peerId": peer_id }));
-    let result = read_loop(session_id, &peer_id, stream, &tx);
+    // The link generation rides on every event. A browser can establish a new connection before
+    // the old one notices it is dead, so "connected(new)" can reach the webview before
+    // "disconnected(old)"; without a generation to compare, that stale disconnect would tear down
+    // the live peer and sync would stop until the next reconnect.
+    emit(
+        "link-peer-connected",
+        serde_json::json!({ "peerId": peer_id, "link": link }),
+    );
+    let result = read_loop(session_id, &peer_id, link, stream, &tx);
 
     // Deregister before dropping our sender, so nothing queues onto a link that is closing.
     if let Ok(mut boxes) = outboxes().lock() {
@@ -277,7 +301,7 @@ fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String>
     let _ = pump.join();
     emit(
         "link-peer-disconnected",
-        serde_json::json!({ "peerId": peer_id }),
+        serde_json::json!({ "peerId": peer_id, "link": link }),
     );
     result
 }
@@ -285,6 +309,7 @@ fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String>
 fn read_loop(
     session_id: u32,
     peer_id: &str,
+    link: u64,
     stream: &mut UnixStream,
     out: &mpsc::Sender<String>,
 ) -> Result<(), String> {
@@ -303,7 +328,7 @@ fn read_loop(
         if let Ok(Request::Sync { frame }) = serde_json::from_str::<Request>(&plaintext) {
             emit(
                 "link-sync-frame",
-                serde_json::json!({ "peerId": peer_id, "frame": frame }),
+                serde_json::json!({ "peerId": peer_id, "link": link, "frame": frame }),
             );
             continue;
         }
@@ -690,7 +715,8 @@ mod tests {
         /// connection's own thread, so it is not ordered against the test's next statement.
         fn await_registered(&self, want: bool) {
             for _ in 0..200 {
-                if link_sync_peers().contains(&self.public_key) == want {
+                let listed = link_sync_peers().iter().any(|p| p.peer_id == self.public_key);
+                if listed == want {
                     return;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
@@ -757,7 +783,7 @@ mod tests {
         drop(link); // closes the socket, as a browser shutting down does
 
         for _ in 0..200 {
-            if !link_sync_peers().contains(&public_key) {
+            if !link_sync_peers().iter().any(|p| p.peer_id == public_key) {
                 handshake::handshake_close(session_id);
                 return;
             }
