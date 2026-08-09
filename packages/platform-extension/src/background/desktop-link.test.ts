@@ -225,3 +225,45 @@ describe("the held sync link", () => {
 		await settled;
 	});
 });
+
+describe("keeping the pipe up", () => {
+	it("re-establishes the link after the app restarts", async () => {
+		// The deadlock this exists to break: the app learns a browser exists only when one
+		// CONNECTS, and the browser only speaks once the app has spoken. So after the app
+		// restarts, nothing reconnects and both ends wait for the other forever.
+		vi.useFakeTimers();
+		const mod = await load();
+		const frames: string[] = [];
+		const opening = mod.openSyncLink((f) => frames.push(f));
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+		const afterOpen = h.connects;
+
+		// The app goes away, taking the pipe with it.
+		for (const cb of h.onDisconnect) cb();
+		await vi.advanceTimersByTimeAsync(25_000);
+		// The rebuilt link needs its handshake answered, as the first one did.
+		completeHandshake();
+
+		await vi.waitFor(() => expect(h.connects).toBeGreaterThan(afterOpen));
+		vi.useRealTimers();
+	});
+
+	it("stops re-establishing once sync stops", async () => {
+		// Otherwise stopping sync would leave a timer spawning native host processes forever.
+		vi.useFakeTimers();
+		const mod = await load();
+		const opening = mod.openSyncLink(() => {});
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+
+		await mod.closeSyncLink();
+		const afterClose = h.connects;
+		await vi.advanceTimersByTimeAsync(120_000);
+
+		expect(h.connects).toBe(afterClose);
+		vi.useRealTimers();
+	});
+});

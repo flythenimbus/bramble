@@ -51,6 +51,11 @@ export interface MeshOptions {
 	epochRooms?: boolean;
 }
 
+/** First retry delay after a dropped relay socket; doubles up to the cap. */
+const RECONNECT_BASE_MS = 1000;
+/** The ceiling, so an offline machine retries about twice a minute rather than never. */
+const RECONNECT_MAX_MS = 30_000;
+
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 const short = (pubkey: string): string => pubkey.slice(0, 8);
 const relayHost = (url: string): string => {
@@ -109,6 +114,11 @@ class Mesh {
 	private publishRoom = "";
 	private rollTimer: ReturnType<typeof setInterval> | undefined;
 	private clockWarned = false;
+	/** Set by stop(), so a socket closing during teardown is not treated as a drop. */
+	private stopped = false;
+	private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Consecutive failed attempts, for the backoff. Reset by a connection that opens. */
+	private attempts = 0;
 
 	constructor(private readonly opts: MeshOptions) {}
 
@@ -161,6 +171,10 @@ class Mesh {
 					? "relay disconnected"
 					: `relay unreachable${code ? ` (code ${code})` : ""} — couldn't reach ${host}`,
 			);
+			// Sync used to end here. A dropped socket left the session alive but deaf: peers went
+			// stale, nothing reconnected, and the next edit simply never arrived. Recovering meant
+			// locking and unlocking, with nothing on screen suggesting it.
+			this.scheduleReconnect();
 		};
 		this.client = connectSignaling(
 			this.socket as SocketLike,
@@ -168,6 +182,7 @@ class Mesh {
 			(ev) => this.onEvent(ev),
 			() => {
 				opened = true;
+				this.attempts = 0; // a connection that opens clears the backoff
 				clearTimeout(timer);
 				this.opts.onStatus(`relay connected (${host})`);
 			},
@@ -187,7 +202,31 @@ class Mesh {
 		this.sendHello();
 	}
 
+	/**
+	 * Reconnect after a drop, backing off so a relay that is down or a machine that is offline is
+	 * not hammered. Capped, because the recovery has to happen on its own: nobody watching a
+	 * password manager knows that sync needs a lock and unlock to come back.
+	 */
+	private scheduleReconnect(): void {
+		if (this.stopped || this.reconnectTimer) return;
+		const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.attempts);
+		this.attempts++;
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = undefined;
+			if (this.stopped) return;
+			this.opts.onStatus("reconnecting to the relay…");
+			// A failure here closes the new socket, which schedules the next attempt, so the retry
+			// loop continues rather than ending on a throw nobody sees.
+			void this.start().catch((e) => {
+				this.opts.onStatus(`relay reconnect failed: ${String(e)}`);
+				this.scheduleReconnect();
+			});
+		}, delay);
+	}
+
 	stop(): void {
+		this.stopped = true;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		if (this.rollTimer) clearInterval(this.rollTimer);
 		for (const peer of this.peers.values()) peer.close();
 		for (const relay of this.relayPeers.values()) relay.close();

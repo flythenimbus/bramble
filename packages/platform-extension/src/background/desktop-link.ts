@@ -304,15 +304,38 @@ let held: HeldLink | null = null;
 /** Where a frame from the app goes. Set while sync is running. */
 let onSyncFrame: ((frame: string) => void) | null = null;
 
+/**
+ * How often to re-establish the pipe while sync is running.
+ *
+ * The link has to be rebuilt by THIS side, and it is what tells the app a browser exists at all.
+ * The app cannot reach out first: it learns of a browser only when one connects. So without this,
+ * a desktop app that restarts (or starts after the browser did) is never spoken to again, and
+ * both ends sit waiting for the other — the browser for a frame, the app for a connection.
+ *
+ * Cheap: a live link returns immediately, and there is nothing to do when no app is paired.
+ */
+const LINK_KEEPALIVE_MS = 20_000;
+
+let keepalive: ReturnType<typeof setInterval> | undefined;
+
 /** Open the link and keep it open, routing the app's sync frames to `onFrame`. */
 export async function openSyncLink(onFrame: (frame: string) => void): Promise<boolean> {
 	onSyncFrame = onFrame;
+	if (!keepalive) {
+		keepalive = setInterval(() => {
+			void ensureHeld().catch(() => {});
+		}, LINK_KEEPALIVE_MS);
+	}
 	return (await ensureHeld()) !== null;
 }
 
 /** Close the held link. Delegation goes back to a session per request. */
 export async function closeSyncLink(): Promise<void> {
 	onSyncFrame = null;
+	if (keepalive) {
+		clearInterval(keepalive);
+		keepalive = undefined;
+	}
 	const link = held;
 	held = null;
 	if (!link) return;
