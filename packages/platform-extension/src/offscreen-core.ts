@@ -41,6 +41,7 @@ import {
 	CryptoWrapPasswordSlotSchema,
 	CryptoWrapWebauthnSlotSchema,
 } from "./crypto/messages";
+import { makeLinkPeerSource } from "./link-peer-source";
 import { api } from "./platform-api";
 import {
 	AdmissionPubkeyMsgSchema,
@@ -98,6 +99,38 @@ const unregisteredBridge: SyncBridge = {
 // The single live enrollment / sync session for this host context.
 let enrollSession: MeshSession | null = null;
 let syncSession: MeshSession | null = null;
+/**
+ * The second sync session, over the native link to the desktop app on this machine.
+ *
+ * Separate from `syncSession` rather than a combined peer source, because they are different
+ * transports with different failure modes: a relay outage should not take the local pipe down
+ * with it, and the pipe works with no network at all. They need no coordination, since the merge
+ * they both feed is serialised in the background.
+ */
+let linkSyncSession: MeshSession | null = null;
+
+/** Sinks for frames the desktop app sends, delivered here by the background. */
+const linkFrameSinks = new Set<(frame: string) => void>();
+
+/** The desktop app as a sync peer. Sends go out through the background, which owns the port. */
+const desktopPeerSource = makeLinkPeerSource({
+	send: async (frame) => {
+		try {
+			const res = (await api.runtime.sendMessage({
+				type: "LINK_SYNC_SEND",
+				payload: { frame },
+			})) as { ok?: boolean; data?: boolean } | undefined;
+			return res?.ok === true && res.data === true;
+		} catch {
+			// No background listening (a torn-down worker) is a link that is down, not a fault.
+			return false;
+		}
+	},
+	subscribe: (onFrame) => {
+		linkFrameSinks.add(onFrame);
+		return () => linkFrameSinks.delete(onFrame);
+	},
+});
 
 /**
  * The pairing approval the host is waiting on, if any. It lives here rather than in the popup
@@ -497,6 +530,8 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				enrollSession = null;
 				syncSession?.stop();
 				syncSession = null;
+				linkSyncSession?.stop();
+				linkSyncSession = null;
 				reportSyncStatus("disconnected");
 				return { ok: true };
 			case "SYNC_ENROLL_STOP":
@@ -524,13 +559,24 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				};
 			case "SYNC_BROADCAST_NOW":
 				// A local vault write landed: push it to peers now instead of at the next tick.
+				// Both transports, or an edit would reach the phone at once and the browser's own
+				// desktop app only at its next tick.
 				await syncSession?.broadcastNow?.();
+				await linkSyncSession?.broadcastNow?.();
 				return { ok: true };
+			case "LINK_SYNC_FRAME": {
+				// A frame the desktop app pushed, relayed in by the background, which owns the port.
+				const frame = (payload as { frame?: unknown } | null)?.frame;
+				if (typeof frame !== "string") throw new Error("LINK_SYNC_FRAME requires a frame");
+				for (const sink of linkFrameSinks) sink(frame);
+				return { ok: true };
+			}
 			case "SYNC_ROSTER_SYNC": {
 				const opts = RosterSyncMsgSchema.parse(payload);
 				const w = await getWasm();
 				syncSession?.stop();
-				syncSession = await startRosterSync({
+				linkSyncSession?.stop();
+				const common = {
 					...opts,
 					wasm: w,
 					report: reportSyncStatus,
@@ -538,7 +584,11 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					pushRemotePayload: bridge.pushRemotePayload,
 					fetchLocalRoster: bridge.fetchLocalRoster,
 					pushRemoteRoster: bridge.pushRemoteRoster,
-				});
+				};
+				syncSession = await startRosterSync(common);
+				// The desktop app on this machine, over the pipe it already has. Started second so
+				// a relay failure does not cost the local peer, which is the one that works offline.
+				linkSyncSession = await startRosterSync({ ...common, peerSource: desktopPeerSource });
 				return { ok: true };
 			}
 			case "SYNC_GENERATE_KEYPAIR": {

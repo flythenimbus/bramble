@@ -46,6 +46,7 @@ import {
 	storeKeypair,
 	storeSigningKey,
 } from "../sync/sync-config";
+import { closeSyncLink, openSyncLink } from "./desktop-link";
 import { keepEventPageAlive, releaseEventPage } from "./event-page-keepalive";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
@@ -295,11 +296,20 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 		return;
 	}
 	await sendToOffscreen({ type: "SYNC_ROSTER_SYNC", payload });
+	// Hold the desktop link open for as long as sync runs, so the app's pushed frames have
+	// somewhere to arrive. Failure is silent and expected: most browsers have no desktop app
+	// paired, and the ones that do may not have it running.
+	void openSyncLink((frame) => {
+		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame } }).catch(() => {});
+	}).catch(() => {});
 }
 
 export async function stopSync(): Promise<void> {
 	const stopEpoch = ++syncEpoch;
 	syncRunning = false;
+	// The pipe must not outlive sync: it exists to carry sync, and holding it open would keep a
+	// native host process alive for nothing.
+	void closeSyncLink().catch(() => {});
 	stopInFlight = (async () => {
 		if (syncHostSuspends) await api.alarms.clear(SYNC_KEEPALIVE_ALARM);
 		// If a newer stop superseded this one, it will deliver the disconnect instead.

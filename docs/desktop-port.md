@@ -509,6 +509,44 @@ would only add a layer whose job is to undo the rename.
 Windows (WebView2, Chromium) is near-certain to work the same way; WebKitGTK is the open
 question `[unverified]`, and it is where webrtc-rs would come back if it comes back at all.
 
+**Browsers on this machine skip the relay entirely.** The app and a paired extension already have
+an authenticated pipe between them, so routing their sync traffic out to a relay and back through
+WebRTC is a trip through the internet to reach the next process along. `PeerSource` in
+`@core/sync/transport/peer-session` makes where peers come from injectable; a supplied source
+short-circuits before ICE and before joining a room, so a local session never touches the network.
+The local path also works with no network at all.
+
+Nothing above that seam changes, deliberately. A local peer proves membership of the CURRENT
+roster and completes Noise KK keyed by its device identity like any other, so being on the same
+machine is not an authorization and a revocation bites a pipe as it bites a relay connection.
+
+Both ends run TWO sessions, relay and link, rather than one combined source: a phone is only
+reachable through the relay, a browser here is reachable without it, and a relay outage should not
+take the local pipe down with it. They need no coordination because the merge they both feed is
+already serialised.
+
+This nests Noise inside Noise. The outer session authenticates a browser INSTALL to this app; the
+inner one, which the link layer cannot read, authenticates a roster DEVICE to the group. They are
+different identities on purpose, and only the inner one is what the roster knows, so it has to be
+the one that survives to where revocation is enforced.
+
+Three things that are easy to get wrong here, all now pinned by tests:
+
+- **The link is request/response no longer.** The extension used to treat the next inbound frame
+  as the answer to the request in flight. A pushed sync frame arriving mid-request would resolve
+  it, leaving the session one frame out of step for the rest of its life: every later fill
+  returning the previous fill's credential.
+- **One connection per extension.** The app keys its outbound queue by the browser's static key,
+  so a second connection displaces the first as the target for pushes, and closing that
+  short-lived one takes the queue with it. Sync goes quiet with nothing reporting a fault. While
+  the held link is up, delegation rides it rather than spawning its own.
+- **A reconnect can be seen before the disconnect it replaced.** A browser can register a new
+  connection before the old one notices it is dead, so events carry a link generation and each
+  side ignores anything about a connection it has already replaced.
+
+Peers are keyed by Noise static key, never the extension id: two browser profiles share an id but
+not a key.
+
 **Ongoing sync** (`src/sync/roster.ts`) mirrors mobile's `sync-manager.ts`, including all of its
 issue-#27 pinning: the session binds to one vault id for its lifetime, merges are serialised, a
 merge that outlives its session is dropped rather than written, and the blob store is pinned
@@ -609,8 +647,9 @@ Each phase retires a risk.
   panel (risk 2) is deliberately deferred to when auto-type makes it matter.
 - **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join), host-side admission signing,
   and ongoing roster sync all run in the vault window on the webview's own WebRTC, with the
-  crypto routed to Rust. Device identity lives in the OS credential store. Outstanding: the tray
-  residency and scheduled backups that are the actual "hub" part, and a two-device test.
+  crypto routed to Rust. Browsers on this machine sync over the native link instead of the relay,
+  on both ends. Device identity lives in the OS credential store. Outstanding: the tray residency
+  and scheduled backups that are the actual "hub" part, and a two-device test.
 - **Phase 4, browser integration.** Proxy binary, host manifests, Noise pairing plus the approval
   dialog, fill routing. Enter becomes a real fill in the browser.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

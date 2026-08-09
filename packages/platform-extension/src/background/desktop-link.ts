@@ -444,6 +444,18 @@ export async function desktopLinkStatus(): Promise<{ paired: boolean; pairedAt?:
 }
 
 on(
+	"LINK_SYNC_SEND",
+	// The offscreen runs sync but the port lives here, so its outbound frames come through this.
+	// False rather than an error when the link is down: the app may simply not be running, and
+	// sync carries on over the relay.
+	extensionOnly(async (message) => {
+		const frame = (message.payload as { frame?: unknown } | undefined)?.frame;
+		if (typeof frame !== "string") return { ok: false, error: "LINK_SYNC_SEND requires a frame" };
+		return { ok: true, data: await sendSyncFrame(frame) };
+	}),
+);
+
+on(
 	"DESKTOP_LINK_PAIR",
 	extensionOnly(async (message) => {
 		const code = String((message as { code?: unknown }).code ?? "");
