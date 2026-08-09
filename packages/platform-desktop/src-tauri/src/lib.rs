@@ -154,6 +154,7 @@ pub fn run() {
             pairing::pairing_list,
             pairing::pairing_forget,
             pairing::pairing_public_key,
+            index_store::spotlight_search,
             index_store::link_set_index,
             index_store::link_clear_index,
             socket::link_sync_send,

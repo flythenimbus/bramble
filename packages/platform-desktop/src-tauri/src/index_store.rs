@@ -63,6 +63,51 @@ pub fn count() -> usize {
     INDEX.lock().unwrap().len()
 }
 
+/// A free-text search across the index, for the quick-access panel.
+///
+/// Metadata only, like every other read here: the panel lists what it finds and asks for a
+/// secret only when the user acts on one, so a search never puts a credential in the webview.
+///
+/// Matching is a case-insensitive substring over the name, the username and the hostnames,
+/// which is what someone typing "git" into a search field means. Ranked so a name match beats a
+/// hostname match and a hostname beats a username: the name is what the user gave the entry, so
+/// an entry called "GitHub" should not sit below one that merely happens to be registered
+/// against a github.com page.
+#[tauri::command]
+pub fn spotlight_search(query: String, limit: usize) -> Vec<MatchSummary> {
+    let needle = query.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let contains = |hay: &str| hay.to_ascii_lowercase().contains(&needle);
+    // Bound to a local so the guard outlives the borrows taken from it.
+    let index = INDEX.lock().unwrap();
+    let mut hits: Vec<(u8, &IndexEntry)> = index
+        .iter()
+        .filter_map(|e| {
+            // Lower rank sorts first.
+            if contains(&e.name) {
+                Some((0, e))
+            } else if e.hostnames.iter().any(|h| contains(h)) {
+                Some((1, e))
+            } else if contains(&e.username) {
+                Some((2, e))
+            } else {
+                None
+            }
+        })
+        .collect();
+    hits.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    hits.truncate(limit);
+    hits.into_iter()
+        .map(|(_, e)| MatchSummary {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            secondary: e.username.clone(),
+        })
+        .collect()
+}
+
 /// Logins registered against `hostname`, as metadata only.
 ///
 /// Matching is exact on the indexed hostname. `@core` owns the real policy (registrable
@@ -121,6 +166,78 @@ mod tests {
             totp: None,
         }
     }
+    #[test]
+    fn search_finds_by_name_hostname_and_username() {
+        let _g = crate::pairing::test_lock();
+        set(vec![
+            IndexEntry {
+                id: "a".into(),
+                kind: "login".into(),
+                name: "GitHub".into(),
+                hostnames: vec!["github.com".into()],
+                username: "hue".into(),
+                ..Default::default()
+            },
+            IndexEntry {
+                id: "b".into(),
+                kind: "login".into(),
+                name: "Work mail".into(),
+                hostnames: vec!["mail.example.com".into()],
+                username: "someone@github.example".into(),
+                ..Default::default()
+            },
+        ]);
+
+        // The name match must outrank the one that merely mentions github in a username: the
+        // name is what the user gave the entry, so it is what they are typing at.
+        let hits = spotlight_search("github".into(), 10);
+        assert_eq!(
+            hits.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
+
+        assert_eq!(spotlight_search("HUE".into(), 10).len(), 1, "case-insensitive");
+        assert_eq!(spotlight_search("mail.example".into(), 10).len(), 1, "hostname substring");
+    }
+
+    #[test]
+    fn search_answers_with_no_secrets() {
+        // The panel renders these in a webview. A search must never be the thing that puts a
+        // password there; that only happens when the user acts on a result.
+        let _g = crate::pairing::test_lock();
+        set(vec![IndexEntry {
+            id: "a".into(),
+            kind: "login".into(),
+            name: "GitHub".into(),
+            username: "hue".into(),
+            password: "hunter2".into(),
+            totp: Some("otpauth://x".into()),
+            ..Default::default()
+        }]);
+
+        let json = serde_json::to_string(&spotlight_search("git".into(), 10)).unwrap();
+        assert!(!json.contains("hunter2"), "password in a search answer: {json}");
+        assert!(!json.contains("otpauth"), "totp in a search answer: {json}");
+    }
+
+    #[test]
+    fn search_is_bounded_and_empty_for_an_empty_query() {
+        let _g = crate::pairing::test_lock();
+        set((0..50)
+            .map(|i| IndexEntry {
+                id: i.to_string(),
+                kind: "login".into(),
+                name: format!("site {i}"),
+                ..Default::default()
+            })
+            .collect());
+
+        assert_eq!(spotlight_search("site".into(), 8).len(), 8);
+        // An empty field lists nothing rather than everything: the panel opens empty, and
+        // dumping the vault into it would be both useless and a shoulder-surfing surface.
+        assert!(spotlight_search("   ".into(), 8).is_empty());
+    }
+
 
     #[test]
     fn a_query_answers_with_no_secret() {

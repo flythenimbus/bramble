@@ -60,12 +60,48 @@ function Hint({ keys, label }: { keys: React.ReactNode; label: string }) {
 	);
 }
 
+/** Metadata only. A result never carries a secret; acting on one asks for that separately. */
+interface Match {
+	id: string;
+	name: string;
+	secondary: string;
+}
+
+/** Enough to fill the panel without turning it into a vault browser. */
+const MAX_RESULTS = 8;
+
 function Spotlight() {
 	const input = useRef<HTMLInputElement>(null);
 	const panel = useRef<HTMLDivElement>(null);
 	const [query, setQuery] = useState("");
+	const [results, setResults] = useState<Match[]>([]);
+	const [selected, setSelected] = useState(0);
+	/** The current results, for the key handler. It is bound once, so reading state directly
+	 * would close over whatever was on screen when the window opened. */
+	const latest = useRef<Match[]>([]);
+	latest.current = results;
 
 	useWindowTracksContent(panel);
+
+	// Search on every keystroke. The index lives in the Rust process and is metadata only, so
+	// this is a lookup over a few hundred rows rather than anything the vault has to unlock.
+	useEffect(() => {
+		let cancelled = false;
+		void invoke<Match[]>("spotlight_search", { query, limit: MAX_RESULTS })
+			.then((hits) => {
+				if (cancelled) return;
+				setResults(hits);
+				// Back to the top on every new search: the old highlight belonged to a list that
+				// no longer exists, and leaving it would act on whatever happened to slide under it.
+				setSelected(0);
+			})
+			.catch(() => {
+				if (!cancelled) setResults([]);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [query]);
 
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -73,12 +109,24 @@ function Spotlight() {
 				void invoke("spotlight_hide");
 				return;
 			}
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				// Held rather than left to the input, which would otherwise move the caret.
+				e.preventDefault();
+				const count = latest.current.length;
+				if (count === 0) return;
+				setSelected((i) => {
+					const next = e.key === "ArrowDown" ? i + 1 : i - 1;
+					// Wraps, because a list this short is faster to cycle than to reverse out of.
+					return (next + count) % count;
+				});
+				return;
+			}
 			// The modifier is whichever this platform uses, matching what the hints show.
 			const mod = MOD === "Ctrl" ? e.ctrlKey : e.metaKey;
 			if (mod && e.key.toLowerCase() === "o") {
 				e.preventDefault();
-				// With nothing selected this opens the app itself. Once there are results it will
-				// open the highlighted entry; the results list is the next slice.
+				// With nothing highlighted this opens the app itself. Opening the highlighted
+				// entry needs a route the main window can be sent to, which is the next slice.
 				void invoke("spotlight_open_main");
 			}
 		};
@@ -124,8 +172,29 @@ function Spotlight() {
 			    look past, and on a transparent window it is worse than dead: it is a pane of
 			    blur over whatever they were reading. */}
 			{query.length > 0 && (
-				<div className="border-t border-white/10 px-4 py-6 text-sm text-muted-foreground">
-					Results land in the next slice.
+				<div className="border-t border-white/10 py-2">
+					{results.length === 0 ? (
+						<p className="px-5 py-3 text-sm text-foreground/40">No matches</p>
+					) : (
+						<ul className="max-h-80 overflow-y-auto">
+							{results.map((match, i) => (
+								<li key={match.id}>
+									{/* Hovering highlights, so pointer and keyboard drive the same selection
+									    rather than each having their own idea of what is current. */}
+									<button
+										type="button"
+										onMouseMove={() => setSelected(i)}
+										className={`w-full flex items-baseline gap-3 px-5 py-2 text-left ${
+											i === selected ? "bg-white/10" : ""
+										}`}
+									>
+										<span className="text-sm truncate">{match.name}</span>
+										<span className="text-xs text-foreground/45 truncate">{match.secondary}</span>
+									</button>
+								</li>
+							))}
+						</ul>
+					)}
 				</div>
 			)}
 			{/* What you can do from here, on its own rule. Always visible: the panel opens with an
