@@ -10,9 +10,18 @@
 //! MatchSummary, which is id, name and a secondary line, and the secret is fetched separately
 //! for one entry at the moment it is used. See docs/desktop-port.md.
 
-use std::sync::Mutex;
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+    thread,
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 
 /// One indexed login. Only the fields the link actually answers with are modelled; the rest of
 /// what `@core` pushes is carried through `serde(default)` obscurity rather than mirrored,
@@ -36,6 +45,12 @@ pub struct IndexEntry {
     #[serde(default)]
     pub totp: Option<String>,
 }
+
+/// Matches the extension's clipboard behaviour.
+const CLEAR_AFTER: Duration = Duration::from_secs(30);
+
+/// Bumped per copy, so only the most recent one schedules the clear that lands.
+static COPY_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// What a query is allowed to answer with: no secret of any kind.
 #[derive(Clone, Debug, Serialize)]
@@ -61,6 +76,41 @@ pub fn clear() {
 #[allow(dead_code)] // Read by tests and useful in a log line; no caller in the app yet.
 pub fn count() -> usize {
     INDEX.lock().unwrap().len()
+}
+
+/// Put a result's password on the clipboard and dismiss the panel.
+///
+/// Done here rather than by handing the secret to the panel: the whole point of that webview
+/// answering with metadata only is that a credential never reaches it, and routing a copy
+/// through it to reach the clipboard would give that up for nothing.
+///
+/// Cleared after the same window the rest of the app uses. Best-effort, and it does not check
+/// whether the clipboard is still ours first: reading it back needs a permission this app does
+/// not otherwise want, and wiping something the user copied since would be the worse mistake.
+#[tauri::command]
+pub fn spotlight_copy_password(app: AppHandle, id: String) -> Result<(), String> {
+    if vault_crypto::is_locked() {
+        return Err("locked".into());
+    }
+    let entry = secret_for(&id).ok_or("unknown entry")?;
+    if entry.password.is_empty() {
+        return Err("no password".into());
+    }
+    app.clipboard()
+        .write_text(entry.password)
+        .map_err(|e| format!("clipboard: {e}"))?;
+
+    let generation = COPY_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let handle = app.clone();
+    thread::spawn(move || {
+        thread::sleep(CLEAR_AFTER);
+        // A later copy owns the clipboard now; clearing would wipe that instead.
+        if COPY_GENERATION.load(Ordering::Relaxed) == generation {
+            let _ = handle.clipboard().clear();
+        }
+    });
+    crate::spotlight::hide(&app);
+    Ok(())
 }
 
 /// A free-text search across the index, for the quick-access panel.

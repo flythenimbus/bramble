@@ -80,6 +80,9 @@ function Spotlight() {
 	 * would close over whatever was on screen when the window opened. */
 	const latest = useRef<Match[]>([]);
 	latest.current = results;
+	/** The highlighted index, for the same reason. */
+	const selectedRef = useRef(0);
+	selectedRef.current = selected;
 
 	useWindowTracksContent(panel);
 
@@ -119,6 +122,15 @@ function Spotlight() {
 					// Wraps, because a list this short is faster to cycle than to reverse out of.
 					return (next + count) % count;
 				});
+				return;
+			}
+			if (e.key === "Enter") {
+				e.preventDefault();
+				const match = latest.current[selectedRef.current];
+				if (!match) return;
+				// The secret never comes back here: the shell reads it from its own index, puts it
+				// on the clipboard and dismisses the panel.
+				void invoke("spotlight_copy_password", { id: match.id }).catch(() => {});
 				return;
 			}
 			// The modifier is whichever this platform uses, matching what the hints show.
@@ -214,15 +226,16 @@ function Spotlight() {
 					}
 					label="Navigate"
 				/>
-				{/* Filling is what the panel is FOR, so it gets the key that needs no modifier and
-				    no explanation. Highlight a result, press Enter, done. */}
+				{/* Named for what it does today. Filling the page needs a route through the
+				    browser that authorizes on the PAGE's hostname, which a panel-initiated fill
+				    does not fit; until that is designed, promising "Fill" here would be a lie. */}
 				<Hint
 					keys={
 						<Key>
 							<CornerDownLeft className="w-3 h-3" aria-hidden />
 						</Key>
 					}
-					label="Fill"
+					label="Copy password"
 				/>
 				<Hint
 					keys={
