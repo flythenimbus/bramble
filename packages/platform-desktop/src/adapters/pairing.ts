@@ -13,4 +13,10 @@ export const desktopPairing: PairingAdapter = {
 	list: () => invoke<PairedBrowser[]>("pairing_list"),
 	identity: () => invoke<string>("pairing_public_key"),
 	forget: (publicKey) => invoke<boolean>("pairing_forget", { publicKey }),
+
+	// The invite a paired browser can claim over the link. Held in the shell rather than here so
+	// the window closing cannot leave one claimable, and so the answer is gated where the
+	// request is served. See src-tauri/src/socket.rs.
+	armSyncInvite: (payload, ttlMs) => invoke<void>("link_arm_sync_invite", { payload, ttlMs }),
+	clearSyncInvite: () => invoke<void>("link_clear_sync_invite"),
 };

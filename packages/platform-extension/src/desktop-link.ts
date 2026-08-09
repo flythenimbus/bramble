@@ -28,6 +28,10 @@ export const extensionDesktopLink: DesktopLinkAdapter = {
 		if (!answer.ok) throw new Error(answer.error ?? "query failed");
 		return (answer.matches ?? []) as { id: string; name: string; secondary: string }[];
 	},
+	// The invite the app armed when the user clicked Connect. Null rather than an error when
+	// there is none: the app arms one only while its dialog is open, and a version that predates
+	// this arms none at all, so "no invite" is an ordinary answer and not a fault.
+	claimSyncInvite: () => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE"),
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},

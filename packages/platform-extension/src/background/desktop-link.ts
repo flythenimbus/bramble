@@ -444,6 +444,23 @@ export async function desktopLinkStatus(): Promise<{ paired: boolean; pairedAt?:
 }
 
 on(
+	"DESKTOP_LINK_CLAIM_INVITE",
+	// Ask the app for the sync invite it armed. The app answers only while its dialog is open, so
+	// a refusal here is the ordinary case and not something to surface as a failure.
+	extensionOnly(async () => {
+		try {
+			const answer = (await askDesktop({ op: "syncInvite" })) as {
+				ok?: boolean;
+				invite?: string;
+			};
+			return { ok: true, data: answer?.ok === true ? (answer.invite ?? null) : null };
+		} catch {
+			return { ok: true, data: null };
+		}
+	}),
+);
+
+on(
 	"LINK_SYNC_SEND",
 	// The offscreen runs sync but the port lives here, so its outbound frames come through this.
 	// False rather than an error when the link is down: the app may simply not be running, and

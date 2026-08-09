@@ -49,4 +49,16 @@ export interface PairingAdapter {
 	identity(): Promise<string>;
 	/** Revoke a browser. Its next connection fails, because its key is no longer accepted. */
 	forget(publicKey: string): Promise<boolean>;
+	/**
+	 * Arm the sync invite a browser may claim over the link once it has paired, so connecting a
+	 * browser is one code and one click instead of two of each.
+	 *
+	 * Armed for a window, not held indefinitely, and that is the security property rather than
+	 * tidiness: an established link authenticates a browser, and authentication is not consent to
+	 * hand over the vault today. The app answers a claim only while this is armed, which means the
+	 * user clicked the button and re-entered their master password moments ago.
+	 */
+	armSyncInvite?(payload: string, ttlMs: number): Promise<void>;
+	/** Disarm, for a dialog the user dismissed. Dismissing is a refusal. */
+	clearSyncInvite?(): Promise<void>;
 }

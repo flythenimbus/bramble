@@ -31,6 +31,15 @@ export interface DesktopLinkAdapter {
 	 * is locked, which covers the metadata too.
 	 */
 	query(hostname: string): Promise<{ id: string; name: string; secondary: string }[]>;
+	/**
+	 * Claim the sync invite the app armed when the user clicked Connect, so pairing is one code
+	 * and one click rather than two of each. Null when there is none, which is ordinary: the app
+	 * arms one only while its dialog is open, and an older version arms none at all.
+	 *
+	 * The returned string is the same pairing code a user would otherwise carry by hand, so it
+	 * goes straight to `startJoin`.
+	 */
+	claimSyncInvite?(): Promise<string | null>;
 	/** Forget the desktop app on this side. Revoking on the app's side is separate; doing
 	 * both is what fully severs the link. */
 	unlink(): Promise<void>;
