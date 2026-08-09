@@ -3,6 +3,7 @@
 // members are absent or inert exactly as they are on mobile. See docs/desktop-port.md.
 
 import type { OptionsScreen, ShellAdapter } from "@core/adapters/shell";
+import { desktopDeviceLabel } from "@core/util/device-label";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -47,6 +48,10 @@ export function registerOpenSetup(fn: (screen?: OptionsScreen) => void): void {
 
 export const desktopShell: ShellAdapter = {
 	appName: "Bramble",
+
+	// The webview's user agent describes WKWebView, so sniffing it named this app "Browser on
+	// Mac": wrong, and indistinguishable from a real browser in the device list.
+	deviceLabel: desktopDeviceLabel,
 	get version() {
 		return appVersion;
 	},

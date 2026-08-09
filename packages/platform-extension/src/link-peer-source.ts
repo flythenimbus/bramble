@@ -75,9 +75,16 @@ export function makeLinkPeerSource(transport: LinkTransport): PeerSource {
 			deliver?.(frame);
 		});
 
-		// Eagerly, because the app may already be running. If it is not, the first send fails
-		// harmlessly and the peer is dropped until the app speaks.
-		offer();
+		// Nothing is offered until the app speaks, which is deliberate and not just lazy.
+		//
+		// This end cannot tell whether a desktop app exists: most browsers have none paired, and a
+		// paired one may not be running. Offering a peer regardless meant roster-auth talking into
+		// a pipe that was never opened and timing out 15 seconds later, which showed up in the log
+		// as a handshake failure on every start — indistinguishable from a real fault.
+		//
+		// The other end has the information: it learns of a browser from the socket connecting, so
+		// it can always speak first, and it re-broadcasts every few seconds. So waiting costs at
+		// most one tick and removes the guesswork.
 
 		return {
 			stop() {

@@ -48,9 +48,21 @@ beforeEach(() => {
 });
 
 describe("the desktop app as a sync peer", () => {
-	it("offers it as soon as sync starts, because it may already be running", async () => {
+	it("offers nothing until the app speaks", async () => {
+		// This end cannot tell whether a desktop app is even paired, let alone running. Offering
+		// regardless meant roster-auth talking into a pipe that was never opened and reporting a
+		// handshake failure 15 seconds later, on every browser with no desktop app.
 		const t = transport();
 		const { peers } = await start(t.transport);
+		expect(peers).toEqual([]);
+	});
+
+	it("offers it when the app speaks, which it does as soon as the pipe connects", async () => {
+		const t = transport();
+		const { peers } = await start(t.transport);
+
+		t.push("hello");
+
 		expect(peers).toHaveLength(1);
 	});
 
@@ -58,6 +70,7 @@ describe("the desktop app as a sync peer", () => {
 		const t = transport();
 		const { peers } = await start(t.transport);
 
+		t.push("f0");
 		t.push("f1");
 		t.push("f2");
 
@@ -66,19 +79,21 @@ describe("the desktop app as a sync peer", () => {
 		expect(peers).toHaveLength(1);
 	});
 
-	it("delivers the app's frames to the peer", async () => {
+	it("delivers the app's frames to the peer, including the one that woke it", async () => {
 		const t = transport();
 		const { peers } = await start(t.transport);
-		const first = peers[0]?.channel.recv();
 
 		t.push("from-app");
 
-		expect(await first).toBe("from-app");
+		// The frame that caused the offer must not be swallowed by it: it is the peer's opening
+		// message, and losing it would stall the handshake it belongs to.
+		expect(await peers[0]?.channel.recv()).toBe("from-app");
 	});
 
 	it("sends the peer's frames to the app", async () => {
 		const t = transport();
 		const { peers } = await start(t.transport);
+		t.push("wake");
 
 		peers[0]?.channel.send("outbound");
 
@@ -90,6 +105,7 @@ describe("the desktop app as a sync peer", () => {
 		// next broadcast brings a fresh one rather than talking into a closed pipe.
 		const t = transport({ send: async () => false });
 		const { peers } = await start(t.transport);
+		t.push("wake");
 
 		peers[0]?.channel.send("into-the-void");
 		await vi.waitFor(() => {
@@ -103,6 +119,7 @@ describe("declining the app", () => {
 	it("does not close the link, which also carries autofill", async () => {
 		const t = transport();
 		const { peers } = await start(t.transport);
+		t.push("wake");
 
 		peers[0]?.close();
 
@@ -115,6 +132,7 @@ describe("declining the app", () => {
 	it("holds it off for a cool-down rather than re-handshaking on every frame", async () => {
 		const t = transport();
 		const { peers } = await start(t.transport);
+		t.push("wake");
 		peers[0]?.close();
 
 		t.push("still-talking");
@@ -129,6 +147,7 @@ describe("declining the app", () => {
 		vi.useFakeTimers();
 		const t = transport();
 		const { peers } = await start(t.transport);
+		t.push("wake");
 		peers[0]?.close();
 
 		vi.setSystemTime(Date.now() + 31_000);
@@ -142,6 +161,7 @@ describe("teardown", () => {
 	it("unsubscribes and offers nothing more", async () => {
 		const t = transport();
 		const { source, peers } = await start(t.transport);
+		t.push("wake");
 
 		source.stop();
 		t.push("after-stop");

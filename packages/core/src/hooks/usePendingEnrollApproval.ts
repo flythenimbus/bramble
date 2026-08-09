@@ -21,7 +21,12 @@ export function usePendingEnrollApproval(
 
 	useEffect(() => {
 		const off = shell.onSyncEvent((e) => {
-			if (e.kind === "enroll-approval" && e.sas) setApproval({ sas: e.sas, label: e.label ?? "" });
+			// Rebuilt field by field, so anything new on the event has to be added here too. It was
+			// dropping sasEmoji, which is the form the user compares: the inviter silently fell back
+			// to digits while the joiner showed symbols, so the two screens did not look alike.
+			if (e.kind === "enroll-approval" && e.sas) {
+				setApproval({ sas: e.sas, sasEmoji: e.sasEmoji, label: e.label ?? "" });
+			}
 			// Anything that ends the exchange also ends the prompt: there is nothing left to approve.
 			if (e.kind === "enrolled" || e.kind === "enroll-expired" || e.kind === "enroll-failed") {
 				setApproval(null);
