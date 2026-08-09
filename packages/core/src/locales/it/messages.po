@@ -182,6 +182,10 @@ msgstr "Aggiungi campo"
 msgid "Add New"
 msgstr "Aggiungi Nuovo"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Add the desktop's vault"
+msgstr "Aggiungere la cassaforte del desktop"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
 msgstr "Aggiungi i siti web che questo accesso copre. Lascia vuoto se le credenziali non sono collegate a un sito."
@@ -803,6 +807,10 @@ msgstr "Deseleziona tutto"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Desktop app"
 msgstr "App desktop"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop vault"
+msgstr "Cassaforte desktop"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -1636,6 +1644,10 @@ msgstr "Apri nella finestra"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Open it from the {0} popup and unlock it with its master password."
 msgstr "Aprila dal popup {0} e sbloccala con la sua password principale."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open that vault"
+msgstr "Aprire quella cassaforte"
 
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -2798,6 +2810,10 @@ msgstr "Scrivere l'anno come YY o YYYY."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"
 msgstr "Anno (AA)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You already share this vault"
+msgstr "Lei condivide già questa cassaforte"
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/OptionsApp.tsx

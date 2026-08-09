@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { DesktopLinkStatus } from "../../../../adapters/desktop-link";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { useVaultActions } from "../../../../hooks/useVault";
+import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
+import { decodePairingCode } from "../../../../sync/enrollment";
+import { syncKeyFor } from "../../../../sync/sync-keys";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
@@ -23,9 +26,10 @@ const OFFER_POLL_MS = 4000;
 /** Link this browser to the Bramble desktop app. Rendered only where the platform provides a
  * desktop-link adapter, which today is the extension. See docs/desktop-port.md. */
 export function DesktopLinkSection() {
-	const { desktopLink, shell } = usePlatform();
+	const { desktopLink, shell, storage } = usePlatform();
 	const { t } = useLingui();
 	const { startJoin } = useVaultActions();
+	const { vaults } = useVaultRegistry();
 	const [status, setStatus] = useState<DesktopLinkStatus | null>(null);
 	const [code, setCode] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -39,6 +43,15 @@ export function DesktopLinkSection() {
 	 * this the modal is a disabled button and the only way past it is approving something on the
 	 * other screen that has not been compared with anything. */
 	const [joinSas, setJoinSas] = useState<{ sas: string; sasEmoji?: number[] } | null>(null);
+	/**
+	 * What accepting will actually do to this browser, worked out before anything moves.
+	 *
+	 * "switch" means a vault here already syncs that group, so this only changes which one is
+	 * open. "add" means a new vault appears alongside the ones already here. "first" means this
+	 * browser has no vaults at all. The distinction is the whole point: a settings action started
+	 * inside one vault must not silently leave the user standing in another.
+	 */
+	const [outcome, setOutcome] = useState<"switch" | "add" | "first" | null>(null);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -52,6 +65,24 @@ export function DesktopLinkSection() {
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	/** Which of the three things accepting this invite would do. */
+	const outcomeFor = useCallback(
+		async (pairingCode: string): Promise<"switch" | "add" | "first"> => {
+			try {
+				const { groupKey } = decodePairingCode(pairingCode.trim());
+				for (const v of vaults) {
+					const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
+					// The same check startJoin makes, run early so the user is told rather than moved.
+					if (g?.groupKey === groupKey) return "switch";
+				}
+			} catch {
+				// An undecodable code fails later with something specific; do not guess here.
+			}
+			return vaults.length === 0 ? "first" : "add";
+		},
+		[vaults, storage],
+	);
 
 	// The joiner's half of the comparison. Raised once the channel is authenticated and cleared
 	// when the join settles either way, so a retry never shows a stale one.
@@ -82,6 +113,7 @@ export function DesktopLinkSection() {
 			if (cancelled || !claimed) return;
 			setInvitePassword("");
 			setInviteError(null);
+			setOutcome(await outcomeFor(claimed));
 			setInvite(claimed);
 		};
 		void check();
@@ -90,7 +122,7 @@ export function DesktopLinkSection() {
 			cancelled = true;
 			clearInterval(id);
 		};
-	}, [desktopLink, status?.paired, invite]);
+	}, [desktopLink, status?.paired, invite, outcomeFor]);
 
 	if (!desktopLink) return null;
 
@@ -109,6 +141,7 @@ export function DesktopLinkSection() {
 			if (claimed) {
 				setInvitePassword("");
 				setInviteError(null);
+				setOutcome(await outcomeFor(claimed));
 				setInvite(claimed);
 			}
 		} catch (e) {
@@ -143,10 +176,13 @@ export function DesktopLinkSection() {
 		setJoining(true);
 		setInviteError(null);
 		try {
-			await startJoin(invite, { kind: "password", password: invitePassword });
+			// Named, so a vault that appears in the list is recognisably the desktop's rather than
+			// an unexplained "Vault 2".
+			await startJoin(invite, { kind: "password", password: invitePassword }, t`Desktop vault`);
 			setInvite(null);
 			setInvitePassword("");
 			setJoinSas(null);
+			setOutcome(null);
 		} catch (e) {
 			setInviteError(
 				e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
@@ -212,6 +248,7 @@ export function DesktopLinkSection() {
 				onClose={() => {
 					setInvite(null);
 					setInvitePassword("");
+					setOutcome(null);
 				}}
 				className="max-w-sm"
 			>
@@ -223,7 +260,13 @@ export function DesktopLinkSection() {
 					}}
 				>
 					<h2 className="text-base font-medium">
-						<Trans>Sync with the desktop app</Trans>
+						{outcome === "switch" ? (
+							<Trans>You already share this vault</Trans>
+						) : outcome === "add" ? (
+							<Trans>Add the desktop's vault</Trans>
+						) : (
+							<Trans>Sync with the desktop app</Trans>
+						)}
 					</h2>
 					{joinSas ? (
 						<>
@@ -267,8 +310,18 @@ export function DesktopLinkSection() {
 							{/* The link stays: declining the vault copy is not declining delegation. */}
 							<Trans>Not now</Trans>
 						</Button>
-						<Button type="submit" size="sm" disabled={joining || !invitePassword}>
-							{joining ? <Trans>Waiting for the desktop app…</Trans> : <Trans>Sync</Trans>}
+						<Button
+							type="submit"
+							size="sm"
+							disabled={joining || (outcome !== "switch" && !invitePassword)}
+						>
+							{joining ? (
+								<Trans>Waiting for the desktop app…</Trans>
+							) : outcome === "switch" ? (
+								<Trans>Open that vault</Trans>
+							) : (
+								<Trans>Sync</Trans>
+							)}
 						</Button>
 					</div>
 				</form>

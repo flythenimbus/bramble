@@ -182,6 +182,10 @@ msgstr "Feld hinzufügen"
 msgid "Add New"
 msgstr "Neu hinzufügen"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Add the desktop's vault"
+msgstr "Desktop-Tresor hinzufügen"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
 msgstr "Fügen Sie die Websites hinzu, die diese Anmeldung abdeckt. Lassen Sie das Feld leer, wenn es sich um eine Anmeldeinformation handelt, die nicht an eine Website gebunden ist."
@@ -803,6 +807,10 @@ msgstr "Alle abwählen"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Desktop app"
 msgstr "Desktop-App"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop vault"
+msgstr "Desktop-Tresor"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -1636,6 +1644,10 @@ msgstr "Im Fenster öffnen"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Open it from the {0} popup and unlock it with its master password."
 msgstr "Öffnen Sie es aus dem {0}-Popup und entsperren Sie es mit seinem Master-Passwort."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open that vault"
+msgstr "Diesen Tresor öffnen"
 
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -2798,6 +2810,10 @@ msgstr "Jahr als JJ oder JJJJ eingeben."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"
 msgstr "Jahr (JJ)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You already share this vault"
+msgstr "Sie teilen diesen Tresor bereits"
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/OptionsApp.tsx

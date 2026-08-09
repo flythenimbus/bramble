@@ -182,6 +182,10 @@ msgstr "Añadir campo"
 msgid "Add New"
 msgstr "Añadir nuevo"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Add the desktop's vault"
+msgstr "Añadir la bóveda del escritorio"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
 msgstr "Añadir los sitios web que cubre este inicio de sesión. Deje vacío si la credencial no está vinculada a un sitio."
@@ -803,6 +807,10 @@ msgstr "Deseleccionar todo"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Desktop app"
 msgstr "Aplicación de escritorio"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop vault"
+msgstr "Bóveda del escritorio"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -1636,6 +1644,10 @@ msgstr "Abrir en ventana"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Open it from the {0} popup and unlock it with its master password."
 msgstr "Ábralo desde la ventana emergente de {0} y desbloquéelo con su contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open that vault"
+msgstr "Abrir esa bóveda"
 
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -2798,6 +2810,10 @@ msgstr "Escribir el año como AA o AAAA."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"
 msgstr "Año (YY)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You already share this vault"
+msgstr "Usted ya comparte esta bóveda"
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/OptionsApp.tsx

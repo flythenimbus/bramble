@@ -313,7 +313,7 @@ export interface VaultActions {
 	/** Setup-flow join: create a NEW vault from a pairing code (dedups to an existing vault if already
 	 * a member), then run the join in that vault's context and unlock into it. Resolves when the join
 	 * completes. Drives `joining` / `joinError`. See docs/multiple-vaults.md. */
-	startJoin(pairingCode: string, unlock: JoinUnlock): Promise<void>;
+	startJoin(pairingCode: string, unlock: JoinUnlock, label?: string): Promise<void>;
 	/** Revoke a device from the sync group (roster tombstone); propagates over ongoing sync. */
 	removeDevice(deviceId: string): Promise<void>;
 }
@@ -1195,7 +1195,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// can only ever fire for the newest attempt. Assigned before the first await, so a double tap
 	// rides the in-flight join instead. See docs/multiple-vaults.md.
 	const startJoin = useCallback(
-		(pairingCode: string, method: JoinUnlock): Promise<void> => {
+		(pairingCode: string, method: JoinUnlock, label?: string): Promise<void> => {
 			if (joinInFlightRef.current) return joinInFlightRef.current;
 			const run = (async () => {
 				setJoinError(null);
@@ -1208,7 +1208,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 						return;
 					}
 				}
-				const newId = await createRecord();
+				// Named by the caller where it knows what this vault IS. An unlabelled vault appearing
+				// mid-flow is how "connect a browser" read as the app swallowing the user's entries.
+				const newId = await createRecord(label);
 				await shell.setActiveVault?.(newId);
 				return new Promise<void>((resolve, reject) => {
 					joinResolverRef.current = { resolve, reject };

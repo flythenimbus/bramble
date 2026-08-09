@@ -182,6 +182,10 @@ msgstr "Adicionar campo"
 msgid "Add New"
 msgstr "Adicionar Novo"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Add the desktop's vault"
+msgstr "Adicionar o cofre do desktop"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
 msgstr "Adicionar os sites que este login cobre. Deixe em branco se as credenciais não estiverem vinculadas a um site."
@@ -803,6 +807,10 @@ msgstr "Desmarcar todos"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Desktop app"
 msgstr "Aplicativo de desktop"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop vault"
+msgstr "Cofre do desktop"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
@@ -1636,6 +1644,10 @@ msgstr "Abrir na janela"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Open it from the {0} popup and unlock it with its master password."
 msgstr "Abra-o a partir do pop-up {0} e desbloqueie-o com sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open that vault"
+msgstr "Abrir esse cofre"
 
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -2798,6 +2810,10 @@ msgstr "Escrever o ano como AA ou AAAA."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Year (YY)"
 msgstr "Ano (AA)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You already share this vault"
+msgstr "Você já compartilha este cofre"
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/OptionsApp.tsx

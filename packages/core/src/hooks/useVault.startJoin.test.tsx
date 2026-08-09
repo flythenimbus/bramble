@@ -56,7 +56,7 @@ function makePlatform() {
 		shell,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, setActiveVault };
+	return { platform, setActiveVault, storage };
 }
 
 describe("startJoin re-entry", () => {
@@ -78,5 +78,51 @@ describe("startJoin re-entry", () => {
 		expect(setActiveVault).toHaveBeenCalledTimes(1);
 		// The second call rode the in-flight join rather than starting its own.
 		expect(second).toBe(first);
+	});
+});
+
+/**
+ * The labels of every vault this join wrote into the registry.
+ *
+ * Read from the writes rather than the final registry because the harness never lets a join
+ * settle, so the record is created and then dropped as an orphan. What is under test is the
+ * record as CREATED.
+ */
+function createdLabels(storage: { setMeta: { mock: { calls: unknown[][] } } }): string[] {
+	const writes = storage.setMeta.mock.calls.filter((c) => c[0] === VAULT_REGISTRY_KEY);
+	const first = writes[0]?.[1] as VaultRegistry | undefined;
+	return (first?.vaults ?? []).map((v) => v.label);
+}
+
+describe("the vault a join creates", () => {
+	it("carries the label the caller gave it", async () => {
+		// An unlabelled vault appearing mid-flow is what made "connect a browser" read as the app
+		// swallowing the user's entries: the list gained a blank "Vault 2" with nothing tying it to
+		// the desktop app the user had just pressed a button about.
+		const { platform, storage } = makePlatform();
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions().startJoin(CODE, { kind: "password", password: "pw" }, "Desktop vault");
+		});
+		// startJoin resolves only once the join settles, which this platform never lets happen;
+		// the record is written before that, so flush the microtasks rather than await the call.
+		await act(async () => {});
+
+		expect(createdLabels(storage)).toEqual(["Desktop vault"]);
+	});
+
+	it("is blank when no label is given, so other callers are unchanged", async () => {
+		const { platform, storage } = makePlatform();
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions().startJoin(CODE, { kind: "password", password: "pw" });
+		});
+		await act(async () => {});
+
+		expect(createdLabels(storage)).toEqual([""]);
 	});
 });
