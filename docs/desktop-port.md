@@ -509,6 +509,20 @@ would only add a layer whose job is to undo the rename.
 Windows (WebView2, Chromium) is near-certain to work the same way; WebKitGTK is the open
 question `[unverified]`, and it is where webrtc-rs would come back if it comes back at all.
 
+**The release CSP has to allow the relay.** `connect-src` starts at `'self' ipc:
+http://ipc.localhost`, which blocks the relay WebSocket and the ICE-servers fetch. WebKit reports
+the blocked `new WebSocket` as `SecurityError: The operation is insecure.`, which reads like a
+transport-security problem rather than a policy one, and the ICE fetch fails quietly into "direct
+(host) only". Neither appears in `pnpm dev:desktop`, because `devCsp` permits localhost, so this
+is a release-only failure. `https:` and `wss:` are now allowed.
+
+That is broader than pinning the relay host, and deliberately: the relay is user-configurable
+under Advanced, and a CSP is fixed at build time, so a pinned host would break any custom relay
+with the same illegible error. `script-src` stays `'self'` with no `unsafe-inline`, which is what
+keeps the widened `connect-src` from being reachable. The tighter fix is to move the relay socket
+into Rust so the webview needs no network access at all; that is worth doing when the sync hub
+lands, not as a CSP tweak.
+
 **Browsers on this machine skip the relay entirely.** The app and a paired extension already have
 an authenticated pipe between them, so routing their sync traffic out to a relay and back through
 WebRTC is a trip through the internet to reach the next process along. `PeerSource` in
