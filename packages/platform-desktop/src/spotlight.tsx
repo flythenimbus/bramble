@@ -3,7 +3,7 @@
 // docs/desktop-port.md for the interaction model they implement.
 
 import { invoke } from "@tauri-apps/api/core";
-import { Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/index.css";
@@ -33,6 +33,33 @@ function useWindowTracksContent(ref: React.RefObject<HTMLElement | null>) {
 	}, [ref]);
 }
 
+/**
+ * The modifier this platform actually uses, as the symbol its users expect to see.
+ *
+ * A Mac showing "Ctrl" is wrong twice over: Control is a different key that exists on the same
+ * keyboard, so the hint is not merely unidiomatic, it names the wrong thing to press.
+ */
+const MOD = /mac/i.test(navigator.userAgent) ? "\u2318" : "Ctrl";
+
+/** One key, drawn as a key. */
+function Key({ children }: { children: React.ReactNode }) {
+	return (
+		<kbd className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded border border-white/15 bg-white/10 text-[0.7rem] font-medium leading-none text-foreground/80">
+			{children}
+		</kbd>
+	);
+}
+
+/** A shortcut and what it does. */
+function Hint({ keys, label }: { keys: React.ReactNode; label: string }) {
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<span className="inline-flex items-center gap-0.5">{keys}</span>
+			<span className="text-foreground/45">{label}</span>
+		</span>
+	);
+}
+
 function Spotlight() {
 	const input = useRef<HTMLInputElement>(null);
 	const panel = useRef<HTMLDivElement>(null);
@@ -42,7 +69,18 @@ function Spotlight() {
 
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") void invoke("spotlight_hide");
+			if (e.key === "Escape") {
+				void invoke("spotlight_hide");
+				return;
+			}
+			// The modifier is whichever this platform uses, matching what the hints show.
+			const mod = MOD === "Ctrl" ? e.ctrlKey : e.metaKey;
+			if (mod && e.key.toLowerCase() === "o") {
+				e.preventDefault();
+				// With nothing selected this opens the app itself. Once there are results it will
+				// open the highlighted entry; the results list is the next slice.
+				void invoke("spotlight_open_main");
+			}
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
@@ -90,6 +128,42 @@ function Spotlight() {
 					Results land in the next slice.
 				</div>
 			)}
+			{/* What you can do from here, on its own rule. Always visible: the panel opens with an
+			    empty field and no results, which is exactly when someone needs telling what it can
+			    do, and a hint that appears only after you have already worked it out is no hint. */}
+			<div className="border-t border-white/10 px-5 h-9 flex items-center gap-4 text-[0.7rem] select-none">
+				<Hint
+					keys={
+						<>
+							<Key>
+								<ArrowUp className="w-3 h-3" aria-hidden />
+							</Key>
+							<Key>
+								<ArrowDown className="w-3 h-3" aria-hidden />
+							</Key>
+						</>
+					}
+					label="Navigate"
+				/>
+				<Hint
+					keys={
+						<>
+							<Key>{MOD}</Key>
+							<Key>O</Key>
+						</>
+					}
+					label="Open in Bramble"
+				/>
+				<Hint
+					keys={
+						<>
+							<Key>{MOD}</Key>
+							<Key>F</Key>
+						</>
+					}
+					label="Autofill"
+				/>
+			</div>
 		</div>
 	);
 }

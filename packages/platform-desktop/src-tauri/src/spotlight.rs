@@ -149,6 +149,17 @@ pub fn spotlight_hide(app: AppHandle) {
 /// not is broken, because an empty results area is dead space the user has to look past.
 /// The content here is also bounded and deterministic, which is what made it unworkable on
 /// the main window's internally-scrolling screens.
+/// Dismiss the panel and bring the vault window forward.
+///
+/// One command rather than two calls, because the order matters and it is easy to get wrong
+/// from the other side: hiding the panel first lets macOS give focus to the window being
+/// raised, where raising first leaves the panel on top of what the user just asked to see.
+#[tauri::command]
+pub fn spotlight_open_main(app: AppHandle) {
+    hide(&app);
+    crate::lifetime::show_main(&app);
+}
+
 #[tauri::command]
 pub fn spotlight_set_height(app: AppHandle, height: f64) {
     let Some(window) = app.get_webview_window(LABEL) else {
