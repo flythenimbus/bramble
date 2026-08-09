@@ -48,6 +48,7 @@ mod ops {
     fn vaults_dir(root: &Path) -> CmdResult<PathBuf> {
         let dir = root.join("vaults");
         io(fs::create_dir_all(&dir), "create vaults dir")?;
+        restrict_dir(&dir)?;
         Ok(dir)
     }
 
@@ -66,10 +67,51 @@ mod ops {
     }
 
     /// Write via a sibling temp file and rename, so the destination is never partially written.
+    ///
+    /// Owner-only, set on the TEMP file before the rename, so the bytes are never briefly readable
+    /// under the process umask. Everything written here is either the encrypted vault or metadata
+    /// that should not be world-readable (the sync group key is in it), and the default 022 umask
+    /// would leave both at 0644. See `restrict` below.
     fn write_atomic(path: &Path, bytes: &[u8]) -> CmdResult<()> {
         let tmp = path.with_extension("tmp");
         io(fs::write(&tmp, bytes), "write temp")?;
+        restrict_file(&tmp)?;
         io(fs::rename(&tmp, path), "rename temp")
+    }
+
+    /// Owner-only (0600). The vault blob is encrypted, but leaving it readable hands any local
+    /// process an offline target for the master password, and meta.json holds the sync group key
+    /// in the clear, which names the relay room and decrypts its signalling.
+    #[cfg(unix)]
+    fn restrict_file(path: &Path) -> CmdResult<()> {
+        use std::os::unix::fs::PermissionsExt;
+        io(
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)),
+            "restrict file",
+        )
+    }
+
+    #[cfg(not(unix))]
+    fn restrict_file(_path: &Path) -> CmdResult<()> {
+        // Windows inherits the user profile's ACL, which is already owner-scoped.
+        Ok(())
+    }
+
+    /// Owner-only (0700) on a directory we create. `~/Library/Application Support` happens to be
+    /// 0700 on macOS, so this is defence in depth there; on Linux the XDG data dir is commonly
+    /// 0755, where it is the only thing standing between another account and these files.
+    #[cfg(unix)]
+    pub fn restrict_dir(path: &Path) -> CmdResult<()> {
+        use std::os::unix::fs::PermissionsExt;
+        io(
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)),
+            "restrict dir",
+        )
+    }
+
+    #[cfg(not(unix))]
+    pub fn restrict_dir(_path: &Path) -> CmdResult<()> {
+        Ok(())
     }
 
     pub fn has_vault(root: &Path, vault_id: Option<&str>) -> CmdResult<bool> {
@@ -190,6 +232,7 @@ pub(crate) fn data_dir(app: &AppHandle) -> CmdResult<PathBuf> {
         .app_data_dir()
         .map_err(|e| format!("no app data dir: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create data dir: {e}"))?;
+    ops::restrict_dir(&dir)?;
     Ok(dir)
 }
 
@@ -270,6 +313,59 @@ mod tests {
 
     fn bak(dir: &Path, id: &str) -> std::path::PathBuf {
         dir.join("vaults").join(format!("{id}.bak"))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn what_is_written_is_owner_only() {
+        // The vault blob is encrypted, but a readable copy is an offline target for the master
+        // password, and meta.json carries the sync group key in the clear. pairing.json and the
+        // socket were already restricted; these were not, and inherited a 022 umask as 0644.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        ops::write_vault(dir.path(), b"blob", Some("v1")).unwrap();
+        ops::set_meta(
+            dir.path(),
+            "sync.group".into(),
+            serde_json::json!({ "groupKey": "k" }),
+        )
+        .unwrap();
+
+        let (vault, _) = ops::vault_paths(dir.path(), Some("v1")).unwrap();
+        for path in [vault, dir.path().join("meta.json")] {
+            let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "{path:?} is {mode:o}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_backup_copy_is_owner_only_too() {
+        // The snapshot is a second full copy of the same bytes, so leaving it readable would
+        // undo the line above.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        ops::write_vault(dir.path(), b"first", Some("v1")).unwrap();
+        ops::write_vault(dir.path(), b"second", Some("v1")).unwrap();
+
+        let (_, backup) = ops::vault_paths(dir.path(), Some("v1")).unwrap();
+        let mode = fs::metadata(&backup).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "backup is {mode:o}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_vaults_directory_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        ops::write_vault(dir.path(), b"blob", Some("v1")).unwrap();
+
+        let mode = fs::metadata(dir.path().join("vaults"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "vaults dir is {mode:o}");
     }
 
     #[test]
