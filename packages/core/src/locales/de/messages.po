@@ -212,6 +212,11 @@ msgstr "Flugzeug"
 msgid "All"
 msgstr "Alle"
 
+#. placeholder {0}: entries.length
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
+msgstr "Kopieren Sie auch die {0} Einträge dieses Tresors hinein, damit alles an einem Ort vereint ist. Sie bleiben auch hier; nichts wird gelöscht."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
 msgstr "Sperren Sie den Tresor auch, wenn der Bildschirm Ihres Computers gesperrt wird, unabhängig von der Zeitüberschreitung."
@@ -2414,6 +2419,10 @@ msgstr "Sie befinden sich nun in Ihrem Tresor. Zu Ihrer Sicherheit löschen Sie 
 msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
 msgstr "Sie sind jetzt in Ihrem Tresor. Die Übertragung erfolgte direkt zwischen den beiden Apps, daher gibt es keine Datei zu bereinigen."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are: two vaults cannot be combined automatically, because each is encrypted with its own key."
+msgstr "Dadurch wird der Tresor des Desktops als separater Tresor zu diesem Browser hinzugefügt. Ihre vorhandenen Tresore bleiben unverändert: Zwei Tresore können nicht automatisch zusammengeführt werden, da jeder mit seinem eigenen Schlüssel verschlüsselt ist."
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."
 msgstr "Dieser Authentifizierungsschlüssel ist ungültig und kann keine Codes generieren."
@@ -2421,6 +2430,10 @@ msgstr "Dieser Authentifizierungsschlüssel ist ungültig und kann keine Codes g
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Dieses Backup hat kein Master-Passwort und kann daher hier nicht wiederhergestellt werden."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
+msgstr "Dieser Browser teilt diesen Tresor bereits mit der Desktop-App. Durch das Öffnen wird nur zu ihm gewechselt; der Tresor, in dem Sie sich gerade befinden, bleibt genau so, wie er ist."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."

@@ -212,6 +212,11 @@ msgstr "Avião"
 msgid "All"
 msgstr "Todos"
 
+#. placeholder {0}: entries.length
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
+msgstr "Copiar também as {0} entradas deste cofre para ele, para que tudo fique em um só lugar. Elas permanecem aqui também; nada é excluído."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
 msgstr "Bloqueie também o cofre sempre que a tela do computador for bloqueada, independentemente do tempo limite."
@@ -2414,6 +2419,10 @@ msgstr "Eles estão no seu cofre agora. Por sua segurança, exclua o arquivo de 
 msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
 msgstr "Eles estão no seu cofre agora. A transferência ocorreu diretamente entre os dois aplicativos, portanto não há nenhum arquivo para limpar."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are: two vaults cannot be combined automatically, because each is encrypted with its own key."
+msgstr "Isso adiciona o cofre do computador a este navegador como um cofre separado. Seus cofres existentes permanecem como estão: dois cofres não podem ser combinados automaticamente, pois cada um é criptografado com sua própria chave."
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."
 msgstr "Esta chave autenticadora é inválida e não pode gerar códigos."
@@ -2421,6 +2430,10 @@ msgstr "Esta chave autenticadora é inválida e não pode gerar códigos."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Este backup não possui senha mestra, portanto não pode ser restaurado aqui."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
+msgstr "Este navegador já compartilha esse cofre com o aplicativo do computador. Ao abri-lo, você apenas muda para ele; o cofre em que você está agora permanece exatamente como está."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."

@@ -212,6 +212,11 @@ msgstr "Aeroplane"
 msgid "All"
 msgstr "All"
 
+#. placeholder {0}: entries.length
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
+msgstr "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
 msgstr "Also lock the vault whenever your computer's screen locks, whatever the timeout."
@@ -2414,6 +2419,10 @@ msgstr "They're in your vault now. For your safety, delete the export file you j
 msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
 msgstr "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are: two vaults cannot be combined automatically, because each is encrypted with its own key."
+msgstr "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are: two vaults cannot be combined automatically, because each is encrypted with its own key."
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."
 msgstr "This authenticator key is invalid and can't generate codes."
@@ -2421,6 +2430,10 @@ msgstr "This authenticator key is invalid and can't generate codes."
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "This backup has no master password, so it can't be restored here."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
+msgstr "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."

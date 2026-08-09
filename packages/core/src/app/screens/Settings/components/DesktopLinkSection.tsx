@@ -3,7 +3,7 @@ import { CheckCircle2, Monitor } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { DesktopLinkStatus } from "../../../../adapters/desktop-link";
 import { usePlatform } from "../../../../context/PlatformContext";
-import { useVaultActions } from "../../../../hooks/useVault";
+import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { decodePairingCode } from "../../../../sync/enrollment";
 import { syncKeyFor } from "../../../../sync/sync-keys";
@@ -28,7 +28,8 @@ const OFFER_POLL_MS = 4000;
 export function DesktopLinkSection() {
 	const { desktopLink, shell, storage } = usePlatform();
 	const { t } = useLingui();
-	const { startJoin } = useVaultActions();
+	const { startJoin, importEntries } = useVaultActions();
+	const { entries } = useVault();
 	const { vaults } = useVaultRegistry();
 	const [status, setStatus] = useState<DesktopLinkStatus | null>(null);
 	const [code, setCode] = useState("");
@@ -52,6 +53,8 @@ export function DesktopLinkSection() {
 	 * inside one vault must not silently leave the user standing in another.
 	 */
 	const [outcome, setOutcome] = useState<"switch" | "add" | "first" | null>(null);
+	/** Whether to carry this vault's entries into the shared one rather than leave two apart. */
+	const [alsoMove, setAlsoMove] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -175,6 +178,11 @@ export function DesktopLinkSection() {
 		if (!invite) return;
 		setJoining(true);
 		setInviteError(null);
+		// Captured BEFORE the join, while this vault is still the open one. Its entries are already
+		// decrypted in memory here, which is what makes moving them possible at all: the two vaults
+		// have different keys and only one is ever loaded, so the plaintext crossing between them
+		// has to be held over the switch rather than re-wrapped in place.
+		const carry = alsoMove ? entries.map(({ id: _id, ...data }) => data) : null;
 		try {
 			// Named, so a vault that appears in the list is recognisably the desktop's rather than
 			// an unexplained "Vault 2".
@@ -183,6 +191,10 @@ export function DesktopLinkSection() {
 			setInvitePassword("");
 			setJoinSas(null);
 			setOutcome(null);
+			// After the join, so this lands in the vault that is now open. Failing here leaves the
+			// originals untouched in the vault they came from, which is the safe way round.
+			if (carry?.length) await importEntries(carry);
+			setAlsoMove(false);
 		} catch (e) {
 			setInviteError(
 				e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
@@ -278,13 +290,31 @@ export function DesktopLinkSection() {
 							</p>
 							<SasDisplay digits={joinSas.sas} emoji={joinSas.sasEmoji} />
 						</>
+					) : outcome === "switch" ? (
+						// Nothing transfers and no vault is created: this browser is already in that
+						// group. All that changes is which vault is open, so say that and ask, rather
+						// than moving the user and leaving them to work out where they landed.
+						<p className="text-xs text-muted-foreground">
+							<Trans>
+								This browser already shares that vault with the desktop app. Opening it just
+								switches you to it; the vault you are in now stays exactly as it is.
+							</Trans>
+						</p>
 					) : (
 						<>
 							<p className="text-xs text-muted-foreground">
-								<Trans>
-									The desktop app offered to share its vault with this browser. Enter the master
-									password you use there, then compare the symbols both screens show.
-								</Trans>
+								{outcome === "add" ? (
+									<Trans>
+										This adds the desktop's vault to this browser as a separate one. Your existing
+										vaults stay as they are: two vaults cannot be combined automatically, because
+										each is encrypted with its own key.
+									</Trans>
+								) : (
+									<Trans>
+										The desktop app offered to share its vault with this browser. Enter the master
+										password you use there, then compare the symbols both screens show.
+									</Trans>
+								)}
 							</p>
 							<PasswordField
 								label={t`Master password`}
@@ -295,6 +325,22 @@ export function DesktopLinkSection() {
 									setInviteError(null);
 								}}
 							/>
+							{outcome === "add" && entries.length > 0 && (
+								<label className="flex items-start gap-2 text-xs text-muted-foreground">
+									<input
+										type="checkbox"
+										className="mt-0.5"
+										checked={alsoMove}
+										onChange={(e) => setAlsoMove(e.target.checked)}
+									/>
+									<span>
+										<Trans>
+											Also copy this vault's {entries.length} entries into it, so everything is in
+											one place. They stay here too; nothing is deleted.
+										</Trans>
+									</span>
+								</label>
+							)}
 						</>
 					)}
 					{inviteError && <p className="text-xs text-destructive">{inviteError}</p>}

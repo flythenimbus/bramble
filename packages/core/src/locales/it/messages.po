@@ -212,6 +212,11 @@ msgstr "Aeroplano"
 msgid "All"
 msgstr "Tutti"
 
+#. placeholder {0}: entries.length
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
+msgstr "Copia anche le {0} voci di questa cassaforte al suo interno, così da avere tutto in un unico posto. Rimangono anche qui; non viene eliminato nulla."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
 msgstr "Blocca il caveau anche quando lo schermo del computer si blocca, indipendentemente dal timeout."
@@ -2414,6 +2419,10 @@ msgstr "Sono ora nella sua vault. Per la sua sicurezza, elimini il file di espor
 msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
 msgstr "Sono ora nella sua cassaforte. Il trasferimento è avvenuto direttamente tra le due app, quindi non c'è alcun file da eliminare."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are: two vaults cannot be combined automatically, because each is encrypted with its own key."
+msgstr "Questo aggiunge la cassaforte del desktop a questo browser come cassaforte separata. Le sue casseforti esistenti restano come sono: due casseforti non possono essere unite automaticamente, perché ognuna è cifrata con la propria chiave."
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This authenticator key is invalid and can't generate codes."
 msgstr "Questa chiave di autenticazione è non valida e non può generare codici."
@@ -2421,6 +2430,10 @@ msgstr "Questa chiave di autenticazione è non valida e non può generare codici
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Questo backup non ha una password principale, quindi non può essere ripristinato qui."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
+msgstr "Questo browser condivide già quella cassaforte con l'app desktop. Aprirla La porta semplicemente ad essa; la cassaforte in cui si trova ora rimane esattamente com'è."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."
