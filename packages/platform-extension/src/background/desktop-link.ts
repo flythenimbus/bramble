@@ -28,6 +28,9 @@ const PROTOCOL_VERSION = 1;
 
 const STORAGE_KEY = "desktopLink";
 
+/** How long a request over the held link waits. A fill the user is watching, so short. */
+const ASK_TIMEOUT_MS = 10_000;
+
 /** What survives a pairing: our identity, and who we are entitled to talk to. */
 interface LinkState {
 	privateKey: string;
@@ -48,10 +51,23 @@ class NativeSession {
 	private port: chrome.runtime.Port;
 	private queue: Array<(value: any) => void> = [];
 	private failed: string | null = null;
+	/**
+	 * Frames the app sent unprompted, rather than as the answer to a request.
+	 *
+	 * Everything used to be request/response, so the next frame to arrive WAS the answer to the
+	 * outstanding request. Sync broke that: the app pushes when it has something to say, and a
+	 * pushed frame landing between a request and its answer would be handed back as that answer,
+	 * leaving the session one frame out of step for as long as it lived. Whoever installs this
+	 * takes those frames out of the queue's path.
+	 */
+	private onUnsolicited: ((msg: any) => boolean) | null = null;
 
 	constructor() {
 		this.port = api.runtime.connectNative(HOST_NAME);
 		this.port.onMessage.addListener((msg) => {
+			// The hook decides: it returns true when it has claimed the frame. Anything it does
+			// not claim is an answer, and goes to whoever is waiting.
+			if (this.onUnsolicited?.(msg)) return;
 			const next = this.queue.shift();
 			if (next) next(msg);
 		});
@@ -83,6 +99,20 @@ class NativeSession {
 	/** Send without expecting a reply, for the last message of a handshake. */
 	send(message: Record<string, unknown>): void {
 		this.port.postMessage(message);
+	}
+
+	/** Claim frames the app sent unprompted. See `onUnsolicited`. */
+	intercept(handler: (msg: any) => boolean): void {
+		this.onUnsolicited = handler;
+	}
+
+	/** Whether the pipe has died, so a held session knows to rebuild rather than hang. */
+	get dead(): boolean {
+		return this.failed !== null;
+	}
+
+	onDead(cb: () => void): void {
+		this.port.onDisconnect.addListener(cb);
 	}
 
 	close(): void {
@@ -160,6 +190,12 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 	const state = await loadState();
 	if (!state) throw new Error("Not linked to the desktop app.");
 
+	// Ride the held link when sync has one open. A second connection would displace it as the
+	// target for the app's pushes, and closing this short-lived one would take that queue with
+	// it, so sync would go quiet with nothing reporting a fault.
+	const link = await ensureHeld();
+	if (link) return askOverHeld(link, request);
+
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
@@ -190,6 +226,28 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 	}
 }
 
+/** One request over the held link, answered by routeInbound. */
+async function askOverHeld(link: HeldLink, request: Record<string, unknown>): Promise<any> {
+	const sealed = (await offscreen("LINK_SEAL", {
+		sessionId: link.sessionId,
+		plaintext: JSON.stringify(request),
+	})) as string;
+	const answer = new Promise<unknown>((resolve, reject) => {
+		// A dead pipe would otherwise leave this pending forever, and the caller is a fill the
+		// user is waiting on.
+		const timer = setTimeout(() => {
+			pendingAnswer = null;
+			reject(new Error("The desktop app did not answer."));
+		}, ASK_TIMEOUT_MS);
+		pendingAnswer = (value) => {
+			clearTimeout(timer);
+			resolve(value);
+		};
+	});
+	link.session.send({ sealed });
+	return answer;
+}
+
 /** Reconnect over KK, which is what every session after the first one does. */
 export async function connectToDesktop(): Promise<boolean> {
 	const state = await loadState();
@@ -217,6 +275,146 @@ export async function connectToDesktop(): Promise<boolean> {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
 	}
+}
+
+/**
+ * The one held-open link to the app, opened when this browser syncs with it.
+ *
+ * Delegation opens a session per request, which is fine for a link that is idle most of the
+ * time. Sync cannot: the app pushes frames when it has something to say, so somebody has to be
+ * listening. Held open while sync runs and torn down with it.
+ *
+ * There must be at most ONE connection from this extension at a time. The app keys its outbound
+ * queue by our static key, so a second connection displaces the first as the target for pushes,
+ * and closing that short-lived one takes the queue with it: sync would go quiet until the next
+ * reconnect, with nothing on either side reporting a fault. So while this is open, requests ride
+ * it instead of spawning their own.
+ */
+interface HeldLink {
+	session: NativeSession;
+	/** The Noise session id, held in the offscreen where the crypto lives. */
+	sessionId: number;
+	/** Opens arrive in order and must be DECRYPTED in order: Noise numbers its transport frames,
+	 * so two opens in flight at once can complete out of order and fail. */
+	inbound: Promise<void>;
+}
+
+let held: HeldLink | null = null;
+
+/** Where a frame from the app goes. Set while sync is running. */
+let onSyncFrame: ((frame: string) => void) | null = null;
+
+/** Open the link and keep it open, routing the app's sync frames to `onFrame`. */
+export async function openSyncLink(onFrame: (frame: string) => void): Promise<boolean> {
+	onSyncFrame = onFrame;
+	return (await ensureHeld()) !== null;
+}
+
+/** Close the held link. Delegation goes back to a session per request. */
+export async function closeSyncLink(): Promise<void> {
+	onSyncFrame = null;
+	const link = held;
+	held = null;
+	if (!link) return;
+	await offscreen("LINK_CLOSE", { sessionId: link.sessionId }).catch(() => {});
+	link.session.close();
+}
+
+/** Hand one sync frame to the app. False when the link is down, which is not an error: the
+ * desktop app may simply not be running, and sync carries on over the relay. */
+export async function sendSyncFrame(frame: string): Promise<boolean> {
+	const link = await ensureHeld();
+	if (!link) return false;
+	try {
+		const sealed = (await offscreen("LINK_SEAL", {
+			sessionId: link.sessionId,
+			plaintext: JSON.stringify({ op: "sync", frame }),
+		})) as string;
+		link.session.send({ sealed });
+		return true;
+	} catch {
+		await dropHeld();
+		return false;
+	}
+}
+
+/** The held link, opening one if sync is running and there is none. */
+async function ensureHeld(): Promise<HeldLink | null> {
+	if (held && !held.session.dead) return held;
+	if (held) await dropHeld();
+	if (!onSyncFrame) return null; // sync is not running; nothing should hold the pipe open
+
+	const state = await loadState();
+	if (!state) return null;
+	const start = (await offscreen("LINK_START_INITIATOR", {
+		privateKey: state.privateKey,
+		remotePublicKey: state.appPublicKey,
+	})) as { sessionId: number; message: string };
+
+	const session = new NativeSession();
+	try {
+		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
+		const reply = await session.request({ message: start.message });
+		if (reply?.ok !== true || reply?.done !== true) throw new Error("refused");
+		// KK is two messages; feeding the reply back is what puts this side in transport mode.
+		if (reply.message) {
+			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
+		}
+	} catch {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		session.close();
+		return null;
+	}
+
+	const link: HeldLink = { session, sessionId: start.sessionId, inbound: Promise.resolve() };
+	session.intercept((msg) => {
+		if (typeof msg?.sealed !== "string") return false;
+		// Claimed BEFORE it is opened, and opened on a chain, because deciding what a frame is
+		// requires decrypting it and decryption has to happen in arrival order.
+		link.inbound = link.inbound.then(() => routeInbound(link, msg.sealed as string));
+		return true;
+	});
+	session.onDead(() => {
+		// Only if it is still the current link: a rebuild may already have replaced it.
+		if (held === link) held = null;
+	});
+	held = link;
+	return link;
+}
+
+/** Open one inbound frame and dispatch it: a sync frame to sync, anything else to the request
+ * waiting for it. */
+async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
+	let parsed: { sync?: string };
+	try {
+		const plain = (await offscreen("LINK_OPEN", {
+			sessionId: link.sessionId,
+			sealed,
+		})) as string;
+		parsed = JSON.parse(plain) as { sync?: string };
+	} catch {
+		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
+		await dropHeld();
+		return;
+	}
+	if (typeof parsed.sync === "string") {
+		onSyncFrame?.(parsed.sync);
+		return;
+	}
+	// An answer: hand the plaintext to whoever asked. Requests over the held link resolve here.
+	pendingAnswer?.(parsed);
+	pendingAnswer = null;
+}
+
+/** The request waiting on the held link, if any. One at a time: askDesktop awaits each call. */
+let pendingAnswer: ((value: unknown) => void) | null = null;
+
+async function dropHeld(): Promise<void> {
+	const link = held;
+	held = null;
+	if (!link) return;
+	await offscreen("LINK_CLOSE", { sessionId: link.sessionId }).catch(() => {});
+	link.session.close();
 }
 
 /**
