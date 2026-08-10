@@ -7,6 +7,7 @@ import { useVault, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 import { setAppBackHandler } from "./android-back";
 import { CornerSavedToast } from "./components/CornerSavedToast";
+import { DevFlagsModal, useHydrateDevFlags } from "./components/DevFlagsModal";
 import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PopOutProvider } from "./hooks/usePopOut";
@@ -38,6 +39,12 @@ interface AppProps {
 // Feeds the live vault slice to route guards via the router context prop. Since
 // context changes only affect future navigations, we invalidate() on every slice
 // change to re-run active beforeLoad guards (bouncing to unlock on auto-lock, etc).
+/** Hydrates persisted overrides, then renders the panel its shortcut opens. */
+function DevFlags() {
+	useHydrateDevFlags();
+	return <DevFlagsModal />;
+}
+
 function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: PendingLogin }) {
 	const { isLocked, ready, entries } = useVault();
 	const { ready: registryReady, vaults, activeId } = useVaultRegistry();
@@ -133,6 +140,10 @@ export default function App({
 						    DURING unlock, before the app chrome renders, so a listener scoped to the
 						    unlocked layout would miss the broadcast. */}
 						<CornerSavedToast />
+						{/* The flag panel and the overrides it persists. Mounted for every host: the
+						    shortcut is obscure enough not to be found by accident, and what it flips is
+						    UI gating rather than anything standing between a user and their data. */}
+						<DevFlags />
 						<VaultRegistryProvider>
 							<VaultProvider>
 								<PrefsProvider>

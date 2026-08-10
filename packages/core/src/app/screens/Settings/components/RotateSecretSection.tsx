@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
-import { flags } from "../../../../flags";
+import { useFlag } from "../../../../hooks/useFlag";
 import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -20,6 +20,9 @@ import { Section } from "./primitives";
  */
 export function RotateSecretSection() {
 	const { hasPasswordSlot, rotateSecret } = useVault();
+	// Through the hook, not a direct flags import: the dev panel can flip this at runtime and a
+	// captured value would leave the section hidden after the box was ticked.
+	const enabled = useFlag("rotateVaultSecret");
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
 	const [confirming, setConfirming] = useState(false);
@@ -32,7 +35,7 @@ export function RotateSecretSection() {
 	// Off by default. The operation is tested, but it ends with every other device unable to read
 	// the vault and a recovery code the user has to save right then, so it stays behind the flag
 	// until it has been exercised on real vaults. See flags.json.
-	if (!flags.rotateVaultSecret) return null;
+	if (!enabled) return null;
 	// Nothing to rotate with: rotation re-wraps the password slot, so the password is the one
 	// credential that has to survive it.
 	if (!hasPasswordSlot) return null;
