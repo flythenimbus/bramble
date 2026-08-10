@@ -78,6 +78,15 @@ pub fn run() {
             }
             lifetime::install_tray(app.handle())?;
 
+            // Updating in place. A password manager distributed outside an app store has no other
+            // way to get a fix to the people running it, so this is not a convenience.
+            #[cfg(desktop)]
+            {
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.handle().plugin(tauri_plugin_process::init())?;
+            }
+
             // Rewritten every launch, not installed once: the manifest carries an absolute
             // path to the proxy, so an app update or a move silently breaks every browser.
             manifest::refresh();

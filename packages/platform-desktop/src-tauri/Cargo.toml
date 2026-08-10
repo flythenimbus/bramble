@@ -46,6 +46,12 @@ tauri-plugin-global-shortcut = "2.3.2"
 sha2 = "0.10.9"
 getrandom = "0.3.4"
 base64 = "0.23.1"
+# Updating the app in place. Desktop-gated as the plugin's own docs show, so a future mobile
+# target does not try to build an updater that has no meaning there.
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "2.10.1"
+# Only for relaunching after an update lands.
+tauri-plugin-process = "2.3.1"
 
 [dev-dependencies]
 # Each storage test gets its own data dir, so they can run in parallel and clean up after

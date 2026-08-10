@@ -150,6 +150,17 @@ export interface ShellAdapter {
 	syncSigningPublicKey?(): Promise<string>;
 	/** Ed25519-sign a canonical roster-entry string (see canonicalRosterEntry). Paired with syncSigningPublicKey. */
 	signRoster?(canonical: string): Promise<string>;
+	/**
+	 * Look for a newer version of the app itself, and install it.
+	 *
+	 * Desktop only: a store-distributed extension is updated by the store, and there is nothing
+	 * for this to do there. `check` resolves null when the app is current. `install` downloads,
+	 * applies and relaunches, so it does not return in the ordinary case.
+	 */
+	updates?: {
+		check(): Promise<{ version: string; notes?: string } | null>;
+		install(onProgress?: (fraction: number | null) => void): Promise<void>;
+	};
 	/** What to call this device in the roster, where the host knows better than the user agent
 	 * does. A native app's UA describes its webview, so a Tauri window reports as Safari and would
 	 * otherwise be listed as a browser. Absent means sniff the UA. */

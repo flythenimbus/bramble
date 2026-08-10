@@ -27,6 +27,7 @@ import {
 	stopSync,
 } from "../sync/transport";
 import { desktopStorage } from "./storage";
+import { desktopUpdates } from "./updates";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
 let appVersion = "0.0.0";
@@ -80,6 +81,10 @@ export const desktopShell: ShellAdapter = {
 	popOut: async () => {},
 	consumeHandoff: async () => null,
 	isDetached: () => false,
+
+	// Updating the app itself. Only the desktop has this: a store-distributed extension is
+	// updated by the store. See ./updates.
+	updates: desktopUpdates,
 
 	// The panel asking this window to open an entry. One window, so this is a route change
 	// rather than a new context; the router's guards still apply.

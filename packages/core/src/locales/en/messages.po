@@ -338,9 +338,17 @@ msgstr "Bramble hit an unexpected error. Your vault is safe — it stays encrypt
 msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 msgstr "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is installed directly, so updates are checked here."
+msgstr "Bramble is installed directly, so updates are checked here."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Bramble is running but locked. Unlock it there first."
 #~ msgstr "Bramble is running but locked. Unlock it there first."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is up to date."
+msgstr "Bramble is up to date."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -425,6 +433,14 @@ msgstr "Change it on the site to keep your account safe."
 msgid "Change your master password"
 msgstr "Change your master password"
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check"
+msgstr "Check"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates"
+msgstr "Check for updates"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Check passwords for breaches"
 msgstr "Check passwords for breaches"
@@ -436,6 +452,10 @@ msgstr "Check the digits; that isn't a valid card number."
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
 msgstr "Check this matches"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Checking…"
+msgstr "Checking…"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Choose a .bramble file"
@@ -875,6 +895,19 @@ msgstr "Done. Your old recovery code no longer works. Save this one now: it is s
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
 msgstr "Download"
+
+#. placeholder {0}: Math.round(fraction * 100)
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading {0}%"
+msgstr "Downloading {0}%"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading…"
+msgstr "Downloading…"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloads and restarts Bramble. Your vault is untouched."
+msgstr "Downloads and restarts Bramble. Your vault is untouched."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -2748,6 +2781,14 @@ msgstr "Unlocking…"
 msgid "Unnamed device"
 msgstr "Unnamed device"
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update and restart"
+msgstr "Update and restart"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update failed: {error}"
+msgstr "Update failed: {error}"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"
 msgstr "Update password"
@@ -2756,6 +2797,10 @@ msgstr "Update password"
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Updated {0}"
 msgstr "Updated {0}"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Updates"
+msgstr "Updates"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Use Bramble for passkeys"
@@ -2832,6 +2877,11 @@ msgstr "Verifying…"
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 msgid "Version"
 msgstr "Version"
+
+#. placeholder {0}: found.version
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Version {0} is available"
+msgstr "Version {0} is available"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Visible"

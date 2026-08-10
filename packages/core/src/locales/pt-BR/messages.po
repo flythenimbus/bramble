@@ -338,9 +338,17 @@ msgstr "O Bramble encontrou um erro inesperado. Seu cofre está seguro — ele p
 msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 msgstr "O Bramble é gratuito e de código aberto. Se for útil para você, uma contribuição ajuda a mantê-lo ativo. Escaneie um código com sua carteira ou copie o endereço. Obrigado."
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is installed directly, so updates are checked here."
+msgstr "O Bramble é instalado diretamente, portanto as atualizações são verificadas aqui."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Bramble is running but locked. Unlock it there first."
 #~ msgstr "O Bramble está em execução, mas bloqueado. Desbloqueie-o lá primeiro."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is up to date."
+msgstr "O Bramble está atualizado."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -425,6 +433,14 @@ msgstr "Altere-o no site para manter sua conta segura."
 msgid "Change your master password"
 msgstr "Mudar sua senha mestra"
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check"
+msgstr "Verificar"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates"
+msgstr "Verificar atualizações"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Check passwords for breaches"
 msgstr "Verificar senhas por violações"
@@ -436,6 +452,10 @@ msgstr "Verifique os dígitos; este não é um número de cartão válido."
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
 msgstr "Verificar se corresponde"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Checking…"
+msgstr "Verificando…"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Choose a .bramble file"
@@ -875,6 +895,19 @@ msgstr "Concluído. Seu código de recuperação antigo não funciona mais. Guar
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
 msgstr "Baixar"
+
+#. placeholder {0}: Math.round(fraction * 100)
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading {0}%"
+msgstr "Baixando {0}%"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading…"
+msgstr "Baixando…"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloads and restarts Bramble. Your vault is untouched."
+msgstr "Baixa e reinicia o Bramble. Seu cofre permanece intacto."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -2748,6 +2781,14 @@ msgstr "Desbloqueando…"
 msgid "Unnamed device"
 msgstr "Dispositivo sem nome"
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update and restart"
+msgstr "Atualizar e reiniciar"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update failed: {error}"
+msgstr "Atualização falhou: {error}"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"
 msgstr "Atualizar senha"
@@ -2756,6 +2797,10 @@ msgstr "Atualizar senha"
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Updated {0}"
 msgstr "Atualizado {0}"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Updates"
+msgstr "Atualizações"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Use Bramble for passkeys"
@@ -2832,6 +2877,11 @@ msgstr "Verificando…"
 #: packages/core/src/app/screens/Settings/components/AboutSection.tsx
 msgid "Version"
 msgstr "Versão"
+
+#. placeholder {0}: found.version
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Version {0} is available"
+msgstr "Versão {0} está disponível"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Visible"

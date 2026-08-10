@@ -653,6 +653,39 @@ filling while locked, the entire point, could not work), and to an unlock TRANSI
 worker restarting with an already-unlocked session never opened it). An open pipe grants nothing on
 its own: the app answers only while its own vault is unlocked, and the handshake still has to pass.
 
+## Releasing and updating
+
+Distribution is a signed GitHub release, nothing else. That makes updating part of the product
+rather than a nicety: there is no store to push a fix through, so without an in-app updater a
+security fix reaches only the people who happen to check the repository.
+
+`plugins.updater` in `tauri.conf.json` points at `latest.json` on the latest release, and
+`createUpdaterArtifacts` makes the bundler emit `Bramble.app.tar.gz` plus a `.sig`. The plugin
+verifies that signature against the public key compiled into the INSTALLED build before applying
+anything, which is what makes downloading a binary and running it acceptable: a substituted or
+tampered asset fails verification and is discarded.
+
+**The signing key is permanent from the first public release.** Verification uses the key baked
+into the app someone already has, so changing the keypair later strands every existing install on a
+manual re-download. It lives at `~/.bramble/updater.key`, referenced from `.env.local` by
+`TAURI_SIGNING_PRIVATE_KEY` — the `_PATH` variant its own generator advertises is NOT what the
+bundler reads, and a build without it fails at the bundling step rather than silently producing an
+unsigned archive. Losing the key means no future release can be signed at all.
+
+`pnpm release:desktop` reads what the build actually produced and writes `latest.json` from it,
+rather than reconstructing filenames: the signature has to belong to the exact bytes published. It
+refuses to write a manifest for an archive with no `.sig`, because publishing one would leave a
+release that looks complete while updating silently fails for everyone.
+
+`latest.json` must be an asset on the LATEST release. Installed apps read that URL, so a release
+that omits it leaves them checking a stale manifest.
+
+Two things are still outstanding for a public release. **Notarization**: the bundle is signed but
+not notarized, so Gatekeeper blocks it on any machine that did not build it; Tauri does it during
+the build once `APPLE_ID`, `APPLE_PASSWORD` (app-specific) and `APPLE_TEAM_ID` are in `.env.local`.
+**Architecture**: the default build is `aarch64` only, so Intel Macs cannot run it —
+`pnpm build:desktop:universal` produces both.
+
 ## Risks to retire early
 
 1. **WebKitGTK rendering and window transparency on Linux.** The UI is Tailwind-heavy and WebKit is

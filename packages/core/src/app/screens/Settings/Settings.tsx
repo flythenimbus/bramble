@@ -25,6 +25,7 @@ import { RotateSecretSection } from "./components/RotateSecretSection";
 import { SecuritySection } from "./components/SecuritySection";
 import { SupportSection } from "./components/SupportSection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
+import { UpdatesSection } from "./components/UpdatesSection";
 import type { SettingsTab } from "./settings-search";
 
 export function Settings() {
@@ -137,6 +138,8 @@ export function Settings() {
 				{tab === "about" && (
 					<>
 						<AboutSection />
+						{/* Renders itself away where the host cannot update itself. */}
+						<UpdatesSection />
 						<SupportSection />
 					</>
 				)}
