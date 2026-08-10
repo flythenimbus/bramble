@@ -1,9 +1,10 @@
 # Release signing
 
-Three independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
+Four independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
 **Chrome extension** (Chrome Web Store verified uploads) below, the **Firefox extension**
-([listed on addons.mozilla.org](#firefox-listed-on-addonsmozillaorg)), and the **Android app**
-([GitHub-released APK](#android-github-released-apk)) at the end.
+([listed on addons.mozilla.org](#firefox-listed-on-addonsmozillaorg)), the **Android app**
+([GitHub-released APK](#android-github-released-apk)), and the **desktop app**
+([GitHub-released and self-updating](#desktop-app-github-released-and-self-updating)) at the end.
 
 ## Chrome Web Store verified uploads
 
@@ -306,4 +307,92 @@ age -d android-release-keystore.backup.age > /tmp/ks.jks         # passphrase
 age-plugin-yubikey --generate                                    # new YubiKey recipient
 age -r age1yubikey1NEW -o ~/.config/bramble/android-release-keystore.age /tmp/ks.jks
 rm -P /tmp/ks.jks
+```
+
+## Desktop app (GitHub-released and self-updating)
+
+Two different signings, and they protect different things.
+
+**Apple Developer ID** makes macOS willing to run the app at all. **The updater key** is what the
+installed app checks before applying an update, so it is the one that decides whether a binary
+downloaded from the internet gets to replace Bramble on someone's machine. That makes it the most
+consequential key in this file: the Chrome and AMO keys prove "the uploader is us" to a store that
+re-signs anyway, while this one is verified by end users' own copies.
+
+It is also effectively permanent. Verification uses the public key compiled into the build a user
+already has, so rotating the keypair does not roll out — it strands every existing install on a
+manual re-download. Treat losing it as unrecoverable-by-design and keep the offline backup.
+
+### Why the key is not ON the YubiKey
+
+Tauri's CLI signs with minisign and takes the key as a path or a string; it cannot drive a hardware
+token. So the YubiKey does here what it does for the Android keystore: it gates *access* to a key
+that lives encrypted at rest. `scripts/build-desktop.ts` decrypts it (PIN + touch), passes it to
+the bundler through the environment, and never writes the plaintext to disk.
+
+### One-time setup
+
+Needs the YubiKey plugged in, and assumes you already made an age identity for it in the
+[Chrome section](#one-time-setup).
+
+```sh
+# 1. Generate the updater keypair. Choose a password or not; the age wrapper is the real
+#    protection, and the build script passes TAURI_SIGNING_PRIVATE_KEY_PASSWORD through if set.
+pnpm --filter @vault/platform-desktop exec tauri signer generate -w /tmp/updater.key
+
+# 2. Day-to-day copy, encrypted to the YubiKey.
+age -r age1yubikey1XXXX -o ~/.config/bramble/desktop-updater-key.age /tmp/updater.key
+
+# 3. Recovery copy, passphrase-encrypted and stored OFFLINE. Without this, a lost YubiKey means
+#    no further updates can ever be signed for anyone already running the app.
+age -p -o desktop-updater-key.backup.age /tmp/updater.key
+
+# 4. Destroy the plaintext.
+rm -P /tmp/updater.key /tmp/updater.key.pub
+```
+
+Put the public half (`/tmp/updater.key.pub`'s contents, printed by step 1) in
+`plugins.updater.pubkey` in `packages/platform-desktop/src-tauri/tauri.conf.json`. It is public and
+belongs in the repo. Then remove any plaintext `TAURI_SIGNING_PRIVATE_KEY` from `.env.local`, or the
+build will keep using it and never ask for the YubiKey.
+
+### Each release
+
+```sh
+pnpm build:desktop:universal   # prompts for a touch; aarch64-only via build:desktop
+pnpm release:desktop           # writes latest.json from what the build produced
+```
+
+Then create the GitHub release tagged `v<version>` and attach the `.dmg`, the `.app.tar.gz` and
+`latest.json`. **`latest.json` must be on the LATEST release**: installed apps read that URL, so a
+release without it leaves them checking a stale manifest.
+
+The build refuses to run without the key rather than producing an unsigned archive, because an
+unsigned one is rejected by every installed app — the release would look complete while updating
+silently broke.
+
+### Notarization
+
+Signing alone is not enough: Gatekeeper blocks a signed-but-un-notarized app on any machine that
+did not build it. Tauri notarizes during the build when the credentials are present.
+
+Prefer an **App Store Connect API key** over a password: `APPLE_API_ISSUER`, `APPLE_API_KEY` (the
+key id) and `APPLE_API_KEY_PATH` (the `.p8`). The `.p8` is a secret and belongs in the same age +
+YubiKey scheme as everything else here.
+
+The alternative is `APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID`, where `APPLE_PASSWORD` is an
+**app-specific password** from appleid.apple.com → Sign-In and Security → App-Specific Passwords.
+Never your Apple ID password: it is not scoped, and revoking it means changing the password you
+sign in with everywhere.
+
+### If the YubiKey is lost
+
+Same as the others: decrypt the offline backup and re-wrap under a new identity. The updater key is
+unchanged, so the pubkey in the app still matches and users keep updating.
+
+```sh
+age -d desktop-updater-key.backup.age > /tmp/updater.key        # passphrase
+age-plugin-yubikey --generate                                    # new recipient
+age -r age1yubikey1NEW -o ~/.config/bramble/desktop-updater-key.age /tmp/updater.key
+rm -P /tmp/updater.key
 ```

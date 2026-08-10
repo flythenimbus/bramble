@@ -667,10 +667,13 @@ tampered asset fails verification and is discarded.
 
 **The signing key is permanent from the first public release.** Verification uses the key baked
 into the app someone already has, so changing the keypair later strands every existing install on a
-manual re-download. It lives at `~/.bramble/updater.key`, referenced from `.env.local` by
-`TAURI_SIGNING_PRIVATE_KEY` — the `_PATH` variant its own generator advertises is NOT what the
-bundler reads, and a build without it fails at the bundling step rather than silently producing an
-unsigned archive. Losing the key means no future release can be signed at all.
+manual re-download. It rides the same age + YubiKey scheme as every other release key (see release-signing.md):
+encrypted at rest, unlocked with a PIN and a touch by `scripts/build-desktop.ts`, and never written
+to disk in plaintext. The key cannot live ON the token, because Tauri's CLI signs with minisign and
+takes a path or a string rather than driving a hardware token; what the YubiKey gates is access to
+it. Note the env var is `TAURI_SIGNING_PRIVATE_KEY` — the `_PATH` variant its own generator
+advertises is NOT what the bundler reads, and a build without a key fails at the bundling step
+rather than silently producing an unsigned archive.
 
 `pnpm release:desktop` reads what the build actually produced and writes `latest.json` from it,
 rather than reconstructing filenames: the signature has to belong to the exact bytes published. It

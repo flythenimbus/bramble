@@ -8,7 +8,7 @@
 		"prepare": "git config core.hooksPath .githooks",
 		"build": "pnpm --filter @vault/platform-extension run build:chromium",
 		"build:firefox": "pnpm --filter @vault/platform-extension run build:firefox",
-		"build:desktop": "set -a; [ -f .env.local ] && . ./.env.local; set +a; pnpm --filter @vault/platform-desktop run build:app",
+		"build:desktop": "node --env-file-if-exists=.env.local scripts/build-desktop.ts",
 		"bundle": "pnpm --filter @vault/platform-extension run bundle:chromium && node scripts/sign.ts --optional",
 		"bundle:firefox": "pnpm --filter @vault/platform-extension run bundle:firefox",
 		"dev": "trap 'kill 0' INT TERM; pnpm run dev:chrome & pnpm run dev:firefox & pnpm run dev:website & wait",
@@ -57,7 +57,7 @@
 		"i18n:stores": "node --env-file-if-exists=.env.local scripts/i18n-stores.mjs",
 		"i18n:check": "node scripts/i18n-check.mjs",
 		"i18n": "pnpm run i18n:extract && pnpm run i18n:translate && pnpm run i18n:compile",
-		"build:desktop:universal": "set -a; [ -f .env.local ] && . ./.env.local; set +a; pnpm --filter @vault/platform-desktop exec tauri build --target universal-apple-darwin",
+		"build:desktop:universal": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --target universal-apple-darwin",
 		"release:desktop": "node scripts/release-desktop.mjs"
 	},
 	"devDependencies": {
