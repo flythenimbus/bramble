@@ -13,9 +13,10 @@
 // a copy left in a temp file is a copy someone could ship a malicious update with.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { yubiKeyIdentity } from "./age-yubikey-identity.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
@@ -61,6 +62,56 @@ function signingKey(): string | undefined {
 		rmSync(tmp, { recursive: true, force: true });
 	}
 }
+
+/**
+ * Notarization credentials, reusing the App Store Connect API key the iOS release already has.
+ *
+ * Apple takes either an API key or an Apple ID with an app-specific password, and the key is the
+ * better one: it is scoped, revocable on its own, and not a credential that also opens the account.
+ * Read from fastlane/.env rather than copied into .env.local so there is one issuer ID in the
+ * repo; an explicit APPLE_* in the environment still wins, for CI.
+ *
+ * Absent, the build still succeeds and produces something Gatekeeper blocks on every machine that
+ * did not build it, so it says so rather than leaving that to be discovered by a user.
+ */
+function loadNotarization(): void {
+	const already =
+		(process.env.APPLE_API_KEY && process.env.APPLE_API_ISSUER && process.env.APPLE_API_KEY_PATH) ||
+		(process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID);
+	if (already) return;
+
+	const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+	const vars = readEnvFile(join(root, "fastlane/.env"));
+	const keyId = vars.ASC_KEY_ID;
+	const issuer = vars.ASC_ISSUER_ID;
+	const keyPath = resolve(root, vars.ASC_KEY_PATH ?? "./fastlane/AuthKey.p8");
+
+	if (!keyId || !issuer || !existsSync(keyPath)) {
+		console.error(
+			"warning: no notarization credentials; the build will be signed but NOT notarized,\n" +
+				"         and Gatekeeper will block it on every machine that did not build it.\n" +
+				"         See docs/release-signing.md.",
+		);
+		return;
+	}
+	process.env.APPLE_API_KEY = keyId;
+	process.env.APPLE_API_ISSUER = issuer;
+	process.env.APPLE_API_KEY_PATH = keyPath;
+}
+
+/** Enough dotenv for fastlane's file: KEY=VALUE, # comments, optional surrounding quotes. */
+function readEnvFile(path: string): Record<string, string> {
+	if (!existsSync(path)) return {};
+	const out: Record<string, string> = {};
+	for (const line of readFileSync(path, "utf8").split("\n")) {
+		const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+		if (!match || line.trimStart().startsWith("#")) continue;
+		out[match[1] as string] = (match[2] as string).trim().replace(/^["']|["']$/g, "");
+	}
+	return out;
+}
+
+loadNotarization();
 
 const key = signingKey();
 if (!key) {

@@ -701,11 +701,16 @@ The extractor only reads `packages/core/src`, so the same sentence written in th
 would ship untranslated to every locale. It falls back to English if no catalog is active yet:
 Lingui throws rather than falling back, and a thrown error there means no dialog at all.
 
-Two things are still outstanding for a public release. **Notarization**: the bundle is signed but
-not notarized, so Gatekeeper blocks it on any machine that did not build it; Tauri does it during
-the build once `APPLE_ID`, `APPLE_PASSWORD` (app-specific) and `APPLE_TEAM_ID` are in `.env.local`.
-**Architecture**: the default build is `aarch64` only, so Intel Macs cannot run it —
-`pnpm build:desktop:universal` produces both.
+**Notarization** reuses the App Store Connect API key the iOS release already has. Apple takes
+either that or an Apple ID with an app-specific password; the key is the better credential, since
+it is scoped, separately revocable, and not one that also opens the account. `build-desktop.ts`
+reads `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_PATH` from `fastlane/.env` and maps them to the
+`APPLE_API_*` names Tauri expects, rather than having the issuer ID written down twice; explicit
+`APPLE_*` in the environment still wins, for CI. Without them the build succeeds and produces
+something Gatekeeper blocks everywhere but the machine that built it, so the script says so.
+
+One thing is still outstanding for a public release. **Architecture**: the default build is
+`aarch64` only, so Intel Macs cannot run it — `pnpm build:desktop:universal` produces both.
 
 ## Risks to retire early
 
