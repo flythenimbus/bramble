@@ -6,6 +6,7 @@ import type { OptionsScreen, ShellAdapter } from "@core/adapters/shell";
 import { desktopDeviceLabel } from "@core/util/device-label";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { onSyncEvent, onSyncStatus } from "../sync/bus";
 import {
@@ -79,6 +80,21 @@ export const desktopShell: ShellAdapter = {
 	popOut: async () => {},
 	consumeHandoff: async () => null,
 	isDetached: () => false,
+
+	// The panel asking this window to open an entry. One window, so this is a route change
+	// rather than a new context; the router's guards still apply.
+	onNavigateRequest: (callback) => {
+		const pending = listen<{ href: string }>("navigate", (e) => callback(e.payload.href));
+		let stop: (() => void) | null = null;
+		void pending.then((un) => {
+			stop = un;
+		});
+		return () => {
+			stop?.();
+			// Subscribed and unsubscribed before the listener resolved: drop it when it lands.
+			void pending.then((un) => un());
+		};
+	},
 
 	// No corner prompt without the extension bridge (phase 4), so nothing is ever parked.
 	flushPendingCornerCapture: async () => false,

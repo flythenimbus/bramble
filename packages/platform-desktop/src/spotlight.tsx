@@ -172,9 +172,10 @@ function Spotlight() {
 			const mod = MOD === "Ctrl" ? e.ctrlKey : e.metaKey;
 			if (mod && e.key.toLowerCase() === "o") {
 				e.preventDefault();
-				// With nothing highlighted this opens the app itself. Opening the highlighted
-				// entry needs a route the main window can be sent to, which is the next slice.
-				void invoke("spotlight_open_main");
+				const match = latest.current[selectedRef.current];
+				// The same key applied to whatever is in focus: an entry if one is highlighted,
+				// otherwise the app itself.
+				void invoke(match ? "spotlight_open_entry" : "spotlight_open_main", { id: match?.id });
 			}
 		};
 		window.addEventListener("keydown", onKey);

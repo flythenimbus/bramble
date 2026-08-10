@@ -380,6 +380,7 @@ msgstr "Gâteau"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -2254,6 +2255,14 @@ msgstr "Clé SSH"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "Clé SSH · {0}"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stop using the app"
+msgstr "Arrêter d'utiliser l'application"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stops filling and unlocking through the desktop app on this browser. This vault keeps syncing with it, and nothing is deleted anywhere. To take this browser out of the vault entirely, remove it from the device list under Device sync."
+msgstr "Arrête le remplissage et le déverrouillage via l'application de bureau sur ce navigateur. Ce coffre-fort continue de se synchroniser avec elle, et rien n'est supprimé nulle part. Pour retirer complètement ce navigateur du coffre-fort, supprimez-le de la liste des appareils sous Synchronisation des appareils."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."

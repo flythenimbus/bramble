@@ -67,6 +67,15 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 		return router.subscribe("onResolved", persist);
 	}, [router, shell]);
 
+	// Navigation the host asks for while this window is already open, e.g. the desktop panel
+	// opening a highlighted entry. Goes through the router, so the route's own guards still run
+	// and a request made while locked lands on the unlock screen.
+	useEffect(() => {
+		return shell.onNavigateRequest?.((href) => {
+			void router.navigate({ href });
+		});
+	}, [router, shell]);
+
 	// `vault`/`registry` are the change triggers, not body inputs: dropping them would fire
 	// invalidate only on mount and defeat the reactive guards.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: vault/registry are change triggers for invalidate

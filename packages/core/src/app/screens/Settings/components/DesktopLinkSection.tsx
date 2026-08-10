@@ -48,6 +48,8 @@ export function DesktopLinkSection() {
 	const [invitePassword, setInvitePassword] = useState("");
 	const [inviteError, setInviteError] = useState<string | null>(null);
 	const [joining, setJoining] = useState(false);
+	/** Guards the local verb, so its wording is read before it is used. */
+	const [confirmUnlink, setConfirmUnlink] = useState(false);
 	/** The SAS for the join in flight. The inviter is holding on the user's answer, so without
 	 * this the modal is a disabled button and the only way past it is approving something on the
 	 * other screen that has not been compared with anything. */
@@ -192,6 +194,7 @@ export function DesktopLinkSection() {
 		setBusy(true);
 		try {
 			await desktopLink.unlink();
+			setConfirmUnlink(false);
 			await refresh();
 		} finally {
 			setBusy(false);
@@ -237,27 +240,62 @@ export function DesktopLinkSection() {
 	return (
 		<Section icon={<Monitor className="w-4 h-4" />} title={t`Desktop app`}>
 			{status?.paired ? (
-				<Row
-					icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
-					title={t`Connected`}
-					subtitle={
-						// Says what the link IS: a browser-wide connection. Whether this particular
-						// vault rides it is the separate fact underneath.
-						sharesThisVault === true
-							? t`This vault syncs with the desktop app.`
-							: sharesThisVault === false
-								? t`Linked to this browser, but the app shares a different vault, not this one.`
-								: status.pairedAt
-									? t`Linked ${formatDate(status.pairedAt)}`
-									: t`Linked to the Bramble desktop app.`
-					}
-				>
-					{/* The only control left once Test went, so it takes the row's slot rather
-					    than sitting under an otherwise empty one. */}
-					<Button variant="ghost" size="sm" disabled={busy} onClick={() => void unlink()}>
-						<Trans>Disconnect</Trans>
-					</Button>
-				</Row>
+				<>
+					<Row
+						icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
+						title={t`Connected`}
+						subtitle={
+							// Says what the link IS: a browser-wide connection. Whether this particular
+							// vault rides it is the separate fact underneath.
+							sharesThisVault === true
+								? t`This vault syncs with the desktop app.`
+								: sharesThisVault === false
+									? t`Linked to this browser, but the app shares a different vault, not this one.`
+									: status.pairedAt
+										? t`Linked ${formatDate(status.pairedAt)}`
+										: t`Linked to the Bramble desktop app.`
+						}
+					>
+						{/* Two different things can be meant by "disconnect", and only one of them is
+					    this one. Stopping the app link is local and reversible; REMOVING this
+					    browser from the vault is a roster change every device sees, and it lives
+					    with the devices under Device sync. Saying which this is, and what it does
+					    not do, is the whole point of the confirmation. */}
+						{confirmUnlink ? (
+							<span className="inline-flex items-center gap-2">
+								<Button
+									variant="destructiveOutline"
+									size="sm"
+									disabled={busy}
+									onClick={() => void unlink()}
+								>
+									<Trans>Stop using the app</Trans>
+								</Button>
+								<Button variant="secondary" size="sm" onClick={() => setConfirmUnlink(false)}>
+									<Trans>Cancel</Trans>
+								</Button>
+							</span>
+						) : (
+							<Button
+								variant="ghost"
+								size="sm"
+								disabled={busy}
+								onClick={() => setConfirmUnlink(true)}
+							>
+								<Trans>Disconnect</Trans>
+							</Button>
+						)}
+					</Row>
+					{confirmUnlink && (
+						<p className="text-xs text-muted-foreground">
+							<Trans>
+								Stops filling and unlocking through the desktop app on this browser. This vault
+								keeps syncing with it, and nothing is deleted anywhere. To take this browser out of
+								the vault entirely, remove it from the device list under Device sync.
+							</Trans>
+						</p>
+					)}
+				</>
 			) : (
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">

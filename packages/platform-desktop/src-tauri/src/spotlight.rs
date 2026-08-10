@@ -10,7 +10,7 @@
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
 /// Where the panel's top-left was placed when it opened. The panel grows downward as results
 /// appear, so the anchor has to survive a resize: macOS measures a window from its bottom-left
@@ -166,6 +166,17 @@ pub fn spotlight_hide(app: AppHandle) {
 pub fn spotlight_open_main(app: AppHandle) {
     hide(&app);
     crate::lifetime::show_main(&app);
+}
+
+/// Dismiss the panel, raise the vault window, and send it to one entry.
+///
+/// The route is asked for, not enforced: it goes through the app's own router, so a request made
+/// while the vault is locked lands on the unlock screen instead of past it.
+#[tauri::command]
+pub fn spotlight_open_entry(app: AppHandle, id: String) {
+    hide(&app);
+    crate::lifetime::show_main(&app);
+    let _ = app.emit("navigate", serde_json::json!({ "href": format!("/vault/{id}") }));
 }
 
 #[tauri::command]

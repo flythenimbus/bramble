@@ -380,6 +380,7 @@ msgstr "Bolo"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -2254,6 +2255,14 @@ msgstr "Chave SSH"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "Chave SSH · {0}"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stop using the app"
+msgstr "Parar de usar o app"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stops filling and unlocking through the desktop app on this browser. This vault keeps syncing with it, and nothing is deleted anywhere. To take this browser out of the vault entirely, remove it from the device list under Device sync."
+msgstr "Interrompe o preenchimento e o desbloqueio através do aplicativo de desktop neste navegador. Este cofre continua sincronizando com ele, e nada é excluído em lugar algum. Para remover completamente este navegador do cofre, remova-o da lista de dispositivos em Sincronização de dispositivos."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."

@@ -85,6 +85,15 @@ export interface ShellAdapter {
 	persistRoute?(path: string): void;
 	/** Read the route stashed by persistRoute (null when none). Called once at boot; the caller restores it only when the vault is unlocked. */
 	restoreRoute?(): Promise<string | null>;
+	/**
+	 * Subscribe to navigation the HOST asks for while the app is already running, e.g. the
+	 * desktop's quick-access panel opening the entry the user highlighted. Distinct from
+	 * restoreRoute, which is read once at boot and cannot move a live window.
+	 *
+	 * The route still passes the usual guards, so asking for an entry while locked lands on the
+	 * unlock screen rather than bypassing it. Returns an unsubscribe.
+	 */
+	onNavigateRequest?(callback: (href: string) => void): () => void;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
 	// Static per-target capability flags live in flags.ts `CAPABILITIES` (resolved via `useCan`).

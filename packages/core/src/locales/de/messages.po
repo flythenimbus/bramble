@@ -380,6 +380,7 @@ msgstr "Kuchen"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -2254,6 +2255,14 @@ msgstr "SSH key"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "SSH key · {0}"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stop using the app"
+msgstr "App nicht mehr verwenden"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stops filling and unlocking through the desktop app on this browser. This vault keeps syncing with it, and nothing is deleted anywhere. To take this browser out of the vault entirely, remove it from the device list under Device sync."
+msgstr "Beendet das Ausfüllen und Entsperren durch die Desktop-App in diesem Browser. Dieser Tresor synchronisiert weiterhin mit ihr, und es wird nirgendwo etwas gelöscht. Um diesen Browser vollständig aus dem Tresor zu entfernen, entfernen Sie ihn aus der Geräteliste unter „Gerätesynchronisation“."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."

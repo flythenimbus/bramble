@@ -380,6 +380,7 @@ msgstr "Torta"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
@@ -2254,6 +2255,14 @@ msgstr "Chiave SSH"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "Chiave SSH · {0}"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stop using the app"
+msgstr "Smettere di utilizzare l'app"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stops filling and unlocking through the desktop app on this browser. This vault keeps syncing with it, and nothing is deleted anywhere. To take this browser out of the vault entirely, remove it from the device list under Device sync."
+msgstr "Interrompe la compilazione automatica e lo sblocco tramite l'app desktop su questo browser. La cassaforte continua a sincronizzarsi con essa e non viene eliminato nulla da nessuna parte. Per rimuovere completamente questo browser dalla cassaforte, rimuoverlo dall'elenco dei dispositivi nella sezione Sincronizzazione dispositivi."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."

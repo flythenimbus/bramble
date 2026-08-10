@@ -147,6 +147,7 @@ pub fn run() {
             storage::shell_export_bytes,
             spotlight::spotlight_hide,
             spotlight::spotlight_open_main,
+            spotlight::spotlight_open_entry,
             spotlight::spotlight_set_height,
             pairing::pairing_begin,
             pairing::pairing_cancel,

@@ -268,3 +268,29 @@ describe("whether the vault on screen is the one the app shares", () => {
 		expect(screen.queryByText(/this vault syncs with/i)).toBeNull();
 	});
 });
+
+describe("disconnecting", () => {
+	it("says what stopping the app link does not do, before doing it", async () => {
+		// "Disconnect" can mean two different things and only one of them is this. Stopping the
+		// link is local and reversible; taking the browser out of the vault is a roster change
+		// every device sees, and it lives elsewhere. Confusing them either silently evicts a
+		// browser from sync or leaves a user thinking they removed something they did not.
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+
+		expect(screen.getByText(/keeps syncing with it/i)).toBeTruthy();
+		expect(screen.getByText(/remove it from the device list/i)).toBeTruthy();
+		// And it has not happened yet: the wording is there to be read first.
+		expect(screen.getByRole("button", { name: /stop using the app/i })).toBeTruthy();
+	});
+
+	it("can be backed out of", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+		fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+		expect(screen.queryByText(/keeps syncing with it/i)).toBeNull();
+	});
+});
