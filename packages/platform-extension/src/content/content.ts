@@ -412,9 +412,20 @@ function applyGeneratedPassword(field: HTMLInputElement): void {
 	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw, newLogin } });
 }
 
-/** Dismisses the dropdown and asks the background to fetch and fill the chosen entry. */
-function selectMatch(entryId: string, isAuto: boolean, otpOnly = false): void {
-	const target = anchorField();
+/**
+ * Dismisses the dropdown and asks the background to fetch and fill the chosen entry.
+ *
+ * `into` overrides the target for a selection that did not come from the picker: the desktop
+ * panel picks an entry with no dropdown open, and anchorField() is by definition the field a
+ * VISIBLE picker belongs to, so it is null there and the fill silently did nothing.
+ */
+function selectMatch(
+	entryId: string,
+	isAuto: boolean,
+	otpOnly = false,
+	into: HTMLInputElement | null = anchorField(),
+): void {
+	const target = into;
 	const targetKind = target ? currentTargetKind(target) : null;
 	if (!target || !targetKind) return;
 	// Manual selection counts as an explicit dismissal; silence auto-redisplay
@@ -669,6 +680,31 @@ document.addEventListener(
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.type === "CORNER_PROMPT_SHOW") {
 		handleCornerPromptShow(message.payload as CornerPromptPayload);
+		sendResponse({ ok: true });
+		return false;
+	}
+
+	if (message?.type === "DESKTOP_FILL") {
+		// A credential the desktop app is filling on this browser's behalf. It does NOT go through
+		// AUTOFILL_SELECT: that reads this browser's own index, which is empty while locked, and
+		// not having to unlock twice is the entire reason the link exists. The app authorized this
+		// one — the user chose the entry there, against a page this browser reported.
+		const fill = message.payload as
+			| { username?: string; password?: string; totp?: string | null }
+			| undefined;
+		// The field the user left focused, else the page's own login field.
+		const fields = getPageFields().login;
+		const into = focusedCandidate() ?? fields.username ?? fields.password;
+		const kind = into ? currentTargetKind(into) : null;
+		if (!fill?.password || !into || !kind) {
+			sendResponse({ ok: false, error: "no field to fill" });
+			return false;
+		}
+		cancelFill();
+		picker.remove();
+		dropRelayed();
+		fillForm(fill.username ?? "", fill.password, false);
+		if (fill.totp) fillOtp(fill.totp);
 		sendResponse({ ok: true });
 		return false;
 	}

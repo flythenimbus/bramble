@@ -109,7 +109,6 @@ pub fn spotlight_copy_password(app: AppHandle, id: String) -> Result<(), String>
             let _ = handle.clipboard().clear();
         }
     });
-    crate::spotlight::hide(&app);
     Ok(())
 }
 

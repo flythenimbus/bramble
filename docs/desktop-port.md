@@ -620,6 +620,39 @@ which only matters for machines other than the one that built it.
 binary's code signature, so an unsigned build looks like a different application on every build
 and prompts for the login password. See risk 5.
 
+## Filling from the panel
+
+Enter in the quick-access panel fills the form in the browser. The app hands over the ONE
+credential the user just chose; the browser puts it in the field.
+
+This is the delegation model the browser link was chosen for, and the reason is the second
+unlock. An earlier attempt routed the fill through the extension's own `AUTOFILL_SELECT`, which
+reads the extension's index and therefore needs the EXTENSION unlocked — demanding exactly the
+double unlock the link exists to avoid. Nothing on the path now reads the browser's vault: the
+background forwards the credential and the content script calls `fillForm` directly, so a locked
+browser can fill.
+
+**Where authorization lives.** The user picking an entry in the panel, with the app unlocked, is
+the grant. On top of that the app checks the entry's hostnames against the page the browser last
+reported, so a wrong tab in front of the user is refused rather than filled, and the panel names
+that page ("Fill on example.com") before the user commits.
+
+That report comes from the browser, and a compromised extension could lie about it to obtain a
+credential for a page it is not on. It is a second line, not the only one, which is why the panel
+shows the target: the user sees where it is going. Hardening it properly means the app learning
+the frontmost window itself rather than trusting a report `[unverified: needs NSWorkspace work]`.
+
+**Limits, deliberate.** The fill goes to the top frame only, so a form inside an iframe is not
+filled. Enter also copies the password, because the browser may refuse the page or not be running,
+and an action that sometimes silently does nothing is worse than one that always does something.
+
+**The link's lifetime is its own.** It opens when the browser starts if a pairing exists, whatever
+the lock state, and closes only on unlink. Three separate bugs came from tying it to something
+else: to sync starting (so a vault in no group had an unreachable app), to being unlocked (so
+filling while locked, the entire point, could not work), and to an unlock TRANSITION (so a service
+worker restarting with an already-unlocked session never opened it). An open pipe grants nothing on
+its own: the app answers only while its own vault is unlocked, and the handshake still has to pass.
+
 ## Risks to retire early
 
 1. **WebKitGTK rendering and window transparency on Linux.** The UI is Tailwind-heavy and WebKit is
@@ -664,8 +697,8 @@ Each phase retires a risk.
   crypto routed to Rust. Browsers on this machine sync over the native link instead of the relay,
   on both ends. Device identity lives in the OS credential store. Outstanding: the tray residency
   and scheduled backups that are the actual "hub" part, and a two-device test.
-- **Phase 4, browser integration.** Proxy binary, host manifests, Noise pairing plus the approval
-  dialog, fill routing. Enter becomes a real fill in the browser.
+- **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
+  and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.
   Enter becomes a real fill in native apps.
 - **Phase 6, SSH agent.**

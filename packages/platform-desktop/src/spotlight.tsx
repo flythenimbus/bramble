@@ -76,6 +76,11 @@ function Spotlight() {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<Match[]>([]);
 	const [selected, setSelected] = useState(0);
+	/** The page a fill would land on, as the browser last reported it. */
+	const [target, setTarget] = useState<string | null>(null);
+	/** What the last Enter actually did. Silence here cost an evening: a fill that found no
+	 * browser, no field, or a page the entry is not for looked identical to one that worked. */
+	const [outcome, setOutcome] = useState<string | null>(null);
 	/** The current results, for the key handler. It is bound once, so reading state directly
 	 * would close over whatever was on screen when the window opened. */
 	const latest = useRef<Match[]>([]);
@@ -128,9 +133,39 @@ function Spotlight() {
 				e.preventDefault();
 				const match = latest.current[selectedRef.current];
 				if (!match) return;
-				// The secret never comes back here: the shell reads it from its own index, puts it
-				// on the clipboard and dismisses the panel.
-				void invoke("spotlight_copy_password", { id: match.id }).catch(() => {});
+				void (async () => {
+					// The copy always happens: the browser refuses a page the entry is not for, and
+					// there may be no browser at all, so this is what keeps Enter from sometimes
+					// doing nothing. The secret never comes back here; the shell reads it from its
+					// own index and writes the clipboard itself.
+					const copied = await invoke("spotlight_copy_password", { id: match.id })
+						.then(() => true)
+						.catch(() => false);
+					// The reason matters here, not just the failure: a mismatched page is a
+					// different thing from no browser at all.
+					const filled = await invoke("spotlight_request_fill", { id: match.id })
+						.then(() => true as const)
+						.catch((e) => {
+							const message = typeof e === "string" ? e : String(e);
+							return message.startsWith("that entry is not for") ? message : false;
+						});
+					if (filled === true) {
+						// The browser still has the last word: it needs a field to put this in.
+						// Saying "asked" rather than "filled" is the honest claim from this side.
+						void invoke("spotlight_hide");
+						return;
+					}
+					setOutcome(
+						// The refusal is worth repeating verbatim: "that entry is not for
+						// github.com" tells the user what happened, where "could not fill" starts
+						// an investigation.
+						typeof filled === "string"
+							? `${filled}. Password copied instead.`
+							: copied
+								? "No browser to fill. Password copied instead."
+								: "Could not copy: is the vault still unlocked?",
+					);
+				})();
 				return;
 			}
 			// The modifier is whichever this platform uses, matching what the hints show.
@@ -152,8 +187,14 @@ function Spotlight() {
 	useEffect(() => {
 		const onFocus = () => {
 			setQuery("");
+			setOutcome(null);
 			input.current?.focus();
 			input.current?.select();
+			// Re-read on every appearance. Tabs are switched while the panel is hidden, so a
+			// target read once would name a page the fill is not going to.
+			void invoke<string | null>("spotlight_active_tab")
+				.then(setTarget)
+				.catch(() => setTarget(null));
 		};
 		window.addEventListener("focus", onFocus);
 		onFocus();
@@ -168,7 +209,10 @@ function Spotlight() {
 					ref={input}
 					type="text"
 					value={query}
-					onChange={(e) => setQuery(e.target.value)}
+					onChange={(e) => {
+						setQuery(e.target.value);
+						setOutcome(null);
+					}}
 					placeholder="Search your vault"
 					aria-label="Search your vault"
 					autoComplete="off"
@@ -226,16 +270,19 @@ function Spotlight() {
 					}
 					label="Navigate"
 				/>
-				{/* Named for what it does today. Filling the page needs a route through the
-				    browser that authorizes on the PAGE's hostname, which a panel-initiated fill
-				    does not fit; until that is designed, promising "Fill" here would be a lie. */}
+				{outcome && (
+					<p className="border-t border-white/10 px-5 py-2 text-xs text-foreground/60">{outcome}</p>
+				)}
+				{/* Names the page a fill would land on, so nobody commits to one blind. Falls back
+				    to the clipboard wording when no browser has reported a page, which is the
+				    honest label for what Enter can still do then. */}
 				<Hint
 					keys={
 						<Key>
 							<CornerDownLeft className="w-3 h-3" aria-hidden />
 						</Key>
 					}
-					label="Copy password"
+					label={target ? `Fill on ${target}` : "Copy password"}
 				/>
 				<Hint
 					keys={

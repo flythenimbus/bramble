@@ -163,6 +163,8 @@ pub fn run() {
             socket::link_arm_sync_invite,
             socket::link_clear_sync_invite,
             socket::link_set_sync_identity,
+            socket::spotlight_active_tab,
+            socket::spotlight_request_fill,
             secure_store::secure_get,
             secure_store::secure_set,
             secure_store::secure_delete,

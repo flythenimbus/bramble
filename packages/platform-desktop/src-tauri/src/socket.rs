@@ -136,6 +136,12 @@ enum Request {
     /// leaves the app; the browser compares it against its own rosters and draws its own
     /// conclusion.
     SyncIdentity,
+    /// The hostname of the page this browser is looking at, reported when it changes.
+    ///
+    /// So the panel can say where a fill would land before the user commits to one. Not trusted
+    /// for any decision: the browser is the only thing that can authorize a fill, because only
+    /// it knows what page is really in front of the user. This is for display.
+    ActiveTab { hostname: String },
     /// One frame of device sync, on its way to the webview that runs the sync host.
     ///
     /// Not request/response like the other two: sync is a conversation, and either side speaks
@@ -183,6 +189,74 @@ impl Answer {
             password: None,
             totp: None,
         }
+    }
+}
+
+/// The page the browser last reported, for the panel to show as a fill target.
+static ACTIVE_TAB: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn active_tab() -> &'static Mutex<Option<String>> {
+    ACTIVE_TAB.get_or_init(|| Mutex::new(None))
+}
+
+/// Where a fill from the panel would land, as the browser last reported it. Empty when no
+/// browser is connected or it is not on a page worth naming.
+#[tauri::command]
+pub fn spotlight_active_tab() -> Option<String> {
+    active_tab().lock().ok().and_then(|t| t.clone())
+}
+
+/// Fill an entry on the page in front of the user, through a browser that need not be unlocked.
+///
+/// This hands over ONE credential, which is the whole point of the link: the user should not have
+/// to unlock twice, so a locked browser cannot fill from a vault it cannot read and the app has
+/// to do it for them. The VEK never crosses, only the entry they just chose.
+///
+/// The user's selection in the panel IS the authorization, made while this app was unlocked. On
+/// top of that the entry is checked against the page the browser last reported, so a wrong tab in
+/// front of the user is caught rather than filled. That report comes from the browser and a
+/// compromised one could lie about it, which is why it is a second line and not the only one: the
+/// panel names the page before the user commits.
+#[tauri::command]
+pub fn spotlight_request_fill(id: String) -> Result<(), String> {
+    if vault_crypto::is_locked() {
+        return Err("locked".into());
+    }
+    let entry = index_store::secret_for(&id).ok_or("unknown entry")?;
+    // Only where the entry belongs. A login with no hostnames at all is not pinned to anywhere,
+    // so it is left to the user's choice rather than refused.
+    if let Some(page) = active_tab().lock().ok().and_then(|t| t.clone()) {
+        if !entry.hostnames.is_empty()
+            && !entry
+                .hostnames
+                .iter()
+                .any(|h| h.eq_ignore_ascii_case(&page) || page.ends_with(&format!(".{h}")))
+        {
+            return Err(format!("that entry is not for {page}"));
+        }
+    }
+    let frame = serde_json::json!({
+        "fill": {
+            "username": entry.username,
+            "password": entry.password,
+            "totp": entry.totp,
+        }
+    })
+    .to_string();
+    let sent = {
+        let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
+        // Every connected browser is asked. Only the one whose page has a matching field and
+        // hostname will act, and that decision is deliberately not made here.
+        boxes
+            .values()
+            .filter(|(_, tx)| tx.send(frame.clone()).is_ok())
+            .count()
+    };
+    log::info!("panel fill: asked {sent} browser(s)");
+    if sent > 0 {
+        Ok(())
+    } else {
+        Err("no browser connected".into())
     }
 }
 
@@ -416,6 +490,17 @@ fn read_loop(
 
         // Sync frames are relayed, not answered: the webview replies in its own time, or not at
         // all. Everything else is request/response and gets exactly one answer.
+        // Reported, not answered: the browser tells us where it is whenever that changes.
+        if let Ok(Request::ActiveTab { hostname }) = serde_json::from_str::<Request>(&plaintext) {
+            if let Ok(mut slot) = active_tab().lock() {
+                *slot = if hostname.is_empty() {
+                    None
+                } else {
+                    Some(hostname)
+                };
+            }
+            continue;
+        }
         if let Ok(Request::Sync { frame }) = serde_json::from_str::<Request>(&plaintext) {
             emit(
                 "link-sync-frame",
@@ -495,8 +580,9 @@ fn answer_for(request: Request) -> Answer {
             },
             None => Answer::error("unknown entry"),
         },
-        // Handled before this, in read_loop: sync is relayed to the webview, not answered here.
+        // Both handled before this, in read_loop: relayed or recorded, not answered.
         Request::Sync { .. } => Answer::error("sync frames are not answered"),
+        Request::ActiveTab { .. } => Answer::error("active-tab reports are not answered"),
     }
 }
 

@@ -19,6 +19,7 @@ import {
 } from "../dedupe";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
+import { type DesktopFill, onDesktopFillRequest, reportActiveTab } from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
 import {
@@ -600,6 +601,65 @@ async function autofillRevalidateSubmit(
 }
 
 on("AUTOFILL_SET_INDEX", autofillSetIndex);
+/**
+ * A fill the desktop app is doing on this browser's behalf: pass it to the page in front of the
+ * user and keep no copy.
+ *
+ * The credential comes from the app, not from this browser's index, which is the point: a locked
+ * browser cannot read its own vault, and the whole reason the link exists is that the user should
+ * not have to unlock twice. The app authorized it — the user chose the entry there, and the app
+ * checked it against the page this browser reported.
+ *
+ * Sent to the top frame only. A form inside an iframe will not be filled this way, which is the
+ * conservative direction: better a fill that does not happen than one aimed at a frame nobody
+ * asked about.
+ */
+async function fillFromDesktop(fill: DesktopFill): Promise<void> {
+	const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+	if (tab?.id === undefined) {
+		console.warn("[bramble:link] fill: no active tab to fill");
+		return;
+	}
+	const reply = await api.tabs
+		.sendMessage(tab.id, { type: "DESKTOP_FILL", payload: fill }, { frameId: 0 })
+		.catch((e) => {
+			// No content script on this page (a settings tab, the store, a PDF), or one orphaned by
+			// an extension reload, which keeps running but can no longer answer.
+			console.warn("[bramble:link] fill: the page did not answer:", e);
+			return undefined;
+		});
+	if (reply && reply.ok !== true) console.warn("[bramble:link] fill declined:", reply);
+}
+
+onDesktopFillRequest((fill) => {
+	// Caught rather than left to become an unhandled rejection, which is how the first version of
+	// this could fail with nothing in the console at all.
+	void fillFromDesktop(fill).catch((e) => console.warn("[bramble:link] fill failed:", e));
+});
+
+/** Keep the desktop app told which page this browser is on, so its panel can name the target. */
+function watchActiveTab(): void {
+	const report = async () => {
+		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+		let hostname = "";
+		try {
+			hostname = tab?.url ? new URL(tab.url).hostname : "";
+		} catch {
+			// A tab URL we cannot parse (about:, chrome://) is not a fill target.
+		}
+		await reportActiveTab(hostname);
+	};
+	// Optional, not assumed. Naming the fill target is a convenience, so a host that does not
+	// expose tab events should lose the label rather than fail to load the background at all.
+	api.tabs.onActivated?.addListener(() => void report());
+	api.tabs.onUpdated?.addListener((_id, change) => {
+		if (change.url) void report();
+	});
+	void report();
+}
+
+watchActiveTab();
+
 on("AUTOFILL_CLEAR_INDEX", autofillClearIndex);
 on("AUTOFILL_FIND", autofillFind);
 on("AUTOFILL_FETCH", autofillFetch);

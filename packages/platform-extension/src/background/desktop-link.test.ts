@@ -197,16 +197,40 @@ describe("the held sync link", () => {
 		expect(await mod.sendSyncFrame("outbound")).toBe(false);
 	});
 
-	it("closes the pipe when sync stops", async () => {
+	it("keeps the pipe when sync stops, because delegation still needs it", async () => {
+		// The pipe used to be opened only as a side effect of sync, so a vault in no sync group
+		// had a paired desktop app that could never ask it for anything — no autofill delegation
+		// and no fill from the panel.
 		const mod = await load();
 		const frames: string[] = [];
 		await open(mod, frames);
 
 		await mod.closeSyncLink();
 
+		expect(h.disconnects).toBe(0);
+	});
+
+	it("closes the pipe only when the app is unlinked", async () => {
+		// NOT on lock. Filling while locked is the reason the link exists, so a locked browser has
+		// to stay reachable; unlinking is what leaves nothing to authenticate with.
+		const mod = await load();
+		const frames: string[] = [];
+		await open(mod, frames);
+
+		await mod.closeDesktopLink();
+
 		expect(h.disconnects).toBe(1);
-		// And nothing holds it open afterwards: a later frame finds no link.
 		expect(await mod.sendSyncFrame("outbound")).toBe(false);
+	});
+
+	it("holds the pipe open for a browser that is unlocked but not syncing", async () => {
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+
+		expect(await opening).toBe(true);
+		expect(h.connects).toBe(1);
 	});
 
 	it("gives up on a request the app never answers", async () => {

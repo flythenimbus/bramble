@@ -305,6 +305,50 @@ let held: HeldLink | null = null;
 let onSyncFrame: ((frame: string) => void) | null = null;
 
 /**
+ * Whether this browser should be holding the pipe open at all.
+ *
+ * Separate from sync, which is what it used to be tied to. The link carries autofill delegation
+ * and the panel's fill requests too, so a browser that is paired and unlocked should be reachable
+ * whether or not sync happens to be running — otherwise a vault that is not in a sync group has a
+ * paired desktop app it can never be asked anything by.
+ */
+let linkWanted = false;
+
+/** One credential the app is asking this browser to fill. Not stored anywhere. */
+export interface DesktopFill {
+	username: string;
+	password: string;
+	totp?: string | null;
+}
+
+/** Where a fill the app asked for goes. Set by the autofill side. */
+let onFillRequest: ((fill: DesktopFill) => void) | null = null;
+
+/** Register the handler for a fill the desktop panel asked for. */
+export function onDesktopFillRequest(handler: (fill: DesktopFill) => void): void {
+	onFillRequest = handler;
+}
+
+/**
+ * Tell the app which page this browser is on, so its panel can say where a fill would land.
+ *
+ * Only while a link is already held: this must not be the thing that spawns a native host, or
+ * every tab switch would start a process on a machine with no desktop app running.
+ */
+export async function reportActiveTab(hostname: string): Promise<void> {
+	if (!held || held.session.dead) return;
+	try {
+		const sealed = (await offscreen("LINK_SEAL", {
+			sessionId: held.sessionId,
+			plaintext: JSON.stringify({ op: "activeTab", hostname }),
+		})) as string;
+		held.session.send({ sealed });
+	} catch {
+		// A dead pipe is not worth reporting: the next keepalive rebuilds it.
+	}
+}
+
+/**
  * How often to re-establish the pipe while sync is running.
  *
  * The link has to be rebuilt by THIS side, and it is what tells the app a browser exists at all.
@@ -318,20 +362,44 @@ const LINK_KEEPALIVE_MS = 20_000;
 
 let keepalive: ReturnType<typeof setInterval> | undefined;
 
-/** Open the link and keep it open, routing the app's sync frames to `onFrame`. */
-export async function openSyncLink(onFrame: (frame: string) => void): Promise<boolean> {
-	onSyncFrame = onFrame;
+/**
+ * Hold the pipe open because this browser is paired and unlocked.
+ *
+ * Idempotent, and cheap when no app is paired: there is nothing to connect to, so it returns
+ * false and the keepalive finds the same thing until one appears.
+ */
+export async function openDesktopLink(): Promise<boolean> {
+	linkWanted = true;
+	startKeepalive();
+	const up = (await ensureHeld()) !== null;
+	console.log(`[bramble:link] ${up ? "connected to the desktop app" : "not connected"}`);
+	return up;
+}
+
+/** Stop holding it: the vault locked, or the app was unlinked. */
+export async function closeDesktopLink(): Promise<void> {
+	linkWanted = false;
+	await closeSyncLink();
+}
+
+function startKeepalive(): void {
 	if (!keepalive) {
 		keepalive = setInterval(() => {
 			void ensureHeld().catch(() => {});
 		}, LINK_KEEPALIVE_MS);
 	}
-	return (await ensureHeld()) !== null;
 }
 
-/** Close the held link. Delegation goes back to a session per request. */
+/** Route the app's sync frames to `onFrame`, and make sure the pipe is up to carry them. */
+export async function openSyncLink(onFrame: (frame: string) => void): Promise<boolean> {
+	onSyncFrame = onFrame;
+	return openDesktopLink();
+}
+
+/** Stop routing sync frames. The pipe stays up if anything else still wants it. */
 export async function closeSyncLink(): Promise<void> {
 	onSyncFrame = null;
+	if (linkWanted) return; // delegation and panel fills still need it
 	if (keepalive) {
 		clearInterval(keepalive);
 		keepalive = undefined;
@@ -365,10 +433,15 @@ export async function sendSyncFrame(frame: string): Promise<boolean> {
 async function ensureHeld(): Promise<HeldLink | null> {
 	if (held && !held.session.dead) return held;
 	if (held) await dropHeld();
-	if (!onSyncFrame) return null; // sync is not running; nothing should hold the pipe open
+	if (!linkWanted) return null; // nothing wants the pipe held open
 
 	const state = await loadState();
-	if (!state) return null;
+	if (!state) {
+		// Not paired in this profile. Said out loud because every failure on this path used to be
+		// swallowed, which made "the link is down" indistinguishable from "there is no app".
+		console.warn("[bramble:link] no desktop pairing in this browser");
+		return null;
+	}
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
@@ -383,7 +456,8 @@ async function ensureHeld(): Promise<HeldLink | null> {
 		if (reply.message) {
 			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
 		}
-	} catch {
+	} catch (e) {
+		console.warn("[bramble:link] desktop app refused or unreachable:", e);
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
 		return null;
@@ -408,13 +482,13 @@ async function ensureHeld(): Promise<HeldLink | null> {
 /** Open one inbound frame and dispatch it: a sync frame to sync, anything else to the request
  * waiting for it. */
 async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
-	let parsed: { sync?: string };
+	let parsed: { sync?: string; fill?: Partial<DesktopFill> };
 	try {
 		const plain = (await offscreen("LINK_OPEN", {
 			sessionId: link.sessionId,
 			sealed,
 		})) as string;
-		parsed = JSON.parse(plain) as { sync?: string };
+		parsed = JSON.parse(plain) as { sync?: string; fill?: Partial<DesktopFill> };
 	} catch {
 		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
 		await dropHeld();
@@ -422,6 +496,14 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 	}
 	if (typeof parsed.sync === "string") {
 		onSyncFrame?.(parsed.sync);
+		return;
+	}
+	if (parsed.fill && typeof parsed.fill.password === "string") {
+		onFillRequest?.({
+			username: parsed.fill.username ?? "",
+			password: parsed.fill.password,
+			totp: parsed.fill.totp ?? null,
+		});
 		return;
 	}
 	// An answer: hand the plaintext to whoever asked. Requests over the held link resolve here.
@@ -545,6 +627,8 @@ on(
 	"DESKTOP_LINK_UNLINK",
 	extensionOnly(async () => {
 		await unlinkDesktop();
+		// Nothing left to authenticate with, so stop holding a pipe the app would refuse anyway.
+		await closeDesktopLink();
 		return { ok: true };
 	}),
 );

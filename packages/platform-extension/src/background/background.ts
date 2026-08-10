@@ -24,6 +24,7 @@ import { ensureOffscreen, sendToOffscreen } from "./offscreen-client";
 import { getLockOnScreenLock, PREF_AUTOLOCK_MINUTES } from "./prefs";
 import { setReady } from "./router";
 import "./desktop-link";
+import { openDesktopLink } from "./desktop-link";
 import {
 	AUTOLOCK_ALARM,
 	clearSession,
@@ -43,6 +44,11 @@ setReady(hydrated);
 // Resume continuous sync after a service-worker restart if the vault is unlocked,
 // re-arm the backup poke, and run any backup that's already due.
 void hydrated.then(() => {
+	// OUTSIDE the unlocked check, deliberately. Filling WHILE LOCKED is the reason the link
+	// exists — the user should not have to unlock twice — so opening it only for an unlocked
+	// browser defeats the feature it was built for. An open pipe grants nothing on its own: the
+	// app answers only while ITS vault is unlocked, and the handshake still has to pass.
+	void openDesktopLink().catch(() => {});
 	if (!vaultLocked()) {
 		void maybeStartSync();
 		void runDueBackups();
