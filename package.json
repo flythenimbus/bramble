@@ -9,6 +9,8 @@
 		"build": "pnpm --filter @vault/platform-extension run build:chromium",
 		"build:firefox": "pnpm --filter @vault/platform-extension run build:firefox",
 		"build:desktop": "node --env-file-if-exists=.env.local scripts/build-desktop.ts",
+		"build:desktop:local-update": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --config src-tauri/tauri.local-update.conf.json",
+		"updater:smoke": "node scripts/updater-smoke.ts",
 		"bundle": "pnpm --filter @vault/platform-extension run bundle:chromium && node scripts/sign.ts --optional",
 		"bundle:firefox": "pnpm --filter @vault/platform-extension run bundle:firefox",
 		"dev": "trap 'kill 0' INT TERM; pnpm run dev:chrome & pnpm run dev:firefox & pnpm run dev:website & wait",

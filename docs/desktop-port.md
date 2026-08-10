@@ -709,6 +709,28 @@ reads `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_PATH` from `fastlane/.env` and m
 `APPLE_*` in the environment still wins, for CI. Without them the build succeeds and produces
 something Gatekeeper blocks everywhere but the machine that built it, so the script says so.
 
+### Testing an update without publishing one
+
+`pnpm build:desktop:local-update` builds against `tauri.local-update.conf.json`, which points the
+updater at `http://127.0.0.1:8787` and turns off the https requirement, and `pnpm updater:smoke`
+serves that build back to itself as a newer version. Run the app out of
+`target/release/bundle/macos/` rather than `/Applications`, so replacing the bundle needs no
+privileges, and watch the server log: a request for `latest.json` then one for the archive is the
+whole handshake.
+
+It advertises the SAME archive under a bumped version. The signature covers the archive's bytes and
+the version comes from the manifest, so every check the plugin makes passes; it installs what is
+already installed. One build instead of two, and it still exercises the part worth exercising —
+manifest, download, signature verification against the key compiled into the running app, bundle
+replacement, relaunch. Afterwards the app reports the old version and offers the same update again.
+That is expected. To confirm the version really changes, bump `tauri.conf.json`, build again, and
+serve the new archive to the old install.
+
+**A local-update build must never be released.** It would check a machine that is not there and
+could never be updated again, since the fix would arrive over the channel that is broken.
+`pnpm release:desktop` refuses to write a manifest when it finds the local endpoint in the built
+binary, which catches it whatever produced the build.
+
 One thing is still outstanding for a public release. **Architecture**: the default build is
 `aarch64` only, so Intel Macs cannot run it — `pnpm build:desktop:universal` produces both.
 

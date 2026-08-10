@@ -15,6 +15,7 @@ import { join } from "node:path";
 
 const BUNDLE = "packages/platform-desktop/src-tauri/target/release/bundle";
 const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
+const PATCH = "packages/platform-desktop/src-tauri/tauri.local-update.conf.json";
 
 const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 
@@ -27,6 +28,28 @@ const macos = join(BUNDLE, "macos");
 if (!existsSync(macos)) {
   console.error(`no bundle at ${macos}. Run pnpm build:desktop first.`);
   process.exit(1);
+}
+
+// The local-update test build points the app at 127.0.0.1 and turns off the https requirement.
+// Publishing one would ship an app that checks a machine that is not there, and would never
+// update again — unfixable, since the fix would arrive over the channel that is broken. The
+// endpoint is a plain string in the binary, so this catches it whatever produced the build.
+const localEndpoint = existsSync(PATCH)
+  ? JSON.parse(readFileSync(PATCH, "utf8")).plugins?.updater?.endpoints?.[0]
+  : undefined;
+if (localEndpoint) {
+  const host = new URL(localEndpoint).host;
+  for (const binary of ["Bramble.app/Contents/MacOS/bramble-desktop"]) {
+    const path = join(macos, binary);
+    if (existsSync(path) && readFileSync(path).includes(host)) {
+      console.error(
+        `${binary} was built against the local update endpoint (${host}).\n` +
+          "That build must not be released: it would check a machine that is not there and could\n" +
+          "never be updated afterwards. Rebuild without --config tauri.local-update.conf.json.",
+      );
+      process.exit(1);
+    }
+  }
 }
 
 const files = await readdir(macos);
