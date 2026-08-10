@@ -295,6 +295,9 @@ export interface VaultActions {
 	revokeSecurityKey(slotIdB64: string): Promise<void>;
 	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
+	/** Re-encrypt the vault under a fresh key. Destructive: orphans other devices, invalidates the
+	 * recovery code (a new one is returned) and drops security-key slots. See rotateSecret. */
+	rotateSecret(password: string): Promise<string>;
 	unlockWithRecoveryCode(code: string): Promise<void>;
 	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
 	enableBiometric(): Promise<void>;
@@ -1044,6 +1047,101 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await refreshSlotMetadata();
 	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata, t]);
 
+	/**
+	 * Rotate the vault's encryption key: everything is re-encrypted under a fresh one.
+	 *
+	 * Destructive on purpose, and the caller must have said so. What it costs:
+	 *  - Every OTHER device in the sync group is orphaned. The key being replaced is the group's
+	 *    shared key (enrollment ships it to each joiner, which wraps that same key under its own
+	 *    slots), and there is no message for handing out a new one. They must be paired again.
+	 *  - The recovery code is invalidated, because it wraps the old key and cannot be re-wrapped
+	 *    without the code itself. A fresh one is returned; it is shown once.
+	 *  - Security-key slots are dropped, for the same reason: re-wrapping needs a tap per key.
+	 *    The master password is what remains, which is why it is required here.
+	 *
+	 * ONE write. New slots and re-sealed entries go into the same blob: written separately, a
+	 * failure between them leaves a vault whose slots open with the new key and whose entries only
+	 * open with the old, and the second write would already have consumed the backup that could
+	 * undo the first. Verified after writing, and rolled back plus locked if that fails, so the
+	 * next unlock loads the old key from the restored file.
+	 */
+	const rotateSecret = useCallback(
+		async (password: string): Promise<string> => {
+			setError(null);
+			if (await crypto.isLocked()) throw new Error(t`Unlock the vault before rotating.`);
+			if (!(await verifyMasterPassword(password))) {
+				throw new Error(t`That password is incorrect.`);
+			}
+			// Read before rotating: this is the last moment the old key can open anything.
+			const { blob } = await readDecodedBlob();
+			const snapshot = snapshotEntries();
+
+			await crypto.rotateVek();
+			// From here the old key is gone. Everything below re-derives from plaintext held in
+			// memory, and any failure has to end in a restore.
+			let code: string;
+			try {
+				const sealed = await mutations.sealAll(snapshot);
+				code = makeRecoveryCode();
+				const withPassword = upsertPasswordSlot(
+					{ ...blob, ...sealed },
+					await wrapPasswordSlot(password),
+				);
+				const rotated = upsertRecoverySlot(withPassword, await wrapRecoverySlot(code));
+				// Security-key slots wrap the key that no longer exists; keeping them would offer an
+				// unlock that cannot work.
+				const slots = rotated.slots.filter((slot) => slot.kind !== SLOT_KIND_WEBAUTHN);
+				await storage.writeVaultBlob(encodeVaultBlob({ ...rotated, slots }));
+
+				const { blob: written } = await readDecodedBlob();
+				const slot = findPasswordSlot(written);
+				const ok =
+					slot != null &&
+					(await crypto.verifyPasswordSlot({
+						password,
+						saltB64: bytesToBase64(slot.salt),
+						slotIdB64: bytesToBase64(slot.slotId),
+						verifierB64: bytesToBase64(slot.verifier),
+						magicVersion: verifierPrefix(),
+					}));
+				if (!ok) throw new Error("rotated password slot failed post-write verify");
+				// And that the entries came back: a readable slot list over unreadable entries is
+				// the failure this whole shape exists to prevent.
+				await crypto.decryptWithVek(
+					bytesToBase64(written.entriesIv),
+					bytesToBase64(written.entriesCiphertext),
+				);
+			} catch (e) {
+				console.error("[vault] rotation failed; restoring", e);
+				await storage.restoreVaultFromBackup().catch(() => false);
+				// The loaded key is now the new one, which the restored file knows nothing about.
+				// Locking makes the next unlock read the old key back out of the restored slots.
+				await crypto.lock().catch(() => {});
+				setIsLocked(true);
+				throw new Error(t`Rotation failed and nothing was changed. Unlock and try again.`);
+			}
+			// Committed: the file is written and verified. Refreshing the view comes after the
+			// rollback boundary on purpose — failing to re-read entries is a display problem, and
+			// undoing a good rotation over it would invalidate a recovery code the user was shown.
+			await refreshSlotMetadata().catch(() => {});
+			await loadEntries().catch(() => {});
+			return code;
+		},
+		[
+			crypto,
+			t,
+			verifyMasterPassword,
+			readDecodedBlob,
+			snapshotEntries,
+			mutations,
+			wrapPasswordSlot,
+			wrapRecoverySlot,
+			storage,
+			refreshSlotMetadata,
+			loadEntries,
+		],
+	);
+
 	/** Generate (or reset) the recovery code. Requires the vault unlocked; returns the plaintext once. */
 	const generateRecoveryCode = useCallback(async (): Promise<string> => {
 		setError(null);
@@ -1378,6 +1476,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			registerSecurityKey,
 			revokeSecurityKey,
 			generateRecoveryCode,
+			rotateSecret,
 			unlockWithRecoveryCode,
 			enableBiometric,
 			disableBiometric,
@@ -1411,6 +1510,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			registerSecurityKey,
 			revokeSecurityKey,
 			generateRecoveryCode,
+			rotateSecret,
 			unlockWithRecoveryCode,
 			enableBiometric,
 			disableBiometric,

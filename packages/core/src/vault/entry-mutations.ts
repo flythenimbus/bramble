@@ -9,6 +9,8 @@ import type { CryptoAdapter } from "../adapters/crypto";
 import type { StorageAdapter } from "../adapters/storage";
 import type { Entry, EntryData } from "../hooks/useVault";
 import type { EntriesPayload, Hlc, HybridClock } from "../sync";
+import { encodeEntriesPayload } from "../sync";
+import { base64ToBytes } from "../util/bytes";
 import type { EncryptedEntry, VaultBlob } from "../vault-format";
 import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
@@ -48,6 +50,16 @@ export interface EntryMutations {
 	removeMany(current: VaultEntries, ids: string[]): Promise<VaultEntries>;
 	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
+	/**
+	 * Re-encrypt everything under whatever key is loaded NOW and hand back the sealed entries
+	 * section, writing nothing.
+	 *
+	 * For rotating the vault key, which has to put a new slot list and re-sealed entries into ONE
+	 * blob. Writing them separately would leave a window where the slots open with the new key and
+	 * the entries only with the old, and the second write would have already consumed the backup
+	 * that could undo the first.
+	 */
+	sealAll(current: VaultEntries): Promise<{ entriesIv: Uint8Array; entriesCiphertext: Uint8Array }>;
 	/** Decrypt the on-disk entries payload (empty for a fresh vault). */
 	readEntriesPayload(): Promise<EntriesPayload>;
 	/**
@@ -88,6 +100,15 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			}),
 		);
 		return { entries, tombstones: [...next.tombstones].map(([id, hlc]) => ({ id, hlc })) };
+	};
+
+	const sealAll = async (current: VaultEntries) => {
+		// Both layers are re-keyed: each entry gets a fresh DEK wrapped by the loaded key, and the
+		// payload holding them is sealed under it too.
+		const { iv, ciphertext } = await crypto.encryptWithVek(
+			encodeEntriesPayload(await buildPayload(current)),
+		);
+		return { entriesIv: base64ToBytes(iv), entriesCiphertext: base64ToBytes(ciphertext) };
 	};
 
 	// Persist a new state in one write, then refresh the autofill index so it can
@@ -238,5 +259,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		remove: (current, id) => removeMany(current, [id]),
 
 		removeMany,
+
+		sealAll,
 	};
 }

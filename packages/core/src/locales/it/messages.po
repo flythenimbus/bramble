@@ -302,6 +302,10 @@ msgstr "Palla"
 msgid "Banana"
 msgstr "Banana"
 
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Before you continue, three things change and none of them can be undone:"
+msgstr "Prima di continuare, tre cose cambiano e nessuna può essere annullata:"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Bell"
 msgstr "Campana"
@@ -383,6 +387,7 @@ msgstr "Torta"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Cancel"
@@ -607,6 +612,7 @@ msgid "Controls which URLs this entry will offer credentials for."
 msgstr "Controlla gli URL per i quali questa voce fornirà le credenziali."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 #: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Copied"
 msgstr "Copiato"
@@ -617,6 +623,7 @@ msgstr "Copiato {copied}"
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Copy"
 msgstr "Copia"
@@ -860,6 +867,10 @@ msgstr "Conferma"
 #: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
 msgid "Done selecting"
 msgstr "Fine selezione"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Done. Your old recovery code no longer works. Save this one now: it is shown only here, and it is the only way back in if you forget your master password."
+msgstr "Completato. Il suo vecchio codice di recupero non funziona più. Salvi questo ora: viene mostrato solo qui ed è l'unico modo per rientrare se dimentica la password principale."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
@@ -1198,6 +1209,10 @@ msgstr "Cavallo"
 msgid "Hourglass"
 msgstr "Clessidra"
 
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "I've saved it"
+msgstr "L'ho salvato"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "I've saved it, continue"
 msgstr "Ho salvato, continua"
@@ -1437,6 +1452,7 @@ msgstr "Accessi"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
@@ -1947,6 +1963,10 @@ msgstr "Rimuovere URL"
 msgid "Replaced {0}"
 msgstr "Sostituita {0}"
 
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Replaces the key everything in this vault is encrypted with. Worth doing if you believe a copy of the vault file has been exposed, since anything taken before cannot be opened with the new key."
+msgstr "Sostituisce la chiave con cui è crittografato l'intero Vault. Consigliato se si ritiene che una copia del file del Vault sia stata esposta, poiché i dati sottratti in precedenza non possono essere aperti con la nuova chiave."
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
 msgstr "Richiedi la password principale per sbloccare"
@@ -2009,6 +2029,22 @@ msgstr "Razzo"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Rooster"
 msgstr "Gallo"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotate secret"
+msgstr "Ruotare segreto"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotate this vault's secret"
+msgstr "Ruotare il segreto di questo Vault"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotating…"
+msgstr "Rotazione in corso…"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Rotation failed and nothing was changed. Unlock and try again."
+msgstr "La rotazione non è riuscita, nessuna modifica è stata apportata. Sblocchi e riprovi."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
@@ -2099,6 +2135,10 @@ msgstr "Chiave di sicurezza"
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Security keys"
 msgstr "Chiavi di sicurezza"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Security keys are removed from this vault and have to be added again. Your master password keeps working."
+msgstr "Le chiavi di sicurezza vengono rimosse da questo Vault e devono essere aggiunte di nuovo. La password principale resta attiva."
 
 #: packages/core/src/hooks/useVault.tsx
 msgid "Security-key unlock failed (verifier mismatch)."
@@ -2314,6 +2354,10 @@ msgstr "Sincronizzato · {0} dispositivi"
 msgid "System"
 msgstr "Sistema"
 
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Take a backup first, from Backups, so you have a copy that still opens."
+msgstr "Esegua prima un backup dalla schermata Backup, così avrà una copia ancora funzionante."
+
 #: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Tappi una chiave di sicurezza per sbloccare invece di digitare la password principale."
@@ -2352,6 +2396,7 @@ msgid "That password didn't open the file."
 msgstr "Quella password non ha aperto il file."
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/hooks/useVault.tsx
 msgid "That password is incorrect."
 msgstr "La password non è corretta."
 
@@ -2643,6 +2688,10 @@ msgid "Unlock the vault before generating a recovery code."
 msgstr "Sbloccare il vault prima di generare un codice di recupero."
 
 #: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before rotating."
+msgstr "Sblocchi il Vault prima di ruotare."
+
+#: packages/core/src/hooks/useVault.tsx
 msgid "Unlock the vault before setting a master password."
 msgstr "Sbloccare il vault prima di impostare una password principale."
 
@@ -2894,6 +2943,18 @@ msgstr "Il suo nuovo codice di recupero"
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Your other device is showing the same symbols. Confirm it there only if they match these."
 msgstr "L’altro dispositivo sta mostrando gli stessi simboli. Confermi lì solo se corrispondono a questi."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your other devices can no longer read this vault. Pair each of them again from Device sync."
+msgstr "I suoi altri dispositivi non possono più leggere questo Vault. Li associ di nuovo da Sincronizzazione dispositivi."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your other devices stop being able to read this vault. They all share the key being replaced, so each one has to be paired again from Device sync."
+msgstr "I suoi altri dispositivi smetteranno di poter leggere questo Vault. Condividono tutti la chiave che viene sostituita, per cui ognuno dovrà essere associato di nuovo da Sincronizzazione dispositivi."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."
+msgstr "Il suo codice di recupero smetterà di funzionare. Subito dopo ne verrà mostrato uno nuovo, una sola volta, e dovrà salvarlo."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Your vault is empty. Add your first item."

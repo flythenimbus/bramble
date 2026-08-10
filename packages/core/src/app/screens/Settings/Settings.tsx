@@ -21,6 +21,7 @@ import { DataSection } from "./components/DataSection";
 import { DeleteVaultSection } from "./components/DeleteVaultSection";
 import { DesktopLinkSection } from "./components/DesktopLinkSection";
 import { GeneralSection } from "./components/GeneralSection";
+import { RotateSecretSection } from "./components/RotateSecretSection";
 import { SecuritySection } from "./components/SecuritySection";
 import { SupportSection } from "./components/SupportSection";
 import { SyncConnectSection } from "./components/SyncConnectSection";
@@ -111,7 +112,13 @@ export function Settings() {
 						<DeleteVaultSection />
 					</>
 				)}
-				{tab === "security" && <SecuritySection />}
+				{tab === "security" && (
+					<>
+						<SecuritySection />
+						{/* Last, like Delete vault in General: destructive, occasionally necessary. */}
+						<RotateSecretSection />
+					</>
+				)}
 				{tab === "backups" && (
 					<>
 						<DataSection />
