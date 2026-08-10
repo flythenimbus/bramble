@@ -335,14 +335,20 @@ export function onDesktopFillRequest(handler: (fill: DesktopFill) => void): void
  * Only while a link is already held: this must not be the thing that spawns a native host, or
  * every tab switch would start a process on a machine with no desktop app running.
  */
+/** Whether a link is live, so callers can skip work that only matters when one is. */
+export function linkIsHeld(): boolean {
+	return held !== null && !held.session.dead;
+}
+
 export async function reportActiveTab(hostname: string): Promise<void> {
-	if (!held || held.session.dead) return;
+	const link = held;
+	if (!link || link.session.dead) return;
 	try {
 		const sealed = (await offscreen("LINK_SEAL", {
-			sessionId: held.sessionId,
+			sessionId: link.sessionId,
 			plaintext: JSON.stringify({ op: "activeTab", hostname }),
 		})) as string;
-		held.session.send({ sealed });
+		link.session.send({ sealed });
 	} catch {
 		// A dead pipe is not worth reporting: the next keepalive rebuilds it.
 	}
@@ -369,10 +375,14 @@ let keepalive: ReturnType<typeof setInterval> | undefined;
  * false and the keepalive finds the same thing until one appears.
  */
 export async function openDesktopLink(): Promise<boolean> {
+	// Nothing to connect to. Checked BEFORE arming anything: almost nobody has a desktop app
+	// paired, and an unconditional keepalive woke every one of those service workers every twenty
+	// seconds, forever, to discover the same thing each time.
+	if (!(await loadState())) return false;
 	linkWanted = true;
 	startKeepalive();
 	const up = (await ensureHeld()) !== null;
-	console.log(`[bramble:link] ${up ? "connected to the desktop app" : "not connected"}`);
+	if (up) console.log("[bramble:link] connected to the desktop app");
 	return up;
 }
 
@@ -436,12 +446,9 @@ async function ensureHeld(): Promise<HeldLink | null> {
 	if (!linkWanted) return null; // nothing wants the pipe held open
 
 	const state = await loadState();
-	if (!state) {
-		// Not paired in this profile. Said out loud because every failure on this path used to be
-		// swallowed, which made "the link is down" indistinguishable from "there is no app".
-		console.warn("[bramble:link] no desktop pairing in this browser");
-		return null;
-	}
+	// Not paired. The ordinary case, and openDesktopLink already declined to arm anything, so this
+	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
+	if (!state) return null;
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
@@ -600,6 +607,9 @@ on(
 		const code = String((message as { code?: unknown }).code ?? "");
 		if (!code) return { ok: false, error: "no code" };
 		const state = await pairWithDesktop(code);
+		// A link is possible from this moment; without this it would wait for a browser restart,
+		// since openDesktopLink now declines to arm anything for an unpaired browser.
+		void openDesktopLink().catch(() => {});
 		return { ok: true, data: { publicKey: state.publicKey, pairedAt: state.pairedAt } };
 	}),
 );

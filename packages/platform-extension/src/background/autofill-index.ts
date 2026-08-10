@@ -19,7 +19,12 @@ import {
 } from "../dedupe";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
-import { type DesktopFill, onDesktopFillRequest, reportActiveTab } from "./desktop-link";
+import {
+	type DesktopFill,
+	linkIsHeld,
+	onDesktopFillRequest,
+	reportActiveTab,
+} from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
 import { type MessageEnvelope, on } from "./router";
 import {
@@ -640,6 +645,9 @@ onDesktopFillRequest((fill) => {
 /** Keep the desktop app told which page this browser is on, so its panel can name the target. */
 function watchActiveTab(): void {
 	const report = async () => {
+		// Checked first so a browser with no desktop app does not query tabs on every switch just to
+		// find there is nowhere to send the answer.
+		if (!linkIsHeld()) return;
 		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
 		let hostname = "";
 		try {

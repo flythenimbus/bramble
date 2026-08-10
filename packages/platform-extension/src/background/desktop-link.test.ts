@@ -291,3 +291,20 @@ describe("keeping the pipe up", () => {
 		vi.useRealTimers();
 	});
 });
+
+describe("a browser with no desktop app", () => {
+	it("arms nothing at all", async () => {
+		// This is nearly every install. An unconditional keepalive woke each of those service
+		// workers every twenty seconds, forever, to rediscover that there is nothing to connect to.
+		vi.useFakeTimers();
+		const mod = await load();
+		h.stored = {}; // never paired
+
+		expect(await mod.openDesktopLink()).toBe(false);
+		expect(h.connects).toBe(0);
+
+		await vi.advanceTimersByTimeAsync(5 * 60_000);
+		expect(h.connects).toBe(0);
+		vi.useRealTimers();
+	});
+});
