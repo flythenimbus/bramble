@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
+import { flags } from "../../../../flags";
 import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -28,6 +29,10 @@ export function RotateSecretSection() {
 	const [freshCode, setFreshCode] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
 
+	// Off by default. The operation is tested, but it ends with every other device unable to read
+	// the vault and a recovery code the user has to save right then, so it stays behind the flag
+	// until it has been exercised on real vaults. See flags.json.
+	if (!flags.rotateVaultSecret) return null;
 	// Nothing to rotate with: rotation re-wraps the password slot, so the password is the one
 	// credential that has to survive it.
 	if (!hasPasswordSlot) return null;

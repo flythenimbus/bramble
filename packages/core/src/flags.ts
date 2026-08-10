@@ -13,6 +13,13 @@ export interface Flags {
 	/** Reject a brand-new roster id that carries no valid admission (phase-2) - this is what gives
 	 * the rogue-injection close its teeth. Default false during rollout. */
 	rosterRequireAdmission: boolean;
+	/**
+	 * Offer "Rotate secret" in Settings. Default false: the operation is correct and tested, but
+	 * it is the one action here that ends with other devices unable to read the vault and a
+	 * recovery code the user must save in that moment. Worth having behind a flag until it has
+	 * been exercised on real vaults, because the failure mode is somebody's whole vault.
+	 */
+	rotateVaultSecret: boolean;
 }
 
 export const flags: Flags = flagsJson;

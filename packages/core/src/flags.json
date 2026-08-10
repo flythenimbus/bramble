@@ -1,4 +1,5 @@
 {
 	"rosterRequireSignatures": false,
-	"rosterRequireAdmission": false
+	"rosterRequireAdmission": false,
+	"rotateVaultSecret": false
 }
