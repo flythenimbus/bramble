@@ -326,6 +326,10 @@ msgstr "Biometric unlock isn't available on this device."
 msgid "Book"
 msgstr "Book"
 
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Bramble {version} is available. Updating downloads it and restarts the app. Your vault is not touched."
+msgstr "Bramble {version} is available. Updating downloads it and restarts the app. Your vault is not touched."
+
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
 msgstr "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
@@ -349,6 +353,10 @@ msgstr "Bramble is installed directly, so updates are checked here."
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Bramble is up to date."
 msgstr "Bramble is up to date."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble restarts by itself once this finishes."
+msgstr "Bramble restarts by itself once this finishes."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -902,6 +910,10 @@ msgid "Downloading {0}%"
 msgstr "Downloading {0}%"
 
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading the update"
+msgstr "Downloading the update"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Downloading…"
 msgstr "Downloading…"
 
@@ -1411,6 +1423,10 @@ msgstr "Last backed up {0}"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Last synced {0}"
 msgstr "Last synced {0}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Later"
+msgstr "Later"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
@@ -2785,9 +2801,17 @@ msgstr "Unnamed device"
 msgid "Update and restart"
 msgstr "Update and restart"
 
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update Bramble"
+msgstr "Update Bramble"
+
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Update failed: {error}"
 msgstr "Update failed: {error}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update now"
+msgstr "Update now"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"

@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Download, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { Button } from "../../../components/ui/button";
 import { Row, Section } from "./primitives";
@@ -21,10 +21,18 @@ export function UpdatesSection() {
 	const [state, setState] = useState<"idle" | "checking" | "installing">("idle");
 	const [found, setFound] = useState<{ version: string; notes?: string } | null>(null);
 	const [current, setCurrent] = useState(false);
-	const [fraction, setFraction] = useState<number | null>(null);
+	const [fraction, setFraction] = useState<number | null | undefined>(undefined);
 	const [error, setError] = useState<string | null>(null);
 
+	// Subscribed rather than tracked locally: the launch prompt can start a download, and this
+	// section opened afterwards should show it rather than offering to check again.
+	useEffect(() => shell.updates?.onProgress(setFraction), [shell]);
+
 	if (!shell.updates) return null;
+
+	// A download is running, whoever started it. The launch prompt sends people here mid-download,
+	// so without this the section would sit on "Check for updates" while the app downloaded itself.
+	const downloading = state === "installing" || fraction !== undefined;
 
 	const look = async () => {
 		setError(null);
@@ -46,7 +54,7 @@ export function UpdatesSection() {
 		setState("installing");
 		try {
 			// Does not return when it succeeds: the app relaunches into the new version.
-			await shell.updates?.install(setFraction);
+			await shell.updates?.install();
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 			setState("idle");
@@ -57,33 +65,41 @@ export function UpdatesSection() {
 		<Section icon={<RefreshCw className="w-4 h-4" />} title={t`Updates`}>
 			<Row
 				icon={<Download className="w-4 h-4 text-primary" />}
-				title={found ? t`Version ${found.version} is available` : t`Check for updates`}
-				subtitle={
+				title={
 					found
-						? t`Downloads and restarts Bramble. Your vault is untouched.`
-						: current
-							? t`Bramble is up to date.`
-							: t`Bramble is installed directly, so updates are checked here.`
+						? t`Version ${found.version} is available`
+						: downloading
+							? t`Downloading the update`
+							: t`Check for updates`
+				}
+				subtitle={
+					downloading
+						? t`Bramble restarts by itself once this finishes.`
+						: found
+							? t`Downloads and restarts Bramble. Your vault is untouched.`
+							: current
+								? t`Bramble is up to date.`
+								: t`Bramble is installed directly, so updates are checked here.`
 				}
 			>
-				{found ? (
+				{downloading ? (
+					<Button variant="secondary" size="sm" disabled>
+						{/* A percentage where the server gave a length, a plain label where it did not,
+						    rather than a bar that would sit at zero and look stuck. */}
+						{typeof fraction === "number" ? (
+							<Trans>Downloading {Math.round(fraction * 100)}%</Trans>
+						) : (
+							<Trans>Downloading…</Trans>
+						)}
+					</Button>
+				) : found ? (
 					<Button
 						variant="secondary"
 						size="sm"
 						disabled={state !== "idle"}
 						onClick={() => void install()}
 					>
-						{state === "installing" ? (
-							// A percentage where the server gave a length, a plain label where it did not,
-							// rather than a bar that would sit at zero and look stuck.
-							fraction === null ? (
-								<Trans>Downloading…</Trans>
-							) : (
-								<Trans>Downloading {Math.round(fraction * 100)}%</Trans>
-							)
-						) : (
-							<Trans>Update and restart</Trans>
-						)}
+						<Trans>Update and restart</Trans>
 					</Button>
 				) : (
 					<Button

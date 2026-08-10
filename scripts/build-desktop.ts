@@ -16,7 +16,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { notifyYubiKeyTouch } from "./yubikey-notify";
+import { yubiKeyIdentity } from "./age-yubikey-identity.ts";
+import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = homedir();
 const KEY_AGE =
@@ -50,7 +51,7 @@ function signingKey(): string | undefined {
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-updater-"));
 	try {
 		const idFile = join(tmp, "id.txt");
-		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
+		writeFileSync(idFile, yubiKeyIdentity());
 		notifyYubiKeyTouch("decrypt the desktop updater signing key");
 		return execFileSync("age", ["-d", "-i", idFile, KEY_AGE], {
 			encoding: "utf8",

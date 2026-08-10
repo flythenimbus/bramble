@@ -683,6 +683,24 @@ release that looks complete while updating silently fails for everyone.
 `latest.json` must be an asset on the LATEST release. Installed apps read that URL, so a release
 that omits it leaves them checking a stale manifest.
 
+**Being told an update exists.** Settings has a Check button, but a manual check is only found by
+someone who already suspects there is something to find, which is the wrong assumption for a
+security fix. So `updates-prompt.ts` asks once, five seconds after launch, in a native dialog: long
+enough to stay out of the way of unlocking, still plainly part of opening the app. Declining
+records the version, so the same one is never offered twice and the prompt does not train people to
+dismiss it unread.
+
+Accepting routes to Settings before starting the download, because a system dialog cannot show
+progress and a password manager that goes quiet and then restarts by itself is alarming. That is
+why download progress is a subscription on the updates adapter rather than local state in the
+section: the install starts outside the component, and a section tracking only its own clicks would
+show "Check for updates" while the app downloaded itself.
+
+The dialog's copy lives in `packages/core/src/app/update-prompt-copy.tsx`, not beside the dialog.
+The extractor only reads `packages/core/src`, so the same sentence written in the desktop package
+would ship untranslated to every locale. It falls back to English if no catalog is active yet:
+Lingui throws rather than falling back, and a thrown error there means no dialog at all.
+
 Two things are still outstanding for a public release. **Notarization**: the bundle is signed but
 not notarized, so Gatekeeper blocks it on any machine that did not build it; Tauri does it during
 the build once `APPLE_ID`, `APPLE_PASSWORD` (app-specific) and `APPLE_TEAM_ID` are in `.env.local`.

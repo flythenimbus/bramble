@@ -335,6 +335,12 @@ the bundler through the environment, and never writes the plaintext to disk.
 Needs the YubiKey plugged in, and assumes you already made an age identity for it in the
 [Chrome section](#one-time-setup).
 
+> **`age-plugin-yubikey --identity` needs the slot named.** On 0.5.1 a bare `--identity` prints an
+> empty stub and exits 0, so the failure surfaces later as an unexplained `age -d` error.
+> `scripts/age-yubikey-identity.ts` discovers serial and slot from `--list`; set
+> `AGE_YUBIKEY_SERIAL` / `AGE_YUBIKEY_SLOT` if more than one slot is configured. Decrypting is
+> interactive (PIN prompt on the tty, then a touch), so it has to be run from a real terminal.
+
 ```sh
 # 1. Generate the updater keypair. Choose a password or not; the age wrapper is the real
 #    protection, and the build script passes TAURI_SIGNING_PRIVATE_KEY_PASSWORD through if set.

@@ -326,6 +326,10 @@ msgstr "El desbloqueo biométrico no está disponible en este dispositivo."
 msgid "Book"
 msgstr "Libro"
 
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Bramble {version} is available. Updating downloads it and restarts the app. Your vault is not touched."
+msgstr "Bramble {version} está disponible. La actualización lo descarga y reinicia la aplicación. Su caja fuerte no se ve afectada."
+
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
 msgstr "Bramble no pudo actualizar de forma segura el almacenamiento de claves de este dispositivo, por lo que la caja fuerte permaneció bloqueada. Inténtelo de nuevo."
@@ -349,6 +353,10 @@ msgstr "Bramble se instala directamente, por lo que aquí se buscan actualizacio
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Bramble is up to date."
 msgstr "Bramble está actualizado."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble restarts by itself once this finishes."
+msgstr "Bramble se reiniciará solo una vez que esto finalice."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -902,6 +910,10 @@ msgid "Downloading {0}%"
 msgstr "Descargando {0}%"
 
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading the update"
+msgstr "Descargando la actualización"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Downloading…"
 msgstr "Descargando…"
 
@@ -1411,6 +1423,10 @@ msgstr "Última copia de seguridad: {0}"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Last synced {0}"
 msgstr "Última sincronización {0}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Later"
+msgstr "Más tarde"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
@@ -2785,9 +2801,17 @@ msgstr "Dispositivo sin nombre"
 msgid "Update and restart"
 msgstr "Actualizar y reiniciar"
 
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update Bramble"
+msgstr "Actualizar Bramble"
+
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Update failed: {error}"
 msgstr "Error al actualizar: {error}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update now"
+msgstr "Actualizar ahora"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Update password"

@@ -9,6 +9,7 @@
 		"clipboard-manager:allow-read-text",
 		"clipboard-manager:allow-clear",
 		"dialog:allow-save",
+		"dialog:allow-ask",
 		"opener:allow-open-url",
 		"updater:default",
 		"process:allow-restart"

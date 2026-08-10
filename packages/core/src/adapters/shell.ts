@@ -159,7 +159,14 @@ export interface ShellAdapter {
 	 */
 	updates?: {
 		check(): Promise<{ version: string; notes?: string } | null>;
-		install(onProgress?: (fraction: number | null) => void): Promise<void>;
+		install(): Promise<void>;
+		/**
+		 * Watch a download, whoever started it. An install can begin from a launch prompt rather
+		 * than from the UI, and a screen that only knew about its own calls would sit there
+		 * looking idle while the app downloaded itself. Fraction is null when the server sent no
+		 * content length, and undefined when nothing is running. Returns an unsubscribe.
+		 */
+		onProgress(callback: (fraction: number | null | undefined) => void): () => void;
 	};
 	/** What to call this device in the roster, where the host knows better than the user agent
 	 * does. A native app's UA describes its webview, so a Tauri window reports as Safari and would
