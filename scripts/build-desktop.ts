@@ -52,7 +52,13 @@ function signingKey(): string | undefined {
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-updater-"));
 	try {
 		const idFile = join(tmp, "id.txt");
-		writeFileSync(idFile, yubiKeyIdentity());
+		// Reported rather than thrown: an unplugged key is the ordinary case here, and a stack
+		// trace buries the one line that says what to do about it.
+		try {
+			writeFileSync(idFile, yubiKeyIdentity());
+		} catch (e) {
+			fail(`error: ${(e as Error).message}`);
+		}
 		notifyYubiKeyTouch("decrypt the desktop updater signing key");
 		return execFileSync("age", ["-d", "-i", idFile, KEY_AGE], {
 			encoding: "utf8",

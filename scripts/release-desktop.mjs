@@ -1,23 +1,63 @@
 #!/usr/bin/env node
-// Assemble a GitHub release for the desktop app: the .dmg people download, the .tar.gz the
-// in-app updater downloads, and the latest.json that points at it.
+// Build and assemble a GitHub release for the desktop app: the .dmg people download, the .tar.gz
+// the in-app updater downloads, and the latest.json that points at it.
 //
-// The updater endpoint is the `latest.json` asset on the latest release, so this file IS the
-// update channel. Getting it wrong does not break the download, it breaks updating for everyone
-// already running the app, which is the failure nobody notices until it matters.
+// Usage:
+//   pnpm package:desktop              build (aarch64) and assemble
+//   pnpm package:desktop --universal  build for both architectures
+//   pnpm package:desktop --resume     assemble what is already built, no rebuild
+//
+// For a real release use `pnpm release desktop <version>`, which bumps, tags, publishes, and
+// commits the manifest in the order that keeps the update channel honest. This is the packaging
+// half of that, usable on its own.
+//
+// It builds rather than assuming a build, the way the other targets do. Assembling from whatever
+// happened to be in the bundle directory is how a release ends up carrying an artifact from an
+// older commit, and the signature in latest.json would still verify against it — the manifest
+// would be internally consistent and simply describe the wrong software.
+//
+// The updater endpoint is this file on the website, so it IS the update channel. Getting it wrong
+// does not break the download, it breaks updating for everyone already running the app, which is
+// the failure nobody notices until it matters. It is served from bramble.sh rather than the
+// GitHub release because `/releases/latest` means the newest release of ANY target, and this repo
+// ships chromium, firefox and android from the same tag namespace — the next extension release
+// would quietly point every desktop install at a 404.
 //
 // Reads what the build actually produced rather than reconstructing names, because the signature
 // has to belong to the exact bytes being published.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const BUNDLE = "packages/platform-desktop/src-tauri/target/release/bundle";
 const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const PATCH = "packages/platform-desktop/src-tauri/tauri.local-update.conf.json";
 
 const { version } = JSON.parse(readFileSync(CONF, "utf8"));
+
+const args = process.argv.slice(2);
+const resume = args.includes("--resume");
+const universal = args.includes("--universal");
+// Set when `pnpm release desktop` drives this: the assets are already uploaded by then, so the
+// upload instructions below would be telling you to do something you just did.
+const quiet = args.includes("--quiet");
+
+if (!resume) {
+  // Inherited stdio, because the build wants a YubiKey PIN at the terminal and a swallowed
+  // prompt looks exactly like a hang.
+  console.log(`building Bramble ${version}${universal ? " (universal)" : ""}…`);
+  try {
+    execFileSync("pnpm", [universal ? "build:desktop:universal" : "build:desktop"], {
+      stdio: "inherit",
+    });
+  } catch {
+    // The build already said why; repeating its output as a stack trace only buries it.
+    console.error("\nbuild failed; nothing was assembled.");
+    process.exit(1);
+  }
+}
 
 /** macOS arch as the updater names it: `darwin-aarch64` / `darwin-x86_64`. */
 function platformKey(file) {
@@ -26,7 +66,7 @@ function platformKey(file) {
 
 const macos = join(BUNDLE, "macos");
 if (!existsSync(macos)) {
-  console.error(`no bundle at ${macos}. Run pnpm build:desktop first.`);
+  console.error(`no bundle at ${macos}. Drop --resume to build it.`);
   process.exit(1);
 }
 
@@ -73,8 +113,9 @@ for (const archive of archives) {
   }
   platforms[platformKey(archive)] = {
     signature: readFileSync(join(macos, sig), "utf8").trim(),
-    // Tags are `v<version>`; the asset name is whatever the bundler produced.
-    url: `https://github.com/flythenimbus/bramble/releases/download/v${version}/${archive}`,
+    // Tags are `<version>-desktop` (the repo's shared namespace); the asset name is whatever the
+    // bundler produced.
+    url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${archive}`,
   };
 }
 
@@ -87,7 +128,8 @@ const manifest = {
   platforms,
 };
 
-const out = join(BUNDLE, "latest.json");
+const out = "website/public/desktop/latest.json";
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`);
 
 console.log(`latest.json -> ${out}`);
@@ -97,10 +139,12 @@ for (const [key, value] of Object.entries(platforms)) {
 const dmgs = existsSync(join(BUNDLE, "dmg"))
   ? (await readdir(join(BUNDLE, "dmg"))).filter((f) => f.endsWith(".dmg"))
   : [];
-console.log("\nUpload to the v" + version + " release:");
-for (const f of dmgs) console.log(`  ${join(BUNDLE, "dmg", f)}`);
-for (const a of archives) console.log(`  ${join(macos, a)}`);
-console.log(`  ${out}`);
-console.log(
-  "\nlatest.json must be an asset on the LATEST release, or installed apps check a stale one.",
-);
+if (!quiet) {
+  console.log(`\nUpload to the ${version}-desktop release:`);
+  for (const f of dmgs) console.log(`  ${join(BUNDLE, "dmg", f)}`);
+  for (const a of archives) console.log(`  ${join(macos, a)}`);
+  console.log(
+    `\n${out} is the update channel; commit it AFTER the release assets exist, or apps read a` +
+      "\nmanifest whose download 404s. `pnpm release desktop` does that ordering for you.",
+  );
+}

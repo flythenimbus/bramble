@@ -1,3 +1,9 @@
 /.well-known/matrix/*
   Content-Type: application/json
   Access-Control-Allow-Origin: *
+
+# The desktop update channel. The site default is max-age=14400, and four hours of apps being
+# told there is nothing new is four hours a security fix does not reach anyone who opened the app.
+/desktop/*
+  Content-Type: application/json
+  Cache-Control: public, max-age=300, must-revalidate

@@ -7,6 +7,7 @@
 //   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
 //                                                                      container already built)
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
+//   pnpm run release desktop  <version|patch|minor|major> [--universal]
 //
 // The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
 // (patch/minor/major) that increments the SELECTED target's current version. Targets version
@@ -21,6 +22,9 @@
 // android is special: it builds in the F-Droid-matching container (docker-compose android-repro,
 // needs Docker) so the APK is byte-reproducible, then signs the container's unsigned output on the
 // host with the YubiKey. Signing setup lives in docs/release-signing.md.
+// desktop publishes a GitHub release AND commits the updater manifest to the website, in that
+// order — the manifest is the live update channel, so it must never name artifacts that are not
+// there yet.
 
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -39,6 +43,12 @@ import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = process.env.HOME ?? "";
 
+/** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
+const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
+const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
+/** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
+const WEBSITE_BRANCH = "main";
+
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
 	process.exit(1);
@@ -50,7 +60,9 @@ const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")));
 const [platform, rawVersion] = argv.filter((a) => !a.startsWith("--"));
 if (!platform)
-	fail("usage: pnpm run release <chromium|firefox|android|ios> <version|patch|minor|major>");
+	fail(
+		"usage: pnpm run release <chromium|firefox|android|ios|desktop> <version|patch|minor|major>",
+	);
 if (!rawVersion)
 	fail(`missing version. usage: pnpm run release ${platform} <version|patch|minor|major>`);
 
@@ -67,6 +79,7 @@ const version = bumpKind
 if (platform === "android") releaseAndroid(version, flags.has("--resume"));
 else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") releaseFirefox(version);
+else if (platform === "desktop") releaseDesktop(version, flags.has("--universal"));
 else releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
@@ -589,6 +602,122 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	);
 }
 
+// ----- desktop: GitHub release (.dmg + updater archive), manifest served from the website -----
+
+function releaseDesktop(version: string, universal: boolean) {
+	const BUNDLE = "packages/platform-desktop/src-tauri/target/release/bundle";
+
+	// Tauri requires a strict major.minor.patch; it refuses to build otherwise, and finding that
+	// out after the gate and a full build wastes ten minutes.
+	if (!/^\d+\.\d+\.\d+$/.test(version))
+		fail(`invalid version "${version}". want major.minor.patch`);
+
+	const tag = `${version}-desktop`;
+	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
+	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+
+	// The manifest reaches apps only via the website, and deploy-website.yml runs on pushes to
+	// main. Released from anywhere else, the GitHub release is real and no installed app ever
+	// hears about it — the quietest possible failure.
+	const onBranch = capture("git rev-parse --abbrev-ref HEAD");
+	if (onBranch !== WEBSITE_BRANCH)
+		fail(
+			`on branch "${onBranch}", but the website deploys from "${WEBSITE_BRANCH}" — the update ` +
+				`manifest would never go live.\nMerge to ${WEBSITE_BRANCH} and release from there.`,
+		);
+
+	// Signing + notarization prereqs, before the slow gate + build. Notarization is required rather
+	// than optional here, unlike a local build: Gatekeeper blocks an un-notarized app on every
+	// machine that did not build it, so publishing one ships something nobody can open.
+	const keyAge =
+		process.env.DESKTOP_UPDATER_KEY_AGE ?? join(HOME, ".config/bramble/desktop-updater-key.age");
+	if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(keyAge))
+		fail(
+			`no updater signing key: set TAURI_SIGNING_PRIVATE_KEY, or provide ${keyAge} (override DESKTOP_UPDATER_KEY_AGE). See docs/release-signing.md.`,
+		);
+	if (!process.env.TAURI_SIGNING_PRIVATE_KEY)
+		for (const bin of ["age", "age-plugin-yubikey"])
+			if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
+		fail(
+			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
+		);
+
+	gate();
+
+	const before = readFileSync(DESKTOP_CONF, "utf8");
+	let replaced = 0;
+	const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
+		replaced++;
+		return `${p1}${version}${p2}`;
+	});
+	if (replaced !== 1)
+		fail(`expected exactly one "version" field in ${DESKTOP_CONF}, found ${replaced}`);
+
+	const branch = capture("git rev-parse --abbrev-ref HEAD");
+	const bumped = after !== before;
+	if (bumped) writeFileSync(DESKTOP_CONF, after);
+
+	try {
+		// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
+		run(`pnpm run ${universal ? "build:desktop:universal" : "build:desktop"}`);
+	} catch {
+		fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
+	}
+
+	const macos = join(BUNDLE, "macos");
+	const archives = existsSync(macos)
+		? readdirSync(macos).filter((f) => f.endsWith(".app.tar.gz"))
+		: [];
+	if (archives.length === 0)
+		fail(`no .app.tar.gz in ${macos}; the build produced no updater archive`);
+	const dmgs = existsSync(join(BUNDLE, "dmg"))
+		? readdirSync(join(BUNDLE, "dmg")).filter((f) => f.endsWith(".dmg"))
+		: [];
+	if (dmgs.length === 0) fail(`no .dmg in ${join(BUNDLE, "dmg")}`);
+
+	const assets: string[] = [];
+	for (const f of dmgs) assets.push(join(BUNDLE, "dmg", f));
+	for (const a of archives) {
+		if (!existsSync(join(macos, `${a}.sig`)))
+			// Every installed app rejects an unsigned archive, so publishing one leaves a release
+			// that looks complete while updating silently fails for everyone.
+			fail(`${a} has no .sig; was the signing key set for this build?`);
+		assets.push(join(macos, a), join(macos, `${a}.sig`));
+	}
+
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+	const sumsAsset = join(stage, "SHA256SUMS");
+	writeFileSync(
+		sumsAsset,
+		assets
+			.filter((f) => !f.endsWith(".sig"))
+			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
+			.join(""),
+	);
+
+	commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
+
+	try {
+		publish(tag, `Desktop ${version}`, [...assets, sumsAsset]);
+	} finally {
+		rmSync(stage, { recursive: true, force: true });
+	}
+
+	// Only now. The manifest IS the update channel, so it goes live after the artifacts it names
+	// exist — the other way round, every app checking in between reads a manifest whose download
+	// 404s, and a failed update is indistinguishable from a broken updater.
+	run("node scripts/release-desktop.mjs --resume --quiet");
+	run(`git add ${DESKTOP_MANIFEST}`);
+	run(`git commit -m ${JSON.stringify(`chore(release): desktop ${version} update manifest`)}`);
+	run(`git push origin ${branch}`);
+
+	console.log(
+		`\nreleased ${tag}: ${dmgs.join(", ")} + updater archive attached to the GitHub release.` +
+			`\nThe manifest is committed; installed apps see ${version} once the website deploy lands.`,
+	);
+}
+
 // ----- shared helpers -----
 
 // A target's current version, read from its own source of truth (each versions independently):
@@ -605,6 +734,12 @@ function currentVersion(platform: string): string {
 			readFileSync("packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj", "utf8"),
 			/MARKETING_VERSION = ([^;]+);/,
 			"MARKETING_VERSION in project.pbxproj",
+		);
+	if (platform === "desktop")
+		return matchVersion(
+			readFileSync(DESKTOP_CONF, "utf8"),
+			/"version"\s*:\s*"([^"]+)"/,
+			`version in ${DESKTOP_CONF}`,
 		);
 	const manifest =
 		platform === "firefox"

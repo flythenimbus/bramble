@@ -330,6 +330,12 @@ token. So the YubiKey does here what it does for the Android keystore: it gates 
 that lives encrypted at rest. `scripts/build-desktop.ts` decrypts it (PIN + touch), passes it to
 the bundler through the environment, and never writes the plaintext to disk.
 
+`pnpm release desktop <version>` requires notarization credentials as well as the signing key; it
+reuses the App Store Connect API key from `fastlane/.env` (see the iOS section). On publish, CI
+re-verifies the archive against the public key compiled into the app
+(`scripts/verify-updater-signature.mjs`), because an archive signed with the wrong key produces a
+release that looks complete and updates nobody.
+
 ### One-time setup
 
 Needs the YubiKey plugged in, and assumes you already made an age identity for it in the

@@ -60,7 +60,7 @@
 		"i18n:check": "node scripts/i18n-check.mjs",
 		"i18n": "pnpm run i18n:extract && pnpm run i18n:translate && pnpm run i18n:compile",
 		"build:desktop:universal": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --target universal-apple-darwin",
-		"release:desktop": "node scripts/release-desktop.mjs"
+		"package:desktop": "node scripts/release-desktop.mjs"
 	},
 	"devDependencies": {
 		"@anthropic-ai/sdk": "^0.106.0",

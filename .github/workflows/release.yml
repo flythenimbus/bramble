@@ -5,7 +5,8 @@ name: Verify release
 # NOT build or sign; they only confirm a publish carried the real signed artifact,
 # so a release can't silently go out without it. Triggered on publish (not the tag
 # push), by which point the assets are attached. One job runs per platform, keyed
-# off the tag suffix (<version>-chromium / <version>-firefox / <version>-android).
+# off the tag suffix (<version>-chromium / <version>-firefox / <version>-android /
+# <version>-desktop).
 on:
   release:
     types: [published]
@@ -14,6 +15,27 @@ permissions:
   contents: read
 
 jobs:
+  verify-updater-signature:
+    if: endsWith(github.event.release.tag_name, '-desktop')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Assert the updater archive verifies against the app's public key
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # An archive signed with the wrong key, or not signed at all, produces a release that
+          # looks complete and updates nobody: installed apps check the key compiled into THEM.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.app.tar.gz*' --dir dl
+          archive="$(ls dl/*.app.tar.gz)"
+          [ -f "$archive.sig" ] || { echo "::error::no .sig for $(basename "$archive")"; exit 1; }
+          node scripts/verify-updater-signature.mjs "$archive" "$archive.sig"
+
   verify-signed-crx:
     if: endsWith(github.event.release.tag_name, '-chromium')
     runs-on: ubuntu-latest

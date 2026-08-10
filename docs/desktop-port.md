@@ -675,13 +675,42 @@ it. Note the env var is `TAURI_SIGNING_PRIVATE_KEY` — the `_PATH` variant its 
 advertises is NOT what the bundler reads, and a build without a key fails at the bundling step
 rather than silently producing an unsigned archive.
 
-`pnpm release:desktop` reads what the build actually produced and writes `latest.json` from it,
-rather than reconstructing filenames: the signature has to belong to the exact bytes published. It
-refuses to write a manifest for an archive with no `.sig`, because publishing one would leave a
-release that looks complete while updating silently fails for everyone.
+`pnpm release desktop <version|patch|minor|major>` cuts the release, the same shape as the other
+targets: bump, gate, build, tag, push, publish. `--universal` builds both architectures. Tags are
+`<version>-desktop`, and notarization is a hard requirement here rather than a warning — an
+un-notarized build is one Gatekeeper blocks on every machine that did not produce it.
 
-`latest.json` must be an asset on the LATEST release. Installed apps read that URL, so a release
-that omits it leaves them checking a stale manifest.
+It publishes the GitHub release BEFORE committing the manifest, in a second commit. The manifest is
+the live update channel, so the other order leaves a window where every app that checks reads a
+manifest whose download 404s, and a failed update looks identical to a broken updater.
+
+**Release from `main`.** The manifest reaches apps only through the website, and deploy-website.yml
+runs on pushes to main, so a release cut from any other branch produces a real GitHub release that
+no installed app ever hears about. The script checks the branch up front rather than letting that
+happen. `/desktop/*` is served with a five minute cache (the site default is four hours), so an
+update becomes visible shortly after the Pages deploy lands rather than the next morning.
+
+`pnpm package:desktop` is the packaging half on its own: it builds and then writes `latest.json` from what the build actually produced,
+rather than reconstructing filenames: the signature has to belong to the exact bytes published. It
+builds rather than assuming a build, like the other targets, because assembling from whatever
+happened to be in the bundle directory is how a release ends up carrying an artifact from an older
+commit — and the signature would still verify against it, so the manifest would be internally
+consistent and simply describe the wrong software. `--universal` builds both architectures;
+`--resume` assembles what is already there. It refuses to write a manifest for an archive with no
+`.sig`, because publishing one would leave a release that looks complete while updating silently
+fails for everyone.
+
+**`latest.json` is served from `https://bramble.sh/desktop/latest.json`, not the GitHub release.**
+GitHub's `/releases/latest` means the newest release of ANY target, and this repo ships chromium,
+firefox and android out of the same tag namespace — the endpoint resolved to `1.11.3-firefox` and
+404'd. Even once a desktop release carried the manifest, the next extension release would take the
+pointer back and silently break update checks for every install. The website is a stable https URL
+under our control, so the release writes `website/public/desktop/latest.json` and the Pages deploy
+publishes it. The endpoint is compiled into every shipped binary, so this had to be settled before
+the first release rather than after.
+
+The archive URLs inside the manifest still point at the GitHub release assets for the
+`<version>-desktop` tag; only the manifest itself moved.
 
 **Being told an update exists.** Settings has a Check button, but a manual check is only found by
 someone who already suspects there is something to find, which is the wrong assumption for a
