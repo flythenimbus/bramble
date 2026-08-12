@@ -81,6 +81,17 @@ function signingKey(): string | undefined {
  * did not build it, so it says so rather than leaving that to be discovered by a user.
  */
 function loadNotarization(): void {
+	// The local-update test build never leaves this machine, so notarizing it buys nothing and
+	// costs an upload to Apple, a wait, and a submission record for a build nobody will run.
+	if (process.argv.slice(2).some((a) => a.includes("local-update"))) {
+		console.error("note: local-update build, skipping notarization.");
+		return;
+	}
+	if (process.env.BRAMBLE_SKIP_NOTARIZE) {
+		console.error("note: BRAMBLE_SKIP_NOTARIZE set, skipping notarization.");
+		return;
+	}
+
 	const already =
 		(process.env.APPLE_API_KEY && process.env.APPLE_API_ISSUER && process.env.APPLE_API_KEY_PATH) ||
 		(process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID);

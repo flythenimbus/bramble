@@ -742,7 +742,9 @@ something Gatekeeper blocks everywhere but the machine that built it, so the scr
 
 `pnpm build:desktop:local-update` builds against `tauri.local-update.conf.json`, which points the
 updater at `http://127.0.0.1:8787` and turns off the https requirement, and `pnpm updater:smoke`
-serves that build back to itself as a newer version. Run the app out of
+serves that build back to itself as a newer version. It skips notarization: the build never leaves
+the machine, so it would buy nothing and cost an upload, a wait, and a submission record.
+(`BRAMBLE_SKIP_NOTARIZE=1` does the same for any other local build.) Run the app out of
 `target/release/bundle/macos/` rather than `/Applications`, so replacing the bundle needs no
 privileges, and watch the server log: a request for `latest.json` then one for the archive is the
 whole handshake.
