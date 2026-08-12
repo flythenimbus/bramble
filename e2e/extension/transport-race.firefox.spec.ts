@@ -54,6 +54,16 @@ for (const testCase of TRANSPORT_CASES) {
 					"--start-url",
 					url,
 				];
+				// Firefox sizes the back/forward cache from detected RAM
+				// (browser.sessionhistory.max_total_viewers defaults to -1, "decide for me"), and on a
+				// small or busy machine that decision is 0, which disables bfcache outright. The
+				// bfcache case then cannot set itself up: A leaves with pagehide persisted=false and
+				// going back builds a new document. Pinning it makes this gate test the transport
+				// rather than the runner it happens to land on.
+				args.push("--pref=browser.sessionhistory.max_total_viewers=3");
+				// Explicit for the same reason: it is the default in the versions under test, but the
+				// point here is not to depend on a default.
+				args.push("--pref=fission.bfcacheInParent=true");
 				if (process.env.FIREFOX_HEADLESS !== "0") args.push("--arg=-headless");
 				// Detached so the wrapper leads a process group: stopProcess signals the group, which
 				// is the only way the Firefox web-ext started goes down with it. See stopProcess.

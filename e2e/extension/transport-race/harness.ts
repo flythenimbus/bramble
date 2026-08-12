@@ -165,6 +165,16 @@ async function waitFor(
 		if (state.processError) throw new Error(state.processError);
 		const remaining = deadline - Date.now();
 		if (remaining <= 0) throw new Error(`transport fixture timed out waiting for ${description}`);
+		// A pagehide that did not persist is the browser refusing to cache the page, which is a
+		// different thing from the transport misbehaving, and worth naming: the generic timeout
+		// sends you looking at the extension when the answer is the browser's cache settings.
+		const declined = state.events.find((e) => e.kind === "pagehide" && e.persisted === false);
+		if (declined && description.includes("BFCache"))
+			throw new Error(
+				`the browser declined to bfcache ${declined.role} (pagehide persisted=false), so no restore ` +
+					"could happen. Check browser.sessionhistory.max_total_viewers; Firefox derives it from " +
+					"available memory and resolves it to 0 on a constrained machine.",
+			);
 		await new Promise<void>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				state.notify = () => {};
