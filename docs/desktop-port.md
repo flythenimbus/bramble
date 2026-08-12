@@ -794,8 +794,12 @@ could never be updated again, since the fix would arrive over the channel that i
 `pnpm release:desktop` refuses to write a manifest when it finds the local endpoint in the built
 binary, which catches it whatever produced the build.
 
-**Architecture.** The default build is `aarch64` only, so Intel Macs cannot run it; `--universal`
-produces both. Two things about that path are easy to get wrong and were, at first. cargo puts a
+**Architecture.** A release is universal by default; `--aarch64` opts out. The default is that way
+round because forgetting a flag would ship an Apple-Silicon-only release, and the failure is silent
+from the releasing end: the dmg simply does not open on an Intel Mac. It needs
+`rustup target add x86_64-apple-darwin`, checked before the gate rather than several minutes into a
+build that ran the whole test suite first. Local builds (`pnpm build:desktop`) stay host-arch, since
+nothing about iterating wants the second slice. Two things about that path are easy to get wrong and were, at first. cargo puts a
 `--target` build under `target/<triple>/`, so a universal build does NOT land in `target/release`,
 and reading the wrong directory is not an empty-directory error: it is the previous aarch64 build,
 published as though it were the universal one. And a universal archive is named exactly like an

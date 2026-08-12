@@ -7,7 +7,8 @@
 //   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
 //                                                                      container already built)
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
-//   pnpm run release desktop  <version|patch|minor|major> [--universal]
+//   pnpm run release desktop  <version|patch|minor|major> [--aarch64]  (--aarch64 = skip the
+//                                                                       Intel slice)
 //
 // The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
 // (patch/minor/major) that increments the SELECTED target's current version. Targets version
@@ -79,7 +80,9 @@ const version = bumpKind
 if (platform === "android") releaseAndroid(version, flags.has("--resume"));
 else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") releaseFirefox(version);
-else if (platform === "desktop") releaseDesktop(version, flags.has("--universal"));
+// Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
+// failure is silent from here: the dmg simply does not open on an Intel Mac.
+else if (platform === "desktop") releaseDesktop(version, !flags.has("--aarch64"));
 else releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
@@ -645,6 +648,14 @@ function releaseDesktop(version: string, universal: boolean) {
 	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
+		);
+	// Checked before the gate, because the alternative is finding out several minutes into a build
+	// that ran lint, typecheck and the whole test suite first.
+	if (universal && !capture("rustup target list --installed").includes("x86_64-apple-darwin"))
+		fail(
+			"the Intel slice needs a toolchain that is not installed:\n" +
+				"  rustup target add x86_64-apple-darwin\n" +
+				"or release Apple Silicon only with --aarch64.",
 		);
 
 	gate();
