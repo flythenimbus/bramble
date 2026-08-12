@@ -1,16 +1,15 @@
 {
-	"_comment": "Placeholder until the first desktop release; pnpm release desktop overwrites it. Version 0.0.0 is never newer than an installed build, so every check answers 'up to date'. The platform entries are unused at that version but must be well-formed: the updater resolves the URL for the current target BEFORE comparing versions, so an empty platforms map fails with TargetNotFound instead of reporting no update.",
-	"version": "0.0.0",
-	"notes": "No desktop release yet.",
-	"pub_date": "2026-08-12T00:00:00Z",
+	"version": "0.2.0",
+	"notes": "Bramble 0.2.0",
+	"pub_date": "2026-08-12T03:35:04.116Z",
 	"platforms": {
 		"darwin-aarch64": {
-			"signature": "",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.0.0-desktop/Bramble.app.tar.gz"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WjdaazBlWmZUZmNiNFpPZG1YYVpTWXorS3FONHZOaXBBVlErWmY4N3J1bHZ6VVVrZ3RTWSt2KzAyMExFQ0kxbVpiWE5qbFYvbC9ZTEpIazlvekR3ZVFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTA1Njg0CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6Ck41TG5UT2d2UmZkN1NDeWpqMHVObWpnbzRUdEIzem11Tk9MMi8vVGQxemhvOXVzdXZUb2lvVkloT0ZEM1ZoWlRoK2JvMmNmZHJ0Z1VjUFBOcFdkSkJBPT0K",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.2.0-desktop/Bramble.app.tar.gz"
 		},
 		"darwin-x86_64": {
-			"signature": "",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.0.0-desktop/Bramble.app.tar.gz"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WjdaazBlWmZUZmNiNFpPZG1YYVpTWXorS3FONHZOaXBBVlErWmY4N3J1bHZ6VVVrZ3RTWSt2KzAyMExFQ0kxbVpiWE5qbFYvbC9ZTEpIazlvekR3ZVFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTA1Njg0CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6Ck41TG5UT2d2UmZkN1NDeWpqMHVObWpnbzRUdEIzem11Tk9MMi8vVGQxemhvOXVzdXZUb2lvVkloT0ZEM1ZoWlRoK2JvMmNmZHJ0Z1VjUFBOcFdkSkJBPT0K",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.2.0-desktop/Bramble.app.tar.gz"
 		}
 	}
 }
