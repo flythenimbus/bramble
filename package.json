@@ -9,6 +9,7 @@
 		"build": "pnpm --filter @vault/platform-extension run build:chromium",
 		"build:firefox": "pnpm --filter @vault/platform-extension run build:firefox",
 		"build:desktop": "node --env-file-if-exists=.env.local scripts/build-desktop.ts",
+		"build:desktop:aarch64": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --aarch64",
 		"build:desktop:local-update": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --config src-tauri/tauri.local-update.conf.json",
 		"updater:smoke": "node scripts/updater-smoke.ts",
 		"bundle": "pnpm --filter @vault/platform-extension run bundle:chromium && node scripts/sign.ts --optional",
@@ -18,7 +19,7 @@
 		"dev:firefox": "pnpm --filter @vault/platform-extension run dev:firefox",
 		"dev:website": "pnpm --filter @vault/website run dev",
 		"dev:desktop": "pnpm --filter @vault/platform-desktop run dev:app",
-		"run:desktop": "f(){ APP=packages/platform-desktop/src-tauri/target/release/bundle/macos/Bramble.app; [ -d \"$APP\" ] || { echo 'not built yet: pnpm build:desktop'; exit 1; }; open \"$APP\"; }; f",
+		"run:desktop": "f(){ B=packages/platform-desktop/src-tauri/target; APP=$B/universal-apple-darwin/release/bundle/macos/Bramble.app; [ -d \"$APP\" ] || APP=$B/release/bundle/macos/Bramble.app; [ -d \"$APP\" ] || { echo 'not built yet: pnpm build:desktop'; exit 1; }; open \"$APP\"; }; f",
 		"wasm:build": "export RUSTFLAGS=\"$(bash scripts/rustflags-reproducible.sh)\"; cd packages/core-rust && wasm-pack build --target web --out-dir ../platform-extension/public/wasm -- --locked",
 		"wasm:build:mobile": "export RUSTFLAGS=\"$(bash scripts/rustflags-reproducible.sh)\"; cd packages/core-rust && wasm-pack build --target web --out-dir ../platform-mobile/public/wasm -- --locked",
 		"wasm:verify": "node packages/core-rust/verify.ts",
@@ -59,7 +60,6 @@
 		"i18n:stores": "node --env-file-if-exists=.env.local scripts/i18n-stores.mjs",
 		"i18n:check": "node scripts/i18n-check.mjs",
 		"i18n": "pnpm run i18n:extract && pnpm run i18n:translate && pnpm run i18n:compile",
-		"build:desktop:universal": "node --env-file-if-exists=.env.local scripts/build-desktop.ts --target universal-apple-darwin",
 		"package:desktop": "node scripts/release-desktop.mjs"
 	},
 	"devDependencies": {

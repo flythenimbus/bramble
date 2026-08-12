@@ -675,7 +675,7 @@ function releaseDesktop(version: string, universal: boolean) {
 
 	try {
 		// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
-		run(`pnpm run ${universal ? "build:desktop:universal" : "build:desktop"}`);
+		run(`pnpm run build:desktop${universal ? "" : " -- --aarch64"}`);
 	} catch {
 		fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
 	}
@@ -722,7 +722,7 @@ function releaseDesktop(version: string, universal: boolean) {
 	// Only now. The manifest IS the update channel, so it goes live after the artifacts it names
 	// exist — the other way round, every app checking in between reads a manifest whose download
 	// 404s, and a failed update is indistinguishable from a broken updater.
-	run(`node scripts/release-desktop.mjs --resume --quiet${universal ? " --universal" : ""}`);
+	run(`node scripts/release-desktop.mjs --resume --quiet${universal ? "" : " --aarch64"}`);
 	run(`git add ${DESKTOP_MANIFEST}`);
 	run(`git commit -m ${JSON.stringify(`chore(release): desktop ${version} update manifest`)}`);
 	run(`git push origin ${branch}`);

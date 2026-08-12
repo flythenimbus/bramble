@@ -794,9 +794,14 @@ could never be updated again, since the fix would arrive over the channel that i
 `pnpm release:desktop` refuses to write a manifest when it finds the local endpoint in the built
 binary, which catches it whatever produced the build.
 
-**Architecture.** A release is universal by default; `--aarch64` opts out. The default is that way
-round because forgetting a flag would ship an Apple-Silicon-only release, and the failure is silent
-from the releasing end: the dmg simply does not open on an Intel Mac. It needs
+**Architecture.** Every desktop build is universal, not just a release: `pnpm build:desktop`,
+the local-update test build, and `pnpm release desktop` all produce both slices. A host-arch build
+is not something to hand anyone, and it fails in the least useful way, by looking identical and
+simply not opening on an Intel Mac. `--aarch64` (or `pnpm build:desktop:aarch64`) opts out for
+iterating, where the second slice doubles the build for a machine that cannot run it.
+
+Bundles land under `target/universal-apple-darwin/release/bundle`, not `target/release/bundle`,
+because cargo puts a `--target` build under its triple. It needs
 `rustup target add x86_64-apple-darwin`, checked before the gate rather than several minutes into a
 build that ran the whole test suite first.
 

@@ -140,13 +140,22 @@ if (!key) {
 	);
 }
 
+// Universal unless asked otherwise. A host-arch build is not something to hand anyone: it looks
+// identical and simply does not open on an Intel Mac. `--aarch64` opts out, for iterating, where
+// the second slice doubles the build for a machine that cannot run it anyway.
+const passed = process.argv.slice(2);
+const hostOnly = passed.includes("--aarch64");
+const forwarded = passed.filter((a) => a !== "--aarch64");
+const universal = !hostOnly && !forwarded.some((a) => a.startsWith("--target"));
+
 const args = [
 	"--filter",
 	"@vault/platform-desktop",
 	"exec",
 	"tauri",
 	"build",
-	...process.argv.slice(2),
+	...forwarded,
+	...(universal ? ["--target", "universal-apple-darwin"] : []),
 ];
 execFileSync("pnpm", args, {
 	stdio: "inherit",
@@ -155,7 +164,7 @@ execFileSync("pnpm", args, {
 		// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
 		// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
 		// proxy and the browser link is dead on Intel.
-		...(process.argv.slice(2).some((a) => a.includes("universal-apple-darwin"))
+		...(universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
 			? { BRAMBLE_UNIVERSAL: "1" }
 			: {}),
 		TAURI_SIGNING_PRIVATE_KEY: key,

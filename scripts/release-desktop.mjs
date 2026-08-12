@@ -3,8 +3,8 @@
 // the in-app updater downloads, and the latest.json that points at it.
 //
 // Usage:
-//   pnpm package:desktop              build (aarch64) and assemble
-//   pnpm package:desktop --universal  build for both architectures
+//   pnpm package:desktop              build (universal) and assemble
+//   pnpm package:desktop --aarch64    Apple Silicon only, for iterating
 //   pnpm package:desktop --resume     assemble what is already built, no rebuild
 //
 // For a real release use `pnpm release desktop <version>`, which bumps, tags, publishes, and
@@ -39,10 +39,10 @@ const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 
 const args = process.argv.slice(2);
 const resume = args.includes("--resume");
-const universal = args.includes("--universal");
-// cargo puts a --target build under target/<triple>/, so a universal build does NOT land in
-// target/release. Reading the wrong one is not an empty directory and an error: it is the
-// PREVIOUS aarch64 build, published as though it were the universal one.
+// Universal unless told otherwise, matching the build. cargo puts a --target build under
+// target/<triple>/, so the two land in different places, and reading the wrong one is not an
+// empty directory and an error: it is the OTHER build, published as though it were this one.
+const universal = !args.includes("--aarch64");
 const BUNDLE = universal
   ? join(TARGET, "universal-apple-darwin/release/bundle")
   : join(TARGET, "release/bundle");
@@ -55,7 +55,7 @@ if (!resume) {
   // prompt looks exactly like a hang.
   console.log(`building Bramble ${version}${universal ? " (universal)" : ""}…`);
   try {
-    execFileSync("pnpm", [universal ? "build:desktop:universal" : "build:desktop"], {
+    execFileSync("pnpm", ["run", "build:desktop", ...(universal ? [] : ["--aarch64"])], {
       stdio: "inherit",
     });
   } catch {
@@ -82,7 +82,7 @@ const macos = join(BUNDLE, "macos");
 if (!existsSync(macos)) {
   console.error(
     `no bundle at ${macos}. Drop --resume to build it` +
-      (universal ? ", or drop --universal if that is not what you built." : "."),
+      (universal ? "." : ", or drop --aarch64 if that is not what you built."),
   );
   process.exit(1);
 }
