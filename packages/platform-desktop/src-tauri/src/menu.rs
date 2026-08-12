@@ -133,3 +133,32 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
     }
     let _ = app.emit(CHECK_FOR_UPDATES, ());
 }
+
+// The update manifest served from the website is the live update channel, and a malformed one is
+// not a quiet failure: the updater calls `res.json()` on any 2xx that is not 204, so anything it
+// cannot parse surfaces as an error rather than "no update". Worse, the site answers unknown paths
+// with 200 and an HTML page, so a missing file fails the same way. Parsing the committed manifest
+// here catches that before it is deployed rather than after.
+#[cfg(all(test, any(target_os = "macos", windows, target_os = "linux")))]
+mod manifest_tests {
+    use tauri_plugin_updater::RemoteRelease;
+
+    const MANIFEST: &str = include_str!("../../../../website/public/desktop/latest.json");
+
+    #[test]
+    fn update_manifest_parses_and_names_every_target_we_ship() {
+        let release: RemoteRelease =
+            serde_json::from_str(MANIFEST).expect("latest.json must deserialize as a RemoteRelease");
+
+        // Resolved BEFORE the version comparison in the plugin, so a manifest missing the running
+        // target errors out even when it advertises an older version than the one installed.
+        for target in ["darwin-aarch64", "darwin-x86_64"] {
+            release
+                .download_url(target)
+                .unwrap_or_else(|_| panic!("latest.json has no entry for {target}"));
+            release
+                .signature(target)
+                .unwrap_or_else(|_| panic!("latest.json has no signature for {target}"));
+        }
+    }
+}

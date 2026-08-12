@@ -712,6 +712,16 @@ the first release rather than after.
 The archive URLs inside the manifest still point at the GitHub release assets for the
 `<version>-desktop` tag; only the manifest itself moved.
 
+**A placeholder manifest is committed, and that is not tidiness.** The updater calls `res.json()`
+on any 2xx that is not 204, and Cloudflare Pages answers unknown paths with 200 and an HTML page,
+so a missing manifest does not read as "no update" — it reads as a parse error. A 404 would not
+help either: the plugin treats any non-success status as an error too. The only clean answers are
+204 or a valid manifest, so one is served from the start, with version `0.0.0` so it is never newer
+than an installed build. Its platform entries have to be well-formed even though they are never
+used, because `get_urls` resolves the URL for the running target BEFORE comparing versions; an
+empty `platforms` map fails with `TargetNotFound` instead of reporting no update. A Rust test
+parses the committed file so a malformed one fails the build rather than the update channel.
+
 **The menu.** `menu.rs` builds the bar by hand rather than taking `Menu::default`, for two items:
 an About panel that says who wrote this and under what licence, and a "Check for Updates…" that
 does not require knowing Settings has an Updates section. Customising one submenu means owning the
