@@ -152,6 +152,12 @@ execFileSync("pnpm", args, {
 	stdio: "inherit",
 	env: {
 		...process.env,
+		// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
+		// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
+		// proxy and the browser link is dead on Intel.
+		...(process.argv.slice(2).some((a) => a.includes("universal-apple-darwin"))
+			? { BRAMBLE_UNIVERSAL: "1" }
+			: {}),
 		TAURI_SIGNING_PRIVATE_KEY: key,
 		TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 	},

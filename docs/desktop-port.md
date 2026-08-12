@@ -798,7 +798,17 @@ binary, which catches it whatever produced the build.
 round because forgetting a flag would ship an Apple-Silicon-only release, and the failure is silent
 from the releasing end: the dmg simply does not open on an Intel Mac. It needs
 `rustup target add x86_64-apple-darwin`, checked before the gate rather than several minutes into a
-build that ran the whole test suite first. Local builds (`pnpm build:desktop`) stay host-arch, since
+build that ran the whole test suite first.
+
+The sidecar is the awkward part, and none of it fails early. Tauri lipos the app's MAIN binary and
+nothing else, while `externalBin` entries are copied rather than built, so a universal build wants
+the proxy in two places at once: `binaries/bramble-proxy-universal-apple-darwin` for the sidecar
+copy, and `target/universal-apple-darwin/release/bramble-proxy` for the binary copy it does for
+this crate's own bins. stage-proxy writes both. Staging only the host arch would have produced a
+universal app with an Apple-Silicon-only proxy, where the app launches on Intel and the browser
+link simply never works. `build.rs` also names its placeholder after the triple being compiled
+rather than the host's, or cross-compiling the proxy fails looking for the sidecar that compiling
+it is supposed to produce. Local builds (`pnpm build:desktop`) stay host-arch, since
 nothing about iterating wants the second slice. Two things about that path are easy to get wrong and were, at first. cargo puts a
 `--target` build under `target/<triple>/`, so a universal build does NOT land in `target/release`,
 and reading the wrong directory is not an empty-directory error: it is the previous aarch64 build,
