@@ -1,4 +1,4 @@
-// Android (F-Droid) fastlane metadata. English (en-US) is the hand-authored source of
+// Android store-listing fastlane metadata. English (en-US) is the hand-authored source of
 // truth for the Android listing; the other locales are AI-translated from it, idempotently (an
 // existing target file is left alone, so manual edits and prior translations win). This mirrors the
 // iOS adapter (fastlane.mjs); the difference is that Android's English is written FOR Android
@@ -53,7 +53,7 @@ export async function run() {
 		console.log(`  ${appStore}: ${wrote ? `wrote ${wrote} file(s)` : "up to date"}`);
 	}
 	flushSources();
-	// Icon (once). F-Droid otherwise falls back to the APK launcher icon.
+	// Icon (once). A listing without one falls back to the APK launcher icon.
 	const iconDst = join(ANDROID_FASTLANE_DIR, SOURCE, "images", "icon.png");
 	if (!existsSync(iconDst) && existsSync(ICON_SRC)) {
 		mkdirSync(join(ANDROID_FASTLANE_DIR, SOURCE, "images"), { recursive: true });

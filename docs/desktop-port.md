@@ -143,8 +143,7 @@ story that transfers directly. Both are worth less here than they look, because 
 strategy below *replaces* the webview features you would otherwise depend on (WebRTC, WebAuthn,
 crypto), and because the highest-value desktop features (sync hub, auto-type, SSH agent) are native
 work under either framework. The remaining Electron cost is a ~150MB bundle that is much harder to
-reproducibly build, against a project that already maintains reproducible-build docs for AMO and
-F-Droid.
+reproducibly build, against a project that already maintains reproducible-build docs for AMO.
 
 ## The reuse seam: what a desktop platform package costs
 

@@ -12,8 +12,8 @@ android {
         applicationId "app.bramble.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionCode is committed (not computed at build) so F-Droid's reproducible build matches
-        // the published APK. `pnpm run release android` bumps it to seconds-since-2020, kept monotonic.
+        // versionCode is committed (not computed at build) so a rebuild of a tag carries the same
+        // code. `pnpm run release android` bumps it to seconds-since-2020, kept monotonic.
         versionCode 207883696
         versionName "0.12.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -23,23 +23,12 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Release signing is injected at release time by `pnpm run release android` via env vars
-    // (the keystore is age+YubiKey encrypted, decrypted to a temp file). Absent for debug/dev/CI,
-    // where assembleRelease yields an unsigned APK and assembleDebug is unaffected.
-    def releaseKeystore = System.getenv("ANDROID_KEYSTORE_FILE")
-    signingConfigs {
-        if (releaseKeystore) {
-            release {
-                storeFile file(releaseKeystore)
-                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                keyAlias System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
-            }
-        }
-    }
+    // No release signingConfig on purpose: assembleRelease always emits app-release-unsigned.apk,
+    // and `pnpm run release android` signs it afterwards with apksigner, from a keystore that is
+    // age+YubiKey encrypted at rest and only decrypted for the few seconds signing takes. Gradle
+    // (and every plugin in its classpath) therefore never sees the key.
     buildTypes {
         release {
-            if (releaseKeystore) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

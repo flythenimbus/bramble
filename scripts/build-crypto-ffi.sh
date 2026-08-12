@@ -19,8 +19,8 @@ set -euo pipefail
 
 cmd="${1:-bindings}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Keep the compiled artifacts byte-identical regardless of checkout location, so
-# F-Droid's rebuild of a tag matches the published APK. See rustflags-reproducible.sh.
+# Keep the compiled artifacts byte-identical regardless of checkout location, so a
+# rebuild of a tag matches the published binary. See rustflags-reproducible.sh.
 export RUSTFLAGS="$(bash "$here/scripts/rustflags-reproducible.sh")${RUSTFLAGS:+ $RUSTFLAGS}"
 crate="$here/packages/core-rust"
 mobile="$here/packages/platform-mobile"

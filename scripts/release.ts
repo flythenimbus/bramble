@@ -5,7 +5,7 @@
 //   pnpm run release chromium <version|patch|minor|major>   e.g. 1.0.0, or `patch` to bump
 //   pnpm run release firefox  <version|patch|minor|major>
 //   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
-//                                                                      container already built)
+//                                                                      last run already built)
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
 //   pnpm run release desktop  <version|patch|minor|major> [--aarch64]  (--aarch64 = skip the
 //                                                                       Intel slice)
@@ -20,9 +20,9 @@
 // never builds or signs). chromium packs a locally-signed .crx; firefox uploads to AMO and
 // attaches the Mozilla-signed .xpi it returns. ios has no GitHub release: the binary goes to
 // TestFlight via fastlane, and you submit for App Store review manually in App Store Connect.
-// android is special: it builds in the F-Droid-matching container (docker-compose android-repro,
-// needs Docker) so the APK is byte-reproducible, then signs the container's unsigned output on the
-// host with the YubiKey. Signing setup lives in docs/release-signing.md.
+// android builds here on macOS (web bundle + Rust FFI + gradle assembleRelease) and signs the
+// unsigned APK gradle emits with the YubiKey-held keystore. Signing setup lives in
+// docs/release-signing.md.
 // desktop publishes a GitHub release AND commits the updater manifest to the website, in that
 // order — the manifest is the live update channel, so it must never name artifacts that are not
 // there yet.
@@ -291,11 +291,9 @@ function releaseFirefox(version: string) {
 function releaseAndroid(version: string, resume: boolean) {
 	const ANDROID = "packages/platform-mobile/android";
 	const BUILD_GRADLE = `${ANDROID}/app/build.gradle`;
-	// The reproducible build runs in the F-Droid-matching container (docker-compose android-repro)
-	// and drops an UNSIGNED apk here; we sign it on the host below. Building on macOS instead would
-	// bake in host toolchain details (NDK clang, wasm-bindgen-cli) that F-Droid's Linux rebuild can't
-	// reproduce, so its reproducible-build check would reject the published APK. See docker/.
-	const UNSIGNED = "build-fdroid/app-release-unsigned.apk";
+	// gradle has no release signingConfig, so assembleRelease lands here UNSIGNED; apksigner signs it
+	// below, once, from a keystore that only exists on disk for those few seconds.
+	const UNSIGNED = `${ANDROID}/app/build/outputs/apk/release/app-release-unsigned.apk`;
 
 	// versionName is the marketing version; 1-3 dot-separated ints (matches bump:mobile).
 	if (!/^\d+(\.\d+){0,2}$/.test(version))
@@ -305,7 +303,7 @@ function releaseAndroid(version: string, resume: boolean) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
-	// Signing inputs (host-side; the container never sees the key). The keystore is age+YubiKey
+	// Signing inputs (post-build; gradle never sees the key). The keystore is age+YubiKey
 	// encrypted; passwords resolve from the env first, then the macOS login Keychain. Store them once:
 	//   security add-generic-password -s bramble-android-keystore -a "$USER" -w
 	//   security add-generic-password -s bramble-android-key       -a "$USER" -w   (only if it differs)
@@ -324,8 +322,14 @@ function releaseAndroid(version: string, resume: boolean) {
 	const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "bramble";
 	const keyPassword =
 		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key") ?? storePassword;
-	for (const bin of ["age", "age-plugin-yubikey", "docker"])
+	for (const bin of ["age", "age-plugin-yubikey"])
 		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	// Native build toolchain, checked before the gate: core:build shells out to wasm-pack and
+	// ffi:build:android to cargo-ndk, and finding either missing after the release commit means a
+	// rewind for something `cargo install` fixes in a minute.
+	if (!resume)
+		for (const bin of ["wasm-pack", "cargo-ndk"])
+			if (!has(bin)) fail(`${bin} not found; see packages/platform-mobile/docs/development.md`);
 	const apksigner =
 		findBuildTool("apksigner") ??
 		fail("apksigner not found (Android SDK build-tools); see docs/release-signing.md");
@@ -339,8 +343,8 @@ function releaseAndroid(version: string, resume: boolean) {
 	let commit: string;
 
 	if (resume) {
-		// Sign an apk the container already built. Both checks are load-bearing: signing an apk
-		// built from any other commit would publish a binary F-Droid cannot reproduce from the tag.
+		// Sign the apk a previous run already built. Both checks are load-bearing: signing an apk
+		// built from any other commit would publish a binary the tag does not describe.
 		if (!existsSync(UNSIGNED))
 			fail(`no unsigned apk at ${UNSIGNED}; nothing to resume, re-run without --resume`);
 		const head = capture("git log -1 --pretty=%s");
@@ -362,8 +366,8 @@ function releaseAndroid(version: string, resume: boolean) {
 		gate();
 
 		// Bump versionName + a deterministic, committed versionCode (seconds-since-2020, kept monotonic),
-		// snapshot the changelogs, and COMMIT. This exact commit is what both the container and F-Droid
-		// build, so the versionCode and every other input line up.
+		// snapshot the changelogs, and COMMIT before building, so the tag names the exact tree the
+		// published APK was built from.
 		const before = readFileSync(BUILD_GRADLE, "utf8");
 		const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
 		versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
@@ -387,16 +391,31 @@ function releaseAndroid(version: string, resume: boolean) {
 		run(`git commit -m ${JSON.stringify(`chore(release): android ${version}`)}`);
 		commit = capture("git rev-parse HEAD");
 
-		// Reproducible build in the container. A failure here rewinds the release commit so the tree
-		// is clean for a retry (the bump + changelogs regenerate next run); nothing was built yet.
+		// Build on this machine: web bundle -> native crypto libs (4 ABIs) -> cap sync -> gradle.
+		// A failure here rewinds the release commit so the tree is clean for a retry (the bump +
+		// changelogs regenerate next run); nothing was published yet.
 		try {
+			// Stale-output guard: assembleRelease writing nothing (skipped task, wrong variant) would
+			// otherwise leave the previous run's apk in place and sign that instead.
 			rmSync(UNSIGNED, { force: true });
-			console.log(
-				`\nbuilding ${commit.slice(0, 9)} in the reproducible container (slow; emulated amd64)…`,
+			console.log(`\nbuilding ${commit.slice(0, 9)}…`);
+			run("pnpm run core:build");
+			run("pnpm run ffi:build:android");
+			run("pnpm --filter @vault/platform-mobile exec cap sync android");
+			execFileSync(
+				join(ANDROID, "gradlew"),
+				["-p", ANDROID, "assembleRelease", `-Porg.gradle.java.installations.paths=${java21}`],
+				{ stdio: "inherit", env: { ...process.env, JAVA_HOME: java21 } },
 			);
-			run("docker compose build android-repro");
-			run(`docker compose run --rm android-repro ${commit}`);
-			if (!existsSync(UNSIGNED)) fail(`container did not produce ${UNSIGNED}`);
+			// `throw`, not fail(): these are build failures like any other, so they belong in the
+			// rewind path below rather than exiting on top of a release commit.
+			if (!existsSync(UNSIGNED)) throw new Error(`gradle did not produce ${UNSIGNED}`);
+			// The apk has to carry the versionCode we just committed; anything else means gradle read
+			// a different build.gradle than the one the tag will point at.
+			const outMeta = `${ANDROID}/app/build/outputs/apk/release/output-metadata.json`;
+			const builtCode = JSON.parse(readFileSync(outMeta, "utf8"))?.elements?.[0]?.versionCode;
+			if (builtCode !== versionCode)
+				throw new Error(`built versionCode ${builtCode} != expected ${versionCode} (${outMeta})`);
 		} catch (e) {
 			rmSync(stage, { recursive: true, force: true });
 			run("git reset --hard HEAD~1");
@@ -404,18 +423,15 @@ function releaseAndroid(version: string, resume: boolean) {
 		}
 	}
 
-	// Host-sign. The commit and the unsigned apk are KEPT on failure: the build is the expensive
+	// Sign. The commit and the unsigned apk are KEPT on failure: the build is the expensive
 	// part, and the usual failure here is a missed YubiKey touch. `--resume` picks it up from here.
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-android-"));
 	try {
-		// Sign on the host: decrypt the keystore into a 0700 dir, apksigner-sign the container's
-		// unsigned apk, then wipe the key. The two flags are load-bearing for reproducibility:
-		//   --v1-signing-enabled false  no JAR/META-INF signature files (minSdk 24 verifies via v2),
-		//                               which would otherwise add entries F-Droid's build lacks.
-		//   --alignment-preserved       keep the unsigned apk's exact byte layout; the default would
-		//                               re-align every entry.
-		// Both keep the signed apk = the container's unsigned apk + the APK Signing Block, which is
-		// exactly what F-Droid's apksigcopier reconstructs when it grafts our signature onto its build.
+		// Decrypt the keystore into a 0700 dir, apksigner-sign gradle's unsigned apk, then wipe the
+		// key. `--v1-signing-enabled false` drops the JAR/META-INF signature files: minSdk is 24, so
+		// every supported device verifies v2/v3, and v1 only adds bytes and a stripping attack
+		// surface. Alignment is left to apksigner's default (native libs on 16 KB pages, the rest on
+		// 4 bytes), which is what Android 15+ requires of an installed apk.
 		const ksFile = join(tmp, "release.jks");
 		const idFile = join(tmp, "id.txt");
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
@@ -435,7 +451,6 @@ function releaseAndroid(version: string, resume: boolean) {
 				"env:BR_KEY_PASS",
 				"--v1-signing-enabled",
 				"false",
-				"--alignment-preserved",
 				"--out",
 				apkAsset,
 				UNSIGNED,
@@ -483,17 +498,16 @@ function releaseAndroid(version: string, resume: boolean) {
 		rmSync(stage, { recursive: true, force: true });
 	}
 	console.log(
-		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): reproducible build, host-signed as ${apkName}.` +
-			`\nNext: retarget docs/fdroid/app.bramble.mobile.yml -> versionCode ${versionCode}, commit ${commit}.`,
+		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): signed as ${apkName}, versionCode ${versionCode}.`,
 	);
 }
 
-// Snapshot each present changelogs/current.txt to changelogs/<versionCode>.txt so the F-Droid
-// listing shows release notes for this build. current.txt is hand-authored under the Android en-US
-// fastlane (the client falls back to en-US for other locales). Returns the written paths (committed
-// with the release).
+// Snapshot each present changelogs/current.txt to changelogs/<versionCode>.txt, the per-build
+// release notes an Android store listing reads. current.txt is hand-authored under the Android
+// en-US fastlane (clients fall back to en-US for other locales). Returns the written paths
+// (committed with the release).
 function snapshotAndroidChangelogs(versionCode: string): string[] {
-	// Repo root, not the android project: fdroidserver only scans <root>/fastlane/metadata/android.
+	// Repo root, not the android project: fastlane's supply layout is <root>/fastlane/metadata/android.
 	const base = "fastlane/metadata/android";
 	if (!existsSync(base)) return [];
 	const written: string[] = [];
@@ -520,8 +534,8 @@ function releaseIos(version: string, ipaOnly: boolean) {
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 
 	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
-	// fastlane/.env. The lanes live in the REPO-ROOT fastlane/ (shared with the Android F-Droid
-	// metadata, which fdroidserver only reads from there). The actual signing is Xcode-automatic
+	// fastlane/.env. The lanes live in the REPO-ROOT fastlane/ (shared with the Android store
+	// metadata, which fastlane's supply layout puts there). The actual signing is Xcode-automatic
 	// (-allowProvisioningUpdates), so unlike Android there's no keystore to decrypt here.
 	if (!has("fastlane"))
 		fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");

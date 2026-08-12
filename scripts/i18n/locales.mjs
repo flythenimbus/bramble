@@ -23,11 +23,10 @@ export const PO_CATALOG = (code) => repo(`packages/core/src/locales/${code}/mess
 // beside Android's. The Fastfile hands this exact path to deliver; deliver's default
 // (fastlane/metadata) would reject the non-locale `ios` child.
 export const FASTLANE_DIR = repo("fastlane/metadata/ios");
-// Android (F-Droid) fastlane metadata. MUST stay at the repo root: fdroidserver only scans
-// `<root>/fastlane/metadata/android/<locale>/` and `<root>/src/<flavor>/fastlane/...`
-// (update.py), so a nested path leaves the F-Droid listing with no name/summary/description.
-// Locale dirs reuse the iOS `appStore` codes; en-US is hand-authored and the rest are
-// AI-translated from it, see scripts/i18n/android-fastlane.mjs.
+// Android store-listing metadata, in fastlane's supply layout: `<root>/fastlane/metadata/android/
+// <locale>/`, which is where every tool that consumes it looks. Locale dirs reuse the iOS
+// `appStore` codes; en-US is hand-authored and the rest are AI-translated from it, see
+// scripts/i18n/android-fastlane.mjs.
 export const ANDROID_FASTLANE_DIR = repo("fastlane/metadata/android");
 // Chrome extension _locales dir (bundled from public/). Chrome locale codes use
 // underscores (pt_BR), unlike the App Store's hyphens.

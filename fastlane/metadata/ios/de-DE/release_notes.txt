@@ -1,9 +1,6 @@
 Neu in dieser Version:
 
-- Mehrere Einträge gleichzeitig bearbeiten. Tippen und halten Sie ein Element in der Liste, um die Auswahl zu starten, markieren Sie so viele wie gewünscht und führen Sie dann eine Aktion für die gesamte Gruppe aus. Vor dem Löschen werden Sie gefragt und erfahren, wie viele Einträge betroffen sind, einschließlich derer, die durch die aktuelle Suche ausgeblendet sind.
-- Exportieren Sie die ausgewählten Einträge in eine Bramble-Datei, geschützt mit einem von Ihnen gewählten Passwort für diese Datei – nicht mit Ihrem Master-Passwort. Sie enthält alles, was ein Eintrag umfasst, inklusive Passkeys und früherer Passwörter, was ein KeePass-Export nicht leisten kann.
-- Öffnen Sie einen Bramble-Export auf einem anderen Gerät, und er wird mit Ihrem bestehenden Tresor zusammengeführt, anstatt ihn zu ersetzen. Bereits im Tresor vorhandene Einträge werden erkannt und übersprungen, sodass das zweimalige Importieren derselben Datei nichts hinzufügt.
-- Behoben: Die Kopieren-Schaltfläche in jeder Zeile war auf dem iPhone nicht erreichbar. Sie erschien nur, wenn ein Mauszeiger über die Zeile bewegt wurde, was auf einem Touchscreen nicht möglich ist. Sie ist jetzt immer sichtbar, und langes Drücken wählt nicht mehr den darunterliegenden Text aus.
-- Behoben: Zählangaben wie „3 ausgewählt“ wurden unabhängig von der eingestellten App-Sprache auf Englisch angezeigt.
+- Beim Verbinden eines weiteren Geräts werden jetzt sieben Bilder zum Vergleichen angezeigt, anstelle von zwölf Ziffern. Eine Reihe unterschiedlicher Bilder lässt sich schneller überprüfen und ist viel schwerer durchzuwinken, wenn sie fast richtig ist – genau das ist der Zweck dieser Ansicht. Unter jedem Bild steht der Name, sodass Sie ihn der Person vorlesen können, die das andere Gerät hält, oder sich vorlesen lassen können.
+- Die zwölf Ziffern sind weiterhin vorhanden, unauffällig, unter den Bildern. Der Abgleich erfolgt zwischen zwei Geräten, und das andere wurde möglicherweise noch nicht aktualisiert, sodass es immer etwas gibt, das beide anzeigen können.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

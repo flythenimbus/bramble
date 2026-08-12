@@ -40,9 +40,8 @@ importers, is listed in [passkey-import.md](passkey-import.md).
 `androidx.credentials.providerevents` resolves its backend by reflecting over services declared in
 **the calling app's own manifest** (`ProviderFactory.getBestAvailableProvider`), and the only artifact
 declaring `PROVIDER_EVENTS_API_PROVIDER_KEY` is `providerevents-play-services`. Both directions
-therefore require bundling a Google Play client library, which `mobile-port.md:213-215` rules out and
-which would complicate the F-Droid submission in `fdroid-inclusion.md`. Bitwarden's docs put the
-runtime floor at Android 14+ with Play Services 26.21+.
+therefore require bundling a Google Play client library, which `mobile-port.md:213-215` rules out.
+Bitwarden's docs put the runtime floor at Android 14+ with Play Services 26.21+.
 
 AOSP has no exchange API to fall back on: `frameworks/base` at `refs/heads/main` carries only
 create/get/clear in `core/java/android/credentials/` and `core/java/android/service/credentials/`.

@@ -303,7 +303,7 @@ and adds `NativeCrypto.swift` + `AutofillBridge.swift` to the App). Re-run it af
 `pnpm ios:beta` builds + uploads to TestFlight (auto-bumping the build number); `pnpm ios:ipa` exports a
 distribution IPA to `~/Desktop` with no credentials. Both run the Capacitor pre-chain first
 (`core:build` + `ffi:build:ios` + `cap sync`). The lanes live in the **repo-root** `fastlane/` (shared
-with the Android F-Droid metadata, which fdroidserver only reads from there), so run them from the repo
+with the Android store metadata, which fastlane's supply layout puts there), so run them from the repo
 root. Secrets live in `<repo root>/fastlane/.env` + `AuthKey.p8`
 (gitignored; see `.env.example`). **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
 (`packages/platform-mobile/ios/DerivedData`, gitignored) because Xcode's default DerivedData here is the

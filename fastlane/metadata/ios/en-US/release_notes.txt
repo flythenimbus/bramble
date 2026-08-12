@@ -1,9 +1,6 @@
 What's new in this release:
 
-- Work on several entries at once. Press and hold any item in the list to start selecting, tick as many as you like, then act on the whole set. Deleting asks first and tells you how many are going, including any the current search is hiding.
-- Export the entries you picked to a Bramble file, protected by a password you choose for that file rather than your master password. It carries everything an entry holds, passkeys and past passwords included, which a KeePass export cannot.
-- Open a Bramble export on another device and it merges into the vault you already have instead of replacing it. Anything already in your vault is recognised and skipped, so importing the same file twice adds nothing.
-- Fixed: the copy button on each row was unreachable on iPhone. It only appeared when a pointer hovered over the row, which a touchscreen has no way to do. It is now always there, and a long press no longer selects the text underneath.
-- Fixed: counts like "3 selected" showed in English whatever language the app was set to.
+- Connecting another device now shows seven pictures to compare instead of twelve digits. A row of distinct pictures is quicker to check and much harder to wave through when it is nearly right, which is the whole point of that screen. Each picture has its name underneath, so you can read it out to whoever is holding the other device, or have it read to you.
+- The twelve digits are still there, quietly, under the pictures. Comparison happens between two devices, and the other one may not have updated yet, so there is always something both can show.
 
 No account, no cloud. Everything stays on your devices.

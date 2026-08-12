@@ -119,7 +119,7 @@ if (existsSync(srcDir)) {
 	}
 }
 
-// --- Android fastlane (F-Droid): each locale has the copy, within caps ---
+// --- Android fastlane (store listing): each locale has the copy, within caps ---
 const ANDROID_STORE_LIMITS = { "title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000 };
 for (const { appStore } of [{ appStore: "en-US" }, ...LOCALES]) {
 	const dir = join(ANDROID_FASTLANE_DIR, appStore);

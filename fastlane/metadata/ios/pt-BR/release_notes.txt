@@ -1,9 +1,6 @@
-Novidades nesta versão:
+Novidades desta versão:
 
-- Trabalhe com várias entradas de uma vez. Pressione e segure qualquer item da lista para começar a selecionar, marque quantos quiser e, em seguida, execute uma ação no conjunto todo. Ao excluir, uma confirmação é solicitada primeiro e informa quantos itens serão removidos, incluindo aqueles ocultos pela busca atual.
-- Exporte as entradas selecionadas para um arquivo Bramble, protegido por uma senha que você escolher para esse arquivo, em vez da sua senha mestra. Ele carrega tudo que uma entrada contém, incluindo chaves de acesso e senhas antigas, o que uma exportação KeePass não faz.
-- Abra uma exportação Bramble em outro dispositivo e ela será mesclada ao cofre que você já possui, em vez de substituí-lo. Tudo que já estiver no seu cofre é reconhecido e ignorado, portanto importar o mesmo arquivo duas vezes não adiciona nada.
-- Corrigido: o botão de copiar em cada linha estava inacessível no iPhone. Ele só aparecia quando um ponteiro pairava sobre a linha, o que é impossível em uma tela sensível ao toque. Agora ele está sempre visível e um toque prolongado não seleciona mais o texto subjacente.
-- Corrigido: contagens como "3 selecionados" eram exibidas em inglês, independentemente do idioma configurado no app.
+- Ao conectar outro dispositivo, agora são exibidas sete imagens para comparação em vez de doze dígitos. Uma fileira de imagens distintas é mais rápida de verificar e muito mais difícil de aprovar quando está quase correta, que é exatamente o objetivo dessa tela. Cada imagem tem seu nome abaixo, para que você possa lê-lo em voz alta para quem está segurando o outro dispositivo, ou para que ele seja lido para você.
+- Os doze dígitos ainda estão lá, discretamente, abaixo das imagens. A comparação ocorre entre dois dispositivos, e o outro pode ainda não ter sido atualizado, então há sempre algo que ambos podem mostrar.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

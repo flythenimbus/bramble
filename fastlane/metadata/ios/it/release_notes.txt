@@ -1,9 +1,6 @@
-Novità in questa versione:
+Novità di questa versione:
 
-- Agisca su più voci contemporaneamente. Tenga premuto un elemento nell'elenco per iniziare a selezionare, spunti quanti ne desidera, quindi agisca sull'intera selezione. L'eliminazione richiede prima una conferma e indica quante voci verranno eliminate, incluse quelle nascoste dalla ricerca corrente.
-- Esporti le voci selezionate in un file Bramble, protetto da una password scelta da Lei per quel file anziché la sua password principale. Include tutto ciò che una voce contiene, passkey e password precedenti comprese, cosa che un'esportazione KeePass non può fare.
-- Apra un'esportazione Bramble su un altro dispositivo e questa si unisce alla cassaforte che già possiede, invece di sostituirla. Ogni elemento già presente nella sua cassaforte viene riconosciuto e saltato, quindi importare lo stesso file due volte non aggiunge nulla.
-- Risolto: il pulsante Copia su ogni riga era irraggiungibile su iPhone. Appariva solo al passaggio del puntatore sulla riga, cosa impossibile su uno schermo touch. Ora è sempre visibile, e una pressione prolungata non seleziona più il testo sottostante.
-- Risolto: i conteggi come "3 selezionati" venivano mostrati in inglese indipendentemente dalla lingua impostata nell'app.
+- Connettere un altro dispositivo ora mostra sette immagini da confrontare anziché dodici cifre. Una fila di immagini distinte è più rapida da controllare e molto più difficile da dare per buona quando è quasi corretta, che è lo scopo stesso di quella schermata. Ogni immagine ha il suo nome sotto, così può leggerlo a voce alta a chi tiene l’altro dispositivo, o farselo leggere.
+- Le dodici cifre sono ancora lì, in modo discreto, sotto le immagini. Il confronto avviene tra due dispositivi e l’altro potrebbe non essere ancora aggiornato, quindi c’è sempre qualcosa che entrambi possono mostrare.
 
 Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

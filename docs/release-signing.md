@@ -283,13 +283,19 @@ export ANDROID_KEYSTORE_PASSWORD="…"     # from your password manager
 pnpm run release android 1.1.0           # prompts for a YubiKey touch to decrypt the keystore
 ```
 
-It runs lint + tests, bumps `versionName`, builds the web bundle + Rust FFI, `cap sync`s,
-assembles a **signed** release APK (JDK 21), prints the cert SHA-256, tags `1.1.0-android`,
+It runs lint + tests, bumps `versionName` + `versionCode` and commits them, then builds **on this
+Mac**: web bundle → Rust FFI for the four ABIs (needs `cargo-ndk` + the NDK) → `cap sync` →
+`gradlew assembleRelease` under JDK 21. Gradle has no signing config, so it emits
+`app-release-unsigned.apk`; the script then decrypts the keystore to a temp file, signs with
+`apksigner` (v2/v3 only — minSdk 24), wipes the key, prints the cert SHA-256, tags `1.1.0-android`,
 pushes, and publishes a GitHub release with `bramble_android_1.1.0.apk` + `SHA256SUMS`. The
-keystore is decrypted to a temp file and wiped; it never touches the repo. `versionCode` is a
-build-time timestamp and is left alone. Env overrides: `ANDROID_KEYSTORE_AGE` (encrypted
-keystore path), `ANDROID_KEY_ALIAS` (default `bramble`), `ANDROID_KEY_PASSWORD` (defaults to the
-store password). CI verifies an APK + matching `SHA256SUMS` are attached; it never builds or signs.
+plaintext keystore exists for the seconds signing takes and never touches the repo or Gradle.
+
+A build failure rewinds the release commit for a clean retry. A *signing* failure (usually a missed
+YubiKey touch) keeps the commit and the unsigned APK: re-run with `--resume` to sign that same build
+without rebuilding. Env overrides: `ANDROID_KEYSTORE_AGE` (encrypted keystore path),
+`ANDROID_KEY_ALIAS` (default `bramble`), `ANDROID_KEY_PASSWORD` (defaults to the store password).
+CI verifies an APK + matching `SHA256SUMS` are attached; it never builds or signs.
 
 ### Verifying (what users run)
 

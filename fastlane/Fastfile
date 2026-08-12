@@ -12,13 +12,13 @@ default_platform(:ios)
 
 REPO = `git rev-parse --show-toplevel`.strip
 BUNDLE_ID = "app.bramble.mobile"
-# This folder is the REPO ROOT fastlane, not the iOS project's: F-Droid's fdroidserver only
-# scans `<root>/fastlane/metadata/android/`, so the Android listing has to live here and the
-# iOS one keeps it company rather than sitting two directories deeper. Everything below is
-# therefore addressed from the repo root.
+# This folder is the REPO ROOT fastlane, not the iOS project's: fastlane's supply layout puts the
+# Android listing at `<root>/fastlane/metadata/android/`, so it lives here and the iOS one keeps it
+# company rather than sitting two directories deeper. Everything below is therefore addressed from
+# the repo root.
 PROJECT = "#{REPO}/packages/platform-mobile/ios/App/App.xcodeproj"
-# deliver's metadata dir, nested in ios/ so the App Store listing sits beside the F-Droid one
-# (metadata/android/, where fdroidserver requires it). The two could share metadata/ directly -
+# deliver's metadata dir, nested in ios/ so the App Store listing sits beside the Android one
+# (metadata/android/, where supply expects it). The two could share metadata/ directly -
 # deliver skips `android` as a known supply dir - but it rejects any other non-locale child, so
 # with this layout metadata_path MUST be passed explicitly: the default (metadata/) errors on `ios`.
 #

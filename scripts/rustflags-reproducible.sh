@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Echo the rustc flags that make our Rust output independent of where the repo is
-# checked out, so a release built here matches one F-Droid's buildserver rebuilds
-# from the same tag (its reproducible-build check diffs the two APKs).
+# checked out, so a rebuild of a tag matches the published binary regardless of who
+# builds it (an AMO reviewer diffing the WASM against ours, docs/amo-source-build.md,
+# or you rebuilding a release to check it).
 #
 # `strip = true` only drops debug symbols; rustc still bakes absolute file!() paths
 # into .rodata for panic locations, so /Users/<me>/... and /home/vagrant/build/...

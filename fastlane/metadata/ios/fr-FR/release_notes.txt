@@ -1,9 +1,6 @@
-Nouveautés de cette version :
+Quoi de neuf dans cette version :
 
-- Travaillez sur plusieurs entrées à la fois. Appuyez longuement sur un élément de la liste pour commencer la sélection, cochez-en autant que vous le souhaitez, puis agissez sur l’ensemble sélectionné. Lors de la suppression, une confirmation vous est demandée et vous indique combien d’éléments seront supprimés, y compris ceux masqués par la recherche en cours.
-- Exportez les entrées sélectionnées vers un fichier Bramble, protégé par un mot de passe que vous choisissez pour ce fichier plutôt que votre mot de passe maître. Il contient tout ce qu’une entrée détient, y compris les clés d’accès et les anciens mots de passe, ce qu’un export KeePass ne peut pas faire.
-- Ouvrez un fichier Bramble sur un autre appareil et il fusionne avec le coffre-fort existant au lieu de le remplacer. Tout ce qui se trouve déjà dans votre coffre-fort est reconnu et ignoré, ainsi importer le même fichier deux fois n’ajoute rien.
-- Correction : le bouton de copie sur chaque ligne était inaccessible sur iPhone. Il n’apparaissait que lorsqu’un pointeur survolait la ligne, ce qu’un écran tactile ne peut pas faire. Il est désormais toujours présent, et un appui prolongé ne sélectionne plus le texte sous-jacent.
-- Correction : les compteurs comme « 3 sélectionnés » s’affichaient en anglais quelle que soit la langue de l’application.
+- La connexion d’un autre appareil affiche désormais sept images à comparer au lieu de douze chiffres. Une rangée d’images distinctes est plus rapide à vérifier et bien plus difficile à valider à la va-vite lorsqu’elle est presque correcte, ce qui est tout l’intérêt de cet écran. Chaque image a son nom en dessous, ce qui vous permet de le lire à voix haute à la personne qui tient l’autre appareil, ou de vous le faire lire.
+- Les douze chiffres sont toujours là, discrètement, sous les images. La comparaison se fait entre deux appareils, et l’autre n’a peut-être pas encore été mis à jour, de sorte qu’il y a toujours quelque chose que les deux peuvent afficher.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

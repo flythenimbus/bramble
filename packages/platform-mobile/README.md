@@ -72,6 +72,11 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 `adb` lives in `~/Library/Android/sdk/platform-tools`; add it to your PATH or use the full path.
 
+A **release** APK is the same chain, driven from the repo root by `pnpm run release android
+<version>`: it bumps the version, runs the two commands above, `assembleRelease`s, signs the
+unsigned output, and publishes the GitHub release. It all runs on this Mac; see
+[docs/release-signing.md](../../docs/release-signing.md).
+
 **JDK 21 is required for Gradle.** The Capacitor plugin modules declare a Java 21 toolchain, so a
 direct `gradlew` build on the system-default JDK 17 fails with
 `Cannot find a Java installation ... {languageVersion=21}`. `pnpm run:android` and the
@@ -92,17 +97,20 @@ key, which Android pins: every update must be signed by the same key, so the sig
 To verify a download:
 
 ```bash
-# Authenticity: confirm the APK is signed by the key above (use either tool).
-apksigner verify --print-certs bramble_android_<version>.apk   # Android SDK; compare "SHA-256 digest"
-keytool -printcert -jarfile bramble_android_<version>.apk      # any JDK; compare "SHA256"
+# Authenticity: confirm the APK is signed by the key above.
+apksigner verify --print-certs bramble_android_<version>.apk   # compare "SHA-256 digest"
 
 # Integrity: confirm the download wasn't corrupted.
 shasum -a 256 -c SHA256SUMS    # macOS  (sha256sum -c on Linux)
 ```
 
-`apksigner` prints the fingerprint lowercase without colons and `keytool` uppercase with colons;
-they are the same bytes. If it does not match the fingerprint above, do not install. The signing
-setup is in [docs/release-signing.md](../../docs/release-signing.md).
+`apksigner` ships with the Android SDK build-tools. Use it rather than `keytool -printcert
+-jarfile`: releases carry only the v2/v3 signatures (minSdk 24 verifies those), and with no v1 JAR
+signature block `keytool` just reports "Not a signed jar file".
+
+It prints the fingerprint lowercase and without colons; the same bytes as above. If it does not
+match, do not install. The signing setup is in
+[docs/release-signing.md](../../docs/release-signing.md).
 
 ## Live-reload gotcha (important)
 
