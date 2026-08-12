@@ -749,6 +749,10 @@ the machine, so it would buy nothing and cost an upload, a wait, and a submissio
 privileges, and watch the server log: a request for `latest.json` then one for the archive is the
 whole handshake.
 
+`--slow[=seconds]` spreads the download out (default 10s). Six megabytes off localhost arrives in
+milliseconds, so without it the percentage in Settings is gone before it can be read, which makes
+the one part of the UI worth watching the one part you cannot see. The manifest is never throttled.
+
 It advertises the SAME archive under a bumped version. The signature covers the archive's bytes and
 the version comes from the manifest, so every check the plugin makes passes; it installs what is
 already installed. One build instead of two, and it still exercises the part worth exercising —

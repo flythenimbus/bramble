@@ -17,12 +17,15 @@
 
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const MACOS = join(ROOT, "packages/platform-desktop/src-tauri/target/release/bundle/macos");
+/** Overridable so this can be exercised against a scratch directory rather than a real build. */
+const MACOS =
+	process.env.BRAMBLE_SMOKE_BUNDLE ??
+	join(ROOT, "packages/platform-desktop/src-tauri/target/release/bundle/macos");
 const CONF = join(ROOT, "packages/platform-desktop/src-tauri/tauri.conf.json");
 const PATCH = join(ROOT, "packages/platform-desktop/src-tauri/tauri.local-update.conf.json");
 
@@ -30,6 +33,12 @@ const fail = (message: string): never => {
 	console.error(`error: ${message}`);
 	process.exit(1);
 };
+
+// `--slow[=seconds]`. Six megabytes off localhost arrives in milliseconds, so the percentage in
+// Settings is gone before it can be read, which makes the one part of the UI worth watching the
+// one part you cannot see. Spreading the transfer out is the only way to actually test it.
+const slowArg = process.argv.slice(2).find((a) => a === "--slow" || a.startsWith("--slow="));
+const SLOW_MS = slowArg ? (Number(slowArg.split("=")[1]) || 10) * 1000 : 0;
 
 /** The port in the patch config, so the two cannot drift. */
 function port(): number {
@@ -50,7 +59,15 @@ if (!existsSync(MACOS))
 
 const files = await readdir(MACOS);
 const archive = files.find((f) => f.endsWith(".app.tar.gz"));
-if (!archive) fail("no .app.tar.gz in the bundle; createUpdaterArtifacts must be true.");
+if (!archive)
+	// Distinguish "never built" from "built, but the archive is missing" — with an .app sitting
+	// right there, being told to check a config flag that is already set sends you the wrong way.
+	fail(
+		files.some((f) => f.endsWith(".app"))
+			? "there is an .app here but no .app.tar.gz. The archive is produced by the build, so\n" +
+					"       something removed it; rebuild with `pnpm build:desktop:local-update`."
+			: "no build in the bundle directory. Run `pnpm build:desktop:local-update` first.",
+	);
 if (!files.includes(`${archive}.sig`))
 	// Without this the app rejects the download, which looks like a broken updater rather than an
 	// unsigned test artifact.
@@ -94,14 +111,48 @@ const server = createServer((req, res) => {
 		"content-type": name.endsWith(".json") ? "application/json" : "application/octet-stream",
 		"content-length": statSync(path).size,
 	});
-	console.log(`  200 ${name} (${statSync(path).size} bytes)`);
-	createReadStream(path).pipe(res);
+	const size = statSync(path).size;
+	const throttle = SLOW_MS > 0 && name !== "latest.json";
+	console.log(`  200 ${name} (${size} bytes)${throttle ? " throttled" : ""}`);
+	// The manifest is never throttled: it is tiny, and delaying it only delays the dialog.
+	if (!throttle) {
+		createReadStream(path).pipe(res);
+		return;
+	}
+	void sendSlowly(res, readFileSync(path), size);
+});
+
+/** Dribble the body out over SLOW_MS, so a progress bar has something to show. */
+async function sendSlowly(res: ServerResponse, body: Buffer, size: number): Promise<void> {
+	const STEPS = 50;
+	const chunk = Math.ceil(size / STEPS);
+	const gap = SLOW_MS / STEPS;
+	for (let at = 0; at < size; at += chunk) {
+		if (!res.write(body.subarray(at, at + chunk)))
+			await new Promise((done) => res.once("drain", done));
+		await new Promise((done) => setTimeout(done, gap));
+	}
+	res.end();
+}
+
+// A leftover server from an earlier run is the ordinary way this fails, and the default handling
+// is an unhandled 'error' event: eleven lines of stack for a one-line problem, with no hint that
+// the fix is to kill the old one.
+server.on("error", (e) => {
+	if ((e as NodeJS.ErrnoException).code !== "EADDRINUSE") throw e;
+	console.error(
+		`error: port ${PORT} is already in use, probably by an earlier smoke run.\n` +
+			`  lsof -nP -iTCP:${PORT} -sTCP:LISTEN     # check what it is\n` +
+			`  kill $(lsof -tnP -iTCP:${PORT} -sTCP:LISTEN)`,
+	);
+	process.exit(1);
 });
 
 server.listen(PORT, "127.0.0.1", () => {
 	console.log(`serving ${MACOS} on http://127.0.0.1:${PORT}`);
 	console.log(`  installed version: ${version}`);
 	console.log(`  offering:          ${offered} -> ${archive}\n`);
+	if (SLOW_MS) console.log(`  throttled:         ~${SLOW_MS / 1000}s per download\n`);
 	console.log("Open the app built with tauri.local-update.conf.json. Five seconds after launch");
 	console.log("it should ask about " + offered + ". Requests appear below.\n");
 });
