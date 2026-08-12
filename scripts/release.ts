@@ -892,7 +892,13 @@ function releaseNotes(tag: string, platform: string): string {
 	const prev = capture(
 		`git describe --tags --abbrev=0 --match '*-${platform}' ${tag}^ 2>/dev/null || true`,
 	);
-	const range = prev ? `${prev}..${tag}` : tag;
+	// First release for a platform: there is no previous tag to diff against, and falling back to
+	// the whole history lists every commit in the repo, most of them about other platforms. The
+	// desktop 0.2.0 notes came out 871 lines long that way. Nobody wants to read that, and it
+	// makes a milestone look like a changelog dump, so leave the body to be written by hand.
+	if (!prev)
+		return `First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`;
+	const range = `${prev}..${tag}`;
 	const subjects = capture(`git log --no-merges --pretty=%s ${range}`)
 		.split("\n")
 		.filter((s) => s && !/^chore\(release\)/.test(s));
