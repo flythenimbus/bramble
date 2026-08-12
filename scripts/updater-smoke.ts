@@ -161,5 +161,5 @@ server.listen(PORT, "127.0.0.1", () => {
 	console.log(`  offering:          ${offered} -> ${archive}\n`);
 	if (SLOW_MS) console.log(`  throttled:         ~${SLOW_MS / 1000}s per download\n`);
 	console.log("Open the app built with tauri.local-update.conf.json. Five seconds after launch");
-	console.log("it should ask about " + offered + ". Requests appear below.\n");
+	console.log(`it should ask about ${offered}. Requests appear below.\n`);
 });

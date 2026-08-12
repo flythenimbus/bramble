@@ -653,6 +653,18 @@ filling while locked, the entire point, could not work), and to an unlock TRANSI
 worker restarting with an already-unlocked session never opened it). An open pipe grants nothing on
 its own: the app answers only while its own vault is unlocked, and the handshake still has to pass.
 
+### Firefox
+
+Firefox has no part in the browser link. The manifest does not ask for `nativeMessaging`, and the
+desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium support
+directories, where Firefox wants `allowed_extensions` under Mozilla's. Both ends would need work.
+
+The extension adapter is therefore absent unless the running manifest asks for the permission,
+which is what keeps the Settings section from appearing. Read from the manifest rather than sniffed
+from the browser, so it turns itself on the day Firefox support lands instead of needing to be
+remembered. Without that gate a Firefox release would have shipped a Connect button whose only
+possible outcome is an error.
+
 ## Releasing and updating
 
 Distribution is a signed GitHub release, nothing else. That makes updating part of the product

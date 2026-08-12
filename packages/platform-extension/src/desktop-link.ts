@@ -13,7 +13,27 @@ async function dispatch<T = unknown>(type: string, extra?: Record<string, unknow
 	return res.data as T;
 }
 
-export const extensionDesktopLink: DesktopLinkAdapter = {
+/**
+ * Whether this browser can talk to the desktop app at all.
+ *
+ * The link is native messaging, and only the Chromium manifest asks for the permission: the
+ * desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium support
+ * directories, and Firefox wants `allowed_extensions` in a Mozilla one. So on Firefox there is
+ * nothing at either end, and offering to connect would be a settings section whose only outcome
+ * is an error.
+ *
+ * Read from the manifest rather than sniffing the browser, so this turns itself on the day
+ * Firefox support is added rather than needing to be remembered.
+ */
+const canNativeMessage = (): boolean => {
+	try {
+		return (api.runtime.getManifest().permissions ?? []).includes("nativeMessaging");
+	} catch {
+		return false;
+	}
+};
+
+const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
 	// The code goes straight through to the background and is never stored here.
 	pair: async (code) => {
@@ -37,3 +57,8 @@ export const extensionDesktopLink: DesktopLinkAdapter = {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},
 };
+
+/** Undefined where the browser cannot do it, which is what hides the Settings section. */
+export const extensionDesktopLink: DesktopLinkAdapter | undefined = canNativeMessage()
+	? adapter
+	: undefined;
