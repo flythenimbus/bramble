@@ -17,6 +17,19 @@ export interface UpdatePromptCopy {
 	cancel: string;
 }
 
+/** Shown when a check the user asked for finds nothing. Silence would read as a broken check. */
+export function upToDateCopy(version: string): { title: string; body: string } {
+	if (!i18n.locale)
+		return {
+			title: "Bramble is up to date",
+			body: `You are running the latest version (${version}).`,
+		};
+	return {
+		title: i18n._(msg`Bramble is up to date`),
+		body: i18n._(msg`You are running the latest version (${version}).`),
+	};
+}
+
 /** Resolved at call time, not module load, so it follows the locale the user actually picked. */
 export function updatePromptCopy(version: string): UpdatePromptCopy {
 	// Lingui throws rather than falling back when no catalog is active yet, and this is called

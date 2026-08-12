@@ -8,6 +8,7 @@ mod crypto;
 mod index_store;
 mod lifetime;
 mod manifest;
+mod menu;
 mod pairing;
 mod socket;
 // Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
@@ -37,6 +38,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .menu(|app| menu::build(app))
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|app| {
             // Logging is registered in release too, not just debug. A release build used to
             // be entirely silent, so when pairing refused a connection there was nowhere at

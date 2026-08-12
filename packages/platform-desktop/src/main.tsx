@@ -12,7 +12,7 @@ import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/s
 import { desktopStorage } from "./adapters/storage";
 import { onVaultStateChange } from "./adapters/vault-session";
 import { initRosterSync } from "./sync/roster";
-import { promptForUpdateOnLaunch } from "./updates-prompt";
+import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 
 const platform: Platform = {
 	target: "desktop",
@@ -45,6 +45,9 @@ function Root() {
 	// The one nudge about a new version. Nothing else tells anyone: this app is distributed as a
 	// GitHub release, so without it a fix reaches only the people who open Settings and look.
 	useEffect(() => promptForUpdateOnLaunch(), []);
+
+	// The menu's "Check for Updates…", which is where people look for it rather than in Settings.
+	useEffect(() => listenForMenuUpdateCheck(), []);
 
 	// Locking clears the search index, so a panel left open would go on accepting typing and
 	// answering "No matches" to everything the vault still holds. Dismiss it instead: the hotkey

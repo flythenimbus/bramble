@@ -712,6 +712,24 @@ the first release rather than after.
 The archive URLs inside the manifest still point at the GitHub release assets for the
 `<version>-desktop` tag; only the manifest itself moved.
 
+**The menu.** `menu.rs` builds the bar by hand rather than taking `Menu::default`, for two items:
+an About panel that says who wrote this and under what licence, and a "Check for Updates…" that
+does not require knowing Settings has an Updates section. Customising one submenu means owning the
+whole bar, so Edit is rebuilt too — without it Cmd-C and Cmd-V stop working in the webview, in a
+password manager.
+
+macOS renders only part of `AboutMetadata`: name, version, short_version, copyright, icon and
+credits. `authors`, `license` and `website` are accepted and silently dropped, so the author,
+licence and source URL all go through `credits`, where they render as plain text. The URL is
+therefore selectable, not clickable.
+
+The menu item emits an event and the webview does the work, because the webview already owns the
+updater adapter, the dialog copy and the progress UI; a second implementation in Rust would be a
+second answer to "is there an update" that could disagree. A check from the menu differs from the
+launch prompt in two ways: it ignores the dismissed version, since asking again is the point, and
+it always answers — "Bramble is up to date" when there is nothing, and the error when the check
+fails. On launch those are silent, because nobody asked.
+
 **Being told an update exists.** Settings has a Check button, but a manual check is only found by
 someone who already suspects there is something to find, which is the wrong assumption for a
 security fix. So `updates-prompt.ts` asks once, five seconds after launch, in a native dialog: long

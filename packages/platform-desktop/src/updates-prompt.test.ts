@@ -14,6 +14,9 @@ const h = vi.hoisted(() => ({
 	installs: 0,
 	navigations: [] as string[],
 	meta: new Map<string, unknown>(),
+	/** Non-decision dialogs: "up to date", errors. */
+	messages: [] as { body: string; title?: string }[],
+	listeners: new Map<string, () => void>(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -21,11 +24,20 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 		h.asked.push({ body, title: opts?.title });
 		return h.accept;
 	},
+	message: async (body: string, opts?: { title?: string }) => {
+		h.messages.push({ body, title: opts?.title });
+	},
 }));
+
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: async () => "1.1.0" }));
 
 vi.mock("@tauri-apps/api/event", () => ({
 	emit: async (_name: string, payload: { href: string }) => {
 		h.navigations.push(payload.href);
+	},
+	listen: async (name: string, cb: () => void) => {
+		h.listeners.set(name, cb);
+		return () => h.listeners.delete(name);
 	},
 }));
 
@@ -50,7 +62,7 @@ vi.mock("./adapters/storage", () => ({
 	},
 }));
 
-import { promptForUpdateOnLaunch } from "./updates-prompt";
+import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 
 /** Runs the scheduled offer and lets its promise chain settle. */
 async function launch(): Promise<void> {
@@ -67,7 +79,17 @@ beforeEach(() => {
 	h.installs = 0;
 	h.navigations = [];
 	h.meta = new Map();
+	h.messages = [];
+	h.listeners = new Map();
 });
+
+/** Fire the menu item and let its promise chain settle. */
+async function menuCheck(): Promise<void> {
+	listenForMenuUpdateCheck();
+	await vi.runAllTimersAsync();
+	h.listeners.get("check-for-updates")?.();
+	await vi.runAllTimersAsync();
+}
 
 describe("promptForUpdateOnLaunch", () => {
 	it("says nothing when there is no update", async () => {
@@ -132,6 +154,37 @@ describe("promptForUpdateOnLaunch", () => {
 		await expect(launch()).resolves.toBeUndefined();
 
 		expect(h.asked).toHaveLength(0);
+	});
+
+	it("says so when a check from the menu finds nothing", async () => {
+		// A check someone asked for that answers with silence is a check that looks broken.
+		h.available = null;
+		await menuCheck();
+
+		expect(h.messages).toHaveLength(1);
+		expect(h.messages[0]?.body).toContain("1.1.0");
+	});
+
+	it("re-offers a version already dismissed, when asked from the menu", async () => {
+		// The launch prompt stays quiet about a declined version. Asking again is the entire point
+		// of the menu item, so the dismissal must not silence it too.
+		h.accept = false;
+		await launch();
+		expect(h.asked).toHaveLength(1);
+
+		h.accept = true;
+		await menuCheck();
+
+		expect(h.asked).toHaveLength(2);
+		expect(h.installs).toBe(1);
+	});
+
+	it("reports a failed check from the menu instead of swallowing it", async () => {
+		h.checkFails = true;
+		await menuCheck();
+
+		expect(h.messages).toHaveLength(1);
+		expect(h.messages[0]?.title).toMatch(/failed/i);
 	});
 
 	it("does not ask if the window closed first", async () => {

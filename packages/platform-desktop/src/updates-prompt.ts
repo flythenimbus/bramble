@@ -9,9 +9,10 @@
 // accepting opens Settings on the Updates section and starts from there, where the percentage
 // already has a home.
 
-import { updatePromptCopy } from "@core/app/update-prompt-copy";
-import { emit } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { updatePromptCopy, upToDateCopy } from "@core/app/update-prompt-copy";
+import { getVersion } from "@tauri-apps/api/app";
+import { emit, listen } from "@tauri-apps/api/event";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import { desktopStorage } from "./adapters/storage";
 import { desktopUpdates } from "./adapters/updates";
 
@@ -32,14 +33,41 @@ export function promptForUpdateOnLaunch(): () => void {
 	return () => clearTimeout(timer);
 }
 
-async function offer(): Promise<void> {
+/**
+ * The menu's "Check for Updates…".
+ *
+ * Unlike the launch prompt this always answers, including when there is nothing: a check someone
+ * asked for that says nothing is a check that looks broken. It also ignores the dismissal, since
+ * asking again IS the point.
+ */
+export function listenForMenuUpdateCheck(): () => void {
+	const stop = listen("check-for-updates", () => {
+		void offer({ force: true }).catch(async (e) => {
+			// Reported here, unlike on launch: they asked, so the answer cannot be silence.
+			await message(e instanceof Error ? e.message : String(e), {
+				title: "Update check failed",
+				kind: "error",
+			}).catch(() => {});
+		});
+	});
+	return () => {
+		void stop.then((off) => off());
+	};
+}
+
+async function offer({ force = false }: { force?: boolean } = {}): Promise<void> {
 	const update = await desktopUpdates.check();
-	if (!update) return;
+	if (!update) {
+		if (!force) return;
+		const copy = upToDateCopy(await getVersion());
+		await message(copy.body, { title: copy.title, kind: "info" });
+		return;
+	}
 
 	const dismissed = await desktopStorage.getMeta<string>(DISMISSED_KEY);
 	// Asked once per version. Re-asking every launch for something already declined is how a
 	// prompt teaches people to dismiss it without reading.
-	if (dismissed === update.version) return;
+	if (!force && dismissed === update.version) return;
 
 	// Localised from core, where the extractor can see it. The delay above outlasts the boot, so
 	// the catalogs are loaded by now; updatePromptCopy answers in English if they somehow are not.

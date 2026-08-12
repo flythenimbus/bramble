@@ -350,6 +350,10 @@ msgstr "Bramble è installato direttamente, quindi gli aggiornamenti vengono con
 #~ msgid "Bramble is running but locked. Unlock it there first."
 #~ msgstr "Bramble è in esecuzione ma è bloccato. Lo sblocchi prima lì."
 
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Bramble is up to date"
+msgstr "Bramble è aggiornato"
+
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Bramble is up to date."
 msgstr "Bramble è aggiornato."
@@ -2967,6 +2971,10 @@ msgstr "Anno (AA)"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "You already share this vault"
 msgstr "Lei condivide già questa cassaforte"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "You are running the latest version ({version})."
+msgstr "Sta utilizzando la versione più recente ({version})."
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/OptionsApp.tsx
