@@ -336,6 +336,12 @@ token. So the YubiKey does here what it does for the Android keystore: it gates 
 that lives encrypted at rest. `scripts/build-desktop.ts` decrypts it (PIN + touch), passes it to
 the bundler through the environment, and never writes the plaintext to disk.
 
+Release notes are drafted from the commit range by the model the i18n scripts already use, then
+opened in `$EDITOR` before the release publishes; `--no-edit` skips the editing step. The model is
+shown only the `feat`/`fix`/`perf` subjects and told to claim nothing beyond them, and the full
+grouped list is kept underneath the summary in a collapsed block, so anything it leaves out is
+still one click away. No model reachable, or no terminal, falls back to that list unedited.
+
 `pnpm release desktop <version>` requires notarization credentials as well as the signing key; it
 reuses the App Store Connect API key from `fastlane/.env` (see the iOS section). On publish, CI
 re-verifies the archive against the public key compiled into the app

@@ -10,6 +10,11 @@
 //   pnpm run release desktop  <version|patch|minor|major> [--aarch64]  (--aarch64 = skip the
 //                                                                       Intel slice)
 //
+// Release notes are drafted from the commit range by the same model the i18n scripts use, then
+// opened in $EDITOR before publishing: the commit log is written for us, the release page is not.
+// --no-edit publishes the draft unedited, and no model or no terminal falls back to the grouped
+// commit list, because a release must never block on a summary.
+//
 // The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
 // (patch/minor/major) that increments the SELECTED target's current version. Targets version
 // independently, so `android patch` and `chromium patch` can land on different numbers.
@@ -40,6 +45,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { composeNotes } from "./release-notes.mjs";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = process.env.HOME ?? "";
@@ -77,17 +83,17 @@ const version = bumpKind
 	? nextVersion(currentVersion(platform), bumpKind)
 	: rawVersion.replace(/^v/, "");
 
-if (platform === "android") releaseAndroid(version, flags.has("--resume"));
-else if (platform === "ios") releaseIos(version, flags.has("--ipa"));
-else if (platform === "firefox") releaseFirefox(version);
+if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
+else if (platform === "ios") await releaseIos(version, flags.has("--ipa"));
+else if (platform === "firefox") await releaseFirefox(version);
 // Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
 // failure is silent from here: the dmg simply does not open on an Intel Mac.
-else if (platform === "desktop") releaseDesktop(version, !flags.has("--aarch64"));
-else releaseExtension(platform, version);
+else if (platform === "desktop") await releaseDesktop(version, !flags.has("--aarch64"));
+else await releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
 
-function releaseExtension(target: string, version: string) {
+async function releaseExtension(target: string, version: string) {
 	const MANIFESTS: Record<string, string> = {
 		chromium: "packages/manifests/chromium/manifest.json",
 	};
@@ -183,7 +189,7 @@ function releaseExtension(target: string, version: string) {
 			.join(""),
 	);
 	try {
-		publish(tag, title, [crxAsset, zipAsset, sumsAsset]);
+		await publish(tag, title, [crxAsset, zipAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
@@ -194,7 +200,7 @@ function releaseExtension(target: string, version: string) {
 
 // ----- firefox: submitted listed to AMO; GitHub release carries the source .zip + SHA256SUMS -----
 
-function releaseFirefox(version: string) {
+async function releaseFirefox(version: string) {
 	const MANIFEST = "packages/manifests/firefox/manifest.json";
 	const DIST = "packages/platform-extension";
 	const ZIP = `${DIST}/bramble-firefox.zip`;
@@ -277,7 +283,7 @@ function releaseFirefox(version: string) {
 			.join(""),
 	);
 	try {
-		publish(tag, `Firefox Extension ${version}`, [zipAsset, sumsAsset]);
+		await publish(tag, `Firefox Extension ${version}`, [zipAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
@@ -288,7 +294,7 @@ function releaseFirefox(version: string) {
 
 // ----- android: GitHub-released, signed .apk + SHA256SUMS -----
 
-function releaseAndroid(version: string, resume: boolean) {
+async function releaseAndroid(version: string, resume: boolean) {
 	const ANDROID = "packages/platform-mobile/android";
 	const BUILD_GRADLE = `${ANDROID}/app/build.gradle`;
 	// gradle has no release signingConfig, so assembleRelease lands here UNSIGNED; apksigner signs it
@@ -493,7 +499,7 @@ function releaseAndroid(version: string, resume: boolean) {
 	run(`git push origin ${branch}`);
 	run(`git push origin ${tag}`);
 	try {
-		publish(tag, `Android ${version}`, [apkAsset, sumsAsset]);
+		await publish(tag, `Android ${version}`, [apkAsset, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
@@ -523,7 +529,7 @@ function snapshotAndroidChangelogs(versionCode: string): string[] {
 
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
 
-function releaseIos(version: string, ipaOnly: boolean) {
+async function releaseIos(version: string, ipaOnly: boolean) {
 	const IOS = "packages/platform-mobile/ios/App";
 	const PBXPROJ = `${IOS}/App.xcodeproj/project.pbxproj`;
 
@@ -621,7 +627,7 @@ function releaseIos(version: string, ipaOnly: boolean) {
 
 // ----- desktop: GitHub release (.dmg + updater archive), manifest served from the website -----
 
-function releaseDesktop(version: string, universal: boolean) {
+async function releaseDesktop(version: string, universal: boolean) {
 	// cargo puts a --target build under target/<triple>/, so a universal build does not land in
 	// target/release. Reading the wrong one would publish the previous aarch64 build instead.
 	const BUNDLE = universal
@@ -728,7 +734,7 @@ function releaseDesktop(version: string, universal: boolean) {
 	commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
 
 	try {
-		publish(tag, `Desktop ${version}`, [...assets, sumsAsset]);
+		await publish(tag, `Desktop ${version}`, [...assets, sumsAsset]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}
@@ -888,7 +894,7 @@ function commitTagPush(
 // the SAME platform and this one. GitHub's --generate-notes is useless here: it
 // lists merged PRs (we commit straight to main, so it finds none) and picks the
 // previous tag from the shared namespace (diffing android against a chromium tag).
-function releaseNotes(tag: string, platform: string): string {
+async function releaseNotes(tag: string, platform: string): Promise<string> {
 	const prev = capture(
 		`git describe --tags --abbrev=0 --match '*-${platform}' ${tag}^ 2>/dev/null || true`,
 	);
@@ -898,46 +904,25 @@ function releaseNotes(tag: string, platform: string): string {
 	// makes a milestone look like a changelog dump, so leave the body to be written by hand.
 	if (!prev)
 		return `First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`;
-	const range = `${prev}..${tag}`;
-	const subjects = capture(`git log --no-merges --pretty=%s ${range}`)
+
+	const subjects = capture(`git log --no-merges --pretty=%s ${prev}..${tag}`)
 		.split("\n")
 		.filter((s) => s && !/^chore\(release\)/.test(s));
 
-	const sections: [string, string][] = [
-		["feat", "### Features"],
-		["fix", "### Bug Fixes"],
-		["perf", "### Performance"],
-		["refactor", "### Refactors"],
-		["docs", "### Documentation"],
-	];
-	const groups = new Map<string, string[]>();
-	const other: string[] = [];
-	for (const s of subjects) {
-		const m = s.match(/^(\w+)(?:\([^)]*\))?!?:\s*(.+)/);
-		const heading = sections.find(([t]) => t === m?.[1])?.[1];
-		if (heading) groups.set(heading, [...(groups.get(heading) ?? []), m?.[2] ?? s]);
-		else other.push(s);
-	}
+	const repo = capture("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true");
+	const footer = repo
+		? `**Full Changelog**: https://github.com/${repo}/compare/${prev}...${tag}`
+		: "";
 
-	let body = "";
-	for (const [, heading] of sections) {
-		const items = groups.get(heading);
-		if (items) body += `${heading}\n\n${items.map((d) => `- ${d}`).join("\n")}\n\n`;
-	}
-	if (other.length) body += `### Other\n\n${other.map((d) => `- ${d}`).join("\n")}\n\n`;
-	if (prev) {
-		const repo = capture("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true");
-		if (repo) body += `**Full Changelog**: https://github.com/${repo}/compare/${prev}...${tag}\n`;
-	}
-	return body.trim() || "_No notable changes._";
+	return composeNotes({ subjects, footer, edit: !flags.has("--no-edit") });
 }
 
 // Draft -> upload -> publish, so the `release: published` event fires only once the
 // signed artifacts are attached (CI verifies them on that event).
-function publish(tag: string, title: string, assets: string[]) {
+async function publish(tag: string, title: string, assets: string[]) {
 	const notesDir = mkdtempSync(join(tmpdir(), "bramble-notes-"));
 	const notesFile = join(notesDir, "NOTES.md");
-	writeFileSync(notesFile, releaseNotes(tag, platform));
+	writeFileSync(notesFile, await releaseNotes(tag, platform));
 	try {
 		run(
 			`gh release create ${tag} --draft --notes-file ${notesFile} --title ${JSON.stringify(title)}`,

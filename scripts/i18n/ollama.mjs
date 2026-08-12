@@ -31,7 +31,7 @@ const SELF_CHECK =
 	`the input, every placeholder is intact, the register is right, and a native speaker would ` +
 	`phrase it that way in an app. Silently fix any that fail, then output the final result.`;
 
-async function chat(system, user) {
+export async function chat(system, user) {
 	const messages = [
 		{ role: "system", content: system },
 		{ role: "user", content: user },
