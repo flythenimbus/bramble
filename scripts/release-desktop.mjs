@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-const BUNDLE = "packages/platform-desktop/src-tauri/target/release/bundle";
+const TARGET = "packages/platform-desktop/src-tauri/target";
 const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const PATCH = "packages/platform-desktop/src-tauri/tauri.local-update.conf.json";
 
@@ -40,6 +40,12 @@ const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 const args = process.argv.slice(2);
 const resume = args.includes("--resume");
 const universal = args.includes("--universal");
+// cargo puts a --target build under target/<triple>/, so a universal build does NOT land in
+// target/release. Reading the wrong one is not an empty directory and an error: it is the
+// PREVIOUS aarch64 build, published as though it were the universal one.
+const BUNDLE = universal
+  ? join(TARGET, "universal-apple-darwin/release/bundle")
+  : join(TARGET, "release/bundle");
 // Set when `pnpm release desktop` drives this: the assets are already uploaded by then, so the
 // upload instructions below would be telling you to do something you just did.
 const quiet = args.includes("--quiet");
@@ -59,14 +65,25 @@ if (!resume) {
   }
 }
 
-/** macOS arch as the updater names it: `darwin-aarch64` / `darwin-x86_64`. */
-function platformKey(file) {
-  return file.includes("x64") || file.includes("x86_64") ? "darwin-x86_64" : "darwin-aarch64";
+/**
+ * macOS arches an archive serves, as the updater names them.
+ *
+ * A universal archive runs on both, and its filename says neither: the bundler names it
+ * `Bramble.app.tar.gz` exactly as it names an aarch64-only one. Keyed under one arch it would be
+ * invisible to the other, and the updater errors with TargetNotFound rather than reporting no
+ * update, so an Intel user would see a broken check rather than an update built for them.
+ */
+function platformKeys(file) {
+  if (universal) return ["darwin-aarch64", "darwin-x86_64"];
+  return [file.includes("x64") || file.includes("x86_64") ? "darwin-x86_64" : "darwin-aarch64"];
 }
 
 const macos = join(BUNDLE, "macos");
 if (!existsSync(macos)) {
-  console.error(`no bundle at ${macos}. Drop --resume to build it.`);
+  console.error(
+    `no bundle at ${macos}. Drop --resume to build it` +
+      (universal ? ", or drop --universal if that is not what you built." : "."),
+  );
   process.exit(1);
 }
 
@@ -111,12 +128,13 @@ for (const archive of archives) {
     console.error(`${archive} has no ${sig}. Was the signing key set for this build?`);
     process.exit(1);
   }
-  platforms[platformKey(archive)] = {
-    signature: readFileSync(join(macos, sig), "utf8").trim(),
-    // Tags are `<version>-desktop` (the repo's shared namespace); the asset name is whatever the
-    // bundler produced.
-    url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${archive}`,
-  };
+  for (const key of platformKeys(archive))
+    platforms[key] = {
+      signature: readFileSync(join(macos, sig), "utf8").trim(),
+      // Tags are `<version>-desktop` (the repo's shared namespace); the asset name is whatever
+      // the bundler produced.
+      url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${archive}`,
+    };
 }
 
 const manifest = {

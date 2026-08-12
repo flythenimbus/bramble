@@ -794,8 +794,15 @@ could never be updated again, since the fix would arrive over the channel that i
 `pnpm release:desktop` refuses to write a manifest when it finds the local endpoint in the built
 binary, which catches it whatever produced the build.
 
-One thing is still outstanding for a public release. **Architecture**: the default build is
-`aarch64` only, so Intel Macs cannot run it — `pnpm build:desktop:universal` produces both.
+**Architecture.** The default build is `aarch64` only, so Intel Macs cannot run it; `--universal`
+produces both. Two things about that path are easy to get wrong and were, at first. cargo puts a
+`--target` build under `target/<triple>/`, so a universal build does NOT land in `target/release`,
+and reading the wrong directory is not an empty-directory error: it is the previous aarch64 build,
+published as though it were the universal one. And a universal archive is named exactly like an
+aarch64 one, so keying it by filename hides it from Intel entirely, where the updater reports
+TargetNotFound rather than no update. It is keyed under both arches instead.
+
+`minimumSystemVersion` is unset, which means Tauri's default of 10.13.
 
 ## Risks to retire early
 

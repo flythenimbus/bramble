@@ -605,7 +605,11 @@ function releaseIos(version: string, ipaOnly: boolean) {
 // ----- desktop: GitHub release (.dmg + updater archive), manifest served from the website -----
 
 function releaseDesktop(version: string, universal: boolean) {
-	const BUNDLE = "packages/platform-desktop/src-tauri/target/release/bundle";
+	// cargo puts a --target build under target/<triple>/, so a universal build does not land in
+	// target/release. Reading the wrong one would publish the previous aarch64 build instead.
+	const BUNDLE = universal
+		? "packages/platform-desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+		: "packages/platform-desktop/src-tauri/target/release/bundle";
 
 	// Tauri requires a strict major.minor.patch; it refuses to build otherwise, and finding that
 	// out after the gate and a full build wastes ten minutes.
@@ -707,7 +711,7 @@ function releaseDesktop(version: string, universal: boolean) {
 	// Only now. The manifest IS the update channel, so it goes live after the artifacts it names
 	// exist — the other way round, every app checking in between reads a manifest whose download
 	// 404s, and a failed update is indistinguishable from a broken updater.
-	run("node scripts/release-desktop.mjs --resume --quiet");
+	run(`node scripts/release-desktop.mjs --resume --quiet${universal ? " --universal" : ""}`);
 	run(`git add ${DESKTOP_MANIFEST}`);
 	run(`git commit -m ${JSON.stringify(`chore(release): desktop ${version} update manifest`)}`);
 	run(`git push origin ${branch}`);
