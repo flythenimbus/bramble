@@ -317,24 +317,31 @@ async function releaseAndroid(version: string, resume: boolean) {
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
 	// Signing inputs (post-build; gradle never sees the key). The keystore is age+YubiKey
-	// encrypted; passwords resolve from the env first, then the macOS login Keychain. Store them once:
+	// encrypted; passwords resolve from the env, then the macOS login Keychain, then an
+	// age+YubiKey file, which is the only one of the three that works off macOS. Store one once:
 	//   security add-generic-password -s bramble-android-keystore -a "$USER" -w
-	//   security add-generic-password -s bramble-android-key       -a "$USER" -w   (only if it differs)
+	//   printf %s 'PASSWORD' | age -r age1yubikey1... -o ~/.config/bramble/android-keystore-password.age
 	const ksAge =
 		process.env.ANDROID_KEYSTORE_AGE ?? join(HOME, ".config/bramble/android-release-keystore.age");
-	const storePassword =
+	const ksPassAge =
+		process.env.ANDROID_KEYSTORE_PASSWORD_AGE ??
+		join(HOME, ".config/bramble/android-keystore-password.age");
+	const keyPassAge =
+		process.env.ANDROID_KEY_PASSWORD_AGE ?? join(HOME, ".config/bramble/android-key-password.age");
+	const envStorePassword =
 		process.env.ANDROID_KEYSTORE_PASSWORD ?? secretFromKeychain("bramble-android-keystore");
+	const envKeyPassword =
+		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key");
 	if (!existsSync(ksAge))
 		fail(
 			`encrypted keystore not at ${ksAge} (override ANDROID_KEYSTORE_AGE). See docs/release-signing.md.`,
 		);
-	if (!storePassword)
+	// Only the source is checked here. The decrypt happens beside the keystore's, on one touch.
+	if (!envStorePassword && !existsSync(ksPassAge))
 		fail(
-			'no keystore password. Store it once: `security add-generic-password -s bramble-android-keystore -a "$USER" -w`, or set ANDROID_KEYSTORE_PASSWORD.',
+			`no keystore password: set ANDROID_KEYSTORE_PASSWORD, store it in the macOS Keychain as bramble-android-keystore, or age-encrypt it to ${ksPassAge}. See docs/release-signing.md.`,
 		);
 	const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "bramble";
-	const keyPassword =
-		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key") ?? storePassword;
 	requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 	// Native build toolchain, checked before the gate: core:build shells out to wasm-pack and
 	// ffi:build:android to cargo-ndk, and finding either missing after the release commit means a
@@ -448,6 +455,10 @@ async function releaseAndroid(version: string, resume: boolean) {
 		writeFileSync(idFile, execFileSync("age-plugin-yubikey", ["--identity"]));
 		notifyYubiKeyTouch("decrypt the Android signing keystore");
 		execFileSync("age", ["-d", "-i", idFile, "-o", ksFile, ksAge], { stdio: "inherit" });
+		// Back-to-back with the keystore so both ride one touch (the PIV touch cache is ~15s).
+		const storePassword = envStorePassword ?? ageDecrypt(ksPassAge, idFile);
+		const keyPassword =
+			envKeyPassword ?? (existsSync(keyPassAge) ? ageDecrypt(keyPassAge, idFile) : storePassword);
 		execFileSync(
 			apksigner,
 			[
@@ -986,6 +997,15 @@ function requireBins(bins: string[], doc: string) {
 		return hint ? `  ${b}\n    ${hint}` : `  ${b}`;
 	});
 	fail(`missing required tools:\n${how.join("\n")}\nsee ${doc}`);
+}
+
+// Captures stdout so the plaintext never lands on disk; stdin/stderr stay on the terminal so
+// the YubiKey PIN prompt still reaches you.
+function ageDecrypt(file: string, idFile: string): string {
+	return execFileSync("age", ["-d", "-i", idFile, file], {
+		encoding: "utf8",
+		stdio: ["inherit", "pipe", "inherit"],
+	}).replace(/\n$/, "");
 }
 
 // Read a secret from the macOS login Keychain (encrypted at rest, unlocked at login). Returns

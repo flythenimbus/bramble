@@ -285,6 +285,12 @@ age -r age1yubikey1XXXX -o ~/.config/bramble/android-release-keystore.age /tmp/b
 # 4. Recovery copy: passphrase-encrypted, stored OFFLINE (not in the repo, not in CI).
 age -p -o android-release-keystore.backup.age /tmp/bramble-release.jks
 
+# 4b. Optional, and the only option off macOS: encrypt the PASSWORD to the same YubiKey, so
+#     releases stop needing it in the environment. It decrypts beside the keystore, on the
+#     same touch. printf stores the exact bytes; the decrypt strips one trailing newline, so
+#     echo works too, but anything past that first newline is kept and will break signing.
+printf %s "$KS_PW" | age -r age1yubikey1XXXX -o ~/.config/bramble/android-keystore-password.age
+
 # 5. Record the cert SHA-256 (what users verify); paste it into the "Verifying a release APK"
 #    section of packages/platform-mobile/README.md (the single published source of truth).
 keytool -list -v -keystore /tmp/bramble-release.jks -alias bramble -storepass "$KS_PW" | grep "SHA256:"
@@ -298,9 +304,14 @@ Move `android-release-keystore.backup.age` to offline storage (not the repo, not
 ### Each release
 
 ```sh
-export ANDROID_KEYSTORE_PASSWORD="…"     # from your password manager
 pnpm run release android 1.1.0           # prompts for a YubiKey touch to decrypt the keystore
 ```
+
+The keystore password resolves in this order: `ANDROID_KEYSTORE_PASSWORD`, then the macOS login
+Keychain (`bramble-android-keystore`), then `~/.config/bramble/android-keystore-password.age`
+from step 4b. Only the last works off macOS, and it is the one that keeps the password out of
+your shell history and environment entirely. The script checks up front that at least one source
+exists, so a missing password fails before the build rather than after it.
 
 It runs lint + tests, bumps `versionName` + `versionCode` and commits them, then builds **on this
 Mac**: web bundle → Rust FFI for the four ABIs (needs `cargo-ndk` + the NDK) → `cap sync` →
