@@ -1,17 +1,8 @@
 import { useLingui } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import {
-	Archive,
-	ChevronLeft,
-	ChevronRight,
-	Info,
-	Lock,
-	type LucideIcon,
-	SlidersHorizontal,
-	Wifi,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Archive, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
 import { useCan } from "../../../context/PlatformContext";
+import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
 import { cn } from "../../components/ui/utils";
 import { AboutSection } from "./components/AboutSection";
 import { AppearanceSection } from "./components/AppearanceSection";
@@ -38,25 +29,7 @@ export function Settings() {
 		navigate({ to: "/settings", search: (prev) => ({ ...prev, tab: id }), replace: true });
 
 	// Fade whichever edge of the tab strip still has tabs scrolled off (else they hide with no hint).
-	const tabsRef = useRef<HTMLElement>(null);
-	const [edges, setEdges] = useState({ left: false, right: false });
-	useEffect(() => {
-		const el = tabsRef.current;
-		if (!el) return;
-		const measure = () =>
-			setEdges({
-				left: el.scrollLeft > 1,
-				right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
-			});
-		measure();
-		el.addEventListener("scroll", measure, { passive: true });
-		const ro = new ResizeObserver(measure);
-		ro.observe(el);
-		return () => {
-			el.removeEventListener("scroll", measure);
-			ro.disconnect();
-		};
-	}, []);
+	const { ref: tabsRef, edges } = useScrollEdges<HTMLElement>();
 
 	const tabs: { id: SettingsTab; label: string; Icon: LucideIcon }[] = [
 		{ id: "general", label: t`General`, Icon: SlidersHorizontal },
@@ -93,16 +66,7 @@ export function Settings() {
 						</button>
 					))}
 				</nav>
-				{edges.left && (
-					<div className="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center bg-gradient-to-r from-background via-background to-transparent">
-						<ChevronLeft className="h-4 w-4 text-foreground/80" />
-					</div>
-				)}
-				{edges.right && (
-					<div className="pointer-events-none absolute inset-y-0 right-0 flex w-12 items-center justify-end bg-gradient-to-l from-background via-background to-transparent">
-						<ChevronRight className="h-4 w-4 text-foreground/80" />
-					</div>
-				)}
+				<ScrollEdgeFades edges={edges} />
 			</div>
 
 			<div className="space-y-4">

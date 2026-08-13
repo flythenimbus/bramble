@@ -1,4 +1,4 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { EntryType } from "../../hooks/useVault";
@@ -10,6 +10,7 @@ interface AddDropdownProps {
 }
 
 export function AddDropdown({ onCreate }: AddDropdownProps) {
+	const { t } = useLingui();
 	const [isOpen, setIsOpen] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -35,10 +36,14 @@ export function AddDropdown({ onCreate }: AddDropdownProps) {
 				variant="primary"
 				size="none"
 				onClick={() => setIsOpen(!isOpen)}
+				aria-label={t`Add New`}
+				aria-expanded={isOpen}
 				className="flex items-center gap-2 px-4 py-2 h-full"
 			>
 				<Plus className="w-4 h-4" />
-				<span className="text-sm">
+				{/* Dropped on a narrow screen: spelled out, this button takes half the
+					row and the search field next to it wraps its own label. */}
+				<span className="hidden sm:inline text-sm">
 					<Trans>Add New</Trans>
 				</span>
 				<ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
