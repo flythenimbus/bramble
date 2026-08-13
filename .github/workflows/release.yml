@@ -23,6 +23,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # setup-node reads `packageManager` from package.json and shells out to pnpm to prime a
+          # cache, which fails here because this job installs nothing and never sets pnpm up. The
+          # verifier is node builtins only, so there is no cache worth priming.
+          package-manager-cache: false
       - name: Assert the updater archive verifies against the app's public key
         env:
           GH_TOKEN: ${{ github.token }}
