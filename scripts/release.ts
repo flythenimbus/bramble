@@ -83,6 +83,13 @@ const version = bumpKind
 	? nextVersion(currentVersion(platform), bumpKind)
 	: rawVersion.replace(/^v/, "");
 
+// Every path but ios ends in `gh release create`, and finding gh missing or logged out there
+// means the store publish and the tag already happened. An installed gh is not enough.
+if (platform !== "ios") {
+	requireBins(["gh"], "docs/release-signing.md");
+	if (!ok("gh auth status")) fail("gh is not logged in; run `gh auth login`");
+}
+
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
 else if (platform === "ios") await releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") await releaseFirefox(version);
@@ -127,6 +134,9 @@ async function releaseExtension(target: string, version: string) {
 		fail(
 			`no Chrome Web Store signing key: set CWS_KEY_PEM, or provide ${cwsKeyAge} (override CWS_KEY_AGE). See docs/release-signing.md.`,
 		);
+	// primeCwsSecrets needs these, but it does not run until after the gate and the build.
+	if (!process.env.CWS_KEY_PEM || !process.env.CWS_SERVICE_ACCOUNT_JSON)
+		requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 
 	gate();
 
@@ -227,8 +237,7 @@ async function releaseFirefox(version: string) {
 			fail(
 				`no AMO credentials: set AMO_API_KEY + AMO_API_SECRET, or provide ${credsAge} (override AMO_CREDENTIALS_AGE). See docs/release-signing.md.`,
 			);
-		for (const bin of ["age", "age-plugin-yubikey"])
-			if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+		requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 	}
 
 	gate();
@@ -326,14 +335,12 @@ async function releaseAndroid(version: string, resume: boolean) {
 	const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "bramble";
 	const keyPassword =
 		process.env.ANDROID_KEY_PASSWORD ?? secretFromKeychain("bramble-android-key") ?? storePassword;
-	for (const bin of ["age", "age-plugin-yubikey"])
-		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 	// Native build toolchain, checked before the gate: core:build shells out to wasm-pack and
 	// ffi:build:android to cargo-ndk, and finding either missing after the release commit means a
 	// rewind for something `cargo install` fixes in a minute.
 	if (!resume)
-		for (const bin of ["wasm-pack", "cargo-ndk"])
-			if (!has(bin)) fail(`${bin} not found; see packages/platform-mobile/docs/development.md`);
+		requireBins(["wasm-pack", "cargo-ndk"], "packages/platform-mobile/docs/development.md");
 	const apksigner =
 		findBuildTool("apksigner") ??
 		fail("apksigner not found (Android SDK build-tools); see docs/release-signing.md");
@@ -661,8 +668,7 @@ async function releaseDesktop(version: string, universal: boolean) {
 			`no updater signing key: set TAURI_SIGNING_PRIVATE_KEY, or provide ${keyAge} (override DESKTOP_UPDATER_KEY_AGE). See docs/release-signing.md.`,
 		);
 	if (!process.env.TAURI_SIGNING_PRIVATE_KEY)
-		for (const bin of ["age", "age-plugin-yubikey"])
-			if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+		requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
@@ -821,8 +827,7 @@ function primeCwsSecrets(keyAge: string, saAge: string): () => void {
 	const haveSa = Boolean(process.env.CWS_SERVICE_ACCOUNT_JSON);
 	if (haveKey && haveSa) return () => {}; // both already plaintext (CI); nothing to decrypt
 
-	for (const bin of ["age", "age-plugin-yubikey"])
-		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
+	requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 
 	// 0700 scratch dir; the plaintext secrets never leave it and are wiped by the cleanup.
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-cws-secrets-"));
@@ -941,6 +946,46 @@ function has(bin: string) {
 	} catch {
 		return false;
 	}
+}
+
+function ok(cmd: string) {
+	try {
+		execSync(cmd, { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+// Report every missing tool at once: finding them one per run means a rebuild between each.
+// Declared inside the function: the callers run at module scope, before a top-level const
+// would initialize. age-plugin-yubikey has no apt package and its pcsc-sys build needs the
+// pcsclite headers; wasm-pack is pinned to ci.yml so the shipped wasm stays reproducible.
+function requireBins(bins: string[], doc: string) {
+	const install: Record<string, { darwin: string; linux: string }> = {
+		age: { darwin: "brew install age", linux: "sudo apt install age" },
+		"age-plugin-yubikey": {
+			darwin: "brew install age-plugin-yubikey",
+			linux:
+				"sudo apt install libpcsclite-dev pkg-config && cargo install age-plugin-yubikey --locked",
+		},
+		gh: { darwin: "brew install gh", linux: "sudo apt install gh" },
+		"wasm-pack": {
+			darwin: "cargo install wasm-pack --locked --version 0.13.1",
+			linux: "cargo install wasm-pack --locked --version 0.13.1",
+		},
+		"cargo-ndk": {
+			darwin: "cargo install cargo-ndk --locked",
+			linux: "cargo install cargo-ndk --locked",
+		},
+	};
+	const missing = bins.filter((b) => !has(b));
+	if (!missing.length) return;
+	const how = missing.map((b) => {
+		const hint = install[b]?.[process.platform === "darwin" ? "darwin" : "linux"];
+		return hint ? `  ${b}\n    ${hint}` : `  ${b}`;
+	});
+	fail(`missing required tools:\n${how.join("\n")}\nsee ${doc}`);
 }
 
 // Read a secret from the macOS login Keychain (encrypted at rest, unlocked at login). Returns

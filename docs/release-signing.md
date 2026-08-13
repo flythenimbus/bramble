@@ -22,9 +22,28 @@ under a new YubiKey. CWS only stores one public key and rotating it is slow
 
 Needs the YubiKey plugged in.
 
-```sh
-brew install age age-plugin-yubikey
+Every release also needs `gh`, logged in (`gh auth login`), and the tooling below.
+`pnpm run release` checks for all of it up front and prints the install command for
+your platform, so a missing tool never surfaces after the store publish and the tag.
 
+On Debian/Ubuntu, `age-plugin-yubikey` has no package and builds from source; its
+`pcsc-sys` dependency needs the pcsclite headers, and `pcscd` must be running for the
+key to enumerate:
+
+```sh
+sudo apt install age gh yubikey-manager libpcsclite-dev pkg-config
+cargo install age-plugin-yubikey --locked
+```
+
+On macOS:
+
+```sh
+brew install age age-plugin-yubikey gh ykman
+```
+
+Then, on either platform:
+
+```sh
 # 0. Newer YubiKeys (5.7+) ship an AES PIV management key; age-plugin-yubikey
 #    needs TDES. Switch it (PIN-protected, leaves existing slot keys intact).
 #    Press Enter to use the default current key; enter the PIN when asked.
