@@ -83,6 +83,20 @@ export async function seedExampleLogin(popup: Page) {
 	await expect(popup.getByText("Example Login")).toBeVisible();
 }
 
+/** Add a login for example.com carrying an authenticator key, through the popup's own UI. */
+export async function seedTotpLogin(popup: Page, name: string, key: string) {
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Add a new login/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill(name);
+	await popup.getByRole("button", { name: /Add URL/i }).click();
+	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
+	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
+	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
+	await popup.getByLabel("Authenticator key (TOTP)", { exact: true }).fill(key);
+	await popup.getByRole("button", { name: /Save Login/i }).click();
+	await expect(popup.getByText(name)).toBeVisible();
+}
+
 /** Seed one payment card. Cards are offered on any payment form, so it needs no URL. */
 export async function seedExampleCard(popup: Page) {
 	await popup.getByRole("button", { name: /Add New/i }).click();

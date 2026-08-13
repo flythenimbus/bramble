@@ -236,6 +236,27 @@ away before the prompt is shown, the next page picks the stash back up. The
 commit itself goes through the background, which writes directly to
 `chrome.storage.local` (headless, no gesture; see [storage.md](storage.md)).
 
+### Suppressing the browser's own dropdown, without blinding ourselves
+
+While the picker is anchored to a field it writes `autocomplete="off"` on it, so
+the browser's native dropdown doesn't render on top of ours, and restores the
+original the moment the anchor moves.
+
+That write is skipped for a field declaring `one-time-code`, because on a
+segmented widget that token is often the only thing marking the boxes, and
+detection's strongest rung is a query for it. Overwriting it took the anchor out
+of the model at the next re-parse (our own host insertion triggers one), so
+`currentTargetKind` came back null and the pick was refused: the dropdown opened,
+the row was there, and clicking it did nothing. Cloudflare's 2FA form is the case
+that showed it, and `e2e/extension/totp-segmented-fill.spec.ts` is what holds it.
+Nothing is lost by skipping: a desktop browser has no stored one-time code to
+offer, so there was no native dropdown to get out of the way of.
+
+The general rule the incident leaves behind: **do not write over an attribute
+detection reads**. The same hazard sits under `autocomplete="username"` on an
+identifier-first page, where the token can be the only signal; that one still
+suppresses, and would need the same treatment if it ever bites.
+
 ## UI isolation: extension-origin iframe and closed shadow DOM
 
 The **match dropdown** renders in a cross-origin **iframe** served from the

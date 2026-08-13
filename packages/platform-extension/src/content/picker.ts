@@ -41,13 +41,20 @@ let anchorField: HTMLInputElement | null = null;
 let suppressedField: HTMLInputElement | null = null;
 let suppressedAutocomplete: string | null = null;
 
+// A token we would blind ourselves by overwriting: `one-time-code` is the strongest rung of
+// OTP detection, and on a segmented widget it is often the ONLY thing marking the boxes (see
+// docs/field-detection.md). Writing over it on the anchor field takes that field out of the
+// model at the next re-parse, and the user's pick is then refused as landing on nothing:
+// which is what a real 2FA form did, with the dropdown opening and clicking it doing nothing.
+const LOAD_BEARING_TOKEN_RE = /\bone-time-code\b/i;
+
 // Route every anchorField change through here so the browser's native autofill is
 // suppressed on exactly the field Bramble is handling and restored the moment we release
 // it - otherwise the native dropdown renders on top of ours. The MutationObserver watches
 // childList/subtree only (not attributes), so this write never invalidates the field-model
-// cache or re-triggers detection. Best-effort: autocomplete="off" reliably suppresses
-// Firefox and generic Chrome autofill; Chrome's own password UI on a recognized login
-// field may persist.
+// cache directly; our own host insertion does, and the re-parse that follows reads whatever
+// is on the field then. Best-effort: autocomplete="off" reliably suppresses Firefox and
+// generic Chrome autofill; Chrome's own password UI on a recognized login field may persist.
 function setAnchorField(field: HTMLInputElement | null): void {
 	anchorField = field;
 	if (suppressedField && suppressedField !== field) {
@@ -57,8 +64,12 @@ function setAnchorField(field: HTMLInputElement | null): void {
 		suppressedAutocomplete = null;
 	}
 	if (field && field !== suppressedField) {
+		const declared = field.getAttribute("autocomplete");
+		// Nothing to gain and everything to lose: a browser has no stored one-time code to
+		// offer on a desktop, so there is no native dropdown here to get out of the way of.
+		if (declared && LOAD_BEARING_TOKEN_RE.test(declared)) return;
 		suppressedField = field;
-		suppressedAutocomplete = field.getAttribute("autocomplete");
+		suppressedAutocomplete = declared;
 		field.setAttribute("autocomplete", "off");
 	}
 }

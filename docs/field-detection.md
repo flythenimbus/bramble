@@ -110,6 +110,14 @@ underscore is a word character and `\b` fails. Android's `StructureParser.kt`
 holds its own copy of these heuristics and is **not** kept in sync
 automatically.
 
+Rung 1 is the strongest and also the most brittle, because it rests on a single
+attribute: anything that removes `one-time-code` from a box removes that box from
+the model. That included **us** for a while, since the picker wrote
+`autocomplete="off"` on the field it anchored to (see
+[autofill.md](autofill.md)). Worse, on a segmented widget the other boxes keep
+their tokens, so rung 1 still succeeds and the structural rungs that would have
+caught the whole run never run.
+
 Visibility is deliberately not filtered here, matching the rest of the module, so
 a hidden 2FA field on a login step is still found (see the skanetrafiken
 fixture). That is harmless: `kindOf` ranks OTP last, so login and card fields
