@@ -86,6 +86,24 @@ localized phrasing of "verification code" plus every untagged segmented widget.
 The corpus is now `content/detection.otp.dom.test.ts` — add rows there rather
 than editing the regex blind.
 
+A "single-character box" (`isSingleCharBox`) is a text-like input that takes one
+character, said with `maxlength="1"` **or** with a one-character `pattern`.
+Cloudflare's 2FA form is the reason for the second: none of its boxes carry a
+`maxlength` at all except the first, which takes `maxlength="6"` so an OS-level
+code autofill can drop the whole code into it. Each box declares its width as
+`pattern="\d{1}"` instead.
+
+`splitOtpFields` then divides what the ladder found into the **boxes** a code is
+typed across and the one field that holds it **whole**. Segmented widgets
+increasingly ship both: N visible boxes plus a visually-hidden input carrying the
+assembled code for the form (and for OS code autofill). That mirror answers the
+same `one-time-code` query as the boxes, so it used to be filled as if it were
+another box, receiving one character of the code, or the empty string past the
+end of it. On a widget that reads the mirror as its source of truth, that empty
+write resets the widget immediately after a correct fill, which is how
+Cloudflare's 2FA screen ended up reported as "autofill does nothing". How each is
+written is in [autofill.md](autofill.md).
+
 `OTP_HINT_RE` also carries localized terms, and bounds `otp`/`otc`/`totp` on
 letters rather than `\b` so they match inside `idTxtBx_SAOTCC_OTC`, where the
 underscore is a word character and `\b` fails. Android's `StructureParser.kt`
@@ -184,6 +202,12 @@ others). This locks in behaviour on real-world quirks: honeypots, off-screen
 hidden fields, missing `<form>` wrappers, custom component libraries, GitHub's
 tokenless `name="otp"` 2FA field, BMO's card-number-as-login, and invisible
 Turnstile that must not block autofill.
+
+`cloudflare-2fa` is the segmented-widget shape in full: six boxes with no
+`maxlength`, a hidden mirror, and `autocomplete="one-time-code"` on all seven.
+`content/fill.otp.dom.test.ts` fills it, and fills widget doubles that each
+accept a different write (a character at a time, the whole code, a paste, the
+mirror only).
 
 `skanetrafiken-login` is the counter-example worth keeping in mind: it was
 reported as a non-English detection failure (issue #46), but the site ships

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { otpInputs } from "./detection";
+import { otpInputs, splitOtpFields } from "./detection";
 
 // Corpus for issue #47. Before the structural rungs landed, only 4 of these
 // detected: the two autocomplete="one-time-code" shapes, GitHub's name="otp",
@@ -159,6 +159,13 @@ describe("otp: structural rungs (no readable hint at all)", () => {
 		expect(ids(boxes(4, 'type="text" maxlength="1"'))).toHaveLength(4);
 	});
 
+	// Cloudflare's 2FA form sets no maxlength on its boxes at all (bar the first,
+	// which takes maxlength=6 so an OS code autofill can drop the whole code in);
+	// each box declares its width with pattern="\d{1}" instead.
+	it("finds boxes that declare their width with a pattern", () => {
+		expect(ids(boxes(6, 'type="text" inputmode="numeric" pattern="\\d{1}"'))).toHaveLength(6);
+	});
+
 	it("ignores a run shorter than the minimum", () => {
 		// Two or three single-char boxes are more likely a split date or initials.
 		expect(ids(boxes(3, 'type="text" maxlength="1"'))).toEqual([]);
@@ -201,6 +208,49 @@ describe("otp: structural rungs (no readable hint at all)", () => {
 				'<label for="a">Postleitzahl</label><input id="a" type="tel" maxlength="5" inputmode="numeric">',
 			),
 		).toEqual([]);
+	});
+});
+
+describe("otp: boxes vs the field holding the whole code", () => {
+	function split(html: string) {
+		document.body.innerHTML = html;
+		const { boxes: b, whole } = splitOtpFields(otpInputs());
+		return { boxes: b.map((el) => el.id), whole: whole?.id ?? null };
+	}
+
+	it("keeps a segmented widget's hidden mirror out of the boxes", () => {
+		// Verbatim shape from Cloudflare's 2FA form: six boxes plus a
+		// visually-hidden input carrying the assembled code for the form. It
+		// answers the same one-time-code query, and filling it with one character
+		// of the code (or with nothing, past the end of it) blanks the widget.
+		const html =
+			`${boxes(6, 'type="text" autocomplete="one-time-code" pattern="\\d{1}"')}` +
+			'<input id="m" type="text" autocomplete="one-time-code" maxlength="6" pattern="\\d{6}" aria-hidden="true" tabindex="-1">';
+		expect(split(html)).toEqual({
+			boxes: ["d1", "d2", "d3", "d4", "d5", "d6"],
+			whole: "m",
+		});
+	});
+
+	it("reports no mirror when the widget is only boxes", () => {
+		const html = boxes(6, 'type="text" autocomplete="one-time-code" maxlength="1"');
+		expect(split(html).whole).toBeNull();
+	});
+
+	it("treats a lone field as the whole-code field", () => {
+		expect(split('<input id="a" autocomplete="one-time-code" type="text">')).toEqual({
+			boxes: [],
+			whole: "a",
+		});
+	});
+
+	it("does not call a single box a widget", () => {
+		// One box is a field we happened to detect, not something to spread a code
+		// across; it takes the code whole.
+		expect(split('<input id="a" autocomplete="one-time-code" type="text" maxlength="1">')).toEqual({
+			boxes: [],
+			whole: "a",
+		});
 	});
 });
 

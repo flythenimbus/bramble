@@ -23,6 +23,7 @@ import {
 	fillForm,
 	fillOtp,
 	fillPasswordFields,
+	isFilling,
 	submitFromField,
 } from "./fill";
 import { installFrameRelay, type RelayRect } from "./frame-relay";
@@ -762,6 +763,10 @@ function bootstrap(): void {
 	document.addEventListener(
 		"focusin",
 		(e) => {
+			// Filling a segmented OTP widget focuses each box in turn, and focus()
+			// fires a *trusted* focusin: without this the dropdown reopens on the last
+			// box we filled. Not the user's focus, so nothing here should react to it.
+			if (isFilling()) return;
 			const target = composedTarget(e);
 			if (e.isTrusted && !isPickerInteractionTarget(target)) cancelSubmit();
 			// Do not treat extension-picker iframe focus as page deactivation. A real focus

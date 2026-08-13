@@ -73,3 +73,8 @@ module-level concepts that name good seams.
   capture, picker) read the model instead of each re-scanning the DOM, and
   `candidateKind(el)` becomes a lookup against the model rather than a fresh scan.
   Stale references (elements no longer `isConnected`) are dropped on read.
+- **Segmented widget / mirror**: a one-time code split across N single-character
+  **boxes**, often alongside a visually-hidden **mirror** input holding the
+  assembled code for the form and for OS-level code autofill. The model keeps all
+  of them; `splitOtpFields` tells the boxes from the mirror at fill time, because
+  they are written to differently (see docs/autofill.md).

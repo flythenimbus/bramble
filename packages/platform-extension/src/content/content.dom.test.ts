@@ -117,6 +117,7 @@ vi.mock("./fill", () => ({
 	fillForm,
 	fillOtp: vi.fn(),
 	fillPasswordFields,
+	isFilling: () => false,
 	submitFromField,
 }));
 

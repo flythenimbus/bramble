@@ -1,17 +1,52 @@
-import { closestAcrossShadow, deriveMatcher, getFillableInputs, matchesField } from "./detection";
+import {
+	closestAcrossShadow,
+	deriveMatcher,
+	getFillableInputs,
+	matchesField,
+	splitOtpFields,
+} from "./detection";
 import { getPageFields } from "./field-model";
 import type { CustomFieldData, FillPayload } from "./types";
+
+const BUBBLES = { bubbles: true, composed: true } as const;
+const CANCELABLE = { ...BUBBLES, cancelable: true } as const;
 
 /** Sets an input's value via the native setter so frameworks (React) observe the change. */
 function setNativeValue(el: HTMLInputElement, value: string): void {
 	const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
 	desc?.set?.call(el, value);
-	el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/**
+ * Writes `value` into `el` the way the browser does for real input: `beforeinput`
+ * and `input` carry the inserted text and an `inputType`, and a single character
+ * also gets its key events. A bare `new Event("input")` carries none of that, and
+ * widgets that read `event.nativeEvent.data` rather than the field's value
+ * (segmented code boxes, most formatted inputs) ignore it entirely.
+ */
+function insertValue(el: HTMLInputElement, value: string, inputType: string): void {
+	const key = value.length === 1 ? value : null;
+	if (key) el.dispatchEvent(new KeyboardEvent("keydown", { key, ...CANCELABLE }));
+	el.dispatchEvent(new InputEvent("beforeinput", { data: value, inputType, ...CANCELABLE }));
+	setNativeValue(el, value);
+	el.dispatchEvent(new InputEvent("input", { data: value, inputType, ...BUBBLES }));
+	if (key) el.dispatchEvent(new KeyboardEvent("keyup", { key, ...CANCELABLE }));
 }
 
 function fillField(el: HTMLInputElement, value: string): void {
-	setNativeValue(el, value);
+	insertValue(el, value, "insertText");
 	el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+// Segmented widgets route keystrokes through whichever box has focus, so filling
+// one means focusing each box in turn, and focus() fires a *trusted* focusin,
+// which the dropdown would answer by reopening on the box we just filled.
+// content.ts checks this flag before treating a focus as the user's.
+let filling = false;
+
+/** True while autofill is writing into page fields, so its focus moves aren't read as the user's. */
+export function isFilling(): boolean {
+	return filling;
 }
 
 // Auto-fill skips these so clearing a field isn't re-clobbered by the next
@@ -164,23 +199,92 @@ export function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean 
 	return filled;
 }
 
-/** Fills the page's OTP field(s): whole code into a single field, one char per box for a segmented widget. */
+/** True when the boxes hold `code`, one character each and nothing past its end. */
+function boxesHold(boxes: HTMLInputElement[], code: string): boolean {
+	return boxes.every((el, i) => el.value === (code[i] ?? ""));
+}
+
+/** Empties every box, so a strategy that didn't take can't leave digits behind for the next one. */
+function clearBoxes(boxes: HTMLInputElement[]): void {
+	for (const el of boxes) {
+		if (!el.value) continue;
+		el.focus();
+		el.select();
+		el.dispatchEvent(
+			new InputEvent("beforeinput", { inputType: "deleteContentBackward", ...CANCELABLE }),
+		);
+		setNativeValue(el, "");
+		el.dispatchEvent(new InputEvent("input", { inputType: "deleteContentBackward", ...BUBBLES }));
+	}
+}
+
+/** Delivers the whole code as a clipboard paste, for widgets that only distribute one from `onPaste`. */
+function pasteInto(el: HTMLInputElement, code: string): void {
+	// Absent in jsdom, so the tests exercise the insertValue path below instead;
+	// it reaches every widget that reads the field rather than the clipboard.
+	if (typeof ClipboardEvent !== "function" || typeof DataTransfer !== "function") return;
+	const clipboardData = new DataTransfer();
+	clipboardData.setData("text/plain", code);
+	el.dispatchEvent(new ClipboardEvent("paste", { clipboardData, ...CANCELABLE }));
+}
+
+/**
+ * Fills a segmented widget: the whole code at once first, then a character per
+ * box, checking after each attempt what the boxes actually hold.
+ *
+ * Nothing in the markup says which one a widget accepts. Per-box typing is the
+ * general answer, but a widget that distributes a pasted code wants the code
+ * whole (Cloudflare's 2FA form puts maxlength=6 on the first box for exactly
+ * that), and one that only listens to its hidden mirror wants neither.
+ */
+function fillSegmented(
+	boxes: HTMLInputElement[],
+	whole: HTMLInputElement | null,
+	code: string,
+): void {
+	const first = boxes[0]!;
+	first.focus();
+	first.select();
+	pasteInto(first, code);
+	if (!boxesHold(boxes, code)) {
+		insertValue(first, code, "insertFromPaste");
+		first.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	if (!boxesHold(boxes, code)) {
+		clearBoxes(boxes);
+		boxes.forEach((el, i) => {
+			const ch = code[i];
+			if (!ch) return;
+			el.focus();
+			fillField(el, ch);
+		});
+	}
+	for (const el of boxes) autoFilledFields.add(el);
+	// The mirror last: it carries the assembled code for the form, and on widgets
+	// driven by it this is the write that makes the boxes show anything at all.
+	// Never a single character of the code, and never the empty string past its
+	// end: writing that is what used to blank the widget we had just filled.
+	if (whole) {
+		fillField(whole, code);
+		autoFilledFields.add(whole);
+	}
+}
+
+/** Fills the page's OTP field(s): the whole code into a single field, or across a segmented widget. */
 export function fillOtp(code: string | undefined): boolean {
 	if (!code) return false;
-	const fields = getPageFields().otp;
-	if (fields.length === 0) return false;
-	if (fields.length === 1) {
-		const el = fields[0]!;
-		fillField(el, code);
-		autoFilledFields.add(el);
+	const { boxes, whole } = splitOtpFields(getPageFields().otp);
+	filling = true;
+	try {
+		if (boxes.length >= 2) {
+			fillSegmented(boxes, whole, code);
+			return true;
+		}
+		if (!whole) return false;
+		fillField(whole, code);
+		autoFilledFields.add(whole);
 		return true;
+	} finally {
+		filling = false;
 	}
-	let filled = false;
-	fields.forEach((el, i) => {
-		const ch = code[i] ?? "";
-		fillField(el, ch);
-		autoFilledFields.add(el);
-		if (ch) filled = true;
-	});
-	return filled;
 }

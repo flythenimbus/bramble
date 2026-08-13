@@ -134,6 +134,33 @@ is suppressed when an interactive captcha is present (see
 TOTP codes are computed in the background; only the resulting digits are filled,
 never the seed. See [totp.md](totp.md).
 
+## Writing a value into a field
+
+`fill.ts` writes through the native `value` setter (so React's value tracker sees
+a change) and then dispatches the events real input produces: `beforeinput` and
+`input` as `InputEvent`s carrying the inserted text and an `inputType`, key
+events around a single character, and `change`. A bare `new Event("input")`
+carries none of that, and widgets that read `event.nativeEvent.data` rather than
+the field's value ignore it.
+
+**Segmented one-time-code widgets** get an extra ladder, because nothing in the
+markup says which write a given widget accepts. `fillOtp` tries the code whole
+in the first box (a `paste` event, then an `insertFromPaste`), then a character
+per box, **checking after each attempt what the boxes actually hold** and
+clearing them before falling through. A widget's own re-render overwrites
+anything it didn't understand, so reading the boxes back is a truthful test.
+
+Last comes the widget's hidden **mirror** input, if `splitOtpFields` found one:
+it holds the assembled code for the form, and on widgets driven by it that write
+is what makes the boxes show anything at all. It is never given a single
+character, and never the empty string past the end of the code. Doing that was
+the bug (see [field-detection.md](field-detection.md)).
+
+Filling a segmented widget means focusing each box in turn, and `focus()` fires a
+**trusted** `focusin`. `isFilling()` marks that window so the content script
+doesn't read our own focus moves as the user's and reopen the dropdown on the box
+it just filled.
+
 When the vault is locked, the query result still carries `hasPotentialMatch`
 (derived by checking known hostnames against the page's registrable domain
 without decrypting the index), enough to show a "locked, unlock to autofill" hint

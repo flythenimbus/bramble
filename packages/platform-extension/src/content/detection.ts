@@ -480,6 +480,11 @@ const SEGMENT_TYPES = new Set(["text", "tel", "number", ""]);
 // split date and product-key inputs use wider fields. Deliberately structural,
 // so it works on pages whose prose we can't read.
 const SEGMENTED_MIN_BOXES = 4;
+// A pattern admitting exactly one character: `\d{1}`, `[0-9]`, `.` and friends,
+// with optional anchors. Some widgets declare a box's width this way and never
+// set maxlength (Cloudflare's 2FA form even puts maxlength=6 on the FIRST box,
+// so an OS code autofill can drop the whole code into it).
+const ONE_CHAR_PATTERN_RE = /^\^?(\\d|\\w|\[[^\]]+\]|\.)(\{1\})?\$?$/;
 // Bounds for a code typed into one field. Below 4 is a CVV or a PIN, above 8 is
 // prose; both ends are also covered by OTP_NEGATIVE_RE and the card scan.
 const CODE_MIN_LEN = 4;
@@ -505,6 +510,16 @@ function isNumericEntry(el: HTMLInputElement): boolean {
 }
 
 /**
+ * True for one box of a segmented widget: a text-like input that takes a single
+ * character, said with `maxlength` or with a one-character `pattern`.
+ */
+export function isSingleCharBox(el: HTMLInputElement): boolean {
+	if (!SEGMENT_TYPES.has(el.type)) return false;
+	if (el.maxLength === 1) return true;
+	return ONE_CHAR_PATTERN_RE.test(el.getAttribute("pattern") ?? "");
+}
+
+/**
  * A segmented code widget found purely by shape: SEGMENTED_MIN_BOXES or more
  * single-character inputs sharing a parent. Language-independent, and the only
  * thing that finds these widgets when the site tags no box with a hint or an
@@ -513,7 +528,7 @@ function isNumericEntry(el: HTMLInputElement): boolean {
 function segmentedRun(doc: Document): HTMLInputElement[] {
 	const byParent = new Map<Element, HTMLInputElement[]>();
 	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
-		if (el.maxLength !== 1 || !SEGMENT_TYPES.has(el.type)) continue;
+		if (!isSingleCharBox(el)) continue;
 		if (OTP_NEGATIVE_RE.test(attrHint(el))) continue;
 		const parent = el.parentElement;
 		if (!parent) continue;
@@ -549,13 +564,40 @@ export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
 	const parent = seed.parentElement;
 	if (!parent) return [seed];
 	const siblings = Array.from(parent.querySelectorAll<HTMLInputElement>("input")).filter(
-		(el) =>
-			!el.readOnly &&
-			!el.disabled &&
-			el.maxLength === 1 &&
-			(el.type === "text" || el.type === "tel" || el.type === "number" || el.type === ""),
+		(el) => !el.readOnly && !el.disabled && isSingleCharBox(el),
 	);
 	return siblings.length >= 2 ? siblings : [seed];
+}
+
+/** How the detected OTP inputs divide up: per-character boxes, and a whole-code field. */
+export interface OtpTargets {
+	/** Single-character boxes in DOM order. Empty when the code goes in one field. */
+	boxes: HTMLInputElement[];
+	/** The field that takes the entire code: a lone OTP input, or a widget's mirror. */
+	whole: HTMLInputElement | null;
+}
+
+/**
+ * Split the detected OTP inputs into the boxes a code is typed across and the
+ * one field that holds it whole.
+ *
+ * Segmented widgets increasingly ship both: N visible boxes plus a
+ * visually-hidden input carrying the assembled code for the form and for the
+ * OS-level code autofill (Cloudflare's 2FA form, `detection.otp.dom.test.ts`).
+ * That mirror answers the same `one-time-code` query as the boxes, so without
+ * this split it gets a single character of the code, or the empty string past
+ * the end of it. That is how a fill which wrote all six digits correctly still
+ * left the widget blank.
+ */
+export function splitOtpFields(fields: HTMLInputElement[]): OtpTargets {
+	const boxes = fields.filter(isSingleCharBox);
+	// One box is not a widget: that's a lone field we happened to detect.
+	if (boxes.length < 2) return { boxes: [], whole: fields[0] ?? null };
+	const whole =
+		fields.find(
+			(el) => !boxes.includes(el) && (el.maxLength <= 0 || el.maxLength >= boxes.length),
+		) ?? null;
+	return { boxes, whole };
 }
 
 /**

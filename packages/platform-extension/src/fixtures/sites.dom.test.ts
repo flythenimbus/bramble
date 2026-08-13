@@ -10,6 +10,7 @@ import {
 	findNewPasswordOnChangeForm,
 	hasInteractiveCaptcha,
 	otpInputs,
+	splitOtpFields,
 } from "../content/detection";
 import { loadFixture } from "./load";
 
@@ -460,6 +461,43 @@ describe("github.com — 2FA (TOTP)", () => {
 		loadFixture("github-2fa");
 		expect(cardFieldsPresent(detectCardFields())).toBe(false);
 		expect(hasInteractiveCaptcha()).toBe(false);
+	});
+});
+
+describe("dash.cloudflare.com — 2FA (segmented widget + hidden mirror)", () => {
+	// Six boxes that declare their width with pattern="\d{1}" rather than
+	// maxlength, plus a visually-hidden input holding the assembled code. Every
+	// one of the seven carries `autocomplete="one-time-code"`, so the token rung
+	// returns all of them and it's splitOtpFields that has to tell the boxes from
+	// the mirror. Filling the mirror as if it were a seventh box wrote the empty
+	// string into the widget's own source of truth and blanked it.
+
+	it("finds all seven one-time-code inputs", () => {
+		loadFixture("cloudflare-2fa");
+		expect(otpInputs()).toHaveLength(7);
+	});
+
+	it("splits the six boxes from the mirror", () => {
+		loadFixture("cloudflare-2fa");
+		const { boxes, whole } = splitOtpFields(otpInputs());
+		expect(boxes).toHaveLength(6);
+		expect(whole?.id).toBe("base-ui-:rp:-hidden-input");
+	});
+
+	it("classifies a box as 'otp'", () => {
+		loadFixture("cloudflare-2fa");
+		const first = document.querySelector<HTMLInputElement>(
+			'[data-testid="two-factor-login-input-2fa-code"]',
+		)!;
+		expect(candidateKind(first)).toBe("otp");
+	});
+
+	it("finds no login or card fields on the 2FA step", () => {
+		loadFixture("cloudflare-2fa");
+		const { username, password } = detectLoginFields();
+		expect(username).toBeNull();
+		expect(password).toBeNull();
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
 	});
 });
 
