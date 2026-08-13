@@ -144,7 +144,6 @@ async function releaseExtension(target: string, version: string) {
 	if (bumped) writeFileSync(manifest, after);
 
 	try {
-		run("pnpm run wasm:build");
 		run("pnpm --filter @vault/platform-extension run bundle:chromium");
 		// Decrypt BOTH CWS secrets (signing key + service account) in one YubiKey session, then hand
 		// the plaintexts to sign/sign:cws via env so neither prompts for its own touch. Back-to-back
@@ -248,7 +247,6 @@ async function releaseFirefox(version: string) {
 	if (bumped) writeFileSync(MANIFEST, after);
 
 	try {
-		run("pnpm run wasm:build");
 		run("pnpm --filter @vault/platform-extension run bundle:firefox");
 		// AMO's addons-linter, run BEFORE signing. Signing uploads to AMO and consumes the
 		// version (AMO won't re-sign it), so catching a validation error here costs nothing:
@@ -857,6 +855,8 @@ function primeCwsSecrets(keyAge: string, saAge: string): () => void {
 // anything, so a tag never ships from a red tree. typecheck matters because the
 // bundlers strip types without checking them.
 function gate() {
+	// public/wasm is gitignored, and the tests below load it: a fresh clone has none.
+	run("pnpm run wasm:build");
 	try {
 		run("pnpm run ci:check");
 		run("pnpm run typecheck");

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { CryptoAdapter } from "@core/adapters/crypto";
 import { buildCryptoAdapter } from "@core/adapters/crypto-wasm";
 import type { StorageAdapter } from "@core/adapters/storage";
@@ -28,6 +28,8 @@ let wasm: VaultCrypto;
 let crypto: CryptoAdapter;
 
 beforeAll(async () => {
+	if (!existsSync(`${WASM_DIR}/vault_crypto.js`))
+		throw new Error(`no WASM at ${WASM_DIR} (gitignored artifact): run \`pnpm run wasm:build\``);
 	const mod = await import(`${WASM_DIR}/vault_crypto.js`);
 	await mod.default({ module_or_path: readFileSync(`${WASM_DIR}/vault_crypto_bg.wasm`) });
 	wasm = mod as unknown as VaultCrypto;
