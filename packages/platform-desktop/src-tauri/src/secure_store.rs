@@ -38,7 +38,7 @@ fn remember(account: &str, value: Option<String>) {
         .insert(account.to_string(), value);
 }
 
-fn read(account: &str) -> Res<Option<String>> {
+pub fn read(account: &str) -> Res<Option<String>> {
     if let Some(hit) = cached(account) {
         return Ok(hit);
     }
@@ -54,7 +54,7 @@ fn read(account: &str) -> Res<Option<String>> {
     Ok(found)
 }
 
-fn write(account: &str, value: &str) -> Res<()> {
+pub fn write(account: &str, value: &str) -> Res<()> {
     #[cfg(not(test))]
     entry(account)?
         .set_password(value)
@@ -63,7 +63,7 @@ fn write(account: &str, value: &str) -> Res<()> {
     Ok(())
 }
 
-fn erase(account: &str) -> Res<()> {
+pub fn erase(account: &str) -> Res<()> {
     #[cfg(not(test))]
     match entry(account)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => {}
@@ -77,19 +77,36 @@ fn erase(account: &str) -> Res<()> {
 //
 // Keys are namespaced by the caller (`sync.deviceKeypair`, ...). The webview never sees a
 // value it did not put there itself, and the vault's own keys are not reachable through here.
+//
+// Except for the reserved names below, which the webview may not touch at all: they hold
+// secrets this process owns and uses on the webview's behalf, so handing one back would defeat
+// the point of keeping it here. Backup provider credentials are the first (see `backup`): the
+// webview asks for a request to be SENT, never for the credential that authenticates it.
+
+const RESERVED: [&str; 1] = [crate::backup::CREDS_PREFIX];
+
+fn reserved(key: &str) -> Res<()> {
+    if RESERVED.iter().any(|p| key.starts_with(p)) {
+        return Err(format!("{key} is not readable or writable from here"));
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub fn secure_get(key: String) -> Res<Option<String>> {
+    reserved(&key)?;
     read(&key)
 }
 
 #[tauri::command]
 pub fn secure_set(key: String, value: String) -> Res<()> {
+    reserved(&key)?;
     write(&key, &value)
 }
 
 #[tauri::command]
 pub fn secure_delete(key: String) -> Res<()> {
+    reserved(&key)?;
     erase(&key)
 }
 
@@ -127,6 +144,25 @@ mod tests {
         write("sync.signingKey", "b").unwrap();
         assert_eq!(read("sync.deviceKeypair").unwrap(), Some("a".into()));
         assert_eq!(read("sync.signingKey").unwrap(), Some("b".into()));
+    }
+
+    // The webview can drive these commands, so a compromised one must not be able to ask for a
+    // backup provider credential: this process holds it precisely so that JS never can.
+    #[test]
+    fn reserved_accounts_are_refused_through_the_commands() {
+        let _g = setup();
+        write("backup.creds:v1:t1", "secret").unwrap();
+        assert!(secure_get("backup.creds:v1:t1".into()).is_err());
+        assert!(secure_set("backup.creds:v1:t1".into(), "other".into()).is_err());
+        assert!(secure_delete("backup.creds:v1:t1".into()).is_err());
+        // ...and the value is untouched by the refused writes.
+        assert_eq!(read("backup.creds:v1:t1").unwrap(), Some("secret".into()));
+        // Everything else still works.
+        assert!(secure_set("sync.deviceKeypair".into(), "kp".into()).is_ok());
+        assert_eq!(
+            secure_get("sync.deviceKeypair".into()).unwrap(),
+            Some("kp".into())
+        );
     }
 
     #[test]

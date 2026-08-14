@@ -2099,6 +2099,10 @@ msgstr "Rodando…"
 msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "A rotação falhou e nada foi alterado. Desbloqueie e tente novamente."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Runs on schedule even while Bramble is locked"
+msgstr "Executa conforme programado mesmo com o Bramble bloqueado"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Papai Noel"
@@ -2561,6 +2565,10 @@ msgstr "Isso não pode ser desfeito e a exclusão é sincronizada com seus outro
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This code has expired."
 msgstr "Este código expirou."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+msgstr "Este computador mantém essas credenciais em seu próprio chaveiro em vez de dentro do cofre, para que os backups programados continuem funcionando enquanto o Bramble estiver bloqueado. Seus backups permanecem criptografados com sua senha mestra de qualquer forma."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

@@ -71,9 +71,11 @@ export const CAPABILITIES = {
 	// Desktop webcams exist, but webview camera access is inconsistent across the three
 	// engines; pairing codes are pasted instead. See docs/desktop-port.md.
 	cameraScan: { extension: false, mobile: true, desktop: false },
-	// Not shipped on mobile yet. Desktop is the natural host (an always-on machine) but
-	// needs `connectBackupOAuth` on its shell adapter first.
-	cloudBackup: { extension: true, mobile: false, desktop: false },
+	// Not shipped on mobile yet. Desktop is the natural host and the only one that can keep a
+	// schedule: tray-resident, credentials in the OS store, so a vault's timer is honoured while
+	// it is locked. Its S3 + WebDAV tiles work; the one-click OAuth tile stays hidden there until
+	// the shell adapter grows `connectBackupOAuth`.
+	cloudBackup: { extension: true, mobile: false, desktop: true },
 	// Firefox's moz-extension origin is rejected as a WebAuthn RP; mobile has no `prf`.
 	// Desktop webviews have no usable WebAuthn at all, so it waits on a native CTAP path.
 	securityKeys: { chromium: true, firefox: false, android: false, ios: false, desktop: false },

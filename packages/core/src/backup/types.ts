@@ -15,6 +15,39 @@ export interface BackupTarget {
 	remove(key: string): Promise<void>;
 }
 
+export interface BackupHttpRequest {
+	method: string;
+	url: string;
+	headers?: Record<string, string>;
+	body?: Uint8Array;
+}
+
+/** Body arrives whole: provider responses are a listing or one vault blob, never a stream. */
+export interface BackupHttpResponse {
+	status: number;
+	ok: boolean;
+	body: Uint8Array;
+}
+
+/**
+ * How a provider's requests actually reach the network, and who authenticates them.
+ *
+ * The extension and mobile use the default: sign or authenticate in JS, then `fetch`. The
+ * desktop passes its own, which hands the request to Rust, because its webview cannot reach a
+ * provider at all (no S3 endpoint or WebDAV server grants CORS to `tauri://localhost`) and
+ * because its credentials live in the OS credential store, so the only place that CAN
+ * authenticate a request is the Rust side. A transport therefore owns the credentials: a
+ * provider builds an unauthenticated request and the transport adds the auth.
+ */
+export interface BackupTransport {
+	send(req: BackupHttpRequest): Promise<BackupHttpResponse>;
+}
+
+/** Decode a response body as text (XML listings, error documents). */
+export function responseText(res: BackupHttpResponse): string {
+	return new TextDecoder().decode(res.body);
+}
+
 export interface S3Config {
 	kind: "s3";
 	endpoint: string; // e.g. https://s3.us-west-002.backblazeb2.com

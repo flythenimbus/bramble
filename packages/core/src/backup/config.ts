@@ -22,9 +22,25 @@ export function isBackupTargetsKey(key: string): boolean {
 
 export type BackupFrequency = "off" | "daily" | "weekly" | "monthly";
 
+/** Secret credential fields sealed under the vault key. `wrap` is absent on every target
+ * written before the desktop's OS-held option existed, so absent reads as "vek". */
 export interface WrappedCreds {
+	wrap?: "vek";
 	iv: string;
 	ciphertext: string;
+}
+
+/** Not here at all: the desktop keeps this target's credentials in the OS credential store and
+ * authenticates in its own process, so nothing secret is in the config. See
+ * adapters/backup-creds.ts and docs/cloud-storage-backups.md. */
+export interface OsHeldCreds {
+	wrap: "os";
+}
+
+export type TargetCreds = WrappedCreds | OsHeldCreds;
+
+export function credsAreOsHeld(creds: TargetCreds): creds is OsHeldCreds {
+	return creds.wrap === "os";
 }
 
 /** One configured backup destination. The vault can have many, each on its own schedule. */
@@ -40,7 +56,7 @@ export interface BackupTargetConfig {
 	path?: string;
 	frequency: BackupFrequency;
 	keep: number;
-	creds: WrappedCreds; // VEK-wrapped JSON of the secret credential fields
+	creds: TargetCreds; // VEK-wrapped secret fields, or a marker that the OS holds them
 	/** Adopted from the pre-per-vault device-global list, so its snapshots keep the old shared
 	 * folder layout (see targetPrefixFor). Cleared once the user picks a folder for this vault. */
 	sharedFolder?: boolean;

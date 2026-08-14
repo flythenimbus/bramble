@@ -5,12 +5,14 @@ import { createRoot } from "react-dom/client";
 import "./styles/index.css";
 import "./styles/desktop.css";
 import { desktopAutofill } from "./adapters/autofill";
+import { desktopBackupCreds } from "./adapters/backup-creds";
 import { desktopClipboard } from "./adapters/clipboard";
 import { desktopCrypto } from "./adapters/crypto";
 import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { desktopStorage } from "./adapters/storage";
 import { onVaultStateChange } from "./adapters/vault-session";
+import { startBackupSchedule } from "./backup";
 import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 
@@ -22,6 +24,7 @@ const platform: Platform = {
 	shell: desktopShell,
 	clipboard: desktopClipboard,
 	pairing: desktopPairing,
+	backupCreds: desktopBackupCreds,
 	// biometric: Touch ID / Windows Hello is phase 1; nothing on Linux.
 	// exchange: iOS only.
 };
@@ -41,6 +44,11 @@ function Root() {
 
 	// Ongoing sync follows the lock state from here on: it starts on unlock and stops on lock.
 	useEffect(() => initRosterSync(), []);
+
+	// Scheduled backups, driven by the shell's tick. Deliberately not gated on the lock state:
+	// a sealed blob needs no key to copy and the credentials are the OS's, so a vault's schedule
+	// is kept whether or not it is unlocked. See ./backup.
+	useEffect(() => startBackupSchedule(), []);
 
 	// The one nudge about a new version. Nothing else tells anyone: this app is distributed as a
 	// GitHub release, so without it a fix reaches only the people who open Settings and look.

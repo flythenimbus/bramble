@@ -2099,6 +2099,10 @@ msgstr "Rotating…"
 msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "Rotation failed and nothing was changed. Unlock and try again."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Runs on schedule even while Bramble is locked"
+msgstr "Runs on schedule even while Bramble is locked"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Santa"
@@ -2561,6 +2565,10 @@ msgstr "This can't be undone, and the deletion syncs to your other devices."
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This code has expired."
 msgstr "This code has expired."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+msgstr "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

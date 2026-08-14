@@ -176,7 +176,7 @@ First-pass desktop capability values:
 |---|---|---|
 | `popOut` | `false` | It is already a window |
 | `cameraScan` | `false` (v1) | Webcam QR for pairing is plausible but webview camera access is inconsistent `[unverified]`; manual pairing-code paste covers it |
-| `cloudBackup` | `true` | `cloud-storage-backups.md:56` already assumes an always-on desktop as the backup host |
+| `cloudBackup` | `true` | **Shipped.** The only target that can keep a schedule: tray-resident, credentials in the OS credential store rather than under the vault key, so a vault's timer is honoured while it is locked. S3 + WebDAV; the one-click OAuth tile needs `connectBackupOAuth` first. See [cloud-storage-backups.md](cloud-storage-backups.md) |
 | `securityKeys` | `false` (v1) | Webview WebAuthn is unavailable/unreliable. Native CTAP is the follow-on, below |
 | `saveCapture` | `false` | The desktop app has no page to capture from; the extension keeps doing this |
 | `passkeyProviderToggle` | `false` (v1) | |
@@ -876,8 +876,11 @@ Each phase retires a risk.
 - **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join), host-side admission signing,
   and ongoing roster sync all run in the vault window on the webview's own WebRTC, with the
   crypto routed to Rust. Browsers on this machine sync over the native link instead of the relay,
-  on both ends. Device identity lives in the OS credential store. Outstanding: the tray residency
-  and scheduled backups that are the actual "hub" part, and a two-device test.
+  on both ends. Device identity lives in the OS credential store. Tray residency landed with
+  `lifetime`. **Scheduled backups landed**: a 5-minute tick in the shell drives the shared
+  `runScheduledBackups`, with target credentials in the OS credential store and the HTTP done in
+  Rust (the webview has no CORS grant for `tauri://localhost`), so every vault's schedule is kept
+  whether or not it is unlocked. Outstanding: autostart, and a two-device test.
 - **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
   and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

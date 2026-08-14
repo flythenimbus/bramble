@@ -346,6 +346,7 @@ function TargetCard({
 	def,
 	running,
 	folder,
+	whileLocked,
 	onFrequency,
 	onEdit,
 	onReconnect,
@@ -357,6 +358,9 @@ function TargetCard({
 	// The folder THIS vault's snapshots land in, shown only when several vaults exist: a target
 	// carried over from the old shared config writes to a derived folder, not the one in its form.
 	folder?: string;
+	// This target's credentials are the OS's, so its schedule is kept whether or not the vault is
+	// unlocked (desktop). Worth stating: everywhere else a backup waits for an unlock.
+	whileLocked?: boolean;
 	onFrequency: (f: BackupFrequency) => void;
 	onEdit: () => void;
 	// Present for OAuth targets: re-run sign-in in place instead of editing credential fields.
@@ -402,6 +406,11 @@ function TargetCard({
 						{folder && (
 							<p className="text-xs text-muted-foreground truncate" title={folder}>
 								<Trans>This vault's folder: {folder}</Trans>
+							</p>
+						)}
+						{whileLocked && (
+							<p className="text-xs text-muted-foreground truncate">
+								<Trans>Runs on schedule even while Bramble is locked</Trans>
 							</p>
 						)}
 					</div>
@@ -604,6 +613,7 @@ export function BackupSection() {
 									def={def}
 									running={runningIds.has(target.id)}
 									folder={backup.multiVault ? backup.folderFor(target) : undefined}
+									whileLocked={backup.runsWhileLocked(target)}
 									onFrequency={(f) => void backup.setFrequency(target.id, f)}
 									onEdit={() => editTarget(target)}
 									onReconnect={
@@ -699,6 +709,18 @@ export function BackupSection() {
 							<p className="text-xs text-muted-foreground">
 								<SetupHint def={modalDef} />
 							</p>
+
+							{/* Said before the credential is typed, not after: it goes somewhere different
+							    here, and that is what buys backups that run while the vault is locked. */}
+							{backup.credsInOsStore && (
+								<p className="text-xs text-muted-foreground">
+									<Trans>
+										This computer keeps these credentials in its own keychain rather than inside the
+										vault, so scheduled backups keep running while Bramble is locked. Your backups
+										stay encrypted with your master password either way.
+									</Trans>
+								</p>
+							)}
 
 							{modalDef.kind === "s3" ? (
 								<>

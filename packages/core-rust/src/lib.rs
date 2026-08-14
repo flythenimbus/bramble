@@ -49,6 +49,11 @@ mod passkey;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
 pub mod roster_sig;
+// SigV4 signing for S3-compatible backup targets. Only the desktop shell calls it (its webview
+// cannot reach a provider: no CORS grant for `tauri://localhost`), but it is declared
+// unconditionally so `cargo test` covers it in every feature set; nothing references it in the
+// wasm/ffi builds, so it links away. See docs/cloud-storage-backups.md.
+pub mod sigv4;
 // Build-time feature flags, generated from packages/core/src/flags.json (one source shared with TS).
 mod flags;
 // Sync handshake/nostr compile into every layer: device sync must run natively so it

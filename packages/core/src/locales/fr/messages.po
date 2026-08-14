@@ -2099,6 +2099,10 @@ msgstr "Renouvellement en cours…"
 msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "La rotation a échoué et rien n’a été modifié. Déverrouillez le coffre et réessayez."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Runs on schedule even while Bramble is locked"
+msgstr "S’exécute selon le calendrier même lorsque Bramble est verrouillé"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Père Noël"
@@ -2561,6 +2565,10 @@ msgstr "Cette action est irréversible, et la suppression se synchronisera avec 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This code has expired."
 msgstr "Ce code a expiré."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+msgstr "Cet ordinateur conserve ces identifiants dans son propre trousseau plutôt que dans le coffre, afin que les sauvegardes planifiées continuent de s’exécuter pendant que Bramble est verrouillé. Dans tous les cas, vos sauvegardes restent chiffrées avec votre mot de passe principal."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

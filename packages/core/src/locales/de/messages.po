@@ -2099,6 +2099,10 @@ msgstr "Rotieren…"
 msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "Die Rotation ist fehlgeschlagen und nichts wurde geändert. Entsperren Sie den Tresor und versuchen Sie es erneut."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Runs on schedule even while Bramble is locked"
+msgstr "Wird auch bei gesperrtem Bramble planmäßig ausgeführt"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Weihnachtsmann"
@@ -2561,6 +2565,10 @@ msgstr "Dies kann nicht rückgängig gemacht werden, und die Löschung wird mit 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "This code has expired."
 msgstr "Dieser Code ist abgelaufen."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+msgstr "Dieser Computer speichert diese Anmeldedaten im eigenen Schlüsselbund statt im Tresor, sodass geplante Backups auch bei gesperrtem Bramble weiter ausgeführt werden. Ihre Backups bleiben in jedem Fall mit Ihrem Master-Passwort verschlüsselt."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

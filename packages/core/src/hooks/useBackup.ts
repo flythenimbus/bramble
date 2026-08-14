@@ -7,7 +7,9 @@ import {
 	type BackupTargetConfig,
 	backupPrefix,
 	backupTargetsKeyFor,
+	credsAreOsHeld,
 	migrateBackupTargetsToVaults,
+	type TargetCreds,
 	targetPrefixFor,
 	toProviderConfig,
 } from "../backup/config";
@@ -30,6 +32,10 @@ export interface SaveTargetInput {
 
 const newId = () => globalThis.crypto.randomUUID();
 
+// Placeholder secret fields for a target whose credentials the OS holds: its transport
+// authenticates, so nothing reads these. toProviderConfig still needs the shape.
+const EMPTY_SECRETS = { username: "", password: "" } as const;
+
 /**
  * Manual cloud backup across the active vault's device-local targets, each with credentials
  * VEK-wrapped. Targets belong to one vault (`backup.targets:<vaultId>`), so configuring a
@@ -38,7 +44,7 @@ const newId = () => globalThis.crypto.randomUUID();
  * reaches any provider via host permissions. See docs/cloud-storage-backups.md.
  */
 export function useBackup() {
-	const { storage, crypto, shell } = usePlatform();
+	const { storage, crypto, shell, backupCreds } = usePlatform();
 	// Targets, credentials and snapshots all belong to the vault the user is currently in.
 	const { activeId, vaults, ready } = useVaultRegistry();
 	const vaultId = activeId ?? vaults[0]?.id;
@@ -47,6 +53,21 @@ export function useBackup() {
 	// undefined = still loading (or no vault resolved yet).
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
 	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
+	// Whether new credentials will go to the OS credential store rather than under the vault key,
+	// which is also what decides whether this device can back up while locked. The UI says so
+	// before the user types a credential, since it is a different place to trust.
+	const [credsInOsStore, setCredsInOsStore] = useState(false);
+
+	useEffect(() => {
+		let live = true;
+		void (async () => {
+			const ok = backupCreds ? await backupCreds.available().catch(() => false) : false;
+			if (live) setCredsInOsStore(ok);
+		})();
+		return () => {
+			live = false;
+		};
+	}, [backupCreds]);
 
 	// The migration is one-shot per storage, not per read: without this every live-refresh from a
 	// background write would re-probe the (by then absent) global keys.
@@ -85,19 +106,28 @@ export function useBackup() {
 		[storage, vaultId],
 	);
 
-	const wrap = useCallback(
-		async (secrets: BackupSecrets) => {
+	// Where a target's credentials go. The desktop hands them to the OS credential store, which
+	// is what lets its scheduler honour a vault's timer while that vault is locked; everywhere
+	// else (and on a desktop with no usable store) they are wrapped under the vault key, so a
+	// backup can only run while it is unlocked. See adapters/backup-creds.ts.
+	const sealFor = useCallback(
+		async (targetId: string, secrets: BackupSecrets): Promise<TargetCreds> => {
+			if (vaultId && backupCreds && (await backupCreds.available())) {
+				await backupCreds.save(vaultId, targetId, secrets);
+				return { wrap: "os" };
+			}
 			const w = await crypto.encryptWithVek(JSON.stringify(secrets));
 			return { iv: w.iv, ciphertext: w.ciphertext };
 		},
-		[crypto],
+		[crypto, backupCreds, vaultId],
 	);
 
 	const addTarget = useCallback(
 		async (input: SaveTargetInput) => {
 			if (!input.secrets) throw new Error("Enter your credentials.");
+			const id = newId();
 			const target: BackupTargetConfig = {
-				id: newId(),
+				id,
 				providerId: input.providerId,
 				provider: input.provider,
 				endpoint: input.endpoint,
@@ -108,11 +138,11 @@ export function useBackup() {
 				path: input.path,
 				frequency: "daily",
 				keep: input.keep ?? 30,
-				creds: await wrap(input.secrets),
+				creds: await sealFor(id, input.secrets),
 			};
 			await persist([...(targets ?? []), target]);
 		},
-		[wrap, persist, targets],
+		[sealFor, persist, targets],
 	);
 
 	const updateTarget = useCallback(
@@ -120,8 +150,8 @@ export function useBackup() {
 			const list = targets ?? [];
 			const cur = list.find((t) => t.id === id);
 			if (!cur) return;
-			// A new credential pair re-wraps; omitting them keeps the saved ones.
-			const creds = input.secrets ? await wrap(input.secrets) : cur.creds;
+			// A new credential pair re-seals; omitting them keeps the saved ones.
+			const creds = input.secrets ? await sealFor(id, input.secrets) : cur.creds;
 			const updated: BackupTargetConfig = {
 				...cur,
 				providerId: input.providerId,
@@ -143,7 +173,7 @@ export function useBackup() {
 			}
 			await persist(list.map((t) => (t.id === id ? updated : t)));
 		},
-		[wrap, persist, targets],
+		[sealFor, persist, targets],
 	);
 
 	const setFrequency = useCallback(
@@ -168,9 +198,11 @@ export function useBackup() {
 
 	const removeTarget = useCallback(
 		async (id: string) => {
+			// Erase the OS-held credential too, or it outlives the target that named it.
+			if (vaultId) await backupCreds?.remove(vaultId, id).catch(() => {});
 			await persist((targets ?? []).filter((t) => t.id !== id));
 		},
-		[persist, targets],
+		[persist, targets, backupCreds, vaultId],
 	);
 
 	// Back up to one target (id given) or all of them. Reads the vault blob once and
@@ -187,10 +219,18 @@ export function useBackup() {
 			const results = await Promise.all(
 				toRun.map(async (t) => {
 					try {
-						const secrets = JSON.parse(
-							await crypto.decryptWithVek(t.creds.iv, t.creds.ciphertext),
-						) as BackupSecrets;
-						const bt = createTarget(toProviderConfig(t, secrets));
+						// OS-held credentials never come back here: the platform's transport
+						// authenticates in its own process (desktop). Otherwise unwrap with the VEK.
+						const creds = t.creds;
+						const secrets = credsAreOsHeld(creds)
+							? EMPTY_SECRETS
+							: (JSON.parse(
+									await crypto.decryptWithVek(creds.iv, creds.ciphertext),
+								) as BackupSecrets);
+						const bt = createTarget(
+							toProviderConfig(t, secrets),
+							credsAreOsHeld(creds) && vaultId ? backupCreds?.transport(vaultId, t) : undefined,
+						);
 						const prefix = targetPrefixFor(t, vaultId ?? "", isDefault);
 						const r = await runBackup(bt, blob, { prefix, keep: t.keep });
 						return {
@@ -207,7 +247,7 @@ export function useBackup() {
 			await persist(applyBackupOutcomes(list, byId, Date.now()));
 			setRunningIds(new Set());
 		},
-		[targets, storage, crypto, persist, vaultId, isDefault],
+		[targets, storage, crypto, persist, vaultId, isDefault, backupCreds],
 	);
 
 	// The folder this vault's snapshots actually land in for a target, so the UI can show a
@@ -229,6 +269,10 @@ export function useBackup() {
 		folderFor,
 		/** Several vaults exist, so the UI should say which one these targets belong to. */
 		multiVault: vaults.length > 1,
+		/** New credentials go to the OS credential store, so backups run while locked (desktop). */
+		credsInOsStore,
+		/** Whether this target's credentials are the OS's, so it runs on schedule while locked. */
+		runsWhileLocked: (t: BackupTargetConfig) => credsAreOsHeld(t.creds),
 		// Whether this platform can run the OAuth connect at all (extension yes, mobile no).
 		oauthAvailable: Boolean(shell.connectBackupOAuth),
 	};

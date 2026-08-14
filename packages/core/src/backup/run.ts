@@ -2,6 +2,7 @@ import {
 	applyBackupOutcomes,
 	type BackupSecrets,
 	type BackupTargetConfig,
+	credsAreOsHeld,
 	type WrappedCreds,
 } from "./config";
 import { isDue, selectDueTargets } from "./schedule";
@@ -28,13 +29,15 @@ export interface ScheduledBackupDeps {
 	/** One vault's fingerprint, so an unchanged vault skips re-upload. */
 	hashVault(vault: VaultBackup): Promise<string>;
 	/** Unwrap a target's credentials, or null when no resident VEK opens them (that vault is
-	 * locked). Null is a skip, not a failure: nothing is wrong, the run just can't happen yet. */
+	 * locked). Null is a skip, not a failure: nothing is wrong, the run just can't happen yet.
+	 * Not called at all for a target whose credentials the OS holds (desktop). */
 	decryptSecrets(vaultId: string, creds: WrappedCreds): Promise<BackupSecrets | null>;
-	/** Upload one vault's blob to one of its targets. */
+	/** Upload one vault's blob to one of its targets. `secrets` is null when the platform holds
+	 * them outside the vault, in which case its transport authenticates instead. */
 	upload(
 		vaultId: string,
 		target: BackupTargetConfig,
-		secrets: BackupSecrets,
+		secrets: BackupSecrets | null,
 		vault: VaultBackup,
 	): Promise<void>;
 }
@@ -73,10 +76,15 @@ export async function runScheduledBackups(
 		// Sequential: callers back a shared crypto host whose key injection can't race.
 		for (const t of toRun) {
 			try {
-				const secrets = await deps.decryptSecrets(vault.id, t.creds);
-				if (secrets === null) {
-					result.skipped += 1;
-					continue;
+				// OS-held credentials (desktop) need no vault key, which is what lets a locked
+				// vault still meet its schedule there; everywhere else the VEK has to open them.
+				let secrets: BackupSecrets | null = null;
+				if (!credsAreOsHeld(t.creds)) {
+					secrets = await deps.decryptSecrets(vault.id, t.creds);
+					if (secrets === null) {
+						result.skipped += 1;
+						continue;
+					}
 				}
 				await deps.upload(vault.id, t, secrets, vault);
 				outcome.set(t.id, { hash });

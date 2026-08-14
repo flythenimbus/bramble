@@ -5,9 +5,12 @@ const TARGETS: Target[] = ["chromium", "firefox", "android", "ios"];
 
 describe("can()", () => {
 	it("resolves an { extension, mobile } capability by surface", () => {
-		// `cloudBackup` is extension-only.
+		// `cloudBackup`: the extension and the desktop, not mobile. Desktop is the one that can
+		// keep a schedule (tray-resident, credentials in the OS store, so a locked vault still
+		// backs up); mobile has no background scheduler at all.
 		expect(can("cloudBackup", "chromium")).toBe(true);
 		expect(can("cloudBackup", "firefox")).toBe(true);
+		expect(can("cloudBackup", "desktop")).toBe(true);
 		expect(can("cloudBackup", "android")).toBe(false);
 		expect(can("cloudBackup", "ios")).toBe(false);
 	});

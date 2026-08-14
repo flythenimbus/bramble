@@ -46,6 +46,16 @@ tauri-plugin-global-shortcut = "2.3.2"
 sha2 = "0.10.9"
 getrandom = "0.3.4"
 base64 = "0.23.1"
+# Backup uploads run here, not in the webview: no S3 endpoint or WebDAV server grants CORS to
+# `tauri://localhost`, and the credentials live in the OS credential store on this side. Already
+# in the tree via the updater plugin; rustls keeps TLS uniform across the three platforms.
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "http2",
+    "system-proxy",
+] }
+# One formatted timestamp: SigV4's `YYYYMMDDTHHMMSSZ`. Already in the tree via tauri.
+chrono = "0.4"
 # Updating the app in place. Desktop-gated as the plugin's own docs show, so a future mobile
 # target does not try to build an updater that has no meaning there.
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

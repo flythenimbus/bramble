@@ -178,6 +178,9 @@ Opportunistic, per platform:
   `BGTaskScheduler`, Android `WorkManager`, the latter pure AndroidX and
   compatible with the no-Google-Play constraint) is a later stretch, OS-throttled
   and never guaranteed.
+- **Desktop:** a timer in the Rust shell, every 5 minutes, and it is not
+  unlock-gated. See [Desktop: the one platform that can keep a
+  schedule](#desktop-the-one-platform-that-can-keep-a-schedule).
 
 ### Back up now
 
@@ -225,6 +228,90 @@ so run `pnpm i18n:extract` after wiring it):
 
 Mobile swaps "unlock the extension" and "open Bramble on this device" for "open
 the app".
+
+## Desktop: the one platform that can keep a schedule
+
+Everything above describes best-effort, unlock-gated backups, because on a
+browser extension that is the only honest promise. The desktop app is different
+in three ways that compound, and together they make a *schedule* mean what it
+says. It is the only target where "daily" is actually daily.
+
+**1. The process outlives the window.** Closing the vault window hides it and a
+tray icon stays (`lifetime.rs`), so the app is resident for as long as the
+machine is on and the user has launched it.
+
+**2. Nothing a backup needs requires the vault key.** The sealed blob is readable
+while locked (as everywhere), and on desktop the *credentials* are not
+VEK-wrapped either: they live in the OS credential store. So a run needs no
+unlock at all, and each vault's timer is evaluated on its own whether or not
+anything is unlocked.
+
+**3. The requests have to leave from Rust anyway.** The webview's origin is
+`tauri://localhost`, and no S3 endpoint or WebDAV server grants it CORS, so a
+`fetch` there fails before reaching the network. Since the request is made in
+the shell regardless, the credential has no reason to travel back to JavaScript.
+
+### How it is built
+
+- **Credentials:** one credential-store item per target, at
+  `backup.creds:<vaultId>:<targetId>` (`backup.rs`), holding the same JSON the
+  other platforms VEK-wrap. `secure_store` refuses that prefix through its
+  generic `secure_get`/`secure_set`/`secure_delete` commands, so a compromised
+  webview cannot read one back: it can ask for a request to be *sent*, never for
+  the secret that authenticates it. The target's `creds` field is then just
+  `{ wrap: "os" }`; `{ wrap: "vek" }` (or an absent `wrap`, which every existing
+  target has) keeps the old meaning.
+- **Transport:** `backup_send` performs the request with the auth injected in
+  Rust: SigV4 via the shared core (`vault-crypto::sigv4`, pinned to the same
+  vectors as the TS signer) or an `Authorization: Basic` header for WebDAV. The
+  provider clients in `@core/backup` are unchanged apart from taking a
+  `BackupTransport`, so object naming and keep-N retention stay single-sourced
+  across every platform.
+- **Schedule:** a thread in the shell emits `backup://tick` every 5 minutes, and
+  the main window runs the same `runScheduledBackups` the extension does. The
+  tick is in Rust because this window is usually hidden and a hidden webview's
+  timers are throttled.
+- **Fallback:** where the credential store does not answer (a Linux session with
+  no Secret Service), `backup_creds_available` returns false, credentials are
+  VEK-wrapped as everywhere else, and backups go back to running only while that
+  vault is unlocked. Same code path, one fewer capability.
+
+### The trade, stated plainly
+
+Backup credentials on desktop are protected by the OS account rather than by the
+master password. Code already running as the user, past the credential store's
+ACL, can use them, and what they reach is the bucket: read, overwrite, delete.
+It cannot read a vault, because the backups are ciphertext sealed by the master
+password, and it does not get the VEK.
+
+That is proportionate here and not on the extension, for one concrete reason: an
+extension has no OS-mediated secret store, so its "device key" would be a plain
+file in the browser profile. The desktop has a real one, and this app already
+trusts it with strictly more powerful secrets, the sync device identity (the
+Noise static key and the roster-signing seed). The alternative is worse than the
+risk: an unlock-gated schedule on an always-on machine means a vault the user
+rarely opens is effectively never backed up, and a backup that does not run
+protects nobody.
+
+Two things keep it honest. The Settings form says where the credentials go
+*before* the user types them, and each target card says whether it runs while
+locked. And the recommendation, for anyone who wants the credential to be weak
+by construction, is a provider-side scope: an S3 key restricted to the backup
+prefix, or Dropbox's app-folder token.
+
+### Not done yet
+
+- **Autostart.** "Runs as long as the computer is on" holds only once the app is
+  launched. A login item (`tauri-plugin-autostart`) with a Settings toggle, off
+  by default, is the missing piece and is deliberately separate work.
+- **A "back up while locked" opt-out.** Currently implicit: a desktop with a
+  working credential store uses it. A real toggle has to answer what happens to
+  credentials already in the store when it is turned off (they cannot be
+  re-wrapped, because Rust never hands them back), so the honest version erases
+  them and asks for them again.
+- **Dropbox on desktop.** The OAuth connect is extension-only
+  (`shell.connectBackupOAuth`), so the desktop shows the S3 and WebDAV tiles and
+  hides one-click sign-in.
 
 ## Target these two adapters first
 

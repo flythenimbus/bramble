@@ -4,6 +4,7 @@
 //! the VEK (see `crypto`), the vault files (see `storage`), and later the sync hub, the
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
+mod backup;
 mod crypto;
 mod index_store;
 mod lifetime;
@@ -94,6 +95,10 @@ pub fn run() {
             // path to the proxy, so an app update or a move silently breaks every browser.
             manifest::refresh();
 
+            // The backup schedule. Runs from here, not from a JS timer, because the main window
+            // is usually hidden and a hidden webview's timers are throttled. See `backup`.
+            backup::start_ticker(app.handle().clone());
+
             // The browser proxy's end of the pipe. Bound at startup rather than on first
             // pairing: an extension that is already paired reconnects whenever its browser
             // starts, without the user doing anything.
@@ -181,6 +186,10 @@ pub fn run() {
             secure_store::secure_get,
             secure_store::secure_set,
             secure_store::secure_delete,
+            backup::backup_creds_available,
+            backup::backup_creds_save,
+            backup::backup_creds_remove,
+            backup::backup_send,
             sync_crypto::sync_handshake_generate_keypair,
             sync_crypto::sync_handshake_start_initiator,
             sync_crypto::sync_handshake_start_responder,

@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from "react";
 import type { AutofillAdapter } from "../adapters/autofill";
+import type { BackupCredentialsAdapter } from "../adapters/backup-creds";
 import type { BiometricUnlock } from "../adapters/biometric";
 import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
@@ -27,6 +28,9 @@ export interface Platform {
 	pairing?: PairingAdapter;
 	/** The other end of `pairing`: linking this browser to the desktop app. Extension only. */
 	desktopLink?: DesktopLinkAdapter;
+	/** Backup credentials in the OS credential store, and the transport that uses them. Desktop
+	 * only; elsewhere credentials stay VEK-wrapped and backups are unlock-gated. */
+	backupCreds?: BackupCredentialsAdapter;
 }
 
 const PlatformContext = createContext<Platform | null>(null);

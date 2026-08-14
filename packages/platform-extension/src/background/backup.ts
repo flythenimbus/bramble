@@ -135,6 +135,9 @@ export async function runDueBackups(
 				},
 				upload: async (_vaultId, t, secrets, vault) => {
 					if (!sessionCurrent()) throw new Error("vault session changed");
+					// Null means the platform holds the credentials outside the vault, which only
+					// the desktop does; every target here is VEK-wrapped, so this cannot be null.
+					if (secrets === null) throw new Error("no credentials for this target");
 					const target = createTarget(toProviderConfig(t, secrets));
 					await runBackup(target, vault.blob, {
 						prefix: targetPrefixFor(t, vault.id, vault.isDefault),

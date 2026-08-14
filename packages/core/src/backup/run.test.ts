@@ -125,6 +125,21 @@ describe("runScheduledBackups", () => {
 		expect(tb?.lastBackupAt).toBe(111); // still due
 	});
 
+	// The desktop keeps credentials in the OS credential store, so a run needs no vault key at
+	// all: that is what lets a locked vault still meet its schedule there.
+	it("uploads a target whose credentials the OS holds without decrypting anything", async () => {
+		const h = harness({
+			v1: [target("a", "daily", { lastVaultHash: "OLD", creds: { wrap: "os" } })],
+		});
+		h.deps.decryptSecrets = async () => {
+			throw new Error("must not be asked to decrypt an OS-held credential");
+		};
+		const res = await runScheduledBackups(h.deps, NOW);
+		expect(h.uploaded.map((u) => u.id)).toEqual(["a"]);
+		expect(res.succeeded).toEqual([{ vaultId: "v1", id: "a" }]);
+		expect(h.current("v1")[0]?.lastBackupAt).toBe(NOW);
+	});
+
 	it("does nothing when no target is due", async () => {
 		const h = harness({
 			v1: [
