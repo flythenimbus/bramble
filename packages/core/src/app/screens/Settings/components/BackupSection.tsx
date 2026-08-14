@@ -358,8 +358,8 @@ function TargetCard({
 	// The folder THIS vault's snapshots land in, shown only when several vaults exist: a target
 	// carried over from the old shared config writes to a derived folder, not the one in its form.
 	folder?: string;
-	// This target's credentials are the OS's, so its schedule is kept whether or not the vault is
-	// unlocked (desktop). Worth stating: everywhere else a backup waits for an unlock.
+	// Whether this target's schedule is kept while the vault is locked. Undefined on the platforms
+	// where the answer is always "no" and saying so would be noise (the extension, mobile).
 	whileLocked?: boolean;
 	onFrequency: (f: BackupFrequency) => void;
 	onEdit: () => void;
@@ -408,9 +408,15 @@ function TargetCard({
 								<Trans>This vault's folder: {folder}</Trans>
 							</p>
 						)}
-						{whileLocked && (
+						{/* Behaviour, not mechanism: where the credential lives is our decision, and naming
+						    the store would only invite a judgement nobody can make from here. */}
+						{whileLocked !== undefined && (
 							<p className="text-xs text-muted-foreground truncate">
-								<Trans>Runs on schedule even while Bramble is locked</Trans>
+								{whileLocked ? (
+									<Trans>Backs up on schedule</Trans>
+								) : (
+									<Trans>Backs up when you unlock this vault</Trans>
+								)}
 							</p>
 						)}
 					</div>
@@ -589,6 +595,17 @@ export function BackupSection() {
 					</Trans>
 				</p>
 			)}
+			{/* A remedy, not a warning: this is one package away for almost everyone who sees it, and
+			    the alternative is backups that quietly only happen when the vault is open. */}
+			{backup.noStore && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>
+						Backups on this computer run when you unlock a vault, because this session has no
+						keyring to keep the connection details in. Starting GNOME Keyring or KWallet, or turning
+						on KeePassXC's Secret Service integration, lets them run on schedule instead.
+					</Trans>
+				</p>
+			)}
 			{targets === undefined ? null : targets.length === 0 ? (
 				<>
 					<p className="text-sm text-muted-foreground">
@@ -613,7 +630,10 @@ export function BackupSection() {
 									def={def}
 									running={runningIds.has(target.id)}
 									folder={backup.multiVault ? backup.folderFor(target) : undefined}
-									whileLocked={backup.runsWhileLocked(target)}
+									// Only where a schedule can be kept at all is the distinction worth drawing.
+									whileLocked={
+										backup.unattended || backup.noStore ? backup.runsWhileLocked(target) : undefined
+									}
 									onFrequency={(f) => void backup.setFrequency(target.id, f)}
 									onEdit={() => editTarget(target)}
 									onReconnect={
@@ -709,18 +729,6 @@ export function BackupSection() {
 							<p className="text-xs text-muted-foreground">
 								<SetupHint def={modalDef} />
 							</p>
-
-							{/* Said before the credential is typed, not after: it goes somewhere different
-							    here, and that is what buys backups that run while the vault is locked. */}
-							{backup.credsInOsStore && (
-								<p className="text-xs text-muted-foreground">
-									<Trans>
-										This computer keeps these credentials in its own keychain rather than inside the
-										vault, so scheduled backups keep running while Bramble is locked. Your backups
-										stay encrypted with your master password either way.
-									</Trans>
-								</p>
-							)}
 
 							{modalDef.kind === "s3" ? (
 								<>

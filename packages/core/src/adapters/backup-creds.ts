@@ -20,11 +20,16 @@ import type { BackupTransport } from "../backup/types";
  */
 export interface BackupCredentialsAdapter {
 	/**
-	 * Whether the OS credential store can actually be used right now (a Linux session with no
-	 * Secret Service cannot). False means the caller falls back to VEK-wrapped credentials and
-	 * unlock-gated backups, which is how every other platform works.
+	 * Whether credentials can be kept outside the vault here, and therefore whether a schedule can
+	 * be kept while the vault is locked. False means the caller falls back to VEK-wrapped
+	 * credentials and unlock-gated backups, which is how every other platform works.
+	 *
+	 * Which store answers is not exposed, and not a choice: the platform climbs its own ladder
+	 * (see the desktop's `secure_store::tier`) and reports only the consequence, because the
+	 * mechanism is not something a user can weigh. `reason` exists so the UI can offer the remedy
+	 * for the one case that has one.
 	 */
-	available(): Promise<boolean>;
+	status(): Promise<{ unattended: boolean; reason?: "no-credential-store" }>;
 	/**
 	 * Store one target's secret fields, pinned to `origin` (`scheme://host[:port]`, from the
 	 * endpoint or server URL the user configured). The pin is the load-bearing part: this side

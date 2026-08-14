@@ -186,7 +186,7 @@ pub fn run() {
             secure_store::secure_get,
             secure_store::secure_set,
             secure_store::secure_delete,
-            backup::backup_creds_available,
+            backup::backup_creds_tier,
             backup::backup_creds_save,
             backup::backup_creds_remove,
             backup::backup_send,

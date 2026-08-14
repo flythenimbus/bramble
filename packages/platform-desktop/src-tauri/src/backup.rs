@@ -33,9 +33,6 @@ type Res<T> = Result<T, String>;
 /// Credential-store accounts owned by this module. `secure_store` refuses these through its
 /// generic commands, so the webview can neither read them back nor overwrite them.
 pub const CREDS_PREFIX: &str = "backup.creds:";
-/// A name that is never written. Reading it tells us whether the store answers at all.
-const PROBE: &str = "backup.creds:.probe";
-
 fn account(vault_id: &str, target_id: &str) -> String {
     format!("{CREDS_PREFIX}{vault_id}:{target_id}")
 }
@@ -295,12 +292,11 @@ pub fn start_ticker(app: tauri::AppHandle) {
 
 // ---- commands ----
 
-/// Whether the OS credential store answers. A Linux session with no Secret Service does not, and
-/// the caller then falls back to vault-key-wrapped credentials and unlock-gated backups, which is
-/// how every other platform works. Reads a name that is never written, so this creates nothing.
+/// Which credential store this machine offers, and therefore whether a backup can run while the
+/// vault is locked. The caller turns it into a statement about behaviour, never into a question.
 #[tauri::command]
-pub fn backup_creds_available() -> bool {
-    secure_store::read(PROBE).is_ok()
+pub fn backup_creds_tier() -> secure_store::Tier {
+    secure_store::tier()
 }
 
 /// Store one target's secret fields, pinned to the origin they belong to. `origin` comes from the

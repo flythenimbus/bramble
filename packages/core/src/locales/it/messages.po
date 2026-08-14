@@ -275,6 +275,14 @@ msgid "Backing up…"
 msgstr "Backup in corso…"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up on schedule"
+msgstr "Backup pianificato"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up when you unlock this vault"
+msgstr "Backup allo sblocco di questo archivio"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backup folder (optional)"
 msgstr "Cartella di backup (opzionale)"
 
@@ -289,6 +297,10 @@ msgstr "Backup"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
 msgstr "I backup vengono eseguiti al meglio, non in un orario fisso. Ogni destinazione esegue il backup al massimo con la frequenza da Lei scelta, la volta successiva in cui sblocca Bramble dopo la scadenza; pertanto la frequenza effettiva dipende da quanto spesso apre l'app su questo dispositivo. I caveau invariati vengono saltati."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups on this computer run when you unlock a vault, because this session has no keyring to keep the connection details in. Starting GNOME Keyring or KWallet, or turning on KeePassXC's Secret Service integration, lets them run on schedule instead."
+msgstr "I backup su questo computer vengono eseguiti quando si sblocca un archivio, perché questa sessione non dispone di un portachiavi in cui conservare i dettagli di connessione. Avviare GNOME Keyring o KWallet, oppure attivare l'integrazione Secret Service di KeePassXC, consente invece di eseguirli secondo la pianificazione."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups to keep"
@@ -2100,8 +2112,8 @@ msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "La rotazione non è riuscita, nessuna modifica è stata apportata. Sblocchi e riprovi."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Runs on schedule even while Bramble is locked"
-msgstr "Viene eseguito come pianificato anche quando Bramble è bloccato"
+#~ msgid "Runs on schedule even while Bramble is locked"
+#~ msgstr "Viene eseguito come pianificato anche quando Bramble è bloccato"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
@@ -2567,8 +2579,8 @@ msgid "This code has expired."
 msgstr "Questo codice è scaduto."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
-msgstr "Questo computer conserva queste credenziali nel proprio portachiavi anziché nella cassaforte, quindi i backup pianificati continuano a essere eseguiti anche quando Bramble è bloccato. I Suoi backup restano cifrati con la Sua password principale in entrambi i casi."
+#~ msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+#~ msgstr "Questo computer conserva queste credenziali nel proprio portachiavi anziché nella cassaforte, quindi i backup pianificati continuano a essere eseguiti anche quando Bramble è bloccato. I Suoi backup restano cifrati con la Sua password principale in entrambi i casi."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

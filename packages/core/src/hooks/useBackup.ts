@@ -13,6 +13,7 @@ import {
 	type TargetCreds,
 	targetPrefixFor,
 	toProviderConfig,
+	type WrappedCreds,
 } from "../backup/config";
 import type { OAuthProviderId } from "../backup/oauth";
 import { usePlatform } from "../context/PlatformContext";
@@ -38,8 +39,12 @@ const newId = () => globalThis.crypto.randomUUID();
 const EMPTY_SECRETS = { username: "", password: "" } as const;
 
 /** The single origin a target's credentials belong to, or null when it has no usable one. */
-function originOf(input: SaveTargetInput): string | null {
-	const raw = input.provider === "s3" ? input.endpoint : input.serverUrl;
+function originOf(t: {
+	provider: BackupTargetConfig["provider"];
+	endpoint?: string;
+	serverUrl?: string;
+}): string | null {
+	const raw = t.provider === "s3" ? t.endpoint : t.serverUrl;
 	try {
 		return raw ? new URL(raw).origin : null;
 	} catch {
@@ -64,16 +69,21 @@ export function useBackup() {
 	// undefined = still loading (or no vault resolved yet).
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
 	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
-	// Whether new credentials will go to the OS credential store rather than under the vault key,
-	// which is also what decides whether this device can back up while locked. The UI says so
-	// before the user types a credential, since it is a different place to trust.
-	const [credsInOsStore, setCredsInOsStore] = useState(false);
+	// Whether this device can keep a schedule while the vault is locked. Not a setting and not a
+	// question: the platform picks the best store it has, and this is only the consequence, which
+	// the UI states as behaviour. `noStore` is the one case with a remedy worth offering.
+	const [unattended, setUnattended] = useState(false);
+	const [noStore, setNoStore] = useState(false);
 
 	useEffect(() => {
 		let live = true;
 		void (async () => {
-			const ok = backupCreds ? await backupCreds.available().catch(() => false) : false;
-			if (live) setCredsInOsStore(ok);
+			const status = backupCreds
+				? await backupCreds.status().catch(() => ({ unattended: false }))
+				: { unattended: false };
+			if (!live) return;
+			setUnattended(status.unattended);
+			setNoStore(Boolean(backupCreds) && !status.unattended);
 		})();
 		return () => {
 			live = false;
@@ -98,6 +108,57 @@ export function useBackup() {
 		void reload();
 	}, [reload]);
 
+	const persist = useCallback(
+		async (next: BackupTargetConfig[]) => {
+			if (!vaultId) return;
+			await storage.setMeta(backupTargetsKeyFor(vaultId), next);
+			setTargets(next);
+		},
+		[storage, vaultId],
+	);
+
+	// Climb the ladder for targets that were saved when there was nowhere better to put their
+	// credentials. Removing the user's choice is what makes this possible: there is no preference
+	// to respect, only a best available place, so a target saved on a machine with no credential
+	// store moves into one the first time this vault is open while a store answers. The plaintext
+	// is in hand anyway (the VEK is right here), so nothing is asked and nothing is shown.
+	const upgrading = useRef(false);
+	useEffect(() => {
+		if (!unattended || !backupCreds || !vaultId || !targets?.length) return;
+		const stale = targets.filter((t) => !credsAreOsHeld(t.creds));
+		if (stale.length === 0 || upgrading.current) return;
+		upgrading.current = true;
+		void (async () => {
+			try {
+				const moved = new Map<string, TargetCreds>();
+				for (const t of stale) {
+					const origin = originOf(t);
+					if (!origin) continue;
+					try {
+						const secrets = JSON.parse(
+							await crypto.decryptWithVek(
+								(t.creds as WrappedCreds).iv,
+								(t.creds as WrappedCreds).ciphertext,
+							),
+						) as BackupSecrets;
+						await backupCreds.save(vaultId, t.id, secrets, origin);
+						moved.set(t.id, { wrap: "os" });
+					} catch {
+						// A credential that will not unwrap (wrapped under another vault's key, from
+						// the device-global era) stays where it is and keeps working as it does.
+					}
+				}
+				if (moved.size > 0) {
+					await persist(
+						targets.map((t) => (moved.has(t.id) ? { ...t, creds: moved.get(t.id)! } : t)),
+					);
+				}
+			} finally {
+				upgrading.current = false;
+			}
+		})();
+	}, [unattended, backupCreds, vaultId, targets, crypto, persist]);
+
 	// Live-refresh when a background scheduled backup rewrites the targets (status/lastError),
 	// so an open Settings page reflects it without a reopen. No-op where unsupported (mobile).
 	useEffect(
@@ -106,15 +167,6 @@ export function useBackup() {
 				? storage.subscribeMeta?.(backupTargetsKeyFor(vaultId), () => void reload())
 				: undefined,
 		[storage, reload, vaultId],
-	);
-
-	const persist = useCallback(
-		async (next: BackupTargetConfig[]) => {
-			if (!vaultId) return;
-			await storage.setMeta(backupTargetsKeyFor(vaultId), next);
-			setTargets(next);
-		},
-		[storage, vaultId],
 	);
 
 	// Where a target's credentials go. The desktop hands them to the OS credential store, which
@@ -130,7 +182,7 @@ export function useBackup() {
 			// The origin the credential is being handed over FOR. A target with no usable one has
 			// nothing to pin against, so it takes the vault-key path instead of a looser store.
 			const origin = originOf(input);
-			if (origin && vaultId && backupCreds && (await backupCreds.available())) {
+			if (origin && vaultId && backupCreds && (await backupCreds.status()).unattended) {
 				await backupCreds.save(vaultId, targetId, secrets, origin);
 				return { wrap: "os" };
 			}
@@ -306,8 +358,12 @@ export function useBackup() {
 		/** Several vaults exist, so the UI should say which one these targets belong to. */
 		multiVault: vaults.length > 1,
 		/** New credentials go to the OS credential store, so backups run while locked (desktop). */
-		credsInOsStore,
-		/** Whether this target's credentials are the OS's, so it runs on schedule while locked. */
+		/** This device can keep a schedule while the vault is locked. */
+		unattended,
+		/** ...and it cannot, because nothing here can hold a credential outside the vault. The one
+		 * degraded case with a remedy, so the UI offers it instead of a warning. */
+		noStore,
+		/** Whether this target in particular backs up on schedule, or waits for an unlock. */
 		runsWhileLocked: (t: BackupTargetConfig) => credsAreOsHeld(t.creds),
 		// Whether this platform can run the OAuth connect at all (extension yes, mobile no).
 		oauthAvailable: Boolean(shell.connectBackupOAuth),

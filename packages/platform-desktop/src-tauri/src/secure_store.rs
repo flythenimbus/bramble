@@ -14,16 +14,96 @@
 
 use std::{
     collections::HashMap,
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
+use serde::Serialize;
 use zeroize::Zeroizing;
 
 type Res<T> = Result<T, String>;
 
 /// Shared with `pairing`, which was here first.
 const SERVICE: &str = "app.bramble.desktop";
+
+/// Which store is answering on this machine.
+///
+/// A ladder rather than a yes/no, because Linux has two mechanisms and a session may have either,
+/// both, or neither, and because the difference is visible to the user as *when their backups
+/// run*. The app climbs it and never asks: choosing between these needs knowledge of what a given
+/// distribution's Secret Service guarantees versus what a kernel keyring does, which is not a
+/// judgement to hand to someone who just wants their vault backed up. See
+/// docs/cloud-storage-backups.md.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Tier {
+    /// The platform's own credential store: Keychain, Credential Manager, or Secret Service.
+    Os,
+    /// Linux kernel keyutils. Not at-rest storage: the key is linked into the session keyring and
+    /// the per-UID persistent keyring, so it outlives an app restart and even a logout (subject to
+    /// the persistent keyring's expiry, refreshed on every access), but not a reboot. The answer
+    /// for sessions with no Secret Service on the bus: minimal window managers, headless boxes.
+    Kernel,
+    /// Nothing usable. Callers fall back to keeping secrets under the vault key.
+    None,
+}
+
+/// Resolved once: probing costs a round trip to the store, and the answer does not change while
+/// the process runs (a keyring appearing mid-session is rare enough to be worth a restart).
+static TIER: OnceLock<Tier> = OnceLock::new();
+
+/// Build an entry against a specific tier's backend.
+fn entry_for(tier: Tier, account: &str) -> Res<keyring::Entry> {
+    let builder = match tier {
+        #[cfg(target_os = "linux")]
+        Tier::Os => keyring::secret_service::default_credential_builder(),
+        #[cfg(target_os = "linux")]
+        Tier::Kernel => keyring::keyutils::default_credential_builder(),
+        #[cfg(not(target_os = "linux"))]
+        Tier::Os | Tier::Kernel => {
+            return keyring::Entry::new(SERVICE, account)
+                .map_err(|e| format!("credential store unavailable: {e}"))
+        }
+        Tier::None => return Err("no credential store on this system".into()),
+    };
+    #[allow(unreachable_code)]
+    {
+        let credential = builder
+            .build(None, SERVICE, account)
+            .map_err(|e| format!("credential store unavailable: {e}"))?;
+        Ok(keyring::Entry::new_with_credential(credential))
+    }
+}
+
+/// Does this backend answer at all? Reads a name that is never written, so nothing is created:
+/// "no such entry" is the healthy response, and anything else means the store is not usable.
+fn probes_ok(tier: Tier) -> bool {
+    match entry_for(tier, PROBE).map(|e| e.get_password()) {
+        Ok(Ok(_)) | Ok(Err(keyring::Error::NoEntry)) => true,
+        _ => false,
+    }
+}
+
+/// A name that is never written, used only to ask a backend whether it is there.
+const PROBE: &str = ".probe";
+
+/// The best store this machine offers, resolved on first use.
+pub fn tier() -> Tier {
+    *TIER.get_or_init(|| {
+        for candidate in [Tier::Os, Tier::Kernel] {
+            // On anything but Linux the two candidates are the same backend, so one probe decides.
+            if !cfg!(target_os = "linux") && candidate == Tier::Kernel {
+                break;
+            }
+            if probes_ok(candidate) {
+                log::info!("credential store: {candidate:?}");
+                return candidate;
+            }
+        }
+        log::warn!("no credential store available; secrets stay under the vault key");
+        Tier::None
+    })
+}
 
 /// How long a cached value stays usable, for accounts that get one.
 ///
@@ -47,7 +127,7 @@ type Entry = (Option<Zeroizing<String>>, Instant);
 static CACHE: Mutex<Option<HashMap<String, Entry>>> = Mutex::new(None);
 
 pub fn entry(account: &str) -> Res<keyring::Entry> {
-    keyring::Entry::new(SERVICE, account).map_err(|e| format!("credential store unavailable: {e}"))
+    entry_for(tier(), account)
 }
 
 /// A cache hit, unless this account has a TTL and the entry is past it. An expired entry is

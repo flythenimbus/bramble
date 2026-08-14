@@ -81,7 +81,15 @@ keyring = { version = "3.6.3", features = ["apple-native"] }
 keyring = { version = "3.6.3", features = ["windows-native"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+# Both Linux backends, chosen at RUNTIME (see secure_store::tier): Secret Service where a
+# session bus offers one, else kernel keyutils, which needs no daemon and works headless. Not the
+# crate's `linux-native-sync-persistent` combo, which writes to keyutils AND Secret Service and
+# fails the write if the latter is absent, so it cannot cover the case this is here for.
+keyring = { version = "3.6.3", features = [
+    "sync-secret-service",
+    "linux-native",
+    "crypto-rust",
+] }
 
 # The native-messaging host Chrome spawns. Its own bin rather than a mode of the app binary:
 # the browser starts it on every launch, so it must not carry Tauri's startup cost, and

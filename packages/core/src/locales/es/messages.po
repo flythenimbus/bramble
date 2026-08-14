@@ -275,6 +275,14 @@ msgid "Backing up…"
 msgstr "Realizando copia de seguridad…"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up on schedule"
+msgstr "Realiza copias de seguridad según lo programado"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up when you unlock this vault"
+msgstr "Realiza copias de seguridad al desbloquear esta caja fuerte"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backup folder (optional)"
 msgstr "Carpeta de respaldo (opcional)"
 
@@ -289,6 +297,10 @@ msgstr "Copias de seguridad"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
 msgstr "Las copias de seguridad se realizan según el esfuerzo disponible, no en un horario fijo. Cada destino realiza una copia de seguridad como máximo con la frecuencia que usted elija, la próxima vez que desbloquee Bramble después de que una esté vencida, por lo que la frecuencia real depende de la frecuencia con la que abra la aplicación en este dispositivo. Las bóvedas sin cambios se omiten."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups on this computer run when you unlock a vault, because this session has no keyring to keep the connection details in. Starting GNOME Keyring or KWallet, or turning on KeePassXC's Secret Service integration, lets them run on schedule instead."
+msgstr "Las copias de seguridad en este equipo se ejecutan al desbloquear una caja fuerte, porque esta sesión no tiene un depósito de claves donde guardar los detalles de conexión. Iniciar GNOME Keyring o KWallet, o activar la integración de Secret Service de KeePassXC, permite que se ejecuten según lo programado."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Backups to keep"
@@ -2100,8 +2112,8 @@ msgid "Rotation failed and nothing was changed. Unlock and try again."
 msgstr "La rotación falló y no se realizó ningún cambio. Desbloquee e inténtelo de nuevo."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "Runs on schedule even while Bramble is locked"
-msgstr "Se ejecuta según lo programado incluso con Bramble bloqueado"
+#~ msgid "Runs on schedule even while Bramble is locked"
+#~ msgstr "Se ejecuta según lo programado incluso con Bramble bloqueado"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
@@ -2567,8 +2579,8 @@ msgid "This code has expired."
 msgstr "Este código ha caducado."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
-msgstr "Este equipo guarda estas credenciales en su propio llavero en lugar de dentro de la caja fuerte, para que las copias de seguridad programadas sigan ejecutándose mientras Bramble está bloqueado. Sus copias de seguridad permanecen cifradas con su contraseña maestra de cualquier forma."
+#~ msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
+#~ msgstr "Este equipo guarda estas credenciales en su propio llavero en lugar de dentro de la caja fuerte, para que las copias de seguridad programadas sigan ejecutándose mientras Bramble está bloqueado. Sus copias de seguridad permanecen cifradas con su contraseña maestra de cualquier forma."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."

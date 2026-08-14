@@ -64,7 +64,16 @@ async function send(
 }
 
 export const desktopBackupCreds: BackupCredentialsAdapter = {
-	available: () => invoke<boolean>("backup_creds_available"),
+	// The shell picks its own store (Secret Service, else kernel keyutils, else nothing) and this
+	// only reports the consequence. "kernel" is not surfaced separately: it backs up on schedule
+	// just the same, and the difference (gone after a reboot rather than after logout) is not
+	// something to put in front of anyone.
+	async status() {
+		const tier = await invoke<"os" | "kernel" | "none">("backup_creds_tier");
+		return tier === "none"
+			? { unattended: false, reason: "no-credential-store" as const }
+			: { unattended: true };
+	},
 
 	save: (vaultId, targetId, secrets, origin) =>
 		invoke<void>("backup_creds_save", {
