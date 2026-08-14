@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { backupTargetsKeyFor } from "../backup/config";
 import type { Platform } from "../context/PlatformContext";
 import { PER_VAULT_SYNC_KEYS } from "../sync/sync-keys";
 import { mountVaultActions } from "../test/vault-harness";
@@ -131,7 +132,7 @@ describe("deleteVault clears the recorded active vault", () => {
 // (bundle + slot), and the biometric item is the key that opens it. Both survived a delete, and
 // neither is namespaced in a way that anything else would reclaim.
 describe("deleteVault erases everything else keyed to the vault", () => {
-	it("clears the provider mirror, the biometric item, and the per-vault sync keys", async () => {
+	it("clears the provider mirror, the biometric item, and the per-vault sync + backup keys", async () => {
 		const { platform, storage, autofill, biometric } = makePlatform();
 		const getActions = mountVaultActions(platform);
 		await act(async () => {});
@@ -145,6 +146,8 @@ describe("deleteVault erases everything else keyed to the vault", () => {
 		for (const k of PER_VAULT_SYNC_KEYS) {
 			expect(storage.removeMeta).toHaveBeenCalledWith(`${k}:${VAULT_ID}`);
 		}
+		// The target list holds cloud credentials wrapped under the vek that just went away.
+		expect(storage.removeMeta).toHaveBeenCalledWith(backupTargetsKeyFor(VAULT_ID));
 	});
 
 	it("does none of it when re-auth fails", async () => {

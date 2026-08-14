@@ -46,12 +46,20 @@ no background scheduler at all and run only while open.
 
 ### Device-local, no syncing
 
-Backup configuration is **device-local**: a list of targets, each with its own
-provider, credentials, and schedule. A vault can back up to several destinations
-at once (say Drive daily, R2 weekly, Nextcloud monthly). It is stored the way
-device preferences and sync endpoints already are, per-device under `backup.*`
-keys, and is **never** placed in a sync payload. The P2P sync code is untouched:
-no new wire field, no roster change, no synced settings record.
+Backup configuration is **device-local and per vault**: each vault has its own
+list of targets, each with its own provider, credentials, and schedule. A vault
+can back up to several destinations at once (say Drive daily, R2 weekly,
+Nextcloud monthly). It is stored the way device preferences and sync endpoints
+already are, per-device under `backup.*` keys, and is **never** placed in a sync
+payload. The P2P sync code is untouched: no new wire field, no roster change, no
+synced settings record.
+
+Per vault, not per device, because a shared list made every vault back up to one
+place: configuring Nextcloud in a personal vault silently configured a work vault
+with the same server, credentials and folder, with no way to separate them
+([issue #49](https://github.com/flythenimbus/bramble/issues/49)). See
+[Config and state](#config-and-state-device-local-per-vault) for the keys and the
+one-time migration off the old shared list.
 
 The user configures backups on one device, typically an always-on desktop with
 the extension. Only that device holds credentials and runs the schedules.
@@ -95,23 +103,48 @@ backups, where credentials sit under a device key instead of the VEK so the
 extension's background worker can upload while locked, are a possible later
 upgrade if best-effort proves too loose. Deferred for now.
 
-### Config and state (device-local)
+### Config and state (device-local, per vault)
 
-A vault holds a list of targets under `backup.targets`; each carries its own
-non-secret provider config, VEK-wrapped credentials, schedule, and run state:
+Each vault holds its own list of targets under `backup.targets:<vaultId>`; each
+target carries its own non-secret provider config, VEK-wrapped credentials,
+schedule, and run state:
 
 ```
-backup.targets: BackupTargetConfig[]   // each:
+backup.targets:<vaultId>: BackupTargetConfig[]   // each:
   { id, providerId, provider: s3|webdav,
     endpoint, region, bucket, prefix | serverUrl, path,   // non-secret
     frequency: off|daily|weekly|monthly, keep,
     creds: { iv, ciphertext },          // VEK-wrapped secret credentials
+    sharedFolder?,                      // carried over from the old shared list
     lastBackupAt, lastVaultHash, lastError? }             // per-target run state
 ```
 
 Stored via the same per-device meta storage as `sync.relay` and the `pref.*`
-values. "Back up now" fans out to every target; scheduling evaluates each target
-independently.
+values, namespaced by vault id exactly like the `sync.*` keys
+(`backupTargetsKeyFor`, mirroring `syncKeyFor`). "Back up now" fans out to every
+target of the vault you are in; scheduling walks every vault and evaluates each
+of its targets independently, against **that vault's own** change fingerprint.
+
+Deleting a vault removes its list along with its blob and sync keys: the list
+holds cloud credentials wrapped under a VEK that no longer exists.
+
+**Migration off the shared list.** Installs configured before this existed have
+one device-global `backup.targets` array. On first load with a resolved registry,
+`migrateBackupTargetsToVaults` copies it to **every** registered vault and then
+deletes the global keys (per-vault writes first, so an interrupted run just
+repeats; a vault that already has its own list is never overwritten). Every vault
+adopts it so that no vault silently stops being backed up by the upgrade. From
+then on the lists are independent.
+
+Each copy is marked `sharedFolder`, which keeps it writing where it already
+writes: the default (first) vault at `<prefix>/`, every other vault at the
+sibling `<prefix>-<vaultId>/` (`vaultBackupPrefix`). A target created in a vault
+after the migration has no such flag and uses **exactly the folder the user
+typed** - the point of the whole change. Editing a migrated target's folder drops
+the flag too, since the user has now chosen a folder for that vault; editing
+anything else keeps it, or the snapshots would move on top of another vault's.
+`targetPrefixFor` is the single place that decides this, and both "Back up now"
+and the scheduled run go through it.
 
 ### The decision rule
 

@@ -8,12 +8,12 @@
 
 import { createTarget, runBackup, sha256Hex } from "@core/backup";
 import {
-	BACKUP_TARGETS_KEY,
 	type BackupSecrets,
 	type BackupTargetConfig,
-	backupPrefix,
+	backupTargetsKeyFor,
+	migrateBackupTargetsToVaults,
+	targetPrefixFor,
 	toProviderConfig,
-	vaultBackupPrefix,
 	type WrappedCreds,
 } from "@core/backup/config";
 import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
@@ -21,82 +21,97 @@ import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
-import { getActiveVaultId, unlockedVaultIds, vaultLocked } from "./session";
+import { unlockedVaultIds, vaultLocked } from "./session";
 
 export const BACKUP_ALARM = "backup:scheduled";
 // A cheap poke; the handler no-ops unless a target is due + changed + unlocked.
 const CHECK_PERIOD_MINUTES = 30;
 
-/** Arm the recurring poke while any target is scheduled; clear it otherwise. */
+/** Every registered vault, default (first) flag included. */
+async function registeredVaults(): Promise<{ id: string; isDefault: boolean }[]> {
+	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY));
+	return reg.vaults.map((v) => ({ id: v.id, isDefault: v.id === reg.vaults[0]?.id }));
+}
+
+/** One vault's targets. Each vault owns its own list (`backup.targets:<id>`). */
+async function loadTargets(vaultId: string): Promise<BackupTargetConfig[]> {
+	return (await extensionStorage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(vaultId))) ?? [];
+}
+
+// Hand a pre-per-vault device-global target list to every vault. Done here as well as in the UI
+// hook: the background must not wait for someone to open the Backups panel before an existing
+// install's scheduled backups resume. Idempotent, and a no-op once the global keys are gone.
+async function ensureMigrated(vaults: { id: string }[]): Promise<void> {
+	await migrateBackupTargetsToVaults(
+		extensionStorage,
+		vaults.map((v) => v.id),
+		() => crypto.randomUUID(),
+	);
+}
+
+/** Arm the recurring poke while any vault has a scheduled target; clear it otherwise. */
 export async function scheduleBackups(): Promise<void> {
-	const targets = await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY);
-	if (targets?.some((t) => t.frequency !== "off")) {
+	const vaults = await registeredVaults();
+	await ensureMigrated(vaults);
+	let scheduled = false;
+	for (const v of vaults) {
+		if ((await loadTargets(v.id)).some((t) => t.frequency !== "off")) {
+			scheduled = true;
+			break;
+		}
+	}
+	if (scheduled) {
 		api.alarms.create(BACKUP_ALARM, { periodInMinutes: CHECK_PERIOD_MINUTES });
 	} else {
 		void api.alarms.clear(BACKUP_ALARM);
 	}
 }
 
-// Unwrap a target's VEK-wrapped credentials via the offscreen crypto host. Backup targets are
-// device-global but their creds were VEK-wrapped under whichever vault was active when the target
-// was created; with several veks now resident, try the active vault first, then each other
-// unlocked vault (bounded). The durable fix (wrap under a device key, not a vault VEK) is deferred;
-// see docs/multiple-vaults.md "Backup cred decrypt".
-async function decryptSecrets(creds: WrappedCreds): Promise<BackupSecrets> {
-	const active = getActiveVaultId();
-	const candidates = [active, ...unlockedVaultIds().filter((id) => id !== active)].filter(
-		(id): id is string => id !== null,
-	);
-	for (const vaultId of candidates) {
+// Unwrap a target's VEK-wrapped credentials via the offscreen crypto host. A target belongs to one
+// vault, so its own vek comes first; targets carried over from the old device-global list were
+// wrapped under whichever vault happened to be active back then, so fall back to the other
+// unlocked veks (bounded) rather than dropping those backups. Null means no resident vek opened
+// them — that vault is locked, which is a skip, not a failure. The durable fix (wrap under a
+// device key, not a vault VEK) is deferred; see docs/multiple-vaults.md "Backup cred decrypt".
+async function decryptSecrets(vaultId: string, creds: WrappedCreds): Promise<BackupSecrets | null> {
+	const unlocked = unlockedVaultIds();
+	const candidates = [
+		...(unlocked.includes(vaultId) ? [vaultId] : []),
+		...unlocked.filter((id) => id !== vaultId),
+	];
+	for (const id of candidates) {
 		const dec = await sendToOffscreen({
 			type: "CRYPTO_DECRYPT_OUTER",
-			vaultId,
+			vaultId: id,
 			payload: { iv: creds.iv, ciphertext: creds.ciphertext },
 		});
 		if (dec.ok && typeof dec.data === "string") return JSON.parse(dec.data) as BackupSecrets;
 	}
-	throw new Error("Couldn't unlock credentials.");
+	return null;
 }
 
 let running = false;
 
-/** Run any due+changed backup headlessly while unlocked. No-op if locked or nothing due. */
 /** Every registered vault's sealed blob. Backups copy the encrypted blob (no VEK needed), so a
- * locked non-active vault is still backed up. A registered vault with no readable blob is skipped. */
-async function readVaults(): Promise<VaultBackup[]> {
-	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY));
+ * locked vault still has bytes to upload; whether its target credentials can be unwrapped is
+ * decided per target. A registered vault with no readable blob is skipped. */
+async function listVaults(): Promise<VaultBackup[]> {
+	const vaults = await registeredVaults();
+	await ensureMigrated(vaults);
 	const out: VaultBackup[] = [];
-	for (const v of reg.vaults) {
+	for (const v of vaults) {
 		try {
 			out.push({
 				id: v.id,
 				blob: await extensionStorage.readVaultBlob(v.id),
-				isDefault: v.id === reg.vaults[0]?.id,
+				isDefault: v.isDefault,
 			});
 		} catch {}
 	}
 	return out;
 }
 
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-	const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-	let off = 0;
-	for (const p of parts) {
-		out.set(p, off);
-		off += p.length;
-	}
-	return out;
-}
-
-/** One fingerprint over all vaults; id-tagged + sorted so add/remove/edit any vault changes it. */
-async function hashVaults(vaults: VaultBackup[]): Promise<string> {
-	const enc = new TextEncoder();
-	const parts = [...vaults]
-		.sort((a, b) => a.id.localeCompare(b.id))
-		.flatMap((v) => [enc.encode(`${v.id}:`), v.blob]);
-	return sha256Hex(concatBytes(parts));
-}
-
+/** Run any due+changed backup headlessly while unlocked. No-op if locked or nothing due. */
 export async function runDueBackups(
 	sessionCurrent: () => boolean = () => !vaultLocked(),
 ): Promise<void> {
@@ -105,28 +120,26 @@ export async function runDueBackups(
 	try {
 		const result = await runScheduledBackups(
 			{
-				loadTargets: async () => {
-					if (!sessionCurrent()) return [];
-					return (await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY)) ?? [];
+				listVaults: async () => (sessionCurrent() ? listVaults() : []),
+				loadTargets: async (vaultId) => (sessionCurrent() ? loadTargets(vaultId) : []),
+				saveTargets: async (vaultId, targets) => {
+					if (sessionCurrent()) {
+						await extensionStorage.setMeta(backupTargetsKeyFor(vaultId), targets);
+					}
 				},
-				saveTargets: async (targets) => {
-					if (sessionCurrent()) await extensionStorage.setMeta(BACKUP_TARGETS_KEY, targets);
-				},
-				readVaults: async () => (sessionCurrent() ? readVaults() : []),
-				hashVaults: async (vaults) => (sessionCurrent() ? hashVaults(vaults) : ""),
-				decryptSecrets: async (target) => {
+				// One vault's own fingerprint, so editing one vault no longer re-uploads the others.
+				hashVault: async (vault) => (sessionCurrent() ? sha256Hex(vault.blob) : ""),
+				decryptSecrets: async (vaultId, creds) => {
 					if (!sessionCurrent()) throw new Error("vault session changed");
-					return decryptSecrets(target);
+					return decryptSecrets(vaultId, creds);
 				},
-				upload: async (t, secrets, vaults) => {
+				upload: async (_vaultId, t, secrets, vault) => {
 					if (!sessionCurrent()) throw new Error("vault session changed");
 					const target = createTarget(toProviderConfig(t, secrets));
-					// Sequential per vault: the offscreen crypto host is shared and can't race.
-					for (const v of vaults) {
-						if (!sessionCurrent()) throw new Error("vault session changed");
-						const prefix = vaultBackupPrefix(backupPrefix(t), v.id, v.isDefault);
-						await runBackup(target, v.blob, { prefix, keep: t.keep });
-					}
+					await runBackup(target, vault.blob, {
+						prefix: targetPrefixFor(t, vault.id, vault.isDefault),
+						keep: t.keep,
+					});
 				},
 			},
 			Date.now(),
@@ -137,7 +150,7 @@ export async function runDueBackups(
 			);
 		}
 		for (const f of result.failed) {
-			console.warn(`[titanpass:bg] backup failed for ${f.id}:`, f.error);
+			console.warn(`[titanpass:bg] backup failed for ${f.id} (vault ${f.vaultId}):`, f.error);
 		}
 	} finally {
 		running = false;

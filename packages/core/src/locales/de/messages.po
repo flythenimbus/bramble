@@ -2518,6 +2518,10 @@ msgstr "Thema"
 msgid "There's no vendor reset. Memorize this password and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be recovered."
 msgstr "Es gibt keinen Reset durch den Anbieter. Merken Sie sich dieses Passwort und bewahren Sie den folgenden Wiederherstellungs-Code sicher auf. Wenn Sie beides verlieren, kann Ihr Tresor nicht wiederhergestellt werden."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "These destinations belong to the vault you're in. Every vault keeps its own targets and its own backup folder."
+msgstr "Diese Ziele gehören zu dem Tresor, in dem Sie sich befinden. Jeder Tresor verwaltet seine eigenen Ziele und seinen eigenen Sicherungsordner."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "They match, approve"
 msgstr "Sie stimmen überein – genehmigen"
@@ -2614,6 +2618,10 @@ msgstr "Dieser Tresor hat keinen Wiederherstellungscode."
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "This vault syncs with the desktop app."
 msgstr "Dieser Tresor wird mit der Desktop-App synchronisiert."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This vault's folder: {folder}"
+msgstr "Ordner dieses Tresors: {folder}"
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."

@@ -206,10 +206,11 @@ A new `VaultRegistryProvider` sits above `VaultProvider` and owns the vault list
   - the biometric VEK item (`biometric.disable(id)`), which also drops the shared autofill
     mirror of that VEK. Otherwise the key outlives the data it opened.
 
+  - its backup targets (`backup.targets:<id>`), which hold cloud credentials wrapped under
+    the vek that just went away.
+
   All of it is best-effort (`.catch`): once the blob is erased the delete has to finish,
-  so a failing native call can't strand a half-deleted vault. There are no per-vault
-  `backup.*` keys (`backup.targets` / `backup.config` are device-global), and `primaryId`
-  no longer exists.
+  so a failing native call can't strand a half-deleted vault. `primaryId` no longer exists.
 
   Known gap: on Android `KeepUnlockedStore`'s on-disk (Keystore-wrapped) VEK cache survives
   a delete. There is no `AutofillBridge` plugin on Android to route `clearProviderData` to,
@@ -653,16 +654,27 @@ Each phase is independently shippable.
   follow: full multi-vault autofill with per-vault native caches.)
 - **Phase 4: per-vault backups + restore choice.** DONE. The restore-destination flow
   landed earlier (existing vault -> add a new one, never overwrite). Scheduled backups
-  now cover **every** vault, not just the primary: `runScheduledBackups` reads all
-  registered vaults (the sealed blob needs no VEK) and uploads each as its own file to
-  each target. Backup *targets* stay device-global (one config backs up all vaults);
-  the legacy vault keeps the un-suffixed `<prefix>/` folder so existing backups continue,
-  and every other vault gets a sibling `<prefix>-<id>/` folder (a sibling, so the legacy
-  folder's prefix listing can't sweep up other vaults during keep-N retention). A single
-  combined change-hash over all vaults gates re-upload (so an unchanged set is skipped),
-  which means any one vault changing re-snapshots them all — per-vault change tracking to
-  avoid that redundancy is a deferred optimization (needs a target-format change). Each
-  backup file is still a standalone VLT1 blob, so restore opens one file -> one vault.
+  cover **every** vault, not just the primary: `runScheduledBackups` walks all registered
+  vaults (the sealed blob needs no VEK) and uploads each as its own file. Each backup file
+  is a standalone VLT1 blob, so restore opens one file -> one vault.
+
+  Phase 4 first shipped with backup *targets* still device-global (one config backing up
+  every vault), which turned out to be wrong in use: configuring Nextcloud in a personal
+  vault silently configured a work vault with the same server, credentials and folder
+  ([issue #49](https://github.com/flythenimbus/bramble/issues/49)). Targets are now per
+  vault (`backup.targets:<id>`), as this document's key table always said. Consequences:
+  - a target created in a vault writes to **exactly** the folder the user typed;
+  - targets adopted from the old shared list are marked `sharedFolder` and keep the
+    derived layout they already write to (default vault `<prefix>/`, every other vault the
+    sibling `<prefix>-<id>/`, a sibling so keep-N retention on one can't sweep another);
+  - the change-hash is per vault now, so editing one vault no longer re-snapshots them all
+    (this closes the deferred redundancy noted here before);
+  - a target's creds are wrapped under its own vault's vek, so a vault that is locked at
+    run time is **skipped, not failed** (no `lastError`; it stays due). Migrated targets
+    still decrypt under any resident vek, so existing setups keep their coverage. Removing
+    the skip entirely is the deferred device-key wrap below.
+  See [cloud-storage-backups.md](cloud-storage-backups.md) for the storage layout and the
+  migration.
 
 ## Per-vault VEK
 
@@ -1069,14 +1081,16 @@ the single-VEK assumption.
   `CRYPTO_ENCRYPT_OUTER` (in `readLocalState` / `writeMerged`) and vault-io's
   `reencryptOuterWithEntryChange` gain the ctx's `vaultId`. `resolveSyncVault()` already
   picks active-then-primary.
-- **Backup cred decrypt** (`background/backup.ts`): Phase 4 ships all-vault uploads of
-  sealed blobs (no vek needed), but `decryptSecrets` unwraps the backup **target
-  credentials**, which were VEK-wrapped under whichever vault was active when the target
-  was created. v1 mitigation, now that several veks can be resident: tag the decrypt with
-  the active vault first, and on AEAD failure retry under each other unlocked vault's id
-  (bounded, logged). The durable fix (wrap target creds under a device key, not a vault
-  vek) stays deferred. `backup-connect.ts` `wrapSecrets` tags the active vault when
-  creating a target.
+- **Backup cred decrypt** (`background/backup.ts`): uploads copy the sealed blob (no vek
+  needed), but `decryptSecrets` unwraps the backup **target credentials**, which are
+  VEK-wrapped. Targets are per-vault now, so the decrypt is tagged with the **target's own
+  vault** first, then retried under each other unlocked vault (bounded) — the retry is what
+  keeps targets migrated off the old device-global list working, since those were wrapped
+  under whichever vault happened to be active back then. No resident vek opening them means
+  that vault is locked: the target is **skipped, not failed** (no `lastError`, still due).
+  The durable fix (wrap target creds under a device key, not a vault vek) stays deferred and
+  would remove the skip. `backup-connect.ts` `wrapSecret` tags the active vault when creating
+  a target, and writes it to that vault's list.
 - **`primaryId` is effectively dead.** Its doc-comments claim it is the autofill/biometric
   target, but the only live consumers are storage/sync **fallback defaults**
   (`vaultId ?? primaryId` in `storage.ts`, `sync-config.ts`, `useVaultRegistry.syncKey`)
@@ -1213,10 +1227,13 @@ hardening), and full multi-vault autofill Tier 2 (search all vaults; post-v1). D
   code" entry (which id-less-wrote / overwrote the ACTIVE vault) was REMOVED (commit 454a2d99);
   the not-in-a-group panel keeps invite + points to "Add a vault -> Join a device". The raw
   `joinGroup` action stays for the "join into the active vault" primitive but has no UI entry.**
-- **Backup target-cred device-key wrap.** Backup target credentials are VEK-wrapped under
-  whichever vault created the target. Per-vault VEK ships a mitigation (try the active
-  vault's vek, then each other unlocked vault's); the durable fix wraps target config
-  under a device key rather than any vault VEK, which is separate work.
+- **Backup target-cred device-key wrap.** Backup target credentials are VEK-wrapped under the
+  vault that owns the target (and, for targets migrated off the old device-global list,
+  whichever vault created them). A locked vault's scheduled backup is therefore skipped until
+  it is next unlocked. The durable fix wraps target creds under a device key rather than any
+  vault VEK, which would also let backups run while everything is locked — separate work, and
+  a deliberate security trade-off (cloud credentials would no longer be master-password
+  protected at rest), so it wants its own change and its own release note.
 - ~~**`primaryId` removal.**~~ **DONE (2026-07, commit `94802182`).** The user-reassignable
   primary pointer is gone from the registry (Zod strips a stored one); the storage/sync fallbacks
   resolve the first/only vault instead. Mobile's out-of-process autofill still serves that fallback

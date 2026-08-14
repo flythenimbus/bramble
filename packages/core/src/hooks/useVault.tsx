@@ -161,6 +161,7 @@ export type JoinUnlock =
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { securityKey: true };
 
+import { backupTargetsKeyFor } from "../backup/config";
 import { exportToOs } from "../exchange";
 import { toKdbxEntries } from "../export/kdbx";
 import {
@@ -1429,6 +1430,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			for (const k of PER_VAULT_SYNC_KEYS) {
 				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
 			}
+			// Its backup targets too: the list holds cloud credentials wrapped under the vek that
+			// just went away, so leaving it behind is unreadable state pointing at the user's bucket.
+			await storage.removeMeta(backupTargetsKeyFor(activeId)).catch(() => {});
 			await dropActiveRecord();
 			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
 			// so after a delete it still named the vault we just erased. Mobile's sync resolves its

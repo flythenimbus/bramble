@@ -1,11 +1,24 @@
 import type { ProviderConfig } from "./types";
 
-// Device-local backup targets. Non-secret fields are stored in the clear via
+// Device-local backup targets, per vault. Non-secret fields are stored in the clear via
 // storage.setMeta; credentials are VEK-wrapped (see useBackup). Never synced.
 // See docs/cloud-storage-backups.md.
+
+/** Legacy device-global list, shared by every vault. Migration input only (see
+ * migrateBackupTargetsToVaults); live reads go through backupTargetsKeyFor. */
 export const BACKUP_TARGETS_KEY = "backup.targets";
-// Legacy single-target key, migrated into the array on first load (unreleased format).
+// Legacy single-target key, folded into the array by the same migration (unreleased format).
 export const BACKUP_CONFIG_KEY = "backup.config";
+
+/** Where one vault's targets live: `backup.targets:<vaultId>`, mirroring the sync keys. */
+export function backupTargetsKeyFor(vaultId: string): string {
+	return `${BACKUP_TARGETS_KEY}:${vaultId}`;
+}
+
+/** True for any vault's target-list key, for storage-change watchers that can't name the id. */
+export function isBackupTargetsKey(key: string): boolean {
+	return key.startsWith(`${BACKUP_TARGETS_KEY}:`);
+}
 
 export type BackupFrequency = "off" | "daily" | "weekly" | "monthly";
 
@@ -28,6 +41,9 @@ export interface BackupTargetConfig {
 	frequency: BackupFrequency;
 	keep: number;
 	creds: WrappedCreds; // VEK-wrapped JSON of the secret credential fields
+	/** Adopted from the pre-per-vault device-global list, so its snapshots keep the old shared
+	 * folder layout (see targetPrefixFor). Cleared once the user picks a folder for this vault. */
+	sharedFolder?: boolean;
 	lastBackupAt?: number;
 	lastVaultHash?: string;
 	lastError?: string;
@@ -104,14 +120,71 @@ export function backupPrefix(cfg: BackupTargetConfig): string {
 }
 
 /**
- * Where one vault's snapshots live under a target's base prefix. The default (first) vault keeps
+ * Where a SHARED target's snapshots live under its base prefix. The default (first) vault keeps
  * the un-suffixed base so existing backups keep going; every other vault gets a SIBLING
  * `<base>-<id>` namespace — a sibling, not a `<base>/<id>` subfolder, so the base's prefix listing
- * (`<base>/`) can't sweep up other vaults' files during keep-N retention. Used by both the manual
- * "Back up now" (active vault) and the scheduled all-vaults run, so their files land in the same place.
+ * (`<base>/`) can't sweep up other vaults' files during keep-N retention. Only reached for targets
+ * carried over from the device-global list; see targetPrefixFor.
  */
 export function vaultBackupPrefix(base: string, vaultId: string, isDefault: boolean): string {
 	return isDefault ? base : `${base}-${vaultId}`;
+}
+
+/**
+ * The object-key prefix one vault's snapshots use for a target. Targets are per-vault now, so a
+ * vault's own target uses exactly the folder the user typed. A target inherited from the old
+ * device-global list (`sharedFolder`) instead keeps the derived per-vault layout it has been
+ * writing to, so an upgrade never strands or collides with existing snapshots. Used by both the
+ * manual "Back up now" and the scheduled run, so their files land in the same place.
+ */
+export function targetPrefixFor(
+	cfg: BackupTargetConfig,
+	vaultId: string,
+	isDefault: boolean,
+): string {
+	const base = backupPrefix(cfg);
+	return cfg.sharedFolder ? vaultBackupPrefix(base, vaultId, isDefault) : base;
+}
+
+/** The metadata slice the target migration needs; the storage adapter satisfies it. */
+export interface BackupMetaStore {
+	getMeta<T>(key: string): Promise<T | undefined>;
+	setMeta<T>(key: string, value: T): Promise<void>;
+	removeMeta(key: string): Promise<void>;
+}
+
+/**
+ * One-shot: hand the pre-per-vault device-global target list to every registered vault, then drop
+ * the global keys. Every vault adopts the list (rather than only the default one) so no vault
+ * silently stops being backed up by the upgrade; each copy is marked `sharedFolder` so its
+ * snapshots stay in the folder that vault already uses. From here the lists are independent:
+ * editing or removing a target in one vault leaves the others alone (issue #49).
+ *
+ * Idempotent and crash-safe: the per-vault writes land BEFORE the global keys are removed, so an
+ * interrupted run simply repeats, and a vault that already has a list is never overwritten.
+ */
+export async function migrateBackupTargetsToVaults(
+	store: BackupMetaStore,
+	vaultIds: string[],
+	newId: () => string,
+): Promise<void> {
+	if (vaultIds.length === 0) return; // registry not ready: nothing to migrate onto yet
+	const shared = await store.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY);
+	// The even older single-target shape, if it never reached the array form.
+	const legacy = shared
+		? undefined
+		: await store.getMeta<Omit<BackupTargetConfig, "id">>(BACKUP_CONFIG_KEY);
+	if (!shared && !legacy) return;
+	const list = (shared ?? [{ ...(legacy as Omit<BackupTargetConfig, "id">), id: newId() }]).map(
+		(t) => ({ ...t, sharedFolder: true }),
+	);
+	for (const id of vaultIds) {
+		const key = backupTargetsKeyFor(id);
+		if ((await store.getMeta<BackupTargetConfig[]>(key)) !== undefined) continue;
+		await store.setMeta(key, list);
+	}
+	await store.removeMeta(BACKUP_TARGETS_KEY);
+	await store.removeMeta(BACKUP_CONFIG_KEY);
 }
 
 /**

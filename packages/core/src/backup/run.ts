@@ -20,67 +20,82 @@ export interface VaultBackup {
 }
 
 export interface ScheduledBackupDeps {
-	loadTargets(): Promise<BackupTargetConfig[]>;
-	saveTargets(targets: BackupTargetConfig[]): Promise<void>;
-	/** Every local vault's sealed blob. Backups copy the encrypted blob (no VEK), so all vaults
-	 * can be backed up regardless of which one is unlocked. */
-	readVaults(): Promise<VaultBackup[]>;
-	/** A single fingerprint over all vaults, so an unchanged set skips re-upload. */
-	hashVaults(vaults: VaultBackup[]): Promise<string>;
-	decryptSecrets(creds: WrappedCreds): Promise<BackupSecrets>;
-	/** Upload every vault to `target` (each to its own per-vault key namespace). */
-	upload(target: BackupTargetConfig, secrets: BackupSecrets, vaults: VaultBackup[]): Promise<void>;
+	/** Every local vault's sealed blob. Reading one needs no VEK, so a locked vault still has
+	 * bytes to upload; whether it can is decided by decryptSecrets. */
+	listVaults(): Promise<VaultBackup[]>;
+	loadTargets(vaultId: string): Promise<BackupTargetConfig[]>;
+	saveTargets(vaultId: string, targets: BackupTargetConfig[]): Promise<void>;
+	/** One vault's fingerprint, so an unchanged vault skips re-upload. */
+	hashVault(vault: VaultBackup): Promise<string>;
+	/** Unwrap a target's credentials, or null when no resident VEK opens them (that vault is
+	 * locked). Null is a skip, not a failure: nothing is wrong, the run just can't happen yet. */
+	decryptSecrets(vaultId: string, creds: WrappedCreds): Promise<BackupSecrets | null>;
+	/** Upload one vault's blob to one of its targets. */
+	upload(
+		vaultId: string,
+		target: BackupTargetConfig,
+		secrets: BackupSecrets,
+		vault: VaultBackup,
+	): Promise<void>;
 }
 
 export interface ScheduledBackupResult {
 	attempted: number;
-	succeeded: string[]; // target ids
-	failed: { id: string; error: string }[];
+	succeeded: { vaultId: string; id: string }[];
+	failed: { vaultId: string; id: string; error: string }[];
+	/** Targets left for later because their vault is locked (see decryptSecrets). */
+	skipped: number;
 }
 
-const EMPTY: ScheduledBackupResult = { attempted: 0, succeeded: [], failed: [] };
-
 /**
- * Back up every target that is due and whose vaults changed since its last run.
- * Reads all vaults once, unwraps + uploads each target sequentially, then folds the
- * per-target success/failure back into the stored list. A failed target keeps its
- * old lastBackupAt (stays due, retries next trigger); a success advances it and
- * clears any error. The change fingerprint covers every vault, so a due target
- * re-uploads all of them whenever any one changes. See docs/cloud-storage-backups.md.
+ * Back up every vault whose own targets are due and whose blob changed since their last run.
+ * Targets belong to one vault (`backup.targets:<vaultId>`), so each vault is evaluated on its
+ * own: its own change fingerprint, its own schedule state, its own credentials. A failed target
+ * keeps its old lastBackupAt (stays due, retries next trigger); a success advances it and clears
+ * any error; a locked vault's targets are left untouched. See docs/cloud-storage-backups.md.
  */
 export async function runScheduledBackups(
 	deps: ScheduledBackupDeps,
 	now: number,
 ): Promise<ScheduledBackupResult> {
-	const targets = await deps.loadTargets();
-	if (!targets.some((t) => isDue(t, now))) return EMPTY;
+	const result: ScheduledBackupResult = { attempted: 0, succeeded: [], failed: [], skipped: 0 };
+	const vaults = await deps.listVaults();
 
-	const vaults = await deps.readVaults();
-	const hash = await deps.hashVaults(vaults);
-	const toRun = selectDueTargets(targets, now, hash);
-	if (toRun.length === 0) return EMPTY; // every due target already holds these vaults
+	for (const vault of vaults) {
+		const targets = await deps.loadTargets(vault.id);
+		if (!targets.some((t) => isDue(t, now))) continue;
 
-	const outcome = new Map<string, { hash?: string; error?: string }>();
-	// Sequential: callers back a shared crypto host whose key injection can't race.
-	for (const t of toRun) {
-		try {
-			const secrets = await deps.decryptSecrets(t.creds);
-			await deps.upload(t, secrets, vaults);
-			outcome.set(t.id, { hash });
-		} catch (e) {
-			outcome.set(t.id, { error: (e as Error).message });
+		const hash = await deps.hashVault(vault);
+		const toRun = selectDueTargets(targets, now, hash);
+		if (toRun.length === 0) continue; // every due target already holds this vault
+
+		const outcome = new Map<string, { hash?: string; error?: string }>();
+		// Sequential: callers back a shared crypto host whose key injection can't race.
+		for (const t of toRun) {
+			try {
+				const secrets = await deps.decryptSecrets(vault.id, t.creds);
+				if (secrets === null) {
+					result.skipped += 1;
+					continue;
+				}
+				await deps.upload(vault.id, t, secrets, vault);
+				outcome.set(t.id, { hash });
+			} catch (e) {
+				outcome.set(t.id, { error: (e as Error).message });
+			}
+		}
+		if (outcome.size === 0) continue;
+
+		// Re-read the list (it may have changed during the uploads) and fold results in by id.
+		const latest = await deps.loadTargets(vault.id);
+		await deps.saveTargets(vault.id, applyBackupOutcomes(latest, outcome, now));
+
+		for (const [id, r] of outcome) {
+			result.attempted += 1;
+			if (r.error !== undefined) result.failed.push({ vaultId: vault.id, id, error: r.error });
+			else result.succeeded.push({ vaultId: vault.id, id });
 		}
 	}
 
-	// Re-read the list (it may have changed during the uploads) and fold results in by id.
-	const latest = await deps.loadTargets();
-	await deps.saveTargets(applyBackupOutcomes(latest, outcome, now));
-
-	const succeeded: string[] = [];
-	const failed: { id: string; error: string }[] = [];
-	for (const [id, r] of outcome) {
-		if (r.error !== undefined) failed.push({ id, error: r.error });
-		else succeeded.push(id);
-	}
-	return { attempted: outcome.size, succeeded, failed };
+	return result;
 }

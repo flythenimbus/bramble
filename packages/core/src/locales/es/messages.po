@@ -2518,6 +2518,10 @@ msgstr "Tema"
 msgid "There's no vendor reset. Memorize this password and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be recovered."
 msgstr "No hay restablecimiento del proveedor. Memorice esta contraseña y guarde el código de recuperación que recibirá a continuación en un lugar seguro. Si pierde ambos, su bóveda no podrá ser recuperada."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "These destinations belong to the vault you're in. Every vault keeps its own targets and its own backup folder."
+msgstr "Estos destinos pertenecen a la caja fuerte en la que se encuentra. Cada caja fuerte mantiene sus propios destinos y su propia carpeta de copia de seguridad."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "They match, approve"
 msgstr "Coinciden, aprobar"
@@ -2614,6 +2618,10 @@ msgstr "Esta bóveda no tiene un código de recuperación."
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "This vault syncs with the desktop app."
 msgstr "Esta bóveda se sincroniza con la aplicación de escritorio."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This vault's folder: {folder}"
+msgstr "Carpeta de esta caja fuerte: {folder}"
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."

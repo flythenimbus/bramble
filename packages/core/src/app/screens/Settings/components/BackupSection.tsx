@@ -345,6 +345,7 @@ function TargetCard({
 	target,
 	def,
 	running,
+	folder,
 	onFrequency,
 	onEdit,
 	onReconnect,
@@ -353,6 +354,9 @@ function TargetCard({
 	target: BackupTargetConfig;
 	def: ProviderDef;
 	running: boolean;
+	// The folder THIS vault's snapshots land in, shown only when several vaults exist: a target
+	// carried over from the old shared config writes to a derived folder, not the one in its form.
+	folder?: string;
 	onFrequency: (f: BackupFrequency) => void;
 	onEdit: () => void;
 	// Present for OAuth targets: re-run sign-in in place instead of editing credential fields.
@@ -393,6 +397,11 @@ function TargetCard({
 								) : (
 									<Trans>Not backed up yet</Trans>
 								)}
+							</p>
+						)}
+						{folder && (
+							<p className="text-xs text-muted-foreground truncate" title={folder}>
+								<Trans>This vault's folder: {folder}</Trans>
 							</p>
 						)}
 					</div>
@@ -563,6 +572,14 @@ export function BackupSection() {
 
 	return (
 		<Section icon={<CloudUpload className="w-4 h-4 text-primary" />} title={t`Cloud backups`}>
+			{backup.multiVault && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>
+						These destinations belong to the vault you're in. Every vault keeps its own targets and
+						its own backup folder.
+					</Trans>
+				</p>
+			)}
 			{targets === undefined ? null : targets.length === 0 ? (
 				<>
 					<p className="text-sm text-muted-foreground">
@@ -586,6 +603,7 @@ export function BackupSection() {
 									target={target}
 									def={def}
 									running={runningIds.has(target.id)}
+									folder={backup.multiVault ? backup.folderFor(target) : undefined}
 									onFrequency={(f) => void backup.setFrequency(target.id, f)}
 									onEdit={() => editTarget(target)}
 									onReconnect={

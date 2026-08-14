@@ -118,6 +118,13 @@ export async function gotoSync(page: Page) {
 	await expect(page.getByRole("heading", { name: "Device sync" })).toBeVisible();
 }
 
+/** From an unlocked popup, open Settings and select the Backups panel. */
+export async function gotoBackups(page: Page) {
+	await page.getByRole("button", { name: "Settings" }).click();
+	await page.getByRole("button", { name: "Backups", exact: true }).click();
+	await expect(page.getByRole("heading", { name: "Cloud backups" })).toBeVisible();
+}
+
 /** The background service worker, for reading/writing the extension's storage in a test. */
 export async function backgroundWorker(context: BrowserContext): Promise<Worker> {
 	let [sw] = context.serviceWorkers();

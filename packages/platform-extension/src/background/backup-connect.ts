@@ -9,8 +9,8 @@
 // whenever the popup is next opened. See docs/cloud-storage-backups.md.
 
 import {
-	BACKUP_TARGETS_KEY,
 	type BackupTargetConfig,
+	backupTargetsKeyFor,
 	type WrappedCreds,
 } from "@core/backup/config";
 import {
@@ -104,11 +104,16 @@ async function connectOAuth(message: {
 	});
 	const creds = await wrapSecret(JSON.stringify({ refreshToken: tokens.refreshToken }));
 
+	// The target belongs to the vault that connected it (unlocked, so there is an active id).
+	const activeVaultId = getActiveVaultId();
+	if (!activeVaultId) return { ok: false, error: "Unlock Bramble first, then connect." };
+	const targetsKey = backupTargetsKeyFor(activeVaultId);
+
 	// Add a new target, or re-wrap an existing one's creds (reconnect).
-	const list = (await extensionStorage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY)) ?? [];
+	const list = (await extensionStorage.getMeta<BackupTargetConfig[]>(targetsKey)) ?? [];
 	if (targetId && list.some((t) => t.id === targetId)) {
 		await extensionStorage.setMeta(
-			BACKUP_TARGETS_KEY,
+			targetsKey,
 			list.map((t) => (t.id === targetId ? { ...t, creds, lastError: undefined } : t)),
 		);
 		return { ok: true, data: { targetId } };
@@ -122,7 +127,7 @@ async function connectOAuth(message: {
 		keep: 30,
 		creds,
 	};
-	await extensionStorage.setMeta(BACKUP_TARGETS_KEY, [...list, target]);
+	await extensionStorage.setMeta(targetsKey, [...list, target]);
 	return { ok: true, data: { targetId: id } };
 }
 

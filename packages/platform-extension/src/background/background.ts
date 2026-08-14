@@ -5,7 +5,7 @@
 // idle, prefs). Each concern module registers its own message handlers; the
 // router (./background/router) owns the single onMessage dispatcher.
 
-import { BACKUP_TARGETS_KEY } from "@core/backup/config";
+import { isBackupTargetsKey } from "@core/backup/config";
 import { api } from "../platform-api";
 import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
 import "./backup-connect";
@@ -161,6 +161,6 @@ api.storage.onChanged.addListener((changes, area) => {
 	if (Object.keys(changes).some(isSyncGroupKey) && !vaultLocked()) {
 		void maybeStartSync();
 	}
-	// Re-arm or clear the backup poke when the target list or a schedule changes.
-	if (changes[BACKUP_TARGETS_KEY]) void scheduleBackups();
+	// Re-arm or clear the backup poke when any vault's target list or schedule changes.
+	if (Object.keys(changes).some(isBackupTargetsKey)) void scheduleBackups();
 });

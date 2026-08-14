@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { BackupTargetConfig } from "./config";
-import { backupPrefix, normalizeS3, toProviderConfig } from "./config";
+import type { BackupMetaStore, BackupTargetConfig } from "./config";
+import {
+	BACKUP_CONFIG_KEY,
+	BACKUP_TARGETS_KEY,
+	backupPrefix,
+	backupTargetsKeyFor,
+	isBackupTargetsKey,
+	migrateBackupTargetsToVaults,
+	normalizeS3,
+	targetPrefixFor,
+	toProviderConfig,
+} from "./config";
 
 const TARGET = {
 	id: "t1",
@@ -41,6 +51,104 @@ describe("backupPrefix", () => {
 	it("leaves Dropbox on the bramble subfolder", () => {
 		const cfg: BackupTargetConfig = { ...TARGET, provider: "dropbox", path: "Sub" };
 		expect(backupPrefix(cfg)).toBe("bramble");
+	});
+});
+
+describe("target keys", () => {
+	it("namespaces a vault's target list", () => {
+		expect(backupTargetsKeyFor("v1")).toBe("backup.targets:v1");
+		expect(isBackupTargetsKey("backup.targets:v1")).toBe(true);
+	});
+
+	// The watcher must not treat the legacy device-global key as a vault's list.
+	it("does not match the legacy device-global key", () => {
+		expect(isBackupTargetsKey(BACKUP_TARGETS_KEY)).toBe(false);
+		expect(isBackupTargetsKey("sync.group:v1")).toBe(false);
+	});
+});
+
+describe("targetPrefixFor", () => {
+	const webdav = (extra: Partial<BackupTargetConfig>): BackupTargetConfig => ({
+		...TARGET,
+		provider: "webdav",
+		...extra,
+	});
+
+	// A target the user configured in this vault uses exactly the folder they typed, in every
+	// vault: the list is per-vault now, so there is nothing to disambiguate (issue #49).
+	it("uses the configured folder as-is for a vault's own target", () => {
+		const cfg = webdav({ path: "/backups/passmanager/work" });
+		expect(targetPrefixFor(cfg, "v2", false)).toBe("backups/passmanager/work");
+	});
+
+	// A target inherited from the old device-global list keeps writing where it already writes.
+	it("keeps the derived per-vault folder for a shared (migrated) target", () => {
+		const cfg = webdav({ path: "backups", sharedFolder: true });
+		expect(targetPrefixFor(cfg, "v1", true)).toBe("backups");
+		expect(targetPrefixFor(cfg, "v2", false)).toBe("backups-v2");
+	});
+});
+
+describe("migrateBackupTargetsToVaults", () => {
+	function store(initial: Record<string, unknown> = {}) {
+		const data: Record<string, unknown> = { ...initial };
+		const meta: BackupMetaStore = {
+			getMeta: async <T>(key: string) => data[key] as T | undefined,
+			setMeta: async (key, value) => {
+				data[key] = value;
+			},
+			removeMeta: async (key) => {
+				delete data[key];
+			},
+		};
+		return { meta, data };
+	}
+
+	const shared: BackupTargetConfig[] = [{ ...TARGET, provider: "webdav", path: "backups" }];
+
+	// Every vault adopts the old shared list, so the upgrade never silently stops backing one up.
+	it("copies the device-global list to every vault and drops the global keys", async () => {
+		const s = store({ [BACKUP_TARGETS_KEY]: shared });
+		await migrateBackupTargetsToVaults(s.meta, ["v1", "v2"], () => "generated");
+		const v1 = s.data[backupTargetsKeyFor("v1")] as BackupTargetConfig[];
+		const v2 = s.data[backupTargetsKeyFor("v2")] as BackupTargetConfig[];
+		expect(v1).toEqual([{ ...shared[0], sharedFolder: true }]);
+		expect(v2).toEqual(v1);
+		expect(s.data[BACKUP_TARGETS_KEY]).toBeUndefined();
+		expect(s.data[BACKUP_CONFIG_KEY]).toBeUndefined();
+	});
+
+	it("folds the older single-target config in", async () => {
+		const { id: _id, ...legacy } = shared[0] as BackupTargetConfig;
+		const s = store({ [BACKUP_CONFIG_KEY]: legacy });
+		await migrateBackupTargetsToVaults(s.meta, ["v1"], () => "generated");
+		expect(s.data[backupTargetsKeyFor("v1")]).toEqual([
+			{ ...legacy, id: "generated", sharedFolder: true },
+		]);
+		expect(s.data[BACKUP_CONFIG_KEY]).toBeUndefined();
+	});
+
+	// A vault that has already been configured owns its list; the migration must not clobber it.
+	it("leaves a vault that already has its own list alone", async () => {
+		const own: BackupTargetConfig[] = [{ ...TARGET, id: "own", provider: "s3" }];
+		const s = store({ [BACKUP_TARGETS_KEY]: shared, [backupTargetsKeyFor("v1")]: own });
+		await migrateBackupTargetsToVaults(s.meta, ["v1", "v2"], () => "generated");
+		expect(s.data[backupTargetsKeyFor("v1")]).toEqual(own);
+		expect(s.data[backupTargetsKeyFor("v2")]).toHaveLength(1);
+	});
+
+	// Before the registry resolves there is nothing to migrate onto: the global key must survive
+	// so a later, id-aware run still finds it.
+	it("no-ops (keeping the global key) when no vault is registered", async () => {
+		const s = store({ [BACKUP_TARGETS_KEY]: shared });
+		await migrateBackupTargetsToVaults(s.meta, [], () => "generated");
+		expect(s.data[BACKUP_TARGETS_KEY]).toEqual(shared);
+	});
+
+	it("no-ops when there is nothing to migrate", async () => {
+		const s = store({ [backupTargetsKeyFor("v1")]: [] });
+		await migrateBackupTargetsToVaults(s.meta, ["v1"], () => "generated");
+		expect(s.data).toEqual({ [backupTargetsKeyFor("v1")]: [] });
 	});
 });
 

@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createTarget, runBackup } from "../backup";
 import {
 	applyBackupOutcomes,
-	BACKUP_CONFIG_KEY,
-	BACKUP_TARGETS_KEY,
 	type BackupFrequency,
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupPrefix,
+	backupTargetsKeyFor,
+	migrateBackupTargetsToVaults,
+	targetPrefixFor,
 	toProviderConfig,
-	vaultBackupPrefix,
 } from "../backup/config";
 import type { OAuthProviderId } from "../backup/oauth";
 import { usePlatform } from "../context/PlatformContext";
@@ -31,32 +31,36 @@ export interface SaveTargetInput {
 const newId = () => globalThis.crypto.randomUUID();
 
 /**
- * Manual cloud backup across many device-local targets, each with credentials
- * VEK-wrapped. Scheduling (Phase 1) rides on top of the same targets. Uploads run
- * in this UI context; on the extension a popup fetch reaches any provider via host
- * permissions. See docs/cloud-storage-backups.md.
+ * Manual cloud backup across the active vault's device-local targets, each with credentials
+ * VEK-wrapped. Targets belong to one vault (`backup.targets:<vaultId>`), so configuring a
+ * destination in one vault leaves the others alone (issue #49). Scheduling (Phase 1) rides on
+ * top of the same targets. Uploads run in this UI context; on the extension a popup fetch
+ * reaches any provider via host permissions. See docs/cloud-storage-backups.md.
  */
 export function useBackup() {
 	const { storage, crypto, shell } = usePlatform();
-	// "Back up now" backs up the vault the user is currently in, to that vault's own folder.
-	const { activeId, vaults } = useVaultRegistry();
-	// undefined = still loading.
+	// Targets, credentials and snapshots all belong to the vault the user is currently in.
+	const { activeId, vaults, ready } = useVaultRegistry();
+	const vaultId = activeId ?? vaults[0]?.id;
+	const isDefault = vaultId != null && vaultId === vaults[0]?.id;
+	const vaultIds = useMemo(() => vaults.map((v) => v.id), [vaults]);
+	// undefined = still loading (or no vault resolved yet).
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
 	const [runningIds, setRunningIds] = useState<ReadonlySet<string>>(() => new Set());
 
+	// The migration is one-shot per storage, not per read: without this every live-refresh from a
+	// background write would re-probe the (by then absent) global keys.
+	const migrated = useRef(false);
+
 	const reload = useCallback(async () => {
-		let list = await storage.getMeta<BackupTargetConfig[]>(BACKUP_TARGETS_KEY);
-		if (!list) {
-			// Migrate a legacy single-target config into the array (unreleased format).
-			const legacy = await storage.getMeta<Omit<BackupTargetConfig, "id">>(BACKUP_CONFIG_KEY);
-			list = legacy ? [{ ...legacy, id: newId() }] : [];
-			if (legacy) {
-				await storage.setMeta(BACKUP_TARGETS_KEY, list);
-				await storage.removeMeta(BACKUP_CONFIG_KEY);
-			}
+		if (!ready || !vaultId) return;
+		if (!migrated.current) {
+			// Hand a pre-per-vault device-global list to every registered vault, once.
+			await migrateBackupTargetsToVaults(storage, vaultIds, newId);
+			migrated.current = true;
 		}
-		setTargets(list);
-	}, [storage]);
+		setTargets((await storage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(vaultId))) ?? []);
+	}, [storage, ready, vaultId, vaultIds]);
 
 	useEffect(() => {
 		void reload();
@@ -65,16 +69,20 @@ export function useBackup() {
 	// Live-refresh when a background scheduled backup rewrites the targets (status/lastError),
 	// so an open Settings page reflects it without a reopen. No-op where unsupported (mobile).
 	useEffect(
-		() => storage.subscribeMeta?.(BACKUP_TARGETS_KEY, () => void reload()),
-		[storage, reload],
+		() =>
+			vaultId
+				? storage.subscribeMeta?.(backupTargetsKeyFor(vaultId), () => void reload())
+				: undefined,
+		[storage, reload, vaultId],
 	);
 
 	const persist = useCallback(
 		async (next: BackupTargetConfig[]) => {
-			await storage.setMeta(BACKUP_TARGETS_KEY, next);
+			if (!vaultId) return;
+			await storage.setMeta(backupTargetsKeyFor(vaultId), next);
 			setTargets(next);
 		},
-		[storage],
+		[storage, vaultId],
 	);
 
 	const wrap = useCallback(
@@ -127,6 +135,12 @@ export function useBackup() {
 				keep: input.keep ?? cur.keep,
 				creds,
 			};
+			// Picking a folder makes this vault's choice explicit, so the target stops deriving one
+			// from the old shared layout. Any other edit leaves it alone: silently dropping the
+			// suffix would move a non-default vault's snapshots on top of the default vault's.
+			if (cur.sharedFolder && backupPrefix(updated) !== backupPrefix(cur)) {
+				updated.sharedFolder = undefined;
+			}
 			await persist(list.map((t) => (t.id === id ? updated : t)));
 		},
 		[wrap, persist, targets],
@@ -166,10 +180,8 @@ export function useBackup() {
 			const list = targets ?? [];
 			const toRun = id ? list.filter((t) => t.id === id) : list;
 			if (toRun.length === 0) return;
-			// The active vault (fall back to the first vault before one resolves). Read its blob and
-			// place snapshots in its own folder, matching where scheduled backups put this vault.
-			const vaultId = activeId ?? vaults[0]?.id ?? undefined;
-			const isDefault = vaultId == null || vaultId === vaults[0]?.id;
+			// This vault's own targets: read its blob and place snapshots in its own folder,
+			// matching where scheduled backups put this vault.
 			const blob = await storage.readVaultBlob(vaultId);
 			setRunningIds(new Set(toRun.map((t) => t.id)));
 			const results = await Promise.all(
@@ -179,7 +191,7 @@ export function useBackup() {
 							await crypto.decryptWithVek(t.creds.iv, t.creds.ciphertext),
 						) as BackupSecrets;
 						const bt = createTarget(toProviderConfig(t, secrets));
-						const prefix = vaultBackupPrefix(backupPrefix(t), vaultId ?? "", isDefault);
+						const prefix = targetPrefixFor(t, vaultId ?? "", isDefault);
 						const r = await runBackup(bt, blob, { prefix, keep: t.keep });
 						return {
 							id: t.id,
@@ -195,7 +207,14 @@ export function useBackup() {
 			await persist(applyBackupOutcomes(list, byId, Date.now()));
 			setRunningIds(new Set());
 		},
-		[targets, storage, crypto, persist, activeId, vaults],
+		[targets, storage, crypto, persist, vaultId, isDefault],
+	);
+
+	// The folder this vault's snapshots actually land in for a target, so the UI can show a
+	// migrated target's derived folder instead of the (different) one in its config.
+	const folderFor = useCallback(
+		(t: BackupTargetConfig) => targetPrefixFor(t, vaultId ?? "", isDefault),
+		[vaultId, isDefault],
 	);
 
 	return {
@@ -207,6 +226,9 @@ export function useBackup() {
 		removeTarget,
 		backupNow,
 		connectOAuth,
+		folderFor,
+		/** Several vaults exist, so the UI should say which one these targets belong to. */
+		multiVault: vaults.length > 1,
 		// Whether this platform can run the OAuth connect at all (extension yes, mobile no).
 		oauthAvailable: Boolean(shell.connectBackupOAuth),
 	};
