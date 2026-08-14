@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use vault_crypto::sigv4::{sign_s3, S3Credentials, SignRequest};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::secure_store;
 
@@ -39,18 +40,42 @@ fn account(vault_id: &str, target_id: &str) -> String {
     format!("{CREDS_PREFIX}{vault_id}:{target_id}")
 }
 
-/// How to authenticate one target's requests. The provider kind decides it, so the webview says
-/// which one applies and this side supplies the secret.
+/// How to authenticate one target's requests.
+///
+/// The first two read the secret from the credential store, which is the normal path. The
+/// `*Inline` pair carries it in the call instead, for the machine that has no usable credential
+/// store (a Linux session with no Secret Service): there the credentials stay wrapped under the
+/// vault key and the webview unwraps them per run, exactly as the extension does. The request
+/// still has to be sent from here, because the webview cannot reach a provider at all.
 #[derive(Deserialize, Clone)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AuthSpec {
-    /// S3-compatible: SigV4, signed here.
+    /// S3-compatible: SigV4, signed here with the stored secret.
     S3 { region: String },
-    /// WebDAV: an `Authorization: Basic` header built here.
+    /// WebDAV: an `Authorization: Basic` header built here from the stored secret.
     Basic,
+    /// SigV4 with credentials supplied by the caller (no credential store on this machine).
+    S3Inline {
+        region: String,
+        access_key_id: String,
+        secret_access_key: String,
+    },
+    /// Basic auth with credentials supplied by the caller (no credential store on this machine).
+    BasicInline { username: String, password: String },
 }
 
-#[derive(Deserialize)]
+impl AuthSpec {
+    /// Whether this request's secret comes from the credential store, in which case the stored
+    /// origin pin applies. An inline secret is the caller's own and needs no pin: it already had
+    /// the credential before it called.
+    fn uses_stored_secret(&self) -> bool {
+        matches!(self, AuthSpec::S3 { .. } | AuthSpec::Basic)
+    }
+}
+
+// Zeroized on drop, and no Debug: these are the only plaintext copies of a user's provider
+// credential in this process, and they are handled while the vault they belong to may be locked.
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
 struct S3Secrets {
     #[serde(rename = "accessKeyId")]
     access_key_id: String,
@@ -58,10 +83,37 @@ struct S3Secrets {
     secret_access_key: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
 struct BasicSecrets {
     username: String,
     password: String,
+}
+
+/// What the credential store holds for one target: the secret, and the ONE origin it may ever be
+/// sent to.
+///
+/// The origin is the whole reason this record exists rather than a bare secret. Refusing to hand
+/// the credential back to the webview (see `secure_store`'s reserved prefix) is worth nothing on
+/// its own, because the webview also names the URL each request goes to: point it at
+/// `https://attacker.example` and this process would attach `Authorization: Basic ...` and mail
+/// the credential out. Pinning the origin at save time, inside an item the webview cannot read or
+/// rewrite, is what actually contains it.
+#[derive(Serialize, Deserialize)]
+struct StoredCreds {
+    /// `scheme://host[:port]`, from the endpoint or server URL the user configured.
+    origin: String,
+    /// The provider's secret fields, shape depending on the provider kind.
+    secrets: serde_json::Value,
+}
+
+/// `scheme://host[:port]`, the comparison used for origin pinning. Not `Url::origin`, whose
+/// serialisation differs for non-special schemes, and not the full URL: a target legitimately
+/// addresses many paths under one origin.
+fn origin_of(url: &reqwest::Url) -> String {
+    match url.port() {
+        Some(port) => format!("{}://{}:{port}", url.scheme(), url.host_str().unwrap_or_default()),
+        None => format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default()),
+    }
 }
 
 #[derive(Serialize)]
@@ -76,13 +128,86 @@ fn amz_date() -> String {
     chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
 }
 
+/// The credentials a request will actually use, once it is settled where they came from. Held in
+/// `Zeroizing` so the copies made on the way to the signer do not outlive the call in freed memory.
+enum Resolved {
+    S3 {
+        region: String,
+        access_key_id: Zeroizing<String>,
+        secret_access_key: Zeroizing<String>,
+    },
+    Basic {
+        username: Zeroizing<String>,
+        password: Zeroizing<String>,
+    },
+}
+
+/// Pick the credentials for this request, and enforce the origin pin when they are the stored
+/// ones. An inline secret skips the pin deliberately: the caller already had that credential
+/// before it called, so pinning it would restrict nothing that is not already lost.
+fn resolve(auth: &AuthSpec, stored_json: Option<&str>, url: &reqwest::Url) -> Res<Resolved> {
+    match auth {
+        AuthSpec::S3Inline {
+            region,
+            access_key_id,
+            secret_access_key,
+        } => {
+            return Ok(Resolved::S3 {
+                region: region.clone(),
+                access_key_id: Zeroizing::new(access_key_id.clone()),
+                secret_access_key: Zeroizing::new(secret_access_key.clone()),
+            })
+        }
+        AuthSpec::BasicInline { username, password } => {
+            return Ok(Resolved::Basic {
+                username: Zeroizing::new(username.clone()),
+                password: Zeroizing::new(password.clone()),
+            })
+        }
+        _ => {}
+    }
+
+    let stored_json = stored_json.ok_or("no stored credentials for this backup target")?;
+    let stored: StoredCreds = serde_json::from_str(stored_json)
+        .map_err(|e| format!("stored backup credentials unreadable: {e}"))?;
+    // The one check that makes holding the credential here worth anything: it may only ever be
+    // sent to the origin the user configured for this target.
+    if origin_of(url) != stored.origin {
+        return Err(format!(
+            "refusing to authenticate a request to {}: this target's credentials are only for {}",
+            origin_of(url),
+            stored.origin
+        ));
+    }
+    let secrets_json = stored.secrets.to_string();
+    match auth {
+        AuthSpec::S3 { region } => {
+            let s: S3Secrets = serde_json::from_str(&secrets_json)
+                .map_err(|e| format!("stored S3 credentials unreadable: {e}"))?;
+            Ok(Resolved::S3 {
+                region: region.clone(),
+                access_key_id: Zeroizing::new(s.access_key_id.clone()),
+                secret_access_key: Zeroizing::new(s.secret_access_key.clone()),
+            })
+        }
+        _ => {
+            let s: BasicSecrets = serde_json::from_str(&secrets_json)
+                .map_err(|e| format!("stored WebDAV credentials unreadable: {e}"))?;
+            Ok(Resolved::Basic {
+                username: Zeroizing::new(s.username.clone()),
+                password: Zeroizing::new(s.password.clone()),
+            })
+        }
+    }
+}
+
 /// Turn an unauthenticated request into the exact one to send: the URL (with the canonical query
 /// SigV4 signed, so the wire form and the signed form cannot diverge) and the full header list.
 ///
 /// Separated from the sending so signing is testable with no network and no credential store.
 fn prepare(
     auth: &AuthSpec,
-    secrets_json: &str,
+    stored_json: Option<&str>,
     method: &str,
     url: &str,
     headers: Vec<(String, String)>,
@@ -90,10 +215,12 @@ fn prepare(
     stamp: &str,
 ) -> Res<(reqwest::Url, Vec<(String, String)>)> {
     let mut url = reqwest::Url::parse(url).map_err(|e| format!("backup url: {e}"))?;
-    match auth {
-        AuthSpec::S3 { region } => {
-            let s: S3Secrets = serde_json::from_str(secrets_json)
-                .map_err(|e| format!("stored S3 credentials unreadable: {e}"))?;
+    match resolve(auth, stored_json, &url)? {
+        Resolved::S3 {
+            region,
+            access_key_id,
+            secret_access_key,
+        } => {
             // The Host header carries the port when it is not the scheme's default, and the
             // signature covers Host, so it has to be built the same way here.
             let host = match url.port() {
@@ -114,9 +241,9 @@ fn prepare(
                     body,
                 },
                 &S3Credentials {
-                    access_key_id: s.access_key_id,
-                    secret_access_key: s.secret_access_key,
-                    region: region.clone(),
+                    access_key_id: access_key_id.to_string(),
+                    secret_access_key: secret_access_key.to_string(),
+                    region,
                 },
                 "s3",
                 stamp,
@@ -128,13 +255,12 @@ fn prepare(
             }
             Ok((url, signed.headers))
         }
-        AuthSpec::Basic => {
-            let s: BasicSecrets = serde_json::from_str(secrets_json)
-                .map_err(|e| format!("stored WebDAV credentials unreadable: {e}"))?;
+        Resolved::Basic { username, password } => {
             let mut out = headers;
+            let pair = Zeroizing::new(format!("{}:{}", *username, *password));
             out.push((
                 "Authorization".to_string(),
-                format!("Basic {}", B64.encode(format!("{}:{}", s.username, s.password))),
+                format!("Basic {}", B64.encode(pair.as_bytes())),
             ));
             Ok((url, out))
         }
@@ -177,9 +303,22 @@ pub fn backup_creds_available() -> bool {
     secure_store::read(PROBE).is_ok()
 }
 
+/// Store one target's secret fields, pinned to the origin they belong to. `origin` comes from the
+/// endpoint or server URL the user just typed; requests to anywhere else are refused later.
 #[tauri::command]
-pub fn backup_creds_save(vault_id: String, target_id: String, secrets: String) -> Res<()> {
-    secure_store::write(&account(&vault_id, &target_id), &secrets)
+pub fn backup_creds_save(
+    vault_id: String,
+    target_id: String,
+    origin: String,
+    secrets: String,
+) -> Res<()> {
+    let parsed = reqwest::Url::parse(&origin).map_err(|e| format!("backup origin: {e}"))?;
+    let record = StoredCreds {
+        origin: origin_of(&parsed),
+        secrets: serde_json::from_str(&secrets).map_err(|e| format!("backup credentials: {e}"))?,
+    };
+    let json = serde_json::to_string(&record).map_err(|e| format!("backup credentials: {e}"))?;
+    secure_store::write(&account(&vault_id, &target_id), &json)
 }
 
 #[tauri::command]
@@ -188,9 +327,14 @@ pub fn backup_creds_remove(vault_id: String, target_id: String) -> Res<()> {
 }
 
 /// One authenticated request to a backup provider. The webview builds the request; the secret is
-/// added here and never travels back.
+/// added here and never travels back, and only ever to the origin this target was saved with.
+///
+/// Main window only. A crate command is not gated by `capabilities/*.json` (those cover plugin
+/// permissions), so without this check the always-on-top spotlight panel could drive it too, and
+/// that window is deliberately the narrowest surface in the app.
 #[tauri::command]
 pub async fn backup_send(
+    window: tauri::Window,
     vault_id: String,
     target_id: String,
     auth: AuthSpec,
@@ -199,12 +343,21 @@ pub async fn backup_send(
     headers: HashMap<String, String>,
     body: Option<Vec<u8>>,
 ) -> Res<HttpReply> {
-    let secrets = secure_store::read(&account(&vault_id, &target_id))?
-        .ok_or("no stored credentials for this backup target")?;
+    if window.label() != crate::lifetime::MAIN {
+        return Err("backups run from the main window only".into());
+    }
+    let stored = if auth.uses_stored_secret() {
+        Some(
+            secure_store::read(&account(&vault_id, &target_id))?
+                .ok_or("no stored credentials for this backup target")?,
+        )
+    } else {
+        None
+    };
     let body = body.unwrap_or_default();
     let (url, headers) = prepare(
         &auth,
-        &secrets,
+        stored.as_deref(),
         &method,
         &url,
         headers.into_iter().collect(),
@@ -216,8 +369,13 @@ pub async fn backup_send(
     // protocols address objects directly, so a redirect is a misconfiguration worth surfacing.
     // No cookie store either, for the reason the WebDAV client documents: an ambient session for
     // the same host outranks our Authorization header on Nextcloud and then fails its CSRF check.
+    // Timeouts, because this runs unattended: without them one provider that accepts a connection
+    // and then says nothing would hang the run, and the caller's in-flight latch with it, so every
+    // vault's schedule would stop until the app restarted.
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(20))
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .map_err(|e| format!("http client: {e}"))?;
     let mut req = client.request(
@@ -247,8 +405,16 @@ mod tests {
 
     const STAMP: &str = "20260814T101112Z";
 
+    /// A stored record: secrets plus the origin they are pinned to.
+    fn stored(origin: &str, secrets: &str) -> String {
+        format!(r#"{{"origin":"{origin}","secrets":{secrets}}}"#)
+    }
+
     fn s3_secrets() -> String {
-        r#"{"accessKeyId":"AKIAIOSFODNN7EXAMPLE","secretAccessKey":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}"#.to_string()
+        stored(
+            "https://s3.example.com",
+            r#"{"accessKeyId":"AKIAIOSFODNN7EXAMPLE","secretAccessKey":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}"#,
+        )
     }
 
     fn header<'a>(headers: &'a [(String, String)], name: &str) -> &'a str {
@@ -273,7 +439,7 @@ mod tests {
             &AuthSpec::S3 {
                 region: "us-west-002".into(),
             },
-            &s3_secrets(),
+            Some(s3_secrets().as_str()),
             "GET",
             "https://s3.example.com/mybucket?prefix=bramble%2Fsub%20dir&list-type=2",
             vec![],
@@ -295,7 +461,13 @@ mod tests {
             &AuthSpec::S3 {
                 region: "us-east-1".into(),
             },
-            &s3_secrets(),
+            Some(
+            stored(
+                "https://minio.example.com",
+                r#"{"accessKeyId":"AKIA","secretAccessKey":"secret"}"#,
+                )
+                .as_str(),
+            ),
             "GET",
             "https://minio.example.com/b/k",
             vec![],
@@ -308,7 +480,13 @@ mod tests {
             &AuthSpec::S3 {
                 region: "us-east-1".into(),
             },
-            &s3_secrets(),
+            Some(
+            stored(
+                "https://minio.example.com:9000",
+                r#"{"accessKeyId":"AKIA","secretAccessKey":"secret"}"#,
+                )
+                .as_str(),
+            ),
             "GET",
             "https://minio.example.com:9000/b/k",
             vec![],
@@ -329,7 +507,13 @@ mod tests {
     fn webdav_requests_get_a_basic_header_and_an_untouched_url() {
         let (url, headers) = prepare(
             &AuthSpec::Basic,
-            r#"{"username":"admin","password":"Bramble-test-123"}"#,
+            Some(
+            stored(
+                "http://localhost:8080",
+                r#"{"username":"admin","password":"Bramble-test-123"}"#,
+                )
+                .as_str(),
+            ),
             "PROPFIND",
             "http://localhost:8080/remote.php/dav/files/admin/bramble/",
             vec![("Depth".into(), "1".into())],
@@ -352,7 +536,7 @@ mod tests {
     fn unreadable_stored_credentials_are_an_error_not_a_panic() {
         let err = prepare(
             &AuthSpec::Basic,
-            "not json",
+            Some("not json"),
             "GET",
             "https://example.com/",
             vec![],
@@ -360,7 +544,123 @@ mod tests {
             STAMP,
         )
         .unwrap_err();
-        assert!(err.contains("WebDAV credentials"), "{err}");
+        assert!(err.contains("backup credentials unreadable"), "{err}");
+    }
+
+    // The attack this whole arrangement exists to stop: the webview names the URL, so without a
+    // pin it could ask for the credential to be attached to a request at its own server and read
+    // it straight out of the log. Refusing to hand the secret back is not enough on its own.
+    #[test]
+    fn a_credential_is_refused_for_any_origin_but_its_own() {
+        for (label, url) in [
+            ("attacker host", "https://attacker.example/collect"),
+            ("same host, other scheme", "http://cloud.example.com/dav/"),
+            ("same host, other port", "https://cloud.example.com:8443/dav/"),
+            ("subdomain", "https://cloud.example.com.attacker.example/dav/"),
+            ("userinfo trick", "https://cloud.example.com@attacker.example/dav/"),
+        ] {
+            let err = prepare(
+                &AuthSpec::Basic,
+                Some(
+            stored(
+                    "https://cloud.example.com",
+                    r#"{"username":"admin","password":"pw"}"#,
+                    )
+                    .as_str(),
+                ),
+                "GET",
+                url,
+                vec![],
+                b"",
+                STAMP,
+            )
+            .unwrap_err();
+            assert!(err.contains("refusing to authenticate"), "{label}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_credential_is_accepted_anywhere_under_its_own_origin() {
+        for url in [
+            "https://cloud.example.com/remote.php/dav/files/me/",
+            "https://cloud.example.com/remote.php/dav/files/me/bramble/x.bramble",
+        ] {
+            assert!(
+                prepare(
+                    &AuthSpec::Basic,
+                    Some(
+            stored(
+                        "https://cloud.example.com",
+                        r#"{"username":"admin","password":"pw"}"#,
+                        )
+                        .as_str(),
+                    ),
+                    "PUT",
+                    url,
+                    vec![],
+                    b"",
+                    STAMP,
+                )
+                .is_ok(),
+                "{url}"
+            );
+        }
+    }
+
+    // The no-credential-store fallback: the caller passes the secret it already unwrapped from the
+    // vault, so there is nothing for a pin to protect, but the request must still be sent from
+    // here because the webview cannot reach a provider.
+    #[test]
+    fn inline_credentials_need_no_pin_and_still_authenticate() {
+        let (_, headers) = prepare(
+            &AuthSpec::BasicInline {
+                username: "admin".into(),
+                password: "Bramble-test-123".into(),
+            },
+            None,
+            "PUT",
+            "https://anywhere.example/dav/x",
+            vec![],
+            b"",
+            STAMP,
+        )
+        .unwrap();
+        assert_eq!(
+            header(&headers, "Authorization"),
+            "Basic YWRtaW46QnJhbWJsZS10ZXN0LTEyMw=="
+        );
+    }
+
+    #[test]
+    fn a_stored_auth_spec_with_nothing_stored_is_an_error() {
+        let err = prepare(
+            &AuthSpec::Basic,
+            None,
+            "GET",
+            "https://cloud.example.com/dav/",
+            vec![],
+            b"",
+            STAMP,
+        )
+        .unwrap_err();
+        assert!(err.contains("no stored credentials"), "{err}");
+    }
+
+    #[test]
+    fn the_s3_path_is_pinned_too() {
+        let err = prepare(
+            &AuthSpec::S3 {
+                region: "us-east-1".into(),
+            },
+            Some(s3_secrets().as_str()),
+            "GET",
+            "https://attacker.example/b/k",
+            vec![],
+            b"",
+            STAMP,
+        )
+        .unwrap_err();
+        assert!(err.contains("refusing to authenticate"), "{err}");
     }
 
     #[test]

@@ -162,6 +162,19 @@ export function targetPrefixFor(
 	return cfg.sharedFolder ? vaultBackupPrefix(base, vaultId, isDefault) : base;
 }
 
+/**
+ * The vault id to stamp into this target's object keys, or undefined to leave them untagged.
+ *
+ * Untagged is right for a target carried over from the device-global list: its folder is already
+ * exclusive to one vault (`<base>` for the default vault, `<base>-<id>` for the rest), and its
+ * existing snapshots have no tag, so tagging new ones would leave the old ones unprunable. Every
+ * other target shares its folder with whatever else the user pointed there, including another
+ * vault, so its keys carry the marker that keeps retention from crossing vaults.
+ */
+export function keyVaultIdFor(cfg: BackupTargetConfig, vaultId: string): string | undefined {
+	return cfg.sharedFolder ? undefined : vaultId;
+}
+
 /** The metadata slice the target migration needs; the storage adapter satisfies it. */
 export interface BackupMetaStore {
 	getMeta<T>(key: string): Promise<T | undefined>;

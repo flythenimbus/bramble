@@ -8,6 +8,7 @@ import {
 	backupPrefix,
 	backupTargetsKeyFor,
 	credsAreOsHeld,
+	keyVaultIdFor,
 	migrateBackupTargetsToVaults,
 	type TargetCreds,
 	targetPrefixFor,
@@ -35,6 +36,16 @@ const newId = () => globalThis.crypto.randomUUID();
 // Placeholder secret fields for a target whose credentials the OS holds: its transport
 // authenticates, so nothing reads these. toProviderConfig still needs the shape.
 const EMPTY_SECRETS = { username: "", password: "" } as const;
+
+/** The single origin a target's credentials belong to, or null when it has no usable one. */
+function originOf(input: SaveTargetInput): string | null {
+	const raw = input.provider === "s3" ? input.endpoint : input.serverUrl;
+	try {
+		return raw ? new URL(raw).origin : null;
+	} catch {
+		return null;
+	}
+}
 
 /**
  * Manual cloud backup across the active vault's device-local targets, each with credentials
@@ -111,9 +122,16 @@ export function useBackup() {
 	// else (and on a desktop with no usable store) they are wrapped under the vault key, so a
 	// backup can only run while it is unlocked. See adapters/backup-creds.ts.
 	const sealFor = useCallback(
-		async (targetId: string, secrets: BackupSecrets): Promise<TargetCreds> => {
-			if (vaultId && backupCreds && (await backupCreds.available())) {
-				await backupCreds.save(vaultId, targetId, secrets);
+		async (
+			targetId: string,
+			secrets: BackupSecrets,
+			input: SaveTargetInput,
+		): Promise<TargetCreds> => {
+			// The origin the credential is being handed over FOR. A target with no usable one has
+			// nothing to pin against, so it takes the vault-key path instead of a looser store.
+			const origin = originOf(input);
+			if (origin && vaultId && backupCreds && (await backupCreds.available())) {
+				await backupCreds.save(vaultId, targetId, secrets, origin);
 				return { wrap: "os" };
 			}
 			const w = await crypto.encryptWithVek(JSON.stringify(secrets));
@@ -138,7 +156,7 @@ export function useBackup() {
 				path: input.path,
 				frequency: "daily",
 				keep: input.keep ?? 30,
-				creds: await sealFor(id, input.secrets),
+				creds: await sealFor(id, input.secrets, input),
 			};
 			await persist([...(targets ?? []), target]);
 		},
@@ -151,7 +169,7 @@ export function useBackup() {
 			const cur = list.find((t) => t.id === id);
 			if (!cur) return;
 			// A new credential pair re-seals; omitting them keeps the saved ones.
-			const creds = input.secrets ? await sealFor(id, input.secrets) : cur.creds;
+			const creds = input.secrets ? await sealFor(id, input.secrets, input) : cur.creds;
 			const updated: BackupTargetConfig = {
 				...cur,
 				providerId: input.providerId,
@@ -227,12 +245,23 @@ export function useBackup() {
 							: (JSON.parse(
 									await crypto.decryptWithVek(creds.iv, creds.ciphertext),
 								) as BackupSecrets);
+						// Which transport, if any. Where the platform cannot reach a provider from
+						// this process at all (the desktop's webview has no CORS grant), BOTH cases
+						// have to route through it: the stored-credential one, and the one where we
+						// just unwrapped the secret ourselves. Undefined here means the platform can
+						// simply fetch, which is the extension and mobile.
 						const bt = createTarget(
 							toProviderConfig(t, secrets),
-							credsAreOsHeld(creds) && vaultId ? backupCreds?.transport(vaultId, t) : undefined,
+							credsAreOsHeld(creds) && vaultId
+								? backupCreds?.transport(vaultId, t)
+								: backupCreds?.transportWithSecrets(t, secrets),
 						);
 						const prefix = targetPrefixFor(t, vaultId ?? "", isDefault);
-						const r = await runBackup(bt, blob, { prefix, keep: t.keep });
+						const r = await runBackup(bt, blob, {
+							prefix,
+							keep: t.keep,
+							vaultId: keyVaultIdFor(t, vaultId ?? ""),
+						});
 						return {
 							id: t.id,
 							hash: r.hash as string | undefined,
@@ -243,8 +272,15 @@ export function useBackup() {
 					}
 				}),
 			);
+			// Re-read before folding, as the scheduled runner does: an upload takes a while, and
+			// the list can have changed under it (a target removed here, or run state stamped by
+			// the scheduler). Folding into the pre-run copy would put the stale one back, and
+			// would resurrect a target whose credentials have already been erased.
 			const byId = new Map(results.map((r) => [r.id, r]));
-			await persist(applyBackupOutcomes(list, byId, Date.now()));
+			const latest = vaultId
+				? ((await storage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(vaultId))) ?? list)
+				: list;
+			await persist(applyBackupOutcomes(latest, byId, Date.now()));
 			setRunningIds(new Set());
 		},
 		[targets, storage, crypto, persist, vaultId, isDefault, backupCreds],

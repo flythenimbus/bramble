@@ -255,12 +255,13 @@ the shell regardless, the credential has no reason to travel back to JavaScript.
 
 - **Credentials:** one credential-store item per target, at
   `backup.creds:<vaultId>:<targetId>` (`backup.rs`), holding the same JSON the
-  other platforms VEK-wrap. `secure_store` refuses that prefix through its
-  generic `secure_get`/`secure_set`/`secure_delete` commands, so a compromised
-  webview cannot read one back: it can ask for a request to be *sent*, never for
-  the secret that authenticates it. The target's `creds` field is then just
-  `{ wrap: "os" }`; `{ wrap: "vek" }` (or an absent `wrap`, which every existing
-  target has) keeps the old meaning.
+  other platforms VEK-wrap, alongside the one origin it may be sent to (see
+  [Origin pinning](#origin-pinning-the-part-that-does-the-work)). `secure_store`
+  refuses that prefix through its generic `secure_get`/`secure_set`/
+  `secure_delete` commands, so a compromised webview cannot read one back: it can
+  ask for a request to be *sent*, never for the secret that authenticates it. The
+  target's `creds` field is then just `{ wrap: "os" }`; `{ wrap: "vek" }` (or an
+  absent `wrap`, which every existing target has) keeps the old meaning.
 - **Transport:** `backup_send` performs the request with the auth injected in
   Rust: SigV4 via the shared core (`vault-crypto::sigv4`, pinned to the same
   vectors as the TS signer) or an `Authorization: Basic` header for WebDAV. The
@@ -271,10 +272,79 @@ the shell regardless, the credential has no reason to travel back to JavaScript.
   the main window runs the same `runScheduledBackups` the extension does. The
   tick is in Rust because this window is usually hidden and a hidden webview's
   timers are throttled.
-- **Fallback:** where the credential store does not answer (a Linux session with
-  no Secret Service), `backup_creds_available` returns false, credentials are
-  VEK-wrapped as everywhere else, and backups go back to running only while that
-  vault is unlocked. Same code path, one fewer capability.
+- **Fallback:** where no credential store answers, credentials are VEK-wrapped as
+  everywhere else and backups go back to running only while that vault is
+  unlocked. Same code path, one fewer capability. Which store answers is a
+  ladder, not a yes/no: see [Where credentials go](#where-credentials-go-a-ladder-the-app-climbs-for-you).
+
+### Origin pinning: the part that does the work
+
+Keeping the credential out of the webview is worthless on its own, and an
+adversarial review of the first implementation is what made that obvious. The
+webview names the URL of every request. Point `backup_send` at
+`https://attacker.example` and this process would attach
+`Authorization: Basic <user:password>` and mail the credential out. Refusing to
+hand the secret back accomplishes nothing when the secret can be *spent*
+anywhere.
+
+So the stored record is `{ origin, secrets }`, where the origin is
+`scheme://host[:port]` taken from the endpoint or server URL the user configured,
+and `backup_send` refuses any request whose origin differs. The pin lives inside
+an item the webview can neither read nor rewrite, which is what makes it a
+boundary rather than a suggestion. `backup_send` is also main-window only:
+crate commands are not gated by `capabilities/*.json` (those cover plugin
+permissions), so without that check the always-on-top spotlight panel could drive
+it too.
+
+What remains, and is accepted: a compromised webview can still make authenticated
+requests to the user's *own* provider, including deletes. Bounding that would
+mean moving the whole orchestration into Rust, which forks object naming and
+retention into two implementations. Destruction of backups by an attacker who
+already owns the renderer is the lesser evil.
+
+### Where credentials go: a ladder the app climbs for you
+
+Three tiers, tried in order, per target, at save time:
+
+1. **The OS credential store** (macOS Keychain, Windows Credential Manager, and
+   on Linux Secret Service: gnome-keyring, KWallet, or KeePassXC's integration).
+2. **The kernel keyring** (`keyutils`, the `keyring` crate's `linux-native`
+   backend). Linux only, and the answer for the sessions that have no Secret
+   Service on the bus: minimal window managers, headless machines. Better than
+   holding the secret in our own process: it lives in kernel memory, is never
+   swapped, survives an app restart within the login session, and is cleared at
+   logout. It is not at-rest storage, so a reboot means the target waits for the
+   next unlock to be re-armed.
+3. **The vault key**, unlock-gated, exactly like the extension.
+
+**The app chooses, and never asks.** Picking between these requires knowing what
+Secret Service guarantees on a particular distribution versus what a kernel
+keyring does versus what the vault key does. That is not a judgement a user can
+make well, and asking them to make it is offloading our job. There is no toggle
+and no per-target setting; `wrap: "os" | "vek"` records what happened, it is not
+a preference anyone chose.
+
+It follows that the app must **upgrade itself**. A target saved on a machine with
+no keyring is vault-wrapped; the next time that vault is unlocked the plaintext
+is in hand anyway, so if a store has appeared since, the credential moves up the
+ladder silently. No migration screen, no prompt.
+
+A store that is temporarily unreachable (a locked login keyring, a session
+without a bus) is a **skip, not a failure**, matching what a locked vault already
+does: no error painted on the card, still due, runs when the store comes back.
+
+### What the user sees
+
+Behaviour, never mechanism. The card says "Backs up on schedule" or "Backs up
+when you unlock this vault". No keychain, no Secret Service, no VEK anywhere in
+the main surface: those words cannot help someone decide anything, because there
+is nothing for them to decide.
+
+The degraded case gets a remedy rather than a warning, because it is usually one
+package away: an unobtrusive explanation that this session has no keyring, and
+that starting gnome-keyring or KWallet, or enabling KeePassXC's Secret Service
+integration, gets scheduled backups working. That is a statement about behaviour
+and how to change it, not a security decision handed to the user.
 
 ### The trade, stated plainly
 
@@ -293,22 +363,72 @@ risk: an unlock-gated schedule on an always-on machine means a vault the user
 rarely opens is effectively never backed up, and a backup that does not run
 protects nobody.
 
-Two things keep it honest. The Settings form says where the credentials go
-*before* the user types them, and each target card says whether it runs while
-locked. And the recommendation, for anyone who wants the credential to be weak
-by construction, is a provider-side scope: an S3 key restricted to the backup
-prefix, or Dropbox's app-folder token.
+Calibrate the Linux tier honestly, though. gnome-keyring and KWallet expose
+`org.freedesktop.secrets` on the session bus and **any process running as the
+user can read a secret from them unprompted**; there is no per-application ACL
+like the one macOS binds to a signed binary. What the Linux tier buys is
+encryption at rest while the session is locked or logged out, and on a
+full-disk-encrypted machine even that is largely already covered. It is still
+worth climbing to, but it is not the macOS guarantee wearing a different name.
+
+**There is no opt-out.** On a desktop with a working store, unattended is what
+you get. Someone who would rather their cloud credentials be reachable only with
+the master password has no switch for it, which is a deliberate consequence of
+the app choosing: an opt-out is the same unanswerable question as an opt-in,
+asked the other way round. Recorded here rather than left to be discovered.
+
+The recommendation for anyone who wants the credential to be weak by
+construction is provider-side scope: an S3 key restricted to the backup prefix,
+or Dropbox's app-folder token.
+
+### Handling the secret in memory
+
+Once a credential can be fetched unattended, "the vault is locked" stops implying
+"no cloud credential is in this process's memory", and that was true the moment
+scheduled-while-locked shipped, not when any cache was added: `secure_store`
+memoises reads (it has to, or macOS turns every read into a password prompt), so
+the first scheduled run leaves the plaintext in a process-global map for the life
+of the process. What that costs and what follows:
+
+- Evict `backup.creds:*` from that cache after a run, rather than holding it for
+  the process lifetime. The prompt-storm argument justifies caching the accounts
+  that are read constantly, not these.
+- Hold the secret types in `Zeroizing` (the crate is already a core-rust
+  dependency) so freed memory does not keep a copy, and keep `Debug` off them.
+- Editing a target's credentials must evict any cached copy, or backups keep
+  failing against a stale secret and the error will read like a server fault.
+- Swap and core dumps remain part of the surface; `zeroize` does not address
+  either. `MADV_DONTDUMP` is the cheap half if it ever matters.
+
+### Considered and rejected
+
+- **A key file next to the vault.** Any key readable unattended is readable by
+  anything running as the user, so it protects against offline disk access and
+  nothing else, which is what full-disk encryption already does better. Worth
+  noting the company it would keep: `~/.aws/credentials`, `rclone.conf`, and
+  restic and borg password files are all exactly this, so a user's realistic
+  alternative to Bramble is weaker. Still not something to ship as a default.
+- **Presigned URLs instead of a stored credential.** SigV4 can presign a PUT
+  valid for up to seven days, so an unlocked session could mint capabilities a
+  locked scheduler spends, and nothing reusable would sit at rest. It dies on our
+  own object naming: keys embed the snapshot's content hash and timestamp, so
+  they cannot be known in advance, and retention still needs LIST and DELETE.
+  Recorded so it does not get re-proposed.
+- **A per-target choice of mechanism.** See above: the app chooses.
 
 ### Not done yet
 
-- **Autostart.** "Runs as long as the computer is on" holds only once the app is
-  launched. A login item (`tauri-plugin-autostart`) with a Settings toggle, off
-  by default, is the missing piece and is deliberately separate work.
-- **A "back up while locked" opt-out.** Currently implicit: a desktop with a
-  working credential store uses it. A real toggle has to answer what happens to
-  credentials already in the store when it is turned off (they cannot be
-  re-wrapped, because Rust never hands them back), so the honest version erases
-  them and asks for them again.
+- **Autostart, and on Linux the same work as TPM sealing.** "Runs as long as the
+  computer is on" holds only once the app has been launched. On macOS and Windows
+  that is a login item (`tauri-plugin-autostart`). On Linux it is a **systemd user
+  unit**, and a user unit is also how `LoadCredentialEncrypted=` delivers a
+  TPM-sealed secret with no keyring daemon in the picture. So on that platform
+  autostart and a fourth, stronger credential tier are one piece of work rather
+  than two, and they should be done together.
+- **Verify keyutils persistence for real.** Session versus user keyring, and
+  `keyctl` timeouts, decide whether tier 2 survives an app restart. Docs are not
+  enough; this wants checking on an actual session before the UI promises
+  anything.
 - **Dropbox on desktop.** The OAuth connect is extension-only
   (`shell.connectBackupOAuth`), so the desktop shows the S3 and WebDAV tiles and
   hides one-click sign-in.

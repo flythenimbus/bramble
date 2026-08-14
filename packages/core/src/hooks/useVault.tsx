@@ -338,6 +338,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		shell,
 		biometric,
 		exchange,
+		backupCreds,
 	} = usePlatform();
 	// Vault actions reject with copy the screens render directly, so it has to be translated
 	// here rather than at each call site. Internal invariants below stay untranslated on purpose.
@@ -1430,8 +1431,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			for (const k of PER_VAULT_SYNC_KEYS) {
 				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
 			}
-			// Its backup targets too: the list holds cloud credentials wrapped under the vek that
-			// just went away, so leaving it behind is unreadable state pointing at the user's bucket.
+			// Its backup targets, and the credentials they name. The list itself is VEK-wrapped
+			// state that nothing can read once the vek is gone, but where the platform keeps
+			// credentials OUTSIDE the vault (the desktop's OS credential store) they are plaintext
+			// and would outlive the vault with no path left to reach them, because the list that
+			// named them is about to be deleted. So erase those first, then the list.
+			const doomed =
+				(await storage
+					.getMeta<{ id: string }[]>(backupTargetsKeyFor(activeId))
+					.catch(() => undefined)) ?? [];
+			for (const t of doomed) {
+				await backupCreds?.remove(activeId, t.id).catch(() => {});
+			}
 			await storage.removeMeta(backupTargetsKeyFor(activeId)).catch(() => {});
 			await dropActiveRecord();
 			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
@@ -1451,6 +1462,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			shell,
 			autofill,
 			biometric,
+			backupCreds,
 		],
 	);
 

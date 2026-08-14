@@ -12,30 +12,63 @@
 //! into a wall of them once already. An absent value is cached too, since that is just as
 //! stable a fact as a present one.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
+
+use zeroize::Zeroizing;
 
 type Res<T> = Result<T, String>;
 
 /// Shared with `pairing`, which was here first.
 const SERVICE: &str = "app.bramble.desktop";
 
-/// `None` means never looked up; `Some(None)` means looked up and absent.
-static CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+/// How long a cached value stays usable, for accounts that get one.
+///
+/// Most accounts here are device identity, read constantly and cached for the process lifetime
+/// because that is what the prompt problem above demands. Backup provider credentials are
+/// different: they are read in bursts (a snapshot is a PUT, a listing and some deletes), and
+/// keeping them resident between runs means a plaintext cloud credential sits in this process's
+/// memory for days with no run in sight. A short window keeps a burst to one keychain read
+/// without that. See docs/cloud-storage-backups.md, "Handling the secret in memory".
+const BURST_TTL: Duration = Duration::from_secs(60);
+
+fn ttl_for(account: &str) -> Option<Duration> {
+    account
+        .starts_with(crate::backup::CREDS_PREFIX)
+        .then_some(BURST_TTL)
+}
+
+/// `None` means never looked up; `Some(None)` means looked up and absent. Values are zeroized
+/// when they are replaced or evicted, so an expired credential does not linger in freed memory.
+type Entry = (Option<Zeroizing<String>>, Instant);
+static CACHE: Mutex<Option<HashMap<String, Entry>>> = Mutex::new(None);
 
 pub fn entry(account: &str) -> Res<keyring::Entry> {
     keyring::Entry::new(SERVICE, account).map_err(|e| format!("credential store unavailable: {e}"))
 }
 
+/// A cache hit, unless this account has a TTL and the entry is past it. An expired entry is
+/// dropped on the way out, which zeroizes the value rather than leaving it to be overwritten
+/// whenever the account is next read.
 fn cached(account: &str) -> Option<Option<String>> {
-    CACHE.lock().unwrap().as_ref()?.get(account).cloned()
+    let mut guard = CACHE.lock().unwrap();
+    let map = guard.as_mut()?;
+    let (value, stored_at) = map.get(account)?;
+    if ttl_for(account).is_some_and(|ttl| stored_at.elapsed() > ttl) {
+        map.remove(account);
+        return None;
+    }
+    Some(value.as_ref().map(|v| v.to_string()))
 }
 
 fn remember(account: &str, value: Option<String>) {
-    CACHE
-        .lock()
-        .unwrap()
-        .get_or_insert_with(HashMap::new)
-        .insert(account.to_string(), value);
+    CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(
+        account.to_string(),
+        (value.map(Zeroizing::new), Instant::now()),
+    );
 }
 
 pub fn read(account: &str) -> Res<Option<String>> {
@@ -163,6 +196,16 @@ mod tests {
             secure_get("sync.deviceKeypair".into()).unwrap(),
             Some("kp".into())
         );
+    }
+
+    // Device identity is read constantly and stays cached for the process lifetime, which is what
+    // keeps macOS from prompting. A backup credential is read in bursts and would otherwise sit in
+    // memory for days between runs, so only that prefix expires.
+    #[test]
+    fn only_backup_credentials_expire_from_the_cache() {
+        assert!(ttl_for("backup.creds:v1:t1").is_some());
+        assert!(ttl_for("sync.deviceKeypair").is_none());
+        assert!(ttl_for("extension-pairing-identity").is_none());
     }
 
     #[test]

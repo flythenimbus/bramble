@@ -880,7 +880,11 @@ Each phase retires a risk.
   `lifetime`. **Scheduled backups landed**: a 5-minute tick in the shell drives the shared
   `runScheduledBackups`, with target credentials in the OS credential store and the HTTP done in
   Rust (the webview has no CORS grant for `tauri://localhost`), so every vault's schedule is kept
-  whether or not it is unlocked. Outstanding: autostart, and a two-device test.
+  whether or not it is unlocked. Credentials climb a ladder the app picks with no user input
+  (OS store -> kernel keyring on Linux -> vault-wrapped and unlock-gated), and are pinned to the
+  one origin they may be sent to. Outstanding: autostart, which on Linux is a systemd user unit
+  and therefore the same work as TPM-sealed credentials via `LoadCredentialEncrypted=`; and a
+  two-device test. See [cloud-storage-backups.md](cloud-storage-backups.md).
 - **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
   and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

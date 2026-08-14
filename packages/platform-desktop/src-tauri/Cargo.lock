@@ -464,6 +464,7 @@ dependencies = [
  "tempfile",
  "vault-crypto",
  "window-vibrancy 0.8.0",
+ "zeroize",
 ]
 
 [[package]]

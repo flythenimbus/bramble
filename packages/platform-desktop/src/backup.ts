@@ -18,6 +18,7 @@ import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
+	keyVaultIdFor,
 	migrateBackupTargetsToVaults,
 	targetPrefixFor,
 	toProviderConfig,
@@ -92,15 +93,19 @@ export async function runDueBackups(): Promise<void> {
 					}
 				},
 				upload: async (vaultId, t, secrets, vault) => {
+					// Both paths go through the shell, because this window cannot reach a provider
+					// either way. Stored credentials stay in the shell; a vault-wrapped one (no
+					// credential store on this machine) is passed in with the request.
 					const target = createTarget(
-						// A target whose credentials the OS holds has no secret fields here; its
-						// transport authenticates in the shell instead.
 						toProviderConfig(t, secrets ?? { username: "", password: "" }),
-						secrets === null ? desktopBackupCreds.transport(vaultId, t) : undefined,
+						secrets === null
+							? desktopBackupCreds.transport(vaultId, t)
+							: desktopBackupCreds.transportWithSecrets(t, secrets),
 					);
 					await runBackup(target, vault.blob, {
 						prefix: targetPrefixFor(t, vault.id, vault.isDefault),
 						keep: t.keep,
+						vaultId: keyVaultIdFor(t, vault.id),
 					});
 				},
 			},

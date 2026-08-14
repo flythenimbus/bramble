@@ -11,6 +11,7 @@ import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
+	keyVaultIdFor,
 	migrateBackupTargetsToVaults,
 	targetPrefixFor,
 	toProviderConfig,
@@ -142,6 +143,7 @@ export async function runDueBackups(
 					await runBackup(target, vault.blob, {
 						prefix: targetPrefixFor(t, vault.id, vault.isDefault),
 						keep: t.keep,
+						vaultId: keyVaultIdFor(t, vault.id),
 					});
 				},
 			},
