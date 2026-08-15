@@ -467,10 +467,43 @@ updater key.
 
 ### One-time setup
 
+The OpenPGP applet, which is a different applet from the PIV one `age-plugin-yubikey` uses: the
+same token carries both, and setting this up does not disturb the existing age identities.
+
 ```sh
-# A signing-only key, on the token. Choose "(4) Set your own capabilities" -> sign only.
-gpg --expert --full-generate-key            # or --card-edit -> generate, to keep it on-card
-gpg --armor --export <KEYID> > keys.asc     # the public half users install
+# 1. Change both PINs. The factory defaults are 123456 (user) and 12345678 (admin), and a key
+#    that can sign a package repository must not be behind a published PIN.
+gpg --card-edit
+  admin
+  passwd          # 1 = PIN, 3 = Admin PIN, then q
+  # 2. Ed25519 rather than the RSA-2048 default: smaller, faster on the card, and apt has
+  #    understood it for years.
+  key-attr        # choose ECC + Curve 25519 for each of the three slots it asks about
+  # 3. Generate ON the card. Answer "n" to the off-card backup: not being exportable is the
+  #    property being bought here, and this key is replaceable (see below).
+  generate
+  quit
+
+# 4. Require a physical touch for every signature. Without this the PIN alone signs, and the PIN
+#    is cached by gpg-agent, so a compromised machine could sign silently.
+ykman openpgp keys set-touch sig on
+
+# 5. The fingerprint goes in .env.local as BRAMBLE_APT_GPG_KEY.
+gpg --list-secret-keys --keyid-format=long
+```
+
+`publish-apt.ts` exports the public half itself at publish time, so there is no `keys.asc` to
+keep in sync by hand.
+
+Two things to check once, because both fail in ways that read as something else:
+
+```sh
+# aptly must shell out to gpg. Its own Go OpenPGP implementation cannot talk to a smartcard and
+# reports a missing secret key for a key that is plainly there. The script asserts this too.
+grep gpgProvider ~/.aptly.conf     # "gpg"
+
+# pinentry has to be able to reach a terminal, or signing hangs with no prompt.
+echo test | gpg --clearsign > /dev/null && echo "signing works"
 ```
 
 Publish `keys.asc` at the repository root. It is public; the point is that it is fetched over

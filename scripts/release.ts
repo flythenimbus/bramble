@@ -680,6 +680,11 @@ async function releaseDesktop(version: string, universal: boolean) {
 		);
 	if (!process.env.TAURI_SIGNING_PRIVATE_KEY)
 		requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
+	// Linux needs two tools a minimal install does not have, and neither failure is legible when
+	// it happens: the deb bundler copies xdg-open INTO the package for tauri-plugin-opener and
+	// stops with "xdg-open binary not found" several minutes in, and the containerised build
+	// (scripts/build-linux.ts) rsyncs the tree into its workspace volume.
+	if (process.platform === "linux") requireBins(["rsync", "xdg-open"], "docs/desktop-port.md");
 	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
@@ -988,6 +993,17 @@ function requireBins(bins: string[], doc: string) {
 		"cargo-ndk": {
 			darwin: "cargo install cargo-ndk --locked",
 			linux: "cargo install cargo-ndk --locked",
+		},
+		rsync: { darwin: "preinstalled", linux: "sudo apt install rsync" },
+		// The binary the deb bundler looks for; the package that carries it is xdg-utils.
+		"xdg-open": { darwin: "not needed on macOS", linux: "sudo apt install xdg-utils" },
+		// The APT repository (scripts/publish-apt.ts). aptly builds and signs the index, rclone
+		// pushes it to R2, and docker runs the Linux build from a Mac.
+		aptly: { darwin: "brew install aptly", linux: "sudo apt install aptly" },
+		rclone: { darwin: "brew install rclone", linux: "sudo apt install rclone" },
+		docker: {
+			darwin: "brew install --cask docker",
+			linux: "see docs/release-signing.md",
 		},
 	};
 	const missing = bins.filter((b) => !has(b));

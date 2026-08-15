@@ -85,22 +85,31 @@ for (const deb of packages) {
 	aptly(["repo", "add", "-force-replace", REPO, join(DEBS, deb)]);
 }
 
+// aptly can sign with its own Go OpenPGP implementation instead of shelling out to gpg, and that
+// one cannot talk to a smartcard: it would report a missing secret key for a key that is plainly
+// there, because the secret half is on the token. Checked rather than assumed, since the default
+// has changed between aptly versions.
+const config = JSON.parse(execFileSync("aptly", ["config", "show"], { encoding: "utf8" }));
+if (config.gpgProvider && config.gpgProvider !== "gpg") {
+	fail(
+		`aptly is configured with gpgProvider "${config.gpgProvider}", which cannot use a key on a\n` +
+			'YubiKey. Set "gpgProvider": "gpg" in ~/.aptly.conf.',
+	);
+}
+
 // The touch is here, and only here. Everything above is public metadata.
 notifyYubiKeyTouch("sign the APT repository index");
 const published = aptly(["publish", "list", "-raw"], { quiet: true });
 const already = published.split("\n").some((line) => line.trim().startsWith(`. ${SUITE}`));
-aptly([
-	already ? "publish" : "publish",
-	...(already ? ["update"] : ["repo"]),
-	...(already ? [SUITE] : [REPO]),
-	`-gpg-key=${gpgKey}`,
-	// Batch: aptly would otherwise try to prompt for a passphrase, and the key is on a token that
-	// asks for its PIN through pinentry instead.
-	"-batch",
-]);
+// No -batch: it stops gpg from prompting, and a card asks for its PIN through pinentry. The
+// passphrase prompt -batch exists to avoid is not one this key has.
+aptly(
+	already
+		? ["publish", "update", SUITE, `-gpg-key=${gpgKey}`]
+		: ["publish", "repo", REPO, `-gpg-key=${gpgKey}`],
+);
 
-const root = execFileSync("aptly", ["config", "show"], { encoding: "utf8" });
-const rootDir = /"rootDir":\s*"([^"]+)"/.exec(root)?.[1];
+const rootDir = config.rootDir;
 if (!rootDir) fail("could not read aptly's rootDir from `aptly config show`.");
 const publishedDir = join(rootDir.replace("~", process.env.HOME ?? "~"), "public");
 

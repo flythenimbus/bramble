@@ -2,6 +2,10 @@
 name = "bramble-desktop"
 version = "0.1.0"
 description = "Bramble password manager"
+# Feeds the Maintainer field of the .deb and .rpm (Tauri falls back to `bundle.publisher` only
+# when this is absent, and Debian policy wants a name AND an address). Kept here rather than in
+# publisher so the Windows installer's Manufacturer stays a plain name.
+authors = ["Bramble <flythenimbus@pm.me>"]
 edition = "2021"
 publish = false
 rust-version = "1.77.2"
