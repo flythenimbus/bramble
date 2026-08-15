@@ -101,12 +101,17 @@ if (config.gpgProvider && config.gpgProvider !== "gpg") {
 notifyYubiKeyTouch("sign the APT repository index");
 const published = aptly(["publish", "list", "-raw"], { quiet: true });
 const already = published.split("\n").some((line) => line.trim().startsWith(`. ${SUITE}`));
-// No -batch: it stops gpg from prompting, and a card asks for its PIN through pinentry. The
-// passphrase prompt -batch exists to avoid is not one this key has.
+// Flags BEFORE the positional arguments: aptly's parser stops looking for flags at the first
+// non-flag word, so `publish repo bramble -gpg-key=...` reads the key as the PREFIX argument and
+// publishes the whole tree into a directory named `-gpg-key=<fingerprint>`. It succeeds, too,
+// which is the annoying part: the only symptom is that dists/ is not where anything expects it.
+//
+// No -batch either: it stops gpg from prompting, and a card asks for its PIN through pinentry.
+// The passphrase prompt -batch exists to avoid is not one this key has.
 aptly(
 	already
-		? ["publish", "update", SUITE, `-gpg-key=${gpgKey}`]
-		: ["publish", "repo", REPO, `-gpg-key=${gpgKey}`],
+		? ["publish", "update", `-gpg-key=${gpgKey}`, SUITE]
+		: ["publish", "repo", `-gpg-key=${gpgKey}`, REPO],
 );
 
 const rootDir = config.rootDir;
@@ -152,20 +157,34 @@ if (
 	fail("R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY must be set (.env.local).");
 }
 
+/**
+ * Flags every transfer needs, for one reason: R2 answers 501 NotImplemented to operations rclone
+ * performs by default against S3.
+ *
+ * Without these, every upload fails its first attempt and succeeds on the retry, which works but
+ * fills a release log with nine errors and an "Attempt 2/3 succeeded" — and a log that always
+ * carries errors is a log nobody reads when there is a real one.
+ *
+ * `--checksum` compares by hash instead of size-and-modtime, so rclone never needs to SET a
+ * modtime afterwards (which it does through a server-side copy that R2 rejects). `--s3-no-head`
+ * drops the HEAD-after-upload that rclone otherwise does to confirm what it just wrote.
+ */
+const RCLONE = ["--checksum", "--s3-no-head", "--s3-no-check-bucket", "--progress"];
+
 // The index last. rclone walks alphabetically, so `dists/` would otherwise be live before the
 // `pool/` files it points at, and an apt run in that window 404s on a package it was just told
 // about. Two passes, packages first, is the whole fix.
 console.log("uploading packages…");
-execFileSync("rclone", ["sync", join(publishedDir, "pool"), `r2:${BUCKET}/pool`, "--progress"], {
+execFileSync("rclone", ["sync", join(publishedDir, "pool"), `r2:${BUCKET}/pool`, ...RCLONE], {
 	stdio: "inherit",
 });
 console.log("uploading the index…");
-execFileSync("rclone", ["sync", join(publishedDir, "dists"), `r2:${BUCKET}/dists`, "--progress"], {
+execFileSync("rclone", ["sync", join(publishedDir, "dists"), `r2:${BUCKET}/dists`, ...RCLONE], {
 	stdio: "inherit",
 });
 // The key and the sources snippet, which are what a new user fetches before anything else.
 for (const file of ["keys.asc", "bramble.sources"]) {
-	execFileSync("rclone", ["copyto", join(publishedDir, file), `r2:${BUCKET}/${file}`], {
+	execFileSync("rclone", ["copyto", join(publishedDir, file), `r2:${BUCKET}/${file}`, ...RCLONE], {
 		stdio: "inherit",
 	});
 }
