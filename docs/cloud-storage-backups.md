@@ -416,22 +416,58 @@ of the process. What that costs and what follows:
   Recorded so it does not get re-proposed.
 - **A per-target choice of mechanism.** See above: the app chooses.
 
-### Not done yet
+### Carried over
 
-- **Autostart, and on Linux the same work as TPM sealing.** "Runs as long as the
-  computer is on" holds only once the app has been launched. On macOS and Windows
-  that is a login item (`tauri-plugin-autostart`). On Linux it is a **systemd user
-  unit**, and a user unit is also how `LoadCredentialEncrypted=` delivers a
-  TPM-sealed secret with no keyring daemon in the picture. So on that platform
-  autostart and a fourth, stronger credential tier are one piece of work rather
-  than two, and they should be done together.
-- **Verify keyutils persistence for real.** Session versus user keyring, and
-  `keyctl` timeouts, decide whether tier 2 survives an app restart. Docs are not
-  enough; this wants checking on an actual session before the UI promises
-  anything.
-- **Dropbox on desktop.** The OAuth connect is extension-only
-  (`shell.connectBackupOAuth`), so the desktop shows the S3 and WebDAV tiles and
-  hides one-click sign-in.
+Everything the per-vault and desktop-scheduling work left behind, with enough context to pick
+each one up cold. Ordered by what would bite a user first.
+
+**Failing targets retry forever, with no backoff.** The desktop tick is every five minutes and a
+failed target stays due, so a wrong password means twelve authentication failures an hour,
+indefinitely and unattended. Nextcloud throttles an account after repeated failed sign-ins — the
+WebDAV client already explains this in `reason()` — so the retry loop manufactures a lockout that
+outlives the correction. The fix wants a `failedAt` / `failures` pair on `BackupTargetConfig` and
+a backoff capped at the target's own frequency, which is a persisted-format change and therefore
+additive-and-tolerant like the rest. Until then, a broken target is noisy rather than harmful.
+
+**Autostart, and on Linux the same work as TPM sealing.** "Runs as long as the computer is on"
+holds only once the app has been launched. On macOS and Windows that is a login item
+(`tauri-plugin-autostart`). On Linux it is a **systemd user unit**, and a user unit is also how
+`LoadCredentialEncrypted=` delivers a TPM-sealed secret with no keyring daemon in the picture, so
+on that platform autostart and a fourth, stronger credential tier are one piece of work.
+
+**Two assumptions the UI already relies on, neither verified on hardware.**
+
+- *keyutils persistence.* `secure_store`'s tier 2 links keys into the session AND the per-UID
+  persistent keyring, which the crate documents as surviving a logout subject to an expiry timer
+  (`/proc/sys/kernel/keys/persistent_keyring_expiry`, typically three days, refreshed on access).
+  The card says "Backs up on schedule" on the strength of that. Check it on a real session:
+  generate a target, log out, log back in, confirm the scheduler still runs before a reboot.
+- *The `.deb`'s sidecar layout.* `manifest.rs` resolves the browser proxy as a sibling of the
+  running executable. That holds in a bundle and in `target/debug`; nobody has confirmed where
+  `externalBin` lands in a Debian package. If it is wrong, the browser link silently does not work
+  for anyone who installed from apt.
+
+**Not yet run.** All of it is written and skipped rather than missing:
+
+- `docker compose up -d` then `BRAMBLE_IT=1 pnpm --filter @vault/core exec vitest run providers.integration` — the provider round trip, keep-N against a server's own listing, and the two-vault retention scoping, against real Nextcloud and MinIO.
+- `cargo test -- --ignored` in `platform-desktop/src-tauri` — the SigV4 signer against MinIO, which validates signatures strictly. Our vectors only prove the two signers agree with each other.
+- A desktop run against the compose Nextcloud: configure a target, lock the vault, wait for a tick, confirm a snapshot lands while locked.
+- `apt install bramble` from `apt.bramble.sh` on a clean machine.
+
+**Mobile is untouched** (`cloudBackup: false`). Enabling it needs an answer to the same question
+the desktop had: whether a Capacitor webview can reach an arbitrary provider, or whether it needs
+a native transport the way the desktop does. Do not assume the extension's answer transfers.
+
+**Dropbox on desktop.** The OAuth connect is extension-only (`shell.connectBackupOAuth`), so the
+desktop shows the S3 and WebDAV tiles and hides one-click sign-in.
+
+**The extension's cross-vault credential fallback is temporary by design.** `decryptSecrets` tries
+every resident vek because targets migrated off the device-global list were wrapped under whichever
+vault happened to be active then. Once those have aged out (every migrated target re-saved, or
+gone), it should be narrowed to the owning vault, which is what a per-vault model should mean.
+
+**arm64 packages.** amd64 only, like Signal. The build container takes `--platform`, so this is a
+runner or an emulated build rather than new code.
 
 ## Target these two adapters first
 

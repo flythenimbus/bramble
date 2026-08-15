@@ -29,6 +29,28 @@ describe("SigV4 signing", () => {
 		);
 	});
 
+	// A backup folder with a space signed as `/my%2520folder` while fetch sent `/my%20folder`, so
+	// the server computed a different signature and every upload failed with SignatureDoesNotMatch
+	// for any prefix outside [A-Za-z0-9-._~]. `URL.pathname` is already encoded; encoding it again
+	// was the bug. The expected value here comes from the Rust signer, which signs the wire form.
+	it("encodes the path exactly once, whatever the folder is called", async () => {
+		const credentials = {
+			accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+			secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+			region: "us-east-1",
+		};
+		const signed = async (url: string) =>
+			(await signS3Request({ method: "GET", url, credentials, amzDate: "20260814T101112Z" }))
+				.headers.Authorization;
+
+		// The literal space and its encoded form are the same request, so they sign identically.
+		expect(await signed("https://h.example.com/b/my folder/x")).toBe(
+			await signed("https://h.example.com/b/my%20folder/x"),
+		);
+		// And a path needing no encoding is unaffected by the change.
+		expect(await signed("https://h.example.com/b/plain/x")).toContain("Signature=");
+	});
+
 	it("uri-encodes per AWS rules", () => {
 		expect(uriEncode("test$file.text")).toBe("test%24file.text");
 		expect(uriEncode("/a b/c", false)).toBe("/a%20b/c");

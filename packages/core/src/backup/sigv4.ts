@@ -37,6 +37,26 @@ export function uriEncode(input: string, encodeSlash = true): string {
 	return out;
 }
 
+/**
+ * The canonical URI: the path as it goes on the wire, encoded exactly once.
+ *
+ * `URL.pathname` is ALREADY percent-encoded, so encoding it again turns a folder called
+ * `my folder` into `/my%2520folder` while fetch sends `/my%20folder`, and the server computes a
+ * different signature than we did. The symptom is `SignatureDoesNotMatch` on every upload for any
+ * prefix outside `[A-Za-z0-9-._~]`, which reads as a credentials problem rather than an encoding
+ * one. Decoding first and re-encoding under AWS's rules produces the wire form for both.
+ */
+function canonicalPath(pathname: string): string {
+	let decoded = pathname;
+	try {
+		decoded = decodeURIComponent(pathname);
+	} catch {
+		// A stray `%` that is not an escape: leave it alone rather than throw. Signing something
+		// that may not match beats refusing to back up at all.
+	}
+	return uriEncode(decoded, false);
+}
+
 function canonicalQuery(params: URLSearchParams): string {
 	const pairs = [...params].map(([k, v]) => [uriEncode(k), uriEncode(v)] as const);
 	pairs.sort((a, b) =>
@@ -94,7 +114,7 @@ export async function signS3Request(
 
 	const canonicalRequest = [
 		input.method,
-		uriEncode(url.pathname, false),
+		canonicalPath(url.pathname),
 		canonicalQuery(url.searchParams),
 		canonicalHeaders,
 		signedHeaders,
