@@ -453,6 +453,9 @@ rm -P /tmp/updater.key
 
 ## Linux APT repository (`apt.bramble.sh`)
 
+Keys and their rationale here; the end-to-end flow, the runbook and the troubleshooting are in
+[apt-releases.md](apt-releases.md).
+
 A fifth signing setup, and the only one whose key can live **on** the YubiKey rather than
 encrypted beside it. Debian's tooling signs with GPG, and GPG drives a hardware token natively, so
 unlike the updater key (minisign, which Tauri's CLI takes as a path or a string) the private half

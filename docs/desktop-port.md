@@ -726,6 +726,9 @@ the only answer. On Linux `tauri build` produces three things, and the differenc
 | `.rpm` | `bundle/rpm/` | Same, for Fedora and friends; falls out of `targets: "all"` |
 | `.AppImage` + `.sig` | `bundle/appimage/` | Both the self-updating download and what the updater fetches, keyed in `latest.json` as `linux-x86_64` |
 
+The `.deb` is also published to an APT repository, which is how most Linux users will install and
+update: see [apt-releases.md](apt-releases.md).
+
 Note the asymmetry with macOS, which cost a wrong assumption before a real build corrected it:
 there is **no `.AppImage.tar.gz`**. Tauri 2.11 signs the AppImage itself, where on macOS the
 updater artifact is a separate archive beside the `.app`. It also emits `.sig` files next to the
