@@ -13,61 +13,15 @@
 // a copy left in a temp file is a copy someone could ship a malicious update with.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { yubiKeyIdentity } from "./age-yubikey-identity.ts";
-import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
-
-const HOME = homedir();
-const KEY_AGE =
-	process.env.DESKTOP_UPDATER_KEY_AGE ?? join(HOME, ".config/bramble/desktop-updater-key.age");
+import { KEY_AGE, signingKey } from "./desktop-signing-key.ts";
 
 const fail = (message: string): never => {
 	console.error(message);
 	process.exit(1);
 };
-
-const has = (bin: string): boolean => {
-	try {
-		execFileSync("which", [bin], { stdio: "ignore" });
-		return true;
-	} catch {
-		return false;
-	}
-};
-
-/** The updater key's contents, from the environment if already set, else off the YubiKey. */
-function signingKey(): string | undefined {
-	// Already provided (CI, or an unencrypted key during development).
-	if (process.env.TAURI_SIGNING_PRIVATE_KEY) return process.env.TAURI_SIGNING_PRIVATE_KEY;
-	if (!existsSync(KEY_AGE)) return undefined;
-
-	for (const bin of ["age", "age-plugin-yubikey"])
-		if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
-
-	// 0700 scratch dir for the identity stub, which points at the YubiKey slot and is not key
-	// material. The key itself is read from stdout and never lands in it.
-	const tmp = mkdtempSync(join(tmpdir(), "bramble-updater-"));
-	try {
-		const idFile = join(tmp, "id.txt");
-		// Reported rather than thrown: an unplugged key is the ordinary case here, and a stack
-		// trace buries the one line that says what to do about it.
-		try {
-			writeFileSync(idFile, yubiKeyIdentity());
-		} catch (e) {
-			fail(`error: ${(e as Error).message}`);
-		}
-		notifyYubiKeyTouch("decrypt the desktop updater signing key");
-		return execFileSync("age", ["-d", "-i", idFile, KEY_AGE], {
-			encoding: "utf8",
-			stdio: ["inherit", "pipe", "inherit"],
-		});
-	} finally {
-		rmSync(tmp, { recursive: true, force: true });
-	}
-}
 
 /**
  * Notarization credentials, reusing the App Store Connect API key the iOS release already has.
@@ -130,7 +84,7 @@ function readEnvFile(path: string): Record<string, string> {
 
 loadNotarization();
 
-const key = signingKey();
+const key = signingKey(fail);
 if (!key) {
 	// Refused rather than built unsigned: an unsigned archive is rejected by every installed app,
 	// so a release built without the key looks complete and silently breaks updating.

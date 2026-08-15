@@ -101,3 +101,32 @@ jobs:
             || { echo "::error::$apk is not a valid APK"; exit 1; }
           sha256sum -c SHA256SUMS
           echo "ok: $apk matches SHA256SUMS and is a valid APK"
+
+  verify-apt-repository:
+    if: endsWith(github.event.release.tag_name, '-desktop')
+    runs-on: ubuntu-latest
+    steps:
+      # What apt trusts is the signature on the index, not the packages: a .deb is verified by its
+      # checksum in Packages, which is covered by Release, which is signed. So a repository whose
+      # InRelease does not verify against the published key is one that installs nothing, and the
+      # failure surfaces to users as "the following signatures were invalid" long after the fact.
+      # This runs against the live repository, so it also catches a half-finished upload.
+      - name: Assert the APT index verifies against the published key
+        run: |
+          set -euo pipefail
+          curl -fsSL https://apt.bramble.sh/keys.asc | gpg --dearmor > /tmp/bramble.gpg
+          curl -fsSL https://apt.bramble.sh/dists/stable/InRelease > /tmp/InRelease
+          gpgv --keyring /tmp/bramble.gpg /tmp/InRelease
+          echo "ok: InRelease verifies"
+
+      # The index names packages by path and checksum; a pool file that is missing (or was
+      # overwritten by a later sync) makes `apt install` fail on a package apt was just told about.
+      - name: Assert every package the index names is actually there
+        run: |
+          set -euo pipefail
+          curl -fsSL https://apt.bramble.sh/dists/stable/main/binary-amd64/Packages > /tmp/Packages
+          grep '^Filename:' /tmp/Packages | awk '{print $2}' | while read -r path; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -I "https://apt.bramble.sh/$path")"
+            [ "$code" = "200" ] || { echo "::error::$path is $code"; exit 1; }
+            echo "ok: $path"
+          done

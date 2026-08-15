@@ -2,6 +2,8 @@ node_modules/
 dist/
 dist-chromium/
 dist-firefox/
+# Linux bundles from the container build (scripts/build-linux.ts).
+dist-linux/
 
 # Astro build cache
 .astro/

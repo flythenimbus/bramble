@@ -697,9 +697,28 @@ manifest whose download 404s, and a failed update looks identical to a broken up
 
 ### Linux artifacts
 
-The build scripts are platform-aware rather than macOS-shaped: `universal-apple-darwin` is a lipo
-of two Apple slices, so it is asked for only on darwin, and elsewhere the host target is the only
-answer. On Linux `tauri build` produces three things, and the difference between them matters:
+Built in a container (`pnpm run build:linux`), because a Debian package has to be built on Debian
+and the maintainer's machine is a Mac. Three things about that setup are load-bearing:
+
+- **`ubuntu:22.04`, not something current.** A binary cannot run on an older glibc than the one it
+  was linked against, so the build distribution sets the floor for every user: building on trixie
+  would produce a `.deb` that refuses to install on Ubuntu 22.04 or Debian 12. 22.04 is the oldest
+  release carrying webkit2gtk-4.1, which Tauri v2 requires.
+- **The repository is copied into the container, not bind-mounted for the build.** A shared mount
+  would have the container's `pnpm install` overwrite `node_modules` with Linux binaries and break
+  the host's dev environment. It is mounted read-only and rsynced into a named volume, which also
+  keeps rebuilds incremental. Into a *subdirectory* of that volume: the volume root is owned by
+  root, and `rsync -a` sets times on its destination root, which a non-owner cannot do however
+  writable the directory is.
+- **Signing does not happen in the container.** The updater key is forwarded through the
+  environment with `docker run -e NAME` (no value: the value form puts it in argv, which is
+  world-readable in `/proc` and echoed back in error messages). The APT repository's GPG key never
+  goes near a container at all, because it lives on a YubiKey and Docker Desktop on macOS cannot
+  pass a USB device through. `pnpm run publish:apt` signs and uploads from the host.
+
+The build scripts are otherwise platform-aware rather than macOS-shaped: `universal-apple-darwin`
+is a lipo of two Apple slices, so it is asked for only on darwin, and elsewhere the host target is
+the only answer. On Linux `tauri build` produces three things, and the difference matters:
 
 | Artifact | Where | What it is for |
 |---|---|---|

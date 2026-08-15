@@ -1,0 +1,11 @@
+# Bramble's APT repository. Fetched by users as part of the install snippet on bramble.sh and
+# published to the repository root by scripts/publish-apt.ts.
+#
+# Signed-By is the line that matters: it scopes this key to THIS repository, so a key installed
+# for Bramble cannot be used to authenticate a package from anywhere else on the system.
+Types: deb
+URIs: https://apt.bramble.sh
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/bramble-keyring.asc

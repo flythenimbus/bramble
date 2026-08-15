@@ -519,10 +519,33 @@ Signed-By: /usr/share/keyrings/bramble-keyring.asc
 
 ### Each release
 
-Built and signed on the maintainer's machine, like every other target here; CI only verifies.
-`pnpm release desktop` adds the new `.deb` to the local `aptly` repo, re-signs `Release` (a touch),
-and syncs to R2. A CI job on release-published re-downloads `InRelease` and checks it verifies
-against the published `keys.asc`, the same shape as `verify-updater-signature`.
+Two steps, split by where the keys are. The Linux artifacts are built in a container, because a
+Debian package has to be built on Debian and this machine is a Mac; the signing and publishing run
+on the host, because the GPG key is on a YubiKey and Docker Desktop on macOS cannot pass a USB
+device through.
+
+```sh
+pnpm run build:linux      # container: .deb, .rpm, AppImage -> dist-linux/ (updater key, a touch)
+pnpm run publish:apt      # host: aptly add + sign Release (a touch) + rclone sync to R2
+```
+
+`build:linux --unsigned` uses a throwaway updater key for iterating; the result installs fine and
+can never update, so it is not publishable.
+
+`publish:apt` needs three things in `.env.local`: `BRAMBLE_APT_GPG_KEY` (the fingerprint of the
+repository key), and `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` from the R2 API
+token. rclone is configured from those variables rather than from an `rclone.conf`, so no
+credential is written to disk.
+
+It uploads `pool/` before `dists/`, deliberately: the index names packages by path, and publishing
+it first leaves a window where apt is told about a `.deb` that is not there yet. It also exports
+`keys.asc` from whatever key actually signed, rather than from a committed copy, because the two
+drifting apart produces a repository nobody can verify and an error that reads like a network
+fault.
+
+CI only verifies, on release-published: `verify-apt-repository` re-downloads `InRelease` against
+the published key with `gpgv`, and then checks that every `Filename:` in `Packages` actually
+resolves, which catches a half-finished upload.
 
 ### What users run
 
