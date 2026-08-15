@@ -280,7 +280,9 @@ the shell regardless, the credential has no reason to travel back to JavaScript.
 ### Origin pinning: the part that does the work
 
 Keeping the credential out of the webview is worthless on its own, and an
-adversarial review of the first implementation is what made that obvious. The
+adversarial review of the first implementation is what made that obvious (that
+review, its findings and what was accepted rather than fixed:
+[sec-audit-backups.md](sec-audit-backups.md)). The
 webview names the URL of every request. Point `backup_send` at
 `https://attacker.example` and this process would attach
 `Authorization: Basic <user:password>` and mail the credential out. Refusing to
