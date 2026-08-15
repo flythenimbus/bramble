@@ -28,7 +28,23 @@ export function UpdatesSection() {
 	// section opened afterwards should show it rather than offering to check again.
 	useEffect(() => shell.updates?.onProgress(setFraction), [shell]);
 
-	if (!shell.updates) return null;
+	// Nothing to offer, but not always nothing to say: where a package manager owns this install
+	// the app cannot update itself and should not pretend otherwise, yet vanishing would read as
+	// having no update story at all. Everywhere else (the extension, mobile) there is genuinely
+	// nothing to report, because the store does it.
+	if (!shell.updates) {
+		if (!shell.updatesManagedExternally?.()) return null;
+		return (
+			<Section icon={<RefreshCw className="w-4 h-4 text-primary" />} title={t`Updates`}>
+				<p className="text-sm text-muted-foreground">
+					<Trans>
+						This copy of Bramble is kept up to date by your system's package manager. Updating your
+						system updates Bramble with it.
+					</Trans>
+				</p>
+			</Section>
+		);
+	}
 
 	// A download is running, whoever started it. The launch prompt sends people here mid-download,
 	// so without this the section would sit on "Check for updates" while the app downloaded itself.

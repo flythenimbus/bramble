@@ -95,6 +95,9 @@ export const desktopShell: ShellAdapter = {
 		return canSelfUpdate() ? desktopUpdates : undefined;
 	},
 
+	// A .deb or .rpm install: apt owns the files, and the Updates section says so.
+	updatesManagedExternally: () => !canSelfUpdate(),
+
 	// The panel asking this window to open an entry. One window, so this is a route change
 	// rather than a new context; the router's guards still apply.
 	onNavigateRequest: (callback) => {

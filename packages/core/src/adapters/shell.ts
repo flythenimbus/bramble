@@ -168,6 +168,13 @@ export interface ShellAdapter {
 		 */
 		onProgress(callback: (fraction: number | null | undefined) => void): () => void;
 	};
+	/**
+	 * True where something else keeps this install current: a Linux package manager, for a .deb or
+	 * .rpm from apt.bramble.sh. `updates` is then absent, because the app genuinely cannot replace
+	 * a dpkg-managed binary, and the Updates section says who does instead of disappearing — an
+	 * absent section reads as "this app has no way to update", which is the opposite of true.
+	 */
+	updatesManagedExternally?(): boolean;
 	/** What to call this device in the roster, where the host knows better than the user agent
 	 * does. A native app's UA describes its webview, so a Tauri window reports as Safari and would
 	 * otherwise be listed as a browser. Absent means sniff the UA. */

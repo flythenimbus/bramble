@@ -45,16 +45,11 @@ fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
 }
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    // Absent, not greyed out, where the package manager owns updates: a disabled item invites
-    // the question "why can I not check for updates", which is the wrong question. See
-    // crate::self_updatable.
-    let check = MenuItem::with_id(
-        app,
-        CHECK_FOR_UPDATES,
-        "Check for Updates…",
-        crate::can_self_update(),
-        None::<&str>,
-    )?;
+    // Absent, not greyed out, where the package manager owns updates: a disabled item invites the
+    // question "why can I not check for updates", which is the wrong question to make someone ask.
+    // See crate::can_self_update.
+    let updatable = crate::can_self_update();
+    let check = MenuItem::with_id(app, CHECK_FOR_UPDATES, "Check for Updates…", true, None::<&str>)?;
 
     let edit = Submenu::with_items(
         app,
@@ -88,23 +83,35 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         // The first submenu IS the app menu on macOS, and its items are the ones under the app
         // name. Order follows the platform convention: About, then app-specific items, then the
         // Services/Hide/Quit block macOS users expect to find in fixed positions.
-        let app_menu = Submenu::with_items(
-            app,
-            "Bramble",
-            true,
-            &[
-                &PredefinedMenuItem::about(app, Some("About Bramble"), Some(about(app)))?,
-                &check,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::services(app, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::hide(app, None)?,
-                &PredefinedMenuItem::hide_others(app, None)?,
-                &PredefinedMenuItem::show_all(app, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::quit(app, None)?,
-            ],
-        )?;
+        // Bound to locals first: the submenu takes references, so each item has to outlive the
+        // slice, and the conditional update check means it cannot be one expression any more.
+        let about_item = PredefinedMenuItem::about(app, Some("About Bramble"), Some(about(app)))?;
+        let sep1 = PredefinedMenuItem::separator(app)?;
+        let services = PredefinedMenuItem::services(app, None)?;
+        let sep2 = PredefinedMenuItem::separator(app)?;
+        let hide = PredefinedMenuItem::hide(app, None)?;
+        let hide_others = PredefinedMenuItem::hide_others(app, None)?;
+        let show_all = PredefinedMenuItem::show_all(app, None)?;
+        let sep3 = PredefinedMenuItem::separator(app)?;
+        let quit = PredefinedMenuItem::quit(app, None)?;
+
+        let mut items: Vec<&dyn tauri::menu::IsMenuItem<R>> = vec![&about_item];
+        if updatable {
+            items.push(&check);
+        }
+        for item in [
+            &sep1 as &dyn tauri::menu::IsMenuItem<R>,
+            &services,
+            &sep2,
+            &hide,
+            &hide_others,
+            &show_all,
+            &sep3,
+            &quit,
+        ] {
+            items.push(item);
+        }
+        let app_menu = Submenu::with_items(app, "Bramble", true, &items)?;
         Menu::with_items(app, &[&app_menu, &edit, &window])
     }
 
@@ -112,15 +119,13 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     {
         // No app menu off macOS, so the two items live where those platforms put them: an About
         // and an update check under Help.
-        let help = Submenu::with_items(
-            app,
-            "Help",
-            true,
-            &[
-                &check,
-                &PredefinedMenuItem::about(app, Some("About Bramble"), Some(about(app)))?,
-            ],
-        )?;
+        let about_item = PredefinedMenuItem::about(app, Some("About Bramble"), Some(about(app)))?;
+        let mut items: Vec<&dyn tauri::menu::IsMenuItem<R>> = Vec::new();
+        if updatable {
+            items.push(&check);
+        }
+        items.push(&about_item);
+        let help = Submenu::with_items(app, "Help", true, &items)?;
         let file = Submenu::with_items(app, "File", true, &[&PredefinedMenuItem::quit(app, None)?])?;
         Menu::with_items(app, &[&file, &edit, &window, &help])
     }

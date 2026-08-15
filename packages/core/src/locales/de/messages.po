@@ -2582,6 +2582,10 @@ msgstr "Dieser Code ist abgelaufen."
 #~ msgid "This computer keeps these credentials in its own keychain rather than inside the vault, so scheduled backups keep running while Bramble is locked. Your backups stay encrypted with your master password either way."
 #~ msgstr "Dieser Computer speichert diese Anmeldedaten im eigenen Schlüsselbund statt im Tresor, sodass geplante Backups auch bei gesperrtem Bramble weiter ausgeführt werden. Ihre Backups bleiben in jedem Fall mit Ihrem Master-Passwort verschlüsselt."
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "This copy of Bramble is kept up to date by your system's package manager. Updating your system updates Bramble with it."
+msgstr "Diese Kopie von Bramble wird über die Paketverwaltung Ihres Systems auf dem neuesten Stand gehalten. Wenn Sie Ihr System aktualisieren, wird Bramble mit aktualisiert."
+
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
 msgstr "Dies erstellt einen neuen Tresor auf diesem Gerät und synchronisiert ihn von Ihrem anderen Gerät. Verwenden Sie dasselbe Master-Passwort wie auf jenem Gerät."
