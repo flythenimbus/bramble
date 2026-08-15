@@ -695,6 +695,35 @@ It publishes the GitHub release BEFORE committing the manifest, in a second comm
 the live update channel, so the other order leaves a window where every app that checks reads a
 manifest whose download 404s, and a failed update looks identical to a broken updater.
 
+### Linux artifacts
+
+The build scripts are platform-aware rather than macOS-shaped: `universal-apple-darwin` is a lipo
+of two Apple slices, so it is asked for only on darwin, and elsewhere the host target is the only
+answer. On Linux `tauri build` produces three things, and the difference between them matters:
+
+| Artifact | Where | What it is for |
+|---|---|---|
+| `.deb` | `bundle/deb/` | What most people install. **Cannot self-update**: Tauri's updater replaces an AppImage in place and has no way to re-run a package manager |
+| `.rpm` | `bundle/rpm/` | Same, for Fedora and friends; falls out of `targets: "all"` |
+| `.AppImage` + `.sig` | `bundle/appimage/` | Both the self-updating download and what the updater fetches, keyed in `latest.json` as `linux-x86_64` |
+
+Note the asymmetry with macOS, which cost a wrong assumption before a real build corrected it:
+there is **no `.AppImage.tar.gz`**. Tauri 2.11 signs the AppImage itself, where on macOS the
+updater artifact is a separate archive beside the `.app`. It also emits `.sig` files next to the
+`.deb` and `.rpm`, which are misleading: the updater cannot apply either, so those signatures go
+nowhere and only the AppImage belongs in the manifest.
+
+Publishing only a `.deb` would ship an app whose update check works and whose update never
+arrives, which is worse than one that plainly cannot update, so `release-desktop.mjs` requires the
+signed AppImage and lists the rest for upload alongside it.
+
+Building on Linux needs the Tauri prerequisites plus two of ours: `libdbus-1-dev` for the Secret
+Service backend of the credential store, and `libxdo-dev` for the tray and global shortcut. The
+full list is in the `desktop-linux` CI job, which builds the bundle on every push with a
+throwaway signing key, so a Linux-only break is caught there rather than the first time someone
+tries to cut a `.deb`. That job also runs the shell's own `cargo test`, which nothing else in CI
+did: the credential store and the backup signing are desktop-only code.
+
 **Release from `main`.** The manifest reaches apps only through the website, and deploy-website.yml
 runs on pushes to main, so a release cut from any other branch produces a real GitHub release that
 no installed app ever hears about. The script checks the branch up front rather than letting that

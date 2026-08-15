@@ -6,8 +6,29 @@
 // tampered or substituted asset fails the signature and is discarded.
 
 import type { ShellAdapter } from "@core/adapters/shell";
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+
+/**
+ * Whether this install is allowed to replace itself.
+ *
+ * False for a .deb or .rpm from apt.bramble.sh: the updater cannot replace a dpkg-managed binary,
+ * and an app that keeps offering an update it cannot apply is worse than one that says nothing,
+ * because the user is told they are out of date and handed no way to act on it. The shell reports
+ * no updater at all in that case and the launch nudge stays quiet. Resolved from Rust, which is
+ * where the signal is (`APPIMAGE` in the environment); pessimistic until then, since briefly
+ * hiding a working check is harmless and briefly offering a broken one is not.
+ */
+let selfUpdatable = false;
+
+export async function resolveUpdatability(): Promise<void> {
+	selfUpdatable = await invoke<boolean>("self_updatable").catch(() => false);
+}
+
+export function canSelfUpdate(): boolean {
+	return selfUpdatable;
+}
 
 /** Held between check and install so the user is not made to wait for a second round trip. */
 let pending: Awaited<ReturnType<typeof check>> | null = null;

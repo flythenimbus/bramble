@@ -659,6 +659,63 @@ mod tests {
         assert!(err.contains("refusing to authenticate"), "{err}");
     }
 
+    /// The signer against a real S3 implementation, which is the only check that matters: our own
+    /// vectors prove the Rust and TypeScript signers agree with each other, not that either agrees
+    /// with a server. MinIO validates SigV4 strictly, so a canonicalisation mistake fails here and
+    /// nowhere else. It also exercises the invariant that the request sent is the request signed,
+    /// since reqwest, not the test, decides what finally goes on the wire.
+    ///
+    ///   docker compose up -d
+    ///   cargo test --manifest-path packages/platform-desktop/src-tauri/Cargo.toml -- --ignored
+    #[test]
+    #[ignore = "needs the MinIO from docker compose"]
+    fn signs_a_request_minio_accepts() {
+        let base = std::env::var("BRAMBLE_IT_S3").unwrap_or("http://localhost:9000".into());
+        let bucket = std::env::var("BRAMBLE_IT_S3_BUCKET").unwrap_or("bramble-test".into());
+        let stored = stored(
+            &base,
+            r#"{"accessKeyId":"bramble","secretAccessKey":"bramble-test-secret"}"#,
+        );
+        let auth = AuthSpec::S3 {
+            region: "us-east-1".into(),
+        };
+        let key = format!("{base}/{bucket}/it-rust-signer.bramble");
+        let body = b"sealed vault bytes".to_vec();
+
+        let send = |method: &str, url: &str, body: Vec<u8>| {
+            let (url, headers) = prepare(
+                &auth,
+                Some(stored.as_str()),
+                method,
+                url,
+                vec![(
+                    "content-type".to_string(),
+                    "application/octet-stream".to_string(),
+                )],
+                &body,
+                &amz_date(),
+            )
+            .expect("prepare");
+            let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
+            tauri::async_runtime::block_on(async move {
+                let mut req = reqwest::Client::new().request(method, url);
+                for (k, v) in headers {
+                    req = req.header(k, v);
+                }
+                let res = req.body(body).send().await.expect("minio reachable");
+                (res.status().as_u16(), res.bytes().await.unwrap().to_vec())
+            })
+        };
+
+        let (status, _) = send("PUT", &key, body.clone());
+        assert_eq!(status, 200, "MinIO rejected the signed PUT");
+        let (status, got) = send("GET", &key, vec![]);
+        assert_eq!(status, 200);
+        assert_eq!(got, body, "the bytes came back changed");
+        let (status, _) = send("DELETE", &key, vec![]);
+        assert_eq!(status, 204, "delete should succeed");
+    }
+
     #[test]
     fn a_stamp_is_the_shape_sigv4_requires() {
         let stamp = amz_date();

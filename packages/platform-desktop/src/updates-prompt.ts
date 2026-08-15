@@ -14,7 +14,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { emit, listen } from "@tauri-apps/api/event";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { desktopStorage } from "./adapters/storage";
-import { desktopUpdates } from "./adapters/updates";
+import { canSelfUpdate, desktopUpdates } from "./adapters/updates";
 
 /** Long enough to be out of the way of launching and unlocking, short enough to still be this
  * session rather than a surprise ten minutes in. */
@@ -25,6 +25,9 @@ const DISMISSED_KEY = "updates.dismissedVersion";
 
 export function promptForUpdateOnLaunch(): () => void {
 	const timer = setTimeout(() => {
+		// Nothing to nudge about where a package manager owns this install: apt already keeps it
+		// current, and the updater could not apply what the prompt offered.
+		if (!canSelfUpdate()) return;
 		void offer().catch(() => {
 			// Offline, GitHub down, a malformed manifest: none of it is worth a dialog on launch.
 			// Settings still has a Check button that reports the reason.

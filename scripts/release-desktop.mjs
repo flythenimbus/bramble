@@ -39,13 +39,38 @@ const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 
 const args = process.argv.slice(2);
 const resume = args.includes("--resume");
-// Universal unless told otherwise, matching the build. cargo puts a --target build under
-// target/<triple>/, so the two land in different places, and reading the wrong one is not an
-// empty directory and an error: it is the OTHER build, published as though it were this one.
-const universal = !args.includes("--aarch64");
+const MAC = process.platform === "darwin";
+// Universal unless told otherwise, matching the build, and macOS-only for the same reason it is
+// there (see build-desktop.ts). cargo puts a --target build under target/<triple>/, so the two
+// land in different places, and reading the wrong one is not an empty directory and an error: it
+// is the OTHER build, published as though it were this one.
+const universal = MAC && !args.includes("--aarch64");
 const BUNDLE = universal
   ? join(TARGET, "universal-apple-darwin/release/bundle")
   : join(TARGET, "release/bundle");
+
+/**
+ * Where the platform's artifacts are, and what each one is for.
+ *
+ * The split matters on Linux and does not exist on macOS: Tauri's updater can only replace an
+ * AppImage in place, so the .deb is a download-and-install artifact that will never self-update.
+ * Publishing only a .deb would ship an app whose update check works and whose update never
+ * arrives, which is worse than one that plainly cannot update.
+ */
+const LAYOUT = MAC
+  ? { updater: join(BUNDLE, "macos"), suffix: ".app.tar.gz", downloads: [["dmg", ".dmg"]] }
+  : {
+      // The AppImage IS the updater artifact here: Tauri signs it directly and there is no
+      // `.AppImage.tar.gz`, unlike the macOS side where the archive is a separate file. It also
+      // signs the .deb and .rpm, which is misleading — the updater cannot apply either, so those
+      // signatures go nowhere and only the AppImage belongs in the manifest.
+      updater: join(BUNDLE, "appimage"),
+      suffix: ".AppImage",
+      downloads: [
+        ["deb", ".deb"],
+        ["rpm", ".rpm"],
+      ],
+    };
 // Set when `pnpm release desktop` drives this: the assets are already uploaded by then, so the
 // upload instructions below would be telling you to do something you just did.
 const quiet = args.includes("--quiet");
@@ -66,23 +91,28 @@ if (!resume) {
 }
 
 /**
- * macOS arches an archive serves, as the updater names them.
+ * The arches an archive serves, as the updater names them.
  *
- * A universal archive runs on both, and its filename says neither: the bundler names it
+ * A universal macOS archive runs on both, and its filename says neither: the bundler names it
  * `Bramble.app.tar.gz` exactly as it names an aarch64-only one. Keyed under one arch it would be
  * invisible to the other, and the updater errors with TargetNotFound rather than reporting no
  * update, so an Intel user would see a broken check rather than an update built for them.
+ *
+ * Linux names carry the Debian arch (`amd64`, `arm64`), which is not what the updater calls them.
  */
 function platformKeys(file) {
+  if (!MAC) {
+    return [file.includes("aarch64") || file.includes("arm64") ? "linux-aarch64" : "linux-x86_64"];
+  }
   if (universal) return ["darwin-aarch64", "darwin-x86_64"];
   return [file.includes("x64") || file.includes("x86_64") ? "darwin-x86_64" : "darwin-aarch64"];
 }
 
-const macos = join(BUNDLE, "macos");
-if (!existsSync(macos)) {
+const updaterDir = LAYOUT.updater;
+if (!existsSync(updaterDir)) {
   console.error(
-    `no bundle at ${macos}. Drop --resume to build it` +
-      (universal ? "." : ", or drop --aarch64 if that is not what you built."),
+    `no bundle at ${updaterDir}. Drop --resume to build it` +
+      (universal || !MAC ? "." : ", or drop --aarch64 if that is not what you built."),
   );
   process.exit(1);
 }
@@ -96,8 +126,12 @@ const localEndpoint = existsSync(PATCH)
   : undefined;
 if (localEndpoint) {
   const host = new URL(localEndpoint).host;
-  for (const binary of ["Bramble.app/Contents/MacOS/bramble-desktop"]) {
-    const path = join(macos, binary);
+  // The binary to scan, inside whatever the platform's bundle is.
+  const binaries = MAC
+    ? [join(updaterDir, "Bramble.app/Contents/MacOS/bramble-desktop")]
+    : [join(TARGET, "release/bramble-desktop")];
+  for (const path of binaries) {
+    const binary = path.split("/").pop();
     if (existsSync(path) && readFileSync(path).includes(host)) {
       console.error(
         `${binary} was built against the local update endpoint (${host}).\n` +
@@ -109,11 +143,11 @@ if (localEndpoint) {
   }
 }
 
-const files = await readdir(macos);
-const archives = files.filter((f) => f.endsWith(".app.tar.gz"));
+const files = await readdir(updaterDir);
+const archives = files.filter((f) => f.endsWith(LAYOUT.suffix));
 if (archives.length === 0) {
   console.error(
-    "no .app.tar.gz in the bundle. createUpdaterArtifacts must be true in tauri.conf.json,\n" +
+    `no ${LAYOUT.suffix} in ${updaterDir}. createUpdaterArtifacts must be true in tauri.conf.json,\n` +
       "and TAURI_SIGNING_PRIVATE_KEY* must be set so the archive gets signed.",
   );
   process.exit(1);
@@ -130,7 +164,7 @@ for (const archive of archives) {
   }
   for (const key of platformKeys(archive))
     platforms[key] = {
-      signature: readFileSync(join(macos, sig), "utf8").trim(),
+      signature: readFileSync(join(updaterDir, sig), "utf8").trim(),
       // Tags are `<version>-desktop` (the repo's shared namespace); the asset name is whatever
       // the bundler produced.
       url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${archive}`,
@@ -154,13 +188,21 @@ console.log(`latest.json -> ${out}`);
 for (const [key, value] of Object.entries(platforms)) {
   console.log(`  ${key}: ${value.url.split("/").pop()}`);
 }
-const dmgs = existsSync(join(BUNDLE, "dmg"))
-  ? (await readdir(join(BUNDLE, "dmg"))).filter((f) => f.endsWith(".dmg"))
-  : [];
+// What a person downloads, as opposed to what the updater fetches: a .dmg on macOS, and on Linux
+// a .deb (installs, never self-updates) plus the AppImage (self-updates).
+const downloads = [];
+for (const [dir, ext] of LAYOUT.downloads) {
+  const at = join(BUNDLE, dir);
+  if (!existsSync(at)) continue;
+  for (const f of (await readdir(at)).filter((f) => f.endsWith(ext))) downloads.push(join(at, f));
+}
 if (!quiet) {
   console.log(`\nUpload to the ${version}-desktop release:`);
-  for (const f of dmgs) console.log(`  ${join(BUNDLE, "dmg", f)}`);
-  for (const a of archives) console.log(`  ${join(macos, a)}`);
+  for (const f of downloads) console.log(`  ${f}`);
+  for (const a of archives) {
+    console.log(`  ${join(updaterDir, a)}`);
+    console.log(`  ${join(updaterDir, `${a}.sig`)}`);
+  }
   console.log(
     `\n${out} is the update channel; commit it AFTER the release assets exist, or apps read a` +
       "\nmanifest whose download 404s. `pnpm release desktop` does that ordering for you.",

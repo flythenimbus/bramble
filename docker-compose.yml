@@ -1,11 +1,14 @@
-# Local Nextcloud for testing Bramble's WebDAV cloud backup end-to-end.
-# This is NOT part of the app; it's a throwaway WebDAV server you run on your
-# own machine to exercise the S3/WebDAV backup path without a cloud account.
+# Local Nextcloud and MinIO for testing Bramble's cloud backups end-to-end.
+# This is NOT part of the app; it's throwaway WebDAV and S3 servers you run on
+# your own machine to exercise the backup path without a cloud account.
 #
-#   docker compose up -d       # start it (first boot installs Nextcloud, ~30-90s)
+#   docker compose up -d       # start them (Nextcloud's first boot installs, ~30-90s)
 #   docker compose logs -f      # watch until Apache is serving requests
-#   docker compose down         # stop + remove the container
-#   docker compose down -v      # ...and wipe the data volume for a clean slate
+#   docker compose down         # stop + remove the containers
+#   docker compose down -v      # ...and wipe the data volumes for a clean slate
+#
+# With both up, the provider integration suite runs against them:
+#   BRAMBLE_IT=1 pnpm --filter @vault/core exec vitest run providers.integration
 #
 # Once it's up, point Bramble's WebDAV provider at:
 #   Server URL: http://localhost:8080/remote.php/dav/files/admin/
@@ -37,5 +40,42 @@ services:
       - bramble-nextcloud-data:/var/www/html
     restart: unless-stopped
 
+  # S3, for the other half of the backup code. MinIO validates SigV4 the way a real S3 endpoint
+  # does, which is what makes it worth running: the signer has two implementations (WebCrypto in
+  # TypeScript, and Rust for the desktop, which cannot reach a provider from its webview), and
+  # test vectors only prove they agree with each other. This proves they agree with a server.
+  #
+  #   Endpoint: http://localhost:9000    Bucket: bramble-test
+  #   Key: bramble                       Secret: bramble-test-secret
+  # The console is on http://localhost:9001 if you want to look at what landed.
+  minio:
+    image: minio/minio:latest
+    container_name: bramble-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: bramble
+      MINIO_ROOT_PASSWORD: bramble-test-secret
+    volumes:
+      - bramble-minio-data:/data
+    restart: unless-stopped
+
+  # Creates the bucket and exits. A one-shot rather than a manual step, so `docker compose up -d`
+  # leaves an environment the tests can use with nothing else typed.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 bramble bramble-test-secret; do sleep 1; done;
+      mc mb --ignore-existing local/bramble-test;
+      echo 'bucket ready: bramble-test';
+      "
+    restart: "no"
+
 volumes:
   bramble-nextcloud-data:
+  bramble-minio-data:

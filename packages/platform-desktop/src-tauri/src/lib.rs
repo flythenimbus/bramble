@@ -25,6 +25,24 @@ use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 use tauri_plugin_log::{Target, TargetKind};
 
+/// Whether this install can replace itself, which is not the same question as "is there an
+/// updater compiled in".
+///
+/// A Linux package manager owns the files it installed: the updater cannot replace a
+/// dpkg-managed binary, and an app that keeps offering an update it cannot apply is worse than
+/// one that says nothing, because the user is told they are out of date and given no way to fix
+/// it. AppImage runs set `APPIMAGE` in the environment and nothing else does, which is the only
+/// signal available at runtime; macOS and Windows always own their own bundle.
+/// See docs/release-signing.md, "The updater has to stand down".
+pub(crate) fn can_self_update() -> bool {
+    !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
+}
+
+#[tauri::command]
+fn self_updatable() -> bool {
+    can_self_update()
+}
+
 /// Version of the shared Rust crypto core this binary linked. Exists to prove the
 /// core-rust-as-a-cargo-dependency path end to end, which is the bet Tauri was picked on;
 /// the Settings "About" row reads it.
@@ -133,6 +151,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             core_version,
+            self_updatable,
             crypto::crypto_is_locked,
             crypto::crypto_lock,
             crypto::crypto_generate_vek,

@@ -27,13 +27,15 @@ import {
 	stopSync,
 } from "../sync/transport";
 import { desktopStorage } from "./storage";
-import { desktopUpdates } from "./updates";
+import { canSelfUpdate, desktopUpdates, resolveUpdatability } from "./updates";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
 let appVersion = "0.0.0";
 
 export async function resolveAppVersion(): Promise<void> {
 	appVersion = await getVersion();
+	// Same boot step, because both are read synchronously by the UI afterwards. See ./updates.
+	await resolveUpdatability();
 }
 
 /** Proves the shared Rust crypto core is linked into this binary. */
@@ -84,7 +86,14 @@ export const desktopShell: ShellAdapter = {
 
 	// Updating the app itself. Only the desktop has this: a store-distributed extension is
 	// updated by the store. See ./updates.
-	updates: desktopUpdates,
+	//
+	// A getter, and absent rather than disabled, when a package manager owns this install (a .deb
+	// or .rpm from apt.bramble.sh). The updater cannot replace a dpkg-managed binary, so offering
+	// the check would tell someone they are out of date and hand them no way to act on it. Every
+	// consumer already treats this as optional: the Settings section renders itself away.
+	get updates() {
+		return canSelfUpdate() ? desktopUpdates : undefined;
+	},
 
 	// The panel asking this window to open an entry. One window, so this is a route change
 	// rather than a new context; the router's guards still apply.

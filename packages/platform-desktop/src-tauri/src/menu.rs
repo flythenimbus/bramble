@@ -45,7 +45,16 @@ fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
 }
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let check = MenuItem::with_id(app, CHECK_FOR_UPDATES, "Check for Updates…", true, None::<&str>)?;
+    // Absent, not greyed out, where the package manager owns updates: a disabled item invites
+    // the question "why can I not check for updates", which is the wrong question. See
+    // crate::self_updatable.
+    let check = MenuItem::with_id(
+        app,
+        CHECK_FOR_UPDATES,
+        "Check for Updates…",
+        crate::can_self_update(),
+        None::<&str>,
+    )?;
 
     let edit = Submenu::with_items(
         app,

@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
 	/** Non-decision dialogs: "up to date", errors. */
 	messages: [] as { body: string; title?: string }[],
 	listeners: new Map<string, () => void>(),
+	/** False for a .deb install, where apt owns updates and the updater cannot apply one. */
+	selfUpdatable: true,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -42,6 +44,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("./adapters/updates", () => ({
+	canSelfUpdate: () => h.selfUpdatable,
 	desktopUpdates: {
 		check: async () => {
 			if (h.checkFails) throw new Error("offline");
@@ -73,6 +76,7 @@ async function launch(): Promise<void> {
 beforeEach(() => {
 	vi.useFakeTimers();
 	h.available = { version: "1.2.0" };
+	h.selfUpdatable = true;
 	h.checkFails = false;
 	h.accept = true;
 	h.asked = [];
@@ -193,5 +197,16 @@ describe("promptForUpdateOnLaunch", () => {
 		await vi.runAllTimersAsync();
 
 		expect(h.asked).toHaveLength(0);
+	});
+
+	// A .deb or .rpm is updated by apt, and the updater cannot replace a dpkg-managed binary.
+	// Prompting anyway would tell someone they are out of date and hand them no way to act on it,
+	// which is worse than staying quiet.
+	it("stays quiet where a package manager owns the install", async () => {
+		h.selfUpdatable = false;
+		await launch();
+
+		expect(h.asked).toHaveLength(0);
+		expect(h.installs).toBe(0);
 	});
 });

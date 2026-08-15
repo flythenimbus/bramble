@@ -54,7 +54,18 @@
 			"icons/icon.ico"
 		],
 		"externalBin": ["binaries/bramble-proxy"],
-		"createUpdaterArtifacts": true
+		"createUpdaterArtifacts": true,
+		"publisher": "Bramble",
+		"homepage": "https://bramble.sh",
+		"license": "GPL-3.0-only",
+		"shortDescription": "Password manager",
+		"longDescription": "An offline-first password manager. Vaults are encrypted locally and sync directly between your own devices, with no account and no server holding your data.",
+		"linux": {
+			"deb": {
+				"section": "utils",
+				"priority": "optional"
+			}
+		}
 	},
 	"plugins": {
 		"updater": {

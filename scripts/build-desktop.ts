@@ -140,13 +140,17 @@ if (!key) {
 	);
 }
 
-// Universal unless asked otherwise. A host-arch build is not something to hand anyone: it looks
-// identical and simply does not open on an Intel Mac. `--aarch64` opts out, for iterating, where
-// the second slice doubles the build for a machine that cannot run it anyway.
+// Universal unless asked otherwise, and only on macOS: `universal-apple-darwin` is a lipo of two
+// Apple slices, which is meaningless anywhere else and would fail the build outright. Elsewhere
+// the host target is the right and only answer, so Linux produces a .deb and an AppImage for the
+// architecture it is running on. A host-arch build IS wrong to hand anyone on macOS, though: it
+// looks identical and simply does not open on an Intel Mac, so `--aarch64` (iterating only) is
+// what opts out there.
 const passed = process.argv.slice(2);
 const hostOnly = passed.includes("--aarch64");
 const forwarded = passed.filter((a) => a !== "--aarch64");
-const universal = !hostOnly && !forwarded.some((a) => a.startsWith("--target"));
+const universal =
+	process.platform === "darwin" && !hostOnly && !forwarded.some((a) => a.startsWith("--target"));
 
 const args = [
 	"--filter",

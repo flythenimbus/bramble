@@ -450,3 +450,92 @@ age-plugin-yubikey --generate                                    # new recipient
 age -r age1yubikey1NEW -o ~/.config/bramble/desktop-updater-key.age /tmp/updater.key
 rm -P /tmp/updater.key
 ```
+
+## Linux APT repository (`apt.bramble.sh`)
+
+A fifth signing setup, and the only one whose key can live **on** the YubiKey rather than
+encrypted beside it. Debian's tooling signs with GPG, and GPG drives a hardware token natively, so
+unlike the updater key (minisign, which Tauri's CLI takes as a path or a string) the private half
+never exists off the token at all. That is a strictly better arrangement than everything above,
+and it is available here only because of the format.
+
+What the key protects: `apt` trusts a repository because its `Release` file is signed by a key the
+user installed into `/usr/share/keyrings`, pinned to that one repository by `Signed-By`. A key
+compromise means being able to serve arbitrary packages, installed as root, to everyone who ran
+the install snippet. Treat it as the second most consequential key in this file, after the
+updater key.
+
+### One-time setup
+
+```sh
+# A signing-only key, on the token. Choose "(4) Set your own capabilities" -> sign only.
+gpg --expert --full-generate-key            # or --card-edit -> generate, to keep it on-card
+gpg --armor --export <KEYID> > keys.asc     # the public half users install
+```
+
+Publish `keys.asc` at the repository root. It is public; the point is that it is fetched over
+HTTPS from a host we control and then pinned, so a later compromise of the repository host cannot
+substitute a different signer.
+
+There is no offline backup of this key, deliberately: an on-card key that cannot be exported is
+the property being bought. Losing the token means generating a new key and asking users to install
+it once, which is recoverable, unlike an updater-key loss.
+
+### Hosting
+
+Cloudflare R2 (`bramble-apt`) behind the custom domain `apt.bramble.sh`. Not the website's
+Cloudflare Pages deployment and not `website/public/`: each release adds a ~10 MB `.deb`, which in
+git is permanent, and Pages caps a file at 25 MiB anyway. R2 has no egress fees and the bucket is
+S3-compatible, so the release script pushes it with one `rclone sync`.
+
+Two cache rules on that hostname, which matter more than they look:
+
+| Path | Rule | Why |
+|---|---|---|
+| `/dists/*` | bypass cache | The index. A cached `InRelease` means `apt update` reports no new version, indefinitely |
+| `/pool/*` | cache, long TTL | Package filenames carry the version, so they never change |
+
+### Layout
+
+```
+keys.asc
+bramble.sources
+pool/main/b/bramble/bramble_<version>_amd64.deb
+dists/stable/main/binary-amd64/Packages{,.gz}
+dists/stable/{Release,InRelease}
+```
+
+`bramble.sources` is deb822, and the `Signed-By` line is what scopes the key to this repository
+rather than trusting it for everything apt fetches:
+
+```
+Types: deb
+URIs: https://apt.bramble.sh
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/bramble-keyring.asc
+```
+
+### Each release
+
+Built and signed on the maintainer's machine, like every other target here; CI only verifies.
+`pnpm release desktop` adds the new `.deb` to the local `aptly` repo, re-signs `Release` (a touch),
+and syncs to R2. A CI job on release-published re-downloads `InRelease` and checks it verifies
+against the published `keys.asc`, the same shape as `verify-updater-signature`.
+
+### What users run
+
+```sh
+curl -fsSL https://apt.bramble.sh/keys.asc | sudo tee /usr/share/keyrings/bramble-keyring.asc > /dev/null
+curl -fsSL https://apt.bramble.sh/bramble.sources | sudo tee /etc/apt/sources.list.d/bramble.sources > /dev/null
+sudo apt update && sudo apt install bramble
+```
+
+### The updater has to stand down
+
+A `.deb` install is updated by `apt`, and Tauri's updater cannot replace a dpkg-managed binary. An
+app that keeps offering an update it cannot apply is worse than one that says nothing, so the
+in-app updater is disabled whenever the app is not running as an AppImage: the `APPIMAGE`
+environment variable is set for AppImage runs and absent otherwise, which is the only reliable
+signal available at runtime. See `docs/desktop-port.md`.
