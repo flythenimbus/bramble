@@ -47,11 +47,15 @@ const has = (bin: string): boolean => {
 	}
 };
 
-function aptly(argv: string[], opts: { quiet?: boolean } = {}): string {
-	return execFileSync("aptly", argv, {
+/** `capture` keeps stderr, so a failure can be explained rather than only echoed. */
+function aptly(argv: string[], opts: { quiet?: boolean; capture?: boolean } = {}): string {
+	const out = execFileSync("aptly", argv, {
 		encoding: "utf8",
-		stdio: opts.quiet ? ["inherit", "pipe", "pipe"] : ["inherit", "pipe", "inherit"],
+		stdio:
+			opts.quiet || opts.capture ? ["inherit", "pipe", "pipe"] : ["inherit", "pipe", "inherit"],
 	});
+	if (opts.capture && out.trim()) console.log(out.trimEnd());
+	return out;
 }
 
 for (const bin of ["aptly", "gpg", "rclone"]) {
@@ -108,11 +112,41 @@ const already = published.split("\n").some((line) => line.trim().startsWith(`. $
 //
 // No -batch either: it stops gpg from prompting, and a card asks for its PIN through pinentry.
 // The passphrase prompt -batch exists to avoid is not one this key has.
-aptly(
-	already
-		? ["publish", "update", `-gpg-key=${gpgKey}`, SUITE]
-		: ["publish", "repo", `-gpg-key=${gpgKey}`, REPO],
-);
+try {
+	aptly(
+		already
+			? ["publish", "update", `-gpg-key=${gpgKey}`, SUITE]
+			: ["publish", "repo", `-gpg-key=${gpgKey}`, REPO],
+		{ capture: true },
+	);
+} catch (e) {
+	// stderr is captured for this call (see `capture` below) precisely so the hint can be
+	// conditional. Printed first, because swallowing aptly's own message would be worse than the
+	// missing hint.
+	const stderr = String((e as { stderr?: Buffer | string }).stderr ?? "");
+	if (stderr) console.error(stderr.trimEnd());
+	// aptly refuses to replace a published file whose bytes differ under the same name, which is
+	// the right instinct: a version someone already installed must not change underneath them. It
+	// only comes up when re-publishing an unbumped version, which is a testing move.
+	if (stderr.includes("file already exists and is different")) {
+		console.error(
+			`\nThat version has been published before with different bytes. Bump the version for a\n` +
+				`real release, or for a test:  aptly publish drop ${SUITE} && pnpm run publish:apt`,
+		);
+	}
+	if (stderr.includes("Timeout")) {
+		// Three different causes, one message from gpg. Ordered by how often each turned out to be
+		// the real one while this was being built.
+		console.error(
+			"\ngpg timed out waiting for the card. In order of likelihood:\n" +
+				"  1. The YubiKey is not plugged in.       check: ykman list\n" +
+				"  2. A PIN dialog is open behind a window. check: pgrep -a pinentry\n" +
+				"  3. It is blinking for a touch. `publish update` signs Release.gpg and InRelease\n" +
+				"     separately, so it wants TWO.",
+		);
+	}
+	process.exit(1);
+}
 
 const rootDir = config.rootDir;
 if (!rootDir) fail("could not read aptly's rootDir from `aptly config show`.");
@@ -188,6 +222,45 @@ for (const file of ["keys.asc", "bramble.sources"]) {
 		stdio: "inherit",
 	});
 }
+
+/**
+ * Purge the edge copies of what just changed.
+ *
+ * `/pool/*` is cached for a month, on the reasoning that a filename carries its version and so
+ * never changes content. That holds for a real release and fails the moment a version is
+ * re-published: the index demands the new hash while the edge still serves the old bytes, and apt
+ * stops with a checksum mismatch that looks like corruption. `/dists/*` bypasses cache, so this is
+ * only ever about packages.
+ *
+ * Optional, because it needs a Cloudflare token this repository does not otherwise use. Skipped
+ * loudly rather than silently: a stale edge is not something to discover from a user.
+ */
+async function purgeEdge(files: string[]): Promise<void> {
+	const zone = process.env.CF_ZONE_ID;
+	const token = process.env.CF_CACHE_PURGE_TOKEN;
+	if (!zone || !token) {
+		console.log(
+			"\nnote: CF_ZONE_ID / CF_CACHE_PURGE_TOKEN not set, so the edge cache was not purged.\n" +
+				"      Fine for a version that has never been published. If you re-published one, purge\n" +
+				"      these by hand or apt will fetch the old bytes for up to a month:",
+		);
+		for (const f of files) console.log(`        ${f}`);
+		return;
+	}
+	const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
+		method: "POST",
+		headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+		body: JSON.stringify({ files }),
+	});
+	const body = (await res.json()) as { success?: boolean; errors?: unknown };
+	if (!res.ok || !body.success) {
+		console.error(`cache purge failed: ${res.status} ${JSON.stringify(body.errors ?? body)}`);
+		process.exit(1);
+	}
+	console.log(`purged ${files.length} edge object(s)`);
+}
+
+await purgeEdge(packages.map((deb) => `https://apt.bramble.sh/pool/main/b/bramble/${deb}`));
 
 console.log("\ndone. Verify with:");
 console.log("  curl -fsSL https://apt.bramble.sh/dists/stable/InRelease | gpg --verify -");
