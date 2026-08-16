@@ -88,10 +88,9 @@ fn manifest_for(proxy: &Path) -> HostManifest {
 
 /// The proxy that sits beside the running binary.
 ///
-/// In development that is `target/debug/`; in a bundle it is `Contents/MacOS/`, which means
-/// the bundler has to place the proxy there. That wiring does not exist yet, so a bundled
-/// build will write a manifest pointing at a binary that is not present. Tracked in
-/// docs/desktop-port.md; harmless in development, where both live side by side.
+/// In development that is `target/debug/`; in a bundle it is `Contents/MacOS/` on macOS and
+/// `/usr/bin` from the `.deb`. Every packaging path now puts it there, which the .deb, Nix and
+/// cask tests each assert, and the shipped 0.2.0 disk image carries it.
 pub fn proxy_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     Some(exe.parent()?.join("bramble-proxy"))

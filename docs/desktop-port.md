@@ -783,6 +783,30 @@ bramble` does in one command and computes the checksum itself; for a cask with a
 their bot usually opens that PR before you do. When autostart lands as a launch agent, the cask
 will need an `uninstall launchctl:` stanza to match.
 
+**Submitting it requires a Mac, and not for a technical reason.** homebrew-cask's pull request
+template has a checklist, prefaced with "do not tick a checkbox if you haven't performed its
+action", and two of its new-cask items are `HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask` and
+`brew uninstall --cask`. Neither can run on Linux. `test:brew` covers every other box, so the
+remaining work is:
+
+```bash
+brew tap-new flythenimbus/local && cp packages/platform-desktop/homebrew/bramble.rb \
+  "$(brew --repository)/Library/Taps/flythenimbus/homebrew-local/Casks/bramble.rb"
+brew audit --cask --online --new flythenimbus/local/bramble
+HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask flythenimbus/local/bramble
+open -a Bramble && brew uninstall --cask flythenimbus/local/bramble
+```
+
+Then the PR is `Casks/b/bramble.rb`, titled `bramble <version> (new cask)`.
+
+The template also asks whether AI was used, wants the tool disclosed and its `zap` paths reviewed,
+limits a non-maintainer to one AI-assisted PR open at a time, and asks that maintainer questions be
+answered without it. That is a commitment only the submitter can make, so the PR gets opened by a
+person, not by tooling. See <https://docs.brew.sh/Responsible-AI-Usage>.
+
+Worth doing the `zap` review carefully at that point: it deletes the vault directory, and the two
+globs reach into other applications' support directories.
+
 ### NixOS
 
 `flake.nix` at the repository root builds the app from source
