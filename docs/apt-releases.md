@@ -17,6 +17,9 @@ repository, then install. `bramble.sources` is deb822 and its `Signed-By:` line 
 without it, a key installed for Bramble could authenticate a package from anywhere else on the
 system.
 
+Those same three commands are what the download box on the front page hands a Linux visitor, from
+`website/src/downloads.ts`. Change them here and change them there.
+
 ## Why a repository rather than a `.deb` on the release page
 
 A downloaded `.deb` installs once and then rots. Bramble is distributed outside any store, so

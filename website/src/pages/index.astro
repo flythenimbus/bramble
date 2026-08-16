@@ -43,6 +43,7 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/starwind/tabs";
+import DownloadBox from "@/components/DownloadBox.astro";
 import Footer from "@/components/Footer.astro";
 import Header from "@/components/Header.astro";
 import Newsletter from "@/components/Newsletter.astro";
@@ -132,73 +133,40 @@ const faqs = [
     <Header />
 
     <main>
-        {/* Hero */}
-        <section class="relative overflow-hidden">
+        {/* Hero. Sized to the first screen minus the sticky header, so the download box lands
+            above the fold without pushing anything off the bottom of it. */}
+        <section
+            class="relative flex min-h-[calc(100svh-4rem)] items-center overflow-hidden"
+        >
             <div
                 class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_50%_0%,var(--muted)_0%,transparent_70%)]"
             >
             </div>
             <div
-                class="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28"
+                class="mx-auto w-full max-w-6xl px-4 py-8 text-center sm:px-6 sm:py-10"
             >
-                <div class="mx-auto mb-6 flex w-fit items-center gap-2">
+                <div class="mx-auto mb-5 flex w-fit items-center gap-2">
                     <Badge variant="outline" size="md"
                         >Local-first password manager</Badge
                     >
                 </div>
                 <h1
-                    class="mx-auto max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
+                    class="mx-auto max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl"
                 >
                     Your passwords never leave your devices.
                 </h1>
                 <p
-                    class="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground text-pretty"
+                    class="mx-auto mt-5 max-w-2xl text-muted-foreground text-pretty sm:text-lg"
                 >
                     {SITE.description}
                 </p>
 
-                <div
-                    class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
-                >
-                    <Button
-                        href={LINKS.chrome}
-                        data-install-browser
-                        target="_blank"
-                        rel="noopener"
-                        size="lg"
-                    >
-                        <Puzzle />
-                        <span data-install-label>Add to your browser</span>
-                    </Button>
-                    <Button
-                        href={LINKS.ios}
-                        target="_blank"
-                        rel="noopener"
-                        variant="outline"
-                        size="lg"
-                    >
-                        <BrandApple />
-                        Get the iOS app
-                    </Button>
-                    <Button
-                        href={LINKS.android}
-                        target="_blank"
-                        rel="noopener"
-                        variant="outline"
-                        size="lg"
-                    >
-                        <BrandAndroid />
-                        Get the Android app
-                    </Button>
+                <div class="mt-8">
+                    <DownloadBox />
                 </div>
 
-                <p class="mt-4 text-sm text-muted-foreground">
-                    Works in Chrome, Brave, Arc, Vivaldi, Firefox, LibreWolf,
-                    and Waterfox, plus iOS and Android.
-                </p>
-
                 <ul
-                    class="mx-auto mt-9 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2"
+                    class="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2"
                 >
                     {
                         trust.map((item) => (

@@ -729,6 +729,15 @@ the only answer. On Linux `tauri build` produces three things, and the differenc
 The `.deb` is also published to an APT repository, which is how most Linux users will install and
 update: see [apt-releases.md](apt-releases.md).
 
+The front page offers all four of these (macOS, APT, AppImage, Nix) from one download box, which
+picks the visitor's platform first. It reads the version out of `latest.json`, so a release
+updates the site without anyone editing it, and the AppImage link is the manifest's own URL — the
+exact file the updater fetches, which means it cannot be a download that does not exist. Until a
+release is cut from Linux there is no `linux-x86_64` entry, and the box offers the release page
+instead. The `.dmg` is the one URL built by hand, because the manifest names the `.app.tar.gz` and
+never the disk image; `scripts/release.ts` fails the release if the build produced a different
+filename. See `website/src/downloads.ts`.
+
 ### NixOS
 
 `flake.nix` at the repository root builds the app from source

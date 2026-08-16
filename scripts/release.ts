@@ -730,6 +730,15 @@ async function releaseDesktop(version: string, universal: boolean) {
 		? readdirSync(join(BUNDLE, "dmg")).filter((f) => f.endsWith(".dmg"))
 		: [];
 	if (dmgs.length === 0) fail(`no .dmg in ${join(BUNDLE, "dmg")}`);
+	// The website's download box builds this URL from the version rather than reading it from
+	// anywhere, because the updater manifest names the .app.tar.gz and never the disk image. A
+	// rename here would leave the front page's main macOS download pointing at a 404.
+	const expectedDmg = `Bramble_${version}_universal.dmg`;
+	if (universal && !dmgs.includes(expectedDmg))
+		fail(
+			`expected ${expectedDmg}, built ${dmgs.join(", ")}.\n` +
+				"website/src/downloads.ts links to that exact name; update both together.",
+		);
 
 	const assets: string[] = [];
 	for (const f of dmgs) assets.push(join(BUNDLE, "dmg", f));

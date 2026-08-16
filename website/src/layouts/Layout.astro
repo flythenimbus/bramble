@@ -1,6 +1,6 @@
 ---
 import "@/styles/starwind.css";
-import { LINKS, SITE } from "@/consts";
+import { SITE } from "@/consts";
 
 interface Props {
 	title?: string;
@@ -71,56 +71,23 @@ const ogImage = new URL("/icon-512.png", SITE.url).href;
 		{/* Personalize the "Add to your browser" buttons: point them at the right store
 		    and, where the browser is nameable, relabel to "Add to <Browser>". The markup
 		    defaults to the Chrome Web Store and a generic label, so with JS off or an
-		    unknown browser it degrades cleanly. Gecko browsers (Firefox, Zen, Waterfox,
-		    LibreWolf) go to Firefox Add-ons; the rest of the Chromium family stays on the
-		    Chrome Web Store. */}
-		<script is:inline define:vars={{ chromeHref: LINKS.chrome, firefoxHref: LINKS.firefox }}>
-			(function () {
-				var ua = navigator.userAgent;
+		    unknown browser (Safari, Arc) it degrades cleanly. */}
+		<script>
+			import { LINKS } from "@/consts";
+			import { browserName, detect } from "@/scripts/platform";
 
-				function apply(name, href) {
-					for (const el of document.querySelectorAll("[data-install-browser]")) {
-						el.setAttribute("href", href);
-					}
-					if (name) {
-						for (const el of document.querySelectorAll("[data-install-label]")) {
-							el.textContent = "Add to " + name;
-						}
-					}
+			const href = detect().family === "gecko" ? LINKS.firefox : LINKS.chrome;
+			for (const el of document.querySelectorAll("[data-install-browser]")) {
+				el.setAttribute("href", href);
+			}
+
+			// Resolved rather than read: Brave hides itself from the user agent string.
+			browserName().then((name) => {
+				if (!name) return;
+				for (const el of document.querySelectorAll("[data-install-label]")) {
+					el.textContent = `Add to ${name}`;
 				}
-
-				// Gecko family -> Firefox Add-ons (Zen reports a plain Firefox UA).
-				if (/\bFirefox\/\d/.test(ua) && !/Seamonkey\//i.test(ua)) {
-					var gecko = /Waterfox\//i.test(ua)
-						? "Waterfox"
-						: /LibreWolf\//i.test(ua)
-							? "LibreWolf"
-							: "Firefox";
-					return apply(gecko, firefoxHref);
-				}
-
-				// Chromium family -> Chrome Web Store (already the default href).
-				if (/Vivaldi\//.test(ua)) return apply("Vivaldi", chromeHref);
-				if (/\bEdg(?:e|A|iOS)?\//.test(ua)) return apply("Edge", chromeHref);
-				if (/\bOPR\//.test(ua)) return apply("Opera", chromeHref);
-
-				// Brave hides itself from the UA and exposes navigator.brave instead.
-				if (navigator.brave && typeof navigator.brave.isBrave === "function") {
-					navigator.brave
-						.isBrave()
-						.then(function (isBrave) {
-							apply(isBrave ? "Brave" : "Chrome", chromeHref);
-						})
-						.catch(function () {
-							apply("Chrome", chromeHref);
-						});
-					return;
-				}
-
-				if (/\bChrome\//.test(ua)) return apply("Chrome", chromeHref);
-
-				// Unknown browser (e.g. Arc, Safari): keep the generic label + Chrome default.
-			})();
+			});
 		</script>
 	</body>
 </html>

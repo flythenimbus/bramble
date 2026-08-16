@@ -1,0 +1,486 @@
+---
+/**
+ * The download picker: pick a device, pick a flavour, get the one thing you came for.
+ *
+ * Three columns, narrowing left to right. Everything is rendered server-side and hidden with the
+ * `hidden` attribute, so the whole thing works with JS off at its default selection; the script
+ * only reorders the lists to put the visitor's own platform first and wires up selection. A wrong
+ * guess therefore costs a click, never a dead end.
+ */
+import BrandAndroid from "@tabler/icons/outline/brand-android.svg";
+import BrandApple from "@tabler/icons/outline/brand-apple.svg";
+import BrandChrome from "@tabler/icons/outline/brand-chrome.svg";
+import BrandDebian from "@tabler/icons/outline/brand-debian.svg";
+import BrandFirefox from "@tabler/icons/outline/brand-firefox.svg";
+import Check from "@tabler/icons/outline/check.svg";
+import ChevronRight from "@tabler/icons/outline/chevron-right.svg";
+import Copy from "@tabler/icons/outline/copy.svg";
+import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
+import DeviceMobile from "@tabler/icons/outline/device-mobile.svg";
+import Download from "@tabler/icons/outline/download.svg";
+import ExternalLink from "@tabler/icons/outline/external-link.svg";
+import Package from "@tabler/icons/outline/package.svg";
+import Puzzle from "@tabler/icons/outline/puzzle.svg";
+import Snowflake from "@tabler/icons/outline/snowflake.svg";
+
+import { Button } from "@/components/starwind/button";
+import { LINKS } from "@/consts";
+import { APT_INSTALL, DESKTOP_RELEASE, DESKTOP_VERSION, DOWNLOADS, NIX_INSTALL } from "@/downloads";
+
+type Icon = typeof BrandApple;
+
+interface Option {
+	id: string;
+	/** The middle column. */
+	label: string;
+	icon: Icon;
+	title: string;
+	body: string;
+	/** A link to follow, or commands to paste. */
+	action: { href: string; label: string; external?: boolean } | { shell: string };
+	/** Trailing aside, with an optional command set in monospace after it. */
+	note?: string;
+	noteCode?: string;
+	meta?: string;
+}
+
+interface Category {
+	id: string;
+	label: string;
+	hint: string;
+	icon: Icon;
+	options: Option[];
+}
+
+// No AppImage until a release is cut from Linux, and the release page is a better answer than a
+// link that 404s.
+const appImage = DOWNLOADS.appimage
+	? { href: DOWNLOADS.appimage, label: "Download the AppImage" }
+	: { href: DESKTOP_RELEASE, label: "Open the release page", external: true };
+
+const categories: Category[] = [
+	{
+		id: "desktop",
+		label: "Desktop",
+		hint: "macOS and Linux",
+		icon: DeviceDesktop,
+		options: [
+			{
+				id: "macos",
+				label: "macOS",
+				icon: BrandApple,
+				title: "macOS",
+				body: "A universal build for Apple silicon and Intel, signed and notarized. It checks for updates and installs them itself.",
+				action: { href: DOWNLOADS.macos, label: "Download the .dmg" },
+				meta: `Version ${DESKTOP_VERSION}`,
+				note: "macOS 11 Big Sur or later.",
+			},
+			{
+				id: "debian",
+				label: "Debian / Ubuntu",
+				icon: BrandDebian,
+				title: "Debian, Ubuntu and friends",
+				body: "Install from our APT repository and apt upgrade keeps Bramble current along with the rest of your system.",
+				action: { shell: APT_INSTALL },
+				note: "The key is scoped to this repository alone, so it can never vouch for a package from anywhere else.",
+			},
+			{
+				id: "appimage",
+				label: "Linux AppImage",
+				icon: Package,
+				title: "AppImage",
+				body: "One file that runs on most distributions, with no package manager involved. This is the build that updates itself in place.",
+				action: appImage,
+				meta: `Version ${DESKTOP_VERSION}`,
+				note: "Mark it executable first:",
+				noteCode: "chmod +x Bramble_*.AppImage",
+			},
+			{
+				id: "nix",
+				label: "Nix flake",
+				icon: Snowflake,
+				title: "Nix and NixOS",
+				body: "Built from source by the flake at the repository root, so nothing is fetched at build time and you get the same bytes twice.",
+				action: { shell: NIX_INSTALL },
+				note: "The flake also exposes an overlay for a system configuration. To try it without installing:",
+				noteCode: "nix run github:flythenimbus/bramble",
+			},
+		],
+	},
+	{
+		id: "browser",
+		label: "Browser",
+		hint: "Chrome and Firefox",
+		icon: Puzzle,
+		options: [
+			{
+				id: "chrome",
+				label: "Chrome Web Store",
+				icon: BrandChrome,
+				title: "Chromium browsers",
+				body: "Chrome, Brave, Edge, Vivaldi, Opera, Arc and the rest of the family. Autofill on the pages you visit, and one-click copy for passwords and one-time codes.",
+				action: { href: LINKS.chrome, label: "Add to your browser", external: true },
+			},
+			{
+				id: "firefox",
+				label: "Firefox Add-ons",
+				icon: BrandFirefox,
+				title: "Firefox and its forks",
+				body: "Firefox, Zen, LibreWolf and Waterfox. The same extension, reviewed and hosted by Mozilla.",
+				action: { href: LINKS.firefox, label: "Add to Firefox", external: true },
+			},
+		],
+	},
+	{
+		id: "mobile",
+		label: "Mobile",
+		hint: "iOS and Android",
+		icon: DeviceMobile,
+		options: [
+			{
+				id: "ios",
+				label: "iOS",
+				icon: BrandApple,
+				title: "iPhone and iPad",
+				body: "System AutoFill across apps and browsers, Face ID and Touch ID unlock, and passkeys.",
+				action: { href: LINKS.ios, label: "Download on the App Store", external: true },
+			},
+			{
+				id: "android",
+				label: "Android",
+				icon: BrandAndroid,
+				title: "Android",
+				body: "A native autofill service, biometric unlock and passkeys, with no Google Play Services required.",
+				action: { href: LINKS.android, label: "Get the APK", external: true },
+				note: "Released as signed APKs on GitHub, so you always know exactly what you are installing.",
+			},
+		],
+	},
+];
+
+const options = categories.flatMap((category) => category.options);
+
+// Rows in a sidebar on a wide screen; chips in a grid on a narrow one, where three stacked lists
+// would put the download button most of a screen below the fold.
+const tab =
+	"flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors" +
+	" justify-center text-center md:justify-start md:gap-2.5 md:px-3 md:py-2.5 md:text-left" +
+	" text-muted-foreground hover:bg-muted hover:text-foreground" +
+	" focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-outline/50" +
+	" aria-selected:bg-muted aria-selected:text-foreground";
+---
+
+<div
+	class="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm"
+	data-download
+>
+	<div
+		class="grid divide-y divide-border/60 md:min-h-64 md:grid-cols-[13.5rem_15rem_minmax(0,1fr)] md:divide-x md:divide-y-0"
+	>
+		{/* What kind of device */}
+		<div
+			class="grid grid-cols-3 gap-1 p-2.5 md:flex md:flex-col"
+			role="tablist"
+			aria-orientation="vertical"
+			aria-label="Where you want Bramble"
+			data-categories
+		>
+			{
+				categories.map((category, i) => {
+					const Icon = category.icon;
+					return (
+						<button
+							type="button"
+							role="tab"
+							id={`dl-cat-${category.id}`}
+							aria-controls={`dl-opts-${category.id}`}
+							aria-selected={i === 0}
+							tabindex={i === 0 ? 0 : -1}
+							data-category={category.id}
+							class={tab}
+						>
+							<Icon class="size-5 shrink-0" />
+							<span class="min-w-0 md:flex-1">
+								<span class="block truncate">{category.label}</span>
+								<span class="hidden truncate text-xs font-normal opacity-70 md:block">
+									{category.hint}
+								</span>
+							</span>
+							<ChevronRight class="hidden size-4 shrink-0 opacity-40 md:block" />
+						</button>
+					);
+				})
+			}
+		</div>
+
+		{/* Which flavour of it */}
+		<div class="p-2.5">
+			{
+				categories.map((category, i) => (
+					<div
+						role="tabpanel"
+						id={`dl-opts-${category.id}`}
+						aria-labelledby={`dl-cat-${category.id}`}
+						hidden={i !== 0}
+					>
+						<div
+							class="grid grid-cols-2 gap-1 md:flex md:flex-col"
+							role="tablist"
+							aria-orientation="vertical"
+							aria-label={`${category.label}: how to install`}
+							data-options={category.id}
+						>
+							{category.options.map((option, j) => {
+								const Icon = option.icon;
+								return (
+									<button
+										type="button"
+										role="tab"
+										id={`dl-opt-${option.id}`}
+										aria-controls={`dl-panel-${option.id}`}
+										aria-selected={j === 0}
+										tabindex={j === 0 ? 0 : -1}
+										data-option={option.id}
+										class={tab}
+									>
+										<Icon class="size-4.5 shrink-0" />
+										<span class="min-w-0 truncate md:flex-1">{option.label}</span>
+									</button>
+								);
+							})}
+						</div>
+
+						{/* Revealed by the script. Windows gets no build, and saying so beats a list
+						    with nothing on it for them. */}
+						{category.id === "desktop" && (
+							<p
+								class="mt-3 px-3 text-xs text-muted-foreground text-pretty"
+								data-windows-note
+								hidden
+							>
+								No Windows build yet. The browser extension works there today.
+							</p>
+						)}
+					</div>
+				))
+			}
+		</div>
+
+		{/* And how to get it */}
+		<div class="p-4 sm:p-5">
+			{
+				options.map((option, i) => (
+					<div
+						role="tabpanel"
+						id={`dl-panel-${option.id}`}
+						aria-labelledby={`dl-opt-${option.id}`}
+						tabindex="0"
+						hidden={i !== 0}
+						data-panel={option.id}
+						class="focus-visible:outline-none"
+					>
+						<p class="font-medium">{option.title}</p>
+						<p class="mt-1.5 text-sm text-muted-foreground text-pretty">{option.body}</p>
+
+						{"shell" in option.action ? (
+							<div class="relative mt-4">
+								<pre class="overflow-hidden rounded-lg border border-border/60 bg-muted/50 px-3 py-2.5 pr-11 font-mono text-[0.7rem] leading-relaxed whitespace-pre-wrap break-words text-foreground"><code>{option.action.shell}</code></pre>
+								<button
+									type="button"
+									data-copy
+									aria-label="Copy to clipboard"
+									class="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-outline/50 focus-visible:outline-none"
+								>
+									<span class="contents" data-copy-idle>
+										<Copy class="size-4" />
+									</span>
+									<span class="contents" data-copy-done hidden>
+										<Check class="size-4" />
+									</span>
+								</button>
+							</div>
+						) : (
+							<div class="mt-4 flex flex-wrap items-center gap-3">
+								<Button href={option.action.href} target="_blank" rel="noopener" size="md">
+									{option.action.external ? <ExternalLink /> : <Download />}
+									<span data-cta-label>{option.action.label}</span>
+								</Button>
+								{option.meta && (
+									<span class="text-xs text-muted-foreground">{option.meta}</span>
+								)}
+							</div>
+						)}
+
+						{option.note && (
+							<p class="mt-3 text-xs text-muted-foreground text-pretty">
+								{option.note}
+								{option.noteCode && (
+									<code class="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[0.7rem] whitespace-nowrap text-foreground">
+										{option.noteCode}
+									</code>
+								)}
+							</p>
+						)}
+					</div>
+				))
+			}
+		</div>
+	</div>
+</div>
+
+<script>
+	import { browserName, detect } from "@/scripts/platform";
+
+	const found = document.querySelector<HTMLElement>("[data-download]");
+
+	if (found) {
+		// Bound to a const so the null check narrows inside the functions below too.
+		const root = found;
+		const categoryTabs = () => [...root.querySelectorAll<HTMLElement>("[data-category]")];
+		const optionTabs = (category: string) => [
+			...root.querySelectorAll<HTMLElement>(`[data-options="${category}"] [data-option]`),
+		];
+
+		function selectOption(category: string, id: string) {
+			for (const tab of optionTabs(category)) {
+				const on = tab.dataset.option === id;
+				tab.setAttribute("aria-selected", String(on));
+				tab.tabIndex = on ? 0 : -1;
+			}
+			for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) {
+				panel.hidden = panel.dataset.panel !== id;
+			}
+		}
+
+		function selectCategory(id: string) {
+			for (const tab of categoryTabs()) {
+				const on = tab.dataset.category === id;
+				tab.setAttribute("aria-selected", String(on));
+				tab.tabIndex = on ? 0 : -1;
+				const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+				if (panel) panel.hidden = !on;
+			}
+			// Whatever ended up first after reordering, which is the point of the reordering.
+			const first = optionTabs(id)[0];
+			if (first?.dataset.option) selectOption(id, first.dataset.option);
+		}
+
+		/** Move the named children to the front of their list, in the order given. */
+		function order(list: Element | null, attribute: string, ids: string[]) {
+			if (!list) return;
+			for (const id of ids) {
+				const item = list.querySelector(`[data-${attribute}="${id}"]`);
+				if (item) list.appendChild(item);
+			}
+		}
+
+		const { os, family, mobile } = detect();
+
+		// A browser cannot tell Debian from Fedora from NixOS, so Linux leads with the packaged
+		// install that covers the most people and leaves the other two one click away.
+		if (os === "linux") {
+			order(root.querySelector('[data-options="desktop"]'), "option", [
+				"debian",
+				"appimage",
+				"nix",
+				"macos",
+			]);
+		}
+		if (family === "gecko") {
+			order(root.querySelector('[data-options="browser"]'), "option", ["firefox", "chrome"]);
+		}
+		if (os === "android") {
+			order(root.querySelector('[data-options="mobile"]'), "option", ["android", "ios"]);
+		}
+		if (mobile) {
+			// Every id, not just the ones that move: order() appends, so a partial list would push
+			// the named ones behind the rest instead of in front of them.
+			order(root.querySelector("[data-categories]"), "category", [
+				"mobile",
+				"browser",
+				"desktop",
+			]);
+		}
+		if (os === "windows") {
+			const note = root.querySelector<HTMLElement>("[data-windows-note]");
+			if (note) note.hidden = false;
+		}
+
+		// "Add to Brave" on the panel for the visitor's own browser engine, and only that one:
+		// naming the browser on the store they cannot use would be worse than saying nothing.
+		const named =
+			family === "gecko" ? "dl-panel-firefox" : family === "chromium" ? "dl-panel-chrome" : null;
+		if (named) {
+			browserName().then((name) => {
+				const label = document.querySelector(`#${named} [data-cta-label]`);
+				if (name && label) label.textContent = `Add to ${name}`;
+			});
+		}
+
+		const firstCategory = categoryTabs()[0]?.dataset.category;
+		if (firstCategory) selectCategory(firstCategory);
+
+		root.addEventListener("click", (event) => {
+			const target = (event.target as HTMLElement).closest<HTMLElement>(
+				"[data-category], [data-option]",
+			);
+			if (!target) return;
+			if (target.dataset.category) return selectCategory(target.dataset.category);
+			const list = target.closest<HTMLElement>("[data-options]");
+			if (list?.dataset.options && target.dataset.option) {
+				selectOption(list.dataset.options, target.dataset.option);
+			}
+		});
+
+		// Arrow keys within a list, with selection following focus: the expected behaviour for
+		// tabs, and the only way a keyboard reaches an option that is not already selected.
+		root.addEventListener("keydown", (event) => {
+			const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+			if (!keys.includes(event.key)) return;
+			const tab = (event.target as HTMLElement).closest<HTMLElement>('[role="tab"]');
+			const list = tab?.closest<HTMLElement>('[role="tablist"]');
+			if (!tab || !list) return;
+
+			const tabs = [...list.querySelectorAll<HTMLElement>('[role="tab"]')];
+			const at = tabs.indexOf(tab);
+			const to =
+				event.key === "Home"
+					? 0
+					: event.key === "End"
+						? tabs.length - 1
+						: (at + (event.key === "ArrowDown" ? 1 : tabs.length - 1)) % tabs.length;
+
+			event.preventDefault();
+			tabs[to]?.focus();
+			tabs[to]?.click();
+		});
+
+		for (const button of root.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
+			const idle = button.querySelector<HTMLElement>("[data-copy-idle]");
+			const done = button.querySelector<HTMLElement>("[data-copy-done]");
+			let revert: ReturnType<typeof setTimeout>;
+
+			button.addEventListener("click", async () => {
+				const text = button.parentElement?.querySelector("pre")?.textContent;
+				// Absent outside a secure context, and a silent no-op beats a thrown error over
+				// something the visitor can select and copy by hand.
+				if (!text || !navigator.clipboard) return;
+				try {
+					await navigator.clipboard.writeText(text);
+				} catch {
+					return;
+				}
+
+				if (idle) idle.hidden = true;
+				if (done) done.hidden = false;
+				button.setAttribute("aria-label", "Copied");
+				clearTimeout(revert);
+				revert = setTimeout(() => {
+					if (idle) idle.hidden = false;
+					if (done) done.hidden = true;
+					button.setAttribute("aria-label", "Copy to clipboard");
+				}, 1600);
+			});
+		}
+	}
+</script>
