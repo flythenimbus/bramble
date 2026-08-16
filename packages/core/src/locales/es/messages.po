@@ -221,6 +221,10 @@ msgstr "Copie también las {0} entradas de esta caja fuerte en ella, para que to
 msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
 msgstr "Bloquee también la bóveda cada vez que se bloquee la pantalla de su computadora, independientemente del tiempo de espera."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "An app password reaches every file in the account, not just this folder, and cannot be narrowed. For a backup that holds your whole vault history, a separate account used only for backups is worth the two minutes."
+msgstr "Una contraseña de aplicación accede a todos los archivos de la cuenta, no solo a esta carpeta, y no se puede restringir. Para una copia de seguridad que conserve todo el historial de su bóveda, merece la pena dedicar dos minutos a crear una cuenta independiente que se use solo para copias de seguridad."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Un punto final que devuelve sus propios servidores ICE en formato JSON. Por defecto utiliza los del retransmisor."
@@ -370,9 +374,17 @@ msgstr "Bramble está al día"
 msgid "Bramble is up to date."
 msgstr "Bramble está actualizado."
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving out delete, limits what it can do if it is ever stolen."
+msgstr "Bramble solo necesita subir y listar. Restringir la clave a este único bucket y excluir la eliminación limita lo que podría hacer si alguna vez la roban."
+
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Bramble restarts by itself once this finishes."
 msgstr "Bramble se reiniciará solo una vez que esto finalice."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Bramble will never delete anything here, so this can use a credential that isn't allowed to. One that's stolen then can't destroy your backup history."
+msgstr "Bramble nunca eliminará nada aquí, por lo que puede usar una credencial que no tenga permiso para eliminar. Si alguien la roba, no podrá destruir su historial de copias de seguridad."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1381,6 +1393,10 @@ msgstr "Unirse a la bóveda"
 #: packages/core/src/hooks/useVault.tsx
 msgid "KDBX export isn't available here."
 msgstr "La exportación a KDBX no está disponible aquí."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Keep everything"
+msgstr "Conservar todo"
 
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Keep the invite open on your other device while the vault transfers."

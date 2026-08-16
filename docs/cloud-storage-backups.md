@@ -407,8 +407,40 @@ the app choosing: an opt-out is the same unanswerable question as an opt-in,
 asked the other way round. Recorded here rather than left to be discovered.
 
 The recommendation for anyone who wants the credential to be weak by
-construction is provider-side scope: an S3 key restricted to the backup prefix,
-or Dropbox's app-folder token.
+construction is provider-side scope, and the setup form now says so per provider
+rather than leaving it here (`ScopeHint`).
+
+**Append-only is the version of that which actually matters.** Of the three
+things a stolen credential can do, reading is a marginal gain over the local
+vault file it could already read, and running up a storage bill is an
+inconvenience. Deleting is the one that costs something irreplaceable: it is not
+bounded by the master password the way everything else is, it survives wiping
+the machine, and destroying backups before encrypting anything is the documented
+ransomware playbook. Bramble asks for `DELETE` for exactly one reason, keep-N
+retention, so **Keep everything** gives it up: `selectForPruning` returns nothing
+and `runBackup` never lists or deletes, which lets the user hand over a
+credential with neither permission.
+
+That reading of `keep` needed a guard. `slice(0)` is every element, so before
+this, `keep: 0` selected *every snapshot* for deletion; it was safe only because
+the select offered 5/10/30/100 and nothing could reach it. Repurposing the value
+without `if (keep <= 0) return []` would have shipped a backup-destroyer.
+
+A tightened credential also has to not look like a breakage, which it does not:
+a keep-N target whose provider refuses `DELETE` still backs up, and one that
+refuses `LIST` does too, because pruning is already non-fatal. Pinned by tests,
+since that is the sort of tolerance a later refactor removes without noticing.
+
+**WebDAV cannot be scoped, and that is the honest answer.** A Nextcloud app
+password is account-wide by construction: it reaches every file in the account,
+not just the backup folder, and no permission exists to narrow it. So the
+containment is a *separate account* used only for backups, which is what the
+form recommends. Two partial measures are worth knowing and neither is a
+substitute: a server admin can deny `DELETE` over WebDAV for a group with the
+Files access control app, which gets the append-only property from the server
+side instead of the credential; and Nextcloud's trash and versioning make a
+delete recoverable for a while, though the same app password can empty the trash,
+so it is a speed bump rather than a barrier.
 
 ### Starting with the session
 

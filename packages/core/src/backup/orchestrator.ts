@@ -50,6 +50,10 @@ export function selectForPruning(
 	keep: number,
 	vaultId?: string,
 ): string[] {
+	// `keep <= 0` is "keep everything", and the guard is the whole safety of that reading: without
+	// it `slice(0)` returns every snapshot and the caller deletes the lot. Nothing could reach 0
+	// through the UI before, which is exactly why it was safe to be wrong about.
+	if (keep <= 0) return [];
 	const tag = vaultId ? `-v${vaultTag(vaultId)}.bramble` : undefined;
 	const backups = objects.filter((o) => {
 		if (!o.key.includes("/bramble-")) return false;
@@ -79,7 +83,12 @@ export async function runBackup(
 	// listing that fails (or deletes that do) must not fail the backup: doing so leaves the
 	// target's lastVaultHash unadvanced, so the next run re-uploads the same bytes, and a target
 	// whose prune is permanently broken would re-upload a full snapshot every five minutes.
+	//
+	// That tolerance is what makes an append-only credential work at all, and `keep <= 0` makes it
+	// deliberate: nothing is listed and nothing is deleted, so a key with neither permission
+	// produces no failed requests rather than swallowed ones. See docs/cloud-storage-backups.md.
 	let prunedKeys: string[] = [];
+	if (keep <= 0) return { key, hash, uploaded: blob.byteLength, prunedKeys };
 	try {
 		prunedKeys = selectForPruning(await target.list(`${prefix}/`), keep, opts.vaultId);
 		for (const k of prunedKeys) {

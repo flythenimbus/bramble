@@ -112,6 +112,11 @@ The review did not raise these; they came out of working through its findings.
   misuse: the webview can still drive deletes against the user's own bucket. Bounding that means
   moving orchestration into Rust, which forks object naming and retention into two
   implementations. Destruction by an attacker who already owns the renderer is the lesser evil.
+  **Since mitigated where the user wants it**, and not by hardening the app: "Keep everything"
+  retention means Bramble never deletes, so the credential can be one that is not allowed to. A
+  renderer cannot issue a delete that the provider will honour. That closes this for S3 and
+  Dropbox; WebDAV app passwords cannot be scoped, so it stays open there unless the server denies
+  `DELETE` itself. See [cloud-storage-backups.md](cloud-storage-backups.md).
 - **Response bodies return to the webview**, so a compromised one can download the backups. They
   are ciphertext sealed by the master password, and it can already read the local vault file
   through `storage_read_vault`.

@@ -268,6 +268,34 @@ function SetupHint({ def }: { def: ProviderDef }) {
 }
 
 /**
+ * What this credential can reach beyond the backups, stated where it is being created.
+ *
+ * Scoping is the only real defence for a credential a machine has to be able to use unattended,
+ * and it is the user's to apply: we can say what Bramble needs, we cannot restrict what they hand
+ * us. WebDAV gets its own line because it is the one that cannot be narrowed at all — a Nextcloud
+ * app password is account-wide by construction, so the containment is a separate account rather
+ * than a smaller permission. See docs/cloud-storage-backups.md.
+ */
+function ScopeHint({ def }: { def: ProviderDef }) {
+	if (def.kind === "s3")
+		return (
+			<Trans>
+				Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving
+				out delete, limits what it can do if it is ever stolen.
+			</Trans>
+		);
+	if (def.kind === "webdav")
+		return (
+			<Trans>
+				An app password reaches every file in the account, not just this folder, and cannot be
+				narrowed. For a backup that holds your whole vault history, a separate account used only for
+				backups is worth the two minutes.
+			</Trans>
+		);
+	return null;
+}
+
+/**
  * OAuth modal body. When the platform can run the flow and the provider is wired, it
  * offers a "Connect" button that signs in and adds the target; otherwise it falls back
  * to the "coming soon" note (mobile, or a build with no app key configured).
@@ -782,6 +810,10 @@ export function BackupSection() {
 								<SetupHint def={modalDef} />
 							</p>
 
+							<p className="text-xs text-muted-foreground text-pretty">
+								<ScopeHint def={modalDef} />
+							</p>
+
 							{modalDef.kind === "s3" ? (
 								<>
 									<TextField
@@ -881,7 +913,22 @@ export function BackupSection() {
 											<option value="10">{t`Last 10`}</option>
 											<option value="30">{t`Last 30`}</option>
 											<option value="100">{t`Last 100`}</option>
+											{/* 0 is the sentinel selectForPruning reads as "never delete". */}
+											<option value="0">{t`Keep everything`}</option>
 										</SelectField>
+										{/* The security point of the option, and the only reason to pick it over
+										    a number: deleting is the one thing Bramble asks for that can lose
+										    you something, so not needing it is what lets the credential
+										    give it up. */}
+										{keep === 0 && (
+											<p className="text-xs text-muted-foreground text-pretty">
+												<Trans>
+													Bramble will never delete anything here, so this can use a credential that
+													isn't allowed to. One that's stolen then can't destroy your backup
+													history.
+												</Trans>
+											</p>
+										)}
 									</div>
 								)}
 							</div>
