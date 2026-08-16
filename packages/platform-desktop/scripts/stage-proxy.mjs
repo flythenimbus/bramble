@@ -60,7 +60,12 @@ function build(forTriple) {
 	const args = ["build", "--release", "--bin", "bramble-proxy"];
 	if (forTriple) args.push("--target", forTriple);
 	execFileSync("cargo", args, { cwd: tauri, stdio: "inherit" });
-	return join(tauri, "target", ...(forTriple ? [forTriple] : []), "release", "bramble-proxy");
+	// cargo writes under target/<triple>/ whenever a target is in play, whether it came from our
+	// flag or from the environment. Nix sets CARGO_BUILD_TARGET even for a native build, so
+	// assuming target/release/ here looked for a binary that was one directory away.
+	const dir = forTriple ?? process.env.CARGO_BUILD_TARGET ?? "";
+	const root = process.env.CARGO_TARGET_DIR ?? join(tauri, "target");
+	return join(root, ...(dir ? [dir] : []), "release", "bramble-proxy");
 }
 
 // Set by build-desktop.ts when it passes --target universal-apple-darwin. Read from our own

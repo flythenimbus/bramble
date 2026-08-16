@@ -729,6 +729,44 @@ the only answer. On Linux `tauri build` produces three things, and the differenc
 The `.deb` is also published to an APT repository, which is how most Linux users will install and
 update: see [apt-releases.md](apt-releases.md).
 
+### NixOS
+
+`flake.nix` at the repository root builds the app from source
+(`packages/platform-desktop/nix/package.nix`), so NixOS users can install it without waiting on
+nixpkgs:
+
+```bash
+nix build github:flythenimbus/bramble      # or `nix run`
+```
+
+and it exposes `overlays.default` for a system configuration. `pnpm run test:nix` builds it in a
+container and asserts the result, the way `test:apt` does for the Debian package.
+
+**A flake here rather than a nixpkgs submission, at least first.** nixpkgs is not a channel you
+publish to, it is one you submit to: a fix reaches users when a committer merges and Hydra builds,
+not when it is released, and stable channels lag by up to six months. This gets the same package
+to the same users on our own schedule, and CI can build it so it cannot rot. Upstreaming later is
+a strict addition, and is the sort of thing a NixOS user in the community often does better than
+we would, since it comes with a per-release obligation to regenerate hashes.
+
+Three things about the derivation are worth knowing before changing it:
+
+- **It builds from source, so nothing may be fetched at build time.** That is what caught
+  `stage-proxy.mjs` assuming `target/release/`: Nix sets `CARGO_BUILD_TARGET` even for a native
+  build, which moves cargo's output one directory down, and the sidecar was staged from a path
+  that did not exist. Fixed by honouring the variable, which is right anyway.
+- **`createUpdaterArtifacts` is patched off.** Bundling signs the artifacts, there is no key in a
+  Nix build, and a store path is read-only so the updater could never apply anything regardless.
+  The app already agrees: `can_self_update()` is false without `APPIMAGE`, so Settings reports
+  that the package manager keeps it current.
+- **Two hashes, one of which is maintenance.** `cargoLock.lockFile` means there is no vendor hash
+  to regenerate (every dependency is a registry crate). The pnpm store is a fixed-output
+  derivation and its `hash` must be updated whenever the lockfile changes: build once, take the
+  `got:` value from the mismatch error.
+
+Users who would rather not build anything can run the published AppImage with
+`programs.appimage.enable`, which needs nothing from us.
+
 Note the asymmetry with macOS, which cost a wrong assumption before a real build corrected it:
 there is **no `.AppImage.tar.gz`**. Tauri 2.11 signs the AppImage itself, where on macOS the
 updater artifact is a separate archive beside the `.app`. It also emits `.sig` files next to the
