@@ -55,6 +55,7 @@
 		"test:e2e:build": "pnpm --filter @vault/platform-extension run build:chromium && playwright test",
 		"test:apt": "node scripts/test-apt-install.ts",
 		"test:nix": "node scripts/test-nix-build.ts",
+		"test:brew": "node scripts/test-brew-cask.ts",
 		"test:transport-race": "playwright test --config playwright.transport.config.ts",
 		"typecheck": "pnpm -r run typecheck",
 		"i18n:extract": "lingui extract",

@@ -738,6 +738,51 @@ instead. The `.dmg` is the one URL built by hand, because the manifest names the
 never the disk image; `scripts/release.ts` fails the release if the build produced a different
 filename. See `website/src/downloads.ts`.
 
+### Homebrew
+
+A **cask**, not a formula: it is a GUI app shipped as a disk image. The canonical copy is
+`packages/platform-desktop/homebrew/bramble.rb`; the published one lives in homebrew/homebrew-cask,
+which the repository's star count clears the notability bar for. Keeping a copy here is what lets
+`pnpm run test:brew` check it against the live release, and it means a release that renames an
+artifact fails a test rather than a stranger's `brew install`.
+
+Three stanzas in it are decisions rather than boilerplate:
+
+- **`livecheck` uses `strategy :github_releases`, not the default `:github_latest`.** This is the
+  same `/releases/latest` trap that already bit the update manifest (below): the endpoint means the
+  newest release of *any* target, and this repository ships four out of one tag namespace. Left on
+  the default, livecheck reports the Android version and the cask offers a `.dmg` that does not
+  exist. Verified by deliberately breaking it: with `:github_latest` it reported `0.14.0`.
+- **`auto_updates true`.** `can_self_update()` is unconditionally true on macOS, so the app
+  replaces itself in `/Applications` and drifts from whatever version brew recorded. This tells
+  brew the app owns its own version, and is the *opposite* call from the `.deb`, where the updater
+  stands down because dpkg owns the files. A cask cannot stop the updater, so it steps aside
+  instead. Detecting a brew install from inside the bundle would be the alternative, and there is
+  no reliable marker for it.
+- **`zap` deletes the vault.** `data_dir()` is Tauri's `app_data_dir`, so
+  `~/Library/Application Support/app.bramble.desktop` holds the vault and `brew uninstall --zap`
+  trashes it. That is what zap is for and it is opt-in, but it deserved a conscious yes. It cannot
+  reach the Keychain, so backup credentials survive it. The globs beside it remove the
+  native-messaging manifests the app writes into other browsers' support directories, which would
+  otherwise point a browser at a proxy binary that no longer exists.
+
+**`pnpm run test:brew` runs on Linux**, which is most of the point. Homebrew refuses to *install* a
+cask off macOS, but everything before that works in the `homebrew/brew` container: `brew style`,
+`brew audit --new` (the stricter set a submission gets), `brew livecheck` against the real GitHub
+API, and `brew fetch`, which downloads the real disk image and verifies it. It also checks the cask
+against the release itself: the version must match `latest.json`, and the checksum must match the
+`.dmg` line in the release's published `SHA256SUMS`. So a shipped release with a stale cask fails
+here. What still needs a Mac is the install itself, Gatekeeper accepting the notarization, and the
+`uninstall --zap` round trip.
+
+A pass here is necessary and not sufficient: homebrew-cask's own CI runs the macOS-only audits on
+top, and acceptance is a human review regardless.
+
+Per release the cask needs its `version` and `sha256`, which `brew bump-cask-pr --version X.Y.Z
+bramble` does in one command and computes the checksum itself; for a cask with a working livecheck
+their bot usually opens that PR before you do. When autostart lands as a launch agent, the cask
+will need an `uninstall launchctl:` stanza to match.
+
 ### NixOS
 
 `flake.nix` at the repository root builds the app from source
