@@ -1,8 +1,4 @@
 ---
-import BrandAndroid from "@tabler/icons/outline/brand-android.svg";
-import BrandApple from "@tabler/icons/outline/brand-apple.svg";
-import BrandChrome from "@tabler/icons/outline/brand-chrome.svg";
-import BrandFirefox from "@tabler/icons/outline/brand-firefox.svg";
 import BrandGithub from "@tabler/icons/outline/brand-github.svg";
 import Check from "@tabler/icons/outline/check.svg";
 import CloudLock from "@tabler/icons/outline/cloud-lock.svg";
@@ -37,12 +33,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/starwind/card";
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from "@/components/starwind/tabs";
 import DownloadBox from "@/components/DownloadBox.astro";
 import Footer from "@/components/Footer.astro";
 import Header from "@/components/Header.astro";
@@ -349,129 +339,6 @@ const faqs = [
                         }
                     </CardContent>
                 </Card>
-            </div>
-        </section>
-
-        {/* Platforms */}
-        <section
-            id="platforms"
-            class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24"
-        >
-            <div class="mx-auto max-w-6xl px-4 sm:px-6">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2
-                        class="text-3xl font-semibold tracking-tight sm:text-4xl"
-                    >
-                        Bramble runs where you do.
-                    </h2>
-                    <p class="mt-4 text-muted-foreground text-pretty">
-                        One vault, three platforms, syncing directly to each
-                        other with no cloud in the middle.
-                    </p>
-                </div>
-
-                <Tabs defaultValue="browser" class="mx-auto mt-12 max-w-3xl">
-                    <TabsList class="mx-auto w-fit">
-                        <TabsTrigger value="browser">
-                            <BrandChrome class="size-4" />
-                            Browser
-                        </TabsTrigger>
-                        <TabsTrigger value="ios">
-                            <BrandApple class="size-4" />
-                            iOS
-                        </TabsTrigger>
-                        <TabsTrigger value="android">
-                            <BrandAndroid class="size-4" />
-                            Android
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="browser">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Browser extension</CardTitle>
-                                <CardDescription>
-                                    For Chromium browsers (Brave, Vivaldi,
-                                    Chrome, Arc, and friends) and Firefox forks
-                                    like Zen and Waterfox. Install it and you
-                                    are up and running in a minute, with
-                                    autofill on the pages you visit and
-                                    one-click copy for passwords and one-time
-                                    codes.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent class="flex flex-wrap gap-3">
-                                <Button
-                                    href={LINKS.chrome}
-                                    target="_blank"
-                                    rel="noopener"
-                                >
-                                    <BrandChrome />
-                                    Chrome Web Store
-                                </Button>
-                                <Button
-                                    href={LINKS.firefox}
-                                    target="_blank"
-                                    rel="noopener"
-                                    variant="outline"
-                                >
-                                    <BrandFirefox />
-                                    Firefox Add-ons
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="ios">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>iOS app</CardTitle>
-                                <CardDescription>
-                                    System AutoFill across apps and browsers,
-                                    Face ID and Touch ID unlock, and passkeys.
-                                    The vault lives in encrypted on-device
-                                    storage, and everything cryptographic runs
-                                    in the same native Rust core.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button
-                                    href={LINKS.ios}
-                                    target="_blank"
-                                    rel="noopener"
-                                >
-                                    <BrandApple />
-                                    Download on the App Store
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="android">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Android app</CardTitle>
-                                <CardDescription>
-                                    A native autofill service, biometric unlock,
-                                    and passkeys, with no Google Play Services
-                                    required. Released as signed APKs on GitHub
-                                    so you always know exactly what you are
-                                    installing.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button
-                                    href={LINKS.android}
-                                    target="_blank"
-                                    rel="noopener"
-                                >
-                                    <BrandAndroid />
-                                    Get the APK from Releases
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
             </div>
         </section>
 
