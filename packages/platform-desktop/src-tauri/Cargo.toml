@@ -63,6 +63,7 @@ chrono = "0.4"
 # Backup credentials are the only plaintext provider secrets in this process, and they are
 # handled while the vault may be locked; zeroize keeps freed copies from lingering.
 zeroize = { version = "1.8", features = ["derive"] }
+tauri-plugin-autostart = "2.5.1"
 # Updating the app in place. Desktop-gated as the plugin's own docs show, so a future mobile
 # target does not try to build an updater that has no meaning there.
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

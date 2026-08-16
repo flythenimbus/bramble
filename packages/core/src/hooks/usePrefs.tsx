@@ -29,6 +29,10 @@ export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
 // Home screen: whether the Total / At Risk / Strong stats row is collapsed.
 // Persisted so the user's choice sticks across opens.
 const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
+// Desktop only: the user waved away the suggestion to start Bramble at login after setting up
+// a backup. Someone who leaves the machine on has a perfectly good reason to decline, and a
+// suggestion that cannot be silenced is a nag. See BackupSection.
+const PREF_AUTOSTART_PROMPT_DISMISSED = "pref.autostartPromptDismissed";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -41,6 +45,7 @@ const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 const DEFAULT_STATS_COLLAPSED = false;
+const DEFAULT_AUTOSTART_PROMPT_DISMISSED = false;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -58,7 +63,24 @@ export interface Prefs {
 	lockOnScreenLock: boolean;
 	// Home: collapse the Total / At Risk / Strong stats row.
 	statsCollapsed: boolean;
+	// Desktop: the backup section's "start at login" suggestion has been declined.
+	autostartPromptDismissed: boolean;
 }
+
+/** Each pref's storage key. A map rather than a ternary chain: the type makes it exhaustive, so
+ * a new pref cannot quietly share another's key the way a fall-through else did. */
+const META_KEYS: Record<keyof Prefs, string> = {
+	autoLockMinutes: PREF_AUTOLOCK_MINUTES,
+	breachCheckEnabled: PREF_BREACH_CHECK,
+	clipboardClearSeconds: PREF_CLIPBOARD_SECONDS,
+	offerToSave: PREF_OFFER_TO_SAVE,
+	neverSaveSites: PREF_NEVER_SAVE_SITES,
+	autofillQuickType: PREF_AUTOFILL_QUICKTYPE,
+	passkeyProviderEnabled: PREF_PASSKEY_PROVIDER,
+	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
+	statsCollapsed: PREF_STATS_COLLAPSED,
+	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
+};
 
 const DEFAULT_PREFS: Prefs = {
 	autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
@@ -70,6 +92,7 @@ const DEFAULT_PREFS: Prefs = {
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: DEFAULT_STATS_COLLAPSED,
+	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 };
 
 export interface UsePrefs {
@@ -93,7 +116,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g, h, i] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -103,6 +126,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
 				storage.getMeta<boolean>(PREF_STATS_COLLAPSED),
+				storage.getMeta<boolean>(PREF_AUTOSTART_PROMPT_DISMISSED),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -115,6 +139,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				passkeyProviderEnabled: typeof g === "boolean" ? g : DEFAULT_PASSKEY_PROVIDER,
 				lockOnScreenLock: typeof h === "boolean" ? h : DEFAULT_LOCK_ON_SCREEN_LOCK,
 				statsCollapsed: typeof i === "boolean" ? i : DEFAULT_STATS_COLLAPSED,
+				autostartPromptDismissed: typeof j === "boolean" ? j : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 			});
 			setLoaded(true);
 		})();
@@ -126,25 +151,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	const update = useCallback(
 		async <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
 			setPrefs((p) => ({ ...p, [key]: value }));
-			const metaKey =
-				key === "autoLockMinutes"
-					? PREF_AUTOLOCK_MINUTES
-					: key === "breachCheckEnabled"
-						? PREF_BREACH_CHECK
-						: key === "clipboardClearSeconds"
-							? PREF_CLIPBOARD_SECONDS
-							: key === "offerToSave"
-								? PREF_OFFER_TO_SAVE
-								: key === "neverSaveSites"
-									? PREF_NEVER_SAVE_SITES
-									: key === "autofillQuickType"
-										? PREF_AUTOFILL_QUICKTYPE
-										: key === "passkeyProviderEnabled"
-											? PREF_PASSKEY_PROVIDER
-											: key === "lockOnScreenLock"
-												? PREF_LOCK_ON_SCREEN_LOCK
-												: PREF_STATS_COLLAPSED;
-			await storage.setMeta(metaKey, value);
+			await storage.setMeta(META_KEYS[key], value);
 		},
 		[storage],
 	);

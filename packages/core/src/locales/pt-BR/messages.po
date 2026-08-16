@@ -1656,6 +1656,7 @@ msgstr "URL do relé Nostr"
 msgid "Not backed up yet"
 msgstr "Ainda não foi feito backup"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Agora não"
@@ -2120,6 +2121,10 @@ msgstr "A rotação falhou e nada foi alterado. Desbloqueie e tente novamente."
 #~ msgid "Runs on schedule even while Bramble is locked"
 #~ msgstr "Executa conforme programado mesmo com o Bramble bloqueado"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Runs quietly in the menu bar so scheduled backups happen without you opening the app."
+msgstr "Executa silenciosamente na barra de menus para que os backups agendados sejam executados sem abrir o app."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Papai Noel"
@@ -2180,6 +2185,10 @@ msgstr "Escaneie isto no seu outro dispositivo ou copie o código abaixo. Manten
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
 msgstr "Escaneando…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Scheduled backups only run while Bramble is running. Start it at login and they happen on their own, from the menu bar, without you opening the app."
+msgstr "Os backups agendados somente são executados enquanto o Bramble estiver em execução. Inicie-o no login e eles serão executados automaticamente, a partir da barra de menus, sem abrir o app."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Scissors"
@@ -2369,6 +2378,14 @@ msgstr "Chave SSH"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "Chave SSH · {0}"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Start at login"
+msgstr "Iniciar no login"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Start Bramble at login"
+msgstr "Iniciar o Bramble no login"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
@@ -2691,6 +2708,10 @@ msgstr "Alternar bloqueio ao bloquear a tela"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"
 msgstr "Alternar oferta para salvar credenciais"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle start at login"
+msgstr "Alternar início no login"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"

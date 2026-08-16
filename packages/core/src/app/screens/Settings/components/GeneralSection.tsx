@@ -4,12 +4,14 @@ import {
 	Keyboard,
 	KeyRound,
 	Lock,
+	Power,
 	ShieldCheck,
 	SlidersHorizontal,
 	Timer,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
+import { useAutostart } from "../../../../hooks/useAutostart";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
@@ -56,6 +58,10 @@ export function GeneralSection() {
 	useEffect(() => {
 		if (loaded) void autofill.setKeepUnlocked?.(keepUnlockedWindow(prefs.autoLockMinutes));
 	}, [loaded, prefs.autoLockMinutes, autofill]);
+
+	// Desktop only; `available` is the adapter's presence rather than a target check, since there
+	// is nothing to start on a platform whose host decides when we run.
+	const autostart = useAutostart();
 
 	// Shown where the OS supports inline autofill (iOS always; Android 11+). Starts hidden until resolved.
 	const [inlineAvailable, setInlineAvailable] = useState(false);
@@ -130,6 +136,28 @@ export function GeneralSection() {
 						onChange={(enabled) => void update("lockOnScreenLock", enabled)}
 						label={t`Toggle lock when the screen locks`}
 					/>
+				</Row>
+			)}
+
+			{/* Desktop only. Phrased by what it buys rather than by what it does: "start at login"
+			    is a chore, "keep backups running" is the reason to accept one. */}
+			{autostart.available && (
+				<Row
+					icon={<Power className="w-4 h-4 text-primary" />}
+					title={t`Start Bramble at login`}
+					subtitle={t`Runs quietly in the menu bar so scheduled backups happen without you opening the app.`}
+				>
+					<div className="flex flex-col items-end gap-1">
+						<Toggle
+							checked={autostart.enabled === true}
+							onChange={(on) => void autostart.setEnabled(on)}
+							disabled={autostart.enabled === null}
+							label={t`Toggle start at login`}
+						/>
+						{autostart.error && (
+							<span className="text-xs text-red-500 text-right">{autostart.error}</span>
+						)}
+					</div>
 				</Row>
 			)}
 

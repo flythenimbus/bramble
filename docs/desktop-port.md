@@ -1060,9 +1060,12 @@ Each phase retires a risk.
   Rust (the webview has no CORS grant for `tauri://localhost`), so every vault's schedule is kept
   whether or not it is unlocked. Credentials climb a ladder the app picks with no user input
   (OS store -> kernel keyring on Linux -> vault-wrapped and unlock-gated), and are pinned to the
-  one origin they may be sent to. Outstanding: autostart, which on Linux is a systemd user unit
-  and therefore the same work as TPM-sealed credentials via `LoadCredentialEncrypted=`; and a
-  two-device test. See [cloud-storage-backups.md](cloud-storage-backups.md).
+  one origin they may be sent to. **Autostart landed** on all three
+  platforms (`tauri-plugin-autostart`; a Settings, General toggle, plus a prompt when a backup is
+  first scheduled), which is what makes "runs as long as the computer is on" true rather than
+  conditional on someone having launched the app. Outstanding: a two-device test, and on Linux a
+  TPM-sealed credential tier via `LoadCredentialEncrypted=`, which needs a systemd user unit and
+  would move autostart there off the XDG entry it writes today. See [cloud-storage-backups.md](cloud-storage-backups.md).
 - **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
   and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

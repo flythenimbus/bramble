@@ -410,6 +410,39 @@ The recommendation for anyone who wants the credential to be weak by
 construction is provider-side scope: an S3 key restricted to the backup prefix,
 or Dropbox's app-folder token.
 
+### Starting with the session
+
+The schedule is a timer in this process, so every claim above is conditional on the app running.
+On a machine that gets rebooted and then used through the browser extension all week, a daily
+backup is not a daily backup. So the desktop app can start at login, and Settings, General carries
+a toggle for it: **Start Bramble at login**, phrased by what it buys rather than by what it does.
+
+`tauri-plugin-autostart` over the `auto-launch` crate, which means a login item
+(`~/Library/LaunchAgents`) on macOS, a `Run` registry value on Windows, and an XDG
+`~/.config/autostart` entry on Linux. XDG rather than a systemd user unit deliberately: this is a
+tray app, and an XDG entry starts once the graphical session exists where a user unit wanting
+`default.target` can come up with no display to render into. The TPM tier above is the reason that
+will need revisiting.
+
+The registered entry passes `--hidden`, and the main window is configured `visible: false` so an
+ordinary launch shows it explicitly and a login launch never flashes one. That inverts the usual
+arrangement, so the show/hide decision is the first thing `setup` does, before anything fallible:
+a failure between window creation and that call would otherwise leave the app running with no
+window at all.
+
+**The state is the OS's, not a pref.** A login item is user-visible and removable outside the app,
+so `useAutostart` asks rather than stores, and asks again after every write instead of trusting
+it. Unknown (`null`) is a real state, distinct from off: the toggle disables rather than guessing,
+because guessing "off" invites a second write of an entry that already exists. The hook shares
+state between instances, since two Settings sections offer this at once and per-instance state
+would leave one asserting the opposite of the other.
+
+**Setting up a backup suggests it.** The Backups section shows a prompt when a target is scheduled
+and autostart is off, because that is the moment the connection between the two is obvious and the
+user is already thinking about it. It is dismissible (`pref.autostartPromptDismissed`): leaving the
+machine on is a perfectly good reason to decline, and a suggestion that cannot be silenced is a
+nag.
+
 ### Handling the secret in memory
 
 Once a credential can be fetched unattended, "the vault is locked" stops implying
@@ -450,11 +483,12 @@ of the process. What that costs and what follows:
 Everything the per-vault and desktop-scheduling work left behind, with enough context to pick
 each one up cold. Ordered by what would bite a user first.
 
-**Autostart, and on Linux the same work as TPM sealing.** "Runs as long as the computer is on"
-holds only once the app has been launched. On macOS and Windows that is a login item
-(`tauri-plugin-autostart`). On Linux it is a **systemd user unit**, and a user unit is also how
-`LoadCredentialEncrypted=` delivers a TPM-sealed secret with no keyring daemon in the picture, so
-on that platform autostart and a fourth, stronger credential tier are one piece of work.
+**A TPM-sealed fourth tier on Linux.** `LoadCredentialEncrypted=` hands a systemd-started service a
+secret sealed to the TPM, with no keyring daemon in the picture, which would be stronger than
+either Linux tier we have: the Secret Service has no per-application ACL, and keyutils lives in
+kernel memory rather than sealed hardware. It only delivers to a **systemd user unit**, so it
+needs one, and autostart currently registers an XDG entry instead (see below). Whoever picks this
+up should move Linux autostart onto the unit rather than leave the app with both.
 
 **One assumption the UI relies on that is still unverified on hardware.** `secure_store`'s tier 2
 links keys into the session AND the per-UID persistent keyring, which the crate documents as

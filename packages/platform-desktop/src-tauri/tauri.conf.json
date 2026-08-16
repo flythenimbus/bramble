@@ -19,7 +19,8 @@
 				"height": 580,
 				"center": true,
 				"resizable": false,
-				"fullscreen": false
+				"fullscreen": false,
+				"visible": false
 			},
 			{
 				"label": "spotlight",

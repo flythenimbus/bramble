@@ -13,6 +13,9 @@
 		"dialog:allow-message",
 		"opener:allow-open-url",
 		"updater:default",
-		"process:allow-restart"
+		"process:allow-restart",
+		"autostart:allow-is-enabled",
+		"autostart:allow-enable",
+		"autostart:allow-disable"
 	]
 }

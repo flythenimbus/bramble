@@ -1656,6 +1656,7 @@ msgstr "URL du relais Nostr"
 msgid "Not backed up yet"
 msgstr "Pas encore sauvegardé"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Pas maintenant"
@@ -2120,6 +2121,10 @@ msgstr "La rotation a échoué et rien n’a été modifié. Déverrouillez le c
 #~ msgid "Runs on schedule even while Bramble is locked"
 #~ msgstr "S’exécute selon le calendrier même lorsque Bramble est verrouillé"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Runs quietly in the menu bar so scheduled backups happen without you opening the app."
+msgstr "S’exécute discrètement dans la barre des menus afin que les sauvegardes planifiées aient lieu sans que vous ayez à ouvrir l’application."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Père Noël"
@@ -2180,6 +2185,10 @@ msgstr "Scannez ceci sur votre autre appareil, ou copiez le code ci-dessous. Gar
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
 msgstr "Analyse en cours…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Scheduled backups only run while Bramble is running. Start it at login and they happen on their own, from the menu bar, without you opening the app."
+msgstr "Les sauvegardes planifiées ne s’exécutent que lorsque Bramble est en cours d’exécution. Démarrez-le à l’ouverture de session et elles se dérouleront automatiquement, depuis la barre des menus, sans que vous ayez à ouvrir l’application."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Scissors"
@@ -2369,6 +2378,14 @@ msgstr "Clé SSH"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "Clé SSH · {0}"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Start at login"
+msgstr "Démarrer à l’ouverture de session"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Start Bramble at login"
+msgstr "Démarrer Bramble à l’ouverture de session"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
@@ -2691,6 +2708,10 @@ msgstr "Activer le verrouillage lorsque l'écran se verrouille"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"
 msgstr "Activer l'offre d'enregistrement des identifiants"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle start at login"
+msgstr "Activer ou désactiver le démarrage à l’ouverture de session"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"

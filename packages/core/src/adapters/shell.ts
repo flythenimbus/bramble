@@ -169,6 +169,18 @@ export interface ShellAdapter {
 		onProgress(callback: (fraction: number | null | undefined) => void): () => void;
 	};
 	/**
+	 * Start the app when the user signs in.
+	 *
+	 * Desktop only, and the reason it exists is scheduled backups: the tick runs in the app's own
+	 * process, so "backs up on schedule" is only true of an app that is running. There is nothing
+	 * for this to do in a browser extension or a phone app, where the host decides when we run,
+	 * and it is absent there — the Settings row keys off that rather than off a target check.
+	 */
+	autostart?: {
+		isEnabled(): Promise<boolean>;
+		setEnabled(on: boolean): Promise<void>;
+	};
+	/**
 	 * True where something else keeps this install current: a Linux package manager, for a .deb or
 	 * .rpm from apt.bramble.sh. `updates` is then absent, because the app genuinely cannot replace
 	 * a dpkg-managed binary, and the Updates section says who does instead of disappearing — an

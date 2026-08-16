@@ -4,6 +4,7 @@
 //! the VEK (see `crypto`), the vault files (see `storage`), and later the sync hub, the
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
+mod autostart;
 mod backup;
 mod crypto;
 mod index_store;
@@ -54,12 +55,22 @@ fn core_version() -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(autostart::plugin())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .menu(|app| menu::build(app))
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|app| {
+            // First, before anything fallible: the main window is configured hidden so a
+            // login-launched app never flashes one, which means an ordinary launch has to ask
+            // for it. Anything that could fail before this point would leave no window at all.
+            if autostart::launched_hidden() {
+                lifetime::set_dock_visible(app.handle(), false);
+            } else {
+                lifetime::show_main(app.handle());
+            }
+
             // Logging is registered in release too, not just debug. A release build used to
             // be entirely silent, so when pairing refused a connection there was nowhere at
             // all to find out why: no stdout, no file, and a UI that showed nothing. Stdout

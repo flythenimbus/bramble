@@ -21,7 +21,9 @@ import {
 } from "../../../../backup/config";
 import { isOAuthConfigured, OAUTH_PROVIDERS, type OAuthProviderId } from "../../../../backup/oauth";
 import { retryDelayMs } from "../../../../backup/schedule";
+import { useAutostart } from "../../../../hooks/useAutostart";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
+import { usePrefs } from "../../../../hooks/usePrefs";
 import { formatDateTime, formatIn } from "../../../../util/format-date";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
@@ -484,6 +486,9 @@ export function BackupSection() {
 	const { t, i18n } = useLingui();
 	const backup = useBackup();
 	const { targets, runningIds } = backup;
+	// Desktop only; absent everywhere else, which hides the prompt below without a target check.
+	const autostart = useAutostart();
+	const { prefs, update } = usePrefs();
 
 	const [modal, setModal] = useState<ModalState | null>(null);
 	const [saving, setSaving] = useState(false);
@@ -611,6 +616,37 @@ export function BackupSection() {
 					</Trans>
 				</p>
 			)}
+			{/* Desktop only, and the thing a first-time backup setup most needs to hear: the schedule
+			    is kept by this process, so an app that never starts is an app that never backs up.
+			    Shown while a target is actually scheduled, so it is an explanation rather than an
+			    advert, and dismissible because leaving the machine on is a perfectly good reason to
+			    decline. */}
+			{autostart.available &&
+				autostart.enabled === false &&
+				!prefs.autostartPromptDismissed &&
+				targets?.some((target) => target.frequency !== "off") && (
+					<div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+						<p className="text-xs">
+							<Trans>
+								Scheduled backups only run while Bramble is running. Start it at login and they
+								happen on their own, from the menu bar, without you opening the app.
+							</Trans>
+						</p>
+						<div className="flex flex-wrap items-center gap-2">
+							<Button size="sm" onClick={() => void autostart.setEnabled(true)}>
+								<Trans>Start at login</Trans>
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => void update("autostartPromptDismissed", true)}
+							>
+								<Trans>Not now</Trans>
+							</Button>
+						</div>
+						{autostart.error && <p className="text-xs text-red-500">{autostart.error}</p>}
+					</div>
+				)}
 			{/* A remedy, not a warning: this is one package away for almost everyone who sees it, and
 			    the alternative is backups that quietly only happen when the vault is open. */}
 			{backup.noStore && (

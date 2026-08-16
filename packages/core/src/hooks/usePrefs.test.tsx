@@ -41,8 +41,12 @@ describe("usePrefs shared provider", () => {
 		);
 		await act(async () => {});
 
-		// One load of the 9 pref keys total, not one load per consumer (the old plain-hook bug).
-		expect(storage.getMeta).toHaveBeenCalledTimes(9);
+		// One load of the whole pref set, not one load per consumer (the old plain-hook bug).
+		// Asserted as "each key read exactly once" rather than a total, so adding a pref does not
+		// fail a test about sharing.
+		const keys = storage.getMeta.mock.calls.map(([key]) => key);
+		expect(keys).toHaveLength(new Set(keys).size);
+		expect(keys.length).toBeGreaterThan(1);
 	});
 
 	it("propagates an update from one consumer to another", async () => {

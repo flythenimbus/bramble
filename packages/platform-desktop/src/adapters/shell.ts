@@ -7,6 +7,7 @@ import { desktopDeviceLabel } from "@core/util/device-label";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { onSyncEvent, onSyncStatus } from "../sync/bus";
 import {
@@ -97,6 +98,18 @@ export const desktopShell: ShellAdapter = {
 
 	// A .deb or .rpm install: apt owns the files, and the Updates section says so.
 	updatesManagedExternally: () => !canSelfUpdate(),
+
+	// Start with the session, so the backup tick belongs to a process that is running. The
+	// registered entry passes --hidden, which src-tauri/src/autostart.rs reads to go straight to
+	// the tray. Enabling writes a login item, a Run key, or an XDG entry depending on the OS; all
+	// three are user-visible and removable outside the app, so isEnabled is read rather than
+	// cached, and reflects a change made from the OS.
+	autostart: {
+		isEnabled,
+		setEnabled: async (on: boolean) => {
+			await (on ? enable() : disable());
+		},
+	},
 
 	// The panel asking this window to open an entry. One window, so this is a route change
 	// rather than a new context; the router's guards still apply.

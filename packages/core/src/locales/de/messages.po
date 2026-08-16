@@ -1656,6 +1656,7 @@ msgstr "Nostr Relay URL"
 msgid "Not backed up yet"
 msgstr "Noch nicht gesichert"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Nicht jetzt"
@@ -2120,6 +2121,10 @@ msgstr "Die Rotation ist fehlgeschlagen und nichts wurde geändert. Entsperren S
 #~ msgid "Runs on schedule even while Bramble is locked"
 #~ msgstr "Wird auch bei gesperrtem Bramble planmäßig ausgeführt"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Runs quietly in the menu bar so scheduled backups happen without you opening the app."
+msgstr "Läuft unauffällig in der Menüleiste, damit geplante Backups erfolgen, ohne dass Sie die App öffnen."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Santa"
 msgstr "Weihnachtsmann"
@@ -2180,6 +2185,10 @@ msgstr "Scannen Sie diesen Code auf Ihrem anderen Gerät oder kopieren Sie ihn u
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Scanning…"
 msgstr "Scannen…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Scheduled backups only run while Bramble is running. Start it at login and they happen on their own, from the menu bar, without you opening the app."
+msgstr "Geplante Backups werden nur ausgeführt, während Bramble läuft. Starten Sie Bramble bei der Anmeldung, dann erfolgen sie automatisch über die Menüleiste, ohne dass Sie die App öffnen."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Scissors"
@@ -2369,6 +2378,14 @@ msgstr "SSH key"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
 msgstr "SSH key · {0}"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Start at login"
+msgstr "Bei der Anmeldung starten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Start Bramble at login"
+msgstr "Bramble bei der Anmeldung starten"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
@@ -2691,6 +2708,10 @@ msgstr "Sperren bei Bildschirmsperre umschalten"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle offer to save logins"
 msgstr "Angebot zum Speichern von Anmeldedaten umschalten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle start at login"
+msgstr "Start bei der Anmeldung umschalten"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
