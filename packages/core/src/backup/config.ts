@@ -63,6 +63,14 @@ export interface BackupTargetConfig {
 	lastBackupAt?: number;
 	lastVaultHash?: string;
 	lastError?: string;
+	/** Consecutive failures, cleared by any success. Drives the retry backoff (see schedule.ts).
+	 * Optional and absent until a target first fails, so an older stored list reads fine and an
+	 * older build simply retries every tick the way it always did. */
+	failures?: number;
+	/** When the last failure happened. The backoff is measured from here rather than from
+	 * `lastBackupAt`, which a failure deliberately does not advance and which a target that has
+	 * never succeeded does not have at all. */
+	failedAt?: number;
 }
 
 /** What one target's backup attempt produced: a vault hash on success, a message on failure. */
@@ -77,6 +85,10 @@ export interface BackupOutcome {
  * last-good stamps alone, and a target with no outcome is untouched (the list can change
  * while uploads run). Kept in one place because two copies of it drift into two different
  * ideas of when a target is "up to date".
+ *
+ * A failure also advances the retry counter and a success clears it, which is what makes the
+ * backoff work; both callers get that for free by folding through here. Note a *skipped* target
+ * (locked vault, no resident VEK) produces no outcome at all, so it never counts as a failure.
  */
 export function applyBackupOutcomes(
 	targets: BackupTargetConfig[],
@@ -87,9 +99,28 @@ export function applyBackupOutcomes(
 		const r = outcomes.get(t.id);
 		if (!r) return t;
 		return r.error !== undefined
-			? { ...t, lastError: r.error }
-			: { ...t, lastBackupAt: now, lastVaultHash: r.hash, lastError: undefined };
+			? { ...t, lastError: r.error, failedAt: now, failures: (t.failures ?? 0) + 1 }
+			: {
+					...t,
+					lastBackupAt: now,
+					lastVaultHash: r.hash,
+					lastError: undefined,
+					failedAt: undefined,
+					failures: undefined,
+				};
 	});
+}
+
+/**
+ * Reset a target's failure state, so it is due at the next trigger rather than mid-backoff.
+ *
+ * Called whenever the user edits a target, because the edit is usually the fix: without this, a
+ * corrected password would sit unused for as long as the accumulated backoff, and the fix would
+ * look like it had not worked. Cheap to be wrong about, since the worst case is one extra attempt.
+ */
+export function clearBackoff(t: BackupTargetConfig): BackupTargetConfig {
+	if (t.failedAt === undefined && t.failures === undefined) return t;
+	return { ...t, failedAt: undefined, failures: undefined };
 }
 
 type S3Secrets = { accessKeyId: string; secretAccessKey: string };

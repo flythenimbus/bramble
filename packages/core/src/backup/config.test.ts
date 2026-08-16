@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { BackupMetaStore, BackupTargetConfig } from "./config";
 import {
+	applyBackupOutcomes,
 	BACKUP_CONFIG_KEY,
 	BACKUP_TARGETS_KEY,
 	backupPrefix,
 	backupTargetsKeyFor,
+	clearBackoff,
 	isBackupTargetsKey,
 	migrateBackupTargetsToVaults,
 	normalizeS3,
@@ -208,5 +210,62 @@ describe("normalizeS3", () => {
 			bucket: "b",
 			prefix: undefined,
 		});
+	});
+});
+
+describe("applyBackupOutcomes and the failure counter", () => {
+	const NOW = 1_700_000_000_000;
+	const base = { ...TARGET, id: "t1" } as BackupTargetConfig;
+	const fold = (t: BackupTargetConfig, outcome: { hash?: string; error?: string }) =>
+		applyBackupOutcomes([t], new Map([[t.id, outcome]]), NOW)[0] as BackupTargetConfig;
+
+	it("counts consecutive failures and stamps when the last one was", () => {
+		const once = fold(base, { error: "401" });
+		expect(once).toMatchObject({ lastError: "401", failures: 1, failedAt: NOW });
+		expect(fold(once, { error: "401" })).toMatchObject({ failures: 2, failedAt: NOW });
+	});
+
+	it("leaves the last-good stamps alone on failure", () => {
+		const good = { ...base, lastBackupAt: 123, lastVaultHash: "H" };
+		expect(fold(good, { error: "boom" })).toMatchObject({ lastBackupAt: 123, lastVaultHash: "H" });
+	});
+
+	it("a success clears the backoff as well as the error", () => {
+		const failed = fold(fold(base, { error: "401" }), { error: "401" });
+		expect(fold(failed, { hash: "NEW" })).toMatchObject({
+			lastBackupAt: NOW,
+			lastVaultHash: "NEW",
+			lastError: undefined,
+			failures: undefined,
+			failedAt: undefined,
+		});
+	});
+
+	it("does not touch a target with no outcome", () => {
+		const other = { ...base, id: "t2" } as BackupTargetConfig;
+		expect(applyBackupOutcomes([other], new Map([["t1", { error: "x" }]]), NOW)[0]).toBe(other);
+	});
+
+	// A skipped target (locked vault) records no outcome at all, so it must not accrue a backoff:
+	// nothing is wrong with it, and backing it off would delay the run it is waiting for.
+	it("a skip is not a failure", () => {
+		expect(applyBackupOutcomes([base], new Map(), NOW)[0]?.failures).toBeUndefined();
+	});
+});
+
+describe("clearBackoff", () => {
+	it("drops the failure state so an edited target retries at once", () => {
+		const t = { ...TARGET, failures: 5, failedAt: 1 } as BackupTargetConfig;
+		expect(clearBackoff(t)).toMatchObject({ failures: undefined, failedAt: undefined });
+	});
+
+	it("keeps the error, which is still worth showing until the next attempt", () => {
+		const t = { ...TARGET, failures: 1, failedAt: 1, lastError: "401" } as BackupTargetConfig;
+		expect(clearBackoff(t).lastError).toBe("401");
+	});
+
+	it("returns the same object when there is nothing to clear", () => {
+		const t = TARGET as BackupTargetConfig;
+		expect(clearBackoff(t)).toBe(t);
 	});
 });

@@ -154,6 +154,7 @@ On each trigger a pure, testable function decides whether to upload:
 shouldBackup(now, target, currentVaultHash, isUnlocked):   // evaluated per target
   if target.frequency == off -> skip (off)
   if not isUnlocked       -> skip (locked)
+  if backing off          -> skip (failed recently; see below)
   due     = lastBackupAt is null or now - lastBackupAt >= interval(frequency)
   if not due              -> skip (not due)
   changed = currentVaultHash != lastVaultHash
@@ -163,7 +164,33 @@ shouldBackup(now, target, currentVaultHash, isUnlocked):   // evaluated per targ
 
 A due-but-unchanged vault is skipped: the previous backup already captures the
 current state. On upload failure `lastBackupAt` is not advanced, so it stays due
-and retries at the next trigger, surfacing the error in the UI.
+and retries, surfacing the error in the UI.
+
+**Retry backoff.** "Stays due" on its own means *due at every trigger*, which on the desktop's
+five-minute tick is twelve authentication attempts an hour, unattended, for as long as a
+credential stays wrong. Providers notice: Nextcloud throttles an account after enough failed
+sign-ins from one address, so an unbounded retry loop manufactures a lockout that outlives the
+correction, and the WebDAV client's `reason()` already has to explain that to the user.
+
+So a failure also stamps `failedAt` and increments `failures`, and `isDue` holds the target off
+for `retryDelayMs(failures, frequency)`: doubling from fifteen minutes, **capped at the target's
+own interval**. The cap is the part that matters, since it means a backoff can never stretch a
+daily backup into a weekly one however long it has been failing; a daily target that cannot
+authenticate settles at one attempt a day rather than 288.
+
+Three things deliberately do not back off:
+
+- **A skipped target.** A locked vault produces no outcome at all, so it never counts as a
+  failure. Backing it off would delay the very run it is waiting for.
+- **"Back up now."** It bypasses the whole decision rule, so the escape hatch stays available
+  at any point in a backoff.
+- **An edited target.** `clearBackoff` runs on every edit and on a frequency change, because the
+  edit is usually the fix, and a corrected password that sits out an accumulated backoff looks
+  like it did not work.
+
+A success clears the counter along with the error. Both fields are optional and absent until a
+target first fails, so an older stored list reads unchanged and an older build ignores them and
+retries the way it always did.
 
 ### Trigger points
 
@@ -422,14 +449,6 @@ of the process. What that costs and what follows:
 
 Everything the per-vault and desktop-scheduling work left behind, with enough context to pick
 each one up cold. Ordered by what would bite a user first.
-
-**Failing targets retry forever, with no backoff.** The desktop tick is every five minutes and a
-failed target stays due, so a wrong password means twelve authentication failures an hour,
-indefinitely and unattended. Nextcloud throttles an account after repeated failed sign-ins — the
-WebDAV client already explains this in `reason()` — so the retry loop manufactures a lockout that
-outlives the correction. The fix wants a `failedAt` / `failures` pair on `BackupTargetConfig` and
-a backoff capped at the target's own frequency, which is a persisted-format change and therefore
-additive-and-tolerant like the rest. Until then, a broken target is noisy rather than harmful.
 
 **Autostart, and on Linux the same work as TPM sealing.** "Runs as long as the computer is on"
 holds only once the app has been launched. On macOS and Windows that is a login item

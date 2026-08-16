@@ -193,3 +193,71 @@ describe("runScheduledBackups", () => {
 		expect(h.current("v1")[0]?.lastError).toBe("bad creds");
 	});
 });
+
+// The pieces composed: isDue holds a failed target off, applyBackupOutcomes counts the failures,
+// and a success clears both. Unit tests cover each half; this is the loop the desktop tick runs.
+describe("runScheduledBackups: retry backoff", () => {
+	it("stops retrying a failing target every tick", async () => {
+		const h = harness({ v1: [target("t1", "daily")] }, { uploadFail: new Set(["t1"]) });
+
+		const first = await runScheduledBackups(h.deps, NOW);
+		expect(first.failed).toHaveLength(1);
+		expect(h.current("v1")[0]).toMatchObject({ failures: 1, failedAt: NOW });
+
+		// Five minutes later, the next tick. Before the backoff this attempted again, and would
+		// have gone on doing so twelve times an hour for as long as the credential stayed wrong.
+		const soon = await runScheduledBackups(h.deps, NOW + 5 * 60 * 1000);
+		expect(soon.attempted).toBe(0);
+		expect(h.current("v1")[0]?.failures).toBe(1);
+
+		// Past the first delay it tries once more, and fails again, so the next wait is longer.
+		const later = await runScheduledBackups(h.deps, NOW + 16 * 60 * 1000);
+		expect(later.failed).toHaveLength(1);
+		expect(h.current("v1")[0]?.failures).toBe(2);
+	});
+
+	it("resumes as normal once a run succeeds", async () => {
+		const failing = new Set(["t1"]);
+		const h = harness({ v1: [target("t1", "daily")] }, { uploadFail: failing });
+
+		await runScheduledBackups(h.deps, NOW);
+		expect(h.current("v1")[0]?.failures).toBe(1);
+
+		// The user fixes the credential. (Editing the target clears the backoff too; this covers
+		// the other route, where whatever was broken simply recovers.)
+		failing.delete("t1");
+		const ok = await runScheduledBackups(h.deps, NOW + 16 * 60 * 1000);
+		expect(ok.succeeded).toHaveLength(1);
+		expect(h.current("v1")[0]).toMatchObject({
+			failures: undefined,
+			failedAt: undefined,
+			lastError: undefined,
+		});
+	});
+
+	// A locked vault is a skip, not a failure: backing it off would delay the very run it is
+	// waiting for, and nothing about the target is wrong.
+	it("does not back off a target whose vault is locked", async () => {
+		const h = harness({ v1: [target("t1", "daily")] }, { locked: new Set(["v1"]) });
+		const r = await runScheduledBackups(h.deps, NOW);
+		expect(r.skipped).toBe(1);
+		expect(h.current("v1")[0]?.failures).toBeUndefined();
+	});
+
+	// One target's backoff must not stall the vault's other destinations, nor stop the vault
+	// being looked at: the run loop skips a whole vault when none of its targets is due.
+	it("keeps backing up other targets beside a backed-off one", async () => {
+		const h = harness(
+			{ v1: [target("bad", "daily"), target("good", "daily")] },
+			{ uploadFail: new Set(["bad"]) },
+		);
+		await runScheduledBackups(h.deps, NOW);
+		expect(h.uploaded.map((u) => u.id)).toEqual(["good"]);
+
+		// A destination added five minutes later, while `bad` is still inside its first backoff.
+		h.current("v1").push(target("fresh", "daily"));
+		const next = await runScheduledBackups(h.deps, NOW + 5 * 60 * 1000);
+		expect(next.succeeded.map((s) => s.id)).toEqual(["fresh"]);
+		expect(next.failed).toHaveLength(0);
+	});
+});

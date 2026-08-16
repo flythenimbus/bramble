@@ -7,6 +7,7 @@ import {
 	type BackupTargetConfig,
 	backupPrefix,
 	backupTargetsKeyFor,
+	clearBackoff,
 	credsAreOsHeld,
 	keyVaultIdFor,
 	migrateBackupTargetsToVaults,
@@ -222,8 +223,10 @@ export function useBackup() {
 			if (!cur) return;
 			// A new credential pair re-seals; omitting them keeps the saved ones.
 			const creds = input.secrets ? await sealFor(id, input.secrets, input) : cur.creds;
+			// clearBackoff first: an edit is usually the fix for whatever was failing, and a
+			// corrected credential that sits out the accumulated backoff looks like it did not work.
 			const updated: BackupTargetConfig = {
-				...cur,
+				...clearBackoff(cur),
 				providerId: input.providerId,
 				provider: input.provider,
 				endpoint: input.endpoint,
@@ -248,7 +251,11 @@ export function useBackup() {
 
 	const setFrequency = useCallback(
 		async (id: string, frequency: BackupFrequency) => {
-			await persist((targets ?? []).map((t) => (t.id === id ? { ...t, frequency } : t)));
+			// Also clears the backoff: reaching for the frequency of a failing target is the other
+			// way a user says "try this again", and off -> daily should not wait one out.
+			await persist(
+				(targets ?? []).map((t) => (t.id === id ? { ...clearBackoff(t), frequency } : t)),
+			);
 		},
 		[persist, targets],
 	);
