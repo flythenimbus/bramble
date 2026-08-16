@@ -20,8 +20,9 @@ import {
 	normalizeS3,
 } from "../../../../backup/config";
 import { isOAuthConfigured, OAUTH_PROVIDERS, type OAuthProviderId } from "../../../../backup/oauth";
+import { retryDelayMs } from "../../../../backup/schedule";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
-import { formatDateTime } from "../../../../util/format-date";
+import { formatDateTime, formatIn } from "../../../../util/format-date";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
@@ -375,6 +376,14 @@ function TargetCard({
 			: target.provider === "webdav"
 				? target.serverUrl
 				: target.path || def.name;
+	// How long this target is still backing off, so a failure says when it will be tried again
+	// rather than looking abandoned. Read at render: it goes stale in an open panel, and a
+	// countdown that ticks is not worth a timer here. Undefined once the wait is over, and for a
+	// target that is off (it has no next attempt) or whose backoff an edit already cleared.
+	const retryIn =
+		target.frequency !== "off" && target.failedAt && target.failures
+			? target.failedAt + retryDelayMs(target.failures, target.frequency) - Date.now()
+			: undefined;
 	return (
 		<div className="rounded-lg border border-border p-3 space-y-3">
 			<div className="flex items-start justify-between gap-3">
@@ -389,9 +398,16 @@ function TargetCard({
 								<Trans>Backing up…</Trans>
 							</p>
 						) : target.lastError ? (
-							<p className="text-xs text-red-500 break-words" title={target.lastError}>
-								<Trans>Failed</Trans>: {target.lastError}
-							</p>
+							<>
+								<p className="text-xs text-red-500 break-words" title={target.lastError}>
+									<Trans>Failed</Trans>: {target.lastError}
+								</p>
+								{retryIn !== undefined && retryIn > 0 && (
+									<p className="text-xs text-muted-foreground truncate">
+										<Trans>Next attempt {formatIn(retryIn)}</Trans>
+									</p>
+								)}
+							</>
 						) : (
 							<p className="text-xs text-muted-foreground truncate">
 								{target.lastBackupAt ? (

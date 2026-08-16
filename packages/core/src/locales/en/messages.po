@@ -1590,6 +1590,11 @@ msgstr "New {modeLabel}"
 msgid "New password"
 msgstr "New password"
 
+#. placeholder {0}: formatIn(retryIn)
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Next attempt {0}"
+msgstr "Next attempt {0}"
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "No answer. Is Bramble running on this computer?"
 #~ msgstr "No answer. Is Bramble running on this computer?"

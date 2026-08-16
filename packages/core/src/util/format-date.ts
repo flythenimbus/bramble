@@ -16,6 +16,23 @@ export function formatDateTime(value: number | Date): string {
 	});
 }
 
+/**
+ * Localized "in 12 minutes" / "in 2 hours" / "in 3 days", rounded to the largest unit that fits.
+ *
+ * `Intl.RelativeTimeFormat` rather than a hand-rolled plural, because it gets the plural rules of
+ * every locale right for free, which a `<Plural>` per unit would only get right for English.
+ * `numeric: "always"` on purpose: "auto" produces "next hour", which reads oddly for a countdown.
+ */
+export function formatIn(ms: number): string {
+	const rtf = new Intl.RelativeTimeFormat(i18n.locale, { numeric: "always" });
+	const minutes = Math.round(ms / 60_000);
+	// Never "in 0 minutes": under a minute is still a wait, and rounding it away reads as a bug.
+	if (minutes < 60) return rtf.format(Math.max(1, minutes), "minute");
+	const hours = Math.round(minutes / 60);
+	if (hours < 24) return rtf.format(hours, "hour");
+	return rtf.format(Math.round(hours / 24), "day");
+}
+
 /** Localized medium date + time to the second, e.g. "Jan 13, 2026, 4:05:22 PM".
  * For the password changelog, where two rotations can land seconds apart. */
 export function formatDateTimeExact(value: number | Date): string {
