@@ -1063,9 +1063,11 @@ Each phase retires a risk.
   one origin they may be sent to. **Autostart landed** on all three
   platforms (`tauri-plugin-autostart`; a Settings, General toggle, plus a prompt when a backup is
   first scheduled), which is what makes "runs as long as the computer is on" true rather than
-  conditional on someone having launched the app. Outstanding: a two-device test, and on Linux a
-  TPM-sealed credential tier via `LoadCredentialEncrypted=`, which needs a systemd user unit and
-  would move autostart there off the XDG entry it writes today. See [cloud-storage-backups.md](cloud-storage-backups.md).
+  conditional on someone having launched the app. Outstanding: a two-device test. The TPM-sealed
+  Linux tier that was queued behind this is **abandoned**: systemd refuses TPM keys in user scope,
+  and a user-scoped credential is readable by any process running as its owner anyway. The
+  reasoning is in [cloud-storage-backups.md](cloud-storage-backups.md), and it is why Linux
+  autostart stays an XDG entry. See [cloud-storage-backups.md](cloud-storage-backups.md).
 - **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
   and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.

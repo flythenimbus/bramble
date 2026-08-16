@@ -483,12 +483,36 @@ of the process. What that costs and what follows:
 Everything the per-vault and desktop-scheduling work left behind, with enough context to pick
 each one up cold. Ordered by what would bite a user first.
 
-**A TPM-sealed fourth tier on Linux.** `LoadCredentialEncrypted=` hands a systemd-started service a
-secret sealed to the TPM, with no keyring daemon in the picture, which would be stronger than
-either Linux tier we have: the Secret Service has no per-application ACL, and keyutils lives in
-kernel memory rather than sealed hardware. It only delivers to a **systemd user unit**, so it
-needs one, and autostart currently registers an XDG entry instead (see below). Whoever picks this
-up should move Linux autostart onto the unit rather than leave the app with both.
+**~~A TPM-sealed fourth tier on Linux.~~ Abandoned; the idea does not work, and the reason is
+worth keeping.** The plan was `LoadCredentialEncrypted=` in a systemd **user** unit, handing the
+app a secret sealed to the TPM with no keyring daemon involved. Three things kill it, checked on
+Debian 13 with systemd 257 and a real TPM2 rather than reasoned about:
+
+1. **User-scoped credentials cannot use the TPM at all.**
+   `systemd-creds --user --with-key=tpm2` answers `Selected key not available in --uid= scoped
+   mode, refusing.` That is a scope rule, not a permission problem: it refuses before it ever
+   touches `/dev/tpmrm0`.
+2. **A user-scoped credential is not secret from the user's own processes.** `systemd-creds --user
+   decrypt` succeeds from any plain shell, and there is no per-user secret file behind it; the man
+   page says the key incorporates "the selected user's numeric UID and username, as well as the
+   system's machine-id", all of which any local process can read. It resists a file copied to
+   another machine, and nothing else.
+3. **System scope is where the TPM lives, and it is out of reach.** Encrypting needs
+   `/var/lib/systemd/credential.secret`, which is `-r-------- root root`, and the credential is
+   delivered to a *system* unit running as a system user. A GUI tray app in the user's session
+   cannot be one.
+
+Even granting all three, there is a fourth problem that is not systemd's: for an **unattended**
+backup, whatever unseals the secret has to be available to the process with no user present, so
+anything the app can do, code running as the app's user can also do. TPM sealing moves "readable
+from a stolen disk" to "readable only on this machine" — which is what the Secret Service tier
+already gives, and what full-disk encryption largely gives on top. It does not touch the threat
+this tier was supposed to address.
+
+So the Linux ladder stops where it is, and the honest mitigation is not a stronger box for the key
+but a **weaker key**: see the provider-side scoping note in [The trade, stated
+plainly](#the-trade-stated-plainly). Bounding what a stolen credential can do beats trying to hide
+it from a process that runs as its owner.
 
 **One assumption the UI relies on that is still unverified on hardware.** `secure_store`'s tier 2
 links keys into the session AND the per-UID persistent keyring, which the crate documents as
