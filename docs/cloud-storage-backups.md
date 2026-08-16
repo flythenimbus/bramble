@@ -437,24 +437,25 @@ holds only once the app has been launched. On macOS and Windows that is a login 
 `LoadCredentialEncrypted=` delivers a TPM-sealed secret with no keyring daemon in the picture, so
 on that platform autostart and a fourth, stronger credential tier are one piece of work.
 
-**Two assumptions the UI already relies on, neither verified on hardware.**
+**One assumption the UI relies on that is still unverified on hardware.** `secure_store`'s tier 2
+links keys into the session AND the per-UID persistent keyring, which the crate documents as
+surviving a logout subject to an expiry timer
+(`/proc/sys/kernel/keys/persistent_keyring_expiry`, typically three days, refreshed on access).
+The card says "Backs up on schedule" on the strength of that. Check it on a real session: generate
+a target, log out, log back in, confirm the scheduler still runs before a reboot.
 
-- *keyutils persistence.* `secure_store`'s tier 2 links keys into the session AND the per-UID
-  persistent keyring, which the crate documents as surviving a logout subject to an expiry timer
-  (`/proc/sys/kernel/keys/persistent_keyring_expiry`, typically three days, refreshed on access).
-  The card says "Backs up on schedule" on the strength of that. Check it on a real session:
-  generate a target, log out, log back in, confirm the scheduler still runs before a reboot.
-- *The `.deb`'s sidecar layout.* `manifest.rs` resolves the browser proxy as a sibling of the
-  running executable. That holds in a bundle and in `target/debug`; nobody has confirmed where
-  `externalBin` lands in a Debian package. If it is wrong, the browser link silently does not work
-  for anyone who installed from apt.
+*(The other one, where `externalBin` lands in a Debian package, is settled: `test:apt` asserts
+`/usr/bin/bramble-proxy` on Debian 12 and Ubuntu 22.04, `test:nix` asserts the same sibling in the
+Nix store, and the shipped macOS disk image carries it at `Contents/MacOS/bramble-proxy`.)*
 
 **Not yet run.** All of it is written and skipped rather than missing:
 
 - `docker compose up -d` then `BRAMBLE_IT=1 pnpm --filter @vault/core exec vitest run providers.integration` — the provider round trip, keep-N against a server's own listing, and the two-vault retention scoping, against real Nextcloud and MinIO.
 - `cargo test -- --ignored` in `platform-desktop/src-tauri` — the SigV4 signer against MinIO, which validates signatures strictly. Our vectors only prove the two signers agree with each other.
 - A desktop run against the compose Nextcloud: configure a target, lock the vault, wait for a tick, confirm a snapshot lands while locked.
-- `apt install bramble` from `apt.bramble.sh` on a clean machine.
+
+*(`apt install bramble` from `apt.bramble.sh` on a clean machine is done, and is now
+`pnpm run test:apt`.)*
 
 **Mobile is untouched** (`cloudBackup: false`). Enabling it needs an answer to the same question
 the desktop had: whether a Capacitor webview can reach an arbitrary provider, or whether it needs

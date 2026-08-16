@@ -38,12 +38,17 @@ and is marked `[unverified]`. Do a research pass before committing to any of tho
   already syncs. Desktop becomes the only client that can *use* those keys, with no vault-format,
   sync, or importer change.
 
-## Implementation status (built so far, branch `feat/desktop`)
+## Implementation status
 
-**Phase 0 is done and the vertical slice is proven.** The app builds and boots on macOS, the
-React UI renders in WKWebView, and a frontend call reaches a Rust command and hits the
-filesystem. The sections below this one are the original forward-looking analysis (still
-accurate for the unbuilt parts); this section is the ground truth.
+**Shipping: 0.2.0 is released for macOS, signed and notarized, with a Linux channel behind it.**
+The sections below this one are the original forward-looking analysis, still accurate for the
+unbuilt parts; this section and [Proposed plan](#proposed-plan) are the ground truth, and the plan
+is the better place to look for what is left.
+
+The list that follows is what the first pass built, kept because the reasoning behind each choice
+is still load-bearing. Landed since: scheduled cloud backups with an OS-credential-store ladder and
+the HTTP in Rust ([cloud-storage-backups.md](cloud-storage-backups.md)), sync over the webview's
+own WebRTC, the browser link, and the whole release and packaging story below.
 
 - **`core-rust` as a plain cargo dependency: CONFIRMED.** The decisive bet works. A new
   `native` feature (`native = ["dep:snow", "dep:k256"]`, with `ffi = ["native", "dep:uniffi"]`
@@ -1004,7 +1009,11 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
 ## Risks to retire early
 
 1. **WebKitGTK rendering and window transparency on Linux.** The UI is Tailwind-heavy and WebKit is
-   the stricter engine. Retire in Phase 0 by rendering the existing UI on all three OSes.
+   the stricter engine. **Half retired.** Linux builds, packages and installs: CI builds the bundle
+   on every push, `test:apt` installs the `.deb` on Debian 12 and Ubuntu 22.04 and finds no
+   unresolved libraries, and `test:nix` builds from source. None of that renders a pixel. Somebody
+   still has to launch it on a Linux desktop and look at the UI, which is the part the risk was
+   actually about `[unverified]`.
 2. **The macOS non-activating panel plus frontmost-app capture.** The entire auto-type premise
    depends on it, and it is the highest-uncertainty native piece. Retire in Phase 2.
 3. **Native-messaging manifest install across three OSes and two browsers**, and whether it survives
@@ -1018,9 +1027,10 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
    application on every build and prompts for the login password each time. Ship it unsigned
    and every user gets a password prompt on every launch, which for a password manager reads
    as something being wrong. A Developer ID signature is stable across builds and updates, so
-   it should prompt zero times. `[unverified: no signed desktop build exists yet, so the
-   zero-prompt claim and ACL survival across updates are both inference from how macOS ACLs
-   work rather than something observed]`
+   it should prompt zero times. **Signing and notarization are done**: 0.2.0 ships signed and
+   notarized, and the whole Linux channel is signed too (see [apt-releases.md](apt-releases.md)).
+   `[the zero-prompt claim is still unobserved: it needs one signed build to be updated over
+   another and the keychain to stay quiet, which no release has yet exercised]`
 6. ~~**webrtc-rs interop with the extension's browser WebRTC on desktop.**~~ Retired by not
    happening: macOS WKWebView has its own WebRTC, so desktop talks to peers with the same browser
    APIs the extension does. Returns only if WebKitGTK turns out to lack them.
@@ -1029,9 +1039,10 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
 
 Each phase retires a risk.
 
-- **Phase 0, walking skeleton. DONE**, on macOS only: `packages/platform-desktop` (Vite + React,
-  mirroring platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux
-  and Windows are still unbuilt, so risk 1 is not actually retired.
+- **Phase 0, walking skeleton. DONE**: `packages/platform-desktop` (Vite + React, mirroring
+  platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux now builds
+  and packages as well, though nobody has yet looked at the rendered UI there (risk 1). Windows is
+  still unbuilt.
 - **Phase 1, vault MVP. MOSTLY DONE.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK
   held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. Outstanding: KDBX import
   and the passkey provider (both need core-rust re-exports), and biometric unlock.
@@ -1064,13 +1075,25 @@ it proves the hardest native UI problem before the largest install-surface probl
 
 ## Open questions
 
-- **Distribution.** Direct download plus Homebrew cask on macOS; MSI or winget on Windows; Linux is
-  the question. Flatpak is actively hostile to both native messaging (the manifest must reach the
-  browser's sandbox) and global input capture, so AppImage or native packages may be forced
-  `[unverified]`.
-- **Auto-update.** Tauri's updater needs its own signing keys, which interacts with
-  `release-signing.md`.
-- **Versioning.** Per-target versioning is already the norm here, so desktop gets its own line.
+Three of the original five are answered; they are kept, struck, because the reasoning still
+explains why the answer is what it is.
+
+- ~~**Distribution.**~~ **Answered.** Direct download (`.dmg`) plus a Homebrew cask on macOS; on
+  Linux, native packages and an AppImage, published through an APT repository at
+  `apt.bramble.sh`, plus a Nix flake. Flatpak was ruled out for the reason predicted: it is hostile
+  to native messaging, whose manifest has to reach the browser's own sandbox, and to global input
+  capture. Windows is still unbuilt and still the MSI-or-winget question. See
+  [Linux artifacts](#linux-artifacts), [Homebrew](#homebrew), [NixOS](#nixos) and
+  [apt-releases.md](apt-releases.md).
+- ~~**Auto-update.**~~ **Answered.** Tauri's updater has its own Ed25519 key, held encrypted at
+  rest under age + YubiKey like the other release keys, and the manifest is served from the
+  website rather than a GitHub release. The interaction with `release-signing.md` turned out to be
+  additive. Where a package manager owns the files the updater stands down instead, which is the
+  `.deb`, the Nix store path, and a Homebrew cask.
+- ~~**Versioning.**~~ **Answered:** desktop versions independently, tagged `<version>-desktop`.
+  That per-target namespace is also a trap worth remembering, since `/releases/latest` means the
+  newest release of *any* target: it has now bitten the update manifest once and the Homebrew
+  livecheck once.
 - **Native CTAP for security keys.** `authenticator-rs` or `ctap-hid-fido2` would make desktop
   security-key unlock *more* capable than the browser path, since hmac-secret is a CTAP2-level
   protocol feature and a native implementation sidesteps origin restrictions entirely. The slot
