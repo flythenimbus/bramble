@@ -141,14 +141,37 @@ fn tray_icon_bytes(dark_theme: bool) -> &'static [u8] {
 pub fn set_tray_theme(app: &AppHandle, dark_theme: bool) {
     #[cfg(not(target_os = "macos"))]
     {
+        // Repainting is not free on Linux. Under libayatana the icon cannot be handed over as
+        // bytes, so the tray crate writes a temporary PNG and points GTK at a new icon theme
+        // search path, and GTK rescans. Doing that on every call, when the frontend re-reports a
+        // theme that has not changed, is how a tray icon starts costing frames.
+        static APPLIED: std::sync::Mutex<Option<bool>> = std::sync::Mutex::new(None);
+        let mut applied = match APPLIED.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if *applied == Some(dark_theme) {
+            return;
+        }
+
         let Some(tray) = app.tray_by_id("main") else {
             return;
         };
+        let started = std::time::Instant::now();
         match Image::from_bytes(tray_icon_bytes(dark_theme)) {
             Ok(icon) => {
                 if let Err(e) = tray.set_icon(Some(icon)) {
                     log::warn!("could not repaint the tray icon: {e}");
+                    return;
                 }
+                *applied = Some(dark_theme);
+                // Timed because a stutter here is invisible in a profile taken anywhere else:
+                // the work happens in the panel, not in this process.
+                log::info!(
+                    "tray icon -> {} in {}ms",
+                    if dark_theme { "light" } else { "dark" },
+                    started.elapsed().as_millis()
+                );
             }
             Err(e) => log::warn!("tray icon variant unavailable: {e}"),
         }

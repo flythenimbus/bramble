@@ -44,12 +44,22 @@ export function syncTrayTheme() {
 	if (isMac) return;
 	const root = document.documentElement;
 	let last: boolean | undefined;
+	let queued: ReturnType<typeof setTimeout> | undefined;
 	const push = () => {
 		const dark = root.classList.contains("dark");
 		if (dark === last) return;
 		last = dark;
 		void invoke("tray_theme", { dark }).catch(() => {});
 	};
-	push();
-	new MutationObserver(push).observe(root, { attributes: true, attributeFilter: ["class"] });
+	// Coalesced, and kept off the first paint. Repainting the tray is expensive on Linux: the icon
+	// cannot be passed as bytes, so it goes to disk and the panel reloads it. The theme provider
+	// settles the class in the same tick it mounts, so an immediate call competes with showing the
+	// window for the first time. A tray icon that is correct a moment later costs nothing; a
+	// stuttering launch is the thing people notice.
+	const schedule = () => {
+		clearTimeout(queued);
+		queued = setTimeout(push, 250);
+	};
+	schedule();
+	new MutationObserver(schedule).observe(root, { attributes: true, attributeFilter: ["class"] });
 }
