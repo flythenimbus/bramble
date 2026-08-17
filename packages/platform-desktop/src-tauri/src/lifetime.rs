@@ -95,7 +95,12 @@ pub fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     // A template image: macOS ignores the colour and renders the alpha, so the icon inverts
     // itself against a light or dark menu bar. Shipping the app icon here would put a black
     // rounded square up there that disappears in dark mode. See scripts/make-macos-icon.mjs.
-    match Image::from_bytes(include_bytes!("../icons/tray.png")) {
+    //
+    // Nobody does that inverting for us anywhere else. Ayatana draws the pixels it is given, and
+    // the pixels are pure black, so on a dark Plasma panel the icon is a black smudge. Off macOS
+    // the shape is therefore drawn in whichever of the two variants the theme calls for, and
+    // `set_tray_theme` swaps it when the theme changes.
+    match Image::from_bytes(tray_icon_bytes(false)) {
         Ok(icon) => {
             builder = builder.icon(icon);
             #[cfg(target_os = "macos")]
@@ -110,4 +115,42 @@ pub fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+/// The same artwork in two colours: black for a light panel, white for a dark one. `tray-light`
+/// is generated from `tray.png` by whitening the RGB and keeping the alpha, since the shape lives
+/// entirely in the alpha channel.
+fn tray_icon_bytes(dark_theme: bool) -> &'static [u8] {
+    if dark_theme {
+        include_bytes!("../icons/tray-light.png")
+    } else {
+        include_bytes!("../icons/tray.png")
+    }
+}
+
+/// Repaint the tray for a light or dark surround.
+///
+/// Driven from the webview rather than read from the desktop, because the app already resolves
+/// this: it follows the OS through `prefers-color-scheme` when the user's theme is "system", and
+/// follows the user when they have picked one. Reading the desktop directly would need a portal
+/// round trip and would then disagree with the app whenever those two differ.
+///
+/// A no-op on macOS, which does its own inverting from the template and would only be made worse
+/// by being told what to do.
+#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+pub fn set_tray_theme(app: &AppHandle, dark_theme: bool) {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let Some(tray) = app.tray_by_id("main") else {
+            return;
+        };
+        match Image::from_bytes(tray_icon_bytes(dark_theme)) {
+            Ok(icon) => {
+                if let Err(e) = tray.set_icon(Some(icon)) {
+                    log::warn!("could not repaint the tray icon: {e}");
+                }
+            }
+            Err(e) => log::warn!("tray icon variant unavailable: {e}"),
+        }
+    }
 }

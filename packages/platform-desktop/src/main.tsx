@@ -15,6 +15,7 @@ import { onVaultStateChange } from "./adapters/vault-session";
 import { startBackupSchedule } from "./backup";
 import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
+import { installWindowShortcuts, syncTrayTheme } from "./window-chrome";
 
 const platform: Platform = {
 	target: "desktop",
@@ -83,9 +84,13 @@ if (!root) throw new Error("missing #root");
 void (async () => {
 	// Settings' "About" row reads this synchronously, so resolve it before the first render.
 	await resolveAppVersion();
+	// Ctrl-W / Ctrl-Q, and a tray icon that stays visible against the panel. Both are no-ops on
+	// macOS, where the menu and the template icon already do the job. See ./window-chrome.
+	installWindowShortcuts();
 	createRoot(root).render(
 		<PlatformProvider platform={platform}>
 			<Root />
 		</PlatformProvider>,
 	);
+	syncTrayTheme();
 })();

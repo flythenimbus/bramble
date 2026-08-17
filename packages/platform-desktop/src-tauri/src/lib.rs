@@ -44,6 +44,30 @@ fn self_updatable() -> bool {
     can_self_update()
 }
 
+/// Repaint the tray icon for a light or dark desktop. Called by the frontend whenever its
+/// resolved theme changes; see `lifetime::set_tray_theme`.
+#[tauri::command]
+fn tray_theme(app: tauri::AppHandle, dark: bool) {
+    lifetime::set_tray_theme(&app, dark);
+}
+
+/// Quit for real, which only the tray menu could do before. Paired with `hide_to_tray`: closing
+/// hides, quitting exits, and off macOS both arrive from the webview.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+/// Hide the window to the tray, which is what the close button does.
+///
+/// Exposed because the keyboard route has to come from the webview off macOS: muda documents
+/// `close_window` and `quit` as unsupported on Linux, so the menu carries no Ctrl-W or Ctrl-Q
+/// however it is built, and the accelerators have to be handled where the keystrokes land.
+#[tauri::command]
+fn hide_to_tray(app: tauri::AppHandle) {
+    lifetime::hide_main(&app);
+}
+
 /// Version of the shared Rust crypto core this binary linked. Exists to prove the
 /// core-rust-as-a-cargo-dependency path end to end, which is the bet Tauri was picked on;
 /// the Settings "About" row reads it.
@@ -54,13 +78,22 @@ fn core_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+
+    // macOS only. There the menu bar belongs to the screen rather than the window, costs no space,
+    // and carries Cmd-Q and the Edit items the webview needs from the responder chain. Everywhere
+    // else it is a strip of chrome inside a 600x580 window offering File > Quit, Window > Minimize
+    // and two items that already live in Settings. See `menu`.
+    #[cfg(target_os = "macos")]
+    let builder = builder
         .menu(|app| menu::build(app))
-        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()));
+
+    builder
         .setup(|app| {
             // First, before anything fallible: the main window is configured hidden so a
             // login-launched app never flashes one, which means an ordinary launch has to ask
@@ -69,17 +102,6 @@ pub fn run() {
                 lifetime::set_dock_visible(app.handle(), false);
             } else {
                 lifetime::show_main(app.handle());
-            }
-
-            // The menu is attached everywhere, because that is what carries Ctrl-W and the Edit
-            // accelerators, but off macOS it is drawn *inside* the window and a 660x580 app cannot
-            // spare a strip for File > Quit and Window > Minimize. Hidden rather than absent: GTK
-            // keeps the accelerator group on the window, so the shortcuts live on with no bar.
-            #[cfg(not(target_os = "macos"))]
-            if let Some(window) = app.get_webview_window(lifetime::MAIN) {
-                if let Err(e) = window.hide_menu() {
-                    log::warn!("could not hide the menu bar: {e}");
-                }
             }
 
             // Logging is registered in release too, not just debug. A release build used to
@@ -162,6 +184,13 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } if window.label() == lifetime::MAIN => {
                 api.prevent_close();
                 lifetime::hide_main(&window.app_handle().clone());
+                // Logged because "the close button does nothing" is otherwise unfalsifiable from
+                // the outside: this line distinguishes an event that never arrived from a hide
+                // that did not take.
+                log::info!(
+                    "close requested: hidden to tray (visible now: {:?})",
+                    window.is_visible()
+                );
             }
             // A quick-access panel that outlives the user's attention is clutter, and on
             // macOS an always-on-top window with no dock entry is awkward to dismiss any
@@ -174,6 +203,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             core_version,
             self_updatable,
+            tray_theme,
+            hide_to_tray,
+            quit_app,
             crypto::crypto_is_locked,
             crypto::crypto_lock,
             crypto::crypto_generate_vek,
