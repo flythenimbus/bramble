@@ -101,7 +101,15 @@ hmac-secret.
 Run it with `pnpm dev:desktop`. `build:desktop` bundles it, `test:desktop` runs the shell's
 cargo tests.
 
-The window is a fixed, non-resizable 600x580, in the same spirit as the extension's
+To run a *built* app rather than one from source, `pnpm run:macos`, `pnpm run:debian` (installs
+the `.deb` first) and `pnpm run:linux` (the AppImage). They exist because `dev:desktop` cannot
+answer the install-shaped questions: where files land, whether the tray and desktop entry work,
+and whether the app knows a package manager owns it. All three run attached, since on Linux the
+terminal is the only place WebKitGTK's complaints appear. Note `run:debian` uses `dpkg` rather
+than `apt`: every rebuild carries the same version until a release bumps it, and apt reads that
+as "already the newest version" and silently leaves the previous build installed.
+
+The window is a fixed, non-resizable 660x580, in the same spirit as the extension's
 500x550 popup. An earlier attempt sized it to each screen's content and was dropped: the
 measurement is genuinely awkward (@core's screens are fixed-height boxes that scroll
 internally, so neither `documentElement.scrollHeight` nor the scroller's own `scrollHeight`
