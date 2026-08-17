@@ -49,7 +49,11 @@ export function SelectionBar({
 			// don't fit on one line, and the translated labels are wider still
 			// ("Désélectionner tout"). The card clips overflow, so the exit button has to
 			// stay reachable.
-			className="shrink-0 px-4 py-2 border-b border-border/50 flex flex-wrap items-center gap-x-3 gap-y-1"
+			// Vertical padding dropped on touch for the same reason as the Items header, and it has
+			// to be the same reason: the two bars swap in place, so a different height here would
+			// shift the whole list on entering selection mode. The wider gap-y is what keeps a
+			// wrapped second row legible once the padding is gone.
+			className="shrink-0 px-4 py-2 pointer-coarse:py-0 border-b border-border/50 flex flex-wrap items-center gap-x-3 gap-y-1 pointer-coarse:gap-y-2"
 		>
 			<div className="min-w-0">
 				<p className="text-sm whitespace-nowrap">

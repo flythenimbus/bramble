@@ -190,7 +190,10 @@ export function VaultHome({
 						onActionDone={() => setSelected(EMPTY_SELECTION)}
 					/>
 				) : (
-					<div className="shrink-0 px-4 py-2 border-b border-border/50 flex items-center justify-between gap-3">
+					// No vertical padding on touch: the icon button already carries 14px of its own to
+					// reach a 44px tap target, and the row's height is that button. Stacking the
+					// container's 8px on top made a header that says "Items (12)" 60px tall.
+					<div className="shrink-0 px-4 py-2 pointer-coarse:py-0 border-b border-border/50 flex items-center justify-between gap-3">
 						<h3 className="text-sm">
 							<Trans>Items ({filtered.length})</Trans>
 						</h3>
