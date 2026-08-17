@@ -49,9 +49,21 @@ pub fn set_dock_visible(app: &AppHandle, visible: bool) {
 }
 
 /// Hide the vault window and give up the Dock icon with it.
+///
+/// On Wayland this minimises instead, and the reason is worth keeping. KWin draws the titlebar
+/// server-side and sends the app a close request when the X is clicked; a window that has been
+/// hidden and shown again stops acting on that request, so the button goes dead while dragging
+/// the same titlebar still works, because KWin does the dragging itself. Hiding unmaps the
+/// surface, and it is the unmapping that breaks it. Minimising keeps the surface mapped, and
+/// `skip_taskbar` is what makes a minimised window feel closed rather than parked.
 pub fn hide_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN) {
-        let _ = window.hide();
+        if wayland() {
+            let _ = window.set_skip_taskbar(true);
+            let _ = window.minimize();
+        } else {
+            let _ = window.hide();
+        }
     }
     // After hiding, not before: dropping to Accessory while the window is still on screen
     // makes macOS reshuffle focus underneath it.
@@ -67,9 +79,19 @@ pub fn show_main(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN) else {
         return;
     };
+    if wayland() {
+        let _ = window.set_skip_taskbar(false);
+    }
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
+}
+
+/// Whether this is a Wayland session, which is the only place the minimise dance is needed.
+/// X11 unmaps and remaps without losing anything, and there the window really should disappear
+/// rather than sit minimised.
+fn wayland() -> bool {
+    cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some()
 }
 
 /// The menu bar icon and its menu, which is the only visible affordance that the app is
