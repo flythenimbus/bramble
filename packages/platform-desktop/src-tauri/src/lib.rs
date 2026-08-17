@@ -95,13 +95,14 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // First, before anything fallible: the main window is configured hidden so a
-            // login-launched app never flashes one, which means an ordinary launch has to ask
-            // for it. Anything that could fail before this point would leave no window at all.
+            // The window is visible from creation and a login launch hides it again, rather than
+            // the other way round. Creating it hidden and showing it later is tidier and cost a
+            // working close button: on Wayland, GTK draws the decorations itself, and a surface
+            // mapped after the fact came up with a titlebar that was drawn but dead — the X did
+            // nothing and produced no CloseRequested at all. A brief flash on autostart is the
+            // cheaper of the two.
             if autostart::launched_hidden() {
-                lifetime::set_dock_visible(app.handle(), false);
-            } else {
-                lifetime::show_main(app.handle());
+                lifetime::hide_main(app.handle());
             }
 
             // Logging is registered in release too, not just debug. A release build used to
