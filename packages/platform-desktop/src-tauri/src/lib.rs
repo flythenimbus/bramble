@@ -54,22 +54,13 @@ fn core_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init());
-
-    // macOS only. There the menu bar belongs to the screen rather than the window, costs no space,
-    // and carries Cmd-Q and the Edit items the webview needs from the responder chain. Everywhere
-    // else it is a strip of chrome inside a 600x580 window offering File > Quit, Window > Minimize
-    // and two items that already live in Settings. See `menu`.
-    #[cfg(target_os = "macos")]
-    let builder = builder
+        .plugin(tauri_plugin_opener::init())
         .menu(|app| menu::build(app))
-        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()));
-
-    builder
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|app| {
             // First, before anything fallible: the main window is configured hidden so a
             // login-launched app never flashes one, which means an ordinary launch has to ask
@@ -78,6 +69,17 @@ pub fn run() {
                 lifetime::set_dock_visible(app.handle(), false);
             } else {
                 lifetime::show_main(app.handle());
+            }
+
+            // The menu is attached everywhere, because that is what carries Ctrl-W and the Edit
+            // accelerators, but off macOS it is drawn *inside* the window and a 660x580 app cannot
+            // spare a strip for File > Quit and Window > Minimize. Hidden rather than absent: GTK
+            // keeps the accelerator group on the window, so the shortcuts live on with no bar.
+            #[cfg(not(target_os = "macos"))]
+            if let Some(window) = app.get_webview_window(lifetime::MAIN) {
+                if let Err(e) = window.hide_menu() {
+                    log::warn!("could not hide the menu bar: {e}");
+                }
             }
 
             // Logging is registered in release too, not just debug. A release build used to

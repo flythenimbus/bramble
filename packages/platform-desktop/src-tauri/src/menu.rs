@@ -1,4 +1,10 @@
-//! The application menu. **macOS only.**
+//! The application menu.
+//!
+//! Drawn only on macOS, where the bar belongs to the screen. Everywhere else it is attached to the
+//! window and immediately hidden (`hide_menu`, called from `lib.rs`), because a menu bar there is
+//! drawn inside the window and this one is 660x580. Attaching it anyway is not pointless: GTK
+//! keeps the accelerator group on the window, so Ctrl-W and the Edit keys keep working with no bar
+//! on screen. Deleting the menu outright is what broke Ctrl-W once already.
 //!
 //! Built by hand rather than taking `Menu::default`, for two items: an About panel that says who
 //! wrote this and under what licence, and a "Check for Updates…" that does not require knowing
@@ -6,35 +12,24 @@
 //! because customising one submenu means owning the whole bar.
 //!
 //! Edit is not optional. Without it, Cmd-C and Cmd-V stop working in the webview — in a password
-//! manager, of all things. That is a macOS responder-chain requirement and does not transfer:
-//! WebKitGTK and WebView2 handle the clipboard keys themselves.
-//!
-//! Off macOS there is no menu at all. A menu bar there is drawn *inside* the window, so it spends
-//! a strip of a 600x580 window on File > Quit (the tray has it), Window > Minimize (the title bar
-//! has it) and About plus Check for Updates, both of which are in Settings. macOS is the one
-//! platform where the bar belongs to the screen rather than the window, and so costs nothing.
+//! manager, of all things.
 //!
 //! macOS renders only some of `AboutMetadata`: name, version, short_version, copyright, icon and
 //! credits. `authors`, `license` and `website` are accepted and silently dropped, so everything
 //! worth showing goes through `credits` instead. It renders as plain text, so the source URL is
 //! selectable rather than clickable.
 
-#[cfg(target_os = "macos")]
 use tauri::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager, Runtime,
 };
 
-#[cfg(target_os = "macos")]
 /// Menu item id and the event the webview listens for. One string, so they cannot drift.
 pub const CHECK_FOR_UPDATES: &str = "check-for-updates";
 
-#[cfg(target_os = "macos")]
 const SOURCE_URL: &str = "https://github.com/flythenimbus/bramble";
-#[cfg(target_os = "macos")]
 const AUTHOR: &str = "flythenimbus";
 
-#[cfg(target_os = "macos")]
 fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
     let version = app.package_info().version.to_string();
     AboutMetadata {
@@ -55,7 +50,6 @@ fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
     }
 }
 
-#[cfg(target_os = "macos")]
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Absent, not greyed out, where the package manager owns updates: a disabled item invites the
     // question "why can I not check for updates", which is the wrong question to make someone ask.
@@ -90,6 +84,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ],
     )?;
 
+    #[cfg(target_os = "macos")]
     {
         // The first submenu IS the app menu on macOS, and its items are the ones under the app
         // name. Order follows the platform convention: About, then app-specific items, then the
@@ -126,9 +121,18 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         Menu::with_items(app, &[&app_menu, &edit, &window])
     }
 
+    #[cfg(not(target_os = "macos"))]
+    {
+        // This menu is never drawn (see the hide_menu call in lib.rs), so it exists purely for the
+        // accelerators: Ctrl-W to close, Ctrl-Q to quit, and Edit's clipboard keys. About and
+        // "Check for Updates" are deliberately absent rather than hidden-but-present — an item
+        // nobody can see or reach is not a feature, and both live in Settings.
+        let _ = (&check, updatable);
+        let file = Submenu::with_items(app, "File", true, &[&PredefinedMenuItem::quit(app, None)?])?;
+        Menu::with_items(app, &[&file, &edit, &window])
+    }
 }
 
-#[cfg(target_os = "macos")]
 /// Route the one item that does something of ours. The check itself runs in the webview, which
 /// already owns the updater adapter, the dialog copy and the progress UI; duplicating that here
 /// would mean two implementations of "is there an update" that could disagree.
