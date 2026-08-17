@@ -613,9 +613,66 @@ Desktop then depends on `vault-crypto` with `default-features = false, features 
 | Auto-type | `CGEventPost` + Accessibility TCC | `SendInput` | X11 `XTEST`; **Wayland blocked** |
 | Biometric | Touch ID | Windows Hello | none |
 
-All `[unverified]`. Linux is the weak column in every row, and WebKitGTK is the same stricter
-renderer already noted at `mobile-port.md:697`. The native-Rust strategy contains the damage: the
-webview only has to render React, not do crypto, transport, or WebAuthn.
+Linux is the weak column in every row, and WebKitGTK is the same stricter renderer already noted
+at `mobile-port.md:697`. The native-Rust strategy contains the damage: the webview only has to
+render React, not do crypto, transport, or WebAuthn. The macOS and Windows columns are still
+`[unverified]` in places; the Linux column is not, and what running it actually cost is below.
+
+### Linux and Wayland, as observed
+
+Everything here comes from running the app on KDE Plasma 6 over **Wayland** (Debian 13, WebKitGTK,
+server-side decorations). Each item cost real time to find, and in most of them the symptom
+pointed somewhere other than the cause, which is the part worth keeping.
+
+**The global hotkey cannot work on Wayland.** `tauri-plugin-global-shortcut` goes through
+`global-hotkey`, whose Linux backend is X11 only (`x11rb`, `XGrabKey`). Wayland has no global grab
+by design, and the replacement is `org.freedesktop.portal.GlobalShortcuts` — a different
+implementation, not a flag. So the spotlight panel has no keyboard route in on a Wayland session
+and the tray's Quick Access item is the only way to it. Confirmed rather than predicted.
+
+**Unmapping a Wayland surface kills the close button.** After `hide()` and `show()`, the titlebar
+X does nothing at all and emits no `CloseRequested`, while dragging the same titlebar still moves
+the window. That combination is the diagnosis: KWin draws the decoration and performs the drag
+itself, so a dead button with a live drag means the app has stopped acting on the compositor's
+close *request*, not that the titlebar is inert. A window declared `visible: false` and shown from
+`setup` has the same fault from birth. `lifetime::hide_main` therefore minimises and sets
+`skip_taskbar` on Wayland instead of hiding, which keeps the surface mapped and looks the same to
+the user, and the window is created visible with the autostart case hiding it afterwards.
+
+**Most menu items do nothing on Linux.** `muda` documents `close_window`, `quit`, `undo`, `redo`,
+`minimize`, `maximize` and `about` as unsupported there; only `cut`, `copy`, `paste` and
+`select_all` work, and WebKitGTK already handles those keys itself. So the menu bar off macOS is
+decoration, and it is drawn *inside* the window rather than on the screen. It is not built at all
+there, and **Ctrl-W and Ctrl-Q are handled in the webview** (`window-chrome.ts` → `hide_to_tray`,
+`quit_app`) because that is the only place they can be. Deleting the menu does not remove those
+shortcuts, because on Linux it never provided them.
+
+**The tray icon has to be drawn twice, and repainting is not free.** `tray.png` is a macOS
+template: pure black pixels carrying their shape in the alpha channel, which macOS inverts against
+the menu bar. Nothing does that elsewhere, so ayatana renders it literally and it disappears into a
+dark panel. `tray-light.png` is the white twin, generated from the same artwork, and the frontend
+picks between them by watching the class the theme provider already writes to the root element.
+Keep that off the launch path: libayatana cannot take an icon as bytes, so the tray crate writes a
+temporary PNG and points GTK at a new icon theme search path, and the resulting rescan happens in
+the panel rather than in this process — invisible to a profiler pointed here, and enough to stutter
+a launch. It is debounced, idempotent, and timed into the log.
+
+**Native messaging is not implemented on Linux.** The log says so plainly on every start, and it
+means the browser link does not work there at all: the `.deb` installs `bramble-proxy` beside the
+binary, and nothing ever writes a host manifest pointing at it. `manifest.rs` only knows the macOS
+paths. A real gap rather than a rough edge, and the largest single thing still missing from the
+Linux build.
+
+**A hybrid-GPU laptop can stall once on first draw, and it is not ours.** On a machine with an
+Intel iGPU rendering and a discrete card runtime-suspended in `D3hot`, the first interaction can
+freeze everything, cursor included, for one to three seconds while the discrete card resumes. It
+happens once and never again until the card re-suspends. `DRI_PRIME=0` or
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` avoid it; the diagnostic is to watch
+`/sys/class/drm/card*/device/power_state` while reproducing. Worth recognising rather than
+chasing, since it looks exactly like an application hang.
+
+One warning on every start (`libayatana-appindicator is deprecated`) comes from the tray crate,
+not from us.
 
 **Bundling.** The host manifest names an absolute path to the proxy, resolved as a sibling of
 the running binary, so a bundle needs the proxy in `Contents/MacOS`. Tauri's `externalBin` puts
@@ -1016,12 +1073,13 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
 
 ## Risks to retire early
 
-1. **WebKitGTK rendering and window transparency on Linux.** The UI is Tailwind-heavy and WebKit is
-   the stricter engine. **Half retired.** Linux builds, packages and installs: CI builds the bundle
-   on every push, `test:apt` installs the `.deb` on Debian 12 and Ubuntu 22.04 and finds no
-   unresolved libraries, and `test:nix` builds from source. None of that renders a pixel. Somebody
-   still has to launch it on a Linux desktop and look at the UI, which is the part the risk was
-   actually about `[unverified]`.
+1. ~~**WebKitGTK rendering and window transparency on Linux.**~~ **Retired.** The `.deb` was
+   installed and run on KDE Plasma 6 (Wayland, Debian 13) and the UI renders correctly: the
+   Tailwind-heavy layout, the chip strips, the modals. Transparency is the one part that did not
+   survive, and it fails politely — the spotlight panel logs that it has no blur on this platform
+   and stays opaque. What the risk did not anticipate is that everything *around* the webview is
+   where Linux costs you: decorations, tray, menus, global shortcuts. See
+   [Linux and Wayland](#linux-and-wayland-as-observed).
 2. **The macOS non-activating panel plus frontmost-app capture.** The entire auto-type premise
    depends on it, and it is the highest-uncertainty native piece. Retire in Phase 2.
 3. **Native-messaging manifest install across three OSes and two browsers**, and whether it survives
@@ -1049,8 +1107,8 @@ Each phase retires a risk.
 
 - **Phase 0, walking skeleton. DONE**: `packages/platform-desktop` (Vite + React, mirroring
   platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux now builds
-  and packages as well, though nobody has yet looked at the rendered UI there (risk 1). Windows is
-  still unbuilt.
+  and packages as well, and has now been run: the UI renders under WebKitGTK, retiring risk 1.
+  Windows is still unbuilt.
 - **Phase 1, vault MVP. MOSTLY DONE.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK
   held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. Outstanding: KDBX import
   and the passkey provider (both need core-rust re-exports), and biometric unlock.
@@ -1076,8 +1134,11 @@ Each phase retires a risk.
   and a user-scoped credential is readable by any process running as its owner anyway. The
   reasoning is in [cloud-storage-backups.md](cloud-storage-backups.md), and it is why Linux
   autostart stays an XDG entry. See [cloud-storage-backups.md](cloud-storage-backups.md).
-- **Phase 4, browser integration. DONE for fill.** Proxy binary, host manifests, Noise pairing,
-  and Enter in the panel fills the page in the browser. See "Filling from the panel" below.
+- **Phase 4, browser integration. DONE for fill, macOS only.** Proxy binary, host manifests, Noise
+  pairing, and Enter in the panel fills the page in the browser. See "Filling from the panel"
+  below. **Not implemented on Linux**: `manifest.rs` knows only the macOS paths, so the `.deb`
+  installs a proxy that no browser is ever told about, and the app says as much on every start.
+  The largest thing still missing from the Linux build.
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.
   Enter becomes a real fill in native apps.
 - **Phase 6, SSH agent.**
