@@ -16,15 +16,15 @@
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dockerProblem } from "./docker-available.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IMAGE = "nixos/nix";
 const STORE_VOLUME = "bramble-nix-store";
 
-try {
-	execFileSync("docker", ["version"], { stdio: "ignore" });
-} catch {
-	console.error("docker not found, or its daemon is not running.");
+const dockerIssue = dockerProblem();
+if (dockerIssue) {
+	console.error(dockerIssue);
 	process.exit(1);
 }
 

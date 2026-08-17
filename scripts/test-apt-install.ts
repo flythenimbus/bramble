@@ -25,6 +25,7 @@
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dockerProblem } from "./docker-available.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = "e2e/apt/install-test.sh";
@@ -36,10 +37,9 @@ const DEFAULT_IMAGES = ["debian:12", "ubuntu:22.04"];
 const images = process.argv.slice(2).filter((a) => !a.startsWith("-"));
 const targets = images.length > 0 ? images : DEFAULT_IMAGES;
 
-try {
-	execFileSync("docker", ["version"], { stdio: "ignore" });
-} catch {
-	console.error("docker not found, or its daemon is not running.");
+const dockerIssue = dockerProblem();
+if (dockerIssue) {
+	console.error(dockerIssue);
 	process.exit(1);
 }
 

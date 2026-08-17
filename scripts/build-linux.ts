@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { signingKey } from "./desktop-signing-key.ts";
+import { dockerProblem } from "./docker-available.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IMAGE = "bramble-linux-build";
@@ -44,11 +45,8 @@ const run = (bin: string, argv: string[], env?: NodeJS.ProcessEnv): void => {
 	execFileSync(bin, argv, { stdio: "inherit", cwd: ROOT, env: env ?? process.env });
 };
 
-try {
-	execFileSync("docker", ["version"], { stdio: "ignore" });
-} catch {
-	fail("docker not found, or its daemon is not running. See docs/release-signing.md.");
-}
+const dockerIssue = dockerProblem();
+if (dockerIssue) fail(`${dockerIssue}\nSee docs/release-signing.md.`);
 
 /**
  * A key for this build only. The bundler refuses to emit updater artifacts unsigned, and making a
