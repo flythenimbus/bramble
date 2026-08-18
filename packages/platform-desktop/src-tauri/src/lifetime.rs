@@ -12,7 +12,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    AppHandle, Manager, WebviewWindow, WebviewWindowBuilder,
 };
 
 use crate::spotlight;
@@ -48,48 +48,82 @@ pub fn set_dock_visible(app: &AppHandle, visible: bool) {
     }
 }
 
-/// Hide the vault window and give up the Dock icon with it.
+/// Whether closing the vault window destroys it rather than hiding it.
 ///
-/// On Wayland this minimises instead, and the reason is worth keeping. KWin draws the titlebar
-/// server-side and sends the app a close request when the X is clicked; a window that has been
-/// hidden and shown again stops acting on that request, so the button goes dead while dragging
-/// the same titlebar still works, because KWin does the dragging itself. Hiding unmaps the
-/// surface, and it is the unmapping that breaks it. Minimising keeps the surface mapped, and
-/// `skip_taskbar` is what makes a minimised window feel closed rather than parked.
+/// Wayland only, and it is a choice between two broken things rather than a preference. Unmapping
+/// a surface there costs the close button: after `hide()` and `show()` the titlebar X does nothing
+/// and emits no `CloseRequested` at all, while dragging the same titlebar still works, because
+/// KWin draws the decoration and performs the drag itself. Minimising instead of hiding kept the
+/// button alive but was not a close: `skip_taskbar` is the EWMH `_NET_WM_STATE_SKIP_TASKBAR` hint
+/// (tao hands it to `gtk_window_set_skip_taskbar_hint`), Wayland has no request it could map onto,
+/// and GTK's Wayland backend silently does nothing, so the "hidden" window sat in the taskbar and
+/// in GNOME's Dock looking merely minimised.
+///
+/// Destroying has neither problem. There is no surface to come back wrong, because the way back
+/// builds a new window, and a window that no longer exists is in nobody's taskbar. See
+/// `rebuild_main` for what that costs.
+pub fn close_destroys() -> bool {
+    wayland()
+}
+
+/// Make the vault window go away without taking the process with it.
+///
+/// Hiding where hiding works, destroying on Wayland (see `close_destroys`). The Dock icon goes
+/// either way, and after the window rather than before: dropping to Accessory while it is still on
+/// screen makes macOS reshuffle focus underneath it.
 pub fn hide_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN) {
-        if wayland() {
-            let _ = window.set_skip_taskbar(true);
-            let _ = window.minimize();
+        if close_destroys() {
+            let _ = window.destroy();
         } else {
             let _ = window.hide();
         }
     }
-    // After hiding, not before: dropping to Accessory while the window is still on screen
-    // makes macOS reshuffle focus underneath it.
     set_dock_visible(app, false);
 }
 
-/// Bring the vault window back, from the tray or a dock click. Un-minimises too: hidden and
-/// minimised are different states and the user means the same thing by both.
+/// Bring the vault window back, from the tray or a dock click, building it again if a close
+/// destroyed it. Un-minimises too: hidden and minimised are different states and the user means
+/// the same thing by both.
 pub fn show_main(app: &AppHandle) {
     // Before showing, so the window arrives with a Dock icon already in place rather than
     // one that pops in a frame later.
     set_dock_visible(app, true);
-    let Some(window) = app.get_webview_window(MAIN) else {
-        return;
+    let window = match app.get_webview_window(MAIN) {
+        Some(window) => window,
+        None => match rebuild_main(app) {
+            Ok(window) => window,
+            // Nothing else can bring the UI back, so this is the one failure worth shouting
+            // about: the tray still works, and every item on it would appear to do nothing.
+            Err(e) => return log::error!("could not rebuild the vault window: {e}"),
+        },
     };
-    if wayland() {
-        let _ = window.set_skip_taskbar(false);
-    }
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
 }
 
-/// Whether this is a Wayland session, which is the only place the minimise dance is needed.
-/// X11 unmaps and remaps without losing anything, and there the window really should disappear
-/// rather than sit minimised.
+/// Build the vault window again after a close destroyed it.
+///
+/// From the `tauri.conf.json` entry the app launched with, not from a second description here, so
+/// a reopen cannot drift from a launch and the size, minimums and centring stay in one place.
+///
+/// The cost is a webview that starts from nothing: the router is back at the vault list and
+/// anything half-typed is gone. The vault does *not* relock, because the VEK lives in this process
+/// and not in the webview, which is the same property that makes the spotlight panel possible.
+fn rebuild_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == MAIN)
+        .cloned()
+        .ok_or(tauri::Error::WebviewNotFound)?;
+    WebviewWindowBuilder::from_config(app, &config)?.build()
+}
+
+/// Whether this is a Wayland session, which is the only place a close cannot simply hide.
 fn wayland() -> bool {
     cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some()
 }

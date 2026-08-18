@@ -87,10 +87,11 @@ own WebRTC, the browser link, and the whole release and packaging story below.
   The chain is the desktop's socket, a native-messaging proxy Chrome spawns, a host manifest
   the app installs for every Chromium browser present, and the extension's own client. The
   pairing key lives in the OS credential store; the allowlist is a file beside the vault.
-- **The app outlives its main window.** Closing hides rather than destroys, a tray icon is the
-  route back, and on macOS the Dock icon follows the window via the activation policy
-  (`Regular` ↔ `Accessory`). Needed for the spotlight to be reachable at all, and the same
-  scaffolding the sync hub will want.
+- **The app outlives its main window.** Closing hides rather than destroys (on Wayland it
+  destroys and the tray rebuilds it, which is the only way to be genuinely closed there; see
+  the Wayland section), a tray icon is the route back, and on macOS the Dock icon follows the
+  window via the activation policy (`Regular` ↔ `Accessory`). Needed for the spotlight to be
+  reachable at all, and the same scaffolding the sync hub will want.
 
 Not yet wired, and deliberately loud about it rather than silently broken: passkey provider and
 KDBX import (both sit behind private modules in core-rust that need a re-export), autofill of any
@@ -115,9 +116,10 @@ The window opens at 660x580 every launch, in the same spirit as the extension's 
 and the user can resize it from there: drag any edge or corner, maximise, or hand it to macOS
 tiling and the Windows and KWin snap zones. The size is deliberately *not* remembered. There is
 no `tauri-plugin-window-state` in the tree, nothing writes the geometry anywhere, and so a fresh
-process is always the default size; a resize is for the session you are in. Closing to the tray
-hides the window rather than destroying it, so reopening from the tray keeps whatever size it
-had, which is what every native app does with a hidden window.
+process is always the default size; a resize is for the session you are in. Where closing hides
+the window (macOS, Windows, X11) a tray reopen keeps whatever size it had, which is what native
+apps do with a hidden window; on Wayland the close destroys it, so a reopen is a new window at
+660x580 centred.
 
 The floor is `minWidth`/`minHeight` 420, low enough that a quarter tile on a 13" display still
 fits (735x448 there) and high enough that the layout is not being asked to do something @core
@@ -647,14 +649,36 @@ by design, and the replacement is `org.freedesktop.portal.GlobalShortcuts` — a
 implementation, not a flag. So the spotlight panel has no keyboard route in on a Wayland session
 and the tray's Quick Access item is the only way to it. Confirmed rather than predicted.
 
-**Unmapping a Wayland surface kills the close button.** After `hide()` and `show()`, the titlebar
-X does nothing at all and emits no `CloseRequested`, while dragging the same titlebar still moves
-the window. That combination is the diagnosis: KWin draws the decoration and performs the drag
-itself, so a dead button with a live drag means the app has stopped acting on the compositor's
-close *request*, not that the titlebar is inert. A window declared `visible: false` and shown from
-`setup` has the same fault from birth. `lifetime::hide_main` therefore minimises and sets
-`skip_taskbar` on Wayland instead of hiding, which keeps the surface mapped and looks the same to
-the user, and the window is created visible with the autostart case hiding it afterwards.
+**Unmapping a Wayland surface kills the close button, and a minimised window is not closed.**
+After `hide()` and `show()`, the titlebar X does nothing at all and emits no `CloseRequested`,
+while dragging the same titlebar still moves the window. That combination is the diagnosis: KWin
+draws the decoration and performs the drag itself, so a dead button with a live drag means the app
+has stopped acting on the compositor's close *request*, not that the titlebar is inert. A window
+declared `visible: false` and shown from `setup` has the same fault from birth.
+
+The first answer was to minimise and set `skip_taskbar` instead of hiding, keeping the surface
+mapped. It kept the button alive and was not a close: `skip_taskbar` is the EWMH
+`_NET_WM_STATE_SKIP_TASKBAR` hint (tao sends `WindowRequest::SetSkipTaskbar`, GTK forwards it to
+`gtk_window_set_skip_taskbar_hint`), Wayland has no request it could map onto, and GDK's Wayland
+backend silently does nothing. So the window sat in the taskbar, and on GNOME in the Dock, looking
+merely minimised, which is exactly what it was.
+
+`lifetime::hide_main` therefore **destroys** the window on Wayland and `show_main` builds a new one
+from the same `tauri.conf.json` entry (`WebviewWindowBuilder::from_config`, so a reopen cannot
+drift from a launch). Neither problem survives that: there is no surface to come back wrong, and a
+window that does not exist is in nobody's taskbar. `RunEvent::ExitRequested` gains a `code: None`
+arm to refuse the exit the runtime asks for when the last window goes; a real quit carries a code
+and still goes through. The cost is a webview that boots from nothing on reopen, so the router is
+back at the vault list and anything half-typed is gone. The vault does not relock, because the VEK
+lives in this process.
+
+Verified on KWin by driving the compositor rather than by clicking: a KWin script calling
+`closeWindow()` on the window (the same request the titlebar X sends) then `com.canonical.dbusmenu`
+`Event` on the tray's "Open Bramble" item. Across three cycles the close was received every time,
+including on rebuilt windows, which is precisely what hide-and-show could not do; the window left
+`workspace.windowList()` entirely; the process survived; and tray Quit still exited. The
+autostart-hidden launch was checked the same way and comes up with no window at all rather than a
+minimised one.
 
 **Most menu items do nothing on Linux.** `muda` documents `close_window`, `quit`, `undo`, `redo`,
 `minimize`, `maximize` and `about` as unsupported there; only `cut`, `copy`, `paste` and

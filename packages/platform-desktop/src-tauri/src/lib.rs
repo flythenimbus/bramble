@@ -183,15 +183,25 @@ pub fn run() {
             // this one would take the global hotkey and the tray with it, and there would be
             // no way back into the app.
             WindowEvent::CloseRequested { api, .. } if window.label() == lifetime::MAIN => {
-                api.prevent_close();
-                lifetime::hide_main(&window.app_handle().clone());
+                let app = window.app_handle().clone();
                 // Logged because "the close button does nothing" is otherwise unfalsifiable from
-                // the outside: this line distinguishes an event that never arrived from a hide
+                // the outside: these lines distinguish an event that never arrived from a close
                 // that did not take.
-                log::info!(
-                    "close requested: hidden to tray (visible now: {:?})",
-                    window.is_visible()
-                );
+                if lifetime::close_destroys() {
+                    // Deliberately NOT prevented. On Wayland the window is destroyed and the tray
+                    // builds a fresh one, because a re-shown surface comes back with a dead X and a
+                    // minimised one is not closed at all (see lifetime::close_destroys). The
+                    // process survives the last window going: see RunEvent::ExitRequested.
+                    lifetime::set_dock_visible(&app, false);
+                    log::info!("close requested: destroying the window, the tray rebuilds it");
+                } else {
+                    api.prevent_close();
+                    lifetime::hide_main(&app);
+                    log::info!(
+                        "close requested: hidden to tray (visible now: {:?})",
+                        window.is_visible()
+                    );
+                }
             }
             // A quick-access panel that outlives the user's attention is clutter, and on
             // macOS an always-on-top window with no dock entry is awkward to dismiss any
@@ -293,8 +303,14 @@ pub fn run() {
         .run(|app, event| match event {
             #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => lifetime::show_main(app),
-            // The window is only ever hidden now, so the process would otherwise linger with
-            // no UI and no way to reach it. Quit is the tray's job.
+            // `code: None` is the runtime asking to exit because the last window closed, which a
+            // close on Wayland now really does destroy. The tray, the spotlight panel and the
+            // backup schedule all outlive the vault window, so that request is refused and the
+            // tray rebuilds the window on demand. A real quit (`app.exit`, and the updater's
+            // `restart`) carries a code and goes through: quitting is the tray's job.
+            RunEvent::ExitRequested {
+                code: None, api, ..
+            } => api.prevent_exit(),
             RunEvent::ExitRequested { .. } => {}
             _ => {
                 let _ = app;
