@@ -98,8 +98,10 @@ kind, sync, and biometric unlock. The security-key slot commands *are* wired sin
 nothing, but `securityKeys` stays `false` for desktop because the webview cannot produce an
 hmac-secret.
 
-Run it with `pnpm dev:desktop`. `build:desktop` bundles it, `test:desktop` runs the shell's
-cargo tests.
+Run it with `pnpm dev:desktop`. `build:macos` bundles it and `test:desktop` runs the shell's
+cargo tests. `build:macos` is named for where a release is cut rather than for what it can
+build: it targets the host, so on Linux it is the same script that produces the `.deb`, `.rpm`
+and AppImage, and `build:linux` is a container wrapper that calls it.
 
 To run a *built* app rather than one from source, `pnpm run:macos`, `pnpm run:debian` (installs
 the `.deb` first) and `pnpm run:linux` (the AppImage). They exist because `dev:desktop` cannot
@@ -109,12 +111,27 @@ terminal is the only place WebKitGTK's complaints appear. Note `run:debian` uses
 than `apt`: every rebuild carries the same version until a release bumps it, and apt reads that
 as "already the newest version" and silently leaves the previous build installed.
 
-The window is a fixed, non-resizable 660x580, in the same spirit as the extension's
-500x550 popup. An earlier attempt sized it to each screen's content and was dropped: the
-measurement is genuinely awkward (@core's screens are fixed-height boxes that scroll
-internally, so neither `documentElement.scrollHeight` nor the scroller's own `scrollHeight`
-reports the content height), and even working it made the window move about under the user.
-A fixed window is the better fit for a UI that is popup-dimensioned anyway.
+The window opens at 660x580 every launch, in the same spirit as the extension's 500x550 popup,
+and the user can resize it from there: drag any edge or corner, maximise, or hand it to macOS
+tiling and the Windows and KWin snap zones. The size is deliberately *not* remembered. There is
+no `tauri-plugin-window-state` in the tree, nothing writes the geometry anywhere, and so a fresh
+process is always the default size; a resize is for the session you are in. Closing to the tray
+hides the window rather than destroying it, so reopening from the tray keeps whatever size it
+had, which is what every native app does with a hidden window.
+
+The floor is `minWidth`/`minHeight` 420, low enough that a quarter tile on a 13" display still
+fits (735x448 there) and high enough that the layout is not being asked to do something @core
+never supports; @core's screens already carry their own caps (`max-w-5xl` on the header, the
+vault list, Settings and the entry screens), so a wide window centres rather than stretches. The
+one exception was desktop's own override of `max-w-md`, which used to drop the cap entirely
+because dead margin either side of a login form was the only failure mode a fixed 660 window
+had; it is now `min(100%, 40rem)`, identical at the default size and bounded above it.
+
+An earlier attempt sized the window to each screen's content and was dropped, which is a
+different thing from letting the user size it: the measurement is genuinely awkward (@core's
+screens are fixed-height boxes that scroll internally, so neither `documentElement.scrollHeight`
+nor the scroller's own `scrollHeight` reports the content height), and even working it made the
+window move about under the user. Nothing about user-driven resizing needs that measurement.
 
 **Two constraints this took on.** Transparency for the spotlight panel needs Tauri's
 `macos-private-api` feature, which rules out the Mac App Store; Bramble ships direct downloads,
@@ -749,7 +766,7 @@ tampered asset fails verification and is discarded.
 **The signing key is permanent from the first public release.** Verification uses the key baked
 into the app someone already has, so changing the keypair later strands every existing install on a
 manual re-download. It rides the same age + YubiKey scheme as every other release key (see release-signing.md):
-encrypted at rest, unlocked with a PIN and a touch by `scripts/build-desktop.ts`, and never written
+encrypted at rest, unlocked with a PIN and a touch by `scripts/build-macos.ts`, and never written
 to disk in plaintext. The key cannot live ON the token, because Tauri's CLI signs with minisign and
 takes a path or a string rather than driving a hardware token; what the YubiKey gates is access to
 it. Note the env var is `TAURI_SIGNING_PRIVATE_KEY` — the `_PATH` variant its own generator
@@ -1008,7 +1025,7 @@ Lingui throws rather than falling back, and a thrown error there means no dialog
 
 **Notarization** reuses the App Store Connect API key the iOS release already has. Apple takes
 either that or an Apple ID with an app-specific password; the key is the better credential, since
-it is scoped, separately revocable, and not one that also opens the account. `build-desktop.ts`
+it is scoped, separately revocable, and not one that also opens the account. `build-macos.ts`
 reads `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_PATH` from `fastlane/.env` and maps them to the
 `APPLE_API_*` names Tauri expects, rather than having the issuer ID written down twice; explicit
 `APPLE_*` in the environment still wins, for CI. Without them the build succeeds and produces
@@ -1016,7 +1033,7 @@ something Gatekeeper blocks everywhere but the machine that built it, so the scr
 
 ### Testing an update without publishing one
 
-`pnpm build:desktop:local-update` builds against `tauri.local-update.conf.json`, which points the
+`pnpm build:macos:local-update` builds against `tauri.local-update.conf.json`, which points the
 updater at `http://127.0.0.1:8787` and turns off the https requirement, and `pnpm updater:smoke`
 serves that build back to itself as a newer version. It skips notarization: the build never leaves
 the machine, so it would buy nothing and cost an upload, a wait, and a submission record.
@@ -1042,10 +1059,10 @@ could never be updated again, since the fix would arrive over the channel that i
 `pnpm release:desktop` refuses to write a manifest when it finds the local endpoint in the built
 binary, which catches it whatever produced the build.
 
-**Architecture.** Every desktop build is universal, not just a release: `pnpm build:desktop`,
+**Architecture.** Every desktop build is universal, not just a release: `pnpm build:macos`,
 the local-update test build, and `pnpm release desktop` all produce both slices. A host-arch build
 is not something to hand anyone, and it fails in the least useful way, by looking identical and
-simply not opening on an Intel Mac. `--aarch64` (or `pnpm build:desktop:aarch64`) opts out for
+simply not opening on an Intel Mac. `--aarch64` (or `pnpm build:macos:aarch64`) opts out for
 iterating, where the second slice doubles the build for a machine that cannot run it.
 
 Bundles land under `target/universal-apple-darwin/release/bundle`, not `target/release/bundle`,
@@ -1061,7 +1078,7 @@ this crate's own bins. stage-proxy writes both. Staging only the host arch would
 universal app with an Apple-Silicon-only proxy, where the app launches on Intel and the browser
 link simply never works. `build.rs` also names its placeholder after the triple being compiled
 rather than the host's, or cross-compiling the proxy fails looking for the sidecar that compiling
-it is supposed to produce. Local builds (`pnpm build:desktop`) stay host-arch, since
+it is supposed to produce. Local builds (`pnpm build:macos`) stay host-arch, since
 nothing about iterating wants the second slice. Two things about that path are easy to get wrong and were, at first. cargo puts a
 `--target` build under `target/<triple>/`, so a universal build does NOT land in `target/release`,
 and reading the wrong directory is not an empty-directory error: it is the previous aarch64 build,

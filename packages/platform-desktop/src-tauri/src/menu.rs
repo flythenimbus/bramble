@@ -10,7 +10,7 @@
 //! WebKitGTK and WebView2 handle the clipboard keys themselves.
 //!
 //! Off macOS there is no menu at all. A menu bar there is drawn *inside* the window, so it spends
-//! a strip of a 600x580 window on File > Quit (the tray has it), Window > Minimize (the title bar
+//! a strip of a small window on File > Quit (the tray has it), Window > Minimize (the title bar
 //! has it) and About plus Check for Updates, both of which are in Settings. macOS is the one
 //! platform where the bar belongs to the screen rather than the window, and so costs nothing.
 //!

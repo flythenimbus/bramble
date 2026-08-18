@@ -10,8 +10,6 @@
 /*
  * Deliberately no `height: 100%` chain. @core's shells size themselves against the viewport
  * (`h-screen` on AppLayout and Auth, `min-h-screen` on OptionsApp), so one buys nothing here.
- * No width cap either: the window is a fixed 600x580 and cannot be resized, so there is no
- * maximised case to defend against.
  */
 html,
 body {
@@ -20,15 +18,20 @@ body {
 
 /*
  * Let the single-column screens fill the window. Auth, VaultPicker and ErrorBoundary cap
- * their column at max-w-md (448) because the extension popup is 500 wide, which on a 600
- * window just leaves dead margin either side.
+ * their column at max-w-md (448) because the extension popup is 500 wide, which in the 660
+ * default window just leaves dead margin either side.
+ *
+ * `min()` rather than `none`, because the window resizes: all three columns are centred, and
+ * an unbounded one turns a password field into a 1400px ruler when the window is tiled or
+ * maximised. 40rem is above every width the default window can offer, so at the launch size
+ * this is still edge to edge.
  *
  * The `:not([role="dialog"])` is load-bearing rather than defensive: modal.tsx builds its
  * panel with the same max-w-md, and three call sites pass `className="max-w-md"` into it, so
  * without the guard this would stretch every dialog in the app to the full window too.
  */
 #root .max-w-md:not([role="dialog"]) {
-	max-width: none;
+	max-width: min(100%, 40rem);
 }
 
 /* Native apps don't let you drag-select the whole UI. Inputs and secrets stay selectable. */

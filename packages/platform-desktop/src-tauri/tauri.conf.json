@@ -17,8 +17,10 @@
 				"title": "Bramble",
 				"width": 660,
 				"height": 580,
+				"minWidth": 420,
+				"minHeight": 420,
 				"center": true,
-				"resizable": false,
+				"resizable": true,
 				"fullscreen": false
 			},
 			{

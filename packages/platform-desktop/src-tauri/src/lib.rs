@@ -86,7 +86,7 @@ pub fn run() {
 
     // macOS only. There the menu bar belongs to the screen rather than the window, costs no space,
     // and carries Cmd-Q and the Edit items the webview needs from the responder chain. Everywhere
-    // else it is a strip of chrome inside a 600x580 window offering File > Quit, Window > Minimize
+    // else it is a strip of chrome inside a popup-sized window offering File > Quit, Window > Minimize
     // and two items that already live in Settings. See `menu`.
     #[cfg(target_os = "macos")]
     let builder = builder
