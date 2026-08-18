@@ -141,6 +141,15 @@ so no channel is given up, but it is now a real constraint. And `Accessory` poli
 app leaves Cmd+Tab while its window is hidden, and that with no Dock icon there is nothing to
 click, so the tray is the only route back.
 
+**The native chrome has its own i18n layer.** The tray menu and the macOS menu bar are drawn by
+this process, so they cannot reach the app's Lingui catalogs: they exist before any webview loads,
+outlive every webview on Wayland, and are the whole UI when the app autostarts hidden. `src/i18n.rs`
+embeds one flat JSON catalog per locale and resolves the OS locale once at startup, so the first
+paint is already right rather than flipping from English when a window opens. Translated by
+`scripts/i18n/tauri-menus.mjs` with the other native surfaces; see
+[i18n.md](i18n.md#4-desktop-native-chrome--embedded-json). Note that every predefined macOS menu
+item passes its text explicitly, because muda substitutes hardcoded English when it is given `None`.
+
 **Trap: Tailwind only scans `packages/core`.** `@core/styles/tailwind.css` declares
 `@import 'tailwindcss' source(none)` with a single `@source` scoped to core, so a utility used
 in a *platform* package that core does not also happen to use is never generated. The class

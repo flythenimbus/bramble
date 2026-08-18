@@ -15,6 +15,7 @@ use tauri::{
     AppHandle, Manager, WebviewWindow, WebviewWindowBuilder,
 };
 
+use crate::i18n;
 use crate::spotlight;
 
 pub const MAIN: &str = "main";
@@ -131,14 +132,21 @@ fn wayland() -> bool {
 /// The menu bar icon and its menu, which is the only visible affordance that the app is
 /// still running once the main window is closed.
 pub fn install_tray(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open Bramble", true, None::<&str>)?;
-    let quick = MenuItem::with_id(app, "quick", "Quick Access", true, Some(spotlight::HOTKEY))?;
+    let open = MenuItem::with_id(app, "open", i18n::t("tray.open"), true, None::<&str>)?;
+    let quick = MenuItem::with_id(
+        app,
+        "quick",
+        i18n::t("tray.quick"),
+        true,
+        Some(spotlight::HOTKEY),
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Bramble", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", i18n::t("tray.quit"), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quick, &separator, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Bramble")
+        // The product name, so nothing to translate; the items are i18n::t.
+        .tooltip(i18n::APP_NAME)
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),

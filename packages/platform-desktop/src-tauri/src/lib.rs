@@ -7,6 +7,7 @@
 mod autostart;
 mod backup;
 mod crypto;
+mod i18n;
 mod index_store;
 mod lifetime;
 mod manifest;

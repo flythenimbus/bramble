@@ -34,6 +34,10 @@ export const CHROME_LOCALES_DIR = repo("packages/platform-extension/public/_loca
 export const ANDROID_RES = repo("packages/platform-mobile/android/app/src/main/res");
 // Web store listings (Chrome Web Store + AMO). <store>/<code>/*.txt; en is the source.
 export const STORE_DIR = repo("packages/platform-extension/store");
+// Tauri desktop native chrome (tray menu, macOS menu bar): flat <code>.json embedded in the
+// binary. Its own surface rather than part of the Lingui catalogs because this chrome is drawn
+// before any webview exists and outlives every webview on Wayland. See src-tauri/src/i18n.rs.
+export const TAURI_LOCALES_DIR = repo("packages/platform-desktop/src-tauri/locales");
 // iOS String Catalog for the autofill extension UI.
 export const XCSTRINGS = repo(
 	"packages/platform-mobile/ios/App/AutoFillProbe/Localizable.xcstrings",

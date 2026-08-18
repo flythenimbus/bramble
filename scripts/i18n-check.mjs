@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // CI / release gate: fail if any locale catalog has missing entries. Pure and
 // model-free. Covers every surface: Lingui .po, Android strings.xml, iOS
-// .xcstrings, the Chrome extension _locales, and fastlane store metadata
-// (presence + App Store length caps).
+// .xcstrings, the Chrome extension _locales, the desktop app's native menus, and
+// fastlane store metadata (presence + App Store length caps).
 //
 //   node scripts/i18n-check.mjs            # validate committed catalogs
 //   node scripts/i18n-check.mjs --extract  # run `lingui extract` first (CI),
@@ -21,6 +21,7 @@ import {
 	FASTLANE_DIR,
 	LOCALES,
 	PO_CATALOG,
+	TAURI_LOCALES_DIR,
 	XCSTRINGS,
 } from "./i18n/locales.mjs";
 
@@ -100,6 +101,36 @@ if (existsSync(chromeSrc)) {
 	}
 }
 
+// --- Tauri native chrome: every en key present per locale, placeholders intact ---
+// The binary falls back to English key by key, so a gap is invisible at runtime: a German menu
+// with two English items looks like a translation choice rather than a missing string. The Rust
+// tests assert the same thing, this is what fails the release when a locale was never generated.
+const tauriSrc = join(TAURI_LOCALES_DIR, "en.json");
+if (existsSync(tauriSrc)) {
+	const src = JSON.parse(readFileSync(tauriSrc, "utf8"));
+	for (const { code } of LOCALES) {
+		const path = join(TAURI_LOCALES_DIR, `${code}.json`);
+		if (!existsSync(path)) {
+			note(`tauri-locales[${code}]: ${code}.json missing (run pnpm i18n:native)`);
+			continue;
+		}
+		const have = JSON.parse(readFileSync(path, "utf8"));
+		const miss = Object.keys(src).filter((k) => !have[k]);
+		if (miss.length) {
+			note(`tauri-locales[${code}]: ${miss.length} missing (${miss.slice(0, 3).join(", ")}…)`);
+		}
+		// A dropped {app} renders as a menu item with no application name in it.
+		const dropped = Object.entries(src).filter(
+			([k, v]) =>
+				have[k] &&
+				["{app}", "{author}"].some((p) => v.includes(p) !== have[k].includes(p)),
+		);
+		if (dropped.length) {
+			note(`tauri-locales[${code}]: placeholder lost in ${dropped.map(([k]) => k).join(", ")}`);
+		}
+	}
+}
+
 // --- fastlane: each store-locale dir has the source files, all within caps ---
 const LIMITS = { "keywords.txt": 100, "subtitle.txt": 30, "promotional_text.txt": 170, "name.txt": 30 };
 const srcDir = join(FASTLANE_DIR, "en-US");
@@ -141,5 +172,5 @@ if (problems.length) {
 	process.exit(1);
 }
 console.log(
-	"✓ i18n check passed: all locales complete across po, android, xcstrings, chrome _locales, fastlane (iOS + Android)",
+	"✓ i18n check passed: all locales complete across po, android, xcstrings, chrome _locales, tauri menus, fastlane (iOS + Android)",
 );

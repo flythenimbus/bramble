@@ -26,31 +26,34 @@ use tauri::{
 };
 
 #[cfg(target_os = "macos")]
+use crate::i18n::{t, APP_NAME, AUTHOR};
+
+#[cfg(target_os = "macos")]
 /// Menu item id and the event the webview listens for. One string, so they cannot drift.
 pub const CHECK_FOR_UPDATES: &str = "check-for-updates";
 
 #[cfg(target_os = "macos")]
 const SOURCE_URL: &str = "https://github.com/flythenimbus/bramble";
-#[cfg(target_os = "macos")]
-const AUTHOR: &str = "flythenimbus";
 
 #[cfg(target_os = "macos")]
 fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
     let version = app.package_info().version.to_string();
     AboutMetadata {
-        name: Some("Bramble".into()),
+        name: Some(APP_NAME.into()),
         version: Some(version),
         copyright: Some(format!("© 2026 {AUTHOR}")),
         // The panel shows this verbatim under the version. Kept to four short lines: it is a
-        // credits box, not a README.
+        // credits box, not a README. The URL is not a sentence and stays as it is.
         credits: Some(format!(
-            "By {AUTHOR}\n\nFree software under the GNU General Public License v3.0.\n{SOURCE_URL}"
+            "{}\n\n{}\n{SOURCE_URL}",
+            t("about.credits_by"),
+            t("about.credits_license")
         )),
         // Set for the platforms that use them; macOS ignores all three.
         authors: Some(vec![AUTHOR.into()]),
         license: Some("GPL-3.0-only".into()),
         website: Some(SOURCE_URL.into()),
-        website_label: Some("Source code".into()),
+        website_label: Some(t("about.website_label")),
         ..Default::default()
     }
 }
@@ -61,32 +64,42 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // question "why can I not check for updates", which is the wrong question to make someone ask.
     // See crate::can_self_update.
     let updatable = crate::can_self_update();
-    let check = MenuItem::with_id(app, CHECK_FOR_UPDATES, "Check for Updates…", true, None::<&str>)?;
+    let check = MenuItem::with_id(
+        app,
+        CHECK_FOR_UPDATES,
+        t("menu.check_updates"),
+        true,
+        None::<&str>,
+    )?;
 
+    // Every predefined item is given its text explicitly. Passing `None` does not defer to macOS,
+    // which localises the standard menus only for a bundle that ships .lproj localisations: muda
+    // substitutes its own hardcoded English ("&Copy", "Quit"), so a menu built that way stays
+    // English in every language and would leave this bar half translated. See docs/i18n.md.
     let edit = Submenu::with_items(
         app,
-        "Edit",
+        t("menu.edit"),
         true,
         &[
-            &PredefinedMenuItem::undo(app, None)?,
-            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::undo(app, Some(&t("menu.undo")))?,
+            &PredefinedMenuItem::redo(app, Some(&t("menu.redo")))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::cut(app, None)?,
-            &PredefinedMenuItem::copy(app, None)?,
-            &PredefinedMenuItem::paste(app, None)?,
-            &PredefinedMenuItem::select_all(app, None)?,
+            &PredefinedMenuItem::cut(app, Some(&t("menu.cut")))?,
+            &PredefinedMenuItem::copy(app, Some(&t("menu.copy")))?,
+            &PredefinedMenuItem::paste(app, Some(&t("menu.paste")))?,
+            &PredefinedMenuItem::select_all(app, Some(&t("menu.select_all")))?,
         ],
     )?;
 
     let window = Submenu::with_items(
         app,
-        "Window",
+        t("menu.window"),
         true,
         &[
-            &PredefinedMenuItem::minimize(app, None)?,
-            &PredefinedMenuItem::maximize(app, None)?,
+            &PredefinedMenuItem::minimize(app, Some(&t("menu.minimize")))?,
+            &PredefinedMenuItem::maximize(app, Some(&t("menu.zoom")))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::close_window(app, None)?,
+            &PredefinedMenuItem::close_window(app, Some(&t("menu.close")))?,
         ],
     )?;
 
@@ -96,15 +109,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         // Services/Hide/Quit block macOS users expect to find in fixed positions.
         // Bound to locals first: the submenu takes references, so each item has to outlive the
         // slice, and the conditional update check means it cannot be one expression any more.
-        let about_item = PredefinedMenuItem::about(app, Some("About Bramble"), Some(about(app)))?;
+        let about_item = PredefinedMenuItem::about(app, Some(&t("menu.about")), Some(about(app)))?;
         let sep1 = PredefinedMenuItem::separator(app)?;
-        let services = PredefinedMenuItem::services(app, None)?;
+        let services = PredefinedMenuItem::services(app, Some(&t("menu.services")))?;
         let sep2 = PredefinedMenuItem::separator(app)?;
-        let hide = PredefinedMenuItem::hide(app, None)?;
-        let hide_others = PredefinedMenuItem::hide_others(app, None)?;
-        let show_all = PredefinedMenuItem::show_all(app, None)?;
+        let hide = PredefinedMenuItem::hide(app, Some(&t("menu.hide")))?;
+        let hide_others = PredefinedMenuItem::hide_others(app, Some(&t("menu.hide_others")))?;
+        let show_all = PredefinedMenuItem::show_all(app, Some(&t("menu.show_all")))?;
         let sep3 = PredefinedMenuItem::separator(app)?;
-        let quit = PredefinedMenuItem::quit(app, None)?;
+        let quit = PredefinedMenuItem::quit(app, Some(&t("menu.quit")))?;
 
         let mut items: Vec<&dyn tauri::menu::IsMenuItem<R>> = vec![&about_item];
         if updatable {
@@ -122,10 +135,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ] {
             items.push(item);
         }
-        let app_menu = Submenu::with_items(app, "Bramble", true, &items)?;
+        let app_menu = Submenu::with_items(app, APP_NAME, true, &items)?;
         Menu::with_items(app, &[&app_menu, &edit, &window])
     }
-
 }
 
 #[cfg(target_os = "macos")]
@@ -159,8 +171,8 @@ mod manifest_tests {
 
     #[test]
     fn update_manifest_parses_and_names_every_target_we_ship() {
-        let release: RemoteRelease =
-            serde_json::from_str(MANIFEST).expect("latest.json must deserialize as a RemoteRelease");
+        let release: RemoteRelease = serde_json::from_str(MANIFEST)
+            .expect("latest.json must deserialize as a RemoteRelease");
 
         // Resolved BEFORE the version comparison in the plugin, so a manifest missing the running
         // target errors out even when it advertises an older version than the one installed.
