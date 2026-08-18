@@ -1,6 +1,6 @@
 // The desktop updater's signing key, unlocked from its age + YubiKey wrapper.
 //
-// Shared by the macOS build (build-desktop.ts) and the containerised Linux one (build-linux.ts),
+// Shared by the macOS build (build-macos.ts) and the containerised Linux one (build-linux.ts),
 // because both produce an artifact the installed app will verify against the public key compiled
 // into it: an unsigned or wrongly-signed archive is a release that looks complete and updates
 // nobody. One copy of the unlock, so the two cannot drift into two ideas of where the key lives.

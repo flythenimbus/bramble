@@ -260,8 +260,9 @@ jobs:
           echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/ci.key)" >> "$GITHUB_ENV"
           echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> "$GITHUB_ENV"
 
+      # `build:macos` is the host-target build script; on this runner it bundles the Linux three.
       - name: Build the bundles (.deb, .rpm, AppImage)
-        run: pnpm run build:desktop
+        run: pnpm run build:macos
 
       - name: Show what was produced
         run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/

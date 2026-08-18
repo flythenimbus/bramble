@@ -107,7 +107,9 @@ const script = [
 		" /src/ /work/repo/",
 	"cd /work/repo",
 	"corepack pnpm install --frozen-lockfile",
-	"corepack pnpm run build:desktop",
+	// `build:macos` despite running on Debian: it is one host-target build script, named for the
+	// platform it is normally invoked from, and on Linux it bundles the .deb, .rpm and AppImage.
+	"corepack pnpm run build:macos",
 	// Only the bundles: the rest of target/ is gigabytes of intermediate objects.
 	"rm -rf /out/*",
 	"cp -a packages/platform-desktop/src-tauri/target/release/bundle/. /out/",

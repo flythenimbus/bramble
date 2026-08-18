@@ -72,8 +72,8 @@ if (!archive)
 	fail(
 		files.some((f) => f.endsWith(".app"))
 			? "there is an .app here but no .app.tar.gz. The archive is produced by the build, so\n" +
-					"       something removed it; rebuild with `pnpm build:desktop:local-update`."
-			: "no build in the bundle directory. Run `pnpm build:desktop:local-update` first.",
+					"       something removed it; rebuild with `pnpm build:macos:local-update`."
+			: "no build in the bundle directory. Run `pnpm build:macos:local-update` first.",
 	);
 if (!files.includes(`${archive}.sig`))
 	// Without this the app rejects the download, which looks like a broken updater rather than an

@@ -363,7 +363,7 @@ manual re-download. Treat losing it as unrecoverable-by-design and keep the offl
 
 Tauri's CLI signs with minisign and takes the key as a path or a string; it cannot drive a hardware
 token. So the YubiKey does here what it does for the Android keystore: it gates *access* to a key
-that lives encrypted at rest. `scripts/build-desktop.ts` decrypts it (PIN + touch), passes it to
+that lives encrypted at rest. `scripts/build-macos.ts` decrypts it (PIN + touch), passes it to
 the bundler through the environment, and never writes the plaintext to disk.
 
 Release notes are drafted from the commit range by the model the i18n scripts already use, then
@@ -413,8 +413,8 @@ build will keep using it and never ask for the YubiKey.
 ### Each release
 
 ```sh
-pnpm build:desktop:universal   # prompts for a touch; aarch64-only via build:desktop
-pnpm release:desktop           # writes latest.json from what the build produced
+pnpm build:macos       # universal; prompts for a touch. aarch64-only via build:macos:aarch64
+pnpm release:desktop   # writes latest.json from what the build produced
 ```
 
 Then create the GitHub release tagged `v<version>` and attach the `.dmg`, the `.app.tar.gz` and

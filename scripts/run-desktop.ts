@@ -63,7 +63,7 @@ if (target === "macos") {
 			`${bundles}/release/bundle/macos/Bramble.app`,
 		]
 			.map((p) => join(ROOT, p))
-			.find(existsSync) ?? fail("not built yet: pnpm build:desktop");
+			.find(existsSync) ?? fail("not built yet: pnpm build:macos");
 	run("open", [app]);
 }
 

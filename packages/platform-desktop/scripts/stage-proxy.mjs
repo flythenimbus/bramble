@@ -68,7 +68,7 @@ function build(forTriple) {
 	return join(root, ...(dir ? [dir] : []), "release", "bramble-proxy");
 }
 
-// Set by build-desktop.ts when it passes --target universal-apple-darwin. Read from our own
+// Set by build-macos.ts when it passes --target universal-apple-darwin. Read from our own
 // side rather than guessed from Tauri's environment, so it cannot silently stop being true.
 if (process.env.BRAMBLE_UNIVERSAL) {
 	const slices = [];

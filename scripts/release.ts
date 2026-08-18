@@ -729,7 +729,7 @@ async function releaseDesktop(version: string, universal: boolean) {
 
 	try {
 		// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
-		run(`pnpm run build:desktop${universal ? "" : " -- --aarch64"}`);
+		run(`pnpm run build:macos${universal ? "" : " -- --aarch64"}`);
 	} catch {
 		fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
 	}

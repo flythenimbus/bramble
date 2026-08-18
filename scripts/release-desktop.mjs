@@ -41,7 +41,7 @@ const args = process.argv.slice(2);
 const resume = args.includes("--resume");
 const MAC = process.platform === "darwin";
 // Universal unless told otherwise, matching the build, and macOS-only for the same reason it is
-// there (see build-desktop.ts). cargo puts a --target build under target/<triple>/, so the two
+// there (see build-macos.ts). cargo puts a --target build under target/<triple>/, so the two
 // land in different places, and reading the wrong one is not an empty directory and an error: it
 // is the OTHER build, published as though it were this one.
 const universal = MAC && !args.includes("--aarch64");
@@ -80,7 +80,7 @@ if (!resume) {
   // prompt looks exactly like a hang.
   console.log(`building Bramble ${version}${universal ? " (universal)" : ""}…`);
   try {
-    execFileSync("pnpm", ["run", "build:desktop", ...(universal ? [] : ["--aarch64"])], {
+    execFileSync("pnpm", ["run", "build:macos", ...(universal ? [] : ["--aarch64"])], {
       stdio: "inherit",
     });
   } catch {

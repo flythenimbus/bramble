@@ -2,6 +2,11 @@
 // Build the desktop app, decrypting the updater signing key only for as long as the bundler needs
 // it.
 //
+// Named for macOS because that is where a release is cut, but it builds for the host target: on
+// Linux the same script produces the .deb, .rpm and AppImage, which is why build-linux.ts calls it
+// inside the container and CI calls it on an Ubuntu runner. Only the Apple-specific parts
+// (notarization, the universal lipo) are guarded by `process.platform`.
+//
 // Same age + YubiKey scheme as every other release key here (see docs/release-signing.md): the key
 // lives encrypted at rest and is unlocked with a PIN and a touch. Tauri's CLI cannot talk to a
 // hardware token — it wants a minisign key as a path or a string — so the key itself cannot live
