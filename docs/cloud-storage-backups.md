@@ -557,11 +557,20 @@ a target, log out, log back in, confirm the scheduler still runs before a reboot
 `/usr/bin/bramble-proxy` on Debian 12 and Ubuntu 22.04, `test:nix` asserts the same sibling in the
 Nix store, and the shipped macOS disk image carries it at `Contents/MacOS/bramble-proxy`.)*
 
-**Not yet run.** All of it is written and skipped rather than missing:
+**Run at last, and both pass.** Bring the stack up with `docker compose up -d`, then:
 
-- `docker compose up -d` then `BRAMBLE_IT=1 pnpm --filter @vault/core exec vitest run providers.integration` — the provider round trip, keep-N against a server's own listing, and the two-vault retention scoping, against real Nextcloud and MinIO.
-- `cargo test -- --ignored` in `platform-desktop/src-tauri` — the SigV4 signer against MinIO, which validates signatures strictly. Our vectors only prove the two signers agree with each other.
-- A desktop run against the compose Nextcloud: configure a target, lock the vault, wait for a tick, confirm a snapshot lands while locked.
+- `BRAMBLE_IT=1 pnpm --filter @vault/core exec vitest run providers.integration` — 6 passing.
+  The round trip, keep-N against the server's own listing, and **two vaults sharing one folder
+  staying out of each other's retention**, against real Nextcloud and real MinIO. That last one is
+  the finding from the security review, now covered against servers rather than a fake.
+- `cargo test -- --ignored` in `platform-desktop/src-tauri` — 1 passing. The Rust SigV4 signer
+  against MinIO, which validates strictly, for PUT, a byte-identical GET, and DELETE. Our vectors
+  only ever proved the two signers agreed with each other; this proves the desktop's agrees with a
+  server, and it is the whole desktop S3 path end to end apart from the UI.
+
+**Still needs a person and the running app:** a desktop run against the compose Nextcloud or
+MinIO — configure a target, lock the vault, wait for a tick, confirm a snapshot lands while
+locked. That is the one claim no test can make, because it is about a process nobody is watching.
 
 *(`apt install bramble` from `apt.bramble.sh` on a clean machine is done, and is now
 `pnpm run test:apt`.)*
