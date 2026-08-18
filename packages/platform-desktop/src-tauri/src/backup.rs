@@ -292,6 +292,27 @@ pub fn start_ticker(app: tauri::AppHandle) {
 
 // ---- commands ----
 
+/// What a scheduled run did, into the app log.
+///
+/// The tick is emitted from here but the run happens in the webview, whose `console.warn` reaches
+/// nobody: there is no JS log plugin, so a backup that runs with the window hidden and the vault
+/// locked — which is the entire point of the feature — leaves no evidence anywhere a user could be
+/// asked to look. This is the evidence.
+///
+/// Called even when nothing was due, because "it did nothing" and "it never ran" are otherwise
+/// indistinguishable and have completely different causes. One short line per tick.
+///
+/// The summary is counts, vault ids and the provider's own error strings, the same material that
+/// already went to the console. No URLs and no secrets.
+#[tauri::command]
+pub fn backup_run_report(summary: String, failed: bool) {
+    if failed {
+        log::warn!("scheduled backup: {summary}");
+    } else {
+        log::info!("scheduled backup: {summary}");
+    }
+}
+
 /// Which credential store this machine offers, and therefore whether a backup can run while the
 /// vault is locked. The caller turns it into a statement about behaviour, never into a question.
 #[tauri::command]

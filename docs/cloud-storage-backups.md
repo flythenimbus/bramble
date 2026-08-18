@@ -568,9 +568,61 @@ Nix store, and the shipped macOS disk image carries it at `Contents/MacOS/brambl
   only ever proved the two signers agreed with each other; this proves the desktop's agrees with a
   server, and it is the whole desktop S3 path end to end apart from the UI.
 
-**Still needs a person and the running app:** a desktop run against the compose Nextcloud or
-MinIO — configure a target, lock the vault, wait for a tick, confirm a snapshot lands while
-locked. That is the one claim no test can make, because it is about a process nobody is watching.
+**And the locked run is verified.** On KDE Plasma 6 (Wayland, Debian 13), with both vaults
+**locked**, one tick at 01:53:25 uploaded a snapshot for each, into the same folder, with each
+vault's own key tag, and folded the run state back per vault. That is the claim the whole desktop
+credential design exists to support — credentials in the OS store rather than under the master
+password, so a schedule can be kept by a process nobody is watching — and it had never been
+observed before.
+
+The same run settled the review's HIGH finding in the field rather than only in tests: with a
+keep of 5, one vault uploaded seven snapshots and pruned to five while leaving the other vault's
+two alone, in a shared folder.
+
+### Testing the scheduler without being fooled by it
+
+Both of us got this wrong once, so it is worth stating. A scheduled run needs **two** gates open,
+and a target that has just backed up has neither:
+
+- **Due**: `now - lastBackupAt >= interval`. The shortest frequency is daily, so a target that ran
+  a minute ago is not due for 24 hours.
+- **Changed**: the vault's hash must differ from `lastVaultHash`. An unchanged vault is skipped,
+  because the previous snapshot already captures it.
+
+A test that ignores this sees nothing happen and reads it as a broken scheduler. To make a target
+due immediately, close the app (it rewrites `meta.json` on exit) and clear both fields:
+
+```bash
+python3 - <<'EOF'
+import json
+p = "~/.local/share/app.bramble.desktop/meta.json"  # expand it
+m = json.load(open(p))
+for k, v in m.items():
+    if k.startswith("backup.targets"):
+        for t in v:
+            t.pop("lastBackupAt", None)
+            t.pop("lastVaultHash", None)
+json.dump(m, open(p, "w"))
+EOF
+```
+
+**"Back up now" is not a way to test any of this.** It deliberately bypasses due, changed, *and*
+the retry backoff, so it will happily run a target that the scheduler is correctly refusing to.
+
+Count snapshots per vault, never per bucket: two vaults share a folder by default, so a whole
+bucket count makes a passing prune look like a failure.
+
+```bash
+docker run --rm --network host --entrypoint sh minio/mc -c \
+  'mc alias set l http://localhost:9000 bramble bramble-test-secret >/dev/null && mc ls -r l/bramble-test' \
+  | awk '{print $NF}' | sed 's/.*-v/v/;s/\.bramble//' | sort | uniq -c
+```
+
+Finally, every tick now writes one line to the app log
+(`~/.local/share/app.bramble.desktop/logs/bramble.log`), including the ticks that do nothing.
+Before that, the run happened in the webview and reported only to a console nobody could read, so
+"nothing was due" and "the scheduler never ran" were indistinguishable from outside — which is a
+bad property for a feature whose whole promise is that it works while you are not looking.
 
 *(`apt install bramble` from `apt.bramble.sh` on a clean machine is done, and is now
 `pnpm run test:apt`.)*

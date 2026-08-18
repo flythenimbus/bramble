@@ -23,8 +23,13 @@ import {
 	targetPrefixFor,
 	toProviderConfig,
 } from "@core/backup/config";
-import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
+import {
+	runScheduledBackups,
+	type ScheduledBackupResult,
+	type VaultBackup,
+} from "@core/backup/run";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { desktopBackupCreds } from "./adapters/backup-creds";
 import { desktopCrypto } from "./adapters/crypto";
@@ -111,12 +116,40 @@ export async function runDueBackups(): Promise<void> {
 			},
 			Date.now(),
 		);
-		for (const f of result.failed) {
-			console.warn(`[bramble] backup failed for ${f.id} (vault ${f.vaultId}):`, f.error);
-		}
+		await report(result);
+	} catch (e) {
+		// A throw here is the runner itself failing rather than one target, which the per-target
+		// error list never sees. Silent before; it was the case with the least evidence and the
+		// most consequence.
+		await invoke("backup_run_report", {
+			summary: `run failed: ${(e as Error).message}`,
+			failed: true,
+		}).catch(() => {});
+		throw e;
 	} finally {
 		running = false;
 	}
+}
+
+/**
+ * One line into the app log per tick.
+ *
+ * Including the ticks that did nothing: with the window hidden and the vault locked, "nothing was
+ * due" and "the scheduler never ran" look identical from outside and mean completely different
+ * things. Counts, vault ids and the provider's own error text only — the same material that used
+ * to go to a console nobody could read.
+ */
+async function report(result: ScheduledBackupResult): Promise<void> {
+	const parts = [`${result.succeeded.length} uploaded`];
+	if (result.failed.length > 0) parts.push(`${result.failed.length} failed`);
+	if (result.skipped > 0) parts.push(`${result.skipped} skipped (locked)`);
+	if (result.attempted === 0 && result.skipped === 0) parts.push("nothing due");
+	const errors = result.failed.map((f) => `${f.vaultId.slice(0, 8)}/${f.id}: ${f.error}`);
+	const summary = [parts.join(", "), ...errors].join(" | ");
+	await invoke("backup_run_report", {
+		summary,
+		failed: result.failed.length > 0,
+	}).catch(() => {});
 }
 
 /** Listen for the shell's tick. Returns an unsubscribe; call once, from the main window. */
