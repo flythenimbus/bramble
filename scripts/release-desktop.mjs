@@ -171,6 +171,38 @@ for (const archive of archives) {
     };
 }
 
+// The Linux half of a release cut from a Mac.
+//
+// `pnpm release desktop` runs the containerised Linux build (scripts/build-linux.ts) alongside the
+// native macOS one, so both halves of the release exist on one machine. The bundle above is the
+// local platform's; this adds the AppImage from `dist-linux/`, which is the only Linux artifact
+// the updater can apply — a .deb is owned by dpkg and a .rpm by rpm, and the app knows it
+// (`can_self_update`). Without this the manifest would carry only darwin keys and every AppImage
+// user would have an updater that never sees a release.
+if (MAC) {
+  const linuxDir = "dist-linux/appimage";
+  if (existsSync(linuxDir)) {
+    const linuxFiles = await readdir(linuxDir);
+    for (const image of linuxFiles.filter((f) => f.endsWith(".AppImage"))) {
+      const sig = `${image}.sig`;
+      if (!linuxFiles.includes(sig)) {
+        console.error(
+          `${image} has no ${sig}. The Linux build must be signed for a release:\n` +
+            "  pnpm run build:linux        (not --unsigned)",
+        );
+        process.exit(1);
+      }
+      const key = image.includes("aarch64") || image.includes("arm64")
+        ? "linux-aarch64"
+        : "linux-x86_64";
+      platforms[key] = {
+        signature: readFileSync(join(linuxDir, sig), "utf8").trim(),
+        url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${image}`,
+      };
+    }
+  }
+}
+
 const manifest = {
   version,
   // Release notes come from the GitHub release body; the updater shows this instead, so keep it
@@ -195,6 +227,17 @@ for (const [dir, ext] of LAYOUT.downloads) {
   const at = join(BUNDLE, dir);
   if (!existsSync(at)) continue;
   for (const f of (await readdir(at)).filter((f) => f.endsWith(ext))) downloads.push(join(at, f));
+}
+// Cut from a Mac, the Linux artifacts sit outside the bundle tree entirely.
+if (MAC) {
+  for (const [dir, ext] of [
+    ["dist-linux/deb", ".deb"],
+    ["dist-linux/rpm", ".rpm"],
+    ["dist-linux/appimage", ".AppImage"],
+  ]) {
+    if (!existsSync(dir)) continue;
+    for (const f of (await readdir(dir)).filter((f) => f.endsWith(ext))) downloads.push(join(dir, f));
+  }
 }
 if (!quiet) {
   console.log(`\nUpload to the ${version}-desktop release:`);

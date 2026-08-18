@@ -45,6 +45,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { signingKey } from "./desktop-signing-key.ts";
 import { composeNotes } from "./release-notes.mjs";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
@@ -685,6 +686,9 @@ async function releaseDesktop(version: string, universal: boolean) {
 	// stops with "xdg-open binary not found" several minutes in, and the containerised build
 	// (scripts/build-linux.ts) rsyncs the tree into its workspace volume.
 	if (process.platform === "linux") requireBins(["rsync", "xdg-open"], "docs/desktop-port.md");
+	// A desktop release ships Linux too, built in a container so one machine can cut the whole
+	// thing. Checked here rather than an hour later, after the gate and a notarized macOS build.
+	if (process.platform === "darwin") requireBins(["docker"], "docs/desktop-port.md");
 	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
@@ -713,11 +717,35 @@ async function releaseDesktop(version: string, universal: boolean) {
 	const bumped = after !== before;
 	if (bumped) writeFileSync(DESKTOP_CONF, after);
 
+	// Unlocked once, here, rather than separately by each build. Both children read it from the
+	// environment before reaching for the age file, so this is the difference between one YubiKey
+	// touch for a release and two. The plaintext never touches disk; build-linux passes it into
+	// the container by name so it stays out of argv. See scripts/desktop-signing-key.ts.
+	if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
+		const key = signingKey(fail);
+		if (!key) fail("no updater signing key; see docs/release-signing.md");
+		process.env.TAURI_SIGNING_PRIVATE_KEY = key;
+	}
+
 	try {
 		// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
 		run(`pnpm run build:desktop${universal ? "" : " -- --aarch64"}`);
 	} catch {
 		fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
+	}
+
+	// The Linux half, in a container, from the same machine. A release that ships only the .dmg
+	// leaves Debian users on an APT repository with nothing new in it and AppImage users with an
+	// updater that never sees a release.
+	if (process.platform === "darwin") {
+		try {
+			run("pnpm run build:linux");
+		} catch {
+			fail(
+				`Linux build failed; the macOS build is fine.\nFix it and re-run, or ` +
+					`\`git checkout ${DESKTOP_CONF}\` to undo the bump.`,
+			);
+		}
 	}
 
 	const macos = join(BUNDLE, "macos");
@@ -742,6 +770,25 @@ async function releaseDesktop(version: string, universal: boolean) {
 
 	const assets: string[] = [];
 	for (const f of dmgs) assets.push(join(BUNDLE, "dmg", f));
+	// One release carries every platform. The AppImage must be signed, for the same reason the
+	// macOS archive must: it is what the updater fetches, and an unsigned one is rejected by every
+	// installed app, so publishing it looks complete and updates nobody. The .deb and .rpm carry
+	// .sig files too, which are meaningless (the updater cannot apply either) and not uploaded.
+	for (const [dir, ext] of [
+		["dist-linux/deb", ".deb"],
+		["dist-linux/rpm", ".rpm"],
+		["dist-linux/appimage", ".AppImage"],
+	] as const) {
+		if (!existsSync(dir)) continue;
+		for (const f of readdirSync(dir).filter((f) => f.endsWith(ext))) {
+			assets.push(join(dir, f));
+			if (ext === ".AppImage") {
+				if (!existsSync(join(dir, `${f}.sig`)))
+					fail(`${f} has no .sig; the Linux build must not be --unsigned for a release`);
+				assets.push(join(dir, `${f}.sig`));
+			}
+		}
+	}
 	for (const a of archives) {
 		if (!existsSync(join(macos, `${a}.sig`)))
 			// Every installed app rejects an unsigned archive, so publishing one leaves a release
@@ -776,9 +823,26 @@ async function releaseDesktop(version: string, universal: boolean) {
 	run(`git commit -m ${JSON.stringify(`chore(release): desktop ${version} update manifest`)}`);
 	run(`git push origin ${branch}`);
 
+	// Last, and deliberately after the tag exists: the APT index names a .deb by version, and
+	// publishing one for a release that was never cut is worse than publishing late. A failure
+	// here does not invalidate anything above it — the GitHub release and the manifest are already
+	// live — so it says how to finish rather than trying to unwind.
+	if (process.platform === "darwin" || process.platform === "linux") {
+		try {
+			run("pnpm run publish:apt");
+		} catch {
+			console.error(
+				`\n${tag} is released, but the APT repository was not updated.` +
+					"\nDebian and Ubuntu users will not see it until you run:  pnpm run publish:apt" +
+					"\n(Plug the YubiKey in first: signing the index wants two touches.)",
+			);
+		}
+	}
+
 	console.log(
-		`\nreleased ${tag}: ${dmgs.join(", ")} + updater archive attached to the GitHub release.` +
-			`\nThe manifest is committed; installed apps see ${version} once the website deploy lands.`,
+		`\nreleased ${tag}: ${dmgs.join(", ")} + the Linux packages + updater archives, on the ` +
+			`GitHub release.\nThe manifest is committed; installed apps see ${version} once the ` +
+			"website deploy lands.",
 	);
 }
 

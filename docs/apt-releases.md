@@ -37,6 +37,14 @@ says nothing about updates when it detects it was installed that way.
 | Sign the index, upload | Host (`pnpm run publish:apt`) | The GPG key is on a YubiKey, and Docker Desktop on macOS cannot pass a USB device through |
 | Verify the published result | CI (`verify-apt-repository`) | It runs against the live URL, so it also catches a half-finished upload |
 
+**`pnpm release desktop` now drives all of this from one machine**, so the two build commands above
+are what a release runs rather than what you type. From a Mac it builds macOS natively, then the
+Linux packages in the container, attaches every artifact to the one GitHub release, writes
+`latest.json` with both the darwin and `linux-x86_64` keys, and finishes with `publish:apt`. The
+updater key is unlocked once for both builds, so a release is one YubiKey touch for signing plus
+two for the APT index. If the APT step fails the release is still valid and complete; re-run
+`pnpm run publish:apt`.
+
 That split is forced rather than chosen. Everything that must be Linux is in the container;
 everything that must be near a key is on the host. aptly and rclone are cross-platform, and aptly
 builds a Debian index without dpkg, so nothing in the publishing half needs Linux.
