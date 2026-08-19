@@ -161,6 +161,31 @@ Filling a segmented widget means focusing each box in turn, and `focus()` fires 
 doesn't read our own focus moves as the user's and reopen the dropdown on the box
 it just filled.
 
+### Card and custom fills never write into a hidden field
+
+`fillCard` and `fillCustomFields` skip any field `isRendered` rejects. A form that
+hides a box has taken it out of the flow, and filling it anyway can put a secret
+somewhere the page never asked for one. The case that prompted the rule: the
+Semafone capture frame (see [field-detection.md](field-detection.md)) tokenises
+the PAN only, but keeps a `display:none` cvc box whose submit handler still
+appends `sf.req.card.securityCode` when it holds a value — so filling it would
+send a CVV in a request that was not collecting one. It also stops us feeding the
+`data-honeypot-field` inputs Shopify ships alongside its real card number, which
+carry genuine `cc-*` tokens and are visually hidden.
+
+`fillForm` is deliberately **not** subject to this. A two-step login can keep its
+password field in the DOM but hidden on the identifier step, and filling it there
+is the point: the value is waiting when step two renders. The exposure that
+motivates the card rule doesn't apply, because a login form isn't assembling a
+request out of boxes it has disabled.
+
+`autoFilledFields` carries the other half of the write policy. A value **we**
+wrote is off-limits to auto-fill (so a re-query can't re-clobber a field the user
+cleared) and fair game for an explicit pick (so choosing a second card in the
+dropdown replaces the first rather than silently doing nothing). A value the
+**user** typed is never clobbered by a custom-field fill, though an explicit pick
+does overwrite the login and card fields — that is what choosing an entry means.
+
 When the vault is locked, the query result still carries `hasPotentialMatch`
 (derived by checking known hostnames against the page's registrable domain
 without decrypting the index), enough to show a "locked, unlock to autofill" hint

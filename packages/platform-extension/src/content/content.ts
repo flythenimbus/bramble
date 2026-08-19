@@ -336,8 +336,8 @@ function applySelectResponse(
 
 	picker.removeDropdown();
 	if (data.payload.kind === "card") {
-		fillCard(data.payload);
-		fillCustomFields(data.payload.customFields);
+		fillCard(data.payload, data.isAuto);
+		fillCustomFields(data.payload.customFields, data.isAuto);
 		return;
 	}
 	if (data.otpOnly) {
@@ -349,7 +349,7 @@ function applySelectResponse(
 		data.payload.password,
 		data.isAuto,
 	);
-	fillCustomFields(data.payload.customFields);
+	fillCustomFields(data.payload.customFields, data.isAuto);
 	fillOtp(data.payload.totp);
 	if (!filled || !data.payload.autoSubmit || !passwordField) return;
 	const generation = ++submitGeneration;

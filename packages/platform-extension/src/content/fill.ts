@@ -2,6 +2,7 @@ import {
 	closestAcrossShadow,
 	deriveMatcher,
 	getFillableInputs,
+	isRendered,
 	matchesField,
 	splitOtpFields,
 } from "./detection";
@@ -53,6 +54,18 @@ export function isFilling(): boolean {
 // query. Explicit dropdown selection ignores this set and always fills.
 const autoFilledFields = new WeakSet<HTMLInputElement>();
 
+/**
+ * True if `el` must be left alone. A value WE wrote is fair game for an explicit
+ * pick and off-limits to auto-fill; that asymmetry is the whole point of the set,
+ * and it is what lets the user switch cards in the dropdown and see the new one
+ * land. A value the USER typed is never clobbered here.
+ */
+function isReserved(el: HTMLInputElement, isAuto: boolean): boolean {
+	if (!isRendered(el)) return true;
+	if (autoFilledFields.has(el)) return isAuto;
+	return el.value !== "";
+}
+
 // Last password we autofilled; capture compares against it to suppress "save"
 // prompts for unchanged autofilled credentials.
 let lastFilledPassword: string | null = null;
@@ -73,6 +86,8 @@ export function fillForm(
 } {
 	const { username: userField, password: pwField } = getPageFields().login;
 	let filled = false;
+	// Not isReserved(): an explicit pick replaces whatever the user typed into the
+	// login fields, which is the point of choosing an entry from the dropdown.
 	if (userField && !(isAuto && autoFilledFields.has(userField))) {
 		fillField(userField, username);
 		autoFilledFields.add(userField);
@@ -149,8 +164,13 @@ function reservedInputs(): Set<HTMLInputElement> {
 	return reserved;
 }
 
-/** Fills each custom field into the first empty page input whose hint matches its derived name. */
-export function fillCustomFields(fields: CustomFieldData[] | undefined): void {
+/**
+ * Fills each custom field into the first available page input whose hint matches its
+ * derived name. Available means empty, or holding a value this module wrote on an
+ * earlier pick -- otherwise switching entries would leave the previous one's custom
+ * values behind, or worse, spill the new ones into a second matching input.
+ */
+export function fillCustomFields(fields: CustomFieldData[] | undefined, isAuto: boolean): void {
 	if (!fields || fields.length === 0) return;
 	const reserved = reservedInputs();
 	const inputs = getFillableInputs().filter((el) => !reserved.has(el));
@@ -159,7 +179,7 @@ export function fillCustomFields(fields: CustomFieldData[] | undefined): void {
 		const matcher = deriveMatcher(field.key);
 		if (!matcher) continue;
 		for (const el of inputs) {
-			if (el.value || autoFilledFields.has(el)) continue;
+			if (isReserved(el, isAuto)) continue;
 			if (matchesField(el, matcher)) {
 				fillField(el, field.value);
 				autoFilledFields.add(el);
@@ -180,11 +200,22 @@ function expYearFor(field: HTMLInputElement, year: string): string {
 	return year.length <= 2 ? `20${two}` : year;
 }
 
-export function fillCard(card: Extract<FillPayload, { kind: "card" }>): boolean {
+/**
+ * Fills the page's card fields. `isAuto` follows the same contract as `fillForm`:
+ * only auto-fill defers to what is already there. Picking a second card from the
+ * dropdown must overwrite the first, which is what the unconditional guard here
+ * used to prevent -- every field bailed and the previous card's expiry and CVV
+ * stayed put, so the pick looked like it had chosen the wrong entry.
+ *
+ * Invisible fields are never written: a form that hides a box has taken it out of
+ * the flow. See docs/autofill.md.
+ */
+export function fillCard(card: Extract<FillPayload, { kind: "card" }>, isAuto: boolean): boolean {
 	const c = getPageFields().card;
 	let filled = false;
 	const put = (el: HTMLInputElement | null, value: string) => {
-		if (!el || !value || autoFilledFields.has(el)) return;
+		if (!el || !value || !isRendered(el)) return;
+		if (isAuto && autoFilledFields.has(el)) return;
 		fillField(el, value);
 		autoFilledFields.add(el);
 		filled = true;
