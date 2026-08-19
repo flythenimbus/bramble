@@ -53,26 +53,32 @@ pub enum Tier {
 static TIER: OnceLock<Tier> = OnceLock::new();
 
 /// Build an entry against a specific tier's backend.
+///
+/// Two functions rather than one with cfg'd arms. Off Linux there is a single backend and no
+/// builder in the picture, so every arm of that match returned, leaving `builder` with nothing
+/// to infer a type from: E0282, and a macOS build that could not compile at all while Linux was
+/// fine. The tiers only branch on Linux, so that is the only place a match belongs.
+#[cfg(not(target_os = "linux"))]
+fn entry_for(tier: Tier, account: &str) -> Res<keyring::Entry> {
+    match tier {
+        Tier::None => Err("no credential store on this system".into()),
+        // Keychain or Credential Manager: the same store either way, so the tier picks nothing.
+        Tier::Os | Tier::Kernel => keyring::Entry::new(SERVICE, account)
+            .map_err(|e| format!("credential store unavailable: {e}")),
+    }
+}
+
+#[cfg(target_os = "linux")]
 fn entry_for(tier: Tier, account: &str) -> Res<keyring::Entry> {
     let builder = match tier {
-        #[cfg(target_os = "linux")]
         Tier::Os => keyring::secret_service::default_credential_builder(),
-        #[cfg(target_os = "linux")]
         Tier::Kernel => keyring::keyutils::default_credential_builder(),
-        #[cfg(not(target_os = "linux"))]
-        Tier::Os | Tier::Kernel => {
-            return keyring::Entry::new(SERVICE, account)
-                .map_err(|e| format!("credential store unavailable: {e}"))
-        }
         Tier::None => return Err("no credential store on this system".into()),
     };
-    #[allow(unreachable_code)]
-    {
-        let credential = builder
-            .build(None, SERVICE, account)
-            .map_err(|e| format!("credential store unavailable: {e}"))?;
-        Ok(keyring::Entry::new_with_credential(credential))
-    }
+    let credential = builder
+        .build(None, SERVICE, account)
+        .map_err(|e| format!("credential store unavailable: {e}"))?;
+    Ok(keyring::Entry::new_with_credential(credential))
 }
 
 /// Does this backend answer at all? Reads a name that is never written, so nothing is created:

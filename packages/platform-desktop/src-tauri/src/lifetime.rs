@@ -201,7 +201,7 @@ fn tray_icon_bytes(dark_theme: bool) -> &'static [u8] {
 ///
 /// A no-op on macOS, which does its own inverting from the template and would only be made worse
 /// by being told what to do.
-#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+#[cfg_attr(target_os = "macos", allow(unused_variables))]
 pub fn set_tray_theme(app: &AppHandle, dark_theme: bool) {
     #[cfg(not(target_os = "macos"))]
     {
