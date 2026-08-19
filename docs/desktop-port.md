@@ -707,11 +707,25 @@ temporary PNG and points GTK at a new icon theme search path, and the resulting 
 the panel rather than in this process — invisible to a profiler pointed here, and enough to stutter
 a launch. It is debounced, idempotent, and timed into the log.
 
-**Native messaging is not implemented on Linux.** The log says so plainly on every start, and it
-means the browser link does not work there at all: the `.deb` installs `bramble-proxy` beside the
-binary, and nothing ever writes a host manifest pointing at it. `manifest.rs` only knows the macOS
-paths. A real gap rather than a rough edge, and the largest single thing still missing from the
-Linux build.
+**Native messaging works on Linux, and the AppImage needed more than a path table.** Manifests go
+under XDG_CONFIG_HOME rather than Application Support, and the browsers read that variable
+themselves, so a user who moves it takes their profiles with them and the manifests have to
+follow. The socket is `$XDG_DATA_HOME/app.bramble.desktop/bramble.sock`, which is Tauri's own app
+data directory on Linux, the same rule the macOS side already used.
+
+The AppImage is the awkward one. A host manifest carries an absolute path to the proxy, and an
+AppImage runs from a mount point named after the process that mounted it, so the path beside the
+running binary stops existing the moment the app does. The manifest would work until the next
+start and then name nothing, which a browser reports as the host being unavailable rather than as
+a stale path. So under an AppImage the proxy is copied into the app data directory and the
+manifest names the copy. The copy is rewritten on every launch, through a rename rather than in
+place, because a browser may be running the previous one.
+
+Firefox is still not covered, on any platform. It reads a different schema
+(`allowed_extensions` with the addon id) from a different directory, but the blocker is upstream
+of that: the Firefox build of the extension does not request the `nativeMessaging` permission, so
+a manifest for it would be a file no browser would ever act on. Adding it means a permission the
+extension has to declare and AMO has to review.
 
 **A hybrid-GPU laptop can stall once on first draw, and it is not ours.** On a machine with an
 Intel iGPU rendering and a discrete card runtime-suspended in `D3hot`, the first interaction can

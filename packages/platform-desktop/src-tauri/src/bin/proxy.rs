@@ -22,12 +22,7 @@ use std::{
     thread,
 };
 
-// APP_IDENTIFIER and SOCKET_NAME are read only by default_socket_path's macOS branch, and there
-// is no other branch yet, so off macOS they are dead in this binary and CI compiles it with
-// -D warnings. The app's copy carries a blanket allow for a different reason: it uses SOCKET_NAME
-// and leaves the rest to this side.
 #[path = "../socket_addr.rs"]
-#[cfg_attr(not(target_os = "macos"), expect(dead_code))]
 mod socket_addr;
 
 /// Matches the app's cap. A frame larger than this is a bug or an attempt to exhaust memory,

@@ -220,8 +220,8 @@ real one.
 
 ## Not done yet
 
-- **arm64.** amd64 only, like Signal. The container takes `--platform`, so an arm64 package is a
-  runner (or an emulated build) away rather than new code.
+- ~~**arm64.**~~ Done: `build:linux` builds both, `--platform` per architecture, emulated for
+  whichever one the host is not. The repository serves `binary-amd64` and `binary-arm64`.
 - **A `.deb` built in CI.** Tempting, since apt trusts the signed index rather than the package,
   so no key would be needed to build one. It would mean signing an artifact this machine did not
   produce, which is a different trust story than every other target here.
