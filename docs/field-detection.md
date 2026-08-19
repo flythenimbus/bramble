@@ -59,6 +59,22 @@ when there is no split month/year pair, avoiding double-fill. A bare cardholder
 name is too weak a signal on its own, so `cardFieldsPresent` requires a real card
 field (number, CVV, or expiry) before the card picker is offered.
 
+The number has a third pass behind those two, for names that are unambiguous **on
+a card form** and meaningless anywhere else. `pan` is the one that matters: it is
+the payment industry's Primary Account Number and what PCI capture iframes call
+the field, but it is also India's Permanent Account Number, on every KYC form
+there. So `CC_NUMBER_WEAK_RE` is consulted only when `cardContextPresent` finds
+independent evidence — another detected card field, or an input whose name gives
+the card schema away (`CC_CONTEXT_RE`).
+
+That context check is the one place detection reads **hidden** inputs. A PCI
+capture frame carries its transport schema in them (`sf.req.card.expiryMonth`,
+`cardScheme`), which is exactly the evidence wanted, and reading them is safe
+precisely because no targeting pass will look at them: `findByHint` skips
+`type=hidden`, so a hidden `expiryDate` names the room without ever becoming a
+fill target. Same two-tier reasoning as `CC_CSC_RE`, which requires card context
+for the opposite reason — "verification code" alone is far more often 2FA.
+
 ## OTP fields
 
 `otpInputs` runs a four-rung ladder, strongest first:
@@ -253,6 +269,25 @@ others). This locks in behaviour on real-world quirks: honeypots, off-screen
 hidden fields, missing `<form>` wrappers, custom component libraries, GitHub's
 tokenless `name="otp"` 2FA field, BMO's card-number-as-login, and invisible
 Turnstile that must not block autofill.
+
+`semafone-card-frame` is the unlabelled-card-field case: a cross-origin PCI
+capture iframe whose number box is a bare `name="pan"` with no label, placeholder,
+autocomplete or aria-label. The only prose that names it is the parent page's
+`<iframe title="Enter credit card number">`, which the frame cannot read. Drawing
+the picker over a frame that short was already handled by the relay
+(`needsRelay`); detection was the whole blocker.
+
+That page also splits the card across frames: the number is inside the iframe
+while expiry and CVV sit in the parent. Each frame runs its own content script and
+its own `AUTOFILL_SELECT` round-trip, so a pick fills the fields in the frame it
+was made from and no others, and the user completes the form with one pick per
+frame. That is deliberate, not a gap. Filling across frames would mean either
+routing the card over the relay -- which carries geometry and an opaque id only,
+never secrets, and where a hostile frame could forge the trigger -- or having the
+background fan the payload out to sibling frames, which puts the number and CVV
+into every same-site frame that *claims* a card form, a claim nothing can verify.
+The invariant is worth more than the second click: a card is only ever written
+into the frame the user acted in.
 
 `angular-ds-set-password` is the set-password class at its most awkward, and the
 form the suggestion used to miss: `autocomplete="off"` on the form and no

@@ -239,6 +239,63 @@ describe("detectCardFields — regex fallback", () => {
 	});
 });
 
+describe("detectCardFields — `pan`, the ambiguous number name", () => {
+	it("matches an unlabelled name=pan when the page is a card form", () => {
+		loadHTML(`
+			<form>
+				<input type="text" name="pan" maxlength="16" />
+				<input type="text" name="cvc" />
+			</form>
+		`);
+		expect(detectCardFields().number?.getAttribute("name")).toBe("pan");
+	});
+
+	it("takes card context from hidden transport fields alone", () => {
+		// A PAN-only PCI capture frame: nothing visible but the number, and the
+		// schema named only in hidden inputs.
+		loadHTML(`
+			<input type="hidden" name="sf.req.card.expiryMonth" />
+			<input type="hidden" name="cardScheme" />
+			<input type="text" name="pan" maxlength="16" />
+		`);
+		expect(detectCardFields().number?.getAttribute("name")).toBe("pan");
+	});
+
+	it("ignores name=pan with no card context (India's Permanent Account Number)", () => {
+		loadHTML(`
+			<form>
+				<input type="text" name="pan" maxlength="10" />
+				<input type="text" name="aadhaar" />
+				<input type="text" name="dob" />
+			</form>
+		`);
+		expect(detectCardFields().number).toBeNull();
+	});
+
+	it("does not let `pan` outrank a properly named card-number field", () => {
+		loadHTML(`
+			<form>
+				<input type="text" name="pan" />
+				<input type="text" name="card_number" />
+				<input type="text" name="cvv" />
+			</form>
+		`);
+		expect(detectCardFields().number?.getAttribute("name")).toBe("card_number");
+	});
+
+	it("does not match `pan` fused into a longer word", () => {
+		// \bpan\b has no boundary in `panel` or `maskedPan`.
+		loadHTML(`
+			<form>
+				<input type="text" name="panel_id" />
+				<input type="text" name="maskedPan" />
+				<input type="text" name="cvv" />
+			</form>
+		`);
+		expect(detectCardFields().number).toBeNull();
+	});
+});
+
 describe("cardFieldsPresent / isCardField", () => {
 	it("returns false when only a cardholder-name field exists", () => {
 		// Name alone false-positives on checkout shipping forms.

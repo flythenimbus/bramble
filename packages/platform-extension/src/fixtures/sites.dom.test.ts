@@ -629,6 +629,49 @@ describe("skanetrafiken.se — Mitt konto (Swedish, formless)", () => {
 	});
 });
 
+describe("hts.rogers.com — Semafone PCI capture frame (unlabelled name=pan)", () => {
+	// Reported as "the card field isn't picked up at all". The frame is cross-origin,
+	// so the only prose naming it -- the parent's <iframe title="Enter credit card
+	// number"> -- is unreachable from inside. What is left is `name="pan"`, the payment
+	// industry's Primary Account Number, with no label, placeholder, autocomplete or
+	// aria-label. The frame relay already handles drawing the picker over a 35px-tall
+	// frame; detection was the whole blocker.
+
+	it("resolves the unlabelled name=pan as the card number", () => {
+		loadFixture("semafone-card-frame");
+		expect(detectCardFields().number?.id).toBe("pan");
+	});
+
+	it("classifies the pan field as a card candidate", () => {
+		loadFixture("semafone-card-frame");
+		const pan = document.querySelector<HTMLInputElement>("#pan")!;
+		expect(candidateKind(pan)).toBe("card");
+	});
+
+	it("does not mistake a hidden transport field for a fillable one", () => {
+		// `expiryDate`, `sf.req.card.cardHolderName` and friends are type=hidden: they
+		// give the page away as a card form, but nothing may ever be filled into them.
+		loadFixture("semafone-card-frame");
+		const c = detectCardFields();
+		expect(c.expCombined).toBeNull();
+		expect(c.expMonth).toBeNull();
+		expect(c.expYear).toBeNull();
+		expect(c.name).toBeNull();
+	});
+
+	it("does not claim the masked mirror as the number", () => {
+		loadFixture("semafone-card-frame");
+		expect(detectCardFields().number?.id).not.toBe("maskedPan");
+	});
+
+	it("finds no login fields to compete with", () => {
+		loadFixture("semafone-card-frame");
+		const { username, password } = detectLoginFields();
+		expect(username).toBeNull();
+		expect(password).toBeNull();
+	});
+});
+
 describe("angular design-system — set a new password (reset / forced rotation)", () => {
 	// Reported as "the password suggestion never shows". The form is the awkward
 	// middle of the set-password class: no `autocomplete="new-password"` (the form

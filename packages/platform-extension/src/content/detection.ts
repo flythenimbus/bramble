@@ -301,6 +301,16 @@ export interface CardFields {
 }
 
 export const CC_NUMBER_RE = /card.?number|cardnum|ccnum|cc.?number/i;
+// Ambiguous names for the card number, consulted only once the document has
+// independent card context (see cardContextPresent). "pan" is the payment
+// industry's Primary Account Number and is what PCI capture iframes call the
+// field, but it is also India's Permanent Account Number, on every KYC form
+// there, so it can never stand on its own.
+const CC_NUMBER_WEAK_RE = /\bpan\b/i;
+// Names that mark a document as a card-capture form, used only to unlock the weak
+// number match. Deliberately not a targeting regex: nothing here is ever filled.
+const CC_CONTEXT_RE =
+	/card.?scheme|card.?type|cardholder|masked.?pan|expiry|expiration|\bcvv\b|\bcvc\b|\bcsc\b/i;
 const CC_NAME_RE = /cardholder|name.?on.?card|cc.?name/i;
 const CC_EXP_RE = /expir(y|ation)/i;
 const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
@@ -348,9 +358,24 @@ function findByHint(
 	return null;
 }
 
+/**
+ * True if the document is recognisably a card-capture form on evidence other than
+ * the number field itself. Unlike every targeting pass this reads hidden inputs
+ * too: a PCI capture iframe carries its transport schema in them
+ * (`sf.req.card.expiryMonth`, `cardScheme`), and naming the schema is exactly the
+ * evidence wanted here, even though such a field would never be filled.
+ */
+function cardContextPresent(partial: Omit<CardFields, "number">, doc: Document): boolean {
+	if (partial.cvv || partial.name || partial.expCombined || partial.expMonth || partial.expYear) {
+		return true;
+	}
+	return deepQueryAll<HTMLInputElement>("input", doc).some((el) =>
+		CC_CONTEXT_RE.test(attrHint(el)),
+	);
+}
+
 /** Detect credit-card fields, preferring `cc-*` autocomplete tokens over hint regexes. */
 export function detectCardFields(doc: Document = document): CardFields {
-	const number = ccByToken("cc-number", doc) ?? findByHint(CC_NUMBER_RE, undefined, false, doc);
 	const name = ccByToken("cc-name", doc) ?? findByHint(CC_NAME_RE, undefined, false, doc);
 	const expMonth =
 		ccByToken("cc-exp-month", doc) ?? findByHint(CC_EXP_MONTH_RE, undefined, false, doc);
@@ -362,7 +387,14 @@ export function detectCardFields(doc: Document = document): CardFields {
 			? (ccByToken("cc-exp", doc) ?? findByHint(CC_EXP_RE, /month|year/i, false, doc))
 			: null;
 	const cvv = ccByToken("cc-csc", doc) ?? findByHint(CC_CSC_RE, undefined, true, doc);
-	return { number, name, expCombined, expMonth, expYear, cvv };
+	const rest = { name, expCombined, expMonth, expYear, cvv };
+	// The weak pass runs last and only in card context, so an unlabelled `name="pan"`
+	// resolves on a PCI capture page without claiming a tax-ID field anywhere else.
+	const number =
+		ccByToken("cc-number", doc) ??
+		findByHint(CC_NUMBER_RE, undefined, false, doc) ??
+		(cardContextPresent(rest, doc) ? findByHint(CC_NUMBER_WEAK_RE, undefined, false, doc) : null);
+	return { number, ...rest };
 }
 
 /** True if a real card field (number/cvv/expiry) is present; a bare name field doesn't count. */

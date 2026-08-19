@@ -1,0 +1,42 @@
+<!-- hts.rogers.com Semafone e-commerce capture fragment, embedded cross-origin in
+     rogers.com's payment page as <iframe title="Enter credit card number">. Captured
+     with the inline scripts dropped; every input is verbatim.
+
+     The card number is `name="pan"` (Primary Account Number) with no label, no
+     placeholder, no autocomplete and no aria-label. The parent's iframe title is the
+     only prose that says "credit card number", and a cross-origin frame cannot read it.
+     Note the decoys: an expiry and a cardholder name exist, but only as type=hidden
+     transport fields, and the real cvc box is display:none. -->
+<input type="hidden" name="semafoneCR" id="semafoneCR" value="" />
+<input type="hidden" name="sessionId" id="sessionId" value="" />
+<input type="hidden" name="semafoneMode" id="semafoneMode" value="DISABLED" />
+<input type="hidden" name="gatewayId" id="gatewayId" value="MONERIS" />
+<input type="hidden" name="methodId" id="methodId" value="TOKENISE" />
+<input type="hidden" name="transactionType" id="transactionType" value="GetTokenPan" />
+<input type="hidden" name="currency" id="currency" value="" />
+<input type="hidden" name="cardScheme" id="cardScheme" value="" />
+<input type="hidden" name="expiryDate" id="expiryDate" value="" />
+<input type="hidden" name="startDate" id="startDate" value="" />
+<input type="hidden" name="captureMethod" id="captureMethod" value="cnp" />
+<input type="hidden" name="isPanFocusedOnInitialise" id="isPanFocusedOnInitialise" value="false" />
+<input type="hidden" name="isPanResetOnInitialFocus" id="isPanResetOnInitialFocus" value="false" />
+<input type="hidden" name="isCvcFocusedOnInitialise" id="isCvcFocusedOnInitialise" value="" />
+<input type="hidden" name="elementMaxLength" id="elementMaxLength" value="16" />
+
+<!-- Integration Module Hidden Fields -->
+<input type="hidden" name="sf.req.card.cardHolderName" id="sf.req.card.cardHolderName" value="" />
+<input type="hidden" name="sf.req.card.cardScheme" id="sf.req.card.cardScheme" value="" />
+<input type="hidden" name="sf.req.card.cardType" id="sf.req.card.cardType" value="" />
+<input type="hidden" name="sf.req.card.expiryDate" id="sf.req.card.expiryDate" value="" />
+<input type="hidden" name="sf.req.card.expiryMonth" id="sf.req.card.expiryMonth" value="" />
+<input type="hidden" name="sf.req.card.expiryYear" id="sf.req.card.expiryYear" value="" />
+<input type="hidden" name="sf.req.card.maskedPan" id="sf.req.card.maskedPan" value="" />
+
+<input style="display: inline; max-width: 743px; font-family: Yolo; font-size: 24px; max-height: 35px;" tabindex="1" type="text" name="pan" id="pan" value="" class="semafonemandatory" maxlength="16" />
+<input style="display: none; max-width: 743px; font-family: Yolo; font-size: 24px; max-height: 35px;" tabindex="2" type="text" name="maskedPan" id="maskedPan" value="" class="" maxlength="16" />
+<input style="display: none; max-width: 743px; font-family: Yolo; font-size: 24px; max-height: 35px;" tabindex="1" type="text" name="cvc" id="cvc" value="" class="semafonedisabled" maxlength="16" />
+
+<div id="buttonRow" style="display: none; padding-top: 15px; float:right;">
+	<button class="button disabled-submit" id="fragmentSubmit" name="fragmentSubmit" disabled="">Submit</button>
+	<button class="button" id="resetAll" name="resetAll">Restart</button>
+</div>
