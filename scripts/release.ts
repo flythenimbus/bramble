@@ -88,7 +88,11 @@ const version = bumpKind
 // means the store publish and the tag already happened. An installed gh is not enough.
 if (platform !== "ios") {
 	requireBins(["gh"], "docs/release-signing.md");
-	if (!ok("gh auth status")) fail("gh is not logged in; run `gh auth login`");
+	// --active, because a bare `gh auth status` exits non-zero when ANY stored account is broken,
+	// including one for a different login that this repo never uses. What a release needs is the
+	// account gh will actually act as.
+	if (!ok("gh auth status --active"))
+		fail("gh's active account cannot log in; run `gh auth login`");
 }
 
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
