@@ -1381,6 +1381,10 @@ msgstr "items"
 msgid "Items ({0})"
 msgstr "Items ({0})"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
+msgstr "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
+
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Join a device"

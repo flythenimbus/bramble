@@ -17,6 +17,7 @@ import { type ComponentType, useState } from "react";
 import {
 	type BackupFrequency,
 	type BackupTargetConfig,
+	FOREIGN_CREDS_ERROR,
 	normalizeS3,
 } from "../../../../backup/config";
 import { isOAuthConfigured, OAUTH_PROVIDERS, type OAuthProviderId } from "../../../../backup/oauth";
@@ -430,7 +431,16 @@ function TargetCard({
 						) : target.lastError ? (
 							<>
 								<p className="text-xs text-red-500 break-words" title={target.lastError}>
-									<Trans>Failed</Trans>: {target.lastError}
+									{target.lastError === FOREIGN_CREDS_ERROR ? (
+										<Trans>
+											Its credentials were entered in another vault, so this one cannot open them.
+											Edit the target and enter them again to back up now.
+										</Trans>
+									) : (
+										<>
+											<Trans>Failed</Trans>: {target.lastError}
+										</>
+									)}
 								</p>
 								{retryIn !== undefined && retryIn > 0 && (
 									<p className="text-xs text-muted-foreground truncate">

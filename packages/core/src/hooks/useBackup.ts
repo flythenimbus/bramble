@@ -9,6 +9,7 @@ import {
 	backupTargetsKeyFor,
 	clearBackoff,
 	credsAreOsHeld,
+	FOREIGN_CREDS_ERROR,
 	keyVaultIdFor,
 	migrateBackupTargetsToVaults,
 	type TargetCreds,
@@ -299,11 +300,24 @@ export function useBackup() {
 						// OS-held credentials never come back here: the platform's transport
 						// authenticates in its own process (desktop). Otherwise unwrap with the VEK.
 						const creds = t.creds;
-						const secrets = credsAreOsHeld(creds)
-							? EMPTY_SECRETS
-							: (JSON.parse(
+						// A failure here is one specific thing often enough to be worth naming: the
+						// credential belongs to another vault (the device-global list put one target
+						// in every vault, sealed under whichever entered it). The scheduled runner
+						// works around that by trying the other unlocked vaults' keys, which this
+						// path cannot reach, so it reports the situation instead of surfacing
+						// `aes decrypt: aead::Error` to somebody who can do nothing with it.
+						let secrets: BackupSecrets;
+						if (credsAreOsHeld(creds)) {
+							secrets = EMPTY_SECRETS;
+						} else {
+							try {
+								secrets = JSON.parse(
 									await crypto.decryptWithVek(creds.iv, creds.ciphertext),
-								) as BackupSecrets);
+								) as BackupSecrets;
+							} catch {
+								throw new Error(FOREIGN_CREDS_ERROR);
+							}
+						}
 						// Which transport, if any. Where the platform cannot reach a provider from
 						// this process at all (the desktop's webview has no CORS grant), BOTH cases
 						// have to route through it: the stored-credential one, and the one where we

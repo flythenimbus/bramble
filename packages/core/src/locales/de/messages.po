@@ -1381,6 +1381,10 @@ msgstr "Elemente"
 msgid "Items ({0})"
 msgstr "Elemente ({0})"
 
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
+msgstr "Die zugehörigen Zugangsdaten wurden in einem anderen Tresor eingegeben, daher kann dieser sie nicht öffnen. Bearbeiten Sie das Ziel und geben Sie sie erneut ein, um jetzt zu sichern."
+
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Join a device"

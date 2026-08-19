@@ -206,6 +206,16 @@ export function keyVaultIdFor(cfg: BackupTargetConfig, vaultId: string): string 
 	return cfg.sharedFolder ? undefined : vaultId;
 }
 
+/**
+ * `lastError` for a credential this vault cannot open, rather than the crypto error itself.
+ *
+ * A target carried over from the device-global era is in every vault's list, but its secret was
+ * sealed under whichever vault entered it, so only that one can unwrap it. Stored as a code and
+ * not a sentence: lastError is persisted, and a translated string would freeze the language it
+ * was written in. The panel renders it (see BackupSection).
+ */
+export const FOREIGN_CREDS_ERROR = "backup/foreign-creds";
+
 /** The metadata slice the target migration needs; the storage adapter satisfies it. */
 export interface BackupMetaStore {
 	getMeta<T>(key: string): Promise<T | undefined>;
