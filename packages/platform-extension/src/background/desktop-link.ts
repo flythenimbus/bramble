@@ -318,11 +318,23 @@ let linkWanted = false;
 export interface DesktopFill {
 	username: string;
 	password: string;
-	totp?: string | null;
+	/**
+	 * The authenticator KEY, not a code: the app has no TOTP implementation and sends what its
+	 * index holds. Named for what it is, because filling it as though it were a code would put
+	 * the seed on the page. The fill side computes the digits.
+	 */
+	totpKey?: string | null;
 }
 
 /** Where a fill the app asked for goes. Set by the autofill side. */
 let onFillRequest: ((fill: DesktopFill) => void) | null = null;
+
+/** A fill as the app frames it. Its `totp` is the authenticator key. */
+interface WireFill {
+	username?: string;
+	password?: string;
+	totp?: string | null;
+}
 
 /** Register the handler for a fill the desktop panel asked for. */
 export function onDesktopFillRequest(handler: (fill: DesktopFill) => void): void {
@@ -489,13 +501,13 @@ async function ensureHeld(): Promise<HeldLink | null> {
 /** Open one inbound frame and dispatch it: a sync frame to sync, anything else to the request
  * waiting for it. */
 async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
-	let parsed: { sync?: string; fill?: Partial<DesktopFill> };
+	let parsed: { sync?: string; fill?: WireFill };
 	try {
 		const plain = (await offscreen("LINK_OPEN", {
 			sessionId: link.sessionId,
 			sealed,
 		})) as string;
-		parsed = JSON.parse(plain) as { sync?: string; fill?: Partial<DesktopFill> };
+		parsed = JSON.parse(plain) as { sync?: string; fill?: WireFill };
 	} catch {
 		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
 		await dropHeld();
@@ -509,7 +521,8 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 		onFillRequest?.({
 			username: parsed.fill.username ?? "",
 			password: parsed.fill.password,
-			totp: parsed.fill.totp ?? null,
+			// `totp` on the wire, and a key rather than a code; see DesktopFill.
+			totpKey: parsed.fill.totp ?? null,
 		});
 		return;
 	}

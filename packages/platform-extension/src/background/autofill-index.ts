@@ -205,21 +205,26 @@ function queryResult(
 	return { logins, cards, otps, locked: false, hasPotentialMatch: logins.length > 0 };
 }
 
+/**
+ * The live code for an authenticator key, or undefined when there is no key or it will not
+ * parse. Every path that fills a one-time code goes through this: what an index holds is the
+ * seed, and the only part of it a page may ever see is the digits it is standing in for.
+ */
+function liveTotpCode(key: string | null | undefined): string | undefined {
+	const parsed = parseTotp(key);
+	return parsed ? totpAt(parsed.totp).code : undefined;
+}
+
 /** Resolve an entry to its fill payload. TOTP is computed live; the seed never ships. */
 function fetchFill(entryId: string): FillPayload {
 	const entry = currentIndex()?.get(entryId);
 	if (!entry) throw new Error(`entry not found: ${entryId}`);
 	if (entry.type === "login") {
-		let totp: string | undefined;
-		if (entry.totp) {
-			const parsed = parseTotp(entry.totp);
-			if (parsed) totp = totpAt(parsed.totp).code;
-		}
 		return {
 			kind: "login",
 			username: entry.username,
 			password: entry.password,
-			totp,
+			totp: liveTotpCode(entry.totp),
 			autoSubmit: entry.autoSubmit,
 			customFields: entry.customFields,
 		};
@@ -625,8 +630,20 @@ async function fillFromDesktop(fill: DesktopFill): Promise<void> {
 		console.warn("[bramble:link] fill: no active tab to fill");
 		return;
 	}
+	// The app sends the authenticator KEY, the same seed its own index holds, and the code is
+	// computed here rather than there: this is where the one TOTP implementation lives. Passing
+	// the key through would type the seed itself into the page's one-time-code field.
+	const totp = liveTotpCode(fill.totpKey);
+	if (fill.totpKey && !totp) console.warn("[bramble:link] fill: unusable authenticator key");
 	const reply = await api.tabs
-		.sendMessage(tab.id, { type: "DESKTOP_FILL", payload: fill }, { frameId: 0 })
+		.sendMessage(
+			tab.id,
+			{
+				type: "DESKTOP_FILL",
+				payload: { username: fill.username, password: fill.password, totp },
+			},
+			{ frameId: 0 },
+		)
 		.catch((e) => {
 			// No content script on this page (a settings tab, the store, a PDF), or one orphaned by
 			// an extension reload, which keeps running but can no longer answer.
