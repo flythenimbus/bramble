@@ -10,13 +10,19 @@ mod crypto;
 mod i18n;
 mod index_store;
 mod lifetime;
+// Off macOS `refresh` is one log line and everything it would have called is unreachable, because
+// the platform is not implemented (docs/desktop-port.md). CI builds on Linux with -D warnings, so
+// that is eight errors rather than eight warnings. `expect` rather than `allow`: whoever wires
+// Linux up is then told to delete this line, instead of leaving a blanket allow behind to hide the
+// next piece of genuinely dead code.
+#[cfg_attr(not(target_os = "macos"), expect(dead_code))]
 mod manifest;
 mod menu;
 mod pairing;
 mod socket;
+mod secure_store;
 // Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
 // SOCKET_NAME from it and the rest is live over there.
-mod secure_store;
 #[allow(dead_code)]
 mod socket_addr;
 mod spotlight;
