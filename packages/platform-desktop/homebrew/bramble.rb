@@ -7,8 +7,8 @@
 # Three stanzas below are decisions rather than boilerplate. See docs/desktop-port.md.
 
 cask "bramble" do
-  version "0.2.0"
-  sha256 "1154e9cbb64c135b8bccd5218a2c410896aa67996e9f754678034a45a605765e"
+  version "0.3.0"
+  sha256 "3cdd2e4f34d919911813e8d55afdce43c2be3c98cc9cf28a142648fa99266a79"
 
   url "https://github.com/flythenimbus/bramble/releases/download/#{version}-desktop/Bramble_#{version}_universal.dmg",
       verified: "github.com/flythenimbus/bramble/"

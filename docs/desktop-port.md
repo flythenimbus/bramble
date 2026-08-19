@@ -40,7 +40,7 @@ and is marked `[unverified]`. Do a research pass before committing to any of tho
 
 ## Implementation status
 
-**Shipping: 0.2.0 is released for macOS, signed and notarized, with a Linux channel behind it.**
+**Shipping: 0.3.0 is released for macOS, signed and notarized, with a Linux channel behind it.**
 The sections below this one are the original forward-looking analysis, still accurate for the
 unbuilt parts; this section and [Proposed plan](#proposed-plan) are the ground truth, and the plan
 is the better place to look for what is left.
