@@ -1,6 +1,7 @@
-// Decides whether a focused password field belongs to an account-creation flow
-// (signup / password-reset) so we can offer a generated strong password, without
-// firing on ordinary login pages. See docs/field-detection.md ("Signup detection").
+// Decides whether a focused password field belongs to a flow that SETS a password
+// (signup, password reset, forced rotation, change form) so we can offer a
+// generated strong password, without firing on ordinary login pages. See
+// docs/field-detection.md ("Signup detection").
 //
 // Design: lean on LANGUAGE-INDEPENDENT structural signals (autocomplete tokens,
 // a confirm-password pair, name fields, terms/privacy links, minlength/pattern, a
@@ -8,6 +9,11 @@
 // text (submit-button / heading keywords) is a booster only, via a small
 // multilingual dictionary. Each signal carries a weight; we offer above THRESHOLD.
 // A current-password field vetoes outright (login or password-change, not signup).
+//
+// Setting a password is not the same as creating an account: a reset link and a
+// forced rotation both set a password for an account that already exists. The
+// score decides whether to OFFER; `isAccountCreationForm` separately decides
+// whether the result is a new login or a rotation of the saved one.
 
 import {
 	attrHint,
@@ -16,6 +22,7 @@ import {
 	deepQueryAll,
 	isRendered,
 	labelText,
+	USERNAME_HINT_RE,
 } from "./detection";
 
 // --- Signal weights (tune here). Either STRONG signal alone reaches THRESHOLD. ---
@@ -27,12 +34,14 @@ export const WEIGHTS = {
 	nameField: 30, // given-name / family-name / name input in scope
 	signupUrl: 40, // /signup, /register, /join, ... in the path
 	signupText: 40, // signup keyword on a submit button / heading / title
+	setPasswordAction: 40, // the form's own submit control says "set/change/reset password"
 	createHint: 35, // new/create/choose/confirm hint on the field or its label
-	pwRules: 20, // the field has a pattern or minlength >= 8
+	identifiedAccount: 30, // no editable username field: the account is already known
+	pwRules: 20, // the field carries a password policy (pattern / minlength / passwordrules)
 	strengthMeter: 20, // a strength meter / requirements element in scope
 	largeForm: 15, // more than 4 rendered inputs in scope (registration is long)
-	loginUrl: -40, // /login, /signin, ... in the path
-	loginText: -35, // "remember me" / "forgot password" near the form
+	loginUrl: -40, // /login, /signin, ... in the path (applied only sans STRONG)
+	loginText: -35, // "remember me" / "forgot password" near the form (only sans STRONG)
 	returningUser: -40, // saved logins already exist here (applied only sans STRONG)
 } as const;
 
@@ -103,6 +112,85 @@ const SIGNUP_TERMS = [
 	"załóż konto",
 ];
 
+// Multilingual "set a password" keywords, matched against the FORM's own submit
+// controls only. Two things keep these safe. Scoping to the form: a login page
+// links to "reset password", but a login form's own button never says it. And
+// pairing a verb with the noun: a bare "password" would match the "Show password"
+// toggle that sits inside plenty of login forms.
+const SET_PASSWORD_TERMS = [
+	// en
+	"set password",
+	"set a password",
+	"set your password",
+	"set new password",
+	"create password",
+	"create a password",
+	"create new password",
+	"choose a password",
+	"choose password",
+	"change password",
+	"change your password",
+	"update password",
+	"reset password",
+	"reset your password",
+	"save password",
+	"new password",
+	"confirm password",
+	// es
+	"cambiar contrase",
+	"crear contrase",
+	"restablecer contrase",
+	"nueva contrase",
+	// fr
+	"changer le mot de passe",
+	"modifier le mot de passe",
+	"nouveau mot de passe",
+	"réinitialiser le mot de passe",
+	"reinitialiser le mot de passe",
+	// de
+	"passwort ändern",
+	"passwort andern",
+	"passwort festlegen",
+	"passwort erstellen",
+	"passwort zurücksetzen",
+	"passwort zurucksetzen",
+	"neues passwort",
+	// nl
+	"wachtwoord wijzigen",
+	"wachtwoord instellen",
+	"nieuw wachtwoord",
+	// pt
+	"alterar senha",
+	"criar senha",
+	"redefinir senha",
+	"nova senha",
+	// it
+	"cambia password",
+	"modifica password",
+	"nuova password",
+	// sv
+	"nytt lösenord",
+	"ändra lösenord",
+	// ru
+	"изменить пароль",
+	"новый пароль",
+	// zh
+	"新密码",
+	"修改密码",
+	// ja
+	"パスワードを変更",
+	"新しいパスワード",
+	// ko
+	"비밀번호 변경",
+	"새 비밀번호",
+	// tr
+	"şifre değiştir",
+	"yeni şifre",
+	// pl
+	"zmień hasło",
+	"nowe hasło",
+];
+
 // Login-only phrases; safe as a negative because they rarely appear on signup
 // forms (unlike "sign in", which shows up as an "already have an account?" link).
 const LOGIN_TERMS = [
@@ -117,11 +205,22 @@ const LOGIN_TERMS = [
 	"password dimenticata",
 ];
 
+/**
+ * Everything a field says about itself: the shared attribute hint plus `title`
+ * and its label. `attrHint` deliberately omits `title` (it feeds card and OTP
+ * detection too, where tooltips are noise), but on a password field the tooltip
+ * is often the only place the intent is written -- Angular Material and friends
+ * put "Enter your new password" there while the visible label is just a float.
+ */
+function fieldHint(el: HTMLInputElement): string {
+	return `${attrHint(el)} ${el.title} ${labelText(el)}`;
+}
+
 /** True if the field's autocomplete token / hints mark it as the *current* password. */
 function isCurrentPassword(el: HTMLInputElement): boolean {
 	const ac = el.autocomplete?.toLowerCase() ?? "";
 	if (ac.split(/\s+/).includes("current-password")) return true;
-	return CURRENT_PASSWORD_RE.test(`${attrHint(el)} ${labelText(el)}`);
+	return CURRENT_PASSWORD_RE.test(fieldHint(el));
 }
 
 /** True if the field's autocomplete token marks it as a *new* password. */
@@ -146,18 +245,38 @@ export function signupPasswordFields(field: HTMLInputElement): HTMLInputElement[
 	return all;
 }
 
+const BUTTON_SELECTOR = 'button, [role="button"], input[type="submit"], input[type="button"]';
+
+/**
+ * Everything a control says: its visible text (or `value`, for an input) plus
+ * `title` and `aria-label`. Icon buttons and design-system wrappers keep the real
+ * label in an attribute, so a submit can render "Continue" while its title says
+ * "Change Password".
+ */
+function controlText(el: HTMLElement): string {
+	const text = el instanceof HTMLInputElement ? el.value : (el.textContent ?? "");
+	return `${text} ${el.title} ${el.getAttribute("aria-label") ?? ""}`;
+}
+
 function collectSignupText(scope: ParentNode, doc: Document): string {
 	const parts: string[] = [];
-	for (const el of deepQueryAll<HTMLElement>(
-		'button, [role="button"], input[type="submit"], input[type="button"]',
-		scope,
-	)) {
-		if (el instanceof HTMLInputElement) parts.push(el.value);
-		else parts.push(el.textContent ?? "");
-	}
+	for (const el of deepQueryAll<HTMLElement>(BUTTON_SELECTOR, scope)) parts.push(controlText(el));
 	for (const h of doc.querySelectorAll("h1, h2, legend")) parts.push(h.textContent ?? "");
 	parts.push(doc.title);
 	return parts.join(" ").toLowerCase();
+}
+
+/**
+ * True if a submit control in the form says "set/change/reset a password". Unlike
+ * `collectSignupText` this never leaves the form: page headings and the title
+ * describe the shell, and a login page's shell says "password" constantly.
+ */
+function hasSetPasswordAction(scope: ParentNode): boolean {
+	for (const el of deepQueryAll<HTMLElement>(BUTTON_SELECTOR, scope)) {
+		const hay = controlText(el).toLowerCase();
+		if (SET_PASSWORD_TERMS.some((term) => hay.includes(term))) return true;
+	}
+	return false;
 }
 
 /** True if any terms-of-service / privacy link or agree checkbox sits in the form. */
@@ -190,6 +309,55 @@ function hasNameField(scope: ParentNode): boolean {
 		if (NAME_HINT_RE.test(`${attrHint(el)} ${labelText(el)}`)) return true;
 	}
 	return false;
+}
+
+/**
+ * True if the element is parked outside the document, the `left:-9999px` idiom for
+ * hiding a field from sight while keeping it in the form. `isRendered` can't see
+ * this: the box has real dimensions and is neither `display:none` nor transparent.
+ * Compared in DOCUMENT coordinates, so a field merely scrolled out of view (whose
+ * viewport rect is also negative) is still counted as on-screen.
+ */
+function isOffscreen(el: Element): boolean {
+	const rect = el.getBoundingClientRect();
+	const view = el.ownerDocument?.defaultView;
+	const x = rect.left + (view?.scrollX ?? 0);
+	const y = rect.top + (view?.scrollY ?? 0);
+	return x + rect.width <= 0 || y + rect.height <= 0;
+}
+
+/**
+ * True if the form has no username field the user could still fill in: absent, or
+ * present but hidden / readonly / already populated.
+ *
+ * This is what separates SETTING a password from CREATING an account. A signup
+ * form asks for the identifier; a reset link, a forced rotation and a change form
+ * already know who you are, so the identifier is either gone, readonly, or --
+ * following the WHATWG guidance that lets password managers associate the
+ * credential -- parked off-screen with `position:absolute; left:-9999px`.
+ */
+function hasIdentifiedAccount(scope: ParentNode): boolean {
+	for (const el of deepQueryAll<HTMLInputElement>("input", scope)) {
+		if (el.type === "hidden" || el.type === "password") continue;
+		// Deliberately not keyed on `value`: a signup form's email is populated the
+		// moment the user types it, and that must not reclassify the form.
+		if (el.readOnly || el.disabled) continue;
+		if (!isRendered(el) || isOffscreen(el)) continue;
+		const ac = (el.autocomplete?.toLowerCase() ?? "").split(/\s+/);
+		const looksLikeUsername =
+			el.type === "email" ||
+			ac.includes("username") ||
+			ac.includes("email") ||
+			USERNAME_HINT_RE.test(attrHint(el));
+		if (looksLikeUsername) return false;
+	}
+	return true;
+}
+
+/** True if the field advertises a password policy: a pattern, a minimum, or Safari's `passwordrules`. */
+function hasPasswordPolicy(field: HTMLInputElement): boolean {
+	if (field.hasAttribute("pattern") || field.hasAttribute("passwordrules")) return true;
+	return field.minLength >= 8;
 }
 
 /** True if scope shows a password strength meter or requirements element. */
@@ -255,24 +423,32 @@ export function scoreSignupForm(
 
 	const path = `${location.pathname}${location.search}`;
 	if (SIGNUP_URL_RE.test(path)) add(WEIGHTS.signupUrl, "signup-url");
-	if (LOGIN_URL_RE.test(path)) add(WEIGHTS.loginUrl, "login-url");
 
 	const hay = collectSignupText(scope, doc);
 	if (SIGNUP_TERMS.some((t) => hay.includes(t))) add(WEIGHTS.signupText, "signup-text");
-	if (LOGIN_TERMS.some((t) => hay.includes(t))) add(WEIGHTS.loginText, "login-text");
+	if (form && hasSetPasswordAction(form)) add(WEIGHTS.setPasswordAction, "set-password-action");
 
-	if (CREATE_HINT_RE.test(`${attrHint(field)} ${labelText(field)}`)) {
-		add(WEIGHTS.createHint, "create-hint");
-	}
-	if (field.hasAttribute("pattern") || field.minLength >= 8) add(WEIGHTS.pwRules, "pw-rules");
+	if (CREATE_HINT_RE.test(fieldHint(field))) add(WEIGHTS.createHint, "create-hint");
+	if (form && hasIdentifiedAccount(form)) add(WEIGHTS.identifiedAccount, "identified-account");
+	if (hasPasswordPolicy(field)) add(WEIGHTS.pwRules, "pw-rules");
 	if (hasStrengthMeter(field, scope)) add(WEIGHTS.strengthMeter, "strength-meter");
 	if (countRenderedInputs(scope) > 4) add(WEIGHTS.largeForm, "large-form");
 
+	// The negatives describe the PAGE (its route, its surrounding prose), so a STRONG
+	// structural signal about the FORM overrules them: a rendered confirm pair means
+	// two password boxes to set, and no login form has ever had two. Without that proof
+	// they still apply, which is what keeps us off an ordinary /login page. Same carve-out
+	// as the returning-user damper below, and for the same reason: a reset link commonly
+	// lands on /auth/... under a heading that says "forgot password".
+	const structural = strongToken || confirmPair || changeForm;
+	if (!structural) {
+		if (LOGIN_URL_RE.test(path)) add(WEIGHTS.loginUrl, "login-url");
+		if (LOGIN_TERMS.some((t) => hay.includes(t))) add(WEIGHTS.loginText, "login-text");
+	}
+
 	// Returning-user damper: don't nag when the site already has saved logins,
 	// unless a STRONG structural signal makes account creation / rotation unambiguous.
-	if (opts.hasExistingLogins && !strongToken && !confirmPair && !changeForm) {
-		add(WEIGHTS.returningUser, "returning-user");
-	}
+	if (opts.hasExistingLogins && !structural) add(WEIGHTS.returningUser, "returning-user");
 
 	return { score, veto: false, signals };
 }
@@ -303,13 +479,23 @@ export function isPasswordChangeForm(field: HTMLInputElement): boolean {
 }
 
 /**
- * True if `field` is the new-password field of an account-creation form (signup / reset),
- * not a login or a password-change form. Unlike `shouldSuggestPassword` this ignores whether
- * the field is empty, so a capture can be classified at submit time.
+ * True if `field` is the new-password field of a form that creates an ACCOUNT, not one
+ * that merely sets a password on an account that already exists (a reset link, a forced
+ * rotation, a change form). Unlike `shouldSuggestPassword` this ignores whether the field
+ * is empty, so a capture can be classified at submit time.
+ *
+ * The caller uses this to force a fresh save past dedupe, because signing up a second time
+ * on a site you already have a login for really is a new credential. Setting a password is
+ * not: routing it through dedupe offers "Update" when a saved login matches and "Save" when
+ * none does, which is right either way -- and the update prompt still has "Save as new".
  */
 export function isAccountCreationForm(field: HTMLInputElement): boolean {
 	if (field.type !== "password") return false;
 	if (isPasswordChangeForm(field)) return false;
+	const form = scopeFormOf(field);
+	// An identified account is one we could already have saved; only a form that still
+	// asks for the identifier is creating one.
+	if (form && hasIdentifiedAccount(form)) return false;
 	const { score, veto } = scoreSignupForm(field);
 	return !veto && score >= THRESHOLD;
 }

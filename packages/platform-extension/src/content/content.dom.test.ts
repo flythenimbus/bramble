@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	defaultOffscreen,
 	extensionSender,
@@ -315,6 +315,20 @@ describe("content: refresh the picker on unlock (issue #20)", () => {
 
 describe("content: strong-password suggestion on signup", () => {
 	beforeEach(() => {
+		// jsdom has no layout, so every box is 0x0 and isRendered() would reject the
+		// email field -- making this signup form look like one whose account is already
+		// identified. Give inputs a real box.
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
 		showMatches.mockClear();
 		removePicker.mockClear();
 		safeSendMessage.mockClear();
@@ -331,6 +345,12 @@ describe("content: strong-password suggestion on signup", () => {
 				<button type="submit">Create account</button>
 			</form>`;
 		invalidatePageFields();
+	});
+
+	// The rect spy is global to Element.prototype; the describes below rely on the
+	// unlaid-out default, so it must not outlive this one.
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	const lastSuggest = () =>
@@ -426,18 +446,6 @@ describe("content: strong-password suggestion on signup", () => {
 	});
 
 	it("captures a change-form suggestion as a rotation, not a new login", () => {
-		// jsdom has no layout; give inputs a box so isRendered() sees the current-password sibling.
-		const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
-			width: 200,
-			height: 24,
-			top: 0,
-			left: 0,
-			right: 200,
-			bottom: 24,
-			x: 0,
-			y: 0,
-			toJSON: () => ({}),
-		} as DOMRect);
 		document.body.innerHTML = `
 			<form>
 				<input id="cur" type="password" name="current" autocomplete="current-password" />
@@ -458,7 +466,6 @@ describe("content: strong-password suggestion on signup", () => {
 				payload: expect.objectContaining({ newLogin: false }),
 			}),
 		);
-		rect.mockRestore();
 	});
 
 	it("swaps in a fresh suggestion on regenerate", () => {

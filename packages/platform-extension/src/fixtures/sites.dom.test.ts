@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	candidateKind,
 	cardFieldsPresent,
@@ -12,6 +12,12 @@ import {
 	otpInputs,
 	splitOtpFields,
 } from "../content/detection";
+import {
+	isAccountCreationForm,
+	scoreSignupForm,
+	shouldSuggestPassword,
+	signupPasswordFields,
+} from "../content/signup-detect";
 import { loadFixture } from "./load";
 
 beforeEach(() => {
@@ -620,5 +626,99 @@ describe("skanetrafiken.se — Mitt konto (Swedish, formless)", () => {
 	it("doesn't detect any card fields", () => {
 		loadFixture("skanetrafiken-login");
 		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+});
+
+describe("angular design-system — set a new password (reset / forced rotation)", () => {
+	// Reported as "the password suggestion never shows". The form is the awkward
+	// middle of the set-password class: no `autocomplete="new-password"` (the form
+	// is `autocomplete="off"`), no current-password box to mark it a change form, no
+	// minlength or pattern, no <meter>, and a submit button that reads "Continue".
+	// What it does have is a confirm pair, the intent in `title` attributes, and the
+	// WHATWG hidden-username companion parked at `left: -9999px`.
+
+	beforeEach(() => {
+		// jsdom has no layout; give elements a box so isRendered() sees the pair.
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	const newPassword = (): HTMLInputElement =>
+		document.querySelector<HTMLInputElement>("#newPassword")!;
+
+	it("identifies the login fields through the design-system wrappers", () => {
+		loadFixture("angular-ds-set-password");
+		const { username, password } = detectLoginFields();
+		expect(username?.id).toBe("username");
+		expect(password?.id).toBe("newPassword");
+	});
+
+	it("classifies the new-password field as a login candidate", () => {
+		loadFixture("angular-ds-set-password");
+		expect(candidateKind(newPassword())).toBe("login");
+	});
+
+	it("offers a generated password on the new-password field", () => {
+		loadFixture("angular-ds-set-password");
+		expect(shouldSuggestPassword(newPassword())).toBe(true);
+	});
+
+	it("still offers under a login route, where reset links land", () => {
+		// The regression: confirm-pair (100) + create-hint (35) used to sit at 135,
+		// and a single login-url (-40) sank it under the threshold of 100.
+		window.history.replaceState({}, "", "/auth/reset-password");
+		loadFixture("angular-ds-set-password");
+		expect(shouldSuggestPassword(newPassword())).toBe(true);
+		window.history.replaceState({}, "", "/");
+	});
+
+	it("reads the intent from the title attributes, not the visible text", () => {
+		// The label is a float ("New password"), the submit button renders "Continue",
+		// and the intent lives in title="Enter your new password" / title="Change Password".
+		loadFixture("angular-ds-set-password");
+		expect(scoreSignupForm(newPassword()).signals).toEqual(
+			expect.arrayContaining(["confirm-pair", "create-hint", "set-password-action"]),
+		);
+	});
+
+	it("fills both the new-password and confirm fields", () => {
+		loadFixture("angular-ds-set-password");
+		expect(signupPasswordFields(newPassword()).map((el) => el.id)).toEqual([
+			"newPassword",
+			"confirmPassword",
+		]);
+	});
+
+	it("captures as a rotation, not a new login (the account already exists)", () => {
+		loadFixture("angular-ds-set-password");
+		const user = document.querySelector<HTMLInputElement>("#username")!;
+		// The username companion sits in a `left: -9999px` wrapper; jsdom lays out
+		// nothing, so the off-screen position has to come from the rect.
+		vi.spyOn(user, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: -9999,
+			right: -9799,
+			bottom: 24,
+			x: -9999,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		expect(scoreSignupForm(newPassword()).signals).toContain("identified-account");
+		expect(isAccountCreationForm(newPassword())).toBe(false);
 	});
 });

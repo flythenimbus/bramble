@@ -201,6 +201,118 @@ describe("shouldSuggestPassword — declines on login and edge cases", () => {
 	});
 });
 
+describe("shouldSuggestPassword — set-password forms (reset / rotation)", () => {
+	it("offers on a confirm pair even under a login route", () => {
+		// A reset link commonly lands under /auth or /login. Two rendered non-current
+		// password boxes are structural proof this isn't the login form the route names.
+		path("/auth/reset-password");
+		loadHTML(`
+			<form autocomplete="off">
+				<input type="password" id="newPassword" name="password" />
+				<input type="password" id="confirmPassword" name="confirm password" />
+				<button type="submit">Continue</button>
+			</form>
+		`);
+		expect(shouldSuggestPassword(pw(0))).toBe(true);
+	});
+
+	it("offers on a confirm pair under a 'forgot password' heading", () => {
+		document.title = "Forgot password";
+		loadHTML(`
+			<h1>Forgot your password?</h1>
+			<form>
+				<input type="password" name="new" />
+				<input type="password" name="confirm" />
+			</form>
+		`);
+		expect(shouldSuggestPassword(pw(0))).toBe(true);
+		document.title = "";
+	});
+
+	it("reads the intent out of the field's title when the visible label is a float", () => {
+		// Angular Material and friends put the intent in the tooltip, not the label.
+		path("/portal/security");
+		loadHTML(`
+			<form>
+				<input type="password" id="pw" name="password" title="Enter your new password" />
+				<button type="submit" title="Change Password">Continue</button>
+			</form>
+		`);
+		const { signals } = scoreSignupForm(pw());
+		expect(signals).toEqual(expect.arrayContaining(["create-hint", "set-password-action"]));
+		expect(shouldSuggestPassword(pw())).toBe(true);
+	});
+
+	it("scores an off-screen username companion as an identified account", () => {
+		loadHTML(`
+			<form>
+				<div id="hidden-user"><input type="email" name="username" autocomplete="username" /></div>
+				<input type="password" name="password" title="Enter your new password" />
+			</form>
+		`);
+		// Only the wrapper is parked off-screen; isRendered() can't see that, so the rect
+		// for the username input has to say so.
+		const user = document.querySelector<HTMLInputElement>('input[name="username"]')!;
+		vi.spyOn(user, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: -9999,
+			right: -9799,
+			bottom: 24,
+			x: -9999,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		expect(scoreSignupForm(pw()).signals).toContain("identified-account");
+	});
+
+	it("does not call a visible username field an identified account", () => {
+		loadHTML(`
+			<form>
+				<input type="email" name="username" autocomplete="username" />
+				<input type="password" name="password" />
+			</form>
+		`);
+		expect(scoreSignupForm(pw()).signals).not.toContain("identified-account");
+	});
+
+	it("declines on a login form whose only 'password' text is a show-password toggle", () => {
+		path("/login");
+		loadHTML(`
+			<form>
+				<input type="email" name="email" />
+				<input type="password" name="password" />
+				<button type="button" title="Show password" aria-label="Show password"></button>
+				<button type="submit">Sign in</button>
+			</form>
+		`);
+		expect(shouldSuggestPassword(pw())).toBe(false);
+	});
+
+	it("declines on a login form under a login route with a hidden username", () => {
+		// The password step of a two-step login: identified account, one password box.
+		path("/login/password");
+		loadHTML(`
+			<form>
+				<input type="email" name="username" autocomplete="username" readonly value="me@example.com" />
+				<input type="password" name="password" />
+				<button type="submit">Sign in</button>
+			</form>
+		`);
+		expect(shouldSuggestPassword(pw())).toBe(false);
+	});
+
+	it("counts Safari's passwordrules as a password policy", () => {
+		loadHTML(`
+			<form>
+				<input type="password" name="password" passwordrules="minlength: 15; allowed: unicode;" />
+			</form>
+		`);
+		expect(scoreSignupForm(pw()).signals).toContain("pw-rules");
+	});
+});
+
 describe("returning-user damper", () => {
 	const weakSignupForm = `
 		<form>
@@ -277,7 +389,10 @@ describe("isPasswordChangeForm / isAccountCreationForm (save-new vs update inten
 		expect(isAccountCreationForm(pw())).toBe(true);
 	});
 
-	it("treats a reset form (new + confirm, no current) as account creation", () => {
+	it("treats a reset form (new + confirm, no identifier) as a rotation, not creation", () => {
+		// No identifier to fill in means the account already exists: the reset link
+		// identified it. Forcing a fresh save here duplicates the saved login; letting
+		// dedupe decide offers "Update" instead, and still offers "Save" if none matches.
 		loadHTML(`
 			<form>
 				<input type="password" name="new" />
@@ -285,7 +400,30 @@ describe("isPasswordChangeForm / isAccountCreationForm (save-new vs update inten
 			</form>
 		`);
 		expect(isPasswordChangeForm(pw(0))).toBe(false);
-		expect(isAccountCreationForm(pw(0))).toBe(true);
+		expect(isAccountCreationForm(pw(0))).toBe(false);
+		// It is still a form we should offer a generated password on.
+		expect(shouldSuggestPassword(pw(0))).toBe(true);
+	});
+
+	it("still treats a signup form as account creation once the email is typed in", () => {
+		loadHTML(`
+			<form>
+				<input type="email" autocomplete="email" value="me@example.com" />
+				<input type="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>
+		`);
+		expect(isAccountCreationForm(pw())).toBe(true);
+	});
+
+	it("treats a reset form with a readonly identifier as a rotation", () => {
+		loadHTML(`
+			<form>
+				<input type="email" autocomplete="username" value="me@example.com" readonly />
+				<input type="password" name="new" autocomplete="new-password" />
+			</form>
+		`);
+		expect(isAccountCreationForm(pw())).toBe(false);
 	});
 
 	it("does not treat a login form as account creation", () => {

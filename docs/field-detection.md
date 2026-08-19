@@ -167,10 +167,10 @@ unconfirmed password is never captured.
 
 ## Signup detection
 
-`signup-detect.ts` decides whether a focused password field belongs to an
-account-creation or password-rotation flow (signup, password-reset, or a
-change-password form) so the autofill dropdown can offer a **generated strong
-password** (`password-gen.ts`) without firing on ordinary login pages. See
+`signup-detect.ts` decides whether a focused password field belongs to a flow that
+**sets** a password (signup, password reset, forced rotation, or a change-password
+form) so the autofill dropdown can offer a **generated strong password**
+(`password-gen.ts`) without firing on ordinary login pages. See
 [autofill.md](autofill.md) for the dropdown row and the save/update flow.
 
 The design principle is to lean on **language-independent structural signals** so
@@ -183,15 +183,33 @@ weighted signals (all in `WEIGHTS`, tune there) and offers above `THRESHOLD`
   a change form (a `current-password` sibling while the focused field is not it,
   marking the focused field as the new password to rotate to).
 - **Supporting (structural, language-independent):** a terms/privacy link or agree
-  checkbox in the form, a name field (`given-name`/`family-name`), the field's
-  `pattern`/`minlength>=8`, a strength meter (`<meter>`/`role=progressbar`), and a
-  long form (>4 inputs).
-- **Supporting (text, boosters only):** the URL path (`/signup`, `/register`, …)
-  and a small multilingual keyword dictionary matched against submit buttons,
-  headings, and the title.
+  checkbox in the form, a name field (`given-name`/`family-name`), a password policy
+  on the field (`pattern`, `minlength>=8`, or Safari's `passwordrules`), a strength
+  meter (`<meter>`/`role=progressbar`), an identified account (below), and a long
+  form (>4 inputs).
+- **Supporting (text, boosters only):** the URL path (`/signup`, `/register`, …), a
+  small multilingual keyword dictionary matched against submit buttons, headings and
+  the title, and a set-password keyword on the form's own submit control.
 - **Negative:** login URLs, "forgot password"/"remember me" text, and a
-  returning-user damper when the site already has saved logins (skipped when a
-  strong signal fires).
+  returning-user damper when the site already has saved logins.
+
+The negatives describe the **page** (its route, its surrounding prose), so all three
+are skipped when a strong structural signal describes the **form**. A rendered
+confirm pair means two password boxes to set, and no login form has two; the route
+and the heading are then talking about the shell around the form, not the form. This
+is what a reset link needs, because it routinely lands on `/auth/…` under a heading
+that says "forgot password" — that combination alone used to cost 75 points and sink
+an otherwise unambiguous form.
+
+Two smaller surfaces matter more than they look. Design-system forms often render a
+floating label and a generic submit ("Continue") while the real intent sits in
+`title` / `aria-label`, so this module reads a wider hint surface than `attrHint`
+gives it (which stays narrow because card and OTP detection share it, where tooltips
+are noise). And the set-password keyword list is matched **only against the form's
+own submit controls**, never page text: a login page links to "reset password" all
+the time, but a login form's own button never says it. The terms pair a verb with the
+noun for the same reason — a bare "password" would match the "Show password" toggle
+that sits inside plenty of login forms.
 
 The veto is narrow: only when the **focused** field is itself a `current-password`
 (a login field, or the "old password" box on a change form) do we suppress. A
@@ -202,6 +220,31 @@ enclosing `<form>` when present, else the document; visibility is gated by
 pair. The offer is also suppressed once the field holds a value (the user is typing
 their own). Exercised by `signup-detect.dom.test.ts`.
 
+### Setting a password is not creating an account
+
+Offering a generated password and deciding what to do with the result are separate
+questions. `isAccountCreationForm` answers the second, and the caller uses it to
+force a fresh save **past dedupe** — because signing up a second time on a site you
+already have a login for really is a new credential.
+
+Setting a password is not. A reset link, a forced rotation and a change form all set
+a password on an account that already exists, so they route through dedupe instead,
+which offers "Update" when a saved login matches and "Save" when none does. (The
+update prompt still carries a "Save as new" button, so the user can overrule it
+either way.) Forcing a save there duplicates the saved login, which is what happens
+if the only test is "no current-password box" — a reset form doesn't have one.
+
+The discriminator is whether the form still asks **who you are**:
+`hasIdentifiedAccount` looks for a username/email field the user could fill in, and
+finds none when it is absent, `readonly`, `disabled`, hidden, or parked off-screen.
+That last case is the WHATWG-recommended reset pattern — a `autocomplete="username"`
+companion at `position:absolute; left:-9999px`, there so password managers can
+associate the credential — and `isRendered` cannot see it, since the box has real
+dimensions and is neither `display:none` nor transparent. `isOffscreen` compares in
+**document** coordinates so a field merely scrolled out of view still counts as
+on-screen. The check deliberately ignores `value`: a signup form's email is populated
+the moment the user types it.
+
 ## Fixtures
 
 `fixtures/sites.dom.test.ts` runs the detectors against real HTML captured from
@@ -210,6 +253,12 @@ others). This locks in behaviour on real-world quirks: honeypots, off-screen
 hidden fields, missing `<form>` wrappers, custom component libraries, GitHub's
 tokenless `name="otp"` 2FA field, BMO's card-number-as-login, and invisible
 Turnstile that must not block autofill.
+
+`angular-ds-set-password` is the set-password class at its most awkward, and the
+form the suggestion used to miss: `autocomplete="off"` on the form and no
+`new-password` token, no current-password box, no `minlength`, no `pattern`, no
+`<meter>`, a submit that reads "Continue", and the only statements of intent in
+`title` attributes and an off-screen username companion.
 
 `cloudflare-2fa` is the segmented-widget shape in full: six boxes with no
 `maxlength`, a hidden mirror, and `autocomplete="one-time-code"` on all seven.

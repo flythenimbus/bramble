@@ -39,7 +39,11 @@ import {
 	showRelayed,
 } from "./relay-client";
 import { closeRelayHost, showRelayHost } from "./relay-host";
-import { isPasswordChangeForm, shouldSuggestPassword, signupPasswordFields } from "./signup-detect";
+import {
+	isAccountCreationForm,
+	shouldSuggestPassword,
+	signupPasswordFields,
+} from "./signup-detect";
 import type {
 	AutofillQueryResponse,
 	AutofillSelectResponse,
@@ -407,9 +411,10 @@ function applyGeneratedPassword(field: HTMLInputElement): void {
 	if (!fillPasswordFields(signupPasswordFields(field), pw)) return;
 	// Grab whatever username/email the user already typed; the password is ours.
 	const username = getPageFields().login.username?.value ?? "";
-	// A signup creates a NEW login; a change form rotates the existing one. Tell the background
-	// so a login already saved for this site doesn't turn a signup into an "update".
-	const newLogin = !isPasswordChangeForm(field);
+	// A signup creates a NEW login; setting a password (reset, rotation, change form) rotates
+	// the existing one. Tell the background so a login already saved for this site doesn't turn
+	// a signup into an "update" -- and, just as importantly, so a reset doesn't duplicate it.
+	const newLogin = isAccountCreationForm(field);
 	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw, newLogin } });
 }
 
