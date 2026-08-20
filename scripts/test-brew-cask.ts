@@ -12,6 +12,11 @@
 // audit, a livecheck against the real GitHub API, and a real download whose checksum is verified.
 // The install, Gatekeeper and the zap round trip are the only parts that need a Mac.
 //
+// On macOS it runs against the local brew and skips Docker entirely. Not for speed: four of the
+// audit's checks mount the disk image to look inside the .app, which only macOS can do, so the
+// container is a strictly weaker run of the same script. Docker is what makes the check possible
+// on the machine that has no Homebrew.
+//
 // The expected version comes from the update manifest rather than the working tree, because the
 // cask has to point at a release that exists, not at whatever version is being developed.
 
@@ -27,14 +32,40 @@ const CASK = "packages/platform-desktop/homebrew/bramble.rb";
 const SCRIPT = "e2e/brew/cask-test.sh";
 const MANIFEST = "website/public/desktop/latest.json";
 
-const dockerIssue = dockerProblem();
-if (dockerIssue) {
-	console.error(dockerIssue);
-	process.exit(1);
+// Only the container path needs Docker, and a Mac with brew never takes it.
+const nativeBrew = process.platform === "darwin" && hasBrew();
+if (!nativeBrew) {
+	const dockerIssue = dockerProblem();
+	if (dockerIssue) {
+		console.error(dockerIssue);
+		process.exit(1);
+	}
+}
+
+function hasBrew() {
+	try {
+		execFileSync("brew", ["--version"], { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 const { version } = JSON.parse(readFileSync(join(ROOT, MANIFEST), "utf8")) as { version: string };
 console.log(`the released desktop version is ${version} (${MANIFEST})`);
+
+if (nativeBrew) {
+	try {
+		execFileSync("bash", [join(ROOT, SCRIPT), version, join(ROOT, CASK)], {
+			stdio: "inherit",
+			cwd: ROOT,
+		});
+	} catch {
+		console.error("\n\x1b[1;31mFAILED\x1b[0m: brew cask");
+		process.exit(1);
+	}
+	process.exit(0);
+}
 
 try {
 	execFileSync(

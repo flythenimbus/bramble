@@ -882,7 +882,7 @@ which the repository's star count clears the notability bar for. Keeping a copy 
 `pnpm run test:brew` check it against the live release, and it means a release that renames an
 artifact fails a test rather than a stranger's `brew install`.
 
-Three stanzas in it are decisions rather than boilerplate:
+Four stanzas in it are decisions rather than boilerplate:
 
 - **`livecheck` uses `strategy :github_releases`, not the default `:github_latest`.** This is the
   same `/releases/latest` trap that already bit the update manifest (below): the endpoint means the
@@ -901,6 +901,13 @@ Three stanzas in it are decisions rather than boilerplate:
   reach the Keychain, so backup credentials survive it. The globs beside it remove the
   native-messaging manifests the app writes into other browsers' support directories, which would
   otherwise point a browser at a proxy binary that no longer exists.
+- **`depends_on :macos`, bare, and no `verified:` on the `url`.** Both came out of a brew 6
+  audit and neither is optional. The stanza is required on a macOS-only cask; the versioned
+  form is not available to us, because the bundle's own `LSMinimumSystemVersion` is 10.13 and
+  brew has removed every symbol below Catalina, so `depends_on macos: :high_sierra` is
+  *disabled* with no replacement while `brew style` simultaneously rewrites `">= :high_sierra"`
+  into it. Bare satisfies the cop and claims no floor the app does not set. `verified:` said
+  the GitHub URL belonged to the same project as the homepage and is now deprecated outright.
 
 **`pnpm run test:brew` runs on Linux**, which is most of the point. Homebrew refuses to *install* a
 cask off macOS, but everything before that works in the `homebrew/brew` container: `brew style`,
@@ -910,6 +917,17 @@ against the release itself: the version must match `latest.json`, and the checks
 `.dmg` line in the release's published `SHA256SUMS`. So a shipped release with a stale cask fails
 here. What still needs a Mac is the install itself, Gatekeeper accepting the notarization, and the
 `uninstall --zap` round trip.
+
+Two things about how it runs, both of them scar tissue. **On macOS it skips Docker and uses the
+local brew.** Four of the audit's checks (`signing`, `artifact_case`, `rosetta`, `min_os`) mount
+the disk image to look inside the `.app`, and `hdiutil` is macOS-only: off macOS they do not fail,
+they raise, and the audit stops at the first one. The container run therefore names them to
+`--except` and reports that it skipped them, which is the honest version of what it was always
+doing. **In the container it runs `brew update` first**, which is load-bearing rather than hygiene:
+Docker Hub stopped publishing `homebrew/brew` at **4.6.20 in November 2025**, so `:latest` carries a
+ruleset most of a year behind whatever a Mac is running. That one cost exactly what you would
+expect. The container passed the 0.4.0 cask clean; the same file put through `brew audit` on a Mac
+failed on a deprecated `verified:` and a missing `depends_on`.
 
 A pass here is necessary and not sufficient: homebrew-cask's own CI runs the macOS-only audits on
 top, and acceptance is a human review regardless.

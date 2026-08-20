@@ -4,14 +4,15 @@
 # means `pnpm run test:brew` can check it against the live release on any machine, and a release
 # that renames an artifact fails a test rather than a stranger's `brew install`.
 #
-# Three stanzas below are decisions rather than boilerplate. See docs/desktop-port.md.
+# Four stanzas below are decisions rather than boilerplate. See docs/desktop-port.md.
 
 cask "bramble" do
   version "0.4.0"
   sha256 "54a0914d235558fb2846e94b5cbab037745eff9b8e9f5871d0933fe56c6c5a90"
 
-  url "https://github.com/flythenimbus/bramble/releases/download/#{version}-desktop/Bramble_#{version}_universal.dmg",
-      verified: "github.com/flythenimbus/bramble/"
+  # No `verified:` beside this. It said the GitHub URL belongs to the same project as the
+  # homepage, and Homebrew 6 deprecated it: the audit now fails on its presence.
+  url "https://github.com/flythenimbus/bramble/releases/download/#{version}-desktop/Bramble_#{version}_universal.dmg"
   name "Bramble"
   desc "Local-first password manager with direct device-to-device sync"
   homepage "https://bramble.sh/"
@@ -31,6 +32,11 @@ cask "bramble" do
   # updater stands down because dpkg owns the files: a cask cannot stop the updater, so it steps
   # aside instead.
   auto_updates true
+  # Required on a macOS-only cask since Homebrew 6, and deliberately bare. The bundle's own
+  # LSMinimumSystemVersion is 10.13, and brew has removed every symbol below Catalina
+  # (`depends_on macos: :high_sierra` is disabled, with no replacement), so a versioned form
+  # would have to claim a floor the app does not actually set.
+  depends_on :macos
 
   app "Bramble.app"
 

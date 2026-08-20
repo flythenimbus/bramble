@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Check the Homebrew cask against the live release, on a machine with no macOS anywhere.
+# Check the Homebrew cask against the live release.
 #
-# Run by scripts/test-brew-cask.ts; runnable by hand inside homebrew/brew with the cask at
-# /cask/bramble.rb and the released version as $1.
+# Run by scripts/test-brew-cask.ts, natively on macOS and in the homebrew/brew container anywhere
+# else. Runnable by hand: $1 is the released version, $2 the cask (default /cask/bramble.rb, where
+# the container mounts it).
 #
 # Homebrew refuses to *install* a cask on Linux, and that is the only part of this that needs a
 # Mac. Everything before it runs: style, audit, livecheck against the real GitHub API, and a real
@@ -20,11 +21,13 @@
 #   installed it.
 # - **The cask keeping up with releases.** The expected version comes from the update manifest, so
 #   a shipped release with a stale cask fails here.
+# - **The audit being the one a submission gets.** Only if the ruleset is current and the checks
+#   all run, neither of which is free off macOS; see the two blocks below.
 
 set -euo pipefail
 
 EXPECTED="${1:?the released version, from website/public/desktop/latest.json}"
-CASK=/cask/bramble.rb
+CASK="${2:-/cask/bramble.rb}"
 FULL=flythenimbus/bramble/bramble
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
@@ -34,9 +37,33 @@ die() {
 	exit 1
 }
 
-# audit wants a tap, and a tap is a git repository. Thrown away with the container.
+MAC=false
+[ "$(uname -s)" = "Darwin" ] && MAC=true
+
+say "homebrew"
+if $MAC; then
+	# Whatever the maintainer has, and deliberately left alone: a repo test has no business
+	# upgrading someone's Homebrew.
+	ok "$(brew --version | head -1)"
+else
+	# Homebrew inside the image is whatever homebrew/brew:latest was built with, and Docker Hub
+	# stopped publishing that image at 4.6.20 in November 2025. Auditing against a ruleset that old
+	# is worse than not auditing: it passed a cask carrying a `verified:` parameter that brew 6
+	# rejects, which is exactly the failure this test exists to catch before a stranger does. The
+	# image ships Homebrew as a git checkout, so this is a fast-forward onto the version a Mac has.
+	brew update > /tmp/update.log 2>&1 || {
+		cat /tmp/update.log >&2
+		die "brew update failed"
+	}
+	ok "$(brew --version | head -1), fast-forwarded from the image's"
+fi
+
+# audit wants a tap, and a tap is a git repository. Removed on the way out, whatever happens.
 say "a throwaway tap"
 TAP="$(brew --repository)/Library/Taps/flythenimbus/homebrew-bramble"
+# Guarded because what follows is an rm -rf, and on macOS this is a real Homebrew.
+case "$TAP" in */Library/Taps/*) ;; *) die "unexpected tap path: $TAP" ;; esac
+trap 'rm -rf "$TAP"' EXIT
 mkdir -p "$TAP/Casks"
 cp "$CASK" "$TAP/Casks/bramble.rb"
 git -C "$TAP" init -q .
@@ -57,11 +84,23 @@ ok "no offenses"
 # verified stanza, a reachable homepage. Their CI runs the macOS-only checks on top, so a pass
 # here is necessary and not sufficient.
 say "brew audit --new"
-brew audit --new --cask "$FULL" > /tmp/audit.log 2>&1 || {
+# Four of its checks mount the disk image to look inside the .app -- signing, artifact_case,
+# rosetta and min_os -- and hdiutil exists only on macOS. Off it they do not fail, they raise, and
+# the audit stops at the first one, so skipping them explicitly is the difference between a run
+# that reports its coverage and one that dies on `hdiutil: No such file`. On a Mac nothing is
+# skipped, which is why this prefers to run there.
+EXCEPT=""
+$MAC || EXCEPT="--except=signing,artifact_case,rosetta,min_os"
+# shellcheck disable=SC2086
+brew audit --new --cask $EXCEPT "$FULL" > /tmp/audit.log 2>&1 || {
 	cat /tmp/audit.log >&2
 	die "audit offenses"
 }
-ok "no offenses"
+if $MAC; then
+	ok "no offenses"
+else
+	ok "no offenses (signing, artifact_case, rosetta and min_os need macOS; skipped)"
+fi
 
 say "what the cask declares"
 INFO="$(brew info --cask --json=v2 "$FULL" 2>/dev/null)"
@@ -113,4 +152,9 @@ brew fetch --cask --force "$FULL" > /dev/null 2>&1 || die "download or checksum 
 ok "downloaded and verified"
 
 printf '\n\033[1;32mPASS\033[0m bramble %s\n' "$VERSION"
-printf 'Still needs a Mac: brew install --cask, launching it past Gatekeeper, and uninstall --zap.\n'
+if $MAC; then
+	printf 'Still to do by hand: brew install --cask, launching it past Gatekeeper, uninstall --zap.\n'
+else
+	printf 'Still needs a Mac: the four skipped audit checks, brew install --cask, launching it past\n'
+	printf 'Gatekeeper, and uninstall --zap.\n'
+fi
