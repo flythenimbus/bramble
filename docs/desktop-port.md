@@ -877,10 +877,13 @@ filename. See `website/src/downloads.ts`.
 ### Homebrew
 
 A **cask**, not a formula: it is a GUI app shipped as a disk image. The canonical copy is
-`packages/platform-desktop/homebrew/bramble.rb`; the published one lives in homebrew/homebrew-cask,
-which the repository's star count clears the notability bar for. Keeping a copy here is what lets
-`pnpm run test:brew` check it against the live release, and it means a release that renames an
-artifact fails a test rather than a stranger's `brew install`.
+`packages/platform-desktop/homebrew/bramble.rb`. Keeping it here is what lets `pnpm run test:brew`
+check it against the live release, and it means a release that renames an artifact fails a test
+rather than a stranger's `brew install`.
+
+**The file carries no comments, deliberately.** It is submitted verbatim, homebrew-cask's own casks
+are bare, and a file explaining itself at length reads as written by something other than a person.
+The reasoning lives here instead, which is the same split the rest of this repository uses.
 
 Four stanzas in it are decisions rather than boilerplate:
 
@@ -966,8 +969,30 @@ browsers' worth, which is the glob pair doing its job. And `zap trash:` is a mov
 rather than a delete, so the vault it takes is recoverable until the Trash is emptied. Worth
 knowing before running it, and worth remembering when reviewing those paths.
 
-The PR is then `Casks/b/bramble.rb`, titled `bramble <version> (new cask)`, and is all that is
-left.
+The PR is then `Casks/b/bramble.rb`, titled `bramble <version> (new cask)`.
+
+**Submitted as Homebrew/homebrew-cask#282145 on 2026-08-20, and closed the same day by a maintainer
+with no comment.** Every CI check passed, the template was complete, and it was not the bot that
+auto-closes template-less PRs, which leaves a comment saying so. So nothing in the file was the
+reason, and there is nothing in it to fix.
+
+What it ran into is a policy that had just been rewritten and a queue that had just been flooded.
+Of the last twenty closed `new cask` PRs at that point, four merged. The
+[acceptance policy](https://docs.brew.sh/Package-Acceptance-Policy) now asks a self-submission by
+the repository's owner for 90 forks, 90 watchers or **225 stars** rather than the usual 75, and says
+in as many words that meeting the criteria does not guarantee acceptance and that new submissions
+may be held to a higher standard. Bramble clears the star threshold (315) while sitting at 14 forks
+and 4 watchers, on a repository created 2026-06-01, which is the shape that invites the discretion
+clause. A maintainer told a comparable submitter the same week that scrutiny had gone up, that
+"packages submitted by the developer are held to a higher notability standard", and to use a
+third-party tap for now.
+
+So the realistic path is **our own tap**, `flythenimbus/homebrew-bramble`, giving users
+`brew tap flythenimbus/bramble && brew install --cask bramble`. Everything already built carries
+over unchanged: the cask, `test:brew`, and the release-time bump. What a tap gives up is
+BrewTestBot's autobump, which costs nothing here because `pnpm release desktop` bumps the cask
+itself. Resubmitting upstream is worth revisiting when forks and watchers catch up with the stars,
+or after a 1.0.
 
 The template also asks whether AI was used, wants the tool disclosed and its `zap` paths reviewed,
 limits a non-maintainer to one AI-assisted PR open at a time, and asks that maintainer questions be
