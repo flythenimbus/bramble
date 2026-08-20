@@ -953,18 +953,21 @@ nothing writes the plist until it is.
 **Submitting it requires a Mac, and not for a technical reason.** homebrew-cask's pull request
 template has a checklist, prefaced with "do not tick a checkbox if you haven't performed its
 action", and two of its new-cask items are `HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask` and
-`brew uninstall --cask`. Neither can run on Linux. `test:brew` covers every other box, so the
-remaining work is:
+`brew uninstall --cask`. Neither can run on Linux.
 
-```bash
-brew tap-new flythenimbus/local && cp packages/platform-desktop/homebrew/bramble.rb \
-  "$(brew --repository)/Library/Taps/flythenimbus/homebrew-local/Casks/bramble.rb"
-brew audit --cask --online --new flythenimbus/local/bramble
-HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask flythenimbus/local/bramble
-open -a Bramble && brew uninstall --cask flythenimbus/local/bramble
-```
+**That round trip has now been done, on 0.4.0, through a local `flythenimbus/local` tap**: audit,
+install, launch past Gatekeeper, plain uninstall, and `--zap`. Four things it confirmed that no
+amount of `test:brew` could. Gatekeeper accepts the notarization on a machine that did not build
+the app: the only prompt is the ordinary quarantine one, and it says Apple found nothing.
+`launchctl:` removes the launch agent and `quit:` the tray process, while a plain uninstall leaves
+`~/Library/Application Support/app.bramble.desktop` alone, which is the line a password manager
+must not cross. `zap` reaches the vault directory *and* the native-messaging manifests, several
+browsers' worth, which is the glob pair doing its job. And `zap trash:` is a move to the Trash
+rather than a delete, so the vault it takes is recoverable until the Trash is emptied. Worth
+knowing before running it, and worth remembering when reviewing those paths.
 
-Then the PR is `Casks/b/bramble.rb`, titled `bramble <version> (new cask)`.
+The PR is then `Casks/b/bramble.rb`, titled `bramble <version> (new cask)`, and is all that is
+left.
 
 The template also asks whether AI was used, wants the tool disclosed and its `zap` paths reviewed,
 limits a non-maintainer to one AI-assisted PR open at a time, and asks that maintainer questions be
