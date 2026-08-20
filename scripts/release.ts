@@ -7,8 +7,9 @@
 //   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
 //                                                                      last run already built)
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
-//   pnpm run release desktop  <version|patch|minor|major> [--aarch64]  (--aarch64 = skip the
-//                                                                       Intel slice)
+//   pnpm run release desktop  <version|patch|minor|major> [--aarch64] [--resume]
+//                                       (--aarch64 = skip the Intel slice; --resume = publish the
+//                                        build the last run already made and signed)
 //
 // Release notes are drafted from the commit range by the same model the i18n scripts use, then
 // opened in $EDITOR before publishing: the commit log is written for us, the release page is not.
@@ -162,7 +163,8 @@ else if (platform === "ios") await releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") await releaseFirefox(version);
 // Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
 // failure is silent from here: the dmg simply does not open on an Intel Mac.
-else if (platform === "desktop") await releaseDesktop(version, !flags.has("--aarch64"));
+else if (platform === "desktop")
+	await releaseDesktop(version, !flags.has("--aarch64"), flags.has("--resume"));
 else await releaseExtension(platform, version);
 
 // ----- extension: Chrome Web Store, signed .crx -----
@@ -710,7 +712,7 @@ async function releaseIos(version: string, ipaOnly: boolean) {
 
 // ----- desktop: GitHub release (.dmg + updater archive), manifest served from the website -----
 
-async function releaseDesktop(version: string, universal: boolean) {
+async function releaseDesktop(version: string, universal: boolean, resume = false) {
 	// cargo puts a --target build under target/<triple>/, so a universal build does not land in
 	// target/release. Reading the wrong one would publish the previous aarch64 build instead.
 	const BUNDLE = universal
@@ -724,7 +726,18 @@ async function releaseDesktop(version: string, universal: boolean) {
 
 	const tag = `${version}-desktop`;
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
-	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+	// A resume finishes the run that made this tag, so the tag existing is the precondition rather
+	// than the error. Publishing is all that is left, and it is keyed off the tag.
+	if (resume) {
+		if (!capture(`git tag -l ${tag}`))
+			fail(`no tag ${tag}; nothing to resume, re-run without --resume`);
+		// The version in the config is what the bundles on disk were built from. If it moved, the
+		// artifacts belong to some other release and publishing them would mislabel them.
+		const conf = JSON.parse(readFileSync(DESKTOP_CONF, "utf8")).version;
+		if (conf !== version)
+			fail(`${DESKTOP_CONF} is ${conf}, not ${version}; rebuild without --resume`);
+		console.log(`resuming ${tag}: publishing the build already on disk, no rebuild`);
+	} else if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
 	// The manifest reaches apps only via the website, and deploy-website.yml runs on pushes to
 	// main. Released from anywhere else, the GitHub release is real and no installed app ever
@@ -741,34 +754,47 @@ async function releaseDesktop(version: string, universal: boolean) {
 	// machine that did not build it, so publishing one ships something nobody can open.
 	const keyAge =
 		process.env.DESKTOP_UPDATER_KEY_AGE ?? join(HOME, ".config/bramble/desktop-updater-key.age");
-	if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(keyAge))
+	// Build-only prerequisites. A resume signs nothing and notarizes nothing: it reads the .sig
+	// files the original run wrote, so demanding a YubiKey and an Apple key to upload finished
+	// artifacts would just make the recovery path harder than the thing it recovers from.
+	if (!resume && !process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(keyAge))
 		fail(
 			`no updater signing key: set TAURI_SIGNING_PRIVATE_KEY, or provide ${keyAge} (override DESKTOP_UPDATER_KEY_AGE). See docs/release-signing.md.`,
 		);
-	if (!process.env.TAURI_SIGNING_PRIVATE_KEY)
+	if (!resume && !process.env.TAURI_SIGNING_PRIVATE_KEY)
 		requireBins(["age", "age-plugin-yubikey"], "docs/release-signing.md");
 	// Linux needs two tools a minimal install does not have, and neither failure is legible when
 	// it happens: the deb bundler copies xdg-open INTO the package for tauri-plugin-opener and
 	// stops with "xdg-open binary not found" several minutes in, and the containerised build
 	// (scripts/build-linux.ts) rsyncs the tree into its workspace volume.
-	if (process.platform === "linux") requireBins(["rsync", "xdg-open"], "docs/desktop-port.md");
+	if (!resume && process.platform === "linux")
+		requireBins(["rsync", "xdg-open"], "docs/desktop-port.md");
 	// A desktop release ships Linux too, built in a container so one machine can cut the whole
 	// thing. Checked here rather than an hour later, after the gate and a notarized macOS build.
-	if (process.platform === "darwin") requireBins(["docker"], "docs/desktop-port.md");
-	if (!existsSync("fastlane/AuthKey.p8") && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
+	if (!resume && process.platform === "darwin") requireBins(["docker"], "docs/desktop-port.md");
+	if (
+		!resume &&
+		!existsSync("fastlane/AuthKey.p8") &&
+		!process.env.APPLE_API_KEY &&
+		!process.env.APPLE_ID
+	)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
 		);
 	// Checked before the gate, because the alternative is finding out several minutes into a build
 	// that ran lint, typecheck and the whole test suite first.
-	if (universal && !capture("rustup target list --installed").includes("x86_64-apple-darwin"))
+	if (
+		!resume &&
+		universal &&
+		!capture("rustup target list --installed").includes("x86_64-apple-darwin")
+	)
 		fail(
 			"the Intel slice needs a toolchain that is not installed:\n" +
 				"  rustup target add x86_64-apple-darwin\n" +
 				"or release Apple Silicon only with --aarch64.",
 		);
 
-	gate();
+	if (!resume) gate();
 
 	const before = readFileSync(DESKTOP_CONF, "utf8");
 	let replaced = 0;
@@ -781,29 +807,30 @@ async function releaseDesktop(version: string, universal: boolean) {
 
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
 	const bumped = after !== before;
-	if (bumped) writeFileSync(DESKTOP_CONF, after);
+	if (bumped && !resume) writeFileSync(DESKTOP_CONF, after);
 
 	// Unlocked once, here, rather than separately by each build. Both children read it from the
 	// environment before reaching for the age file, so this is the difference between one YubiKey
 	// touch for a release and two. The plaintext never touches disk; build-linux passes it into
 	// the container by name so it stays out of argv. See scripts/desktop-signing-key.ts.
-	if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
+	if (!resume && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
 		const key = signingKey(fail);
 		if (!key) fail("no updater signing key; see docs/release-signing.md");
 		process.env.TAURI_SIGNING_PRIVATE_KEY = key;
 	}
 
-	try {
-		// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
-		run(`pnpm run build:macos${universal ? "" : " -- --aarch64"}`);
-	} catch {
-		fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
-	}
+	if (!resume)
+		try {
+			// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
+			run(`pnpm run build:macos${universal ? "" : " -- --aarch64"}`);
+		} catch {
+			fail(`build failed; run \`git checkout ${DESKTOP_CONF}\` to undo the bump`);
+		}
 
 	// The Linux half, in a container, from the same machine. A release that ships only the .dmg
 	// leaves Debian users on an APT repository with nothing new in it and AppImage users with an
 	// updater that never sees a release.
-	if (process.platform === "darwin") {
+	if (!resume && process.platform === "darwin") {
 		try {
 			run("pnpm run build:linux");
 		} catch {
@@ -876,7 +903,10 @@ async function releaseDesktop(version: string, universal: boolean) {
 	);
 	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
 
-	commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
+	// Already committed, tagged and pushed by the run being resumed; doing it again would only
+	// fail on the tag that the resume exists to reuse.
+	if (!resume)
+		commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
 
 	try {
 		await publish(tag, `Desktop ${version}`, [...assets, sumsAsset]);
