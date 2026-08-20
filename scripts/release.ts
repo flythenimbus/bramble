@@ -861,8 +861,14 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 				"website/src/downloads.ts links to that exact name; update both together.",
 		);
 
+	// dist-linux and the dmg directory are not cleaned between releases, and the bundlers put the
+	// version in every filename, so a plain extension glob picks up the PREVIOUS release too:
+	// cutting 0.4.0 over a 0.3.0 tree attaches 0.3.0 debs, rpms and AppImages to the new release
+	// and hashes them into its SHA256SUMS. Delimited, so 0.4.0 never matches 10.4.0.
+	const ofThisVersion = new RegExp(`[_-]${version.replace(/\./g, "\\.")}[_-]`);
+
 	const assets: string[] = [];
-	for (const f of dmgs) assets.push(join(BUNDLE, "dmg", f));
+	for (const f of dmgs.filter((f) => ofThisVersion.test(f))) assets.push(join(BUNDLE, "dmg", f));
 	// One release carries every platform. The AppImage must be signed, for the same reason the
 	// macOS archive must: it is what the updater fetches, and an unsigned one is rejected by every
 	// installed app, so publishing it looks complete and updates nobody. The .deb and .rpm carry
@@ -873,7 +879,11 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 		["dist-linux/appimage", ".AppImage"],
 	] as const) {
 		if (!existsSync(dir)) continue;
-		for (const f of readdirSync(dir).filter((f) => f.endsWith(ext))) {
+		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion.test(f));
+		// Nothing for this version means the Linux build did not run or wrote elsewhere. Silence
+		// here would publish a macOS-only release that claims to carry Linux.
+		if (built.length === 0) fail(`no ${version} ${ext} in ${dir}; re-run the Linux build`);
+		for (const f of built) {
 			assets.push(join(dir, f));
 			if (ext === ".AppImage") {
 				if (!existsSync(join(dir, `${f}.sig`)))
