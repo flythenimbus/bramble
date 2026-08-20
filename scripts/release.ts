@@ -59,6 +59,66 @@ const DESKTOP_CASK = "packages/platform-desktop/homebrew/bramble.rb";
 /** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
 const WEBSITE_BRANCH = "main";
 
+// What each target actually ships, as git pathspecs. A commit belongs to a release only if it
+// touched one of these, so the notes describe THAT target rather than everything that happened in
+// the range. Shared paths are deliberately in every list: a core fix ships in all five, and it
+// should be listed in all five rather than attributed to whichever one released first.
+//
+// Paths decide what a release INCLUDES, and never the commit scope: a `feat(desktop):` that only
+// touches scripts/ or website/ is real work but not shipped code, and guessing from a scope that
+// nothing enforces would put commits in the wrong release. Silently dropping a few is the cheaper
+// mistake. Scope only ever subtracts, in PLATFORM_SCOPES below.
+const SHARED_PATHS = ["packages/core", "packages/core-rust", "packages/theme"];
+const PLATFORM_PATHS: Record<string, string[]> = {
+	chromium: ["packages/platform-extension", "packages/manifests/chromium"],
+	firefox: ["packages/platform-extension", "packages/manifests/firefox"],
+	desktop: ["packages/platform-desktop"],
+	// One mobile package builds both, so each excludes the other's native half and keeps the
+	// shared src/. Order matters to git: the exclude has to follow what it subtracts from.
+	ios: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/android"],
+	android: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/ios"],
+};
+
+// A commit whose scope names a DIFFERENT platform is not this release's news, even when its paths
+// say otherwise. `feat(desktop): pick the credential store, never ask` touches packages/core, so
+// paths alone put it in the mobile notes describing a feature mobile does not have. The author
+// already said who it was for, so believe them.
+//
+// Only unambiguous platform words are listed. A scope this does not know (backup, sync, ui) stays
+// neutral and its paths decide, because subtracting on a guess loses real entries.
+const PLATFORM_SCOPES: Record<string, string[]> = {
+	desktop: ["desktop"],
+	apt: ["desktop"],
+	mobile: ["ios", "android"],
+	ios: ["ios"],
+	android: ["android"],
+	fdroid: ["android"],
+	extension: ["chromium", "firefox"],
+	ext: ["chromium", "firefox"],
+	chromium: ["chromium"],
+	firefox: ["firefox"],
+	"firefox-port": ["firefox"],
+};
+
+/**
+ * The platforms a subject's scope claims, or null when it names none and the paths should decide.
+ *
+ * Compound scopes intersect, so `ext/firefox` is firefox alone rather than both extensions, and
+ * `i18n/android` is android rather than neutral. An empty intersection means the scope contradicts
+ * itself, which is not a reason to drop the commit everywhere, so it falls back to neutral.
+ */
+function scopedPlatforms(subject: string): string[] | null {
+	const scope = subject.match(/^\w+\(([^)]*)\)!?:/)?.[1];
+	if (!scope) return null;
+	let claimed: string[] | null = null;
+	for (const part of scope.split("/")) {
+		const named = PLATFORM_SCOPES[part.trim().toLowerCase()];
+		if (!named) continue;
+		claimed = claimed ? claimed.filter((p) => named.includes(p)) : named;
+	}
+	return claimed?.length ? claimed : null;
+}
+
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);
 	process.exit(1);
@@ -1029,66 +1089,6 @@ function commitTagPush(
 	run(`git tag ${tag}`);
 	run(`git push origin ${branch}`);
 	run(`git push origin ${tag}`);
-}
-
-// What each target actually ships, as git pathspecs. A commit belongs to a release only if it
-// touched one of these, so the notes describe THAT target rather than everything that happened in
-// the range. Shared paths are deliberately in every list: a core fix ships in all five, and it
-// should be listed in all five rather than attributed to whichever one released first.
-//
-// Paths decide what a release INCLUDES, and never the commit scope: a `feat(desktop):` that only
-// touches scripts/ or website/ is real work but not shipped code, and guessing from a scope that
-// nothing enforces would put commits in the wrong release. Silently dropping a few is the cheaper
-// mistake. Scope only ever subtracts, in PLATFORM_SCOPES below.
-const SHARED_PATHS = ["packages/core", "packages/core-rust", "packages/theme"];
-const PLATFORM_PATHS: Record<string, string[]> = {
-	chromium: ["packages/platform-extension", "packages/manifests/chromium"],
-	firefox: ["packages/platform-extension", "packages/manifests/firefox"],
-	desktop: ["packages/platform-desktop"],
-	// One mobile package builds both, so each excludes the other's native half and keeps the
-	// shared src/. Order matters to git: the exclude has to follow what it subtracts from.
-	ios: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/android"],
-	android: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/ios"],
-};
-
-// A commit whose scope names a DIFFERENT platform is not this release's news, even when its paths
-// say otherwise. `feat(desktop): pick the credential store, never ask` touches packages/core, so
-// paths alone put it in the mobile notes describing a feature mobile does not have. The author
-// already said who it was for, so believe them.
-//
-// Only unambiguous platform words are listed. A scope this does not know (backup, sync, ui) stays
-// neutral and its paths decide, because subtracting on a guess loses real entries.
-const PLATFORM_SCOPES: Record<string, string[]> = {
-	desktop: ["desktop"],
-	apt: ["desktop"],
-	mobile: ["ios", "android"],
-	ios: ["ios"],
-	android: ["android"],
-	fdroid: ["android"],
-	extension: ["chromium", "firefox"],
-	ext: ["chromium", "firefox"],
-	chromium: ["chromium"],
-	firefox: ["firefox"],
-	"firefox-port": ["firefox"],
-};
-
-/**
- * The platforms a subject's scope claims, or null when it names none and the paths should decide.
- *
- * Compound scopes intersect, so `ext/firefox` is firefox alone rather than both extensions, and
- * `i18n/android` is android rather than neutral. An empty intersection means the scope contradicts
- * itself, which is not a reason to drop the commit everywhere, so it falls back to neutral.
- */
-function scopedPlatforms(subject: string): string[] | null {
-	const scope = subject.match(/^\w+\(([^)]*)\)!?:/)?.[1];
-	if (!scope) return null;
-	let claimed: string[] | null = null;
-	for (const part of scope.split("/")) {
-		const named = PLATFORM_SCOPES[part.trim().toLowerCase()];
-		if (!named) continue;
-		claimed = claimed ? claimed.filter((p) => named.includes(p)) : named;
-	}
-	return claimed?.length ? claimed : null;
 }
 
 // Build release notes from the conventional-commit log between the previous tag of
