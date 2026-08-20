@@ -49,6 +49,38 @@ const CHANGE = `<!doctype html><html><head><title>Change password</title></head>
 	</form>
 </body></html>`;
 
+// A set-password form: the shape a reset link lands on. No current-password box to mark it a
+// change form, no `new-password` token (the form is autocomplete="off"), and the account is
+// already identified by the link, so the username companion is parked off-screen the way the
+// WHATWG guidance suggests. The intent lives only in `title` attributes.
+const SET_PASSWORD = `<!doctype html><html><head><title>Account</title></head><body>
+	<form autocomplete="off">
+		<div style="position: absolute; left: -9999px;">
+			<input id="user" name="username" type="email" autocomplete="username" />
+		</div>
+		<input id="pass" name="password" type="password" title="Enter your new password" />
+		<input id="confirm" name="confirm password" type="password" />
+		<button type="submit" title="Change Password">Continue</button>
+	</form>
+</body></html>`;
+
+// The same class cut down to exactly two signals: a confirm pair (100) and a "new password"
+// label (35). The username is VISIBLE, so the identified-account signal stays silent, and the
+// submit says "Continue", so the set-password keyword does too. 135 total -- which is what a
+// login route's -40 used to drop to 95, under the bar of 100. This is the arithmetic of the
+// page that was reported, and it isolates the negatives rule from everything added beside it.
+const BARE_SET_PASSWORD = `<!doctype html><html><head><title>Account</title></head><body>
+	<form autocomplete="off">
+		<label for="user">Email</label>
+		<input id="user" name="email" type="email" autocomplete="username" />
+		<label for="pass">New password</label>
+		<input id="pass" name="password" type="password" />
+		<label for="confirm">Confirm</label>
+		<input id="confirm" name="confirm" type="password" />
+		<button type="submit">Continue</button>
+	</form>
+</body></html>`;
+
 const HOST = "#titanpass-autofill-dropdown";
 const STRONG_CHARS = /^[A-Za-z0-9!@#$%^&*()_+\-=[\]{}|;:,.<>?]{20}$/;
 
@@ -341,4 +373,97 @@ test("click-to-unlock re-surfaces the matches in place, without refocusing (issu
 	// re-surface on the field on their own, with nothing focused on the page.
 	await unlock(popup);
 	await expect(host).toBeAttached({ timeout: 10_000 });
+});
+
+test("suggests on a set-password form served from a login route", async ({
+	context,
+	extensionId,
+}) => {
+	// The reported case. A confirm pair is structural proof this is not a login form -- no login
+	// form has two password boxes -- but a reset link routinely lands under /auth with the page
+	// still talking about signing in, and those page-level negatives used to drag the score under
+	// the bar. Serving from /auth/reset-password is the half a unit test cannot fake.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+
+	const page = await context.newPage();
+	await serve(page, SET_PASSWORD);
+	await page.goto("https://example.com/auth/reset-password");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+
+	// Both boxes get the same generated password: the new one and its confirm.
+	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
+	await expect
+		.poll(() => page.locator("#confirm").inputValue())
+		.toBe(await page.locator("#pass").inputValue());
+});
+
+test("a set-password form captures as a rotation, not a new login", async ({
+	context,
+	extensionId,
+}) => {
+	// The counterpart to the signup tests above. Setting a password on an account that already
+	// exists must not force a save past dedupe, or resetting a password duplicates the saved
+	// login instead of offering to update it. The account is identified (the username companion
+	// is off-screen, so there is no identifier left to type), which is what tells them apart.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, SET_PASSWORD);
+	await page.goto("https://example.com/auth/reset-password");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+
+	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect.poll(() => pendingNewLogin(context)).toBe(false);
+});
+
+test("a bare confirm pair outweighs the login route it is served from", async ({
+	context,
+	extensionId,
+}) => {
+	// Isolates the negatives rule from the signals added alongside it. Two rendered password
+	// boxes are structural proof this is not a login form, so the route the page happens to sit
+	// on cannot overrule them. With a visible username and a "Continue" submit, the confirm pair
+	// and the label are the only signals in play: 135, which the login route used to drag to 95.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+
+	const page = await context.newPage();
+	await serve(page, BARE_SET_PASSWORD);
+	await page.goto("https://example.com/auth/signin/reset");
+
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#pass").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+
+	const box = await host.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
+	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 });
