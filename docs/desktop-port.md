@@ -827,7 +827,9 @@ un-notarized build is one Gatekeeper blocks on every machine that did not produc
 
 It publishes the GitHub release BEFORE committing the manifest, in a second commit. The manifest is
 the live update channel, so the other order leaves a window where every app that checks reads a
-manifest whose download 404s, and a failed update looks identical to a broken updater.
+manifest whose download 404s, and a failed update looks identical to a broken updater. The
+Homebrew cask below rides in that same second commit and for the same reason: it names a `.dmg` by
+version, so it should point at a release that already exists.
 
 ### Linux artifacts
 
@@ -912,10 +914,20 @@ here. What still needs a Mac is the install itself, Gatekeeper accepting the not
 A pass here is necessary and not sufficient: homebrew-cask's own CI runs the macOS-only audits on
 top, and acceptance is a human review regardless.
 
-Per release the cask needs its `version` and `sha256`, which `brew bump-cask-pr --version X.Y.Z
-bramble` does in one command and computes the checksum itself; for a cask with a working livecheck
-their bot usually opens that PR before you do. When autostart lands as a launch agent, the cask
-will need an `uninstall launchctl:` stanza to match.
+Per release the cask needs its `version` and `sha256`. The canonical copy here is bumped by
+`pnpm release desktop`, which takes the checksum from the same digests it publishes as `SHA256SUMS`
+rather than hashing the disk image a second time, and commits it beside the update manifest once the
+release exists. A `--aarch64` release skips the bump and says so, because the cask links the
+universal disk image and that build produces none; `test:brew` then fails until a universal release
+is cut, which is the intended noise rather than a surprise. The *published* copy is a separate bump:
+`brew bump-cask-pr --version X.Y.Z bramble` does it in one command and computes the checksum itself,
+and for a cask with a working livecheck their bot usually opens that PR before you do.
+
+**Outstanding before submission: autostart has landed and the cask has not caught up.**
+`autostart.rs` uses `MacosLauncher::LaunchAgent`, so enabling it writes
+`~/Library/LaunchAgents/Bramble.plist` with the label `Bramble` (auto-launch names the plist and
+the label after `productName`). The cask needs `uninstall launchctl: "Bramble"` beside the `quit:`
+it already has, or `brew uninstall` leaves a login item pointing at an app that is gone.
 
 **Submitting it requires a Mac, and not for a technical reason.** homebrew-cask's pull request
 template has a checklist, prefaced with "do not tick a checkbox if you haven't performed its

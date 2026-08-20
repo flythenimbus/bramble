@@ -54,6 +54,8 @@ const HOME = process.env.HOME ?? "";
 /** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
 const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
+/** Canonical copy of the Homebrew cask; the published one lives in homebrew/homebrew-cask. */
+const DESKTOP_CASK = "packages/platform-desktop/homebrew/bramble.rb";
 /** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
 const WEBSITE_BRANCH = "main";
 
@@ -803,13 +805,16 @@ async function releaseDesktop(version: string, universal: boolean) {
 
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const sumsAsset = join(stage, "SHA256SUMS");
-	writeFileSync(
-		sumsAsset,
+	// Keyed by basename because the cask below needs the .dmg's checksum, and `test:brew`
+	// asserts the two agree: hashing the same file twice is how they would come to disagree.
+	const sums = new Map(
 		assets
 			.filter((f) => !f.endsWith(".sig"))
-			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
-			.join(""),
+			.map(
+				(f) => [basename(f), createHash("sha256").update(readFileSync(f)).digest("hex")] as const,
+			),
 	);
+	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
 
 	commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
 
@@ -823,8 +828,22 @@ async function releaseDesktop(version: string, universal: boolean) {
 	// exist — the other way round, every app checking in between reads a manifest whose download
 	// 404s, and a failed update is indistinguishable from a broken updater.
 	run(`node scripts/release-desktop.mjs --resume --quiet${universal ? "" : " --aarch64"}`);
-	run(`git add ${DESKTOP_MANIFEST}`);
-	run(`git commit -m ${JSON.stringify(`chore(release): desktop ${version} update manifest`)}`);
+	// The cask rides in that same commit, for the same reason: it names a .dmg by version, so it
+	// points at a release that exists rather than one that is about to. Skipped on --aarch64,
+	// which builds no universal disk image for it to point at, and the cask says universal.
+	const channels = [DESKTOP_MANIFEST];
+	if (universal) {
+		updateCask(version, sums.get(expectedDmg) ?? fail(`${expectedDmg} is not in SHA256SUMS`));
+		channels.push(DESKTOP_CASK);
+	} else {
+		console.error(
+			`\nnote: ${DESKTOP_CASK} still points at the previous release, because --aarch64 builds ` +
+				"no universal .dmg. `pnpm run test:brew` fails until a universal release is cut.",
+		);
+	}
+	run(`git add ${channels.join(" ")}`);
+	const commitMsg = `chore(release): desktop ${version} update manifest${universal ? " and cask" : ""}`;
+	run(`git commit -m ${JSON.stringify(commitMsg)}`);
 	run(`git push origin ${branch}`);
 
 	// Last, and deliberately after the tag exists: the APT index names a .deb by version, and
@@ -846,7 +865,10 @@ async function releaseDesktop(version: string, universal: boolean) {
 	console.log(
 		`\nreleased ${tag}: ${dmgs.join(", ")} + the Linux packages + updater archives, on the ` +
 			`GitHub release.\nThe manifest is committed; installed apps see ${version} once the ` +
-			"website deploy lands.",
+			"website deploy lands." +
+			(universal
+				? "\nThe cask is bumped too; check it against the release: pnpm run test:brew"
+				: ""),
 	);
 }
 
@@ -965,6 +987,27 @@ function gate() {
 	} catch {
 		fail("lint, typecheck, tests, or i18n check failed; fix them before releasing");
 	}
+}
+
+// The cask's two release-specific lines, rewritten in place. Everything else in that file is a
+// decision with a comment attached to it, so this touches nothing else. It is the canonical copy
+// only: the published one in homebrew/homebrew-cask is bumped by `brew bump-cask-pr`, usually by
+// their livecheck bot before anyone gets to it. See docs/desktop-port.md.
+function updateCask(version: string, sha256: string) {
+	let after = readFileSync(DESKTOP_CASK, "utf8");
+	let replaced = 0;
+	for (const [field, value] of [
+		["version", version],
+		["sha256", sha256],
+	] as const) {
+		after = after.replace(new RegExp(`^([ \\t]*${field} ")[^"]*(")`, "m"), (_m, p1, p2) => {
+			replaced++;
+			return `${p1}${value}${p2}`;
+		});
+	}
+	if (replaced !== 2)
+		fail(`expected a version and a sha256 line in ${DESKTOP_CASK}, rewrote ${replaced}`);
+	writeFileSync(DESKTOP_CASK, after);
 }
 
 function commitTagPush(
