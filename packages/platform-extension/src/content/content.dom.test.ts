@@ -445,6 +445,44 @@ describe("content: strong-password suggestion on signup", () => {
 		);
 	});
 
+	it("still captures as a new login after the picker suppresses the anchor autocomplete", () => {
+		// Regression: the real picker rewrites the anchor's autocomplete to "off" to
+		// suppress the native dropdown, which erases the new-password token. Classifying
+		// save-vs-update at pick time read a form that no longer described itself and
+		// turned the signup's save into an update. Three e2e tests caught what this
+		// suite could not, because the picker is mocked here and never rewrites anything.
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.value = "me@example.com";
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		pass.setAttribute("autocomplete", "off");
+
+		onSuggestedCb?.();
+		expect(safeSendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "CORNER_PROMPT_CAPTURE",
+				payload: expect.objectContaining({ newLogin: true }),
+			}),
+		);
+	});
+
+	it("keeps that decision when the user regenerates", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		pass.setAttribute("autocomplete", "off");
+		regenerateCb?.();
+
+		onSuggestedCb?.();
+		expect(safeSendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "CORNER_PROMPT_CAPTURE",
+				payload: expect.objectContaining({ newLogin: true }),
+			}),
+		);
+	});
+
 	it("captures a change-form suggestion as a rotation, not a new login", () => {
 		document.body.innerHTML = `
 			<form>

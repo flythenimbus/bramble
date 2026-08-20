@@ -282,6 +282,21 @@ detection reads**. The same hazard sits under `autocomplete="username"` on an
 identifier-first page, where the token can be the only signal; that one still
 suppresses, and would need the same treatment if it ever bites.
 
+It bit a second time in a different shape: not detection reading the attribute,
+but a **decision re-read after the write**. `new-password` is the token that
+scores a signup, so classifying save-vs-update at the moment the user clicks the
+suggestion scored a form that no longer described itself, and the signup's "save"
+became an "update". Both decisions a suggestion carries -- the password and
+whether accepting it creates a login -- are now settled together in
+`maybeSuggest`, which runs before the picker anchors, and cached on the field.
+Regenerating swaps the password and keeps the classification.
+
+The corollary to the rule above, then: **anything derived from an attribute the
+picker suppresses must be computed before it anchors, not on the pick.** Unit
+tests cannot see this, because they mock the picker and it never performs the
+write; `e2e/extension/suggest-password.spec.ts` is what caught it and what holds
+it.
+
 ## UI isolation: extension-origin iframe and closed shadow DOM
 
 The **match dropdown** renders in a cross-origin **iframe** served from the

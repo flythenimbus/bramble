@@ -358,26 +358,49 @@ function applySelectResponse(
 	}, 50);
 }
 
-// The generated password offered on a given field, cached so re-renders don't
-// churn a new one each frame. Regenerate replaces it; the WeakMap forgets fields
-// that leave the DOM.
-const suggestionFor = new WeakMap<HTMLInputElement, string>();
+/**
+ * What was decided when the suggestion was first offered: the password, and whether
+ * accepting it creates a login or rotates one.
+ *
+ * `newLogin` is settled HERE rather than at pick time because the picker rewrites the
+ * anchor field's `autocomplete` to "off" to suppress the native dropdown, erasing the
+ * `new-password` token that classifies the form. Re-reading the field after that scores
+ * a signup as an ordinary page and turns its save into an update.
+ */
+interface Suggestion {
+	password: string;
+	newLogin: boolean;
+}
+
+// The suggestion offered on a given field, cached so re-renders don't churn a new
+// one each frame. Regenerate replaces the password; the WeakMap forgets fields that
+// leave the DOM.
+const suggestionFor = new WeakMap<HTMLInputElement, Suggestion>();
 
 /**
- * A generated-password suggestion for `field`, or null when this isn't an
- * account-creation flow. Generates once per field and caches it.
+ * A generated-password suggestion for `field`, or null when this isn't a
+ * password-setting flow. Decides once per field and caches it.
  */
-function maybeSuggest(
-	field: HTMLInputElement,
-	hasExistingLogins: boolean,
-): { password: string } | null {
+function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Suggestion | null {
 	if (field.type !== "password" || field.value) return null;
 	const cached = suggestionFor.get(field);
-	if (cached) return { password: cached };
+	if (cached) return cached;
 	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
-	const pw = generatePassword();
-	suggestionFor.set(field, pw);
-	return { password: pw };
+	// Read the form while it still describes itself; see Suggestion.
+	const suggestion = { password: generatePassword(), newLogin: isAccountCreationForm(field) };
+	suggestionFor.set(field, suggestion);
+	return suggestion;
+}
+
+/**
+ * Swaps in a fresh password for `field`, keeping the save-vs-update decision the
+ * first offer made: by now the picker has rewritten the anchor's autocomplete, so
+ * re-classifying would read a form that no longer describes itself.
+ */
+function regenerateInto(field: HTMLInputElement): string {
+	const password = generatePassword();
+	suggestionFor.set(field, { password, newLogin: suggestionFor.get(field)?.newLogin ?? false });
+	return password;
 }
 
 /** Shows the login picker for `field`: existing matches, or ONLY the strong-password row on a signup/rotation form. */
@@ -386,7 +409,7 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 	// On an account-creation / password-rotation form, offer only the suggestion. Existing logins
 	// aren't useful when making or rotating a credential and would clutter the prompt.
 	if (suggest) {
-		showMatchesFor([], field, { suggest });
+		showMatchesFor([], field, { suggest: { password: suggest.password } });
 		return;
 	}
 	if (logins.length === 0) return;
@@ -400,22 +423,22 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
  */
 function showLockedPicker(field: HTMLInputElement, hasPotentialMatch: boolean): void {
 	const suggest = maybeSuggest(field, hasPotentialMatch);
-	if (suggest) showMatchesFor([], field, { suggest });
+	if (suggest) showMatchesFor([], field, { suggest: { password: suggest.password } });
 	else showLockedFor(field);
 }
 
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */
 function applyGeneratedPassword(field: HTMLInputElement): void {
-	const pw = suggestionFor.get(field);
-	if (!pw) return;
-	if (!fillPasswordFields(signupPasswordFields(field), pw)) return;
+	const suggestion = suggestionFor.get(field);
+	if (!suggestion) return;
+	const { password, newLogin } = suggestion;
+	if (!fillPasswordFields(signupPasswordFields(field), password)) return;
 	// Grab whatever username/email the user already typed; the password is ours.
 	const username = getPageFields().login.username?.value ?? "";
 	// A signup creates a NEW login; setting a password (reset, rotation, change form) rotates
 	// the existing one. Tell the background so a login already saved for this site doesn't turn
 	// a signup into an "update" -- and, just as importantly, so a reset doesn't duplicate it.
-	const newLogin = isAccountCreationForm(field);
-	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password: pw, newLogin } });
+	safeSendMessage({ type: "CORNER_PROMPT_CAPTURE", payload: { username, password, newLogin } });
 }
 
 /**
@@ -565,7 +588,7 @@ function showFor(field: HTMLInputElement): void {
 		// No cached matches: offer a strong password if this looks like a signup
 		// form, and (re)query in case matches exist but weren't cached yet.
 		const suggest = maybeSuggest(field, false);
-		if (suggest) showMatchesFor([], field, { suggest });
+		if (suggest) showMatchesFor([], field, { suggest: { password: suggest.password } });
 		queryAutofill();
 		return;
 	}
@@ -615,8 +638,7 @@ picker.onRegenerate(() => {
 	cancelOperations();
 	const field = anchorField();
 	if (!field) return;
-	const pw = generatePassword();
-	suggestionFor.set(field, pw);
+	const pw = regenerateInto(field);
 	// Suggestion-only prompt (no matches), matching showLoginPicker.
 	showMatchesFor([], field, { suggest: { password: pw } });
 });
@@ -652,8 +674,7 @@ if (frameRelay.isTop()) {
 			cancelOperations();
 			const field = relayedField;
 			if (!field) return;
-			const pw = generatePassword();
-			suggestionFor.set(field, pw);
+			const pw = regenerateInto(field);
 			showMatchesFor([], field, { suggest: { password: pw } });
 		},
 	});
