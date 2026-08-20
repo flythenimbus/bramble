@@ -4,7 +4,7 @@ cask "bramble" do
 
   url "https://github.com/flythenimbus/bramble/releases/download/#{version}-desktop/Bramble_#{version}_universal.dmg"
   name "Bramble"
-  desc "Local-first password manager with direct device-to-device sync"
+  desc "Password manager"
   homepage "https://bramble.sh/"
 
   livecheck do
@@ -27,6 +27,7 @@ cask "bramble" do
     "~/Library/Application Support/app.bramble.desktop",
     "~/Library/Caches/app.bramble.desktop",
     "~/Library/HTTPStorages/app.bramble.desktop",
+    "~/Library/Logs/app.bramble.desktop",
     "~/Library/Preferences/app.bramble.desktop.plist",
     "~/Library/Saved Application State/app.bramble.desktop.savedState",
     "~/Library/WebKit/app.bramble.desktop",
