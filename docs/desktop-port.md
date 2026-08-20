@@ -941,11 +941,14 @@ is cut, which is the intended noise rather than a surprise. The *published* copy
 `brew bump-cask-pr --version X.Y.Z bramble` does it in one command and computes the checksum itself,
 and for a cask with a working livecheck their bot usually opens that PR before you do.
 
-**Outstanding before submission: autostart has landed and the cask has not caught up.**
+`uninstall` carries a `launchctl:` beside its `quit:`, because autostart landed as a launch agent:
 `autostart.rs` uses `MacosLauncher::LaunchAgent`, so enabling it writes
-`~/Library/LaunchAgents/Bramble.plist` with the label `Bramble` (auto-launch names the plist and
-the label after `productName`). The cask needs `uninstall launchctl: "Bramble"` beside the `quit:`
-it already has, or `brew uninstall` leaves a login item pointing at an app that is gone.
+`~/Library/LaunchAgents/Bramble.plist`. The label is the trap. auto-launch names both the plist and
+the label after `productName`, so it is `Bramble` rather than `app.bramble.desktop` like every
+other identifier in the file. brew unloads the service and deletes the plist on a plain
+`brew uninstall`, which is the right moment for it: left behind, it is a login item pointing at an
+app that is gone. Note this only shows up in a test if autostart was enabled at least once, since
+nothing writes the plist until it is.
 
 **Submitting it requires a Mac, and not for a technical reason.** homebrew-cask's pull request
 template has a checklist, prefaced with "do not tick a checkbox if you haven't performed its

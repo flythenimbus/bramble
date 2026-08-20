@@ -40,9 +40,13 @@ cask "bramble" do
 
   app "Bramble.app"
 
-  # Bramble runs from the tray, so an uninstall while it is running would otherwise leave a live
-  # process whose bundle has gone.
-  uninstall quit: "app.bramble.desktop"
+  # `quit:` because Bramble runs from the tray, so an uninstall while it is running would otherwise
+  # leave a live process whose bundle has gone. `launchctl:` because autostart writes
+  # ~/Library/LaunchAgents/Bramble.plist, labelled after productName and not after the bundle id
+  # (auto-launch names both from the app name). brew unloads that service and deletes the plist,
+  # which plain `brew uninstall` would otherwise leave behind pointing at an app that is gone.
+  uninstall launchctl: "Bramble",
+            quit:      "app.bramble.desktop"
 
   # `zap` deletes the vault: `data_dir()` is Tauri's app_data_dir, which on macOS is the first path
   # below. That is what zap is for and it is opt-in (`brew uninstall --zap`), but it is worth
