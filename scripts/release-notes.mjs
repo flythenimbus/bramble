@@ -8,7 +8,7 @@
 //
 // The model only ever sees the subjects and is told not to go beyond them, because a release note
 // that overclaims is worse than a dull one, especially for a password manager. Everything it wrote
-// is still checkable against the full list, which is kept underneath, collapsed.
+// is still checkable against the full list, which is kept underneath.
 //
 // No model reachable, or not a terminal (CI): fall back to the grouped list, unedited. A release
 // must never block on this.
@@ -74,8 +74,8 @@ async function draft(subjects) {
 /**
  * Draft, then open in $EDITOR. Returns the body to publish.
  *
- * `full` is appended collapsed, so nothing the summary leaves out is lost, and anyone who wants
- * the real list is one click away from it.
+ * `full` is appended in full, so nothing the summary leaves out is lost and the page reads without
+ * anyone having to expand it.
  */
 export async function composeNotes({ subjects, footer, edit = true }) {
 	const full = groupSubjects(subjects);
@@ -90,11 +90,7 @@ export async function composeNotes({ subjects, footer, edit = true }) {
 	}
 
 	const body =
-		[
-			summary,
-			full && `<details>\n<summary>All changes (${subjects.length})</summary>\n\n${full}\n</details>`,
-			footer,
-		]
+		[summary, full && `## All changes (${subjects.length})\n\n${full}`, footer]
 			.filter(Boolean)
 			.join("\n\n") || "_No notable changes._";
 
