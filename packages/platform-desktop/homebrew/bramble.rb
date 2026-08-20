@@ -9,7 +9,6 @@ cask "bramble" do
 
   livecheck do
     url :url
-    strategy :github_releases
     regex(/^v?(\d+(?:\.\d+)+)-desktop$/i)
   end
 
