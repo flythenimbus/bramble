@@ -864,11 +864,18 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	// dist-linux and the dmg directory are not cleaned between releases, and the bundlers put the
 	// version in every filename, so a plain extension glob picks up the PREVIOUS release too:
 	// cutting 0.4.0 over a 0.3.0 tree attaches 0.3.0 debs, rpms and AppImages to the new release
-	// and hashes them into its SHA256SUMS. Delimited, so 0.4.0 never matches 10.4.0.
-	const ofThisVersion = new RegExp(`[_-]${version.replace(/\./g, "\\.")}[_-]`);
+	// and hashes them into its SHA256SUMS.
+	//
+	// Compared as text, not as a pattern. `version` comes from argv, so building a RegExp from it
+	// raises an escaping question with no upside: matching the delimited string is what was meant
+	// all along, and it cannot be malformed by its input.
+	// The bundlers bracket the version in one delimiter or the other, never a mix, so requiring a
+	// matched pair rejects 10.4.0 and 0.4.0-rc1 alike, where either loose end would take both.
+	/** `Bramble_0.4.0_amd64.deb` and `Bramble-0.4.0-1.x86_64.rpm`. */
+	const ofThisVersion = (f: string) => ["_", "-"].some((d) => f.includes(`${d}${version}${d}`));
 
 	const assets: string[] = [];
-	for (const f of dmgs.filter((f) => ofThisVersion.test(f))) assets.push(join(BUNDLE, "dmg", f));
+	for (const f of dmgs.filter(ofThisVersion)) assets.push(join(BUNDLE, "dmg", f));
 	// One release carries every platform. The AppImage must be signed, for the same reason the
 	// macOS archive must: it is what the updater fetches, and an unsigned one is rejected by every
 	// installed app, so publishing it looks complete and updates nobody. The .deb and .rpm carry
@@ -879,7 +886,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 		["dist-linux/appimage", ".AppImage"],
 	] as const) {
 		if (!existsSync(dir)) continue;
-		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion.test(f));
+		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion(f));
 		// Nothing for this version means the Linux build did not run or wrote elsewhere. Silence
 		// here would publish a macOS-only release that claims to carry Linux.
 		if (built.length === 0) fail(`no ${version} ${ext} in ${dir}; re-run the Linux build`);
