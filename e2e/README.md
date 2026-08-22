@@ -84,6 +84,14 @@ HEADED=1 pnpm test:e2e   # watch it in a real window
 - `helpers.ts` has the UI helpers (create/lock/unlock, the vault picker, the sync panel) and
   background-storage inspection. The other two suites import from here rather than duplicating.
 - Serial (one worker): the persistent profile and fixed ports are shared resources.
+- `autofill-rescan.spec.ts` is the cost suite for issue #59, and two of its cases assert on cost
+  rather than behaviour: how many `AUTOFILL_QUERY` messages reach the background while a page
+  churns (counted by an extra `chrome.runtime.onMessage` listener in the service worker, which
+  answers nothing), and how much main-thread blocking a sentence typed into a textarea causes.
+  **The churn in those fixtures is load-bearing.** A static page keeps the field model cached, so
+  the regression does not reproduce and the test passes against the old code: verified by
+  rebuilding at the parent commit, where the two cases report 8 stray queries and 4,467ms of
+  blocking.
 
 ---
 
