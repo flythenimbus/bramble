@@ -172,6 +172,46 @@ describe("reddit-style login: each field in its own open shadow root", () => {
 	});
 });
 
+describe("deep traversal order", () => {
+	// deepQueryAll takes a native querySelectorAll when the page has no open
+	// shadow root and walks by hand when it does (issue #59). Both must produce
+	// the one pre-order the "nearest preceding input" rungs depend on: the
+	// element, then its shadow content, then its light children.
+	function reference(selector: string, root: ParentNode): Element[] {
+		const out: Element[] = [];
+		const visit = (parent: ParentNode): void => {
+			for (const el of Array.from(parent.children)) {
+				if (el.matches(selector)) out.push(el);
+				if (el.shadowRoot) visit(el.shadowRoot);
+				visit(el);
+			}
+		};
+		visit(root);
+		return out;
+	}
+
+	const ids = (els: Element[]): string[] => els.map((el) => el.id);
+
+	it("matches the reference walk through nested roots and slotted light children", () => {
+		document.body.innerHTML = `<input id="a"><div><input id="b"></div>`;
+		const outer = host("x-outer", "open", `<input id="c"><span><input id="d"></span><slot></slot>`);
+		// A light child (projected through the slot) and a host nested in the shadow tree.
+		outer.innerHTML = `<input id="e">`;
+		outer.shadowRoot?.append(host("x-inner", "open", `<input id="f">`));
+		document.body.append(outer);
+		document.body.insertAdjacentHTML("beforeend", `<input id="g">`);
+
+		expect(ids(deepQueryAll("input"))).toEqual(ids(reference("input", document)));
+		expect(ids(deepQueryAll("input"))).toEqual(["a", "b", "c", "d", "f", "e", "g"]);
+	});
+
+	it("matches the reference walk on a page with no shadow root at all", () => {
+		document.body.innerHTML = `<input id="a"><section><input id="b"><div><input id="c"></div></section><input id="d">`;
+		expect(ids(deepQueryAll("input"))).toEqual(ids(reference("input", document)));
+		expect(deepQuery("input")?.id).toBe("a");
+	});
+});
+
 describe("shadow-DOM card + OTP", () => {
 	it("detectCardFields finds cc-* inputs inside a shadow root", () => {
 		document.body.append(

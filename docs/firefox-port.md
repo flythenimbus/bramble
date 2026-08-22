@@ -335,6 +335,10 @@ differs from Chrome.
   origin is one we won't serve, e.g. a cross-origin child frame) the background replies `passthrough`
   and the shim calls the captured native method. Firefox therefore has **no all-or-nothing
   interception** and **no pause-around-own-unlock** dance that the Chrome proxy needs.
+  Injecting them only when the pref is on (`scripting.registerContentScripts`) was considered while
+  fixing issue #59 and deliberately not done: the two scripts are 0.6KB and 3.8KB, so the per-frame
+  saving is noise next to what that issue was about, and getting `document_start` + `world: "MAIN"`
+  wrong here fails *silently* (every ceremony passes through to the native authenticator).
 
 **Scoped out of v1:** `mediation: "conditional"` (passkey autofill in the field dropdown) passes
 through to native.

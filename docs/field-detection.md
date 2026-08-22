@@ -1,7 +1,7 @@
 # Field detection
 
 How Bramble decides which inputs on a page are a username, password, card field,
-OTP box, or custom field. Code: `packages/platform-extension/src/detection.ts`,
+OTP box, or custom field. Code: `packages/platform-extension/src/content/detection.ts`,
 exercised by real-site fixtures in `fixtures/sites.dom.test.ts`. How the detected
 fields are filled is in [autofill.md](autofill.md).
 
@@ -16,6 +16,27 @@ attributes (`name`, `id`, `placeholder`, `autocomplete`, `aria-label`) are the
 higher-priority hint; the associated `<label>` text (explicit `for=`, wrapping
 `<label>`, `aria-labelledby`) is a lower-priority fallback for forms whose only
 human-readable hint lives in the label.
+
+## What a parse costs
+
+The rungs below add up to about twenty selectors, and running each as its own DOM
+traversal is what made the extension a browsing tax: a YouTube watch page (50k
+elements, 2 inputs) cost ~675ms per parse, twice a second, in every frame
+(issue #59). Two rules keep it flat:
+
+- **One collection per parse.** `createScan()` gathers every `input` once, in
+  DFS pre-order, and every rung filters that list. Selector work now tracks the
+  number of inputs, not the size of the page.
+- **Native queries unless the page uses shadow DOM.** `deepQueryAll` crosses open
+  shadow roots, which `querySelectorAll` cannot, but only pages that actually
+  have a root pay for the hand-written walk. Whether one exists is a memoized
+  census (one TreeWalker pass), dropped by `invalidatePageFields()`.
+
+Both orders are the same pre-order - the element, then its shadow content, then
+its light children - because rung 1 pairs a username with the password it
+precedes. `detection.shadow.dom.test.ts` pins the two paths to one reference
+walk, and `detection.perf.dom.test.ts` fails if selector work starts scaling with
+page size again.
 
 ## Username and login fields
 

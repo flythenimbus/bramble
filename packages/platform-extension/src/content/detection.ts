@@ -151,21 +151,89 @@ const USERNAME_TEXT_SELECTOR =
 // faceplate-text-input) render into an OPEN shadow root. querySelector(All)
 // stops at shadow boundaries, so these helpers also walk el.shadowRoot. Closed
 // roots report shadowRoot === null and are silently skipped (unreachable).
+//
+// Crossing a boundary costs a JS walk over every element, which on a large page
+// (YouTube: 50k elements) is hundreds of milliseconds. A tree with no open
+// shadow root anywhere - the overwhelming majority - takes a single native
+// querySelectorAll instead, whose pre-order is the same. Whether a tree holds a
+// host is itself a walk, so the answer is memoized per document and dropped by
+// invalidateDomScan() on the same DOM-change signal as the field model.
+
+let shadowCensus: { doc: Document; present: boolean } | null = null;
+// Sticky across invalidations: a page that rendered one open root will render
+// more, and the content script's mutation filter stays conservative there
+// because a shadow tree's own churn is invisible to a light-DOM observer.
+let shadowSeenEver = false;
+
+/** Drop the memoized shadow-host census. Wired to invalidatePageFields(). */
+export function invalidateDomScan(): void {
+	shadowCensus = null;
+}
+
+/** True once any census has found an open shadow root in this frame. */
+export function pageUsesShadowDom(): boolean {
+	return shadowSeenEver;
+}
+
+/** Test seam: forget the memo entirely, sticky flag included. */
+export function resetDomScanForTest(): void {
+	shadowCensus = null;
+	shadowSeenEver = false;
+}
+
+/** Depth-first walk of `root`'s descendants, crossing open shadow roots. `cb` returning true stops it. */
+function walkDeep(root: ParentNode, cb: (el: Element) => boolean): boolean {
+	for (let el = root.firstElementChild; el; el = el.nextElementSibling) {
+		if (cb(el)) return true;
+		// Shadow content before light children: the host's own subtree is what
+		// the root projects into, so it comes second. Matches the pre-order the
+		// detectors' "nearest preceding input" rungs rely on.
+		if (el.shadowRoot && walkDeep(el.shadowRoot, cb)) return true;
+		if (walkDeep(el, cb)) return true;
+	}
+	return false;
+}
+
+/** True if any open shadow root exists under `root`. Memoized for whole-document scans. */
+function crossesShadow(root: ParentNode): boolean {
+	// 9 is Node.DOCUMENT_NODE; only a whole-document census is worth memoizing.
+	const doc = root.nodeType === 9 ? (root as Document) : null;
+	if (doc && shadowCensus?.doc === doc) return shadowCensus.present;
+	// One native walk of the light tree: a nested root can only hang off a host
+	// found here, so finding no host at all settles it.
+	const scope = doc ? doc.documentElement : (root as Element | DocumentFragment);
+	let present = false;
+	if (scope) {
+		if (scope instanceof Element && scope.shadowRoot) present = true;
+		else {
+			const walker = (scope.ownerDocument ?? document).createTreeWalker(
+				scope,
+				NodeFilter.SHOW_ELEMENT,
+			);
+			for (let el = walker.nextNode(); el; el = walker.nextNode()) {
+				if ((el as Element).shadowRoot) {
+					present = true;
+					break;
+				}
+			}
+		}
+	}
+	if (present) shadowSeenEver = true;
+	if (doc) shadowCensus = { doc, present };
+	return present;
+}
 
 /** querySelectorAll that descends into open shadow roots, in DFS pre-order. */
 export function deepQueryAll<E extends Element = HTMLElement>(
 	selector: string,
 	root: ParentNode = document,
 ): E[] {
+	if (!crossesShadow(root)) return Array.from(root.querySelectorAll<E>(selector));
 	const out: E[] = [];
-	const visit = (parent: ParentNode): void => {
-		for (const el of Array.from(parent.children)) {
-			if (el.matches(selector)) out.push(el as E);
-			if (el.shadowRoot) visit(el.shadowRoot);
-			visit(el);
-		}
-	};
-	visit(root);
+	walkDeep(root, (el) => {
+		if (el.matches(selector)) out.push(el as unknown as E);
+		return false;
+	});
 	return out;
 }
 
@@ -174,17 +242,14 @@ export function deepQuery<E extends Element = HTMLElement>(
 	selector: string,
 	root: ParentNode = document,
 ): E | null {
-	const visit = (parent: ParentNode): E | null => {
-		for (const el of Array.from(parent.children)) {
-			if (el.matches(selector)) return el as E;
-			const inShadow = el.shadowRoot ? visit(el.shadowRoot) : null;
-			if (inShadow) return inShadow;
-			const inLight = visit(el);
-			if (inLight) return inLight;
-		}
-		return null;
-	};
-	return visit(root);
+	if (!crossesShadow(root)) return root.querySelector<E>(selector);
+	let found: E | null = null;
+	walkDeep(root, (el) => {
+		if (!el.matches(selector)) return false;
+		found = el as unknown as E;
+		return true;
+	});
+	return found;
 }
 
 /** closest() that crosses shadow boundaries by hopping to each root's host. */
@@ -217,9 +282,60 @@ export function composedTarget(e: Event): EventTarget | null {
 	return e.composedPath()[0] ?? e.target;
 }
 
+// --- Per-parse scan --------------------------------------------------------
+// A parse used to run one deep traversal per selector: 21 of them, whether or
+// not the page held a single input. It now collects the inputs once and every
+// rung filters that list, so a parse costs one traversal however far it climbs.
+
+const EDITABLE_INPUT = "input:not([readonly]):not([disabled])";
+const PASSWORD_INPUT = 'input[type="password"]:not([readonly]):not([disabled])';
+
+export interface PageScan {
+	doc: Document;
+	/** Every input in the tree, in DFS pre-order, open shadow roots included. */
+	inputs: HTMLInputElement[];
+	/** The subset that is neither readonly nor disabled: what most rungs target. */
+	editable: HTMLInputElement[];
+	/** labelText(el), computed at most once per element per scan. */
+	label(el: HTMLInputElement): string;
+}
+
+/** Inputs from `list` matching `selector`, order preserved. */
+function pick(list: HTMLInputElement[], selector: string): HTMLInputElement[] {
+	return list.filter((el) => el.matches(selector));
+}
+
+/** First input in `list` matching `selector`, or null. */
+function pickOne(list: HTMLInputElement[], selector: string): HTMLInputElement | null {
+	return list.find((el) => el.matches(selector)) ?? null;
+}
+
+/** Collect the tree's inputs once, for the detectors to filter. */
+export function createScan(root: ParentNode = document): PageScan {
+	const doc = ((root as Node).ownerDocument ?? (root as Document)) as Document;
+	const inputs = deepQueryAll<HTMLInputElement>("input", root);
+	const labels = new Map<HTMLInputElement, string>();
+	return {
+		doc,
+		inputs,
+		editable: pick(inputs, EDITABLE_INPUT),
+		label(el) {
+			let text = labels.get(el);
+			if (text === undefined) {
+				text = labelText(el, doc);
+				labels.set(el, text);
+			}
+			return text;
+		},
+	};
+}
+
 /** First non-readonly, non-disabled `type=password` input, or null. */
-export function findPasswordField(doc: Document = document): HTMLInputElement | null {
-	return deepQuery<HTMLInputElement>('input[type="password"]:not([readonly]):not([disabled])', doc);
+export function findPasswordField(
+	doc: Document = document,
+	scan: PageScan = createScan(doc),
+): HTMLInputElement | null {
+	return pickOne(scan.inputs, PASSWORD_INPUT);
 }
 
 /** Concatenated attribute hint (name, id, placeholder, autocomplete, aria-label) for regex matching. */
@@ -269,17 +385,19 @@ function looksLikeUsername(el: HTMLInputElement): boolean {
 }
 
 /** Latest text/email input appearing before `password` in DOM order, or null. */
-function findUsernameNearPassword(password: HTMLInputElement): HTMLInputElement | null {
+function findUsernameNearPassword(
+	password: HTMLInputElement,
+	scan: PageScan = createScan(password.ownerDocument),
+): HTMLInputElement | null {
 	const form = closestAcrossShadow(password, "form");
-	const scope: ParentNode = form ?? password.ownerDocument;
 	// Walk text-like inputs AND password inputs together in pre-order: the
 	// username is the latest text-like input appearing before `password`. A
 	// single ordered traversal works even when each field lives in its own
 	// shadow host, where compareDocumentPosition would report DISCONNECTED.
-	const ordered = deepQueryAll<HTMLInputElement>(
-		`${USERNAME_TEXT_SELECTOR}, input[type="password"]`,
-		scope,
-	);
+	const selector = `${USERNAME_TEXT_SELECTOR}, input[type="password"]`;
+	const ordered = form
+		? deepQueryAll<HTMLInputElement>(selector, form)
+		: pick(scan.inputs, selector);
 	let best: HTMLInputElement | null = null;
 	for (const c of ordered) {
 		if (c === password) return best;
@@ -321,11 +439,8 @@ const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
 export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|security.?code|card.?code|card.?verif/i;
 
 /** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
-function ccByToken(token: string, doc: Document = document): HTMLInputElement | null {
-	return deepQuery<HTMLInputElement>(
-		`input[autocomplete~="${token}"]:not([readonly]):not([disabled])`,
-		doc,
-	);
+function ccByToken(scan: PageScan, token: string): HTMLInputElement | null {
+	return pickOne(scan.editable, `input[autocomplete~="${token}"]`);
 }
 
 /**
@@ -333,13 +448,13 @@ function ccByToken(token: string, doc: Document = document): HTMLInputElement | 
  * Password-typed inputs are skipped unless `allowPassword` (CVV may be type=password).
  */
 function findByHint(
+	scan: PageScan,
 	re: RegExp,
 	exclude?: RegExp,
 	allowPassword = false,
-	doc: Document = document,
 ): HTMLInputElement | null {
 	const inputs: HTMLInputElement[] = [];
-	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+	for (const el of scan.editable) {
 		if (el.type === "hidden" || el.type === "checkbox" || el.type === "radio") continue;
 		if (el.type === "password" && !allowPassword) continue;
 		inputs.push(el);
@@ -351,7 +466,7 @@ function findByHint(
 	}
 	// Label text is a fallback, checked only when no attribute matched.
 	for (const el of inputs) {
-		const lbl = labelText(el, doc);
+		const lbl = scan.label(el);
 		if (!lbl || exclude?.test(lbl)) continue;
 		if (re.test(lbl)) return el;
 	}
@@ -365,35 +480,34 @@ function findByHint(
  * (`sf.req.card.expiryMonth`, `cardScheme`), and naming the schema is exactly the
  * evidence wanted here, even though such a field would never be filled.
  */
-function cardContextPresent(partial: Omit<CardFields, "number">, doc: Document): boolean {
+function cardContextPresent(partial: Omit<CardFields, "number">, scan: PageScan): boolean {
 	if (partial.cvv || partial.name || partial.expCombined || partial.expMonth || partial.expYear) {
 		return true;
 	}
-	return deepQueryAll<HTMLInputElement>("input", doc).some((el) =>
-		CC_CONTEXT_RE.test(attrHint(el)),
-	);
+	return scan.inputs.some((el) => CC_CONTEXT_RE.test(attrHint(el)));
 }
 
 /** Detect credit-card fields, preferring `cc-*` autocomplete tokens over hint regexes. */
-export function detectCardFields(doc: Document = document): CardFields {
-	const name = ccByToken("cc-name", doc) ?? findByHint(CC_NAME_RE, undefined, false, doc);
-	const expMonth =
-		ccByToken("cc-exp-month", doc) ?? findByHint(CC_EXP_MONTH_RE, undefined, false, doc);
-	const expYear =
-		ccByToken("cc-exp-year", doc) ?? findByHint(CC_EXP_YEAR_RE, undefined, false, doc);
+export function detectCardFields(
+	doc: Document = document,
+	scan: PageScan = createScan(doc),
+): CardFields {
+	const name = ccByToken(scan, "cc-name") ?? findByHint(scan, CC_NAME_RE);
+	const expMonth = ccByToken(scan, "cc-exp-month") ?? findByHint(scan, CC_EXP_MONTH_RE);
+	const expYear = ccByToken(scan, "cc-exp-year") ?? findByHint(scan, CC_EXP_YEAR_RE);
 	// Combined MM/YY only when there's no split month/year pair.
 	const expCombined =
 		!expMonth && !expYear
-			? (ccByToken("cc-exp", doc) ?? findByHint(CC_EXP_RE, /month|year/i, false, doc))
+			? (ccByToken(scan, "cc-exp") ?? findByHint(scan, CC_EXP_RE, /month|year/i))
 			: null;
-	const cvv = ccByToken("cc-csc", doc) ?? findByHint(CC_CSC_RE, undefined, true, doc);
+	const cvv = ccByToken(scan, "cc-csc") ?? findByHint(scan, CC_CSC_RE, undefined, true);
 	const rest = { name, expCombined, expMonth, expYear, cvv };
 	// The weak pass runs last and only in card context, so an unlabelled `name="pan"`
 	// resolves on a PCI capture page without claiming a tax-ID field anywhere else.
 	const number =
-		ccByToken("cc-number", doc) ??
-		findByHint(CC_NUMBER_RE, undefined, false, doc) ??
-		(cardContextPresent(rest, doc) ? findByHint(CC_NUMBER_WEAK_RE, undefined, false, doc) : null);
+		ccByToken(scan, "cc-number") ??
+		findByHint(scan, CC_NUMBER_RE) ??
+		(cardContextPresent(rest, scan) ? findByHint(scan, CC_NUMBER_WEAK_RE) : null);
 	return { number, ...rest };
 }
 
@@ -557,9 +671,9 @@ export function isSingleCharBox(el: HTMLInputElement): boolean {
  * thing that finds these widgets when the site tags no box with a hint or an
  * autocomplete token.
  */
-function segmentedRun(doc: Document): HTMLInputElement[] {
+function segmentedRun(scan: PageScan): HTMLInputElement[] {
 	const byParent = new Map<Element, HTMLInputElement[]>();
-	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+	for (const el of scan.editable) {
 		if (!isSingleCharBox(el)) continue;
 		if (OTP_NEGATIVE_RE.test(attrHint(el))) continue;
 		const parent = el.parentElement;
@@ -579,13 +693,13 @@ function segmentedRun(doc: Document): HTMLInputElement[] {
  * when exactly one field on the page qualifies: more than one means we can't
  * tell which is the code, and guessing would fill the wrong box.
  */
-function loneNumericCode(doc: Document, card: CardFields): HTMLInputElement[] {
+function loneNumericCode(scan: PageScan, card: CardFields): HTMLInputElement[] {
 	const found: HTMLInputElement[] = [];
-	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+	for (const el of scan.editable) {
 		if (!isOtpCandidateType(el)) continue;
 		if (isCardField(card, el)) continue;
 		if (!isCodeLength(el) || !isNumericEntry(el)) continue;
-		if (OTP_NEGATIVE_RE.test(attrHint(el)) || OTP_NEGATIVE_RE.test(labelText(el, doc))) continue;
+		if (OTP_NEGATIVE_RE.test(attrHint(el)) || OTP_NEGATIVE_RE.test(scan.label(el))) continue;
 		found.push(el);
 	}
 	return found.length === 1 ? found : [];
@@ -644,19 +758,17 @@ export function splitOtpFields(fields: HTMLInputElement[]): OtpTargets {
 export function otpInputs(
 	doc: Document = document,
 	precomputedCard?: CardFields,
+	scan: PageScan = createScan(doc),
 ): HTMLInputElement[] {
 	// 1. Multiple `one-time-code` tokens means a segmented widget tagging every box.
-	const tokened = deepQueryAll<HTMLInputElement>(
-		'input[autocomplete~="one-time-code"]:not([readonly]):not([disabled])',
-		doc,
-	);
+	const tokened = pick(scan.editable, 'input[autocomplete~="one-time-code"]');
 	if (tokened.length >= 1) return tokened;
 
 	// Reuse a card scan from parsePageFields when given; otherwise compute it lazily.
-	const card = precomputedCard ?? detectCardFields(doc);
+	const card = precomputedCard ?? detectCardFields(doc, scan);
 	// 2. Attribute and label hints.
 	let hinted: HTMLInputElement | null = null;
-	for (const el of deepQueryAll<HTMLInputElement>("input:not([readonly]):not([disabled])", doc)) {
+	for (const el of scan.editable) {
 		if (!isOtpCandidateType(el)) continue;
 		if (isCardField(card, el)) continue;
 		const hint = attrHint(el);
@@ -665,7 +777,7 @@ export function otpInputs(
 			hinted = el;
 			break;
 		}
-		const lbl = labelText(el, doc);
+		const lbl = scan.label(el);
 		if (!lbl || OTP_NEGATIVE_RE.test(lbl)) continue;
 		if (OTP_HINT_RE.test(lbl) || (WEAK_CODE_RE.test(lbl) && isCodeLength(el))) {
 			hinted = el;
@@ -682,11 +794,11 @@ export function otpInputs(
 	}
 
 	// 3. Structural: an untagged run of single-character boxes.
-	const run = segmentedRun(doc);
+	const run = segmentedRun(scan);
 	if (run.length > 0) return run;
 
 	// 4. Structural: a lone digits-only field of code length.
-	return loneNumericCode(doc, card);
+	return loneNumericCode(scan, card);
 }
 
 // Match only interactive captchas; v3/invisible variants run transparently and
@@ -708,6 +820,13 @@ const CAPTCHA_SELECTORS = [
 export function isRendered(el: Element): boolean {
 	const rect = el.getBoundingClientRect();
 	if (rect.width < 10 || rect.height < 10) return false;
+	// checkVisibility answers all three in one call and without allocating a
+	// style declaration, which matters in the loops over every input. It also
+	// catches an opacity:0 ANCESTOR, which reading the element's own computed
+	// opacity cannot. Absent (jsdom, older engines): fall back.
+	if (typeof el.checkVisibility === "function") {
+		return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+	}
 	const view = el.ownerDocument?.defaultView;
 	const style = view?.getComputedStyle?.(el);
 	if (!style) return true;
@@ -743,14 +862,11 @@ export function deriveMatcher(key: string): FieldMatcher | null {
 export const CUSTOM_FILLABLE_TYPES = new Set(["text", "tel", "number", "search", "url", ""]);
 
 /** All non-readonly inputs of a custom-fillable type. */
-export function getFillableInputs(doc: Document = document): HTMLInputElement[] {
-	const out: HTMLInputElement[] = [];
-	for (const el of deepQueryAll<HTMLInputElement>("input", doc)) {
-		if (el.readOnly || el.disabled) continue;
-		if (!CUSTOM_FILLABLE_TYPES.has(el.type)) continue;
-		out.push(el);
-	}
-	return out;
+export function getFillableInputs(
+	doc: Document = document,
+	scan: PageScan = createScan(doc),
+): HTMLInputElement[] {
+	return scan.editable.filter((el) => CUSTOM_FILLABLE_TYPES.has(el.type));
 }
 
 /** True if `el` matches the custom field via autocomplete token, attributes, or label text. */
@@ -793,9 +909,10 @@ export interface PageFieldModel {
  * the DOM. The card scan is shared with the OTP detection.
  */
 export function parsePageFields(doc: Document = document): PageFieldModel {
-	const card = detectCardFields(doc);
-	const login = detectLoginFields(doc);
-	const otp = otpInputs(doc, card);
+	const scan = createScan(doc);
+	const card = detectCardFields(doc, scan);
+	const login = detectLoginFields(doc, scan);
+	const otp = otpInputs(doc, card, scan);
 	return { login, card, otp };
 }
 
@@ -824,6 +941,32 @@ export function isCandidate(model: PageFieldModel, el: EventTarget | null): el i
 	return kindOf(model, el) !== null;
 }
 
+// Types no rung can ever claim. Everything else stays in: an expiry field can be
+// type=month, a card number type=tel, an OTP box type=number.
+const NEVER_CANDIDATE_TYPES = new Set([
+	"hidden",
+	"checkbox",
+	"radio",
+	"submit",
+	"reset",
+	"button",
+	"image",
+	"file",
+	"color",
+	"range",
+]);
+
+/**
+ * Could `el` be a candidate at all, judged without parsing the page? A false here
+ * saves the parse behind `isCandidate`, which matters because these run on every
+ * keystroke and click: typing in a comment box must not cost a page scan.
+ */
+export function couldBeCandidate(el: EventTarget | null): el is HTMLInputElement {
+	if (!(el instanceof HTMLInputElement)) return false;
+	if (el.readOnly || el.disabled) return false;
+	return !NEVER_CANDIDATE_TYPES.has(el.type);
+}
+
 /** Classify a focused field by parsing the live DOM. Prefer `kindOf(model, el)` on a cached model. */
 export function candidateKind(
 	el: EventTarget | null,
@@ -845,37 +988,37 @@ export function isAutofillCandidate(
  * explicit autocomplete tokens, lone email input, attribute hints, label text.
  * Either field may be null.
  */
-export function detectLoginFields(doc: Document = document): LoginFields {
-	const password = findPasswordField(doc);
+export function detectLoginFields(
+	doc: Document = document,
+	scan: PageScan = createScan(doc),
+): LoginFields {
+	const password = findPasswordField(doc, scan);
 
 	// 1. Password's nearest preceding text input: the most reliable pairing.
 	if (password) {
-		const near = findUsernameNearPassword(password);
+		const near = findUsernameNearPassword(password, scan);
 		if (near) return { username: near, password };
 	}
 
 	// 2. Explicit autocomplete tokens.
-	const explicit = deepQuery<HTMLInputElement>(
-		'input[autocomplete~="username"]:not([readonly]):not([disabled]), input[autocomplete="email"]:not([readonly]):not([disabled])',
-		doc,
+	const explicit = pickOne(
+		scan.editable,
+		'input[autocomplete~="username"], input[autocomplete="email"]',
 	);
 	if (explicit) return { username: explicit, password };
 
 	// 3. A single visible email input.
-	const email = deepQuery<HTMLInputElement>(
-		'input[type="email"]:not([readonly]):not([disabled])',
-		doc,
-	);
+	const email = pickOne(scan.editable, 'input[type="email"]');
 	if (email) return { username: email, password };
 
 	// 4. Attribute heuristics on text inputs.
-	const candidates = deepQueryAll<HTMLInputElement>(USERNAME_TEXT_SELECTOR, doc);
+	const candidates = pick(scan.inputs, USERNAME_TEXT_SELECTOR);
 	for (const c of candidates) {
 		if (looksLikeUsername(c)) return { username: c, password };
 	}
 	// 5. Last resort: label text.
 	for (const c of candidates) {
-		const lbl = labelText(c, doc);
+		const lbl = scan.label(c);
 		if (!lbl || NEGATIVE_HINT_RE.test(lbl)) continue;
 		if (USERNAME_HINT_RE.test(lbl)) return { username: c, password };
 	}

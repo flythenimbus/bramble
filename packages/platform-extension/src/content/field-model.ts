@@ -4,13 +4,16 @@
 // reads also re-parse if a referenced field has left the document, so a stale
 // element reference can't survive an SPA re-render. See CONTEXT.md.
 
-import { type PageFieldModel, parsePageFields } from "./detection";
+import { invalidateDomScan, type PageFieldModel, parsePageFields } from "./detection";
 
 let cached: PageFieldModel | null = null;
 
 /** Drop the cached model; the next getPageFields() re-parses. Wired to the MutationObserver. */
 export function invalidatePageFields(): void {
 	cached = null;
+	// The traversal helpers memoize whether the page has any open shadow root,
+	// which a DOM change can turn from false to true.
+	invalidateDomScan();
 }
 
 /**

@@ -11,10 +11,12 @@ import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
 	cardFieldsPresent,
 	composedTarget,
+	couldBeCandidate,
 	deepActiveElement,
 	hasInteractiveCaptcha,
 	isCandidate,
 	kindOf,
+	pageUsesShadowDom,
 } from "./detection";
 import { getPageFields, invalidatePageFields } from "./field-model";
 import {
@@ -70,6 +72,10 @@ let reshowField: HTMLInputElement | null = null;
 // unlock there's no active host to refresh; we re-surface matches on this field instead.
 let pendingUnlockField: HTMLInputElement | null = null;
 let lastCheck = 0;
+// Pending coalesced re-query (see scheduleQuery), and whether a DOM change went
+// unqueried because the tab was hidden at the time.
+let queryTimer: ReturnType<typeof setTimeout> | null = null;
+let missedWhileHidden = false;
 let queryGeneration = 0;
 let submitGeneration = 0;
 
@@ -597,17 +603,86 @@ function showFor(field: HTMLInputElement): void {
 	}
 }
 
+// Nodes that can hold, or turn into, a fillable field. A batch that moves
+// nothing else is page churn: YouTube rewrites its player and feed continuously,
+// and re-parsing on every such batch is what made the extension cost hundreds of
+// milliseconds per second (issue #59).
+const FIELD_BEARING = "input, select, textarea, form, iframe, frame";
+
+function mayBearFields(node: Node): boolean {
+	// nodeType, not instanceof: a node adopted from another document belongs to
+	// that realm's Element, and this runs on every batch a busy page produces.
+	// 1 is Node.ELEMENT_NODE, spelled out so a last delivery during teardown
+	// can't trip over a missing global.
+	if (node.nodeType !== 1) return false;
+	const el = node as Element;
+	// A custom element renders its own subtree, often into a shadow root no
+	// light-DOM observer can see, so treat one appearing as worth a re-parse.
+	if (el.tagName.includes("-")) return true;
+	return el.matches(FIELD_BEARING) || el.querySelector(FIELD_BEARING) !== null;
+}
+
+/** True when a batch touched something field-shaped. Pages using shadow DOM skip the filter. */
+function touchesFields(records: MutationRecord[]): boolean {
+	// A shadow tree's own churn produces no records here, so on a page that uses
+	// them any batch is the only hint we get that something was re-rendered.
+	if (pageUsesShadowDom()) return true;
+	for (const record of records) {
+		for (const node of record.addedNodes) if (mayBearFields(node)) return true;
+		for (const node of record.removedNodes) if (mayBearFields(node)) return true;
+	}
+	return false;
+}
+
+// An input the model has never heard of, re-checked at most once. The model is
+// only dropped on observable mutations, and a shadow root attaching produces
+// none, so a first focus or click on an unknown input buys one re-parse before
+// we write it off. Not wired to `input`, which fires per keystroke.
+const rechecked = new WeakSet<HTMLInputElement>();
+
+function isKnownCandidate(el: HTMLInputElement): boolean {
+	if (isCandidate(getPageFields(), el)) return true;
+	if (rechecked.has(el)) return false;
+	rechecked.add(el);
+	invalidatePageFields();
+	return isCandidate(getPageFields(), el);
+}
+
+const REQUERY_MS = 500;
+
+/** Coalesced re-query: one pending at a time, and never inside the observer callback. */
+function scheduleQuery(): void {
+	if (queryTimer !== null) return;
+	// Clamped both ways: a system clock that steps backwards must not park the
+	// re-query beyond one window.
+	const elapsed = Date.now() - lastCheck;
+	const wait = elapsed >= 0 && elapsed < REQUERY_MS ? REQUERY_MS - elapsed : 0;
+	queryTimer = setTimeout(() => {
+		queryTimer = null;
+		lastCheck = Date.now();
+		if (document.hidden) {
+			missedWhileHidden = true;
+			return;
+		}
+		queryAutofill();
+	}, wait);
+}
+
 /** MutationObserver callback: SPA-submit fallback plus a throttled autofill re-query. */
-function onDomChange(): void {
-	// The DOM changed: drop the cached field model so the next read re-parses.
+function onDomChange(records: MutationRecord[]): void {
+	if (!touchesFields(records)) return;
+	// The DOM changed under us: drop the cached field model so the next read re-parses.
 	invalidatePageFields();
 	// Commit checkpoint: an armed capture whose password field has now gone, or a
 	// password the user just edited whose field vanished within the submit window.
 	maybeCommitCapture();
-	const now = Date.now();
-	if (now - lastCheck < 500) return;
-	lastCheck = now;
-	queryAutofill();
+	// A background tab still runs its observer (a video in picture-in-picture keeps
+	// the page busy); defer the re-query until the user is looking at it again.
+	if (document.hidden) {
+		missedWhileHidden = true;
+		return;
+	}
+	scheduleQuery();
 }
 
 // The picker reports user actions through callbacks; the policy lives here.
@@ -684,6 +759,10 @@ if (frameRelay.isTop()) {
 onTeardown(() => {
 	mutationObserver?.disconnect();
 	mutationObserver = null;
+	if (queryTimer !== null) {
+		clearTimeout(queryTimer);
+		queryTimer = null;
+	}
 	cancelOperations();
 	dropRelayed();
 });
@@ -782,7 +861,7 @@ function bootstrap(): void {
 	queryAutofill();
 	queryCornerPrompt();
 
-	mutationObserver = new MutationObserver(() => onDomChange());
+	mutationObserver = new MutationObserver((records) => onDomChange(records));
 	mutationObserver.observe(document.body, { childList: true, subtree: true });
 
 	// Show on focus; this makes the email-only first step (e.g. ikea.com) work.
@@ -805,7 +884,7 @@ function bootstrap(): void {
 			) {
 				cancelOperations();
 			}
-			if (!isCandidate(getPageFields(), target)) return;
+			if (!couldBeCandidate(target) || !isKnownCandidate(target)) return;
 			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
 			showFor(target);
@@ -823,7 +902,7 @@ function bootstrap(): void {
 			if (!e.isTrusted) return;
 			cancelOperations();
 			const target = composedTarget(e);
-			if (!isCandidate(getPageFields(), target)) return;
+			if (!couldBeCandidate(target) || !isCandidate(getPageFields(), target)) return;
 			silenceAutoOpen = false;
 			if (!cachedResult) {
 				queryAutofill();
@@ -892,7 +971,7 @@ function bootstrap(): void {
 				return;
 			}
 			// Picker closed: a mousedown on a candidate field is re-engagement.
-			if (isCandidate(getPageFields(), target)) {
+			if (couldBeCandidate(target) && isKnownCandidate(target)) {
 				silenceAutoOpen = false;
 				// Re-click on the already-focused field fires no focusin, so show ourselves.
 				if (deepActiveElement() === target) showFor(target);
@@ -911,7 +990,15 @@ function bootstrap(): void {
 		}
 	});
 	document.addEventListener("visibilitychange", () => {
-		if (document.visibilityState !== "visible") cancelOperations();
+		if (document.visibilityState !== "visible") {
+			cancelOperations();
+			return;
+		}
+		// Catch up on whatever the page rebuilt while it was hidden.
+		if (!missedWhileHidden) return;
+		missedWhileHidden = false;
+		invalidatePageFields();
+		queryAutofill();
 	});
 	window.addEventListener("blur", () => {
 		// Moving focus into the authenticated picker iframe keeps the top document focused.

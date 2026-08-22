@@ -10,6 +10,12 @@ two are CI-safe.
 | `sync/` | `pnpm test:e2e:sync` | nothing (servers auto-start) | two peers pairing over real WebRTC |
 | `android/` | `pnpm test:e2e:android` | a device attached | the **shipped** app: uniffi Rust core, native storage |
 
+`perf/page-blocking.mjs` is not a suite: it is a plain script (`node
+e2e/perf/page-blocking.mjs [url]`) that loads a real site twice, once with the built Chromium
+extension and once without, and prints the difference in main-thread blocking time. It needs the
+network, so it is manual. It is what quantified issue #59 and what should be re-run after any
+change to the content script's detection or its mutation handling.
+
 The transport-race gate lives under `extension/` but is `testIgnore`d from `playwright.config.ts`:
 it loads its own tiny fixture rather than the built extension, so it needs no build and runs in
 seconds.

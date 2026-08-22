@@ -12,6 +12,8 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.ts"],
+		// Resets the detection helpers' shadow-DOM memo between cases; see the file.
+		setupFiles: ["src/test/setup-dom.ts"],
 		// jsdom loads no external resources and runs no scripts by default, so
 		// site fixtures (e.g. reddit-login.html, which references redditstatic CSS
 		// and recaptcha JS) parse to DOM structure without any network access.

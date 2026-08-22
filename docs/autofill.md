@@ -134,6 +134,33 @@ is suppressed when an interactive captcha is present (see
 TOTP codes are computed in the background; only the resulting digits are filled,
 never the seed. See [totp.md](totp.md).
 
+## When the content script looks at the page again
+
+An SPA can swap a login form in without a navigation, so a `childList`
+MutationObserver drives the re-query. It used to do so on every batch, which on a
+page that rewrites itself continuously (YouTube, a feed, a video player) meant a
+full page parse twice a second in every frame, plus one on every keystroke and
+click, because each of those dropped the cached field model first. That is
+issue #59. The policy now:
+
+- **A batch is ignored unless it moves something field-shaped**: an `input`,
+  `select`, `textarea`, `form`, `iframe`, or a custom element (which renders its
+  own subtree, possibly into a shadow root this observer cannot see). Pages known
+  to use shadow DOM skip the filter entirely, since their real churn is invisible
+  here anyway.
+- **Re-queries coalesce** into one pending timer, at most one per 500ms, and run
+  outside the observer callback.
+- **A hidden tab does not re-query.** Picture-in-picture keeps a backgrounded page
+  busy; the deferred re-query runs when the tab is visible again.
+- **Event handlers check the target before the model.** `couldBeCandidate()` is a
+  type check on the element, so typing in a comment box or clicking a button costs
+  nothing. Only a real input reaches the parse behind `isCandidate()`, and an
+  input the model has never seen buys exactly one re-parse (a shadow root can
+  attach with no mutation to observe).
+
+`e2e/perf/page-blocking.mjs` is the harness for this: it reports main-thread
+blocking time with and without the extension on a real page.
+
 ## Writing a value into a field
 
 `fill.ts` writes through the native `value` setter (so React's value tracker sees

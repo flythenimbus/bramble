@@ -69,10 +69,17 @@ module-level concepts that name good seams.
   fields: the login fields (username/password/new-password), the card fields, and
   the one-time-code inputs, holding live element references. Produced once by
   `parsePageFields(root)` (the pure parser in `content/detection.ts`) and cached;
-  the content script's MutationObserver invalidates it. Callers (content, fill,
-  capture, picker) read the model instead of each re-scanning the DOM, and
-  `candidateKind(el)` becomes a lookup against the model rather than a fresh scan.
-  Stale references (elements no longer `isConnected`) are dropped on read.
+  the content script's MutationObserver invalidates it, but only for a batch that
+  moved something field-shaped. Callers (content, fill, capture, picker) read the
+  model instead of each re-scanning the DOM, and `candidateKind(el)` becomes a
+  lookup against the model rather than a fresh scan. Stale references (elements no
+  longer `isConnected`) are dropped on read.
+- **PageScan** — the one DOM collection a parse is allowed: every `input` in the
+  tree, in DFS pre-order, gathered by `createScan()` and filtered by each detector
+  rung. Traversal crosses open shadow roots only on pages that have one (a
+  memoized census decides), so everywhere else a rung is a native
+  `querySelectorAll`. Both paths yield the same pre-order, which rung 1 of
+  `detectLoginFields` depends on. See docs/field-detection.md.
 - **Segmented widget / mirror**: a one-time code split across N single-character
   **boxes**, often alongside a visually-hidden **mirror** input holding the
   assembled code for the form and for OS-level code autofill. The model keeps all
