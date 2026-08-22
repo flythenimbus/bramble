@@ -91,7 +91,8 @@ const features = [
     },
 ];
 
-const faqs = [
+// `link` is appended to the answer, for the rare one that should point somewhere.
+const faqs: { q: string; a: string; link?: { href: string; label: string } }[] = [
     {
         q: "Is Bramble really free?",
         a: "Yes. Bramble is free and open source. There is no paid tier, no subscription, and no account to create.",
@@ -115,6 +116,11 @@ const faqs = [
     {
         q: "Is it open source?",
         a: "Yes, the whole thing. The code lives on GitHub, so you can read it, build it yourself, or point sync at your own relay.",
+    },
+    {
+        q: "Why isn't Bramble on the Google Play Store?",
+        a: "Because we don't want to help normalise Google's lockdown of Android. The Android build carries no Play Services and nothing else from Google: it is a signed APK you install yourself, and every release is published on GitHub. The campaign against that lockdown makes the case better than we can:",
+        link: { href: "https://keepandroidopen.com/", label: "keepandroidopen.com" },
     },
 ];
 ---
@@ -440,6 +446,17 @@ const faqs = [
                                 <AccordionTrigger>{faq.q}</AccordionTrigger>
                                 <AccordionContent class="text-pretty">
                                     {faq.a}
+                                    {faq.link && (
+                                        <>
+                                            {" "}
+                                            <a
+                                                href={faq.link.href}
+                                                class="underline decoration-border underline-offset-2 hover:decoration-foreground"
+                                            >
+                                                {faq.link.label}
+                                            </a>
+                                        </>
+                                    )}
                                 </AccordionContent>
                             </AccordionItem>
                         ))
