@@ -20,8 +20,13 @@ msgstr "...und noch {0} weitere"
 
 #. placeholder {0}: unsigned.length
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
-msgid "{0, plural, one {# device has not signed its roster entry yet. Open Bramble on it once to finish; a signature is how the others tell it apart from an impostor.} other {# devices have not signed their roster entries yet. Open Bramble on each once to finish; a signature is how the others tell them apart from an impostor.}}"
-msgstr "{0, plural, one {# Gerät hat seinen Roster-Eintrag noch nicht signiert. Öffnen Sie Bramble einmal auf diesem Gerät, um den Vorgang abzuschließen; anhand der Signatur können die anderen es von einem Betrüger unterscheiden.} other {# Geräte haben ihre Roster-Einträge noch nicht signiert. Öffnen Sie Bramble einmal auf jedem Gerät, um den Vorgang abzuschließen; anhand der Signatur können die anderen sie von einem Betrüger unterscheiden.}}"
+msgid "{0, plural, one {# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor.} other {# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor.}}"
+msgstr "{0, plural, one {# Gerät hat seinen Roster-Eintrag noch nicht signiert. Jedes Gerät signiert sich selbst, wenn Bramble das nächste Mal darauf geöffnet wird; bis dahin können die anderen es nicht von einem Betrüger unterscheiden.} other {# Geräte haben ihre Roster-Einträge noch nicht signiert. Jedes Gerät signiert sich selbst, wenn Bramble das nächste Mal darauf geöffnet wird; bis dahin können die anderen sie nicht von einem Betrüger unterscheiden.}}"
+
+#. placeholder {0}: unsigned.length
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#~ msgid "{0, plural, one {# device has not signed its roster entry yet. Open Bramble on it once to finish; a signature is how the others tell it apart from an impostor.} other {# devices have not signed their roster entries yet. Open Bramble on each once to finish; a signature is how the others tell them apart from an impostor.}}"
+#~ msgstr "{0, plural, one {# Gerät hat seinen Roster-Eintrag noch nicht signiert. Öffnen Sie Bramble einmal auf diesem Gerät, um den Vorgang abzuschließen; anhand der Signatur können die anderen es von einem Betrüger unterscheiden.} other {# Geräte haben ihre Roster-Einträge noch nicht signiert. Öffnen Sie Bramble einmal auf jedem Gerät, um den Vorgang abzuschließen; anhand der Signatur können die anderen sie von einem Betrüger unterscheiden.}}"
 
 #. placeholder {0}: entries.length
 #: packages/core/src/app/bulk-actions/export.tsx

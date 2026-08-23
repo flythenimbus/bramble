@@ -371,8 +371,8 @@ export function SyncConnectSection() {
 						<p className="-mt-2 text-xs text-amber-600 dark:text-amber-500">
 							<Plural
 								value={unsigned.length}
-								one="# device has not signed its roster entry yet. Open Bramble on it once to finish; a signature is how the others tell it apart from an impostor."
-								other="# devices have not signed their roster entries yet. Open Bramble on each once to finish; a signature is how the others tell them apart from an impostor."
+								one="# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor."
+								other="# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor."
 							/>
 						</p>
 					)}

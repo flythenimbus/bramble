@@ -310,8 +310,9 @@ function pickOne(list: HTMLInputElement[], selector: string): HTMLInputElement |
 	return list.find((el) => el.matches(selector)) ?? null;
 }
 
-/** Collect the tree's inputs once, for the detectors to filter. */
-export function createScan(root: ParentNode = document): PageScan {
+/** Collect the tree's inputs once, for the detectors to filter. Internal: the detectors build their
+ * own, so nothing outside this module holds a scan that could go stale or belong to another doc. */
+function createScan(root: ParentNode = document): PageScan {
 	const doc = ((root as Node).ownerDocument ?? (root as Document)) as Document;
 	const inputs = deepQueryAll<HTMLInputElement>("input", root);
 	const labels = new Map<HTMLInputElement, string>();
