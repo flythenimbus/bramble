@@ -87,7 +87,10 @@ export interface SyncEnrollmentDeps {
 	readEntriesPayload: () => Promise<EntriesPayload>;
 }
 
-type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup" | "removeDevice">;
+type SyncEnrollment = Pick<UseVault, "inviteDevice" | "joinGroup" | "removeDevice"> & {
+	/** Phase-1 migration backfill; internal, not part of the public vault API. */
+	ensureOwnEntrySigned: () => Promise<void>;
+};
 
 /**
  * Device enrollment (create group / invite / join), lifted out of VaultProvider.
@@ -165,6 +168,32 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		},
 		[shell, storage, syncKey, ensureClock],
 	);
+
+	/**
+	 * Backfill this device's roster signature (Item A phase-1 migration). A device enrolled before
+	 * signing shipped (2026-07-09) carries an unsigned entry, and nothing else ever re-signs it:
+	 * entries are only signed at create/join/invite, so a group that has not paired since stays
+	 * unsigned forever and the phase-2 flip would drop its updates. Re-stamp + re-sign once, and let
+	 * the ordinary broadcast carry it. Idempotent: a no-op the moment the entry has a `sigKey`.
+	 * See docs/p2p-sync-revocation-hardening.md.
+	 */
+	const ensureOwnEntrySigned = useCallback(async (): Promise<void> => {
+		if (!shell.syncSigningPublicKey || !shell.signRoster) return; // host can't sign
+		const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
+			syncKey("sync.group"),
+		);
+		if (!group) return; // not enrolled in a group: nothing to sign
+		const pub = await shell.syncDevicePublicKey();
+		const own = group.roster.devices.find((d) => d.publicKey === pub);
+		if (!own || own.sigKey) return;
+		const hlc = (await ensureClock()).send();
+		const signed = await signOwnEntry(shell, { ...own, hlc });
+		if (!signed.sigKey) return; // host declined to sign; leave the entry as it was
+		await storage.setMeta(syncKey("sync.group"), {
+			groupKey: group.groupKey,
+			roster: addDevice(group.roster, signed),
+		});
+	}, [shell, storage, syncKey, ensureClock]);
 
 	// Generate a fresh one-time pairing code and start listening for a device to join.
 	// The code carries no vault secrets directly, but its PSK is what authenticates a
@@ -387,5 +416,5 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		[storage, syncKey, ensureClock],
 	);
 
-	return { inviteDevice, joinGroup, removeDevice };
+	return { inviteDevice, joinGroup, removeDevice, ensureOwnEntrySigned };
 }

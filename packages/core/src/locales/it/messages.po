@@ -18,6 +18,11 @@ msgstr ""
 msgid "…and {0} more"
 msgstr "...e altri {0}"
 
+#. placeholder {0}: unsigned.length
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "{0, plural, one {# device has not signed its roster entry yet. Open Bramble on it once to finish; a signature is how the others tell it apart from an impostor.} other {# devices have not signed their roster entries yet. Open Bramble on each once to finish; a signature is how the others tell them apart from an impostor.}}"
+msgstr "{0, plural, one {# dispositivo non ha ancora firmato la propria voce del roster. Apra Bramble su di esso una volta per completare l'operazione; una firma è il modo in cui gli altri lo distinguono da un impostore.} other {# dispositivi non hanno ancora firmato le proprie voci del roster. Apra Bramble su ciascuno una volta per completare l'operazione; una firma è il modo in cui gli altri li distinguono da un impostore.}}"
+
 #. placeholder {0}: entries.length
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{0, plural, one {# entry goes into the file, with its passkeys and history.} other {# entries go into the file, with their passkeys and history.}}"
@@ -2878,6 +2883,10 @@ msgstr "Sblocco…"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Unnamed device"
 msgstr "Dispositivo non nominato"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Unsigned"
+msgstr "Non firmato"
 
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Update and restart"

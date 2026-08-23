@@ -1260,7 +1260,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.
-	const { inviteDevice, joinGroup, removeDevice } = useSyncEnrollment({
+	const { inviteDevice, joinGroup, removeDevice, ensureOwnEntrySigned } = useSyncEnrollment({
 		storage,
 		syncKey,
 		ensureClock,
@@ -1270,6 +1270,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		finishWebauthnUnlock,
 		readEntriesPayload: mutations.readEntriesPayload,
 	});
+
+	// Phase-1 migration: a device enrolled before roster signing existed carries an unsigned entry
+	// that nothing else ever re-signs, and the phase-2 flip would drop its updates. Back it off one
+	// unlock at a time. Declared after the enrollment hook (its callback lives there) and after the
+	// setActiveVault effect above, so the host already knows which vault to sign for; a failure
+	// (host asleep, not enrolled yet) just retries on the next unlock, and a signed entry is a no-op.
+	useEffect(() => {
+		if (isLocked || !activeId) return;
+		void ensureOwnEntrySigned().catch(() => {});
+	}, [isLocked, activeId, ensureOwnEntrySigned]);
 
 	// Setup-flow join: create a NEW vault from a pairing code, then run joinGroup in that vault's
 	// context. The join's device identity + blob are active-vault-scoped, so the new vault must be

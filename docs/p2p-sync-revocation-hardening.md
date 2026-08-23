@@ -424,7 +424,7 @@ Not audit findings, but P2P bugs found while device-testing the admission work; 
 - **Mobile `resetSyncState`.** The mobile shell now implements it, so a new vault wipes group + device
   keys + relay + the live mesh instead of inheriting the old group (the extension already did).
 
-## Phase-1 rollout status: the migration clock (as of 2026-07-17)
+## Phase-1 rollout status: the migration clock (as of 2026-08-22)
 
 The phase-1 producer - devices **emit** roster signatures + password-authority admission but do NOT
 enforce (`rosterRequireSignatures` / `rosterRequireAdmission` both `false` = verify-if-present) -
@@ -437,20 +437,34 @@ shipped **2026-07-09**:
   2026-07-13, build 206070081), which reaches users only after App Store review + phased rollout - so
   iOS trails the others by several days.
 
-**Clock as of 2026-07-17: ~8 days on extension + Android, ~4 days (+ review lag) on iOS.**
+**Clock as of 2026-08-22: 44 days, and every target has shipped many releases since**
+(Chromium 1.18.2, Firefox 1.16.0, Android 0.14.0, iOS 1.8.0). Desktop did not exist when this
+section was written and is a **fifth** target; its shell implements all four signing/admission
+methods, so it produces like the others.
 
-**The effective clock is longer than the release date.** Migration is passive: a device re-signs its
-own roster entry only the *next time it re-emits* one (re-enroll / roster mutation), and store/APK
-uptake rolls out over days-to-weeks (Android is a manual GitHub APK). So "every entry in a group is
-signed" trails 2026-07-09 by well more than the raw day count.
+**Waiting was never going to finish this, which is why the flip stalled.** Migration is passive and
+there was nothing to be passive *about*: `signOwnEntry` is called in exactly three places
+(`useSyncEnrollment.ts`: create group, join group, invite with the password re-entered). Nothing
+re-signed on startup, on sync, or on rename, so a device enrolled before 2026-07-09 in a group that
+had not paired since stayed unsigned no matter how long anyone waited.
+
+**Fixed by a backfill (2026-08-22).** `ensureOwnEntrySigned()` in `useSyncEnrollment.ts`, called from
+a post-unlock effect in `useVault.tsx`: if this device's own entry has no `sigKey`, re-stamp,
+re-sign, store, and let the ordinary broadcast carry it. Idempotent, and shared by all three shells
+because they render the same core app. It needs the app opened once per device, which is what the
+readiness display below is for. Now the clock genuinely runs: it starts from the release that
+carries the backfill, not from 2026-07-09.
 
 ### Do not flip phase-2 yet - the flip is capability-gated, not timed
 
 Checklist before flipping `rosterRequireSignatures` / `rosterRequireAdmission` -> `true`:
 
-1. [ ] Broad uptake of the >= 2026-07-09 build confirmed on all four targets (iOS especially, given
-   review + rollout lag). The `hello` capability bit is the runtime signal that a group is fully
-   signing-capable.
+1. [ ] Broad uptake of the build carrying the **backfill** confirmed on all five targets (iOS
+   especially, given review + rollout lag; desktop is the fifth). There is **no `hello` capability
+   bit** - an earlier draft of this checklist assumed one, but `mesh.ts` publishes
+   `{ kind: "hello", rtc }` and nothing else. The signal in its place is local and directly
+   observable: every live entry in the roster carries a `sigKey`. Settings -> Sync shows it, per
+   device, and flags the unsigned ones.
 2. [ ] **`admissionKey` pinned** (the flip prerequisite above): anchor the admission key to
    first-seen. Inert in phase 1, so it did not block the producer release, but it MUST land WITH the
    `rosterRequireAdmission` flip + a multi-device test pass, NOT before.

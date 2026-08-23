@@ -2,7 +2,9 @@
 // read by core-rust (see packages/core-rust/build.rs), so TS and Rust never drift. Each flag
 // defaults to the CONSERVATIVE value; flip it in a later release once the fleet is capable, then
 // ship. Never a runtime/remote fetch - these are baked at build time. See
-// docs/p2p-sync-revocation-hardening.md for the phase-1 -> phase-2 rollout.
+// docs/p2p-sync-revocation-hardening.md for the phase-1 -> phase-2 rollout, and read its flip
+// checklist before touching either roster flag: "the fleet is capable" is a thing to verify in
+// Settings -> Sync (every live device signed), not a length of time that has passed.
 
 import flagsJson from "./flags.json";
 

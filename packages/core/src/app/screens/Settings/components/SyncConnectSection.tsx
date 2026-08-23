@@ -1,5 +1,5 @@
 import { i18n } from "@lingui/core";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -255,6 +255,11 @@ export function SyncConnectSection() {
 	const inGroup = group != null;
 	const paired = others.length > 0;
 	// "This device" first, then most-recently-added.
+	// Roster entries carry an Ed25519 signature since 2026-07-09, but only devices that have
+	// created, joined or invited since then have one: nothing re-signs on its own, so a device that
+	// predates it stays unsigned until Bramble is opened on it (the backfill in useSyncEnrollment).
+	// Surfaced because enforcement is what phase 2 turns on. See docs/p2p-sync-revocation-hardening.md.
+	const unsigned = devices.filter((d) => !d.sigKey);
 	const sortedDevices = [...devices].sort((a, b) =>
 		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
 	);
@@ -353,6 +358,16 @@ export function SyncConnectSection() {
 						</p>
 					)}
 
+					{unsigned.length > 0 && (
+						<p className="-mt-2 text-xs text-amber-600 dark:text-amber-500">
+							<Plural
+								value={unsigned.length}
+								one="# device has not signed its roster entry yet. Open Bramble on it once to finish; a signature is how the others tell it apart from an impostor."
+								other="# devices have not signed their roster entries yet. Open Bramble on each once to finish; a signature is how the others tell them apart from an impostor."
+							/>
+						</p>
+					)}
+
 					<div className="rounded-lg border border-border divide-y divide-border/60">
 						{sortedDevices.map((d: RosterEntry) => (
 							<div key={d.publicKey} className="flex items-center justify-between gap-2 px-3 py-2">
@@ -362,6 +377,11 @@ export function SyncConnectSection() {
 										{d.publicKey === myPub && (
 											<span className="text-[10px] uppercase tracking-wide text-primary/80 border border-primary/40 rounded px-1 py-px">
 												<Trans>This device</Trans>
+											</span>
+										)}
+										{!d.sigKey && (
+											<span className="text-[10px] uppercase tracking-wide text-amber-600 border border-amber-500/40 rounded px-1 py-px dark:text-amber-500">
+												<Trans>Unsigned</Trans>
 											</span>
 										)}
 									</div>

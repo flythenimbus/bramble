@@ -49,7 +49,12 @@ built to close.
 **Fix:**
 
 1. Flip `rosterRequireSignatures` and `rosterRequireAdmission` to `true` (phase 2) once the
-   migration window for already-enrolled unsigned devices has closed.
+   migration window for already-enrolled unsigned devices has closed. That window could not close on
+   its own until the 2026-08-22 backfill (`ensureOwnEntrySigned`), because nothing re-signed an entry
+   outside create/join/invite; see the migration-clock section of
+   [p2p-sync-revocation-hardening.md](p2p-sync-revocation-hardening.md). The two flips are separable:
+   `rosterRequireSignatures` is sound as coded (`sigKey` is anchored) and closes impersonation;
+   `rosterRequireAdmission` needs item 3 below first.
 2. Make `roster_verify` a **required** member of `RosterSyncWasm` (not optional) so a mis-wired or
    partial host fails closed instead of silently skipping verification (`roster-sync.ts:45,127`).
 3. Anchor pre-existing ids too, so a known device can never present a fresh `sigKey` without a valid
