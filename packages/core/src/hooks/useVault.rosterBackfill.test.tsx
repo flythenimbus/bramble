@@ -97,12 +97,13 @@ function makePlatform(
 		}
 		return "bmV3LXNpZw==";
 	});
+	const syncDevicePublicKey = vi.fn(async () => OWN_PUB);
 	const shell = {
 		setActiveVault: vi.fn(async () => {}),
 		getActiveVault: vi.fn(async () => "v1"),
 		flushPendingCornerCapture: vi.fn(async () => {}),
 		stopSyncSpike: vi.fn(async () => {}),
-		syncDevicePublicKey: vi.fn(async () => OWN_PUB),
+		syncDevicePublicKey,
 		...(over.canSign === false
 			? {}
 			: { syncSigningPublicKey: vi.fn(async () => "bmV3LWtleQ=="), signRoster }),
@@ -114,7 +115,7 @@ function makePlatform(
 		shell,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, writes, signRoster };
+	return { platform, writes, signRoster, syncDevicePublicKey };
 }
 
 /** The roster this run wrote back, or null when it never wrote one. */
@@ -164,11 +165,14 @@ describe("roster signature backfill", () => {
 	});
 
 	it("does nothing when this device is in no group", async () => {
-		const { platform, writes, signRoster } = makePlatform({ group: null });
+		const { platform, writes, signRoster, syncDevicePublicKey } = makePlatform({ group: null });
 		await mount(platform);
 
 		expect(signRoster).not.toHaveBeenCalled();
 		expect(writtenRoster(writes)).toBeNull();
+		// Not merely "does not sign": asking the host for the device key GENERATES AND PERSISTS a
+		// Noise keypair when there is none, so a vault that never syncs must not be asked at all.
+		expect(syncDevicePublicKey).not.toHaveBeenCalled();
 	});
 
 	it("outruns its own future-dated stamp instead of losing the merge to it", async () => {

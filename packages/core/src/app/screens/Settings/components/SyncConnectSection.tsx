@@ -263,12 +263,12 @@ export function SyncConnectSection() {
 	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
 	const inGroup = group != null;
 	const paired = others.length > 0;
-	// "This device" first, then most-recently-added.
 	// Roster entries carry an Ed25519 signature since 2026-07-09, but only devices that have
 	// created, joined or invited since then have one: nothing re-signs on its own, so a device that
 	// predates it stays unsigned until Bramble is opened on it (the backfill in useSyncEnrollment).
 	// Surfaced because enforcement is what phase 2 turns on. See docs/p2p-sync-revocation-hardening.md.
 	const unsigned = devices.filter((d) => !d.sigKey);
+	// "This device" first, then most-recently-added.
 	const sortedDevices = [...devices].sort((a, b) =>
 		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
 	);

@@ -136,11 +136,12 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	/**
 	 * Merge an updated own-entry into the stored roster, re-reading it first.
 	 *
-	 * The read-modify-write window spans a signing round trip to the host (tens of milliseconds), and
-	 * both writers here plus the background's roster merge target the same key. Writing back a
-	 * snapshot taken before that trip drops whatever landed in between: a backfill could erase an
-	 * `admissionKey` published mid-invite, since the merge can only keep what is in one of its two
-	 * inputs. Re-reading closes all but an instant of that.
+	 * The read-modify-write window spans a signing round trip to the host, and the background's
+	 * roster merge writes the same key. Writing back a snapshot taken before that trip drops
+	 * whatever landed in between (a peer's entry, a revocation), since the merge can only keep what
+	 * is in one of its two inputs. Re-reading closes all but an instant of that. It does NOT protect
+	 * a concurrent change to THIS entry, which is last-writer-wins and needs re-signing over the new
+	 * body; see ensureOwnEntrySigned, the one path where that race is worth the extra round trip.
 	 */
 	const mergeOwnEntry = useCallback(
 		async (entry: RosterEntry): Promise<void> => {
@@ -201,7 +202,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		if (!shell.syncSigningPublicKey || !shell.signRoster) return; // host can't sign
 		const readGroup = () =>
 			storage.getMeta<{ groupKey: string; roster: RosterPayload }>(syncKey("sync.group"));
-		const pub = await shell.syncDevicePublicKey();
+		// Resolved lazily, AFTER the group check: syncDevicePublicKey generates and persists a Noise
+		// keypair when the device has none, so asking eagerly would write sync identity onto every
+		// vault that never syncs, on every unlock.
+		let pub: string | null = null;
 		// Twice, because signing is a round trip to the host and the entry can change under us in
 		// that window (an invite publishing an `admissionKey` on this same entry). A signature covers
 		// the entry BODY, so a stale body cannot be written back with the new signature grafted on,
@@ -211,6 +215,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const group = await readGroup();
 			if (!group) return; // not enrolled in a group: nothing to sign
+			pub ??= await shell.syncDevicePublicKey();
 			const own = group.roster.devices.find((d) => d.publicKey === pub);
 			if (!own || own.sigKey) return;
 			// Witness before stamping: the clock only ever sees ENTRY stamps (useVault loadEntries),
