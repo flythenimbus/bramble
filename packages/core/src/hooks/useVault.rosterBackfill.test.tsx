@@ -2,7 +2,7 @@
 import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Platform } from "../context/PlatformContext";
-import type { RosterEntry, RosterPayload } from "../sync";
+import { HLC_MAX_DRIFT_MS, type RosterEntry, type RosterPayload } from "../sync";
 import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 
@@ -30,13 +30,13 @@ const OWN_PUB = "b3duLXB1Yg==";
 const GROUP_KEY = "sync.group:v1";
 
 /** A roster holding this device plus a peer, with `sig` on ours only when `signed`. */
-function roster(signed: boolean): RosterPayload {
+function roster(signed: boolean, ownWall = 1000): RosterPayload {
 	const own: RosterEntry = {
 		id: DEVICE_ID,
 		publicKey: OWN_PUB,
 		label: "This device",
 		addedAt: 1,
-		hlc: { wall: 1000, counter: 0, node: DEVICE_ID },
+		hlc: { wall: ownWall, counter: 0, node: DEVICE_ID },
 		...(signed ? { sigKey: "b2xkLWtleQ==", sig: "b2xkLXNpZw==" } : {}),
 	};
 	const peer: RosterEntry = {
@@ -149,6 +149,26 @@ describe("roster signature backfill", () => {
 
 		expect(signRoster).not.toHaveBeenCalled();
 		expect(writtenRoster(writes)).toBeNull();
+	});
+
+	it("outruns its own future-dated stamp instead of losing the merge to it", async () => {
+		// The clock witnesses ENTRY stamps, never roster ones, so a device whose wall clock ran ahead
+		// when it enrolled would otherwise re-stamp BEHIND its own entry: last-writer-wins keeps the
+		// unsigned one and the backfill retries-and-loses forever, with nothing to show for it.
+		// Within the drift budget, because `witness` deliberately clamps anything past it
+		// (HLC_MAX_DRIFT_MS) so a stamp cannot be pinned unreachably far ahead - a stamp that far out
+		// is dropped as future-stamped by every peer anyway.
+		const ahead = Date.now() + HLC_MAX_DRIFT_MS / 2;
+		const { platform, writes } = makePlatform({
+			group: { groupKey: "Z2s=", roster: roster(false, ahead) },
+		});
+		await mount(platform);
+
+		const own = writtenRoster(writes)?.devices.find((d) => d.publicKey === OWN_PUB);
+		expect(own?.sigKey).toBe("bmV3LWtleQ==");
+		expect(own?.hlc.wall).toBeGreaterThanOrEqual(ahead);
+		// Same wall means the counter has to break the tie, or the merge is a coin flip.
+		if (own?.hlc.wall === ahead) expect(own.hlc.counter).toBeGreaterThan(0);
 	});
 
 	it("does nothing on a host that cannot sign", async () => {

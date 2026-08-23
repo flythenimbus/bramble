@@ -186,8 +186,13 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		const pub = await shell.syncDevicePublicKey();
 		const own = group.roster.devices.find((d) => d.publicKey === pub);
 		if (!own || own.sigKey) return;
-		const hlc = (await ensureClock()).send();
-		const signed = await signOwnEntry(shell, { ...own, hlc });
+		// Witness before stamping: the clock only ever sees ENTRY stamps (useVault loadEntries), never
+		// roster ones, so on a device whose wall clock ran ahead when it enrolled a fresh send() can
+		// land BEHIND its own entry. The merge is last-writer-wins, so the unsigned entry would win
+		// and the backfill would retry-and-lose on every unlock, invisibly.
+		const clock = await ensureClock();
+		clock.witness(own.hlc);
+		const signed = await signOwnEntry(shell, { ...own, hlc: clock.send() });
 		if (!signed.sigKey) return; // host declined to sign; leave the entry as it was
 		await storage.setMeta(syncKey("sync.group"), {
 			groupKey: group.groupKey,
