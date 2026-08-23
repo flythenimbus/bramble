@@ -397,7 +397,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Sync metadata kept alongside (not on) the user-facing Entry: per-entry HLC
 	// stamps and the deletion graveyard. Held in refs because mutations thread
 	// the next value explicitly, mirroring the existing entries-rewrite pattern.
-	const clockRef = useRef<HybridClock | null>(null);
+	// Tagged with the vault it belongs to: the device id is per-vault, so a cached clock from the
+	// previously active vault would stamp this one's writes with the wrong node. The provider is
+	// mounted once for the whole app and vaults switch underneath it, so "cache it forever" is not
+	// the same as "cache it for this vault".
+	const clockRef = useRef<{ vaultId: string | null; clock: HybridClock } | null>(null);
 	const stampsRef = useRef<Map<string, Hlc>>(new Map());
 	const tombstonesRef = useRef<Map<string, Hlc>>(new Map());
 
@@ -405,15 +409,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * is its own sync group with its own roster membership), so read/write it under the active
 	 * vault's namespaced key. */
 	const ensureClock = useCallback(async (): Promise<HybridClock> => {
-		if (!clockRef.current) {
+		const vaultId = activeId ?? null;
+		if (clockRef.current?.vaultId !== vaultId) {
 			const id = await ensureDeviceId(
 				() => storage.getMeta<string>(syncKey(DEVICE_ID_KEY)),
 				(_k, v) => storage.setMeta<string>(syncKey(DEVICE_ID_KEY), v),
 			);
-			clockRef.current = makeClock(id);
+			clockRef.current = { vaultId, clock: makeClock(id) };
 		}
-		return clockRef.current;
-	}, [storage, syncKey]);
+		return clockRef.current.clock;
+	}, [storage, syncKey, activeId]);
 
 	/** Mint a fresh device id for a (re)join. A device id is stable and persisted, and a tombstoned id
 	 * stays dead forever (sticky revocation, B1) — so a device re-added after being revoked must NOT
@@ -1274,11 +1279,23 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Phase-1 migration: a device enrolled before roster signing existed carries an unsigned entry
 	// that nothing else ever re-signs, and the phase-2 flip would drop its updates. Back it off one
 	// unlock at a time. Declared after the enrollment hook (its callback lives there) and after the
-	// setActiveVault effect above, so the host already knows which vault to sign for; a failure
-	// (host asleep, not enrolled yet) just retries on the next unlock, and a signed entry is a no-op.
+	// setActiveVault effect above, so the host already knows which vault to sign for.
+	//
+	// Once per vault per context. The extension can have a popup and an options page open at the
+	// same time, and each mounts its own provider: without this, a re-render or a second context
+	// signs and writes again for nothing. A failure drops the mark so the next unlock retries.
+	const signedVaultsRef = useRef<Set<string>>(new Set());
 	useEffect(() => {
 		if (isLocked || !activeId) return;
-		void ensureOwnEntrySigned().catch(() => {});
+		if (signedVaultsRef.current.has(activeId)) return;
+		signedVaultsRef.current.add(activeId);
+		void ensureOwnEntrySigned().catch((e) => {
+			signedVaultsRef.current.delete(activeId);
+			// Deliberately not surfaced: the user did not ask for this and cannot act on it. But a
+			// host that refuses to sign leaves the device reading "Unsigned" in Settings -> Sync
+			// forever, and silence there is undiagnosable from a bug report.
+			console.warn("[vault] roster signature backfill failed; will retry on next unlock:", e);
+		});
 	}, [isLocked, activeId, ensureOwnEntrySigned]);
 
 	// Setup-flow join: create a NEW vault from a pairing code, then run joinGroup in that vault's

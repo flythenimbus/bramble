@@ -3,7 +3,7 @@ import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Platform } from "../context/PlatformContext";
 import { HLC_MAX_DRIFT_MS, type RosterEntry, type RosterPayload } from "../sync";
-import { mountVaultActions } from "../test/vault-harness";
+import { mountVault, mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 
 afterEach(cleanup);
@@ -50,20 +50,29 @@ function roster(signed: boolean, ownWall = 1000): RosterPayload {
 }
 
 function makePlatform(
-	over: { group?: { groupKey: string; roster: RosterPayload } | null; canSign?: boolean } = {},
+	over: {
+		group?: { groupKey: string; roster: RosterPayload } | null;
+		canSign?: boolean;
+		/** Mutate the stored entry while the first signature is in flight. */
+		raceOnFirstSign?: boolean;
+	} = {},
 ) {
-	const group = over.group === undefined ? { groupKey: "Z2s=", roster: roster(false) } : over.group;
+	let group = over.group === undefined ? { groupKey: "Z2s=", roster: roster(false) } : over.group;
 	const writes: Array<{ key: string; value: unknown }> = [];
+	// Reads hand out copies, so a snapshot taken before the signing round trip does not silently
+	// track a write that lands during it. That is the whole shape of the race under test.
+	const copy = <T,>(v: T): T => (v == null ? v : (JSON.parse(JSON.stringify(v)) as T));
 	const storage = {
 		hasVaultHandle: vi.fn(async () => true),
 		getMeta: vi.fn(async (k: string) => {
 			if (k === VAULT_REGISTRY_KEY) return { vaults: [{ id: "v1", label: "", createdAt: 1 }] };
-			if (k === GROUP_KEY) return group ?? undefined;
+			if (k === GROUP_KEY) return copy(group) ?? undefined;
 			if (k === "sync.deviceId:v1") return DEVICE_ID;
 			return undefined;
 		}),
 		setMeta: vi.fn(async (key: string, value: unknown) => {
-			writes.push({ key, value });
+			writes.push({ key, value: copy(value) });
+			if (key === GROUP_KEY) group = value as typeof group;
 		}),
 		readVaultBlob: vi.fn(async () => new Uint8Array([1])),
 		writeVaultBlob: vi.fn(async () => {}),
@@ -76,7 +85,18 @@ function makePlatform(
 		decryptEntries: vi.fn(async () => []),
 		decryptWithVek: vi.fn(async () => JSON.stringify({ entries: [], tombstones: [] })),
 	};
-	const signRoster = vi.fn(async () => "bmV3LXNpZw==");
+	const signRoster = vi.fn(async () => {
+		// A concurrent writer landing inside the host round trip: an invite publishing this device's
+		// admission key onto the same entry, re-stamped so it is the newer of the two.
+		if (over.raceOnFirstSign && signRoster.mock.calls.length === 1 && group) {
+			const own = group.roster.devices.find((d) => d.publicKey === OWN_PUB);
+			if (own) {
+				own.admissionKey = "YWRtaXNzaW9u";
+				own.hlc = { ...own.hlc, wall: own.hlc.wall + 1 };
+			}
+		}
+		return "bmV3LXNpZw==";
+	});
 	const shell = {
 		setActiveVault: vi.fn(async () => {}),
 		getActiveVault: vi.fn(async () => "v1"),
@@ -171,10 +191,126 @@ describe("roster signature backfill", () => {
 		if (own?.hlc.wall === ahead) expect(own.hlc.counter).toBeGreaterThan(0);
 	});
 
+	it("re-signs what is actually stored when the entry changes mid-signature", async () => {
+		// The signature covers the entry body, so a body that changed under us cannot be written back
+		// with the new signature grafted on, and re-reading alone does not help either: the merge is
+		// per-entry last-writer-wins, so this device's newer entry would overwrite the concurrent one
+		// and drop the field it added. Signing again over what is there now is the only answer.
+		const { platform, writes, signRoster } = makePlatform({ raceOnFirstSign: true });
+		await mount(platform);
+
+		const own = writtenRoster(writes)?.devices.find((d) => d.publicKey === OWN_PUB);
+		expect(signRoster).toHaveBeenCalledTimes(2);
+		expect(own?.sigKey).toBe("bmV3LWtleQ==");
+		expect(own?.admissionKey, "the concurrent write survived").toBe("YWRtaXNzaW9u");
+	});
+
 	it("does nothing on a host that cannot sign", async () => {
 		const { platform, writes } = makePlatform({ canSign: false });
 		await mount(platform);
 
 		expect(writtenRoster(writes)).toBeNull();
+	});
+});
+
+// The provider is mounted once for the whole app and vaults switch underneath it, so anything it
+// caches per vault has to be tagged with the vault it came from. The HLC clock is the one that
+// matters here: its node is the per-vault device id, and a stale one stamps this vault's writes
+// with the previous vault's identity. The backfill is a convenient way to observe a stamp.
+describe("the clock a vault switch leaves behind", () => {
+	const SECOND = { vault: "v2", device: "device-2-of-v2", pub: "djItb3duLXB1Yg==" };
+
+	function twoVaultPlatform() {
+		const writes: Array<{ key: string; value: unknown }> = [];
+		const groups: Record<string, { groupKey: string; roster: RosterPayload }> = {
+			"sync.group:v1": { groupKey: "Z2sx", roster: roster(false) },
+			[`sync.group:${SECOND.vault}`]: {
+				groupKey: "Z2sy",
+				roster: {
+					devices: [
+						{
+							id: SECOND.device,
+							publicKey: SECOND.pub,
+							label: "Second vault, this device",
+							addedAt: 3,
+							hlc: { wall: 1002, counter: 0, node: SECOND.device },
+						},
+					],
+					revoked: [],
+				},
+			},
+		};
+		let currentPub = OWN_PUB;
+		const storage = {
+			hasVaultHandle: vi.fn(async () => true),
+			getMeta: vi.fn(async (k: string) => {
+				if (k === VAULT_REGISTRY_KEY) {
+					return {
+						vaults: [
+							{ id: "v1", label: "One", createdAt: 1 },
+							{ id: SECOND.vault, label: "Two", createdAt: 2 },
+						],
+					};
+				}
+				if (k in groups) return JSON.parse(JSON.stringify(groups[k]));
+				if (k === "sync.deviceId:v1") return DEVICE_ID;
+				if (k === `sync.deviceId:${SECOND.vault}`) return SECOND.device;
+				return undefined;
+			}),
+			setMeta: vi.fn(async (key: string, value: unknown) => {
+				writes.push({ key, value: JSON.parse(JSON.stringify(value)) });
+			}),
+			readVaultBlob: vi.fn(async () => new Uint8Array([1])),
+			writeVaultBlob: vi.fn(async () => {}),
+			restoreVaultFromBackup: vi.fn(async () => false),
+		};
+		const platform = {
+			storage,
+			crypto: {
+				isLocked: vi.fn(async () => false),
+				onExternalLock: vi.fn(() => () => {}),
+				onExternalChange: vi.fn(() => () => {}),
+				decryptEntries: vi.fn(async () => []),
+				decryptWithVek: vi.fn(async () => JSON.stringify({ entries: [], tombstones: [] })),
+			},
+			autofill: { clearIndex: vi.fn(async () => {}), setIndex: vi.fn(async () => {}) },
+			shell: {
+				setActiveVault: vi.fn(async () => {}),
+				getActiveVault: vi.fn(async () => "v1"),
+				flushPendingCornerCapture: vi.fn(async () => {}),
+				stopSyncSpike: vi.fn(async () => {}),
+				// The device key is per vault, like the device id.
+				syncDevicePublicKey: vi.fn(async () => currentPub),
+				syncSigningPublicKey: vi.fn(async () => "bmV3LWtleQ=="),
+				signRoster: vi.fn(async () => "bmV3LXNpZw=="),
+			},
+			clipboard: {},
+		} as unknown as Platform;
+		return { platform, writes, useSecondVaultKey: () => (currentPub = SECOND.pub) };
+	}
+
+	it("stamps the second vault with its own device id, not the first's", async () => {
+		const { platform, writes, useSecondVaultKey } = twoVaultPlatform();
+		const mounted = mountVault(platform);
+		await act(async () => {});
+		await act(async () => {});
+
+		const first = writes.filter((w) => w.key === "sync.group:v1").at(-1);
+		expect(first, "the first vault was never backfilled").toBeDefined();
+
+		useSecondVaultKey();
+		await act(async () => {
+			mounted.registry().selectVault(SECOND.vault);
+		});
+		await act(async () => {});
+		await act(async () => {});
+
+		const second = writes.filter((w) => w.key === `sync.group:${SECOND.vault}`).at(-1);
+		expect(second, "the second vault was never backfilled").toBeDefined();
+		const stamped = (second?.value as { roster: RosterPayload }).roster.devices.find(
+			(d) => d.publicKey === SECOND.pub,
+		);
+		// The whole point: a clock cached from v1 would sign this with v1's device id.
+		expect(stamped?.hlc.node).toBe(SECOND.device);
 	});
 });

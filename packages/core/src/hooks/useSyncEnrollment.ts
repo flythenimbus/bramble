@@ -133,6 +133,29 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		return groupKey;
 	}, [storage, syncKey, shell, ensureClock]);
 
+	/**
+	 * Merge an updated own-entry into the stored roster, re-reading it first.
+	 *
+	 * The read-modify-write window spans a signing round trip to the host (tens of milliseconds), and
+	 * both writers here plus the background's roster merge target the same key. Writing back a
+	 * snapshot taken before that trip drops whatever landed in between: a backfill could erase an
+	 * `admissionKey` published mid-invite, since the merge can only keep what is in one of its two
+	 * inputs. Re-reading closes all but an instant of that.
+	 */
+	const mergeOwnEntry = useCallback(
+		async (entry: RosterEntry): Promise<void> => {
+			const fresh = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
+				syncKey("sync.group"),
+			);
+			if (!fresh) return; // the group went away underneath us (disconnected mid-flight)
+			await storage.setMeta(syncKey("sync.group"), {
+				groupKey: fresh.groupKey,
+				roster: addDevice(fresh.roster, entry),
+			});
+		},
+		[storage, syncKey],
+	);
+
 	// Publish this device's admission key on its own roster entry, derived from the re-entered master
 	// password + this device's password-slot salt (Item A rogue-injection close), and return the
 	// context to admission-sign the joiner. The admissionKey is deterministic from (password, salt),
@@ -159,14 +182,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			if (own.admissionKey !== admissionKey) {
 				const hlc = (await ensureClock()).send();
 				const updated = await signOwnEntry(shell, { ...own, admissionKey, hlc });
-				await storage.setMeta(syncKey("sync.group"), {
-					groupKey: group.groupKey,
-					roster: addDevice(group.roster, updated),
-				});
+				await mergeOwnEntry(updated);
 			}
 			return { password, saltB64, adminId: own.id };
 		},
-		[shell, storage, syncKey, ensureClock],
+		[shell, storage, syncKey, ensureClock, mergeOwnEntry],
 	);
 
 	/**
@@ -179,25 +199,39 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	 */
 	const ensureOwnEntrySigned = useCallback(async (): Promise<void> => {
 		if (!shell.syncSigningPublicKey || !shell.signRoster) return; // host can't sign
-		const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
-			syncKey("sync.group"),
-		);
-		if (!group) return; // not enrolled in a group: nothing to sign
+		const readGroup = () =>
+			storage.getMeta<{ groupKey: string; roster: RosterPayload }>(syncKey("sync.group"));
 		const pub = await shell.syncDevicePublicKey();
-		const own = group.roster.devices.find((d) => d.publicKey === pub);
-		if (!own || own.sigKey) return;
-		// Witness before stamping: the clock only ever sees ENTRY stamps (useVault loadEntries), never
-		// roster ones, so on a device whose wall clock ran ahead when it enrolled a fresh send() can
-		// land BEHIND its own entry. The merge is last-writer-wins, so the unsigned entry would win
-		// and the backfill would retry-and-lose on every unlock, invisibly.
-		const clock = await ensureClock();
-		clock.witness(own.hlc);
-		const signed = await signOwnEntry(shell, { ...own, hlc: clock.send() });
-		if (!signed.sigKey) return; // host declined to sign; leave the entry as it was
-		await storage.setMeta(syncKey("sync.group"), {
-			groupKey: group.groupKey,
-			roster: addDevice(group.roster, signed),
-		});
+		// Twice, because signing is a round trip to the host and the entry can change under us in
+		// that window (an invite publishing an `admissionKey` on this same entry). A signature covers
+		// the entry BODY, so a stale body cannot be written back with the new signature grafted on,
+		// and the merge is per-entry last-writer-wins, so a fresher read does not save it either:
+		// the only correct answer is to sign what is actually there. One retry, then leave it for the
+		// next unlock.
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const group = await readGroup();
+			if (!group) return; // not enrolled in a group: nothing to sign
+			const own = group.roster.devices.find((d) => d.publicKey === pub);
+			if (!own || own.sigKey) return;
+			// Witness before stamping: the clock only ever sees ENTRY stamps (useVault loadEntries),
+			// never roster ones, so on a device whose wall clock ran ahead when it enrolled a fresh
+			// send() can land BEHIND its own entry. The merge is last-writer-wins, so the unsigned
+			// entry would win and the backfill would retry-and-lose on every unlock, invisibly.
+			const clock = await ensureClock();
+			clock.witness(own.hlc);
+			const signed = await signOwnEntry(shell, { ...own, hlc: clock.send() });
+			if (!signed.sigKey) return; // host declined to sign; leave the entry as it was
+			const fresh = await readGroup();
+			const current = fresh?.roster.devices.find((d) => d.publicKey === pub);
+			if (!fresh || !current) return;
+			if (canonicalRosterEntry(current) === canonicalRosterEntry(own)) {
+				await storage.setMeta(syncKey("sync.group"), {
+					groupKey: fresh.groupKey,
+					roster: addDevice(fresh.roster, signed),
+				});
+				return;
+			}
+		}
 	}, [shell, storage, syncKey, ensureClock]);
 
 	// Generate a fresh one-time pairing code and start listening for a device to join.

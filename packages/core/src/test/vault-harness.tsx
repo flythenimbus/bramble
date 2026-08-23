@@ -8,7 +8,7 @@ import { I18nProvider } from "@lingui/react";
 import { render } from "@testing-library/react";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import { useVaultActions, VaultProvider } from "../hooks/useVault";
-import { VaultRegistryProvider } from "../hooks/useVaultRegistry";
+import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 
 // VaultProvider translates the errors it rejects with, so it needs a live i18n context.
 // An empty catalog resolves every id to its source string, which is what assertions read.
@@ -21,9 +21,22 @@ i18n.activate("en");
  * `act()`, instead of a stale closure from the first render.
  */
 export function mountVaultActions(platform: Platform): () => ReturnType<typeof useVaultActions> {
+	return mountVault(platform).actions;
+}
+
+/**
+ * As above, plus a getter for the vault registry, for a test that has to switch the active vault
+ * (per-vault state cached inside the provider only shows its seams when a switch happens under it).
+ */
+export function mountVault(platform: Platform): {
+	actions: () => ReturnType<typeof useVaultActions>;
+	registry: () => ReturnType<typeof useVaultRegistry>;
+} {
 	let actions: ReturnType<typeof useVaultActions> | null = null;
+	let registry: ReturnType<typeof useVaultRegistry> | null = null;
 	function Consumer() {
 		actions = useVaultActions();
+		registry = useVaultRegistry();
 		return null;
 	}
 	render(
@@ -37,8 +50,14 @@ export function mountVaultActions(platform: Platform): () => ReturnType<typeof u
 			</PlatformProvider>
 		</I18nProvider>,
 	);
-	return () => {
-		if (!actions) throw new Error("actions not captured");
-		return actions;
+	return {
+		actions: () => {
+			if (!actions) throw new Error("actions not captured");
+			return actions;
+		},
+		registry: () => {
+			if (!registry) throw new Error("registry not captured");
+			return registry;
+		},
 	};
 }

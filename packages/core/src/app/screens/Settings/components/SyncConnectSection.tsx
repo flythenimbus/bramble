@@ -164,6 +164,15 @@ export function SyncConnectSection() {
 		return off;
 	}, [shell]);
 
+	// The roster also changes underneath this panel without a sync event: the phase-1 signature
+	// backfill writes it from a post-unlock effect in this same context, so the device it just
+	// signed would otherwise keep reading "Unsigned" until the panel is reopened. Subscribing to the
+	// key covers that and the background's own merges. A no-op where subscribeMeta is absent; those
+	// hosts emit the in-process "roster" event handled above.
+	useEffect(() => {
+		return storage.subscribeMeta?.(syncKey("sync.group"), () => void refreshGroupRef.current());
+	}, [storage, syncKey]);
+
 	// "Last synced": read the persisted stamp on mount, and on the extension live-refresh via
 	// storage change events (the background writes it). No-op subscription on mobile, where the
 	// onSyncEvent "synced" tick above carries updates instead.
