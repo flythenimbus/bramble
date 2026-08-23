@@ -108,6 +108,15 @@ pnpm test:e2e:sync
 The config starts the relay (`nostr-relay/node/relay.mjs`, port 7400) and the mobile dev server
 (port 5199) itself. Nothing external is contacted.
 
+**Rebuild the extension first.** The mobile peer is served by vite and picks up `@core` changes
+live; the extension peer loads `dist-chromium`, so a core change that is not rebuilt makes the two
+peers run *different code*, and the spec fails somewhere unrelated to what you changed.
+`roster-signature-backfill.spec.ts` covers the phase-1 roster migration: it pairs the peers, strips
+the signatures out of both stored rosters to recreate the pre-2026-07-09 world, reopens the popup,
+and asserts the extension re-signs itself through the real host and that the peer converges on that
+signature. The unit tests mock the shell, so this is the only place a silently no-op backfill (a
+mis-wired host declines, and the code returns rather than throwing) is caught.
+
 **Two traps, both of which fail silently rather than loudly:**
 
 - **Set the relay AFTER creating the vault.** Creating the *first* vault calls `resetSyncState()`,

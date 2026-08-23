@@ -119,12 +119,12 @@ test("a multi-frame vault survives the transfer and the teardown that follows it
 	await mobile.page.getByRole("button", { name: /Join vault/i }).click();
 
 	// --- approve, comparing the digits as a user would ---
-	const joinerSas = mobile.page.locator("p.font-mono.tabular-nums");
+	const joinerSas = mobile.page.locator(".font-mono.tabular-nums");
 	await expect(joinerSas).toBeVisible({ timeout: 90_000 });
 	await expect(ext.page.getByText(/Is this your device\?/i)).toBeVisible({ timeout: 90_000 });
-	const inviterSas = ext.page.locator("p.font-mono.tabular-nums");
+	const inviterSas = ext.page.locator(".font-mono.tabular-nums");
 	expect(await inviterSas.textContent()).toBe(await joinerSas.textContent());
-	await ext.page.getByRole("button", { name: /Numbers match, approve/i }).click();
+	await ext.page.getByRole("button", { name: /They match, approve/i }).click();
 
 	// --- the payoff ---
 	// Reaching an unlocked vault proves the whole bundle arrived: a dropped frame leaves recvSecure

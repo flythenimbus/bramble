@@ -97,14 +97,14 @@ test("the extension and the mobile app pair over a real relay and share a vault"
 	// The only test that proves two independently-built peers derive the SAME number from a real
 	// handshake. A drift in the derivation on either side would leave pairing permanently broken
 	// in the field, and unit tests can't catch it (each side would agree with itself).
-	const joinerSas = mobile.page.locator("p.font-mono.tabular-nums");
+	const joinerSas = mobile.page.locator(".font-mono.tabular-nums");
 	await expect(joinerSas).toBeVisible({ timeout: 90_000 });
 	const approvalDialog = ext.page.getByText(/Is this your device\?/i);
 	await expect(approvalDialog).toBeVisible({ timeout: 90_000 });
-	const inviterSas = ext.page.locator("p.font-mono.tabular-nums");
+	const inviterSas = ext.page.locator(".font-mono.tabular-nums");
 	await expect(inviterSas).toHaveText(/^\d{4} \d{4} \d{4}$/);
 	expect(await inviterSas.textContent()).toBe(await joinerSas.textContent());
-	await ext.page.getByRole("button", { name: /Numbers match, approve/i }).click();
+	await ext.page.getByRole("button", { name: /They match, approve/i }).click();
 	// Answering spends the invite, so the code comes off screen. Approving used to leave the QR up
 	// while the transfer ran behind it, which reads as "still waiting" and invites a second scan.
 	await expect(ext.page.locator("input[readonly]")).toBeHidden();
