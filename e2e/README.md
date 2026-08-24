@@ -51,7 +51,15 @@ pnpm test:transport-race                        # both; needs FIREFOX_BINARY
   CI does this with `xvfb-run -a`, across both current Firefox and the 128 compatibility floor.
 - A missing `FIREFOX_BINARY` **fails** rather than skipping. A silently skipped security gate is a
   hole.
-- `retries: 0` on purpose: a race that only passes on retry is a failure.
+- `retries: 0` on purpose: a race that only passes on retry is a failure. The harness makes one
+  narrow exception, and it is not that: a **declined bfcache** (`pagehide persisted=false`) means
+  the browser refused to STAGE the scenario, so no assertion has run and nothing was proven either
+  way. That is retried up to five times, in `runCase`; every contract violation still fails on the
+  first attempt. The Firefox 128 floor declined roughly one attempt in four (7 of 25 CI runs, and
+  once two minutes apart from a pass on an adjacent commit), which five attempts takes to about one
+  run in 600. Pinning `browser.sessionhistory.max_total_viewers=3` fixed the *always* case; what is
+  left is most likely inherent, since A navigates while deliberately holding an extension message
+  channel open and that channel is the thing under test.
 
 The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with
 same-origin and cross-origin B documents. The BFCache case uses a top-level A → B → Back navigation

@@ -28,6 +28,13 @@ export type TransportCase = {
 	requiresFrame: boolean;
 };
 
+/**
+ * How many times to ask the browser to stage the bfcache case before giving up. Each attempt is a
+ * fresh browser and costs ~2s, and the failure rate on the Firefox 128 floor was ~28% per attempt
+ * (7 of 25 CI runs), so five takes that to roughly one run in 600.
+ */
+const BFCACHE_STAGING_ATTEMPTS = 5;
+
 /** The three races the advisory requires: same-origin, cross-origin, and a BFCache restore. */
 export const TRANSPORT_CASES: readonly TransportCase[] = [
 	{ mode: "same-origin", path: "/parent", requiresFrame: true },
@@ -155,6 +162,20 @@ export async function startFixtureServer(): Promise<FixtureServer> {
 	};
 }
 
+/**
+ * The browser refused to put A in the back/forward cache, so the restore the case needs never
+ * happened. Not a contract violation - the race was never run - which is why runCase retries it
+ * and every other failure goes straight up.
+ *
+ * `browser.sessionhistory.max_total_viewers=3` (set by the spec) removes the reason this used to
+ * happen every time: Firefox otherwise sizes the cache from detected RAM and resolves it to 0 on a
+ * small machine. What remains is intermittent, only on the 128 floor, and most likely inherent to
+ * the case: A navigates while deliberately holding an extension message channel open, which is
+ * exactly the kind of thing that can make a document ineligible. That channel IS the test, so it
+ * cannot be removed to make staging reliable.
+ */
+class BfcacheDeclined extends Error {}
+
 async function waitFor(
 	state: RunState,
 	predicate: (events: ReportedEvent[]) => boolean,
@@ -165,15 +186,13 @@ async function waitFor(
 		if (state.processError) throw new Error(state.processError);
 		const remaining = deadline - Date.now();
 		if (remaining <= 0) throw new Error(`transport fixture timed out waiting for ${description}`);
-		// A pagehide that did not persist is the browser refusing to cache the page, which is a
-		// different thing from the transport misbehaving, and worth naming: the generic timeout
-		// sends you looking at the extension when the answer is the browser's cache settings.
+		// A pagehide that did not persist is the browser refusing to CACHE the page, which is not
+		// the transport misbehaving: the scenario never got staged, so nothing was proven either
+		// way. runCase retries on this rather than failing, and only this.
 		const declined = state.events.find((e) => e.kind === "pagehide" && e.persisted === false);
 		if (declined && description.includes("BFCache"))
-			throw new Error(
-				`the browser declined to bfcache ${declined.role} (pagehide persisted=false), so no restore ` +
-					"could happen. Check browser.sessionhistory.max_total_viewers; Firefox derives it from " +
-					"available memory and resolves it to 0 on a constrained machine.",
+			throw new BfcacheDeclined(
+				`the browser declined to bfcache ${declined.role} (pagehide persisted=false)`,
 			);
 		await new Promise<void>((resolve, reject) => {
 			const timer = setTimeout(() => {
@@ -279,8 +298,42 @@ async function exercise(
 	assertContract(state.events, mode, requiresFrame);
 }
 
-/** Drive one race to completion in whatever browser `open` provides. Throws on any violation. */
+/**
+ * Drive one race to completion in whatever browser `open` provides. Throws on any violation.
+ *
+ * Staging is retried, the contract is not. A declined bfcache means the browser never set the
+ * scenario up; re-running it is not "passing on retry", because no assertion has run yet. Every
+ * other failure - including every contract violation - propagates on the first attempt, which is
+ * what `retries: 0` in the config is there to protect.
+ */
 export async function runCase(
+	open: OpenUrl,
+	server: Pick<FixtureServer, "base" | "runs">,
+	testCase: TransportCase,
+): Promise<void> {
+	const attempts = testCase.mode === "bfcache" ? BFCACHE_STAGING_ATTEMPTS : 1;
+	for (let attempt = 1; ; attempt++) {
+		try {
+			await runOnce(open, server, testCase);
+			return;
+		} catch (error) {
+			if (!(error instanceof BfcacheDeclined) || attempt >= attempts) {
+				if (error instanceof BfcacheDeclined) {
+					throw new Error(
+						`${error.message}, on all ${attempts} attempts. The scenario could not be staged, so ` +
+							"the transport was never exercised. This is the browser's cache eligibility, not " +
+							"the contract: see BfcacheDeclined in harness.ts.",
+					);
+				}
+				throw error;
+			}
+			console.warn(`bfcache staging declined (attempt ${attempt}/${attempts}); retrying`);
+		}
+	}
+}
+
+/** One attempt at one case. */
+async function runOnce(
 	open: OpenUrl,
 	server: Pick<FixtureServer, "base" | "runs">,
 	testCase: TransportCase,
