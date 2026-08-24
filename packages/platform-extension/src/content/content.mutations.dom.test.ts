@@ -52,9 +52,15 @@ vi.mock("./fill", () => ({
 	submitFromField: vi.fn(),
 }));
 
+type MessageListener = (m: unknown, s: unknown, respond: (v: unknown) => void) => unknown;
+let onMessage: MessageListener | null = null;
 (globalThis as unknown as { chrome: unknown }).chrome = {
 	runtime: {
-		onMessage: { addListener: vi.fn() },
+		onMessage: {
+			addListener: (fn: MessageListener) => {
+				onMessage = fn;
+			},
+		},
 		sendMessage: vi.fn(),
 		getURL: (path: string) => path,
 	},
@@ -145,5 +151,46 @@ describe("content: mutation-driven re-query (issue #59)", () => {
 		expect(queryCount()).toBe(1);
 		hidden.mockRestore();
 		state.mockRestore();
+	});
+});
+
+// The desktop app fills through this frame (docs/desktop-port.md): the user picks an entry over
+// there, and the browser is told to write it here. That target is chosen from the cached field
+// model, which is now only dropped when a mutation moves something field-shaped - so a page that
+// changed in a way this frame never observed would answer "no field to fill" for a fill the user
+// deliberately asked for. It re-reads instead.
+describe("content: desktop fill re-reads the page (issue #59 fallout)", () => {
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		// One field, and nothing about it reads as a username, so while it is type=text the model
+		// holds no login field at all: that is what makes the stale answer "no field to fill".
+		document.body.innerHTML = `<form><input id="pw" name="pw" type="text" /></form>`;
+		invalidatePageFields();
+		await settle();
+		safeRequest.mockClear();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const desktopFill = (): unknown[] => {
+		const replies: unknown[] = [];
+		onMessage?.(
+			{ type: "DESKTOP_FILL", payload: { username: "me@example.com", password: "s3cr3t" } },
+			{},
+			(r: unknown) => replies.push(r),
+		);
+		return replies;
+	};
+
+	it("fills a field the cached model never saw become one", () => {
+		// Warm the cache while the page has no login field, then flip the type. An attribute change
+		// produces no childList record, so nothing invalidates the model: the desktop's fill would
+		// be answered from a snapshot in which this page has nothing to fill.
+		expect(desktopFill()).toEqual([{ ok: false, error: "no field to fill" }]);
+		(document.getElementById("pw") as HTMLInputElement).type = "password";
+
+		expect(desktopFill()).toEqual([{ ok: true }]);
 	});
 });

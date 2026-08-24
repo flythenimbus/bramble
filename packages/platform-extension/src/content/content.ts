@@ -798,6 +798,12 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		const fill = message.payload as
 			| { username?: string; password?: string; totp?: string | null }
 			| undefined;
+		// Re-read the page rather than trusting the cached model. The model is only dropped when a
+		// mutation moves something field-shaped (issue #59), so a field that changed in a way this
+		// frame never observed - an input whose type flipped to password, say - would leave a fill the
+		// user explicitly asked for in the desktop app answering "no field to fill". This runs once,
+		// on a deliberate action, where a stale answer costs more than the parse.
+		invalidatePageFields();
 		// The field the user left focused, else the page's own login field.
 		const fields = getPageFields().login;
 		const into = focusedCandidate() ?? fields.username ?? fields.password;
