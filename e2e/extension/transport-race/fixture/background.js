@@ -32,6 +32,17 @@ extension.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			releaseUrl: message.releaseUrl,
 			sendResponse,
 		};
+		// Tell the sender the request has LANDED, without answering it. A document that navigates
+		// with an extension message still in flight is refused the back/forward cache by Firefox
+		// 128; one whose message is already parked here is not. The reply itself stays held, which
+		// is the thing under test - only the delivery is confirmed. See content.js.
+		if (sender.tab?.id !== undefined) {
+			void extension.tabs.sendMessage(
+				sender.tab.id,
+				{ type: "TRANSPORT_REQUEST_PARKED", documentNonce: message.documentNonce },
+				{ frameId: sender.frameId },
+			);
+		}
 		void poll();
 		return true; // exactly the primitive Bramble uses: async sendResponse.
 	}

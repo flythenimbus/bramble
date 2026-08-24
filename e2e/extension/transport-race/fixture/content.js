@@ -64,12 +64,26 @@
 		}
 		if (role !== "a") return;
 
+		// Navigate only once the request is PARKED in the background, never while it is still in
+		// flight: Firefox 128 refuses the back/forward cache to a document with an extension
+		// message outstanding, which made the bfcache case fail on that floor about one run in
+		// four. The reply is still held - that is the contract - and only its arrival is awaited.
+		const parked = new Promise((resolve) => {
+			extension.runtime.onMessage.addListener(function ack(inbound) {
+				if (inbound?.type !== "TRANSPORT_REQUEST_PARKED" || inbound.documentNonce !== documentNonce)
+					return;
+				extension.runtime.onMessage.removeListener(ack);
+				resolve();
+			});
+		});
 		const request = extension.runtime.sendMessage({
 			type: "TRANSPORT_REQUEST",
 			documentNonce,
 			releaseUrl: `${location.origin}/release?run=${encodeURIComponent(run)}`,
 			reportUrl,
 		});
+		// Bounded: an older background that does not send the ack must not hang the case.
+		await Promise.race([parked, new Promise((resolve) => setTimeout(resolve, 2000))]);
 		await documentComplete();
 		parent.postMessage({ kind: "a-ready", run }, location.origin);
 		try {
