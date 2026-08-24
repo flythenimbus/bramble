@@ -65,6 +65,13 @@ pnpm test:transport-race                        # both; needs FIREFOX_BINARY
   failure gives - "this machine declines bfcache outright" or "this case specifically is
   ineligible" - so the next person reads a verdict rather than a symptom. It runs only on the
   failure path, so a green run pays nothing for it.
+- Those two verdicts get different outcomes, and the difference is the whole point. **Control also
+  refused** = the experiment could not be run here, so the case is SKIPPED, loudly (the reason is
+  printed to the log, not just filed as a report annotation) and the job stays green: the same
+  contract is still enforced on every environment that can stage it. **Control cached** = this
+  browser can bfcache but refuses to do it for our page, which is a fact about the case rather than
+  the machine, and that FAILS. Do not soften the second one; it is the only remaining way this gate
+  can tell you something new.
 
 The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with
 same-origin and cross-origin B documents. The BFCache case uses a top-level A → B → Back navigation

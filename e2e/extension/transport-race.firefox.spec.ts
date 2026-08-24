@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "@playwright/test";
 import {
+	BfcacheUnstageable,
 	FIXTURE_DIR,
 	type FixtureServer,
 	runCase,
@@ -42,45 +43,69 @@ test.afterAll(async () => {
 
 for (const testCase of TRANSPORT_CASES) {
 	test(`held reply is not redirected across a ${testCase.mode} navigation`, async () => {
-		await runCase(
-			async (url, state) => {
-				const args = [
-					"run",
-					"--source-dir",
-					FIXTURE_DIR,
-					"--firefox",
-					firefox as string,
-					"--no-reload",
-					"--start-url",
-					url,
-				];
-				// Firefox sizes the back/forward cache from detected RAM
-				// (browser.sessionhistory.max_total_viewers defaults to -1, "decide for me"), and on a
-				// small or busy machine that decision is 0, which disables bfcache outright. The
-				// bfcache case then cannot set itself up: A leaves with pagehide persisted=false and
-				// going back builds a new document. Pinning it makes this gate test the transport
-				// rather than the runner it happens to land on.
-				args.push("--pref=browser.sessionhistory.max_total_viewers=3");
-				// Explicit for the same reason: it is the default in the versions under test, but the
-				// point here is not to depend on a default.
-				args.push("--pref=fission.bfcacheInParent=true");
-				if (process.env.FIREFOX_HEADLESS !== "0") args.push("--arg=-headless");
-				// Detached so the wrapper leads a process group: stopProcess signals the group, which
-				// is the only way the Firefox web-ext started goes down with it. See stopProcess.
-				const child = spawn(webExt, args, { detached: true, stdio: "inherit" });
-				child.once("error", (error) => {
-					state.processError = `web-ext could not start Firefox: ${error.message}`;
-					state.notify();
-				});
-				child.once("exit", (code, signal) => {
-					if (state.stopping) return;
-					state.processError = `web-ext exited before the transport contract completed (code ${code}, signal ${signal})`;
-					state.notify();
-				});
-				return () => stopProcess(child);
-			},
-			server,
-			testCase,
+		// An environment that cannot bfcache anything cannot run this case; the control inside
+		// runCase is what proves that, and only that turns into a skip. A refusal the control does
+		// not reproduce is still a failure. See BfcacheUnstageable.
+		await stageable(() =>
+			runCase(
+				async (url, state) => {
+					const args = [
+						"run",
+						"--source-dir",
+						FIXTURE_DIR,
+						"--firefox",
+						firefox as string,
+						"--no-reload",
+						"--start-url",
+						url,
+					];
+					// Firefox sizes the back/forward cache from detected RAM
+					// (browser.sessionhistory.max_total_viewers defaults to -1, "decide for me"), and on a
+					// small or busy machine that decision is 0, which disables bfcache outright. The
+					// bfcache case then cannot set itself up: A leaves with pagehide persisted=false and
+					// going back builds a new document. Pinning it makes this gate test the transport
+					// rather than the runner it happens to land on.
+					args.push("--pref=browser.sessionhistory.max_total_viewers=3");
+					// Explicit for the same reason: it is the default in the versions under test, but the
+					// point here is not to depend on a default.
+					args.push("--pref=fission.bfcacheInParent=true");
+					if (process.env.FIREFOX_HEADLESS !== "0") args.push("--arg=-headless");
+					// Detached so the wrapper leads a process group: stopProcess signals the group, which
+					// is the only way the Firefox web-ext started goes down with it. See stopProcess.
+					const child = spawn(webExt, args, { detached: true, stdio: "inherit" });
+					child.once("error", (error) => {
+						state.processError = `web-ext could not start Firefox: ${error.message}`;
+						state.notify();
+					});
+					child.once("exit", (code, signal) => {
+						if (state.stopping) return;
+						state.processError = `web-ext exited before the transport contract completed (code ${code}, signal ${signal})`;
+						state.notify();
+					});
+					return () => stopProcess(child);
+				},
+				server,
+				testCase,
+			),
 		);
 	});
+}
+
+/**
+ * Run a case, turning "this environment cannot stage the scenario" into a visible skip. Never a
+ * pass: a skipped line in the report says the contract was not exercised here, which is the honest
+ * outcome when the browser refuses to cache even a page that holds nothing open.
+ */
+async function stageable(run: () => Promise<void>): Promise<void> {
+	try {
+		await run();
+	} catch (error) {
+		if (error instanceof BfcacheUnstageable) {
+			// The reason has to reach the LOG, not just the report annotation: a skip nobody can read
+			// is the silent gate this suite exists to avoid.
+			console.warn(`SKIPPING a security case: ${error.message}`);
+			test.skip(true, error.message);
+		}
+		throw error;
+	}
 }

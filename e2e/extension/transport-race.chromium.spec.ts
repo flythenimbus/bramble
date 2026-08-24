@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { type BrowserContext, chromium, test } from "@playwright/test";
 import {
+	BfcacheUnstageable,
 	FIXTURE_DIR,
 	type FixtureServer,
 	runCase,
@@ -51,18 +52,42 @@ test.afterAll(async () => {
 
 for (const testCase of TRANSPORT_CASES) {
 	test(`held reply is not redirected across a ${testCase.mode} navigation`, async () => {
-		await runCase(
-			async (url, state) => {
-				const page = await browser.newPage();
-				page.on("console", (message) => {
-					if (message.type() === "error") state.diagnostics.push(`console: ${message.text()}`);
-				});
-				page.on("pageerror", (error) => state.diagnostics.push(`pageerror: ${error.message}`));
-				await page.goto(url);
-				return () => page.close();
-			},
-			server,
-			testCase,
+		// An environment that cannot bfcache anything cannot run this case; the control inside
+		// runCase is what proves that, and only that turns into a skip. A refusal the control does
+		// not reproduce is still a failure. See BfcacheUnstageable.
+		await stageable(() =>
+			runCase(
+				async (url, state) => {
+					const page = await browser.newPage();
+					page.on("console", (message) => {
+						if (message.type() === "error") state.diagnostics.push(`console: ${message.text()}`);
+					});
+					page.on("pageerror", (error) => state.diagnostics.push(`pageerror: ${error.message}`));
+					await page.goto(url);
+					return () => page.close();
+				},
+				server,
+				testCase,
+			),
 		);
 	});
+}
+
+/**
+ * Run a case, turning "this environment cannot stage the scenario" into a visible skip. Never a
+ * pass: a skipped line in the report says the contract was not exercised here, which is the honest
+ * outcome when the browser refuses to cache even a page that holds nothing open.
+ */
+async function stageable(run: () => Promise<void>): Promise<void> {
+	try {
+		await run();
+	} catch (error) {
+		if (error instanceof BfcacheUnstageable) {
+			// The reason has to reach the LOG, not just the report annotation: a skip nobody can read
+			// is the silent gate this suite exists to avoid.
+			console.warn(`SKIPPING a security case: ${error.message}`);
+			test.skip(true, error.message);
+		}
+		throw error;
+	}
 }

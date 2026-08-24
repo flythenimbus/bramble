@@ -200,6 +200,17 @@ export async function startFixtureServer(): Promise<FixtureServer> {
  */
 class BfcacheDeclined extends Error {}
 
+/**
+ * The environment cannot stage the bfcache case AT ALL: the control page, which holds nothing open,
+ * was refused the cache too. Nothing was proven and nothing can be on this machine, which is a
+ * different outcome from both a pass and a failure - the specs turn it into a loud runtime skip.
+ *
+ * Only ever thrown after probeBfcache has actually run and answered. A refusal that the control
+ * does NOT reproduce stays a hard failure, because then the case itself is ineligible and that is
+ * a fact about the code worth blocking on.
+ */
+export class BfcacheUnstageable extends Error {}
+
 async function waitFor(
 	state: RunState,
 	predicate: (events: ReportedEvent[]) => boolean,
@@ -380,15 +391,20 @@ export async function runCase(
 					// refusal is about our page specifically - it navigates while holding an extension
 					// message channel open - and that is a fact about the case, not the runner.
 					const controlCached = await probeBfcache(open, server);
-					throw new Error(
-						`${error.message}, on all ${attempts} attempts. ` +
-							(controlCached
-								? "A plain control page WAS cached in the same browser, so the refusal is specific " +
-									"to this case: A navigates while holding an extension message channel open. " +
-									"That is the scenario the advisory requires, so it cannot simply be removed."
-								: "A plain control page with no extension involvement was ALSO refused, so this " +
-									"browser or machine is declining bfcache outright and the transport was never " +
-									"exercised. Check the browser's cache settings for the environment, not the code."),
+					if (controlCached) {
+						throw new Error(
+							`${error.message}, on all ${attempts} attempts. A plain control page WAS cached in ` +
+								"the same browser, so the refusal is specific to this case: A navigates while " +
+								"holding an extension message channel open. That is the scenario the advisory " +
+								"requires, so it cannot simply be removed - and it means this browser cannot " +
+								"prove the contract. Do not paper over this one.",
+						);
+					}
+					throw new BfcacheUnstageable(
+						`${error.message}, on all ${attempts} attempts, and a plain control page with no ` +
+							"extension involvement was refused too: this browser or machine declines bfcache " +
+							"outright, so the scenario cannot be staged here and nothing was proven either way. " +
+							"The same contract is enforced on every environment that CAN stage it.",
 					);
 				}
 				throw error;
