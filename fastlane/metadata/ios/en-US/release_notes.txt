@@ -1,6 +1,6 @@
 What's new in this release:
 
-- Connecting another device now shows seven pictures to compare instead of twelve digits. A row of distinct pictures is quicker to check and much harder to wave through when it is nearly right, which is the whole point of that screen. Each picture has its name underneath, so you can read it out to whoever is holding the other device, or have it read to you.
-- The twelve digits are still there, quietly, under the pictures. Comparison happens between two devices, and the other one may not have updated yet, so there is always something both can show.
+- Device sync now shows whether each of your paired devices has confirmed its identity to the others, and flags any that have not. A device confirms itself the next time you open Bramble on it, so the flag clears on its own.
+- Tighter spacing above the vault list on touch, leaving more of the screen for your entries.
 
 No account, no cloud. Everything stays on your devices.

@@ -1,6 +1,6 @@
 Novedades de esta versión:
 
-- Conectar otro dispositivo muestra ahora siete imágenes para comparar en lugar de doce dígitos. Una fila de imágenes distintas es más rápida de comprobar y mucho más difícil de pasar por alto cuando casi coinciden, que es el objetivo principal de esa pantalla. Cada imagen tiene su nombre debajo, así que puede leerlo en voz alta a quienquiera que tenga el otro dispositivo, o hacer que se lo lean.
-- Los doce dígitos siguen ahí, discretamente, bajo las imágenes. La comparación se realiza entre dos dispositivos, y es posible que el otro aún no se haya actualizado, por lo que siempre hay algo que ambos pueden mostrar.
+- La sincronización de dispositivos ahora muestra si cada uno de sus dispositivos vinculados ha confirmado su identidad ante los demás y marca los que aún no lo han hecho. Un dispositivo se confirma la próxima vez que se abre Bramble en él, de modo que la marca desaparece por sí sola.
+- Espaciado más compacto sobre la lista de la caja fuerte en pantallas táctiles, lo que deja más espacio en pantalla para sus entradas.
 
-Sin cuenta, sin nube. Todo se queda en sus dispositivos.
+Sin cuenta, sin nube. Todo permanece en sus dispositivos.

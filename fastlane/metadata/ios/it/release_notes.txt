@@ -1,6 +1,6 @@
 Novità di questa versione:
 
-- Connettere un altro dispositivo ora mostra sette immagini da confrontare anziché dodici cifre. Una fila di immagini distinte è più rapida da controllare e molto più difficile da dare per buona quando è quasi corretta, che è lo scopo stesso di quella schermata. Ogni immagine ha il suo nome sotto, così può leggerlo a voce alta a chi tiene l’altro dispositivo, o farselo leggere.
-- Le dodici cifre sono ancora lì, in modo discreto, sotto le immagini. Il confronto avviene tra due dispositivi e l’altro potrebbe non essere ancora aggiornato, quindi c’è sempre qualcosa che entrambi possono mostrare.
+- La sincronizzazione dei dispositivi ora mostra se ciascuno dei dispositivi associati ha confermato la propria identità agli altri e segnala quelli che non lo hanno fatto. Un dispositivo conferma la propria identità alla successiva apertura di Bramble su di esso, quindi la segnalazione scompare da sola.
+- Spaziatura più compatta sopra l'elenco del vault sui dispositivi touch, lasciando più spazio sullo schermo per le voci.
 
-Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui dispositivi.

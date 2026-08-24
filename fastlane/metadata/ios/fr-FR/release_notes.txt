@@ -1,6 +1,6 @@
-Quoi de neuf dans cette version :
+Nouveautés de cette version :
 
-- La connexion d’un autre appareil affiche désormais sept images à comparer au lieu de douze chiffres. Une rangée d’images distinctes est plus rapide à vérifier et bien plus difficile à valider à la va-vite lorsqu’elle est presque correcte, ce qui est tout l’intérêt de cet écran. Chaque image a son nom en dessous, ce qui vous permet de le lire à voix haute à la personne qui tient l’autre appareil, ou de vous le faire lire.
-- Les douze chiffres sont toujours là, discrètement, sous les images. La comparaison se fait entre deux appareils, et l’autre n’a peut-être pas encore été mis à jour, de sorte qu’il y a toujours quelque chose que les deux peuvent afficher.
+- La synchronisation des appareils indique désormais si chacun de vos appareils associés a confirmé son identité auprès des autres appareils et signale ceux qui ne l’ont pas encore fait. Un appareil confirme son identité la prochaine fois que vous ouvrez Bramble sur cet appareil, puis le signalement disparaît de lui-même.
+- Espacement réduit au-dessus de la liste du coffre-fort sur les écrans tactiles, laissant plus de place à vos entrées.
 
-Pas de compte, pas de cloud. Tout reste sur vos appareils.
+Aucun compte, aucun cloud. Tout reste sur vos appareils.

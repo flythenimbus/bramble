@@ -1,6 +1,6 @@
-Novidades desta versão:
+O que há de novo nesta versão:
 
-- Ao conectar outro dispositivo, agora são exibidas sete imagens para comparação em vez de doze dígitos. Uma fileira de imagens distintas é mais rápida de verificar e muito mais difícil de aprovar quando está quase correta, que é exatamente o objetivo dessa tela. Cada imagem tem seu nome abaixo, para que você possa lê-lo em voz alta para quem está segurando o outro dispositivo, ou para que ele seja lido para você.
-- Os doze dígitos ainda estão lá, discretamente, abaixo das imagens. A comparação ocorre entre dois dispositivos, e o outro pode ainda não ter sido atualizado, então há sempre algo que ambos podem mostrar.
+- A sincronização de dispositivos agora mostra se cada um dos dispositivos emparelhados confirmou a própria identidade aos demais e indica os que ainda não o fizeram. Um dispositivo confirma a própria identidade na próxima vez que o Bramble for aberto nele; assim, o aviso desaparece por conta própria.
+- Espaçamento mais compacto acima da lista do cofre em telas sensíveis ao toque, deixando mais espaço na tela para suas entradas.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.
