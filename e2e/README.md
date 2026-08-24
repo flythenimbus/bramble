@@ -60,6 +60,11 @@ pnpm test:transport-race                        # both; needs FIREFOX_BINARY
   run in 600. Pinning `browser.sessionhistory.max_total_viewers=3` fixed the *always* case; what is
   left is most likely inherent, since A navigates while deliberately holding an extension message
   channel open and that channel is the thing under test.
+- When it does give up, it runs a **control**: `probe-a.js`, the same navigate-away-and-back shape
+  with no extension messaging at all. Whether the browser caches THAT decides which answer the
+  failure gives - "this machine declines bfcache outright" or "this case specifically is
+  ineligible" - so the next person reads a verdict rather than a symptom. It runs only on the
+  failure path, so a green run pays nothing for it.
 
 The fixture holds an async `sendResponse` while a hostile parent replaces the same iframe with
 same-origin and cross-origin B documents. The BFCache case uses a top-level A → B → Back navigation

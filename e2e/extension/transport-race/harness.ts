@@ -29,11 +29,14 @@ export type TransportCase = {
 };
 
 /**
- * How many times to ask the browser to stage the bfcache case before giving up. Each attempt is a
- * fresh browser and costs ~2s, and the failure rate on the Firefox 128 floor was ~28% per attempt
- * (7 of 25 CI runs), so five takes that to roughly one run in 600.
+ * How many times to ask the browser to stage the bfcache case before giving up.
+ *
+ * Two, not more: five attempts all declined inside eight seconds on the Firefox 128 job, which says
+ * the condition is a property of the run rather than of the attempt, so re-rolling it buys almost
+ * nothing. One retry still covers a genuine one-off; past that, probeBfcache below is what turns
+ * the failure into an answer.
  */
-const BFCACHE_STAGING_ATTEMPTS = 5;
+const BFCACHE_STAGING_ATTEMPTS = 2;
 
 /** The three races the advisory requires: same-origin, cross-origin, and a BFCache restore. */
 export const TRANSPORT_CASES: readonly TransportCase[] = [
@@ -132,6 +135,18 @@ export async function startFixtureServer(): Promise<FixtureServer> {
 			response.end('<!doctype html><body><script src="/bfcache-a.js"></script></body>');
 			return;
 		}
+		// The control pages carry no role param, so the content script no-ops on them and nothing
+		// holds a channel open. See probe-a.js.
+		if (url.pathname === "/probe-a") {
+			response.setHeader("content-type", "text/html");
+			response.end('<!doctype html><body><script src="/probe-a.js"></script></body>');
+			return;
+		}
+		if (url.pathname === "/probe-b") {
+			response.setHeader("content-type", "text/html");
+			response.end('<!doctype html><body><script src="/probe-b.js"></script></body>');
+			return;
+		}
 		if (url.pathname === "/top-b") {
 			response.setHeader("content-type", "text/html");
 			response.end('<!doctype html><body><script src="/bfcache-b.js"></script></body>');
@@ -142,7 +157,16 @@ export async function startFixtureServer(): Promise<FixtureServer> {
 			response.end("<!doctype html><title>child</title>");
 			return;
 		}
-		if (["/bfcache-a.js", "/bfcache-b.js", "/content.js", "/parent.js"].includes(url.pathname)) {
+		if (
+			[
+				"/bfcache-a.js",
+				"/bfcache-b.js",
+				"/content.js",
+				"/parent.js",
+				"/probe-a.js",
+				"/probe-b.js",
+			].includes(url.pathname)
+		) {
 			response.setHeader("content-type", "text/javascript");
 			response.end(await readFile(path.join(FIXTURE_DIR, url.pathname.slice(1))));
 			return;
@@ -299,6 +323,37 @@ async function exercise(
 }
 
 /**
+ * Run the control: a plain page navigating away and back, with the fixture extension installed but
+ * nothing held open. Returns whether the browser cached it. Used only to explain a decline, so its
+ * own failures are answers rather than errors.
+ */
+async function probeBfcache(
+	open: OpenUrl,
+	server: Pick<FixtureServer, "base" | "runs">,
+): Promise<boolean> {
+	const id = `probe-${crypto.randomUUID()}`;
+	const state = newState();
+	server.runs.set(id, state);
+	let teardown: (() => Promise<void>) | undefined;
+	try {
+		teardown = await open(`${server.base}/probe-a?run=${id}`, state);
+		const deadline = Date.now() + 10_000;
+		while (Date.now() < deadline) {
+			const pagehide = state.events.find((e) => e.kind === "pagehide");
+			if (pagehide) return pagehide.persisted === true;
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		return false;
+	} catch {
+		return false;
+	} finally {
+		state.stopping = true;
+		await teardown?.();
+		server.runs.delete(id);
+	}
+}
+
+/**
  * Drive one race to completion in whatever browser `open` provides. Throws on any violation.
  *
  * Staging is retried, the contract is not. A declined bfcache means the browser never set the
@@ -319,10 +374,21 @@ export async function runCase(
 		} catch (error) {
 			if (!(error instanceof BfcacheDeclined) || attempt >= attempts) {
 				if (error instanceof BfcacheDeclined) {
+					// Which of the two worlds are we in? A plain page with nothing held open is the
+					// control: if the browser will not cache THAT either, the machine or its settings
+					// are refusing bfcache outright and this case never had a chance. If it will, the
+					// refusal is about our page specifically - it navigates while holding an extension
+					// message channel open - and that is a fact about the case, not the runner.
+					const controlCached = await probeBfcache(open, server);
 					throw new Error(
-						`${error.message}, on all ${attempts} attempts. The scenario could not be staged, so ` +
-							"the transport was never exercised. This is the browser's cache eligibility, not " +
-							"the contract: see BfcacheDeclined in harness.ts.",
+						`${error.message}, on all ${attempts} attempts. ` +
+							(controlCached
+								? "A plain control page WAS cached in the same browser, so the refusal is specific " +
+									"to this case: A navigates while holding an extension message channel open. " +
+									"That is the scenario the advisory requires, so it cannot simply be removed."
+								: "A plain control page with no extension involvement was ALSO refused, so this " +
+									"browser or machine is declining bfcache outright and the transport was never " +
+									"exercised. Check the browser's cache settings for the environment, not the code."),
 					);
 				}
 				throw error;
