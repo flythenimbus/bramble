@@ -1,23 +1,23 @@
 {
-	"version": "0.4.0",
-	"notes": "Bramble 0.4.0",
-	"pub_date": "2026-08-20T01:22:19.128Z",
+	"version": "0.5.0",
+	"notes": "Bramble 0.5.0",
+	"pub_date": "2026-08-24T04:15:16.396Z",
 	"platforms": {
 		"darwin-aarch64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WjBMYVJiZVlpWi9sbHVHQS9pUnpoYzVUcEpmMTIzVHNhR0F2eHVkellYUUFkdG5aQlhPMUpVV1dWYThBSmJVWWl6R3ZTQWE2bTRGTS9reTN5cnlzRUEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTg3OTA1CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6CkxGOGN2enZkaTE2YU01b3p0aDVZU1pTY3JxRk5XYndWTnNZRFRtZldRK2FaNG9UY3UvN3U0SmU3eEFDWWpEOVVzRzI0QWlmL1lQTkF3d2tVYzFiREJnPT0K",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.4.0-desktop/Bramble.app.tar.gz"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WncrbnNQL295L1FjQWpJNEIvQXRlZ3pOdkxCN1h3YTFJd1kyelFBemM0MVJHUWN0RlRVdlk2Nk9aYUZZcTBKWnpUSWU5SUhFMVUyOXQ0T0dxTjVKekFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTQ0MDQ5CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6Cmh6ek5FSlcxcjNjTlFhWndWZHlpUHFBMlBwVHhPTktEQWw1WllSMU85UHA3TkdkRVBTdFN2V1JQMEkwTngrR3BOa3dxUWpvSjV2ckZIZUdXWm81QkFnPT0K",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.5.0-desktop/Bramble.app.tar.gz"
 		},
 		"darwin-x86_64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WjBMYVJiZVlpWi9sbHVHQS9pUnpoYzVUcEpmMTIzVHNhR0F2eHVkellYUUFkdG5aQlhPMUpVV1dWYThBSmJVWWl6R3ZTQWE2bTRGTS9reTN5cnlzRUEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTg3OTA1CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6CkxGOGN2enZkaTE2YU01b3p0aDVZU1pTY3JxRk5XYndWTnNZRFRtZldRK2FaNG9UY3UvN3U0SmU3eEFDWWpEOVVzRzI0QWlmL1lQTkF3d2tVYzFiREJnPT0K",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.4.0-desktop/Bramble.app.tar.gz"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WncrbnNQL295L1FjQWpJNEIvQXRlZ3pOdkxCN1h3YTFJd1kyelFBemM0MVJHUWN0RlRVdlk2Nk9aYUZZcTBKWnpUSWU5SUhFMVUyOXQ0T0dxTjVKekFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTQ0MDQ5CWZpbGU6QnJhbWJsZS5hcHAudGFyLmd6Cmh6ek5FSlcxcjNjTlFhWndWZHlpUHFBMlBwVHhPTktEQWw1WllSMU85UHA3TkdkRVBTdFN2V1JQMEkwTngrR3BOa3dxUWpvSjV2ckZIZUdXWm81QkFnPT0K",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.5.0-desktop/Bramble.app.tar.gz"
 		},
 		"linux-aarch64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WndleFBmKzZhMXQ5R3BrQ0ZyamVRMTVWYnc0SHcvOE56dHpwb0VsY2E3cGt2U0NJenRDYnpNdDZUK3F2WnJoRmVXVTdPUnRBWWh4UjNOUWFSREx2OGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTg4MzU3CWZpbGU6QnJhbWJsZV8wLjQuMF9hYXJjaDY0LkFwcEltYWdlCkRUVTVjenllMnpxb2NSTEkvSm85YWNaS1h6SklyckFWK3pWUmk2cTV0cjNucHBjMEhIWlpoTEc0blNEQTJlN3BZL0VsRUJDNGlSZjNUV2NTSmIzT0J3PT0K",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.4.0-desktop/Bramble_0.4.0_aarch64.AppImage"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WnhpdGhLZm1hZ24zVTVCb3pma0NTV2lBSTB6Rm5WNkNqbmNtcGJUUDZlNHdRWVM3UUtESW5NSUFBZ3ZOM2RtQW9XZGFLd1daT0xTV05Kc0hPR2ZwUkE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTQ0NDM1CWZpbGU6QnJhbWJsZV8wLjUuMF9hYXJjaDY0LkFwcEltYWdlCllqelg1NDFwNFJyaEFTNmxWL1FJZExPUFhNZk1nNjc3U3JROHhhOVBmN2JFWk5hZjZxSGRSaEl2S2Nob2lORmgxelBCbU4xVVhoSHVoei9VQUVJZkJ3PT0K",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.5.0-desktop/Bramble_0.5.0_aarch64.AppImage"
 		},
 		"linux-x86_64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1Wi81VVJGWnFQMmlUK2FZbUxtM3NxNGptSzZvOUxNNEx5MTY0Rmh0amYwdWVORkJab24vcGpTSkhia2pWTmlXOXB0L2tuZk9MQmxFLzhDcWRQcVluMmdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTg4MTIxCWZpbGU6QnJhbWJsZV8wLjQuMF9hbWQ2NC5BcHBJbWFnZQpFVXhHTlFqT04zSWo4TXFPL05RR3J2SnMxL29BOVArRTJ3d2tjVzlUU0c2VGtWRjRob3R2Z25RY0s5enpCc0NmckJmWTBwKzJlSUlTRnNLcFh3TExEUT09Cg==",
-			"url": "https://github.com/flythenimbus/bramble/releases/download/0.4.0-desktop/Bramble_0.4.0_amd64.AppImage"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVScGo5TFA3elg1WjVnU2lyWTZORGJUakNQVGIzbXlHYWphdjBic0RMeHJtd2dFUFd6R0lKNURwU2FKdXV6SWlDMkNpTlBXeTRhZWVzQ1VLRG5DUncvakVsbkJTWE1aY1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTQ0Mjc5CWZpbGU6QnJhbWJsZV8wLjUuMF9hbWQ2NC5BcHBJbWFnZQpsV0hTa0h3d2xUbkxLckh2Q1U0cGluY0FBZkdsdDdwdDNMMml2SFZmc00xUklIN1p3NkRGUnJFUndub3FiemVYUGJYT0Z2ODNGbDJjZW1CbHZ1eEdDZz09Cg==",
+			"url": "https://github.com/flythenimbus/bramble/releases/download/0.5.0-desktop/Bramble_0.5.0_amd64.AppImage"
 		}
 	}
 }
