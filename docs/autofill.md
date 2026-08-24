@@ -158,6 +158,12 @@ issue #59. The policy now:
   input the model has never seen buys exactly one re-parse (a shadow root can
   attach with no mutation to observe).
 
+One path deliberately opts out: a **desktop fill** (`DESKTOP_FILL`, see
+[desktop-port.md](desktop-port.md)) re-reads the page before choosing its target. The user picked
+that entry in the desktop app, so a model stale by one unobserved change - an input whose `type`
+flipped to password, say - would answer "no field to fill" for something they explicitly asked
+for. One deliberate action is worth one parse.
+
 `e2e/perf/page-blocking.mjs` is the harness for this: it reports main-thread
 blocking time with and without the extension on a real page.
 

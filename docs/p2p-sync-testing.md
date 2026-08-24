@@ -87,6 +87,62 @@ After code changes: `pnpm run build`, then click the reload icon on the extensio
 also run `pnpm run wasm:build` — `pnpm run build` does **not** rebuild the wasm, and a
 stale wasm shows up as `x.foo is not a function` in the browser.
 
+## Testing the roster-signature migration (phase 1 -> phase 2)
+
+A device signs its own roster entry at create / join / invite, and since 2026-08-22 also on
+unlock, which is the backfill that lets the phase-1 migration finish
+([p2p-sync-revocation-hardening.md](p2p-sync-revocation-hardening.md)). Settings -> Sync marks
+every unsigned device with an `UNSIGNED` chip.
+
+Unless you kept a vault paired before 2026-07-09, the only way to reach the pre-signing state is
+to strip the signatures out of stored rosters by hand. In the extension's background console
+(`chrome://extensions` -> service worker, or `about:debugging#/runtime/this-firefox` -> Inspect;
+use `browser.` on Firefox):
+
+```js
+const all = await chrome.storage.local.get(null);
+const k = Object.keys(all).find(k => k.startsWith("sync.group"));
+const g = all[k]; g.roster.devices.forEach(d => { delete d.sigKey; delete d.sig; });
+await chrome.storage.local.set({ [k]: g });
+```
+
+**Watch the PEER, never the device that is signing.** Two things hide the state otherwise, and
+both of them are the system working:
+
+- **A device cannot show its own `UNSIGNED` chip.** Opening the popup is what mounts the provider
+  and runs the backfill, so the entry is signed before the panel paints, and the panel refreshes
+  on that write.
+- **A one-sided strip heals itself.** The peer still holds a signed copy and rebroadcasts every
+  ~4s; if it has re-signed since (a newer stamp), it overwrites the stripped row immediately.
+  Strip **both** sides back to back, with neither popup open in between.
+
+So: strip both, open peer A's popup and **"Open in window"** to pop it out (the popup dismisses on
+focus loss, a detached window does not), leave Settings -> Sync visible there, then open peer B's
+popup. A's chip for B clears within a few seconds. That is the signature crossing the relay, and
+it is the same assertion `e2e/sync/roster-signature-backfill.spec.ts` makes.
+
+Read storage rather than trusting the chips when something looks wrong. Note the `.find()` above
+takes the FIRST `sync.group:*` key, which on a multi-vault profile may not be the active vault:
+
+```js
+const all = await chrome.storage.local.get(null);
+for (const k of Object.keys(all).filter(k => k.startsWith("sync.group"))) {
+  console.log(k, all[k].roster.devices.map(d => ({ id: d.id.slice(0, 8), signed: !!d.sigKey })));
+}
+```
+
+**Firefox is the case worth spending the time on.** Its signing goes through the background EVENT
+PAGE rather than an offscreen document, which no automated suite covers (Playwright cannot install
+a Firefox add-on), and the event page suspends after ~30s idle - so also run it once with the vault
+locked first, to prove the backfill survives a cold wake. A host that refuses to sign says so:
+
+```
+[vault] roster signature backfill failed; will retry on next unlock:
+```
+
+Silence there with an unsigned entry still in storage is a different bug: the host declined rather
+than errored.
+
 ## Caveats
 
 - **Brave WebRTC privacy:** Brave Shields / "WebRTC IP handling" can suppress
