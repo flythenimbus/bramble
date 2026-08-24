@@ -9,6 +9,7 @@ import { maybeCommitCapture, onPasswordEnter } from "./capture";
 import { api } from "./content-api";
 import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
+	anchorIsLive,
 	cardFieldsPresent,
 	composedTarget,
 	couldBeCandidate,
@@ -140,10 +141,23 @@ function pickerIsOpen(): boolean {
 	return !!picker.activeHost() || relayedPickerIsOpen();
 }
 
+/** True while the relayed picker still has a field in this frame to belong to. */
+function relayedAnchorIsLive(): boolean {
+	return !!relayedField && anchorIsLive(relayedField, rectOf(relayedField));
+}
+
 /** Keep whichever picker is showing pinned to its field as the page moves. */
 function repositionPicker(): void {
 	picker.reposition();
-	if (relayedField) repositionRelayed(rectOf(relayedField));
+	if (!relayedField) return;
+	// A relayed picker has no tracker of its own: the rect is pushed from here, so a
+	// field that has gone would re-park it at this frame's corner. Withdraw instead.
+	// picker.ts makes the same call for the pickers it hosts.
+	if (!relayedAnchorIsLive()) {
+		dropRelayed();
+		return;
+	}
+	repositionRelayed(rectOf(relayedField));
 }
 
 /** Dismiss whichever picker is showing. */
@@ -676,6 +690,9 @@ function onDomChange(records: MutationRecord[]): void {
 	// Commit checkpoint: an armed capture whose password field has now gone, or a
 	// password the user just edited whose field vanished within the submit window.
 	maybeCommitCapture();
+	// An SPA route change can take the relayed picker's field with it, and unlike a
+	// scroll nothing else here would notice.
+	if (relayedField && !relayedAnchorIsLive()) dropRelayed();
 	// A background tab still runs its observer (a video in picture-in-picture keeps
 	// the page busy); defer the re-query until the user is looking at it again.
 	if (document.hidden) {
@@ -987,7 +1004,17 @@ function bootstrap(): void {
 	);
 	window.addEventListener("scroll", () => repositionPicker(), true);
 	window.addEventListener("resize", () => repositionPicker(), true);
-	window.addEventListener("pagehide", () => cancelOperations(), true);
+	window.addEventListener(
+		"pagehide",
+		() => {
+			cancelOperations();
+			// Leaving the document. bfcache freezes the DOM as it stands, so a picker left
+			// open comes back on the return trip showing a match set - and a lock state -
+			// from before the trip.
+			removePicker();
+		},
+		true,
+	);
 	window.addEventListener("pageshow", (e) => {
 		if (e.persisted) {
 			cancelOperations();

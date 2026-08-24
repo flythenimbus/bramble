@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import { api } from "./content-api";
+import { anchorIsLive } from "./detection";
 import { dropdownItem } from "./html/dropdown-item";
 import { dropdownLocked } from "./html/dropdown-locked";
 import { dropdownStyles } from "./html/dropdown-styles";
@@ -141,6 +142,15 @@ function startPositionTracking(): void {
 			return;
 		}
 		const rect = anchorField.getBoundingClientRect();
+		// The anchor can go at any time: an SPA route change unmounts the form, a
+		// second step replaces the first, a modal closes. Following a field that is
+		// no longer there parks the picker in the page's top-left corner instead of
+		// taking it down, so a lost anchor dismisses rather than repositions.
+		if (!anchorIsLive(anchorField, rect)) {
+			stopPositionTracking();
+			removeActiveUi();
+			return;
+		}
 		const x = rect.left + window.scrollX;
 		const y = rect.bottom + window.scrollY + 2;
 		const width = pickerWidth(rect.width);
@@ -337,7 +347,12 @@ let iframeHasHighlight = false;
 
 /** Hide the iframe host (kept alive for reuse). */
 function hideIframe(): void {
-	if (iframeHostEl) iframeHostEl.style.display = "none";
+	if (iframeHostEl) {
+		iframeHostEl.style.display = "none";
+		// Drop a mid-scroll hide with it: the next show starts a fresh tracking loop,
+		// whose baseline is "not hidden", so nothing would ever clear it again.
+		iframeHostEl.style.visibility = "";
+	}
 	iframeMatchesKey = "";
 	iframeHasHighlight = false;
 	setAnchorField(null);

@@ -131,6 +131,34 @@ test("keyboard nav drives the iframe: Down highlights, Enter fills, Escape dismi
 	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
 });
 
+test("dismisses when a route change takes the anchored field away", async ({
+	context,
+	extensionId,
+}) => {
+	// A client-side route change unmounts the form without a navigation, so the content script
+	// survives and keeps tracking a field that is no longer laid out. A gone field measures 0x0 at
+	// the document origin, and the picker used to follow it into the page's top-left corner and sit
+	// there, still offering entries for a form that had left the screen.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, LOGIN);
+	await page.goto("https://example.com/");
+
+	const frame = await openPickerIframe(page, "#user");
+	await expect(frame.locator("[data-entry-id]")).toBeVisible({ timeout: 10_000 });
+
+	await page.evaluate(() => {
+		document.querySelector("form")?.remove();
+		history.pushState({}, "", "/account");
+	});
+
+	await expect.poll(() => hostDisplay(page)).toBe("none");
+});
+
 test("the strong-password suggestion renders and regenerates in the iframe", async ({
 	context,
 	extensionId,

@@ -167,6 +167,29 @@ for. One deliberate action is worth one parse.
 `e2e/perf/page-blocking.mjs` is the harness for this: it reports main-thread
 blocking time with and without the extension on a real page.
 
+### The picker lets go of a field that has gone
+
+An open picker is parked below its anchor field by a `requestAnimationFrame` loop
+in `picker.ts`, because a `scroll` event is `composed: false` and never fires for a
+scroll inside a shadow root or a nested modal scroller. The loop re-reads the
+field's rect every frame, so it also sees the moment the field stops existing: an
+SPA route change unmounts the login form, a second step replaces the first, a modal
+closes. **A field that has gone measures 0x0 at the document origin**, which reads
+to anything positioning against it as "the top-left corner of the page" - so the
+loop used to leave the dropdown stranded up there, still offering entries for a
+form that was no longer on screen. `anchorIsLive()` is the check (attached to this
+document, and occupying a box); failing it dismisses the picker instead of
+repositioning it.
+
+The relayed picker has no loop of its own (its rect is pushed from the field's
+frame, see below), so the same check runs where that rect is taken: on
+reposition, and in the MutationObserver, which is the only thing that notices a
+route change when nothing scrolled.
+
+`pagehide` takes the picker down too. bfcache freezes the DOM as it stands, and a
+picker restored on the return trip would be showing a match set - and a lock
+state - from before the trip.
+
 ## Writing a value into a field
 
 `fill.ts` writes through the native `value` setter (so React's value tracker sees

@@ -834,6 +834,20 @@ export function isRendered(el: Element): boolean {
 	return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
 }
 
+/**
+ * True while `el` is still something the picker can hang off: attached to this document
+ * and occupying a layout box. A field that was unmounted (an SPA route change, a step-2
+ * screen replacing step 1) or hidden measures 0x0 at the document origin, which reads to
+ * anything positioning against it as "the top-left corner of the page".
+ *
+ * The rect is passed in rather than measured here: the callers have already measured, and
+ * this runs once per animation frame for as long as a picker is open.
+ */
+export function anchorIsLive(el: Element, rect: { width: number; height: number }): boolean {
+	if (!el.isConnected || el.ownerDocument !== document) return false;
+	return rect.width > 0 || rect.height > 0;
+}
+
 /** True if a rendered interactive captcha is present; used to gate auto-submit. */
 export function hasInteractiveCaptcha(doc: Document = document): boolean {
 	for (const sel of CAPTCHA_SELECTORS) {

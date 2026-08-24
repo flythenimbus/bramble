@@ -912,3 +912,35 @@ describe("content: deferred direct response cancellation", () => {
 		vi.unstubAllGlobals();
 	});
 });
+
+// bfcache freezes the DOM as it stands. A picker left open on the way out comes back on
+// the return trip showing a match set - and a lock state - from before the trip.
+describe("content: leaving the document", () => {
+	beforeEach(() => {
+		removePicker.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" />
+				<input id="pass" type="password" name="password" />
+			</form>`;
+		invalidatePageFields();
+	});
+
+	it("takes an open picker down on pagehide", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "a", name: "A", secondary: "a@example.com" }] }),
+		});
+		expect(pickerState.host).not.toBeNull();
+
+		window.dispatchEvent(new Event("pagehide"));
+
+		expect(removePicker).toHaveBeenCalled();
+		expect(pickerState.host).toBeNull();
+	});
+});
