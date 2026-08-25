@@ -24,6 +24,7 @@ export function RecoveryCodeDisplay({
 }: RecoveryCodeDisplayProps) {
 	const { t } = useLingui();
 	const { shell } = usePlatform();
+	const appName = shell.appName;
 	const [copied, setCopied] = useState(false);
 	const titleText = title ?? t`Save your recovery code`;
 	const continueText = continueLabel ?? t`I've saved it, continue`;
@@ -40,14 +41,16 @@ export function RecoveryCodeDisplay({
 
 	const download = async () => {
 		const body = [
-			t`Titanpass recovery code`,
+			t`${appName} recovery code`,
 			"",
 			code,
 			"",
 			t`Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys.`,
 			"",
 		].join("\n");
-		const name = "titanpass-recovery-code.txt";
+		// Hardcoded rather than built from appName: a file name would need slugging, and this
+		// matches the `.bramble` extension the rest of the app writes.
+		const name = "bramble-recovery-code.txt";
 		try {
 			// On native platforms this saves via the OS share sheet ("Save to Files", Mail, ...);
 			// a WKWebView ignores <a download>, so the blob path below is a web/extension fallback.

@@ -49,6 +49,10 @@ msgstr "{0, plural, one {Eliminare # voce?} other {Eliminare # voci?}}"
 msgid "{0} · added {1}"
 msgstr "{0} · aggiunto {1}"
 
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "{appName} recovery code"
+msgstr "Codice di recupero {appName}"
+
 #: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
 msgid "{count, plural, one {# selected} other {# selected}}"
 msgstr "{count, plural, one {# selezionato} other {# selezionati}}"
@@ -2710,10 +2714,6 @@ msgstr "Pollice su"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Timeout"
 msgstr "Timeout"
-
-#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
-msgid "Titanpass recovery code"
-msgstr "Codice di recupero Titanpass"
 
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Title"
