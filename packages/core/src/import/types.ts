@@ -8,7 +8,8 @@ export type ImportProvider =
 	| "protonpass"
 	| "keepass"
 	| "apple"
-	| "google";
+	| "google"
+	| "lastpass";
 
 /** Normalized parse result. `imported` is id-less (the vault assigns ids); `warnings` flags lossy mappings. */
 export interface ImportResult {

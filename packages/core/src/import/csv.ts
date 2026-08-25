@@ -8,23 +8,21 @@
 // which we pass through verbatim like the Bitwarden importer does.
 
 import type { EntryData } from "../hooks/useVault";
-import { asText, parseCsvRows, summarize } from "./shared";
+import { APPLE_CSV, assertFormat, type CsvFormat, GOOGLE_CSV, headerLabels } from "./csv-format";
+import { asText, hostLabel, parseCsvRows, summarize } from "./shared";
 import type { ImportResult } from "./types";
 
 type Field = "name" | "url" | "username" | "password" | "notes" | "totp";
 
 interface CsvSpec {
-	label: string;
+	/** How the header row is recognised, and what to call the format in an error. */
+	format: CsvFormat;
 	/** Accepted header labels per field, lower-cased. The file's own header row decides order. */
 	columns: Record<Field, readonly string[]>;
-	/** Headers that must ALL be present to accept the file as this provider's export. */
-	signature: readonly string[];
 }
 
-// Apple Passwords: `Title,URL,Username,Password,Notes,OTPAuth`. Apple documents none of this,
-// but its own importer rejects any other header ("missing column labels"), so it's fixed.
 const APPLE: CsvSpec = {
-	label: "Apple Passwords",
+	format: APPLE_CSV,
 	columns: {
 		name: ["title"],
 		url: ["url"],
@@ -33,14 +31,10 @@ const APPLE: CsvSpec = {
 		notes: ["notes"],
 		totp: ["otpauth"],
 	},
-	signature: ["title", "url", "username", "password", "otpauth"],
 };
 
-// Google Password Manager: `name,url,username,password,note`, written by Chromium's
-// password_csv_writer.cc. `note` arrived later than the rest, so it stays out of the
-// signature and older four-column exports still import.
 const GOOGLE: CsvSpec = {
-	label: "Google Password Manager",
+	format: GOOGLE_CSV,
 	columns: {
 		name: ["name"],
 		url: ["url"],
@@ -49,46 +43,12 @@ const GOOGLE: CsvSpec = {
 		notes: ["note", "notes"],
 		totp: [],
 	},
-	signature: ["name", "url", "username", "password"],
 };
-
-// The signatures are mutually exclusive (Apple has title+otpauth and no `name`; Google has
-// `name` and neither), so a mis-picked file is detectable rather than silently empty.
-const OTHER = new Map<CsvSpec, CsvSpec>([
-	[APPLE, GOOGLE],
-	[GOOGLE, APPLE],
-]);
-
-/** Best-effort display name for a row with no title: the URL's host, else the raw URL. */
-function hostLabel(url: string): string {
-	if (!url) return "";
-	try {
-		return new URL(url).hostname || url;
-	} catch {
-		// Bare hosts ("example.com") have no scheme, so URL() throws; retry with one.
-		try {
-			return new URL(`https://${url}`).hostname || url;
-		} catch {
-			return url;
-		}
-	}
-}
 
 function parseSpec(spec: CsvSpec, raw: string | Uint8Array): ImportResult {
 	const rows = parseCsvRows(asText(raw));
-	const header = (rows[0] ?? []).map((h) => h.trim().toLowerCase());
-	if (!spec.signature.every((h) => header.includes(h))) {
-		const other = OTHER.get(spec);
-		// No indefinite article before the label: it would read "a Apple Passwords export".
-		if (other?.signature.every((h) => header.includes(h))) {
-			throw new Error(
-				`This looks like an export from ${other.label}. Go back and choose ${other.label} instead.`,
-			);
-		}
-		throw new Error(
-			`This doesn't look like an export from ${spec.label}. Its first line should be the column names.`,
-		);
-	}
+	const header = headerLabels(rows[0]);
+	assertFormat(spec.format, header);
 
 	const indexOf = (field: Field): number => {
 		for (const alias of spec.columns[field]) {

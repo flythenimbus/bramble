@@ -1,7 +1,7 @@
 # LastPass import: the CSV format
 
-Notes gathered while building the fixtures, so the parser does not have to rediscover them.
-Every claim below is confirmed against at least two real exports (see [Provenance](#provenance)).
+What `import/lastpass.ts` has to cope with, and the evidence for each rule. Every claim below is
+confirmed against at least two real exports (see [Provenance](#provenance)).
 
 Fixtures: `packages/platform-extension/src/fixtures/imports/lastpass.csv` (current header) and
 `lastpass-legacy.csv` (pre-TOTP header).
@@ -28,8 +28,9 @@ including the BOM.
 | `grouping` | Folder path, `\`-separated for nesting (`Dev\Hosting`). Shared folders arrive prefixed `Shared-<name>`. |
 | `fav` | `0` or `1`. |
 
-The vault has no folder or favourite concept, so `grouping` and `fav` have nowhere to land.
-Bitwarden's importer already drops `folderId` on the same grounds.
+The vault has no folder or favourite concept. `grouping` is a readable path the user chose, so it
+is kept as a `Folder` custom field and the import warns once that it did; `fav` means nothing
+outside LastPass and is dropped.
 
 ## Typed secure notes
 
@@ -130,21 +131,29 @@ design. Trim it for display.
 
 ## Mapping to vault types
 
-The vault has `login`, `card`, `note`, `ssh-key`. Only `Credit Card` has an unambiguous home
-(`card`, with `Expiration Date` split into `expMonth`/`expYear` per [Dates](#dates)). `SSH Key` maps
-to `ssh-key` if the PEM survives the multi-line read. Everything else becomes a `note` with the
-`Key:Value` pairs as custom fields, which is what the Bitwarden importer already does for
-identities.
+The vault has `login`, `card`, `note`, `ssh-key`:
+
+- `Credit Card` becomes a `card`, with `Expiration Date` split per [Dates](#dates). The brand comes
+  from the number via `cardBrand()`, falling back to `Type` only when that names a real brand. A
+  `Type` that did not supply the brand is kept as a field rather than dropped.
+- `SSH Key` becomes an `ssh-key` when a key actually came across, and a `note` when it did not.
+- Everything else becomes a `note` carrying the `Key:Value` pairs as custom fields, which is what
+  the Bitwarden importer already does for identities. `Password`, `Pin` and `Passphrase` fields
+  arrive masked.
+
+Empty template fields and dates written as bare commas are dropped rather than kept as blanks.
 
 ## The Google signature collision
 
-`csv.ts` accepts a file as a Google Password Manager export when the header contains
-`name`, `url`, `username`, `password`. A LastPass header contains all four. Today a LastPass
-file handed to the Google card imports silently and wrongly: secure notes become junk logins,
-and `totp`, `extra` and `grouping` are dropped without a warning.
+`csv.ts` accepted a file as a Google Password Manager export when the header contained
+`name`, `url`, `username`, `password`. A LastPass header contains all four, so a LastPass file
+handed to the Google card imported silently and wrongly: secure notes became junk logins, and
+`totp`, `extra` and `grouping` were dropped without a warning.
 
-Adding LastPass means tightening that signature and adding LastPass to the `OTHER` mis-pick map
-so the "you picked the wrong card" message works in both directions.
+Header detection now lives in `csv-format.ts`, where `GOOGLE_CSV` carries a `reject` list
+(`extra`, `grouping`) that no Google export has and every LastPass one does. That makes the three
+signatures mutually exclusive, so a mis-picked file is named in either direction rather than
+half-imported.
 
 ## Provenance
 

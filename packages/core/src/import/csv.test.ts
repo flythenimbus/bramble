@@ -98,6 +98,17 @@ describe("parseGooglePasswords", () => {
 
 		expect(() => parseGooglePasswords(csv)).toThrow(/Apple Passwords/);
 	});
+
+	it("rejects a LastPass export by name", () => {
+		// A LastPass header carries name+url+username+password too, so Google's signature alone
+		// used to accept the file and then drop its secure notes, TOTP and folders in silence.
+		const csv = [
+			"url,username,password,totp,extra,name,grouping,fav",
+			"https://x.com,u,p,,,T,Dev,0",
+		].join("\n");
+
+		expect(() => parseGooglePasswords(csv)).toThrow(/LastPass/);
+	});
 });
 
 describe("shared CSV behaviour", () => {

@@ -1,6 +1,7 @@
 import { parseBitwarden } from "./bitwarden";
 import { parseApplePasswords, parseGooglePasswords } from "./csv";
 import { parseKeePass } from "./keepass";
+import { parseLastPass } from "./lastpass";
 import { parseOnePassword } from "./onepassword";
 import { parseProtonPass } from "./protonpass";
 import type { ImportParser, ImportParserContext, ImportProvider, ImportResult } from "./types";
@@ -13,6 +14,7 @@ export {
 	parseBitwarden,
 	parseGooglePasswords,
 	parseKeePass,
+	parseLastPass,
 	parseOnePassword,
 	parseProtonPass,
 };
@@ -22,6 +24,7 @@ const PARSERS: Record<ImportProvider, ImportParser> = {
 	onepassword: parseOnePassword,
 	protonpass: parseProtonPass,
 	keepass: parseKeePass,
+	lastpass: parseLastPass,
 	apple: parseApplePasswords,
 	google: parseGooglePasswords,
 };
@@ -86,6 +89,13 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 		blurb: "Unencrypted .zip export",
 		accept: ".zip",
 		reads: "bytes",
+	},
+	{
+		id: "lastpass",
+		label: "LastPass",
+		blurb: "Unencrypted .csv export",
+		accept: ".csv,text/csv",
+		reads: "text",
 	},
 	{
 		id: "keepass",

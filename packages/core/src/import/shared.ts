@@ -47,6 +47,21 @@ export function summarize(
 	return { imported, byType: tallyByType(imported), skipped: skipped + dropped, warnings };
 }
 
+/** Best-effort display name for a row with no title: the URL's host, else the raw URL. */
+export function hostLabel(url: string): string {
+	if (!url) return "";
+	try {
+		return new URL(url).hostname || url;
+	} catch {
+		// Bare hosts ("example.com") have no scheme, so URL() throws; retry with one.
+		try {
+			return new URL(`https://${url}`).hostname || url;
+		} catch {
+			return url;
+		}
+	}
+}
+
 /** Normalize a string-or-bytes input to text. */
 export function asText(raw: string | Uint8Array): string {
 	return typeof raw === "string" ? raw : strFromU8(raw);
