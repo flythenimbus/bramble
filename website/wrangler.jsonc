@@ -1,5 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "bramble-website",
+	// Pins the runtime behaviour for functions/ (the release-download badge endpoint).
+	"compatibility_date": "2026-07-28",
 	"pages_build_output_dir": "dist"
 }

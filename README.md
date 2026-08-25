@@ -1,6 +1,11 @@
 # Bramble
 
-[![Matrix](https://img.shields.io/badge/Matrix-%23general%3Abramble.sh-000000?logo=matrix&logoColor=white)](https://matrix.to/#/%23general:bramble.sh)
+[![Matrix](https://img.shields.io/badge/Matrix-%23general%3Abramble.sh-000000?logo=matrix&logoColor=white&style=flat-square)](https://matrix.to/#/%23general:bramble.sh)
+[![Android version](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fversion%2Fandroid)](https://bramble.sh/latest/android)
+[![Android downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Fandroid)](https://bramble.sh/latest/android)
+[![Desktop version](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fversion%2Fdesktop)](https://bramble.sh/latest/desktop)
+[![macOS downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Fmacos)](https://bramble.sh/latest/desktop)
+[![Linux downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Flinux)](https://bramble.sh/latest/desktop)
 
 A password manager that keeps your secrets on your own devices. No account, no server holding your vault, no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
 
