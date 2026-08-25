@@ -178,8 +178,50 @@ closes. **A field that has gone measures 0x0 at the document origin**, which rea
 to anything positioning against it as "the top-left corner of the page" - so the
 loop used to leave the dropdown stranded up there, still offering entries for a
 form that was no longer on screen. `anchorIsLive()` is the check (attached to this
-document, and occupying a box); failing it dismisses the picker instead of
-repositioning it.
+document, occupying a box, and visible); failing it dismisses the picker instead
+of repositioning it.
+
+A **modal closing** is the same problem wearing four disguises, and only the first
+two are answered by "is it attached and does it measure":
+
+| the modal closes by | what the field looks like afterwards |
+| --- | --- |
+| unmounting | detached |
+| `display: none` | attached, 0x0 at the document origin |
+| `visibility: hidden` / `opacity: 0` | attached, laid out, styled invisible |
+| collapsing with `overflow: hidden` | attached, laid out, and styled **visible** |
+
+The third pair is what a transition-based modal leaves behind, and it is answered
+by `checkVisibility({checkOpacity, checkVisibilityCSS})` — the same call
+`isRendered` makes, shared as `isVisibleCss`. It has to answer for **ancestors**,
+since what closed is the modal, not the field.
+
+The fourth has no style to read: the field is fine, its ancestor has gone to
+nothing and clipped it out of the picture. A **hit test at the field's own centre**
+answers it (`anchorIsReachable`), and catches an overlay dropped on top of the
+field for free. Three things make it safe:
+
+- `elementFromPoint` answers with the **deepest** element at the point, so a field
+  that is really there answers with itself or with an icon painted inside it.
+  Accepting an *ancestor* would accept every clipped-away field there is, because
+  `<body>` contains the field too.
+- It runs on `field.getRootNode()`, not the document. For a field inside a shadow
+  root the document's own hit test answers with the **host**, never the field, and
+  would take the picker down on sight.
+- It is skipped when the field's centre is outside the viewport, where there is
+  nothing to hit. A field merely **scrolled** out of sight keeps its picker, which
+  rides along with it as it always has.
+
+It is rate-limited to ~150ms rather than run per frame: it forces a hit test, and a
+dismissal does not need 60Hz. Where it is unavailable (jsdom, any engine without
+CSSOM View) it fails open, the way `isVisibleCss` does without `checkVisibility` —
+never dismiss on a question you cannot ask.
+
+An `IntersectionObserver` looks like the tool for the clipping case and is not: a
+**live** observer never fires when only an ancestor's clip changes, while a fresh
+one on the identical page reports zero. `e2e/extension/picker-modal-close.spec.ts`
+covers all four, plus the shadow-root and scrolled-away cases that the hit test
+must not get wrong.
 
 The relayed picker has no loop of its own (its rect is pushed from the field's
 frame, see below), so the same check runs where that rect is taken: on

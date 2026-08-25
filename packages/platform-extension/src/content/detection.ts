@@ -817,14 +817,14 @@ const CAPTCHA_SELECTORS = [
 	'iframe[title*="captcha" i]',
 ];
 
-/** True if `el` is large enough and not hidden via display/visibility/opacity. */
-export function isRendered(el: Element): boolean {
-	const rect = el.getBoundingClientRect();
-	if (rect.width < 10 || rect.height < 10) return false;
-	// checkVisibility answers all three in one call and without allocating a
-	// style declaration, which matters in the loops over every input. It also
-	// catches an opacity:0 ANCESTOR, which reading the element's own computed
-	// opacity cannot. Absent (jsdom, older engines): fall back.
+/**
+ * True if `el` is not hidden via display / visibility / opacity, ANCESTORS INCLUDED.
+ *
+ * checkVisibility answers all three in one call and without allocating a style declaration,
+ * which matters in the loops over every input. It also catches an opacity:0 ancestor, which
+ * reading the element's own computed opacity cannot. Absent (jsdom, older engines): fall back.
+ */
+function isVisibleCss(el: Element): boolean {
 	if (typeof el.checkVisibility === "function") {
 		return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
 	}
@@ -834,18 +834,31 @@ export function isRendered(el: Element): boolean {
 	return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
 }
 
+/** True if `el` is large enough and not hidden via display/visibility/opacity. */
+export function isRendered(el: Element): boolean {
+	const rect = el.getBoundingClientRect();
+	if (rect.width < 10 || rect.height < 10) return false;
+	return isVisibleCss(el);
+}
+
 /**
- * True while `el` is still something the picker can hang off: attached to this document
- * and occupying a layout box. A field that was unmounted (an SPA route change, a step-2
- * screen replacing step 1) or hidden measures 0x0 at the document origin, which reads to
- * anything positioning against it as "the top-left corner of the page".
+ * True while `el` is still something the picker can hang off: attached to this document,
+ * occupying a layout box, and visible. A field that was unmounted (an SPA route change, a
+ * step-2 screen replacing step 1) or hidden measures 0x0 at the document origin, which reads
+ * to anything positioning against it as "the top-left corner of the page".
  *
- * The rect is passed in rather than measured here: the callers have already measured, and
- * this runs once per animation frame for as long as a picker is open.
+ * A box is not enough on its own. A modal that closes by FADING - `visibility: hidden`, or an
+ * opacity transition that leaves it mounted - leaves the field attached and still measuring,
+ * so only the style check sees it go. It has to answer for ancestors, since what closed is the
+ * modal, not the field.
+ *
+ * The rect is passed in rather than measured here: the callers have already measured, and this
+ * runs once per animation frame. It is one element, only while a picker is open.
  */
 export function anchorIsLive(el: Element, rect: { width: number; height: number }): boolean {
 	if (!el.isConnected || el.ownerDocument !== document) return false;
-	return rect.width > 0 || rect.height > 0;
+	if (rect.width <= 0 && rect.height <= 0) return false;
+	return isVisibleCss(el);
 }
 
 /** True if a rendered interactive captcha is present; used to gate auto-submit. */

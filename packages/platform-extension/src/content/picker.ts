@@ -58,6 +58,9 @@ const LOAD_BEARING_TOKEN_RE = /\bone-time-code\b/i;
 // generic Chrome autofill; Chrome's own password UI on a recognized login field may persist.
 function setAnchorField(field: HTMLInputElement | null): void {
 	anchorField = field;
+	// A new anchor is reachable until its own hit test says otherwise.
+	lastHitTest = Number.NaN;
+	anchorUnreachable = false;
 	if (suppressedField && suppressedField !== field) {
 		if (suppressedAutocomplete === null) suppressedField.removeAttribute("autocomplete");
 		else suppressedField.setAttribute("autocomplete", suppressedAutocomplete);
@@ -73,6 +76,39 @@ function setAnchorField(field: HTMLInputElement | null): void {
 		suppressedAutocomplete = declared;
 		field.setAttribute("autocomplete", "off");
 	}
+}
+
+// Clipping is the one way of hiding a field that leaves it attached, styled visible, and still
+// measuring a box: an ancestor collapsed to nothing with `overflow: hidden`, which is how a fair
+// number of modals close. No style answers that, and neither does an IntersectionObserver, which
+// looks like the tool for it and is not - a LIVE observer never fires when only an ancestor's
+// clip changes, while a fresh one on the identical page reports zero. A hit test at the field's
+// own centre does answer it, and catches an overlay dropped on top of the field for free.
+//
+// Rate-limited rather than run per frame: it forces a hit test, and a dismissal does not need
+// 60Hz. `getRootNode()` keeps it correct for a field inside a shadow root, where the document's
+// own elementFromPoint would answer with the host and never with the field.
+const HIT_TEST_MS = 150;
+let lastHitTest = Number.NaN;
+let anchorUnreachable = false;
+
+function anchorIsReachable(field: HTMLInputElement, rect: DOMRect): boolean {
+	const x = rect.left + rect.width / 2;
+	const y = rect.top + rect.height / 2;
+	// Nothing to hit outside the viewport. A field merely scrolled out of sight keeps its
+	// picker, which rides along with it, as it always has.
+	if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return true;
+	const root = field.getRootNode() as Node & Partial<DocumentOrShadowRoot>;
+	// No hit testing to be had (jsdom, and any engine without CSSOM View): fail open, the way
+	// isVisibleCss does without checkVisibility. Never dismiss on a question we cannot ask.
+	if (typeof root.elementFromPoint !== "function") return true;
+	const top = root.elementFromPoint(x, y);
+	if (!top) return false;
+	// elementFromPoint answers with the DEEPEST element at the point, so a field that is
+	// really there answers with itself, or with an icon painted inside it. An ANCESTOR coming
+	// back means the point fell through to whatever is behind: `<body>` contains the field
+	// too, so accepting ancestors here would accept every clipped-away field there is.
+	return top === field || field.contains(top);
 }
 
 function matchesKey(matches: MatchSummary[]): string {
@@ -142,11 +178,15 @@ function startPositionTracking(): void {
 			return;
 		}
 		const rect = anchorField.getBoundingClientRect();
+		if (Number.isNaN(lastHitTest) || ts - lastHitTest >= HIT_TEST_MS) {
+			lastHitTest = ts;
+			anchorUnreachable = !anchorIsReachable(anchorField, rect);
+		}
 		// The anchor can go at any time: an SPA route change unmounts the form, a
 		// second step replaces the first, a modal closes. Following a field that is
 		// no longer there parks the picker in the page's top-left corner instead of
 		// taking it down, so a lost anchor dismisses rather than repositions.
-		if (!anchorIsLive(anchorField, rect)) {
+		if (!anchorIsLive(anchorField, rect) || anchorUnreachable) {
 			stopPositionTracking();
 			removeActiveUi();
 			return;
