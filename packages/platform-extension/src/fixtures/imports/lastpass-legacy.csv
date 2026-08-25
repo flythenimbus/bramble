@@ -1,0 +1,19 @@
+url,username,password,extra,name,grouping,fav
+https://mastodon.social/,alice,"D<INNeT?#?Bf4%`zA/4i!/'$T",,mastodon.social,Social,0
+https://news.ycombinator.com,alice,"1)Btf2EI~Tfb7g2A!Sy',*Sj#",,news.ycombinator.com,Social,0
+https://onlinebanking.example.ie,alice@example.com,"ws5T@;_UB[Q|P!8'`~z%XC'JHFUbf#IX _E0}:HF,[{ei0hBg14",,Example Bank,Finance,0
+https://mail.example.ws,alice,rPCkmNkhIa>{izt3C3F823!Go,,alice@example.ws,Emails\Personal,0
+,alice,"2cUqe}e9}>IVZf)Ye>3C8ZN,r",This is a garbage address,alice@broken.xb,Emails,0
+https://nowhere.example,alice,,,empty password,CornerCases,0
+,,,,empty entry,CornerCases,0
+http://sn,,,"This is a multiline note entry. Cube shank petroleum guacamole dart mower
+acutely slashing upper cringing lunchbox tapioca wrongful unbeaten sift.",Legacy Note,CornerCases,0
+http://sn,,,"NoteType:Credit Card
+Language:en-US
+Name on Card:Alice Example
+Type:Visa
+Number:4111111111111111
+Security Code:123
+Start Date:February,2001
+Expiration Date:May,2028
+Notes:Card in a pre-totp export",Legacy Card,Finance,0

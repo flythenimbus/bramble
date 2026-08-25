@@ -1,0 +1,229 @@
+url,username,password,totp,extra,name,grouping,fav
+https://github.com/login,alice@example.com,correct-horse-battery,,Personal account,GitHub,Dev,0
+https://gitlab.com/users/sign_in,alice,hunter2,JBSWY3DPEHPK3PXP,,GitLab,Dev\Hosting,1
+https://console.aws.amazon.com,root@example.com,aws-secret,otpauth://totp/AWS:root?secret=KRSXG5CTMVRXEZLU&issuer=AWS,IAM root user,AWS Console,Work,1
+https://jenkins.example.com,build,"p@ss,w""rd\with\slashes",,,Jenkins,Work,0
+https://forum.example.org/login,lurker,readonly,,,,Social,0
+http://,offline-user,localpw,,No URL on this one,Local Router,,0
+,api-user,api-key-123,,Legacy row with no URL at all,Legacy API,,0
+https://vpn.example.com,vpnuser,vpnpass,,"Line one of the note.
+Line two, with a comma in it.
+Line three.",Corporate VPN,Work,0
+htts:/broken.url,someone,somepass,,,Broken URL,,0
+http://sn,,,,Just a plain secure note body.,Plain Note,Notes,0
+http://sn,,,,"He said ""hello"" and then left.
+Second line of the note.",Quoted Note,Notes,0
+http://sn,,,,"NoteType:Credit Card
+Language:en-US
+Name on Card:Alice Example
+Type:Visa
+Number:4111111111111111
+Security Code:123
+Start Date:January,2022
+Expiration Date:November,2030
+Notes:Primary card",Visa Card,Finance,0
+http://sn,,,,"NoteType:Credit Card
+Language:en-GB
+Name on Card:A B
+Type:MasterCard
+Number:5555555555554444
+Security Code:987
+Start Date:,
+Expiration Date:June,2028
+Notes:",Backup Card,Finance,0
+http://sn,,,,"NoteType:Credit Card
+Language:
+Name on Card:Me Myself
+Type:CC
+Number:1234123412341234
+Security Code:123
+Start Date:April,12
+Expiration Date:April,29
+Notes:Two-digit years, blank Language, unbrandable number",Unbranded Card ,Email\Other,0
+http://sn,,,,"NoteType:Bank Account
+Language:en-GB
+Bank Name:Example Bank
+Account Type:Checking
+Routing Number:110000000
+Account Number:000123456789
+SWIFT Code:EXMPGB2L
+IBAN Number:GB29NWBK60161331926819
+Pin:4321
+Branch Address:1 High Street
+Branch Phone:+44 20 7946 0000
+Notes:Joint account",Current Account,Finance,0
+http://sn,,,,"NoteType:Address
+Language:en-GB
+Title:mrs
+First Name:Zoë
+Middle Name:Ann
+Last Name:Example
+Username:zoe
+Gender:f
+Birthday:August,23,1990
+Company:Example Ltd
+Address 1:12 Rue de la Paix
+Address 2:
+Address 3:
+City / Town:Kraków
+County:Małopolskie
+State:
+Zip / Postal Code:30-001
+Country:PL
+Timezone:+01:00,1
+Email Address:zoe@example.com
+Phone:{""num"":""48404505606"",""ext"":""11"",""cc3l"":""POL""}
+Evening Phone:
+Mobile Phone:{""num"":""44111222333"",""ext"":""12"",""cc3l"":""GBR""}
+Fax:
+Notes:Home address",Zoë Example,Personal,0
+http://sn,,,,"NoteType:SSH Key
+Language:en-US
+Bit Strength:4096
+Format:PEM
+Passphrase:keypass
+Private Key:-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACBmYWtlMDAwMGZha2UwMDAwZmFrZTAwMDBmYWtlMDAwMGZha2UwMA==
+-----END OPENSSH PRIVATE KEY-----
+Public Key:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForFixtureOnly alice@example.com
+Hostname:ssh.example.com
+Date:January,31,2024
+Notes:Deploy key for the staging box",Deploy Key,Dev,0
+http://sn,,,,"NoteType:Wi-Fi Password
+Language:en-US
+SSID:Example-Guest
+Password:guestpass123
+Connection Type:WPA2
+Connection Mode:Infrastructure
+Authentication:WPA2-PSK
+Encryption:AES
+Use 802.1X:
+FIPS Mode:
+Key Type:
+Protected:yes
+Key Index:
+Notes:Guest network",Guest Wi-Fi,Home,0
+http://sn,,,,"NoteType:Database
+Language:en-US
+Type:PostgreSQL
+Hostname:db.example.com
+Port:5432
+Database:appdb
+Username:app
+Password:dbpass
+SID:
+Alias:prod
+Notes:Read replica",App Database,Dev,0
+http://sn,,,,"NoteType:Server
+Language:en-US
+Hostname:web01.example.com
+Username:deploy
+Password:serverpass
+Notes:",Web Server,Dev,0
+http://sn,,,,"NoteType:Email Account
+Language:en-US
+Username:alice@example.com
+Password:mailpass
+Server:imap.example.com
+Port:993
+Type:IMAP
+SMTP Server:smtp.example.com
+SMTP Port:587
+Notes:",Work Email,Work,0
+http://sn,,,,"NoteType:Instant Messenger
+Language:en-US
+Type:XMPP
+Username:alice
+Password:chatpass
+Server:chat.example.com
+Port:5222
+Notes:",Team Chat,Work,0
+http://sn,,,,"NoteType:Passport
+Language:en-GB
+Type:Personal
+Name:Alice Example
+Country:United Kingdom
+Number:123456789
+Sex:F
+Nationality:British
+Date of Birth:August,23,1990
+Issued Date:March,1,2020
+Expiration Date:March,1,2030
+Notes:",Passport,Personal,0
+http://sn,,,,"NoteType:Driver's License
+Language:en-US
+Number:D1234567
+Expiration Date:July,14,2029
+License Class:C
+Name:Alice Example
+Address:12 Rue de la Paix
+City / Town:Kraków
+State:
+ZIP / Postal Code:30-001
+Country:PL
+Date of Birth:August,23,1990
+Sex:F
+Height:170 cm
+Notes:",Driver's License,Personal,0
+http://sn,,,,"NoteType:Social Security
+Language:en-US
+Name:Alice Example
+Number:078-05-1120
+Notes:",Social Security,Personal,0
+http://sn,,,,"NoteType:Insurance
+Language:en-GB
+Company:Example Insurance
+Policy Type:Contents
+Policy Number:POL-99887
+Expiration:December,2027
+Agent Name:Sam Agent
+Agent Phone:+44 20 7946 0001
+URL:https://insurance.example.com
+Notes:",Home Insurance,Finance,0
+http://sn,,,,"NoteType:Health Insurance
+Language:en-US
+Company:Example Health
+Company Phone:+1 555 0100
+Policy Type:PPO
+Policy Number:HP-4455
+Group ID:GRP-1
+Member Name:Alice Example
+Member ID:MEM-778
+Physician Name:Dr Example
+Physician Phone:+1 555 0111
+Physician Address:2 Clinic Road
+Co-pay:20.00
+Notes:",Health Plan,Finance,0
+http://sn,,,,"NoteType:Membership
+Language:en-GB
+Organization:Example Club
+Membership Number:MEM-0042
+Member Name:Alice Example
+Start Date:January,2023
+Expiration Date:January,2026
+Website:https://club.example.com
+Telephone:+44 20 7946 0002
+Password:clubpass
+Notes:",Club Membership,Personal,0
+http://sn,,,,"NoteType:Software License
+Language:en-US
+License Key:XXXX-YYYY-ZZZZ-0000
+Licensee:Alice Example
+Version:14
+Publisher:Example Software
+Support Email:support@example.com
+Website:https://example.com
+Price:99.00
+Purchase Date:April,123,123123
+Order Number:ORD-1234
+Number of Licenses:1
+Order Total:99.00
+Notes:",Editor License,Work,0
+http://sn,,,,"NoteType:Custom_657088934083173965
+Language:en-US
+text field:some value
+my password:custompass
+date:January,31,2001
+Notes:First line with a trailing quote ""
+Second line of the custom note",Custom Item,Notes,0
