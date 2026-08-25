@@ -350,6 +350,10 @@ async function hydrateIndexForOwner(
 			});
 			if (!dec.ok || typeof dec.data !== "string") continue;
 			const data = normalizeEntryData(JSON.parse(dec.data));
+			// Archived entries never reach autofill. This repeats the rule in core's
+			// toAutofillIndex rather than sharing it, because this path projects the
+			// decrypted entry itself instead of consuming that index.
+			if (data.archivedAt !== undefined) continue;
 			const customFields =
 				data.customFields?.filter((f) => f.value).map((f) => ({ key: f.key, value: f.value })) ??
 				undefined;

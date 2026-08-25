@@ -74,7 +74,39 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 	}
 }
 
+/** The same disk, but the one login on it has been archived. */
+function archivedOffscreen(msg: Record<string, any>): OffscreenResponse {
+	if (msg.type !== "CRYPTO_DECRYPT") return diskOffscreen(msg);
+	return {
+		ok: true,
+		data: JSON.stringify({
+			type: "login",
+			name: "Example",
+			urls: ["https://example.com"],
+			username: "alice",
+			password: "pw1",
+			archivedAt: 5000,
+		}),
+	};
+}
+
 describe("autofill query with no pushed index (rebuild from disk)", () => {
+	// This path projects the decrypted entry itself instead of consuming core's
+	// toAutofillIndex, so it carries the archived rule separately and can drift from it.
+	it("leaves an archived login out of the rebuilt index", async () => {
+		const bg = await loadBackground({
+			sessionSeed: { [TEST_VEK_KEY]: "SEED" },
+			offscreen: archivedOffscreen,
+		});
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
+		await bg.flush();
+
+		expect(resp.data).toMatchObject({ locked: false, logins: [] });
+	});
+
 	it("answers with the vault's logins, not 'locked'", async () => {
 		// Unlocked (a VEK is cached) but no view ever pushed an index: exactly the state a page is
 		// in when it re-queries on the unlock broadcast.

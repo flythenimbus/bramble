@@ -90,10 +90,19 @@ function cardIndexEntry(entry: CardEntry): IndexEntry {
 	};
 }
 
-/** Project logins and cards into the autofill index (notes/ssh keys excluded). */
+/**
+ * Project logins and cards into the autofill index (notes/ssh keys excluded).
+ *
+ * Archived entries are dropped here, which is what takes them out of autofill on every
+ * surface fed by this index: the extension popup, the iOS credential provider (and the
+ * QuickType + passkey identities it registers with the OS), and desktop. The extension
+ * background and the Android autofill service each build their own index from the vault
+ * file, so they carry the same rule separately; see their notes.
+ */
 export function toAutofillIndex(entries: Entry[]): IndexEntry[] {
 	const out: IndexEntry[] = [];
 	for (const entry of entries) {
+		if (entry.archivedAt !== undefined) continue;
 		if (entry.type === "login") out.push(loginIndexEntry(entry));
 		else if (entry.type === "card") out.push(cardIndexEntry(entry));
 	}

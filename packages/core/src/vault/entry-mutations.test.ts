@@ -351,6 +351,85 @@ describe("createEntryMutations", () => {
 		expect(e.type === "login" && e.passwordChangelog).toEqual([{ value: "old", changedAt: 5000 }]);
 	});
 
+	it("archive keeps the entry and writes no tombstone, so a restore is just the inverse", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+
+		t = 5000;
+		const archived = await h.mutations.setArchived(afterAdd, [id], true);
+		expect(archived.entries).toHaveLength(1);
+		expect(archived.entries[0]!.archivedAt).toBe(5000);
+		expect(archived.tombstones.size).toBe(0);
+		// A fresh stamp, or a peer would never learn the entry was archived.
+		expect(compareHlc(archived.stamps.get(id)!, afterAdd.stamps.get(id)!)).toBeGreaterThan(0);
+
+		t = 9000;
+		const restored = await h.mutations.setArchived(archived, [id], false);
+		// Deleted, not set to undefined: an explicitly-undefined key would serialize away
+		// anyway, and the round-trip through disk must not resurrect the archived state.
+		expect(restored.entries[0]).not.toHaveProperty("archivedAt");
+		const payload = await h.mutations.readEntriesPayload();
+		expect(JSON.stringify(payload)).not.toContain("archivedAt");
+	});
+
+	it("archives a whole selection in one write, skipping ids already archived", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a"), login("b"), login("c")]);
+		const [a, b, c] = seeded.entries.map((e) => e.id) as [string, string, string];
+		const first = await h.mutations.setArchived(seeded, [a], true);
+		const writesBefore = h.writes();
+
+		const both = await h.mutations.setArchived(first, [a, b], true);
+		expect(h.writes()).toBe(writesBefore + 1);
+		expect(both.entries.filter((e) => e.archivedAt !== undefined).map((e) => e.id)).toEqual([a, b]);
+		expect(both.entries.find((e) => e.id === c)!.archivedAt).toBeUndefined();
+		// `a` was already archived, so its stamp (and its archivedAt) is left alone.
+		expect(both.stamps.get(a)).toEqual(first.stamps.get(a));
+		expect(both.entries.find((e) => e.id === a)!.archivedAt).toBe(
+			first.entries.find((e) => e.id === a)!.archivedAt,
+		);
+	});
+
+	// A whole-vault re-encrypt is the cost of any persist, so a no-op must not trigger one.
+	it("archiving nothing new writes nothing at all", async () => {
+		const h = harness();
+		const seeded = await h.mutations.add(empty(), login("a"));
+		const id = seeded.entries[0]!.id;
+		const archived = await h.mutations.setArchived(seeded, [id], true);
+		const writesBefore = h.writes();
+
+		expect(await h.mutations.setArchived(archived, [id], true)).toBe(archived);
+		expect(await h.mutations.setArchived(archived, [], false)).toBe(archived);
+		expect(await h.mutations.setArchived(archived, ["no-such-id"], true)).toBe(archived);
+		expect(h.writes()).toBe(writesBefore);
+	});
+
+	it("drops an archived entry from the autofill index and puts it back on restore", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a"), login("b")]);
+		const [a] = seeded.entries.map((e) => e.id) as [string, string];
+
+		const archived = await h.mutations.setArchived(seeded, [a], true);
+		expect(h.indexCalls.at(-1)).toHaveLength(1);
+
+		await h.mutations.setArchived(archived, [a], false);
+		expect(h.indexCalls.at(-1)).toHaveLength(2);
+	});
+
+	it("archiving does not touch updatedAt, so it can't reorder recently-updated", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+		const updatedAt = afterAdd.entries[0]!.updatedAt;
+
+		t = 5000;
+		const archived = await h.mutations.setArchived(afterAdd, [id], true);
+		expect(archived.entries[0]!.updatedAt).toBe(updatedAt);
+	});
+
 	it("never leaks a superseded password into the autofill index", async () => {
 		let t = 1000;
 		const h = harness(() => t);

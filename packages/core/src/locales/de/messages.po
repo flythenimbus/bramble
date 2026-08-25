@@ -74,6 +74,14 @@ msgstr "{hiddenCount, plural, one {# vom aktuellen Filter ausgeblendet} other {#
 msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
 msgstr "{hiddenCount, plural, one {# davon ist vom aktuellen Filter ausgeblendet.} other {# davon sind vom aktuellen Filter ausgeblendet.}}"
 
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Archive # entry?} other {Archive # entries?}}"
+msgstr "{moving, plural, one {# Eintrag archivieren?} other {# Einträge archivieren?}}"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
+msgstr "{moving, plural, one {# Eintrag wiederherstellen?} other {# Einträge wiederherstellen?}}"
+
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
 msgstr "{passkeys, plural, one {# Passkey ist auf diesen Einträgen gespeichert und wird mit ihnen gelöscht.} other {# Passkeys sind auf diesen Einträgen gespeichert und werden mit ihnen gelöscht.}}"
@@ -254,6 +262,32 @@ msgstr "Erscheinungsbild"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Apple"
 msgstr "Apfel"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive"
+msgstr "Archivieren"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive entry"
+msgstr "Eintrag archivieren"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived"
+msgstr "Archiviert"
+
+#. placeholder {0}: formatDateTime(entry.archivedAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived {0}"
+msgstr "Archiviert {0}"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Archived items"
+msgstr "Archivierte Elemente"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "Archiving…"
+msgstr "Archivieren…"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -1432,6 +1466,10 @@ msgstr "Bewahren Sie dies an einem sicheren Ort und offline auf. Jeder mit diese
 msgid "KeePass master password"
 msgstr "KeePass Master-Passwort"
 
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Kept in your vault, but hidden from the list and never offered for autofill."
+msgstr "Bleibt in Ihrem Tresor, wird aber aus der Liste ausgeblendet und nie für AutoFill angeboten."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Key"
 msgstr "Schlüssel"
@@ -1633,6 +1671,10 @@ msgstr "Nächster Versuch {0}"
 #~ msgid "No answer. Is Bramble running on this computer?"
 #~ msgstr "Keine Antwort. Läuft Bramble auf diesem Computer?"
 
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No archived items found matching your search."
+msgstr "Keine archivierten Einträge gefunden, die Ihrer Suche entsprechen."
+
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
 #~ msgstr "Kein Authentifikator-QR-Code auf der Seite gefunden. Stellen Sie sicher, dass er sichtbar ist, und versuchen Sie es erneut oder fügen Sie den Einrichtungsschlüssel ein."
@@ -1707,6 +1749,10 @@ msgstr "Anmerkungen"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Notes (optional)"
 msgstr "Anmerkungen (optional)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Nothing is archived. Archived items are kept here, out of autofill."
+msgstr "Nichts ist archiviert. Archivierte Einträge werden hier aufbewahrt und nicht für AutoFill angeboten."
 
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
@@ -2088,6 +2134,8 @@ msgstr "Zurücksetzen"
 msgid "Resetting invalidates your old code."
 msgstr "Das Zurücksetzen ungültigt Ihren alten Code."
 
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Restore"
 msgstr "Wiederherstellen"
@@ -2106,6 +2154,10 @@ msgstr "Ein Backup wiederherstellen"
 msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
 msgstr "Stellen Sie ein verschlüsseltes .bramble-Backup wieder her. Dies ersetzt den Tresor auf diesem Gerät."
 
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Restore entry"
+msgstr "Eintrag wiederherstellen"
+
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Restore from backup"
 msgstr "Aus Backup wiederherstellen"
@@ -2114,6 +2166,7 @@ msgstr "Aus Backup wiederherstellen"
 msgid "Restore vault"
 msgstr "Tresor wiederherstellen"
 
+#: packages/core/src/app/bulk-actions/archive.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restoring…"
 msgstr "Wird wiederhergestellt…"
@@ -2329,6 +2382,10 @@ msgstr "Einstellungsbereiche"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
 msgstr "Anzeige einer Speicher-/Aktualisierungskarte in der Ecke der Seite bei Anmeldung mit Zugangsdaten, die im Tresor fehlen."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Show archived items"
+msgstr "Archivierte Einträge anzeigen"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Show authenticator key"
@@ -2597,6 +2654,14 @@ msgstr "Diese Ziele gehören zu dem Tresor, in dem Sie sich befinden. Jeder Tres
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "They match, approve"
 msgstr "Sie stimmen überein – genehmigen"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They return to the list and become available for autofill again."
+msgstr "Sie kehren zur Liste zurück und werden wieder für AutoFill angeboten."
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They stay in your vault and in exports, but leave the list and are never offered for autofill. You can restore them at any time."
+msgstr "Sie bleiben in Ihrem Tresor und in Exporten, verlassen aber die Liste und werden nie für AutoFill angeboten. Sie können diese jederzeit wiederherstellen."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."

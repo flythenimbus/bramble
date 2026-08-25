@@ -86,8 +86,12 @@ object VaultReader {
     }
 
     /**
-     * Decrypt every login. The caller MUST have loaded the VEK into the core first
+     * Decrypt every live login. The caller MUST have loaded the VEK into the core first
      * (unlockWithVek or unwrapVekPassword). Returns logins in vault order.
+     *
+     * Archived entries (`archivedAt` present) are skipped. This service reads the vault
+     * file itself rather than the index core builds, so it repeats the rule that
+     * `core/vault/autofill-index.ts` applies for every other surface.
      */
     fun readLogins(context: Context): List<AutofillLogin> {
         val blob = decode(context)
@@ -105,6 +109,7 @@ object VaultReader {
             )
             val data = JSONObject(plaintext)
             if (data.optString("type", "login") != "login") continue
+            if (isArchived(data)) continue
             val password = data.optString("password", "")
             if (password.isEmpty()) continue
             out.add(
@@ -125,7 +130,8 @@ object VaultReader {
      * Decrypt every login's passkeys (provider role). The caller MUST have loaded the VEK
      * first, exactly like readLogins. Reads the `passkeys[]` array off each login entry; all
      * base64 fields stay STANDARD base64 (as stored) - WebauthnJson converts to b64url and the
-     * Rust core consumes them verbatim. Returns every stored passkey; callers filter by rpId.
+     * Rust core consumes them verbatim. Returns every stored passkey on a live login (those on
+     * an archived one are skipped, as in readLogins); callers filter by rpId.
      */
     fun readPasskeys(context: Context): List<StoredPasskey> {
         val blob = decode(context)
@@ -143,6 +149,7 @@ object VaultReader {
             )
             val data = JSONObject(plaintext)
             if (data.optString("type", "login") != "login") continue
+            if (isArchived(data)) continue
             val passkeys = data.optJSONArray("passkeys") ?: continue
             val entryId = enc.getString("id")
             for (j in 0 until passkeys.length()) {
@@ -204,6 +211,9 @@ object VaultReader {
         }
         return out
     }
+
+    /** An entry the user has archived: present and non-zero `archivedAt`, absent means live. */
+    private fun isArchived(data: JSONObject): Boolean = data.optLong("archivedAt", 0L) > 0L
 
     private fun hostnamesOf(urls: JSONArray?): List<String> {
         if (urls == null) return emptyList()

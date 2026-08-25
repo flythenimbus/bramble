@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
@@ -12,17 +12,21 @@ interface EntryDetailProps {
 	entry: Entry;
 	onEdit: () => void;
 	onDelete: () => Promise<void>;
+	/** Archive or restore this entry. Reversible, so it runs without a confirmation step. */
+	onSetArchived: (archived: boolean) => Promise<void>;
 	/** Called after a successful field copy, to record the entry as recently used. */
 	onUse?: () => void;
 }
 
 /** Shared chrome for viewing any entry (banner, header, delete/edit footer); the mode supplies the fields. */
-export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps) {
+export function EntryDetail({ entry, onEdit, onDelete, onSetArchived, onUse }: EntryDetailProps) {
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
 	const [copied, setCopied] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [archiving, setArchiving] = useState(false);
+	const archived = entry.archivedAt !== undefined;
 
 	const mode = getEntryMode(entry.type);
 	const { icon: Icon, initials } = mode.row(entry);
@@ -55,8 +59,39 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 		}
 	};
 
+	// Stays on this screen afterwards rather than returning to the list: the banner then
+	// explains what happened, and restoring is one tap away instead of a hunt through the
+	// archive for the entry that just vanished.
+	const handleSetArchived = async () => {
+		setArchiving(true);
+		try {
+			await onSetArchived(!archived);
+		} finally {
+			setArchiving(false);
+		}
+	};
+
 	return (
 		<main className="max-w-5xl mx-auto px-4 py-3">
+			{archived && (
+				<div
+					className="mb-3 flex items-start gap-2.5 px-4 py-2.5 rounded-lg border border-border/50 bg-muted/40 text-muted-foreground"
+					role="status"
+				>
+					<Archive className="w-4 h-4 mt-0.5 shrink-0" />
+					<div className="text-sm">
+						<p className="font-medium text-foreground">
+							<Trans>Archived</Trans>
+						</p>
+						<p className="text-xs mt-0.5">
+							<Trans>
+								Kept in your vault, but hidden from the list and never offered for autofill.
+							</Trans>
+						</p>
+					</div>
+				</div>
+			)}
+
 			{alert && (
 				<div
 					className="mb-3 flex items-start gap-2.5 px-4 py-2.5 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive"
@@ -97,6 +132,20 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 							<Button
 								variant="ghost"
 								size="icon"
+								onClick={handleSetArchived}
+								disabled={archiving}
+								aria-label={archived ? t`Restore entry` : t`Archive entry`}
+								title={archived ? t`Restore` : t`Archive`}
+							>
+								{archived ? (
+									<ArchiveRestore className="w-4 h-4" />
+								) : (
+									<Archive className="w-4 h-4" />
+								)}
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={() => setConfirmDelete(true)}
 								className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
 								aria-label={t`Delete entry`}
@@ -122,6 +171,9 @@ export function EntryDetail({ entry, onEdit, onDelete, onUse }: EntryDetailProps
 						)}
 						{entry.updatedAt !== undefined && (
 							<span>{t`Updated ${formatDateTime(entry.updatedAt)}`}</span>
+						)}
+						{entry.archivedAt !== undefined && (
+							<span>{t`Archived ${formatDateTime(entry.archivedAt)}`}</span>
 						)}
 					</div>
 				)}

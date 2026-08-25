@@ -19,6 +19,9 @@ export interface PasskeyMatch {
  * Every stored passkey for `rpId`, optionally narrowed to an allow-list of
  * credential ids (the get() `allowCredentials`). Matches on the passkey's own
  * stored rpId, not on login hostnames; a credential carries its own rp binding.
+ *
+ * Passkeys on an archived login are not offered: archiving takes an entry out of
+ * every fill path, and a passkey is one.
  */
 export function findPasskeys(
 	entries: Entry[],
@@ -29,6 +32,7 @@ export function findPasskeys(
 	const matches: PasskeyMatch[] = [];
 	for (const entry of entries) {
 		if (entry.type !== "login" || !entry.passkeys) continue;
+		if (entry.archivedAt !== undefined) continue;
 		for (const passkey of entry.passkeys) {
 			if (passkey.rpId !== rpId) continue;
 			if (allow && !allow.has(passkey.credentialId)) continue;
@@ -57,10 +61,14 @@ function loginCoversRpId(urls: string[], rpId: string): boolean {
 
 export type LoginEntry = Extract<Entry, { type: "login" }>;
 
-/** Every login whose URLs cover `rpId` (its host or a subdomain). */
+/**
+ * Every live login whose URLs cover `rpId` (its host or a subdomain). Archived logins are
+ * excluded, so a new passkey is never attached to an entry the user has put away.
+ */
 export function loginsCoveringRpId(entries: Entry[], rpId: string): LoginEntry[] {
 	return entries.filter(
-		(e): e is LoginEntry => e.type === "login" && loginCoversRpId(e.urls, rpId),
+		(e): e is LoginEntry =>
+			e.type === "login" && e.archivedAt === undefined && loginCoversRpId(e.urls, rpId),
 	);
 }
 

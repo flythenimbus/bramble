@@ -13,11 +13,15 @@ beforeAll(() => {
 	i18n.activate("en");
 });
 
-function renderBar(search: Partial<VaultSearch> = {}) {
+function renderBar(search: Partial<VaultSearch> = {}, archivedCount = 0) {
 	const onChange = vi.fn();
 	render(
 		<I18nProvider i18n={i18n}>
-			<VaultSearchBar search={{ ...DEFAULT_SEARCH, ...search }} onChange={onChange} />
+			<VaultSearchBar
+				search={{ ...DEFAULT_SEARCH, ...search }}
+				onChange={onChange}
+				archivedCount={archivedCount}
+			/>
 		</I18nProvider>,
 	);
 	return onChange;

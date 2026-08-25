@@ -36,6 +36,37 @@ describe("filterAndSortEntries", () => {
 		expect(filterAndSortEntries(items, search({ q: "TELLER" }))).toHaveLength(1);
 	});
 
+	it("hides archived entries from the live list, however well they match", () => {
+		const items = [
+			item({ name: "Old bank", archived: true, searchText: "old bank" }),
+			item({ name: "New bank", searchText: "new bank" }),
+		];
+		expect(filterAndSortEntries(items, search({ q: "bank" })).map((i) => i.name)).toEqual([
+			"New bank",
+		]);
+	});
+
+	it("shows only archived entries in the archive view", () => {
+		const items = [
+			item({ name: "Old bank", archived: true, searchText: "old bank" }),
+			item({ name: "New bank", searchText: "new bank" }),
+		];
+		expect(filterAndSortEntries(items, search({ archived: true })).map((i) => i.name)).toEqual([
+			"Old bank",
+		]);
+	});
+
+	// The two sides are disjoint, so type and text still narrow within the archive.
+	it("still applies type and text filters inside the archive view", () => {
+		const items = [
+			item({ name: "Old card", type: "card", archived: true, searchText: "old card" }),
+			item({ name: "Old login", archived: true, searchText: "old login" }),
+		];
+		expect(
+			filterAndSortEntries(items, search({ archived: true, type: "card" })).map((i) => i.name),
+		).toEqual(["Old card"]);
+	});
+
 	it("filters by type before matching text", () => {
 		const items = [
 			item({ name: "Visa", type: "card", searchText: "visa" }),
@@ -116,17 +147,21 @@ describe("filterAndSortEntries", () => {
 
 describe("vaultSearchSchema", () => {
 	it("keeps valid params", () => {
-		expect(vaultSearchSchema.parse({ q: "hi", type: "card", sort: "recent-used" })).toEqual({
+		expect(
+			vaultSearchSchema.parse({ q: "hi", type: "card", sort: "recent-used", archived: true }),
+		).toEqual({
 			q: "hi",
 			type: "card",
 			sort: "recent-used",
+			archived: true,
 		});
 	});
 
 	it("drops unknown values to undefined instead of throwing", () => {
-		expect(vaultSearchSchema.parse({ type: "folder", sort: "date" })).toEqual({
+		expect(vaultSearchSchema.parse({ type: "folder", sort: "date", archived: "yes" })).toEqual({
 			type: undefined,
 			sort: undefined,
+			archived: undefined,
 		});
 	});
 

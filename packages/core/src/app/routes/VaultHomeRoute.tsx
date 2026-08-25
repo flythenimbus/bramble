@@ -18,6 +18,7 @@ export function VaultHomeRoute() {
 		q: raw.q ?? DEFAULT_SEARCH.q,
 		type: raw.type ?? DEFAULT_SEARCH.type,
 		sort: raw.sort ?? DEFAULT_SEARCH.sort,
+		archived: raw.archived ?? DEFAULT_SEARCH.archived,
 	};
 	const { entries, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
@@ -29,8 +30,11 @@ export function VaultHomeRoute() {
 	const [matchedIds, setMatchedIds] = useState<ReadonlySet<string>>(() => new Set());
 	useEffect(() => {
 		let cancelled = false;
+		// Archived logins are excluded: the tab match tints and floats a row as the
+		// credential for this site, which is exactly the claim archiving withdraws.
 		const logins = entries
 			.filter(isLogin)
+			.filter((e) => e.archivedAt === undefined)
 			.map((e) => ({ id: e.id, urls: e.urls, subdomainMatch: e.subdomainMatch }));
 		if (logins.length === 0) {
 			setMatchedIds(new Set());

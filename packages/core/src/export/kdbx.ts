@@ -4,6 +4,11 @@
 // data lives in custom String fields (secrets marked Protected). Re-importing them yields a
 // login carrying those fields, which is what the KDBX import path already does with any
 // foreign database. Nothing is dropped; the type label is what KeePass can't carry.
+//
+// Archived entries are exported alongside live ones with an `Archived` String field. The
+// natural KeePass home for them would be the recycle-bin group, but this writer emits a
+// flat entry list (`save_kdbx4` takes entries, not groups), and an archived entry is not
+// deleted anyway. So the state rides as a field, on the same terms as the type label.
 
 import type { KdbxSaveEntry } from "../adapters/crypto";
 import type { EntryData } from "../hooks/useVault";
@@ -53,6 +58,8 @@ function toFields(e: EntryData): Pair[] {
 	const f = new Fields();
 	f.add("Title", e.name);
 	f.add("Notes", e.notes);
+	// ISO 8601 rather than epoch ms: a human reading the field in KeePass should see a date.
+	if (e.archivedAt !== undefined) f.add("Archived", new Date(e.archivedAt).toISOString());
 
 	if (e.type === "login") {
 		f.add("UserName", e.username);

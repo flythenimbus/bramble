@@ -38,7 +38,7 @@ const platform = {
 	crypto: {},
 } as unknown as Platform;
 
-const item = (id: string): VaultListItem => ({
+const item = (id: string, overrides: Partial<VaultListItem> = {}): VaultListItem => ({
 	id,
 	type: "login",
 	name: id,
@@ -46,6 +46,8 @@ const item = (id: string): VaultListItem => ({
 	secondary: "user",
 	copyItems: [],
 	searchText: id,
+	archived: false,
+	...overrides,
 });
 
 const entry = (id: string): Entry => ({
@@ -66,7 +68,7 @@ function setup() {
 		<I18nProvider i18n={i18n}>
 			<PlatformProvider platform={platform}>
 				<VaultHome
-					items={ids.map(item)}
+					items={ids.map((id) => item(id))}
 					entries={ids.map(entry)}
 					search={DEFAULT_SEARCH}
 					onSearchChange={() => {}}

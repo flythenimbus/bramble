@@ -28,5 +28,6 @@ export function toListItem(entry: Entry, showBreaches: boolean): VaultListItem {
 		createdAt: entry.createdAt,
 		updatedAt: entry.updatedAt,
 		lastUsedAt: entry.lastUsedAt,
+		archived: entry.archivedAt !== undefined,
 	};
 }

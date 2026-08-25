@@ -66,6 +66,25 @@ describe("toKdbxEntries: logins", () => {
 	});
 });
 
+describe("toKdbxEntries: archived entries", () => {
+	// KeePass has no archived state and this writer emits a flat list, so the state rides
+	// as a String field rather than a recycle-bin group. Exported, not dropped: a .kdbx is
+	// a backup, and silently losing the archive would be worse than losing the label.
+	it("writes an ISO date for an archived entry", () => {
+		expect(value(login({ archivedAt: Date.UTC(2026, 1, 3, 4, 5, 6) }), "Archived")).toBe(
+			"2026-02-03T04:05:06.000Z",
+		);
+	});
+
+	it("leaves the field off a live entry", () => {
+		expect(value(login(), "Archived")).toBeUndefined();
+	});
+
+	it("is not protected: it is a date, not a secret", () => {
+		expect(isProtected(login({ archivedAt: 1 }), "Archived")).toBe(false);
+	});
+});
+
 describe("toKdbxEntries: non-login types", () => {
 	it("writes card fields, protecting the number and CVV", () => {
 		const e: EntryData = {

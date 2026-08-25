@@ -74,6 +74,14 @@ msgstr "{hiddenCount, plural, one {# hidden by the current filter} other {# hidd
 msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
 msgstr "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
 
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Archive # entry?} other {Archive # entries?}}"
+msgstr "{moving, plural, one {Archive # entry?} other {Archive # entries?}}"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
+msgstr "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
+
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
 msgstr "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
@@ -254,6 +262,32 @@ msgstr "Appearance"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Apple"
 msgstr "Apple"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive"
+msgstr "Archive"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive entry"
+msgstr "Archive entry"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived"
+msgstr "Archived"
+
+#. placeholder {0}: formatDateTime(entry.archivedAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived {0}"
+msgstr "Archived {0}"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Archived items"
+msgstr "Archived items"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "Archiving…"
+msgstr "Archiving…"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -1432,6 +1466,10 @@ msgstr "Keep this somewhere safe and offline. Anyone with this code can unlock y
 msgid "KeePass master password"
 msgstr "KeePass master password"
 
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Kept in your vault, but hidden from the list and never offered for autofill."
+msgstr "Kept in your vault, but hidden from the list and never offered for autofill."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Key"
 msgstr "Key"
@@ -1633,6 +1671,10 @@ msgstr "Next attempt {0}"
 #~ msgid "No answer. Is Bramble running on this computer?"
 #~ msgstr "No answer. Is Bramble running on this computer?"
 
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No archived items found matching your search."
+msgstr "No archived items found matching your search."
+
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
 #~ msgstr "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
@@ -1707,6 +1749,10 @@ msgstr "Notes"
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Notes (optional)"
 msgstr "Notes (optional)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Nothing is archived. Archived items are kept here, out of autofill."
+msgstr "Nothing is archived. Archived items are kept here, out of autofill."
 
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
@@ -2088,6 +2134,8 @@ msgstr "Reset"
 msgid "Resetting invalidates your old code."
 msgstr "Resetting invalidates your old code."
 
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Restore"
 msgstr "Restore"
@@ -2106,6 +2154,10 @@ msgstr "Restore a backup"
 msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
 msgstr "Restore an encrypted .bramble backup. This replaces the vault on this device."
 
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Restore entry"
+msgstr "Restore entry"
+
 #: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
 msgid "Restore from backup"
 msgstr "Restore from backup"
@@ -2114,6 +2166,7 @@ msgstr "Restore from backup"
 msgid "Restore vault"
 msgstr "Restore vault"
 
+#: packages/core/src/app/bulk-actions/archive.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Restoring…"
 msgstr "Restoring…"
@@ -2329,6 +2382,10 @@ msgstr "Settings sections"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
 msgstr "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Show archived items"
+msgstr "Show archived items"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Show authenticator key"
@@ -2597,6 +2654,14 @@ msgstr "These destinations belong to the vault you're in. Every vault keeps its 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "They match, approve"
 msgstr "They match, approve"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They return to the list and become available for autofill again."
+msgstr "They return to the list and become available for autofill again."
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They stay in your vault and in exports, but leave the list and are never offered for autofill. You can restore them at any time."
+msgstr "They stay in your vault and in exports, but leave the list and are never offered for autofill. You can restore them at any time."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."

@@ -1,5 +1,12 @@
 import { useLingui } from "@lingui/react/macro";
-import { ArrowUpDown, ChevronDown, ListFilter, type LucideIcon, Search } from "lucide-react";
+import {
+	Archive,
+	ArrowUpDown,
+	ChevronDown,
+	ListFilter,
+	type LucideIcon,
+	Search,
+} from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 import { Button } from "../../components/ui/button";
 import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
@@ -9,6 +16,13 @@ import type { SortKey, TypeFilter, VaultSearch } from "./vault-search";
 interface VaultSearchBarProps {
 	search: VaultSearch;
 	onChange: (patch: Partial<VaultSearch>) => void;
+	/**
+	 * How many entries are archived. The archive toggle appears only once there is
+	 * something in there (or while the archive is open), so a vault that never uses the
+	 * feature keeps a two-control bar. Discovery happens at the entry, where the archive
+	 * action lives.
+	 */
+	archivedCount: number;
 	/** Rendered to the right of the search input (the add-entry control). */
 	trailing?: ReactNode;
 }
@@ -63,8 +77,8 @@ function SelectPill<T extends string>({
 	);
 }
 
-/** Vault-list controls: text search, a type filter, and the sort order. */
-export function VaultSearchBar({ search, onChange, trailing }: VaultSearchBarProps) {
+/** Vault-list controls: text search, a type filter, the sort order, and the archive toggle. */
+export function VaultSearchBar({ search, onChange, archivedCount, trailing }: VaultSearchBarProps) {
 	const { t } = useLingui();
 	const chipStrip = useScrollEdges<HTMLDivElement>();
 
@@ -163,6 +177,27 @@ export function VaultSearchBar({ search, onChange, trailing }: VaultSearchBarPro
 					onChange={(sort) => onChange({ sort })}
 					className="min-w-0 flex-1 sm:flex-none sm:shrink-0"
 				/>
+
+				{(archivedCount > 0 || search.archived) && (
+					<Button
+						variant="link"
+						size="none"
+						onClick={() => onChange({ archived: !search.archived })}
+						aria-pressed={search.archived}
+						aria-label={t`Show archived items`}
+						title={t`Archived items`}
+						className={`shrink-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors pointer-coarse:py-2 ${
+							search.archived
+								? "bg-primary/15 border-primary/40 text-foreground"
+								: "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
+						}`}
+					>
+						<Archive className="w-3.5 h-3.5 shrink-0" />
+						{/* The count is the point of the resting state: it says the archive is not
+							empty without the user having to open it. */}
+						<span className="tabular-nums">{archivedCount}</span>
+					</Button>
+				)}
 			</div>
 		</div>
 	);

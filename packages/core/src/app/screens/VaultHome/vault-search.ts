@@ -21,9 +21,21 @@ export interface VaultSearch {
 	q: string;
 	type: TypeFilter;
 	sort: SortKey;
+	/**
+	 * Which side of the archive to list. The two sets are disjoint, not additive: false
+	 * (the default) lists live entries only, true lists archived ones only. A view rather
+	 * than an include-flag, so an archived entry can't be mistaken for a live one in a
+	 * list the user searches and fills from.
+	 */
+	archived: boolean;
 }
 
-export const DEFAULT_SEARCH: VaultSearch = { q: "", type: "all", sort: "name-asc" };
+export const DEFAULT_SEARCH: VaultSearch = {
+	q: "",
+	type: "all",
+	sort: "name-asc",
+	archived: false,
+};
 
 // Route search-param validator. All-optional (`.catch` drops garbage) so bad
 // params fall back to DEFAULT_SEARCH and `navigate({ to: "/vault" })` needs no search.
@@ -31,6 +43,7 @@ export const vaultSearchSchema = z.object({
 	q: z.string().optional().catch(undefined),
 	type: z.enum(TYPE_FILTERS).optional().catch(undefined),
 	sort: z.enum(SORT_KEYS).optional().catch(undefined),
+	archived: z.boolean().optional().catch(undefined),
 });
 
 /** The fields the search reads. A `VaultListItem` satisfies this. */
@@ -43,6 +56,7 @@ export interface SearchableEntry {
 	createdAt?: number;
 	updatedAt?: number;
 	lastUsedAt?: number;
+	archived?: boolean;
 }
 
 /** Split a raw query into lowercased tokens. */
@@ -72,7 +86,10 @@ const COMPARATORS: Record<SortKey, (a: SearchableEntry, b: SearchableEntry) => n
 	"recent-updated": byRecent("updatedAt"),
 };
 
-/** Filter by type + all query tokens, then sort; `matchedIds` float to the top. Pure. */
+/**
+ * Filter by archive side + type + all query tokens, then sort; `matchedIds` float to the
+ * top. Pure.
+ */
 export function filterAndSortEntries<T extends SearchableEntry>(
 	items: T[],
 	search: VaultSearch,
@@ -80,6 +97,9 @@ export function filterAndSortEntries<T extends SearchableEntry>(
 ): T[] {
 	const tokens = queryTokens(search.q);
 	const filtered = items.filter((item) => {
+		// The archive side is a hard gate, ahead of the query: searching the live vault must
+		// never surface an archived entry, however well it matches.
+		if ((item.archived ?? false) !== search.archived) return false;
 		if (search.type !== "all" && item.type !== search.type) return false;
 		return tokens.every((tok) => item.searchText.includes(tok));
 	});

@@ -15,9 +15,17 @@ import type { EntryData } from "../hooks/useVault";
 /**
  * Vault bookkeeping, stripped at any depth. `createdAt` is included because only some
  * importers can recover it from the file; leaving it in would make matching work for Bitwarden
- * and quietly fail for every format that doesn't carry a creation date.
+ * and quietly fail for every format that doesn't carry a creation date. `archivedAt` is
+ * included so re-importing the file an entry came from still recognizes the archived copy.
  */
-const METADATA_KEYS = new Set(["id", "createdAt", "updatedAt", "lastUsedAt", "breach"]);
+const METADATA_KEYS = new Set([
+	"id",
+	"createdAt",
+	"updatedAt",
+	"lastUsedAt",
+	"archivedAt",
+	"breach",
+]);
 
 /**
  * Canonical JSON: object keys sorted so a re-ordered but identical entry still matches (stored

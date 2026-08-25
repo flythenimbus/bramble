@@ -47,6 +47,13 @@ describe("toListItem", () => {
 		expect(toListItem(note, true).passkeys).toBeUndefined();
 	});
 
+	// The list filters on this flag, so a projection that dropped it would put archived
+	// entries back into the live list without anything else failing.
+	it("reports whether the entry is archived", () => {
+		expect(toListItem(login(), true).archived).toBe(false);
+		expect(toListItem(login({ archivedAt: 5000 }), true).archived).toBe(true);
+	});
+
 	it("still hides the breach badge when breach checks are off", () => {
 		const breached = login({ breach: { leaked: true, checkedAt: 1 } });
 		expect(toListItem(breached, true).leaked).toBe(true);

@@ -36,6 +36,8 @@ export interface VaultListItem {
 	createdAt?: number;
 	updatedAt?: number;
 	lastUsedAt?: number;
+	/** Archived entries are listed only in the archive view; see VaultSearch.archived. */
+	archived: boolean;
 }
 
 interface VaultHomeProps {
@@ -101,9 +103,14 @@ export function VaultHome({
 		[entries, selected],
 	);
 
+	// Every stat describes the LIVE vault. An archived entry is one the user has put out
+	// of use, so counting it would inflate "Total Items" and, worse, keep a breached
+	// password in "At Risk" long after they dealt with it by archiving the account.
+	const live = useMemo(() => items.filter((item) => !item.archived), [items]);
+	const archivedCount = items.length - live.length;
 	// "At Risk" / "Strong" are password-health stats, so they count logins only.
-	const atRisk = items.filter((item) => item.leaked).length;
-	const strong = items.filter((item) => item.type === "login" && !item.leaked).length;
+	const atRisk = live.filter((item) => item.leaked).length;
+	const strong = live.filter((item) => item.type === "login" && !item.leaked).length;
 
 	// Virtualize the row list so a large vault (1000+ entries) mounts only the
 	// visible rows, not every EntryRow at once (the main open-time render cost).
@@ -123,6 +130,7 @@ export function VaultHome({
 			<VaultSearchBar
 				search={search}
 				onChange={onSearchChange}
+				archivedCount={archivedCount}
 				trailing={<AddDropdown onCreate={onCreate} />}
 			/>
 
@@ -146,7 +154,7 @@ export function VaultHome({
 							<p className="text-xs text-muted-foreground mb-0.5">
 								<Trans>Total Items</Trans>
 							</p>
-							<p className="text-2xl">{items.length}</p>
+							<p className="text-2xl">{live.length}</p>
 						</div>
 					</div>
 					<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
@@ -260,7 +268,13 @@ export function VaultHome({
 						</div>
 					) : (
 						<div className="text-center py-12 text-muted-foreground text-sm">
-							{items.length === 0 ? (
+							{search.archived ? (
+								archivedCount === 0 ? (
+									<Trans>Nothing is archived. Archived items are kept here, out of autofill.</Trans>
+								) : (
+									<Trans>No archived items found matching your search.</Trans>
+								)
+							) : items.length === 0 ? (
 								<Trans>Your vault is empty. Add your first item.</Trans>
 							) : (
 								<Trans>No items found matching your search.</Trans>

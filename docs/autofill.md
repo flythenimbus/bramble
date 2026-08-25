@@ -20,6 +20,26 @@ held in background memory only, never persisted (see [storage.md](storage.md)).
 - **Cards** are not tied to a hostname. Every stored card is offered on any
   detected payment form.
 - **Notes and SSH keys** never participate in autofill.
+- **Archived entries** are excluded, passkeys included. Archiving is how a user
+  retires a credential without deleting it, so an archived entry must not be
+  offered, matched, or counted anywhere in the fill path.
+
+The archived rule has to be written three times, because three places build an
+index and only one of them consumes the others' work:
+
+1. `core/vault/autofill-index.ts` (`toAutofillIndex`), the projection every view
+   pushes. It also feeds the iOS credential provider through `setIndex`, so
+   filtering here removes archived entries from the OS QuickType and passkey
+   identity stores as well.
+2. `platform-extension/background/autofill-index.ts` (`hydrateIndexForOwner`),
+   which rebuilds from the vault file when no view has pushed an index.
+3. `platform-mobile/android/.../VaultReader.kt` (`readLogins`, `readPasskeys`),
+   which reads the vault file directly through uniffi and never sees the
+   TypeScript index at all.
+
+Passkey lookup and placement are filtered once, in `core/vault/passkey.ts`
+(`findPasskeys`, `loginsCoveringRpId`), which covers the extension's WebAuthn
+provider on both deliveries.
 
 A content-script `query` says which field kinds the page exposes (`hasLogin`,
 `hasCard`, `hasOtp`), so the background only returns the relevant lists. Query

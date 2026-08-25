@@ -49,6 +49,18 @@ payload). A build that does not understand a slot kind still round-trips a blob
 containing it without losing data, so a newer build can add slot kinds and an
 older build can read and re-emit those blobs.
 
+Entry *fields* have the same property one layer in. A decrypted entry is JSON,
+`normalizeEntryData` returns the parsed object rather than a schema-stripped
+copy, and `entryDataSchema` is a gate at the write seam rather than a transform,
+so a key an older build has never heard of survives being read, edited and
+written back by it. That is what let `archivedAt` ship without a format bump.
+
+The cost is worth stating plainly: an older build preserves the field but does
+not act on it, so between the release that adds a field and the one a given
+device is running, a synced vault can have an entry that is archived on one
+device and listed (and autofilled) on another. Degraded, not corrupted, and it
+resolves when the older device updates.
+
 ## Verifier prefix
 
 `verifierPrefix()` returns `MAGIC || VERSION` (`"VLT1" || 0x02`). This is the

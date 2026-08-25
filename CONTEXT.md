@@ -14,15 +14,26 @@ module-level concepts that name good seams.
   travelling with the entries, so they are one value, not three.
 - **EntryMutations** — the module (`core/vault/entry-mutations.ts`) that owns every
   local change to VaultEntries: add, import (bulk, one write), update, delete
-  (single or bulk). Each mutation is a transition
+  (single or bulk), archive/restore. Each mutation is a transition
   `(current: VaultEntries, input) -> next: VaultEntries` that performs the
   encrypt-and-write as its effect and returns the next state; it holds no React
   state. `EntryData` is validated against `entryDataSchema` at this seam before
   anything is encrypted. The autofill index is refreshed here on every persist, so
   it can never drift from what was written. The bulk forms exist because a persist
-  re-encrypts and rewrites the WHOLE vault: `importMany` and `removeMany` collapse
-  a batch into one write rather than one per entry, and `remove` is expressed in
-  terms of `removeMany` so there is a single delete path.
+  re-encrypts and rewrites the WHOLE vault: `importMany`, `removeMany` and
+  `setArchived` collapse a batch into one write rather than one per entry, and
+  `remove` is expressed in terms of `removeMany` so there is a single delete path.
+- **Archived** — an entry carrying `archivedAt`. Retired from use but not deleted:
+  it stays in the vault, in backups and in exports, and keeps its id, but leaves
+  the vault list and every autofill projection (see docs/autofill.md, which names
+  the three places that rule is written). Deliberately NOT a delete: no tombstone
+  is written, so `setArchived(ids, false)` restores it, and a concurrent delete on
+  another device still wins the merge because a tombstone beats a record. Being an
+  ordinary field on the encrypted entry, it needs no vault-format change and
+  converges through the same last-writer-wins merge as any edit. The list treats
+  archived and live as disjoint views rather than a filter over one list
+  (`VaultSearch.archived`), so an archived entry can never be mistaken for a live
+  one in a list the user fills from.
 - **EntriesBlobStore** — the single reader/writer of the on-disk entries format
   for the adapter context (`core/vault/entries-blob.ts`). `writeEntriesBlob(payload)`
   encrypts an `EntriesPayload` under the VEK, preserves the slot list, and writes the

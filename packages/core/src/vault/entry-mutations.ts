@@ -48,6 +48,12 @@ export interface EntryMutations {
 	remove(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/** Delete a selection in one write (not N), each id getting its own tombstone. */
 	removeMany(current: VaultEntries, ids: string[]): Promise<VaultEntries>;
+	/**
+	 * Archive or restore a selection in one write. Archiving is an ordinary entry update,
+	 * not a delete: no tombstone is written, so a restore is just the inverse call and a
+	 * concurrent delete elsewhere still wins the merge.
+	 */
+	setArchived(current: VaultEntries, ids: string[], archived: boolean): Promise<VaultEntries>;
 	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/**
@@ -152,6 +158,37 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			stamps,
 			tombstones,
 		});
+	};
+
+	// One write for the whole selection, like removeMany. `archivedAt` is deliberately its
+	// own timestamp rather than a bump of `updatedAt`: archiving edits no content, and
+	// folding it into `updatedAt` would reorder the "recently updated" sort for entries
+	// nobody touched. Ids that are already in the requested state are skipped, so a
+	// no-op archive doesn't rewrite (and re-encrypt) the whole vault.
+	const setArchived = async (
+		current: VaultEntries,
+		ids: string[],
+		archived: boolean,
+	): Promise<VaultEntries> => {
+		const wanted = new Set(ids);
+		const changing = new Set(
+			current.entries
+				.filter((e) => wanted.has(e.id) && (e.archivedAt !== undefined) !== archived)
+				.map((e) => e.id),
+		);
+		if (changing.size === 0) return current;
+		const c = await clock();
+		const stamps = new Map(current.stamps);
+		const entries = current.entries.map((e) => {
+			if (!changing.has(e.id)) return e;
+			// hlc.wall is physical ms, so the stamp doubles as the timestamp (as in `add`).
+			const hlc = c.send();
+			stamps.set(e.id, hlc);
+			if (archived) return { ...e, archivedAt: hlc.wall };
+			const { archivedAt: _archivedAt, ...rest } = e;
+			return rest as Entry;
+		});
+		return persist({ entries, stamps, tombstones: current.tombstones });
 	};
 
 	return {
@@ -259,6 +296,8 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		remove: (current, id) => removeMany(current, [id]),
 
 		removeMany,
+
+		setArchived,
 
 		sealAll,
 	};

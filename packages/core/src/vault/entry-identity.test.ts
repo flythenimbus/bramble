@@ -26,6 +26,12 @@ describe("entryContentKey", () => {
 		expect(entryContentKey(used)).toBe(entryContentKey(login()));
 	});
 
+	// Archiving is vault-local state no import file can carry, so an archived entry must
+	// still match the file it came from; otherwise re-importing quietly duplicates it live.
+	it("ignores the archived state", () => {
+		expect(entryContentKey(stored(login({ archivedAt: 5000 })))).toBe(entryContentKey(login()));
+	});
+
 	it("survives key reordering, since stored entries are rebuilt on read", () => {
 		const a = { type: "note", name: "x", notes: "y" } as EntryData;
 		const b = { notes: "y", name: "x", type: "note" } as EntryData;

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, PasskeyCredential } from "../hooks/useVault";
-import { findPasskeys, passkeyAttachTarget, planPasskeyPlacement } from "./passkey";
+import {
+	findPasskeys,
+	loginsCoveringRpId,
+	passkeyAttachTarget,
+	planPasskeyPlacement,
+} from "./passkey";
 
 function passkey(over: Partial<PasskeyCredential> = {}): PasskeyCredential {
 	return {
@@ -134,5 +139,29 @@ describe("planPasskeyPlacement", () => {
 	it("names a standalone login after the rpId when rpName is blank", () => {
 		const plan = planPasskeyPlacement([], "example.org", "  ", passkey({ rpId: "example.org" }));
 		expect(plan.kind === "create" && plan.data.name).toBe("example.org");
+	});
+});
+
+// Archiving takes an entry out of every fill path, and asserting a passkey is one of
+// them: an archived login must not be offered to sign in, nor collect a new credential.
+describe("archived logins are out of the passkey paths", () => {
+	const archived: Entry = {
+		...githubLogin,
+		archivedAt: 5000,
+		passkeys: [passkey({ credentialId: "a" })],
+	} as Entry;
+
+	it("does not offer a passkey stored on an archived login", () => {
+		expect(findPasskeys([archived], "github.com")).toEqual([]);
+	});
+
+	it("still offers the same passkey once the login is restored", () => {
+		const { archivedAt: _archivedAt, ...live } = archived;
+		expect(findPasskeys([live as Entry], "github.com")).toHaveLength(1);
+	});
+
+	it("does not attach a new passkey to an archived login covering the rpId", () => {
+		expect(loginsCoveringRpId([archived], "github.com")).toEqual([]);
+		expect(passkeyAttachTarget([archived], "github.com", "octocat")).toBeUndefined();
 	});
 });
