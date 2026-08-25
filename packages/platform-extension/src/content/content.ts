@@ -44,6 +44,7 @@ import {
 import { closeRelayHost, showRelayHost } from "./relay-host";
 import {
 	isAccountCreationForm,
+	isOnAccountCreationForm,
 	shouldSuggestPassword,
 	signupPasswordFields,
 } from "./signup-detect";
@@ -397,6 +398,26 @@ interface Suggestion {
 // leave the DOM.
 const suggestionFor = new WeakMap<HTMLInputElement, Suggestion>();
 
+// Whether a field sits on a form that creates an account, decided once per field. Cached
+// for the reason Suggestion is: by the time the picker has anchored, the form no longer
+// describes itself. It also keeps the scoring off the per-keystroke path.
+const creationFormFor = new WeakMap<HTMLInputElement, boolean>();
+
+/**
+ * True while `field` belongs to a form that is making a credential rather than filling one.
+ * Nothing the picker offers applies there: the user is choosing an email to sign up with,
+ * and a saved login is clutter - while the "Vault locked" row is worse, since it asks for a
+ * window and a master password to fill a form that fills nothing. The password box is the
+ * exception and is handled before this, by the generated-password suggestion.
+ */
+function isCreationField(field: HTMLInputElement): boolean {
+	const cached = creationFormFor.get(field);
+	if (cached !== undefined) return cached;
+	const verdict = isOnAccountCreationForm(field);
+	creationFormFor.set(field, verdict);
+	return verdict;
+}
+
 /**
  * A generated-password suggestion for `field`, or null when this isn't a
  * password-setting flow. Decides once per field and caches it.
@@ -409,6 +430,8 @@ function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Sugg
 	// Read the form while it still describes itself; see Suggestion.
 	const suggestion = { password: generatePassword(), newLogin: isAccountCreationForm(field) };
 	suggestionFor.set(field, suggestion);
+	// The same question creationFormFor asks, answered at the one moment it can be.
+	creationFormFor.set(field, suggestion.newLogin);
 	return suggestion;
 }
 
@@ -432,6 +455,8 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 		showMatchesFor([], field, { suggest: { password: suggest.password } });
 		return;
 	}
+	// Same policy, one field over: the signup form's email box gets nothing either.
+	if (isCreationField(field)) return;
 	if (logins.length === 0) return;
 	showMatchesFor(logins, field);
 }
@@ -439,12 +464,13 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 /**
  * What to show on `field` while the vault is locked. Generating a strong password needs no vault,
  * so a signup field still gets the suggestion (picking it fills and offers an "Unlock & Save"
- * corner prompt); anything else falls back to the "Vault locked" unlock row.
+ * corner prompt), and the rest of an account-creation form gets nothing at all. Anything else
+ * falls back to the "Vault locked" unlock row.
  */
 function showLockedPicker(field: HTMLInputElement, hasPotentialMatch: boolean): void {
 	const suggest = maybeSuggest(field, hasPotentialMatch);
 	if (suggest) showMatchesFor([], field, { suggest: { password: suggest.password } });
-	else showLockedFor(field);
+	else if (!isCreationField(field)) showLockedFor(field);
 }
 
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */

@@ -499,3 +499,59 @@ export function isAccountCreationForm(field: HTMLInputElement): boolean {
 	const { score, veto } = scoreSignupForm(field);
 	return !veto && score >= THRESHOLD;
 }
+
+/**
+ * The email slice of the identifier vocabulary. Deliberately NOT `USERNAME_HINT_RE`, which
+ * also carries "account" and "user": pairing an account-number box with an email box is not
+ * a signup, and the pair below is load-bearing.
+ */
+const EMAIL_HINT_RE =
+	/\be.?mail\b|\bmail\b|courriel|correo|mejl|s(ä|a)hk(ö|o)posti|posta.?elettronica|e.?posta|почта|メール|邮箱|이메일/i;
+
+/** True if the box asks for an email: by type, by token, or by what it says about itself. */
+function looksLikeEmail(el: HTMLInputElement): boolean {
+	if (el.type === "email") return true;
+	if ((el.autocomplete?.toLowerCase() ?? "").split(/\s+/).includes("email")) return true;
+	return EMAIL_HINT_RE.test(`${attrHint(el)} ${labelText(el)}`);
+}
+
+/**
+ * True if `scope` asks for the email TWICE. Structural and language-independent, like the
+ * confirm-password pair, and decisive for the same reason: a login form asks who you are
+ * once, and so does the email screen of a two-step login. Only a form making an account
+ * has you type it twice.
+ */
+function hasConfirmEmailPair(scope: ParentNode): boolean {
+	let found = 0;
+	for (const el of deepQueryAll<HTMLInputElement>("input", scope)) {
+		if (el.type === "hidden" || el.type === "password") continue;
+		if (el.readOnly || el.disabled) continue;
+		if (!isRendered(el) || isOffscreen(el)) continue;
+		if (!looksLikeEmail(el)) continue;
+		if (++found >= 2) return true;
+	}
+	return false;
+}
+
+/**
+ * True if `field` sits on a form that creates an account. `isAccountCreationForm` answers for
+ * the password field itself; its NEIGHBOURS need the same answer and cannot give it, since
+ * there is nothing in an email box that says "signup" - and the picker has no business on one
+ * either way, because the user is inventing a credential there rather than filling one.
+ */
+export function isOnAccountCreationForm(field: HTMLInputElement): boolean {
+	const scope: ParentNode = scopeFormOf(field) ?? field.ownerDocument;
+	const passwords = deepQueryAll<HTMLInputElement>(
+		'input[type="password"]:not([readonly]):not([disabled])',
+		scope,
+	).filter(isRendered);
+	// A current-password box says the account already exists: a login form, or a change form.
+	if (passwords.some(isCurrentPassword)) return false;
+	if (passwords.some(isAccountCreationForm)) return true;
+	// No password box in reach: a signup split across steps, which invents the credential on
+	// the NEXT screen. Only the confirm-email pair is decisive enough to act on here. The
+	// page-level signals - a /register route, a "Create account" heading - cannot tell a
+	// signup's email step from a two-step LOGIN's, and getting that wrong would silently kill
+	// autofill on the screen where it is worth the most.
+	return hasConfirmEmailPair(scope);
+}

@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	isAccountCreationForm,
+	isOnAccountCreationForm,
 	isPasswordChangeForm,
 	scoreSignupForm,
 	shouldSuggestPassword,
@@ -434,6 +435,111 @@ describe("isPasswordChangeForm / isAccountCreationForm (save-new vs update inten
 			</form>
 		`);
 		expect(isAccountCreationForm(pw())).toBe(false);
+	});
+});
+
+describe("isOnAccountCreationForm (the rest of the form)", () => {
+	/** The nth non-password input (0-indexed) in the document. */
+	function field(n = 0): HTMLInputElement {
+		return document.querySelectorAll<HTMLInputElement>('input:not([type="password"])')[n]!;
+	}
+
+	it("answers for a signup form's email box, which says nothing itself", () => {
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="email" />
+				<input type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(true);
+	});
+
+	it("leaves a login form's username box alone", () => {
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="username" />
+				<input type="password" name="password" autocomplete="current-password" />
+				<button type="submit">Sign in</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(false);
+	});
+
+	it("leaves a reset form's identifier alone: it sets a password, it does not create an account", () => {
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="username" readonly value="me@example.com" />
+				<input type="password" name="new" autocomplete="new-password" />
+				<input type="password" name="confirm" />
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(false);
+	});
+
+	it("reads a confirm-email pair as account creation, with no password box in reach", () => {
+		// The signup split across steps: the credential is invented on the NEXT screen, so
+		// there is no password field to score. Asking for the email twice is the tell.
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="email" />
+				<input type="email" name="email_confirm" />
+				<button type="submit">Continue</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(true);
+	});
+
+	it("reads a labelled confirm-email pair that declares neither type nor token", () => {
+		loadHTML(`
+			<form>
+				<label for="a">Email address</label>
+				<input id="a" type="text" name="a" />
+				<label for="b">Repeat your Email address</label>
+				<input id="b" type="text" name="b" />
+				<button type="submit">Continue</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(true);
+	});
+
+	it("leaves the email screen of a two-step login alone: it asks once", () => {
+		// The shape this must never swallow. A /signin route with a "Create account" link
+		// scores like a signup on page-level signals alone, which is why only the pair counts.
+		path("/signin");
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="username" />
+				<button type="submit">Next</button>
+			</form>
+			<a href="/register">Create account</a>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(false);
+	});
+
+	it("does not pair an account-number box with an email box", () => {
+		loadHTML(`
+			<form>
+				<label for="a">Account number</label>
+				<input id="a" type="text" name="account" />
+				<label for="b">Email</label>
+				<input id="b" type="email" name="email" />
+				<button type="submit">Continue</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(false);
+	});
+
+	it("vetoes on a current-password box, whatever the rest of the form asks twice", () => {
+		loadHTML(`
+			<form>
+				<input type="email" name="email" autocomplete="username" />
+				<input type="email" name="email_confirm" />
+				<input type="password" name="password" autocomplete="current-password" />
+				<button type="submit">Sign in</button>
+			</form>
+		`);
+		expect(isOnAccountCreationForm(field())).toBe(false);
 	});
 });
 

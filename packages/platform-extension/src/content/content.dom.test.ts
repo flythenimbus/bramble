@@ -391,6 +391,28 @@ describe("content: strong-password suggestion on signup", () => {
 		expect((call?.[2] as { suggest?: unknown })?.suggest).toBeTruthy();
 	});
 
+	it("offers nothing on the email field of a signup form", () => {
+		// The user is inventing a credential here, so there is nothing to fill: the matches are
+		// clutter, and the unlock row is worse - it asks for a window and a master password to
+		// fill a form that fills nothing.
+		showLocked.mockClear();
+		showMatches.mockClear();
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+
+		send({ type: "AUTOFILL_MATCHES", payload: result({ locked: true, hasPotentialMatch: true }) });
+		expect(showLocked).not.toHaveBeenCalled();
+		expect(showMatches).not.toHaveBeenCalled();
+
+		// Unlocked, with a saved login for the site: still nothing on this field.
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "GitHub", secondary: "jordanavery" }] }),
+		});
+		expect(showMatches).not.toHaveBeenCalled();
+	});
+
 	it("still shows the unlock row on a locked login field (no suggestion)", () => {
 		showLocked.mockClear();
 		document.body.innerHTML = `

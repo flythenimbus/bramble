@@ -560,3 +560,29 @@ chosen entry. Because a change form has no username field the capture's username
 empty, so the update **keeps the entry's existing username** rather than blanking
 it. The row is offered only on an empty field, and never on the current-password
 field itself.
+
+### The rest of an account-creation form offers nothing
+
+A signup form is where the user is **inventing** a credential, so the fields around
+that password box have nothing to fill. Existing matches on the email field are
+clutter, and while the vault is locked the row is worse than clutter: it offers a
+window and a master password to fill a form that fills nothing. Both are now
+suppressed (`isCreationField`), leaving the generated-password row as the only thing
+the picker says on a signup form.
+
+`isAccountCreationForm` answers this for the password field; its neighbours cannot
+ask it, since there is nothing in an email box that says "signup".
+`isOnAccountCreationForm` puts the question to the form's own new-password field
+instead. The verdict is cached per field, for the reason the suggestion is: the
+picker rewrites its anchor's `autocomplete` to suppress the native dropdown, so a
+form re-read after it has anchored no longer describes itself. Caching also keeps
+the scoring off the per-keystroke path, since `input` re-decides what to show.
+
+A signup split across steps has no password box to score, so it is judged on a
+**confirm-email pair** instead: a form that asks for the email twice. That is the
+only signal safe enough to act on there. A two-step *login*'s email screen is a
+signup's email screen minus one field, and the page-level signals cannot tell them
+apart — a `/signin` route with a "Create account" link scores like a signup — while
+getting it wrong silently kills autofill on the screen where it is worth the most.
+`e2e/extension/signup-picker.spec.ts` guards every suppression case with the
+two-step login screen it must not swallow.

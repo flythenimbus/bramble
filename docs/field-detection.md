@@ -282,6 +282,28 @@ dimensions and is neither `display:none` nor transparent. `isOffscreen` compares
 on-screen. The check deliberately ignores `value`: a signup form's email is populated
 the moment the user types it.
 
+`isOnAccountCreationForm` turns the same answer around for the form's **other**
+fields. There is nothing in an email box that says "signup", so it puts the question
+to that form's own new-password field instead. The content script uses it to keep the
+picker off the rest of a signup form entirely — see [autofill.md](autofill.md), "The
+rest of an account-creation form offers nothing".
+
+When the form has no password box at all — a registration split across steps, which
+invents the credential on the next screen — it falls back to a **confirm-email
+pair**: two rendered, editable email boxes in scope. Structural and
+language-independent like the confirm-password pair, and decisive for the same
+reason: a login form asks who you are once, and so does the email screen of a
+two-step login. Only a form making an account has you type it twice. A
+`current-password` box anywhere in scope vetoes it outright.
+
+Nothing else is allowed to decide this. The page-level signals score a two-step
+login's email screen exactly like a signup's — a `/signin` route under a heading with
+a "Create account" link — and unlike the password offer, being wrong here is
+**silent**: the picker simply never appears on the screen where autofill is worth the
+most. The pair is also the email vocabulary only, not the whole of
+`USERNAME_HINT_RE`, which carries "account" and "user": an account-number box beside
+an email box is not a signup.
+
 ## Fixtures
 
 `fixtures/sites.dom.test.ts` runs the detectors against real HTML captured from
