@@ -1,0 +1,32 @@
+---
+/**
+ * A command to paste, with a copy button. The button is wired up by whoever renders it, and its
+ * handler reads the `pre` beside it, so the two have to stay siblings.
+ */
+import Check from "@tabler/icons/outline/check.svg";
+import Copy from "@tabler/icons/outline/copy.svg";
+
+interface Props {
+	command: string;
+	class?: string;
+}
+
+const { command, class: className } = Astro.props;
+---
+
+<div class:list={["relative", className]}>
+	<pre class="overflow-hidden rounded-lg border border-border/60 bg-muted/50 px-3 py-2.5 pr-11 font-mono text-[0.7rem] leading-relaxed whitespace-pre-wrap break-words text-foreground"><code>{command}</code></pre>
+	<button
+		type="button"
+		data-copy
+		aria-label="Copy to clipboard"
+		class="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-outline/50 focus-visible:outline-none"
+	>
+		<span class="contents" data-copy-idle>
+			<Copy class="size-4" />
+		</span>
+		<span class="contents" data-copy-done hidden>
+			<Check class="size-4" />
+		</span>
+	</button>
+</div>

@@ -12,9 +12,7 @@ import BrandApple from "@tabler/icons/outline/brand-apple.svg";
 import BrandChrome from "@tabler/icons/outline/brand-chrome.svg";
 import BrandDebian from "@tabler/icons/outline/brand-debian.svg";
 import BrandFirefox from "@tabler/icons/outline/brand-firefox.svg";
-import Check from "@tabler/icons/outline/check.svg";
 import ChevronRight from "@tabler/icons/outline/chevron-right.svg";
-import Copy from "@tabler/icons/outline/copy.svg";
 import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
 import DeviceMobile from "@tabler/icons/outline/device-mobile.svg";
 import Download from "@tabler/icons/outline/download.svg";
@@ -23,9 +21,17 @@ import Package from "@tabler/icons/outline/package.svg";
 import Puzzle from "@tabler/icons/outline/puzzle.svg";
 import Snowflake from "@tabler/icons/outline/snowflake.svg";
 
+import ShellCommand from "@/components/ShellCommand.astro";
 import { Button } from "@/components/starwind/button";
 import { LINKS } from "@/consts";
-import { APT_INSTALL, DESKTOP_RELEASE, DESKTOP_VERSION, DOWNLOADS, NIX_INSTALL } from "@/downloads";
+import {
+	APT_INSTALL,
+	BREW_INSTALL,
+	DESKTOP_RELEASE,
+	DESKTOP_VERSION,
+	DOWNLOADS,
+	NIX_INSTALL,
+} from "@/downloads";
 
 type Icon = typeof BrandApple;
 
@@ -38,6 +44,8 @@ interface Option {
 	body: string;
 	/** A link to follow, or commands to paste. */
 	action: { href: string; label: string; external?: boolean } | { shell: string };
+	/** The same install by another route, offered under an "or" below the first. */
+	alt?: { shell: string };
 	/** Trailing aside, with an optional command set in monospace after it. */
 	note?: string;
 	noteCode?: string;
@@ -73,6 +81,8 @@ const categories: Category[] = [
 				body: "A universal build for Apple silicon and Intel, signed and notarized. It checks for updates and installs them itself.",
 				action: { href: DOWNLOADS.macos, label: "Download the .dmg" },
 				meta: `Version ${DESKTOP_VERSION}`,
+				alt: { shell: BREW_INSTALL },
+				note: "The cask is in homebrew-cask itself, so there is no tap to add. It installs the same signed disk image, and the app still updates itself from there.",
 			},
 			{
 				id: "debian",
@@ -282,22 +292,7 @@ const tab =
 						<p class="mt-1.5 text-sm text-muted-foreground text-pretty">{option.body}</p>
 
 						{"shell" in option.action ? (
-							<div class="relative mt-4">
-								<pre class="overflow-hidden rounded-lg border border-border/60 bg-muted/50 px-3 py-2.5 pr-11 font-mono text-[0.7rem] leading-relaxed whitespace-pre-wrap break-words text-foreground"><code>{option.action.shell}</code></pre>
-								<button
-									type="button"
-									data-copy
-									aria-label="Copy to clipboard"
-									class="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-outline/50 focus-visible:outline-none"
-								>
-									<span class="contents" data-copy-idle>
-										<Copy class="size-4" />
-									</span>
-									<span class="contents" data-copy-done hidden>
-										<Check class="size-4" />
-									</span>
-								</button>
-							</div>
+							<ShellCommand command={option.action.shell} class="mt-4" />
 						) : (
 							<div class="mt-4 flex flex-wrap items-center gap-3">
 								<Button href={option.action.href} target="_blank" rel="noopener" size="md">
@@ -308,6 +303,18 @@ const tab =
 									<span class="text-xs text-muted-foreground">{option.meta}</span>
 								)}
 							</div>
+						)}
+
+						{option.alt && (
+							<Fragment>
+								{/* The rules are decoration; the "or" is the part worth reading aloud. */}
+								<div class="my-3.5 flex items-center gap-3 text-xs text-muted-foreground">
+									<span class="h-px flex-1 bg-border/60" aria-hidden="true" />
+									or
+									<span class="h-px flex-1 bg-border/60" aria-hidden="true" />
+								</div>
+								<ShellCommand command={option.alt.shell} />
+							</Fragment>
 						)}
 
 						{option.note && (

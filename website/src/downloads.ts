@@ -49,3 +49,10 @@ export const APT_INSTALL = [
 
 /** Built from source by the flake at the repository root. See docs/desktop-port.md. */
 export const NIX_INSTALL = "nix profile install github:flythenimbus/bramble";
+
+/**
+ * In homebrew-cask itself, so there is no tap to add first. The canonical copy of the cask lives
+ * at `packages/platform-desktop/homebrew/bramble.rb` and is checked against the live release by
+ * `pnpm run test:brew`. See docs/desktop-port.md.
+ */
+export const BREW_INSTALL = "brew install --cask bramble";
