@@ -10,7 +10,7 @@ import { isExtensionAlive, markExtensionDead, onTeardown, safeSendMessage } from
 import { html } from "./template";
 import type { CornerPromptPayload } from "./types";
 
-const CORNER_ID = "titanpass-corner-prompt";
+const CORNER_ID = "bramble-corner-prompt";
 
 // The save/update card is page-level UI, so render it only in the top frame.
 // Capture still runs in every frame (so logins inside an iframe, e.g. Apple ID,

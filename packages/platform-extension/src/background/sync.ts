@@ -240,7 +240,7 @@ let stopInFlight: Promise<void> = Promise.resolve();
  */
 function abandonStart(stage: string, startEpoch: number, vekEpoch: number): void {
 	console.warn(
-		`[titanpass:bg] sync start abandoned at ${stage}: the vault session moved`,
+		`[bramble:bg] sync start abandoned at ${stage}: the vault session moved`,
 		// Process-local counters only; no key material, vault id or roster data.
 		{
 			stopSuperseded: startEpoch !== syncEpoch,

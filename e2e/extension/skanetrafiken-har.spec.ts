@@ -22,7 +22,7 @@ const HAR = path.resolve(
 	"../hars/skanetrafiken-login.har.zip",
 );
 
-const PROMPT = "#titanpass-corner-prompt";
+const PROMPT = "#bramble-corner-prompt";
 const LOGIN_URL = "https://www.skanetrafiken.se/mitt-konto/";
 
 /** Serve the recorded app, then override the calls the recording can't carry. */

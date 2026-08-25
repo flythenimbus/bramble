@@ -235,7 +235,7 @@ function stopPositionTracking(): void {
 
 // --- Shadow dropdown (COEP fallback renderer) ---
 
-const DROPDOWN_ID = "titanpass-autofill-dropdown";
+const DROPDOWN_ID = "bramble-autofill-dropdown";
 
 let dropdownEl: HTMLElement | null = null;
 // Joined ids of the rendered matches; lets re-queries with the same set skip

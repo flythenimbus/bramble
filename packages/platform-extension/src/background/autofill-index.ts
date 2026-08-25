@@ -101,7 +101,7 @@ export const indexHydration = (async () => {
 		const hostnames = r[HOSTNAMES_KEY];
 		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
 	} catch (e) {
-		console.warn("[titanpass:bg] hostname hydration failed", e);
+		console.warn("[bramble:bg] hostname hydration failed", e);
 	}
 })();
 
@@ -110,7 +110,7 @@ async function persistKnownHostnames(): Promise<void> {
 	try {
 		await api.storage.local.set({ [HOSTNAMES_KEY]: Array.from(knownHostnames) });
 	} catch (e) {
-		console.warn("[titanpass:bg] persistKnownHostnames failed", e);
+		console.warn("[bramble:bg] persistKnownHostnames failed", e);
 	}
 }
 
@@ -400,7 +400,7 @@ async function hydrateIndexForOwner(
 		// next reader will discard the no-longer-owned plaintext index.
 		return autofillSessionOwnerIsCurrent(owner);
 	} catch (e) {
-		console.warn("[titanpass:bg] hydrateAutofillIndexFromDisk failed", e);
+		console.warn("[bramble:bg] hydrateAutofillIndexFromDisk failed", e);
 		return false;
 	}
 }

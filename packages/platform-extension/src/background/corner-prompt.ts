@@ -446,7 +446,7 @@ async function cornerPromptResponse(
 		}
 		return { ok: false, error: `unknown action: ${response.action}` };
 	} catch (err) {
-		console.error("[titanpass:bg] CORNER_PROMPT_RESPONSE failed", err);
+		console.error("[bramble:bg] CORNER_PROMPT_RESPONSE failed", err);
 		return { ok: false, error: String(err) };
 	}
 }
@@ -501,7 +501,7 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 		}
 		return { ok: true, data: true };
 	} catch (err) {
-		console.error("[titanpass:bg] CORNER_FLUSH_HANDOFF failed", err);
+		console.error("[bramble:bg] CORNER_FLUSH_HANDOFF failed", err);
 		return { ok: false, error: String(err) };
 	}
 }

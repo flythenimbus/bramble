@@ -21,7 +21,7 @@ const COEP = {
 	"cross-origin-opener-policy": "same-origin",
 };
 
-const HOST = "#titanpass-autofill-dropdown";
+const HOST = "#bramble-autofill-dropdown";
 const STRONG_CHARS = /^[A-Za-z0-9!@#$%^&*()_+\-=[\]{}|;:,.<>?]{20}$/;
 
 const doc = (body: string, title: string): string =>

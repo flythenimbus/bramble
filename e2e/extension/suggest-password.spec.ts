@@ -13,7 +13,7 @@ import {
 // Drives the strong-password suggestion end to end through the real content script, the picker,
 // and the background save path. Like autofill-unlock.spec.ts, the pages are served with
 // COEP: require-corp, which blocks the picker's extension-origin iframe and forces its shadow-DOM
-// renderer, whose host (`#titanpass-autofill-dropdown`) is a light-DOM element we can observe and
+// renderer, whose host (`#bramble-autofill-dropdown`) is a light-DOM element we can observe and
 // click. The suggestion row itself lives in a closed shadow root, so we activate it by clicking
 // its on-screen position rather than by selector.
 
@@ -81,7 +81,7 @@ const BARE_SET_PASSWORD = `<!doctype html><html><head><title>Account</title></he
 	</form>
 </body></html>`;
 
-const HOST = "#titanpass-autofill-dropdown";
+const HOST = "#bramble-autofill-dropdown";
 const STRONG_CHARS = /^[A-Za-z0-9!@#$%^&*()_+\-=[\]{}|;:,.<>?]{20}$/;
 
 /** Serve `html` for example.com under COEP (forces the shadow renderer); subresources are empty 200s. */
@@ -136,7 +136,7 @@ test("suggests a strong password on a signup form, then fills it and offers to s
 	// It fills the page's password field with a 20-character strong password...
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 	// ...and the in-page save prompt is offered for the new login.
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });
 
@@ -164,7 +164,7 @@ test("a signup with an existing saved login still offers a NEW login, not update
 	expect(box).not.toBeNull();
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	// The capture is flagged as a new login despite the saved match, so the prompt is Save, not Update.
 	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });
@@ -246,7 +246,7 @@ test("suggests a strong password on a change-password form (new field, not the c
 	const filled = await page.locator("#newpass").inputValue();
 	expect(await page.locator("#confirm").inputValue()).toBe(filled);
 	expect(await page.locator("#current").inputValue()).toBe("");
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	// A change form is a rotation, not a new login: the capture is NOT flagged new (offers Update).
 	await expect.poll(() => pendingNewLogin(context)).toBe(false);
 });
@@ -281,7 +281,7 @@ test("offers the suggestion while the vault is locked (fills, then prompts Unloc
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 
 	// The capture is offered while still locked (the card is "Unlock & Save"), as a new login.
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	await expect.poll(() => pendingNewLogin(context)).toBe(true);
 });
 
@@ -310,7 +310,7 @@ test("Unlock & Save commits the new login after unlocking, and confirms it with 
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	// The locked card offers "Unlock & Save"; click it (bottom-left of the card).
-	const card = page.locator("#titanpass-corner-prompt");
+	const card = page.locator("#bramble-corner-prompt");
 	await expect(card).toBeAttached({ timeout: 10_000 });
 	const cardBox = await card.boundingBox();
 	expect(cardBox).not.toBeNull();
@@ -435,7 +435,7 @@ test("a set-password form captures as a rotation, not a new login", async ({
 	expect(box).not.toBeNull();
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 	await expect.poll(() => pendingNewLogin(context)).toBe(false);
 });
 

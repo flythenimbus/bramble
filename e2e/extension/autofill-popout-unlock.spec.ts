@@ -12,7 +12,7 @@ import { createVault, lock, openPopup, STRONG_PW, seedExampleLogin } from "./hel
 // proof is the fill: clicking the row afterwards has to put the saved username in the field, which
 // only a real match row does.
 //
-// COEP forces the picker's shadow renderer, whose host (`#titanpass-autofill-dropdown`) is a
+// COEP forces the picker's shadow renderer, whose host (`#bramble-autofill-dropdown`) is a
 // light-DOM element we can observe and click through (its rows live in a closed shadow root).
 
 const COEP = {
@@ -29,7 +29,7 @@ const LOGIN = `<!doctype html><html><head><title>login</title></head><body>
 	</form>
 </body></html>`;
 
-const HOST = "#titanpass-autofill-dropdown";
+const HOST = "#bramble-autofill-dropdown";
 
 async function serve(page: Page): Promise<void> {
 	await page

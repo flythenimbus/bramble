@@ -90,7 +90,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		try {
 			beforeDispatch(message, sender);
 		} catch (err) {
-			console.error("[titanpass:bg] pre-dispatch hook failed", err);
+			console.error("[bramble:bg] pre-dispatch hook failed", err);
 		}
 	}
 	void (async () => {

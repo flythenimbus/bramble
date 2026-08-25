@@ -194,7 +194,7 @@ export const vekStoreHydration = (async () => {
 				await api.storage.session.remove([...stale, MRU_KEY, ACTIVE_VAULT_SESSION_KEY]);
 			} catch (cause) {
 				failClosed();
-				console.warn("[titanpass:bg] VEK lock cleanup retry failed", cause);
+				console.warn("[bramble:bg] VEK lock cleanup retry failed", cause);
 			}
 			return;
 		}
@@ -213,7 +213,7 @@ export const vekStoreHydration = (async () => {
 		if (typeof all[LEGACY_VEK_KEY] !== "undefined")
 			await api.storage.session.remove([LEGACY_VEK_KEY]);
 	} catch (e) {
-		console.warn("[titanpass:bg] vek-store hydration failed", e);
+		console.warn("[bramble:bg] vek-store hydration failed", e);
 	}
 })();
 

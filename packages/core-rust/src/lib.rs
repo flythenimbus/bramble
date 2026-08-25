@@ -164,6 +164,13 @@ fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, C
     Ok(out)
 }
 
+// Names the product Bramble was called before it was renamed. DO NOT "fix" it: this is an HKDF
+// domain separator, not a label. It is never displayed, logged or exported, and its only
+// requirements are uniqueness and permanence. Every security-key slot ever written wrapped its
+// VEK under a KEK derived with these exact bytes, so changing them changes the KEK, the verifier
+// stops matching, and every enrolled authenticator stops unlocking its vault. Re-wrapping on
+// unlock could migrate a single device, but slots live in the vault blob and that blob syncs, so
+// a migrated vault would break security-key unlock on any device still on an older build.
 const WEBAUTHN_KDF_INFO: &[u8] = b"titanpass/webauthn/v1";
 /// Derive a 32-byte KEK from an authenticator hmac-secret via HKDF-SHA256,
 /// domain-separated by WEBAUTHN_KDF_INFO.

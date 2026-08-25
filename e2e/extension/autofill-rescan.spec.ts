@@ -25,7 +25,7 @@ const COEP = {
 	"cross-origin-opener-policy": "same-origin",
 };
 
-const DROPDOWN = "#titanpass-autofill-dropdown";
+const DROPDOWN = "#bramble-autofill-dropdown";
 
 const LOGIN = `<!doctype html><html><head><title>login</title></head><body>
 	<form>

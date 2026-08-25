@@ -65,7 +65,7 @@ async function openPickerIframe(page: Page, field: string): Promise<Frame> {
 	await page.waitForTimeout(1200);
 	const frame = pickerFrame(page);
 	expect(frame, "the iframe renderer was torn down; the shadow fallback took over").toBeDefined();
-	await expect(page.locator("#titanpass-autofill-dropdown")).toHaveCount(0);
+	await expect(page.locator("#bramble-autofill-dropdown")).toHaveCount(0);
 	return frame!;
 }
 
@@ -191,7 +191,7 @@ test("the strong-password suggestion renders and regenerates in the iframe", asy
 	const shown = (await frame.locator(".tp-suggest-pw").textContent())?.trim() ?? "";
 	await suggest.click();
 	await expect(page.locator("#pass")).toHaveValue(shown, { timeout: 10_000 });
-	await expect(page.locator("#titanpass-corner-prompt")).toBeAttached({ timeout: 10_000 });
+	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
 });
 
 test("click-to-unlock from the iframe: the pop-out closes and the match replaces the locked row", async ({

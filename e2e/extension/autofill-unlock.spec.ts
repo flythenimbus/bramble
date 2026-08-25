@@ -19,7 +19,7 @@ const FORM = `<!doctype html><html><head><title>login</title></head><body>
 	</form>
 </body></html>`;
 
-const HOST = "#titanpass-autofill-dropdown";
+const HOST = "#bramble-autofill-dropdown";
 
 test("the on-page picker refreshes after unlock, without refocusing (#20)", async ({
 	context,
@@ -63,7 +63,7 @@ test("the on-page picker refreshes after unlock, without refocusing (#20)", asyn
 		await expect(host).toBeAttached({ timeout: 2000 });
 	}).toPass({ timeout: 20000 });
 	const lockedHost = await pageA.evaluateHandle(() =>
-		document.querySelector("#titanpass-autofill-dropdown"),
+		document.querySelector("#bramble-autofill-dropdown"),
 	);
 
 	// Focus leaves the page, as it does when unlocking via the toolbar/pop-out; the picker stays open.

@@ -188,7 +188,7 @@ export const sessionHydration = (async () => {
 		await vekStore.vekStoreHydration;
 		await api.storage.session.remove([LEGACY_AUTOFILL_INDEX_KEY]).catch(() => {});
 	} catch (e) {
-		console.warn("[titanpass:bg] session hydration failed", e);
+		console.warn("[bramble:bg] session hydration failed", e);
 	}
 })();
 

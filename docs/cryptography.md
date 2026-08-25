@@ -46,7 +46,10 @@ wrapped VEK). The only thing that differs is how the KEK is produced:
 - **Security key**: HKDF-SHA256 over the 32-byte hmac-secret returned by the
   authenticator, domain-separated by the info string `titanpass/webauthn/v1`
   (`derive_kek_hkdf`). The authenticator owns the entropy; HKDF just shapes it
-  into a KEK that cannot collide with other HKDF callers. See
+  into a KEK that cannot collide with other HKDF callers. That info string names
+  the product Bramble was called before it was renamed, and is frozen: it is a
+  domain separator rather than a label, and changing it would change every
+  derived KEK and strand every enrolled security key. See
   [security-keys.md](security-keys.md).
 
 Reusing the same on-disk slot layout for both keeps slot serialization uniform on

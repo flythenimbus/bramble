@@ -62,7 +62,7 @@ void hydrated.then(() => {
 // See docs/passkey-provider.md and docs/firefox-port.md.
 void loadProviderEnabled().then(() => {
 	if (isProviderEnabled())
-		void initWebauthnProxy().catch((e) => console.warn("[titanpass:bg] passkey proxy", e));
+		void initWebauthnProxy().catch((e) => console.warn("[bramble:bg] passkey proxy", e));
 });
 
 api.runtime.onInstalled.addListener(() => {
@@ -86,7 +86,7 @@ async function lockFromBackground(source: string): Promise<void> {
 	try {
 		await clearSession();
 	} catch (error) {
-		console.error(`[titanpass:bg] ${source} session cleanup failed`, error);
+		console.error(`[bramble:bg] ${source} session cleanup failed`, error);
 	} finally {
 		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
 	}

@@ -28,7 +28,7 @@ async function lockVault(): Promise<void> {
 	} catch (error) {
 		// The VEK store has failed closed; still zeroize the offscreen scratch slot and leave a
 		// useful diagnostic because this timer has no response channel to report the failure.
-		console.error("[titanpass:bg] view-close session cleanup failed", error);
+		console.error("[bramble:bg] view-close session cleanup failed", error);
 	} finally {
 		await sendToOffscreen({ type: "CRYPTO_LOCK" }).catch(() => {});
 	}

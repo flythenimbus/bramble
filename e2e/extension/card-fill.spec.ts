@@ -31,7 +31,7 @@ const PAN_ONLY = `<!doctype html><html><head><title>Secure payment</title></head
 	<input type="text" name="cvc" id="cvc" style="display: none" maxlength="4" />
 </body></html>`;
 
-const HOST = "#titanpass-autofill-dropdown";
+const HOST = "#bramble-autofill-dropdown";
 
 /** Serve `html` for example.com under COEP, which forces the observable shadow renderer. */
 async function serve(page: Page, html: string): Promise<void> {

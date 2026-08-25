@@ -151,11 +151,11 @@ export async function runDueBackups(
 		);
 		if (result.attempted > 0) {
 			console.info(
-				`[titanpass:bg] backup: ${result.succeeded.length} ok, ${result.failed.length} failed`,
+				`[bramble:bg] backup: ${result.succeeded.length} ok, ${result.failed.length} failed`,
 			);
 		}
 		for (const f of result.failed) {
-			console.warn(`[titanpass:bg] backup failed for ${f.id} (vault ${f.vaultId}):`, f.error);
+			console.warn(`[bramble:bg] backup failed for ${f.id} (vault ${f.vaultId}):`, f.error);
 		}
 	} finally {
 		running = false;
