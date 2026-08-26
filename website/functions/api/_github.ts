@@ -13,7 +13,7 @@ export type PagesContext = {
 export type DownloadPlatform = "android" | "macos" | "linux";
 
 /** Platforms that are released under their own tag, and so have a version. */
-export type ReleasePlatform = "android" | "desktop";
+export type ReleasePlatform = "android" | "desktop" | "windows";
 
 export type Latest = { tag: string; version: string; url: string };
 
@@ -43,6 +43,9 @@ const INSTALLERS: Record<DownloadPlatform, RegExp> = {
 const TAGS: Record<ReleasePlatform, RegExp> = {
 	android: /^(.+)-android$/i,
 	desktop: /^(.+)-desktop$/i,
+	// Nothing matches this yet. It is here so the badge reports a version by itself the day a
+	// Windows build is tagged, rather than staying "coming soon" until someone notices.
+	windows: /^(.+)-windows$/i,
 };
 
 // Refetch after an hour; keep the last good numbers for a month to serve if GitHub is unhappy.
