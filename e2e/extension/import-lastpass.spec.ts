@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "./fixtures";
-import { createVault, optionsUrl } from "./helpers";
+import { createVault, expectUnlocked, openPopup, optionsUrl } from "./helpers";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) =>
@@ -24,11 +24,26 @@ test("imports a full LastPass export end to end", async ({ context, extensionId 
 
 	// 30 rows in, 30 entries out: 9 logins, 17 notes, 3 cards and an SSH key.
 	await expect(page.getByRole("button", { name: /Import 30 items/i })).toBeVisible();
-	// Folders have nowhere to land in the vault, so the import has to say so rather than drop them.
-	await expect(page.getByText(/kept as a "Folder" field/i)).toBeVisible();
+	// 27 of the 30 rows carry a `grouping`, which now becomes tags rather than a custom
+	// field named "Folder". Counted, never silent.
+	await expect(
+		page.getByText(/27 item\(s\) were in a LastPass folder, imported as tags/i),
+	).toBeVisible();
 
 	await page.getByRole("button", { name: /Import 30 items/i }).click();
 	await expect(page.getByRole("heading", { name: /Imported 30 items/i })).toBeVisible();
+
+	// The point of the mapping is that tags reach the VAULT, not just the parser, so this
+	// checks the list rather than the preview. The fixture nests one row under
+	// "Dev\\Hosting", so #hosting proves the per-level split survived the write too.
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	const search = popup.getByLabel(/Search vault/i);
+	await search.fill("#dev");
+	await expect(popup.getByText("Items (5)")).toBeVisible();
+	await search.fill("#hosting");
+	await expect(popup.getByText("Items (1)")).toBeVisible();
 });
 
 test("imports a pre-TOTP export, whose columns sit one to the left", async ({
