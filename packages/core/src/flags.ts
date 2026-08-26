@@ -84,6 +84,15 @@ export const CAPABILITIES = {
 	// Corner-prompt / Android autofill save; no iOS save surface. Desktop has no page of
 	// its own to capture from; the extension keeps doing this even once the two are paired.
 	saveCapture: { chromium: true, firefox: true, android: true, ios: false, desktop: false },
+	// In-app on/off switch for page autofill (the in-page dropdown). Extension only: mobile's
+	// autofill is enabled in OS settings and desktop has no page of its own to fill.
+	autofillToggle: {
+		chromium: true,
+		firefox: true,
+		android: false,
+		ios: false,
+		desktop: false,
+	},
 	// In-app runtime toggle for the passkey provider (extension only; mobile's provider is OS-managed).
 	passkeyProviderToggle: {
 		chromium: true,

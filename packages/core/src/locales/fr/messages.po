@@ -331,6 +331,10 @@ msgstr "Délai de verrouillage automatique"
 msgid "Auto-submit after fill"
 msgstr "Soumission automatique après remplissage"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Autofill on web pages"
+msgstr "Remplissage automatique sur les pages web"
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
 msgstr "Retour"
@@ -1817,6 +1821,10 @@ msgid "Off. You unlock with a security key."
 msgstr "Désactivé. Déverrouillage avec une clé de sécurité."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Offer saved logins, cards, and generated passwords in a dropdown on the page. When off, copy from the vault instead."
+msgstr "Proposez les identifiants, les cartes et les mots de passe générés enregistrés dans un menu déroulant sur la page. Lorsque cette option est désactivée, copiez-les depuis le coffre-fort."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Offer to save logins"
 msgstr "Proposer l'enregistrement des identifiants"
 
@@ -2874,6 +2882,10 @@ msgstr "Délai dépassé"
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Title"
 msgstr "Titre"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle autofill on web pages"
+msgstr "Activer/désactiver le remplissage automatique sur les pages web"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle Bramble passkey provider"

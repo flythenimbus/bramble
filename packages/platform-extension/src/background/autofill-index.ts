@@ -26,7 +26,8 @@ import {
 	reportActiveTab,
 } from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
-import { type MessageEnvelope, on } from "./router";
+import { getAutofillEnabled } from "./prefs";
+import { extensionOnly, type MessageEnvelope, on } from "./router";
 import {
 	type AutofillSessionCapability,
 	type AutofillSessionOwner,
@@ -153,6 +154,19 @@ function cardSecondary(entry: Extract<IndexEntry, { type: "card" }>): string {
 	const last4 = entry.number.replace(/\D/g, "").slice(-4);
 	const tail = last4 ? `•••• ${last4}` : "";
 	return [entry.brand, tail].filter(Boolean).join(" ");
+}
+
+/** What a page is told while the autofill switch is off: nothing to show, and don't ask again.
+ * Deliberately not `locked`, which would put the "unlock to autofill" row back on screen. */
+function disabledResult(): QueryResult {
+	return {
+		logins: [],
+		cards: [],
+		otps: [],
+		locked: false,
+		hasPotentialMatch: false,
+		disabled: true,
+	};
 }
 
 /** Build the autofill match list for a hostname, or a locked result if no VEK. */
@@ -551,6 +565,9 @@ async function autofillQuery(
 	if (!hostname) return { ok: false, error: "forbidden" };
 	const generation = autofillSessionSnapshot();
 	try {
+		// Master switch (Settings -> General). Enforced here rather than only in the page: a content
+		// script is not a trusted context, so the answer a page gets must not depend on it asking.
+		if (!(await getAutofillEnabled())) return { ok: true, data: disabledResult() };
 		await hydrateAutofillIndexFromDisk();
 		const hasLogin = message.hasLogin !== false;
 		const hasCard = message.hasCard === true;
@@ -576,8 +593,13 @@ async function autofillSelect(
 	if (!hostname) return { ok: false, error: "forbidden" };
 	const generation = autofillSessionSnapshot();
 	// A request that began while locked (or a transition was already underway) must
-	// never become eligible merely because an unlock completes during its await.
+	// never become eligible merely because an unlock completes during its await. Nothing may
+	// await ahead of this check, which is why the switch is read below it rather than first.
 	if (!autofillSessionIsCurrent(generation)) return { ok: false, error: "unavailable" };
+	// The switch again: an open dropdown from before it was turned off, or an orphaned content
+	// script, must not be able to fill. Nothing here says why - a page learns no more than
+	// "unavailable" from any other refusal.
+	if (!(await getAutofillEnabled())) return { ok: false, error: "unavailable" };
 	try {
 		await hydrateAutofillIndexFromDisk();
 		await scheduleAutoLock();
@@ -688,6 +710,35 @@ function watchActiveTab(): void {
 }
 
 watchActiveTab();
+
+/**
+ * Push the autofill switch to every tab's content script. The background already refuses a
+ * disabled query, so this is purely about what is on screen right now: a dropdown opened before
+ * the toggle flipped would otherwise sit there until the next query, and one suppressed while
+ * off would stay suppressed until the page was reloaded. Best-effort per tab, like the lock push.
+ */
+async function broadcastAutofillEnabled(enabled: boolean): Promise<void> {
+	try {
+		const tabs = await api.tabs.query({});
+		for (const tab of tabs) {
+			if (tab.id === undefined) continue;
+			void api.tabs
+				.sendMessage(tab.id, { type: "AUTOFILL_ENABLED", payload: { enabled } })
+				.catch(() => {});
+		}
+	} catch {}
+}
+
+// Settings toggle: persisting it is usePrefs' job (and the pref is what every query reads);
+// this only applies it to tabs that are already open.
+on(
+	"AUTOFILL_SET_ENABLED",
+	extensionOnly(async (message) => {
+		const { enabled } = (message.payload ?? {}) as { enabled?: boolean };
+		await broadcastAutofillEnabled(!!enabled);
+		return { ok: true, data: null };
+	}),
+);
 
 on("AUTOFILL_CLEAR_INDEX", autofillClearIndex);
 on("AUTOFILL_FIND", autofillFind);

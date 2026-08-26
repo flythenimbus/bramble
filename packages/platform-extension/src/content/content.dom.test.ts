@@ -966,3 +966,105 @@ describe("content: leaving the document", () => {
 		expect(pickerState.host).toBeNull();
 	});
 });
+
+// Settings -> General -> "Autofill on web pages". Off means this frame draws nothing at all:
+// not matches, not the "Vault locked" row, not the generated-password suggestion.
+describe("content: the autofill master switch", () => {
+	const MATCH = { id: "a", name: "Example", secondary: "a@example.com" };
+
+	beforeEach(() => {
+		// A plain sign-in form: every case here must fail if the switch stops being honoured,
+		// and on a signup form the picker withholds matches for reasons of its own.
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="username" />
+				<input id="pass" type="password" name="password" autocomplete="current-password" />
+				<button type="submit">Sign in</button>
+			</form>`;
+		invalidatePageFields();
+		// The content module is shared by every suite in this file. Cycle the switch to reach a
+		// known state: on, with no cached result, so each case's first query is its own.
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: false } });
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: true } });
+		pendingQueryResponses.length = 0;
+		showMatches.mockClear();
+		showLocked.mockClear();
+		removePicker.mockClear();
+		safeRequest.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+	});
+
+	afterEach(() => {
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: true } });
+		pendingQueryResponses.length = 0;
+	});
+
+	it("draws nothing when a query comes back disabled, matches and all", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [MATCH], disabled: true }) });
+		expect(showMatches).not.toHaveBeenCalled();
+		expect(showLocked).not.toHaveBeenCalled();
+		expect(removePicker).toHaveBeenCalled();
+	});
+
+	it("stops asking the background at all", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ disabled: true }) });
+
+		// An empty result normally makes the next focus re-query; a disabled one ends the loop.
+		safeRequest.mockClear();
+		(document.getElementById("pass") as HTMLInputElement).focus();
+		expect(safeRequest).not.toHaveBeenCalled();
+		expect(showMatches).not.toHaveBeenCalled();
+	});
+
+	it("suppresses the generated-password suggestion too, which needs no vault", () => {
+		// jsdom has no layout; the suggestion path checks the field is rendered.
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		document.body.innerHTML = `
+			<form>
+				<input id="suser" type="email" name="email" autocomplete="email" />
+				<input id="spass" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+		const pass = document.getElementById("spass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ disabled: true }) });
+		expect(showMatches).not.toHaveBeenCalled();
+		vi.restoreAllMocks();
+	});
+
+	it("drops an open dropdown when the toggle is pushed off, and asks again when pushed on", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [MATCH] }) });
+		expect(showMatches).toHaveBeenCalled();
+
+		removePicker.mockClear();
+		safeRequest.mockClear();
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: false } });
+		expect(removePicker).toHaveBeenCalled();
+		expect(safeRequest).not.toHaveBeenCalled();
+
+		// Back on: the page that has been open the whole time works again without a reload.
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: true } });
+		expect(safeRequest).toHaveBeenCalledWith(expect.objectContaining({ type: "AUTOFILL_QUERY" }));
+		showMatches.mockClear();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [MATCH] }) });
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
+	});
+});

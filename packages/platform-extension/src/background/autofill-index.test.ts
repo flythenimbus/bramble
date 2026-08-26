@@ -398,6 +398,84 @@ describe("AUTOFILL_QUERY direct response transport", () => {
 	});
 });
 
+describe("autofill master switch", () => {
+	async function disabled(): Promise<BackgroundHarness> {
+		const bg = await loadBackground({
+			sessionSeed: { [VEK_KEY]: "SEED" },
+			localSeed: { "pref.autofillEnabled": false },
+		});
+		await setAutofillIndex(bg, ENTRIES);
+		return bg;
+	}
+
+	it("answers a page query with nothing to show and a stop-asking flag", async () => {
+		const bg = await disabled();
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true, hasCard: true, hasOtp: true },
+			pageSender("example.com", 42),
+		);
+		expect(resp).toEqual({
+			ok: true,
+			data: {
+				logins: [],
+				cards: [],
+				otps: [],
+				locked: false,
+				hasPotentialMatch: false,
+				disabled: true,
+			},
+		});
+	});
+
+	it("refuses a fill even for an entry that matches the page", async () => {
+		const bg = await disabled();
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			pageSender("example.com", 42),
+		);
+		expect(resp).toEqual({ ok: false, error: "unavailable" });
+	});
+
+	it("still answers an extension-page query: the switch is about pages, not the popup", async () => {
+		const bg = await disabled();
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_FIND", payload: { hostname: "example.com", hasLogin: true } },
+			extensionSender,
+		);
+		expect(resp.data.logins.map((login: { id: string }) => login.id)).toEqual(["login1", "login2"]);
+	});
+
+	it("pushes the toggle to open tabs, and takes it only from an extension sender", async () => {
+		const bg = await loadBackground({
+			sessionSeed: { [VEK_KEY]: "SEED" },
+			openTabs: [{ id: 3 }, { id: 4 }],
+		});
+		expect(
+			(
+				await bg.send(
+					{ type: "AUTOFILL_SET_ENABLED", payload: { enabled: false } },
+					pageSender("example.com", 3),
+				)
+			).resp,
+		).toEqual({ ok: false, error: "forbidden" });
+		expect(bg.state.tabMessages).toEqual([]);
+
+		await bg.send({ type: "AUTOFILL_SET_ENABLED", payload: { enabled: false } }, extensionSender);
+		expect(bg.state.tabMessages).toEqual([
+			{
+				tabId: 3,
+				message: { type: "AUTOFILL_ENABLED", payload: { enabled: false } },
+				options: undefined,
+			},
+			{
+				tabId: 4,
+				message: { type: "AUTOFILL_ENABLED", payload: { enabled: false } },
+				options: undefined,
+			},
+		]);
+	});
+});
+
 describe("AUTOFILL_SELECT session transitions", () => {
 	it("fails a select held across lock, including lock-to-unlock ABA", async () => {
 		const bg = await unlockedWithIndex();

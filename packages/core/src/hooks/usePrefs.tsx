@@ -15,6 +15,9 @@ export const PREF_AUTOLOCK_MINUTES = "pref.autoLockMinutes";
 const PREF_BREACH_CHECK = "pref.breachCheckEnabled";
 export const PREF_CLIPBOARD_SECONDS = "pref.clipboardClearSeconds";
 export const PREF_OFFER_TO_SAVE = "pref.offerToSave";
+// Extension only: the master switch for page autofill. Off hides the in-page dropdown entirely
+// (matches, the "Vault locked" row, and the generated-password suggestion) and refuses fills.
+export const PREF_AUTOFILL_ENABLED = "pref.autofillEnabled";
 export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 // Mobile (iOS) only: populate the OS QuickType bar with usernames+domains so logins
 // surface inline in the keyboard. Off by default since it exposes usernames before auth.
@@ -40,6 +43,7 @@ export const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_BREACH_CHECK = false;
 export const DEFAULT_CLIPBOARD_SECONDS = 30;
 export const DEFAULT_OFFER_TO_SAVE = true;
+export const DEFAULT_AUTOFILL_ENABLED = true;
 const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
@@ -53,6 +57,8 @@ export interface Prefs {
 	breachCheckEnabled: boolean;
 	clipboardClearSeconds: number;
 	offerToSave: boolean;
+	// Extension: show the in-page autofill dropdown at all.
+	autofillEnabled: boolean;
 	// eTLD+1 hostnames muted via "Never for this site".
 	neverSaveSites: string[];
 	// iOS QuickType: surface usernames inline in the keyboard (exposes them before auth).
@@ -74,6 +80,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	breachCheckEnabled: PREF_BREACH_CHECK,
 	clipboardClearSeconds: PREF_CLIPBOARD_SECONDS,
 	offerToSave: PREF_OFFER_TO_SAVE,
+	autofillEnabled: PREF_AUTOFILL_ENABLED,
 	neverSaveSites: PREF_NEVER_SAVE_SITES,
 	autofillQuickType: PREF_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: PREF_PASSKEY_PROVIDER,
@@ -87,6 +94,7 @@ const DEFAULT_PREFS: Prefs = {
 	breachCheckEnabled: DEFAULT_BREACH_CHECK,
 	clipboardClearSeconds: DEFAULT_CLIPBOARD_SECONDS,
 	offerToSave: DEFAULT_OFFER_TO_SAVE,
+	autofillEnabled: DEFAULT_AUTOFILL_ENABLED,
 	neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
@@ -116,11 +124,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g, h, i, j] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
 				storage.getMeta<boolean>(PREF_OFFER_TO_SAVE),
+				storage.getMeta<boolean>(PREF_AUTOFILL_ENABLED),
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
@@ -134,12 +143,13 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				breachCheckEnabled: typeof b === "boolean" ? b : DEFAULT_BREACH_CHECK,
 				clipboardClearSeconds: typeof c === "number" ? c : DEFAULT_CLIPBOARD_SECONDS,
 				offerToSave: typeof d === "boolean" ? d : DEFAULT_OFFER_TO_SAVE,
-				neverSaveSites: Array.isArray(e) ? e : DEFAULT_NEVER_SAVE_SITES,
-				autofillQuickType: typeof f === "boolean" ? f : DEFAULT_AUTOFILL_QUICKTYPE,
-				passkeyProviderEnabled: typeof g === "boolean" ? g : DEFAULT_PASSKEY_PROVIDER,
-				lockOnScreenLock: typeof h === "boolean" ? h : DEFAULT_LOCK_ON_SCREEN_LOCK,
-				statsCollapsed: typeof i === "boolean" ? i : DEFAULT_STATS_COLLAPSED,
-				autostartPromptDismissed: typeof j === "boolean" ? j : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+				autofillEnabled: typeof e === "boolean" ? e : DEFAULT_AUTOFILL_ENABLED,
+				neverSaveSites: Array.isArray(f) ? f : DEFAULT_NEVER_SAVE_SITES,
+				autofillQuickType: typeof g === "boolean" ? g : DEFAULT_AUTOFILL_QUICKTYPE,
+				passkeyProviderEnabled: typeof h === "boolean" ? h : DEFAULT_PASSKEY_PROVIDER,
+				lockOnScreenLock: typeof i === "boolean" ? i : DEFAULT_LOCK_ON_SCREEN_LOCK,
+				statsCollapsed: typeof j === "boolean" ? j : DEFAULT_STATS_COLLAPSED,
+				autostartPromptDismissed: typeof k === "boolean" ? k : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 			});
 			setLoaded(true);
 		})();

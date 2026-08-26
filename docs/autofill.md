@@ -157,6 +157,35 @@ is suppressed when an interactive captcha is present (see
 TOTP codes are computed in the background; only the resulting digits are filled,
 never the seed. See [totp.md](totp.md).
 
+## The master switch
+
+Settings -> General -> **Autofill on web pages** (extension only; mobile's autofill is
+enabled in OS settings and desktop has no page of its own to fill). On by default.
+
+Off means the content script draws nothing: not matches, not the "Vault locked" row,
+not the generated-password suggestion. Two places enforce it, and the order matters:
+
+- **The background** reads `pref.autofillEnabled` on every `AUTOFILL_QUERY` and every
+  `AUTOFILL_SELECT`. A disabled query answers with empty lists and `disabled: true`; a
+  disabled select answers `unavailable`, the same word every other refusal uses. A
+  content script is not a trusted context, so what a page is told cannot depend on the
+  page choosing to ask. The read sits *after* the session snapshot in `AUTOFILL_SELECT`,
+  since nothing may await ahead of the locked-start check that rejects a lock/unlock ABA.
+- **The content script** treats `disabled: true` as "stop asking": it drops whatever is
+  on screen, forgets the cached result, and skips every subsequent query until the switch
+  comes back. That is what suppresses the password suggestion, which needs no vault and
+  would otherwise still be offered on a signup form.
+
+Flipping the toggle pushes `AUTOFILL_ENABLED` to every tab (`shell.setAutofillEnabled`),
+so a page that was already open loses its dropdown immediately, and gets it back without a
+reload. The pref is what enforces the switch; the push only settles what is on screen.
+
+The extension-page adapter path (`AUTOFILL_FIND` / `AUTOFILL_FETCH`) is deliberately
+*not* gated: the switch is about what happens on a web page, not about the popup's own
+view of the vault. Capturing new logins has its own toggle ("Offer to save logins"), and
+`DESKTOP_FILL` is exempt as well: that is a credential the user picked in the desktop app,
+aimed at this page, and silently dropping it would leave that action unexplained.
+
 ## When the content script looks at the page again
 
 An SPA can swap a login form in without a navigation, so a `childList`

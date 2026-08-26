@@ -166,6 +166,9 @@ export const extensionShell: ShellAdapter = {
 		if (!res) throw new Error("No response from Bramble's background (reload the extension?).");
 		if (!res.ok) throw new Error(res.error ?? "Sign-in failed.");
 	},
+	async setAutofillEnabled(enabled: boolean) {
+		await api.runtime.sendMessage({ type: "AUTOFILL_SET_ENABLED", payload: { enabled } });
+	},
 	async setPasskeyProviderEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({
 			type: "PASSKEY_PROVIDER_SET_ENABLED",

@@ -78,6 +78,9 @@ export interface QueryResult {
 	locked: boolean;
 	/** Login-only: a known entry exists for this hostname even while locked, enough to show an "unlock to autofill" hint without exposing data. */
 	hasPotentialMatch: boolean;
+	/** The user switched page autofill off: show nothing at all, not even the locked hint or a
+	 * generated-password suggestion, and stop querying until told otherwise. Extension only. */
+	disabled?: boolean;
 }
 
 /** What to fill for a chosen entry, discriminated by kind. */

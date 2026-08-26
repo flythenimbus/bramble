@@ -25,6 +25,8 @@ export interface QueryResult {
 	otps: MatchSummary[];
 	locked: boolean;
 	hasPotentialMatch: boolean;
+	// The user turned page autofill off: show nothing and stop querying.
+	disabled?: boolean;
 }
 
 /** Fill instruction from the background, discriminated by `kind`. `isAuto` echoes whether the fill was user-initiated. */

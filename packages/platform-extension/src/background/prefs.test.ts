@@ -78,6 +78,18 @@ describe("getOfferToSavePref", () => {
 	});
 });
 
+describe("getAutofillEnabled", () => {
+	it("defaults to true and only honors a boolean", async () => {
+		expect(await (await loadPrefs()).prefs.getAutofillEnabled()).toBe(true);
+		expect(
+			await (await loadPrefs({ "pref.autofillEnabled": false })).prefs.getAutofillEnabled(),
+		).toBe(false);
+		expect(
+			await (await loadPrefs({ "pref.autofillEnabled": "off" })).prefs.getAutofillEnabled(),
+		).toBe(true);
+	});
+});
+
 describe("never-save sites", () => {
 	it("parses the stored array and filters out non-strings", async () => {
 		const { prefs } = await loadPrefs({ "pref.neverSaveSites": ["a.com", 5, "b.com", null] });

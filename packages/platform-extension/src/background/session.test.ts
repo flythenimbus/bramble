@@ -640,6 +640,9 @@ describe("autofill session transition ordering", () => {
 			{ "vault.activeId": { oldValue: "v1", newValue: "replacement" } },
 			"session",
 		);
+		// The handler reads storage.local more than once (the autofill switch, then the auto-lock
+		// timeout); hand the rest back to the real area or the held select never returns.
+		bg.chrome.storage.local.get = originalGet;
 		release?.(await originalGet(["pref.autoLockMinutes"]));
 		expect((await select).resp).toEqual({ ok: false, error: "unavailable" });
 	});

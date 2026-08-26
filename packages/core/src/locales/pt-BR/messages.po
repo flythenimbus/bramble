@@ -331,6 +331,10 @@ msgstr "Tempo limite de bloqueio automático"
 msgid "Auto-submit after fill"
 msgstr "Enviar automaticamente após preencher"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Autofill on web pages"
+msgstr "Preenchimento automático em páginas da web"
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
 msgstr "Voltar"
@@ -1817,6 +1821,10 @@ msgid "Off. You unlock with a security key."
 msgstr "Desligado. Você desbloqueia com uma chave de segurança."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Offer saved logins, cards, and generated passwords in a dropdown on the page. When off, copy from the vault instead."
+msgstr "Oferece logins e cartões salvos e senhas geradas em um menu suspenso na página. Quando desativado, copie do cofre."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Offer to save logins"
 msgstr "Oferta para salvar logins"
 
@@ -2874,6 +2882,10 @@ msgstr "Tempo esgotado"
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Title"
 msgstr "Título"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle autofill on web pages"
+msgstr "Alternar preenchimento automático em páginas da web"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle Bramble passkey provider"

@@ -63,6 +63,12 @@ let mutationObserver: MutationObserver | null = null;
 // `null` until the first query response: distinguishes "unknown" from "queried,
 // came back empty" (a locked default would flash "Vault locked" on every load).
 let cachedResult: QueryResult | null = null;
+// The user turned page autofill off (Settings -> General). Learned from a query response, or
+// pushed by the background when the toggle flips. While set, this frame shows no dropdown of any
+// kind - matches, the "Vault locked" row, and the generated-password suggestion alike - and stops
+// querying until it's turned back on. The background refuses the same requests regardless; this
+// is what keeps a disabled page from asking, and from drawing anything the answer can't reach.
+let autofillDisabled = false;
 // Set when the user explicitly closes the popover; suppresses redisplay from
 // re-queries until they re-engage (focus, type, or mousedown on a field).
 let silenceAutoOpen = false;
@@ -548,6 +554,10 @@ function handleResult(result: QueryResult | undefined): void {
 	// Background forwards `undefined` when offscreen erred; keep the last good
 	// cached result rather than clobbering it.
 	if (!isQueryResult(result)) return;
+	if (result.disabled) {
+		applyAutofillEnabled(false);
+		return;
+	}
 	cachedResult = result;
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
@@ -582,8 +592,27 @@ function handleResult(result: QueryResult | undefined): void {
 	showLoginPicker(target, result.logins);
 }
 
+/**
+ * Apply the autofill master switch. Off drops whatever is on screen and stops the query loop;
+ * on re-arms it and asks again, so a page that has been sitting there since before the toggle
+ * flipped starts working without a reload.
+ */
+function applyAutofillEnabled(enabled: boolean): void {
+	autofillDisabled = !enabled;
+	if (!enabled) {
+		cancelOperations();
+		cachedResult = null;
+		reshowField = null;
+		pendingUnlockField = null;
+		removePicker();
+		return;
+	}
+	queryAutofill();
+}
+
 /** Asks the background what's available for this page, but only if a fillable field exists. */
 function queryAutofill(): void {
+	if (autofillDisabled) return;
 	const fields = getPageFields();
 	const hasLogin = !!(fields.login.username || fields.login.password);
 	const hasCard = cardFieldsPresent(fields.card);
@@ -604,7 +633,7 @@ function queryAutofill(): void {
 
 /** Decides what (if anything) to show when the user focuses or edits `field`, based on the cached result. */
 function showFor(field: HTMLInputElement): void {
-	if (silenceAutoOpen) return;
+	if (autofillDisabled || silenceAutoOpen) return;
 	if (!cachedResult) {
 		queryAutofill();
 		return;
@@ -860,6 +889,14 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		dropRelayed();
 		fillForm(fill.username ?? "", fill.password, false);
 		if (fill.totp) fillOtp(fill.totp);
+		sendResponse({ ok: true });
+		return false;
+	}
+
+	if (message?.type === "AUTOFILL_ENABLED") {
+		// The Settings toggle, applied to a page that is already open.
+		const enabled = (message.payload as { enabled?: boolean } | undefined)?.enabled !== false;
+		applyAutofillEnabled(enabled);
 		sendResponse({ ok: true });
 		return false;
 	}

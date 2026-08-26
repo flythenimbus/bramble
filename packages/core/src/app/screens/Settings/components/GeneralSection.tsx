@@ -7,6 +7,7 @@ import {
 	Power,
 	ShieldCheck,
 	SlidersHorizontal,
+	TextCursorInput,
 	Timer,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -35,6 +36,7 @@ const keepUnlockedWindow = (autoLockMinutes: number) =>
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
 	const { autofill, shell } = usePlatform();
+	const hasAutofillToggle = useCan("autofillToggle");
 	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
 	const hasLockOnScreenLock = useCan("lockOnScreenLock");
 	const canSaveCapture = useCan("saveCapture");
@@ -238,6 +240,28 @@ export function GeneralSection() {
 							})()
 						}
 						label={t`Toggle Bramble passkey provider`}
+					/>
+				</Row>
+			)}
+
+			{/* Master switch for the in-page dropdown; extension only. The background reads the pref
+			    on every query, so persisting it is what enforces it; setAutofillEnabled only pushes
+			    the change to tabs that already have a dropdown open. */}
+			{hasAutofillToggle && (
+				<Row
+					icon={<TextCursorInput className="w-4 h-4 text-primary" />}
+					title={t`Autofill on web pages`}
+					subtitle={t`Offer saved logins, cards, and generated passwords in a dropdown on the page. When off, copy from the vault instead.`}
+				>
+					<Toggle
+						checked={prefs.autofillEnabled}
+						onChange={(enabled) =>
+							void (async () => {
+								await update("autofillEnabled", enabled);
+								await shell.setAutofillEnabled?.(enabled);
+							})()
+						}
+						label={t`Toggle autofill on web pages`}
 					/>
 				</Row>
 			)}

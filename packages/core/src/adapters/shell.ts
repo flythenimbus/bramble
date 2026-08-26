@@ -106,6 +106,10 @@ export interface ShellAdapter {
 	 * keeps the OAuth tiles "coming soon". See docs/cloud-storage-backups.md.
 	 */
 	connectBackupOAuth?(providerId: string, opts?: { targetId?: string }): Promise<void>;
+	/** Apply the page-autofill switch to open tabs now (extension only; paired with the autofillToggle
+	 * capability). Persisting the pref is the caller's job; the background reads it per query anyway,
+	 * so this only exists to drop a dropdown that is already on screen. */
+	setAutofillEnabled?(enabled: boolean): Promise<void>;
 	/** Attach/detach the passkey provider at runtime (extension only; paired with the passkeyProvider capability). Persisting the pref is the caller's job; this just applies it now. */
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */
