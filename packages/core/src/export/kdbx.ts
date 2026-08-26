@@ -5,6 +5,10 @@
 // login carrying those fields, which is what the KDBX import path already does with any
 // foreign database. Nothing is dropped; the type label is what KeePass can't carry.
 //
+// Tags are the exception to the String-pair rule: `Tags` is lifted by the Rust writer
+// into KeePass's own `<Tags>` element (see TAGS_KEY in core-rust/src/kdbx.rs), so it
+// round-trips as a real tag rather than a field that happens to be named one.
+//
 // Archived entries are exported alongside live ones with an `Archived` String field. The
 // natural KeePass home for them would be the recycle-bin group, but this writer emits a
 // flat entry list (`save_kdbx4` takes entries, not groups), and an archived entry is not
@@ -58,6 +62,10 @@ function toFields(e: EntryData): Pair[] {
 	const f = new Fields();
 	f.add("Title", e.name);
 	f.add("Notes", e.notes);
+	// KeePass has a first-class Tags element and the Rust writer lifts this pair into it,
+	// so tags land in a KeePass client's own tag column, not a custom field. Comma-joined
+	// is KeePass's own separator.
+	if (e.tags?.length) f.add("Tags", e.tags.join(","));
 	// ISO 8601 rather than epoch ms: a human reading the field in KeePass should see a date.
 	if (e.archivedAt !== undefined) f.add("Archived", new Date(e.archivedAt).toISOString());
 

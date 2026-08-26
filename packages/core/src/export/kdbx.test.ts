@@ -66,6 +66,29 @@ describe("toKdbxEntries: logins", () => {
 	});
 });
 
+describe("toKdbxEntries: tags", () => {
+	// Comma-joined into a single pair, which the Rust writer lifts into KeePass's own
+	// <Tags> element so other clients read them as tags rather than a custom field.
+	it("joins tags with commas, KeePass's own separator", () => {
+		expect(value(login({ tags: ["work", "bank"] }), "Tags")).toBe("work,bank");
+	});
+
+	it("leaves the pair off an untagged entry", () => {
+		expect(value(login(), "Tags")).toBeUndefined();
+		expect(value(login({ tags: [] }), "Tags")).toBeUndefined();
+	});
+
+	it("is not protected: a tag is not a secret", () => {
+		expect(isProtected(login({ tags: ["work"] }), "Tags")).toBe(false);
+	});
+
+	it("round-trips back to tags rather than a custom field", () => {
+		const back = roundTrip(login({ tags: ["work", "bank"] }));
+		expect(back.tags).toEqual(["work", "bank"]);
+		expect(back.customFields?.some((f) => f.key === "Tags")).toBeFalsy();
+	});
+});
+
 describe("toKdbxEntries: archived entries", () => {
 	// KeePass has no archived state and this writer emits a flat list, so the state rides
 	// as a String field rather than a recycle-bin group. Exported, not dropped: a .kdbx is

@@ -195,6 +195,9 @@ function itemFor(e: Entry, warnings: string[]): CxfItem {
 		...(seconds(e.createdAt) !== undefined ? { creationAt: seconds(e.createdAt) } : {}),
 		...(seconds(e.updatedAt) !== undefined ? { modifiedAt: seconds(e.updatedAt) } : {}),
 		...(urls.length ? { scope: { urls, androidApps: [] } } : {}),
+		// CXF has carried a `tags` field all along (see cxfItemSchema); we simply never
+		// had tags to put in it.
+		...(e.tags?.length ? { tags: e.tags } : {}),
 		credentials,
 	};
 }

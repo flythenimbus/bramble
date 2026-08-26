@@ -12,6 +12,7 @@ import { base64UrlToBase64 } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
 import { COSE_ES256 } from "../vault/passkey";
+import { normalizeTags } from "../vault/tags";
 
 import {
 	type CxfCredential,
@@ -178,9 +179,13 @@ async function entryFor(
 	const notes = g.notes.join("\n\n") || undefined;
 	const createdAt = item.creationAt !== undefined ? item.creationAt * 1000 : undefined;
 	const updatedAt = item.modifiedAt !== undefined ? item.modifiedAt * 1000 : undefined;
-	const stamps = {
+	// Metadata every entry kind carries, spread into whichever branch below wins. Tags
+	// ride here rather than per-branch so a new entry type can't quietly drop them.
+	const tags = normalizeTags(item.tags);
+	const common = {
 		...(createdAt !== undefined ? { createdAt } : {}),
 		...(updatedAt !== undefined ? { updatedAt } : {}),
+		...(tags ? { tags } : {}),
 	};
 
 	for (const t of new Set(g.unknownTypes)) {
@@ -201,7 +206,7 @@ async function entryFor(
 			type: "login",
 			name,
 			notes,
-			...stamps,
+			...common,
 			urls: item.scope?.urls ?? [],
 			username: value(g.basicAuth?.username) || g.totp?.username || g.passkeys[0]?.username || "",
 			password: value(g.basicAuth?.password),
@@ -219,7 +224,7 @@ async function entryFor(
 			type: "card",
 			name,
 			notes,
-			...stamps,
+			...common,
 			cardholderName: value(g.card.fullName),
 			number,
 			brand: value(g.card.cardType) || cardBrand(number),
@@ -237,7 +242,7 @@ async function entryFor(
 			type: "ssh-key",
 			name,
 			notes,
-			...stamps,
+			...common,
 			// CXF carries no public key, and we only ever copy it out, so leave it empty.
 			publicKey: "",
 			privateKey: derToPem(g.ssh.privateKey),
@@ -247,7 +252,7 @@ async function entryFor(
 	}
 
 	if (!notes && g.fields.length === 0) return null;
-	return { type: "note", name, notes, ...stamps, customFields: toCustomFields(g.fields) };
+	return { type: "note", name, notes, ...common, customFields: toCustomFields(g.fields) };
 }
 
 /**

@@ -45,6 +45,13 @@ const KDF_ARGON2ID: [u8; 16] = [
 ];
 
 const RECYCLE_BIN: &str = "Recycle Bin";
+/// Synthetic String key carrying KeePass's `<Tags>` element across the JS/FFI boundary.
+/// A pair rather than a new field on `OutEntry`, which is a `uniffi::Record` on the FFI
+/// surface: adding to it would regenerate every Swift and Kotlin binding for one string.
+const TAGS_KEY: &str = "Tags";
+/// Synthetic String key carrying the entry's KeePass group path, which the importer maps
+/// to tags. Groups are the only organisation a KeePass database has.
+const GROUP_KEY: &str = "Group";
 
 /// A failure with a stable machine code the JS layer switches on to show the
 /// right message (WrongCredential keeps the user on the unlock step, the
@@ -505,6 +512,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
         Key,
         Value,
         GroupName,
+        Tags,
     }
     let mut mode = Mode::None;
     let mut protected = false;
@@ -517,6 +525,11 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                 b"Group" => group_names.push(String::new()),
                 b"Entry" => entry_stack.push(Vec::new()),
                 b"History" => history_depth += 1,
+                // Only an entry's own <Tags>; the Meta block has one too.
+                b"Tags" if !entry_stack.is_empty() => {
+                    mode = Mode::Tags;
+                    cur_val.clear();
+                }
                 // A group's <Name> only counts outside an Entry.
                 b"Name" if entry_stack.is_empty() => mode = Mode::GroupName,
                 b"Key" => {
@@ -537,7 +550,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                 let txt = t.unescape().map_err(|_| KdbxError::Corrupt("xml unescape"))?.into_owned();
                 match mode {
                     Mode::Key => cur_key = txt,
-                    Mode::Value => cur_val = txt,
+                    Mode::Value | Mode::Tags => cur_val = txt,
                     Mode::GroupName => {
                         if let Some(n) = group_names.last_mut() {
                             *n = txt;
@@ -561,15 +574,46 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                     mode = Mode::None;
                 }
                 b"Key" | b"Name" => mode = Mode::None,
+                b"Tags" => {
+                    if mode == Mode::Tags {
+                        if let Some(frame) = entry_stack.last_mut() {
+                            if !cur_val.is_empty() {
+                                frame.push(OutString {
+                                    key: TAGS_KEY.to_string(),
+                                    value: cur_val.clone(),
+                                    protected: false,
+                                });
+                            }
+                        }
+                        mode = Mode::None;
+                    }
+                }
                 b"History" => history_depth = history_depth.saturating_sub(1),
                 b"Group" => {
                     group_names.pop();
                 }
                 b"Entry" => {
-                    if let Some(frame) = entry_stack.pop() {
+                    if let Some(mut frame) = entry_stack.pop() {
                         // Emit only top-level entries: not History, not Recycle Bin.
                         let in_recycle = group_names.iter().any(|n| n == RECYCLE_BIN);
                         if history_depth == 0 && entry_stack.is_empty() && !in_recycle {
+                            // The group path, so the importer can turn a database's folder
+                            // structure into tags instead of discarding it. The outermost
+                            // group is the database root and names the file, not a folder.
+                            let path = group_names
+                                .iter()
+                                .skip(1)
+                                .filter(|n| !n.is_empty())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join("/");
+                            if !path.is_empty() {
+                                frame.push(OutString {
+                                    key: GROUP_KEY.to_string(),
+                                    value: path,
+                                    protected: false,
+                                });
+                            }
                             entries.push(OutEntry { strings: frame });
                         }
                     }
@@ -699,9 +743,18 @@ fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
     for e in entries {
         x.push_str("<Entry>");
         x.push_str(&format!("<UUID>{}</UUID>", uuid()?));
+        // KeePass models tags as a first-class <Tags> element, not a String pair, so a
+        // string keyed TAGS_KEY is lifted out and written as one. Carrying it across the
+        // JS boundary as an ordinary pair keeps `SaveEntry` (a uniffi Record on the read
+        // side's mirror) unchanged, so the generated Swift/Kotlin bindings don't churn.
+        if let Some(tags) = e.strings.iter().find(|s| s.key == TAGS_KEY && !s.value.is_empty()) {
+            x.push_str("<Tags>");
+            x.push_str(&quick_xml::escape::escape(&tags.value));
+            x.push_str("</Tags>");
+        }
         for s in &e.strings {
-            if s.key.is_empty() {
-                continue; // a String with no Key has nowhere to land on re-import
+            if s.key.is_empty() || s.key == TAGS_KEY {
+                continue; // no Key means nowhere to land on re-import; Tags went above
             }
             x.push_str("<String><Key>");
             x.push_str(&quick_xml::escape::escape(&s.key));
@@ -1036,6 +1089,34 @@ mod export_tests {
         assert_eq!(find(&read[0], "Password"), Some(""));
         assert_eq!(find(&read[0], "Custom"), Some("after-the-empty-one"));
         assert_eq!(find(&read[0], "Other"), Some("second"));
+    }
+
+    #[test]
+    fn round_trips_tags_through_keepass_own_tags_element() {
+        // Written as <Tags>, not a <String> named "Tags", so other KeePass clients show
+        // them in their tag column. The synthetic pair is just how it crosses the boundary.
+        let entries = vec![entry(&[("Title", "T", false), ("Tags", "work,banking", false)])];
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let xml = String::from_utf8_lossy(&bytes).to_string();
+        assert!(!xml.contains("<Key>Tags</Key>"), "tags must not be written as a String pair");
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(find(&read[0], "Tags"), Some("work,banking"));
+    }
+
+    #[test]
+    fn escapes_xml_metacharacters_in_tags() {
+        let entries = vec![entry(&[("Title", "T", false), ("Tags", "a&b,<c>", false)])];
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(find(&read[0], "Tags"), Some("a&b,<c>"));
+    }
+
+    #[test]
+    fn omits_the_tags_element_when_an_entry_has_none() {
+        let entries = vec![entry(&[("Title", "T", false)])];
+        let bytes = save_inner(&entries, "pw").unwrap();
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(find(&read[0], "Tags"), None);
     }
 
     #[test]
