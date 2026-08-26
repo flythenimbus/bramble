@@ -20,6 +20,9 @@ held in background memory only, never persisted (see [storage.md](storage.md)).
 - **Cards** are not tied to a hostname. Every stored card is offered on any
   detected payment form.
 - **Notes and SSH keys** never participate in autofill.
+- **Tags** are not in the index at all. They organise a vault; they say nothing about
+  which credential belongs to a page, so indexing them would only copy organisational
+  metadata into background memory for no matching benefit.
 - **Archived entries** are excluded, passkeys included. Archiving is how a user
   retires a credential without deleting it, so an archived entry must not be
   offered, matched, or counted anywhere in the fill path.

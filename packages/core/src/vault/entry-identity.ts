@@ -16,7 +16,9 @@ import type { EntryData } from "../hooks/useVault";
  * Vault bookkeeping, stripped at any depth. `createdAt` is included because only some
  * importers can recover it from the file; leaving it in would make matching work for Bitwarden
  * and quietly fail for every format that doesn't carry a creation date. `archivedAt` is
- * included so re-importing the file an entry came from still recognizes the archived copy.
+ * included so re-importing the file an entry came from still recognizes the archived copy,
+ * and `tags` for the same reason: an import can seed them, but they are curated locally
+ * afterwards, and a hand-added tag must not make the source file look like a new entry.
  */
 const METADATA_KEYS = new Set([
 	"id",
@@ -24,6 +26,7 @@ const METADATA_KEYS = new Set([
 	"updatedAt",
 	"lastUsedAt",
 	"archivedAt",
+	"tags",
 	"breach",
 ]);
 

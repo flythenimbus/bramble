@@ -57,11 +57,37 @@ export interface SearchableEntry {
 	updatedAt?: number;
 	lastUsedAt?: number;
 	archived?: boolean;
+	/** Lowercased tag keys, so the filter never re-derives them per keystroke. */
+	tagKeys?: string[];
 }
 
 /** Split a raw query into lowercased tokens. */
 export function queryTokens(q: string): string[] {
 	return q.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/** A query split into its free-text tokens and its `#tag` filters (both lowercased). */
+export interface ParsedQuery {
+	text: string[];
+	tags: string[];
+}
+
+/**
+ * Split a query into free text and `#tag` filters. A bare `#` is not a filter (the user
+ * is mid-word), so it is dropped rather than matching every tag.
+ */
+export function parseQuery(q: string): ParsedQuery {
+	const text: string[] = [];
+	const tags: string[] = [];
+	for (const token of queryTokens(q)) {
+		if (!token.startsWith("#")) {
+			text.push(token);
+			continue;
+		}
+		const tag = token.replace(/^#+/, "");
+		if (tag) tags.push(tag);
+	}
+	return { text, tags };
 }
 
 function byName(a: SearchableEntry, b: SearchableEntry): number {
@@ -87,21 +113,63 @@ const COMPARATORS: Record<SortKey, (a: SearchableEntry, b: SearchableEntry) => n
 };
 
 /**
- * Filter by archive side + type + all query tokens, then sort; `matchedIds` float to the
- * top. Pure.
+ * The `#`-prefixed token the caret is sitting in, lowercased and without its `#`, or null
+ * when the query does not end in one. Drives the search bar's tag suggestions: only the
+ * LAST token counts, because that is the one still being typed.
+ */
+export function trailingTagFragment(q: string): string | null {
+	if (/\s$/.test(q)) return null;
+	const last = q.split(/\s+/).at(-1) ?? "";
+	if (!last.startsWith("#")) return null;
+	return last.replace(/^#+/, "").toLowerCase();
+}
+
+/**
+ * Replace the trailing `#fragment` with `#tag` and leave a trailing space, so picking a
+ * suggestion lands the user ready to type the next term rather than inside the one they
+ * just completed.
+ */
+export function completeTagFragment(q: string, tag: string): string {
+	// Split KEEPING the separators, so the rest of the query survives verbatim rather
+	// than being re-joined with whitespace the user didn't type.
+	const parts = q.split(/(\s+)/);
+	let last = -1;
+	for (let i = parts.length - 1; i >= 0; i--) {
+		if ((parts[i] ?? "").trim().length > 0) {
+			last = i;
+			break;
+		}
+	}
+	if (last === -1) return `#${tag} `;
+	parts[last] = `#${tag}`;
+	return `${parts.join("")} `;
+}
+
+/**
+ * Filter by archive side + type + every query token, then sort; `matchedIds` float to
+ * the top. Pure.
+ *
+ * `#tag` tokens filter on tags and nothing else, so `#work github` means "tagged work
+ * AND matching github" rather than searching for the literal text "#work". Tag matching
+ * is by PREFIX: `#wo` matches `work` while the user is still typing, the way the text
+ * side already matches on substring, and the search bar's suggestions make the exact
+ * form one tap away.
  */
 export function filterAndSortEntries<T extends SearchableEntry>(
 	items: T[],
 	search: VaultSearch,
 	matchedIds?: ReadonlySet<string>,
 ): T[] {
-	const tokens = queryTokens(search.q);
+	const { text, tags } = parseQuery(search.q);
 	const filtered = items.filter((item) => {
 		// The archive side is a hard gate, ahead of the query: searching the live vault must
 		// never surface an archived entry, however well it matches.
 		if ((item.archived ?? false) !== search.archived) return false;
 		if (search.type !== "all" && item.type !== search.type) return false;
-		return tokens.every((tok) => item.searchText.includes(tok));
+		// Every tag token must match some tag, as with text tokens: two of them narrow.
+		const keys = item.tagKeys;
+		if (tags.length > 0 && !tags.every((t) => keys?.some((k) => k.startsWith(t)))) return false;
+		return text.every((tok) => item.searchText.includes(tok));
 	});
 	const cmp = COMPARATORS[search.sort];
 	if (!matchedIds?.size) return filtered.sort(cmp);

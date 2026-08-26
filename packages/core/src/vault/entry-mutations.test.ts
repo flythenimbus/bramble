@@ -430,6 +430,93 @@ describe("createEntryMutations", () => {
 		expect(archived.entries[0]!.updatedAt).toBe(updatedAt);
 	});
 
+	it("adds a tag across a selection in one write, skipping entries that already have it", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a"), login("b"), login("c")]);
+		const [a, b, c] = seeded.entries.map((e) => e.id) as [string, string, string];
+		const first = await h.mutations.setTags(seeded, [a], { add: ["work"] });
+		const writesBefore = h.writes();
+
+		const both = await h.mutations.setTags(first, [a, b], { add: ["work"] });
+		expect(h.writes()).toBe(writesBefore + 1);
+		expect(both.entries.find((e) => e.id === a)?.tags).toEqual(["work"]);
+		expect(both.entries.find((e) => e.id === b)?.tags).toEqual(["work"]);
+		expect(both.entries.find((e) => e.id === c)?.tags).toBeUndefined();
+		// `a` already had it, so its stamp is untouched.
+		expect(both.stamps.get(a)).toEqual(first.stamps.get(a));
+	});
+
+	it("removes a tag by key, so 'work' also takes off 'Work'", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a")]);
+		const id = seeded.entries[0]!.id;
+		const tagged = await h.mutations.setTags(seeded, [id], { add: ["Work", "bank"] });
+		const untagged = await h.mutations.setTags(tagged, [id], { remove: ["work"] });
+		expect(untagged.entries[0]?.tags).toEqual(["bank"]);
+	});
+
+	it("drops the key entirely when the last tag comes off", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a")]);
+		const id = seeded.entries[0]!.id;
+		const tagged = await h.mutations.setTags(seeded, [id], { add: ["work"] });
+		const untagged = await h.mutations.setTags(tagged, [id], { remove: ["work"] });
+		expect(untagged.entries[0]).not.toHaveProperty("tags");
+		expect(JSON.stringify(await h.mutations.readEntriesPayload())).not.toContain("tags");
+	});
+
+	// A persist re-encrypts the whole vault, so a change that changes nothing must not run.
+	it("writes nothing when the tag change is a no-op", async () => {
+		const h = harness();
+		const seeded = await h.mutations.importMany(empty(), [login("a")]);
+		const id = seeded.entries[0]!.id;
+		const tagged = await h.mutations.setTags(seeded, [id], { add: ["work"] });
+		const writesBefore = h.writes();
+
+		expect(await h.mutations.setTags(tagged, [id], { add: ["work"] })).toBe(tagged);
+		expect(await h.mutations.setTags(tagged, [id], { remove: ["nope"] })).toBe(tagged);
+		expect(await h.mutations.setTags(tagged, [id], {})).toBe(tagged);
+		expect(await h.mutations.setTags(tagged, ["no-such-id"], { add: ["x"] })).toBe(tagged);
+		expect(h.writes()).toBe(writesBefore);
+	});
+
+	it("tagging does not touch updatedAt, so a bulk tag can't reorder recently-updated", async () => {
+		let t = 1000;
+		const h = harness(() => t);
+		const afterAdd = await h.mutations.add(empty(), login("a"));
+		const id = afterAdd.entries[0]!.id;
+		const updatedAt = afterAdd.entries[0]!.updatedAt;
+		t = 5000;
+		const tagged = await h.mutations.setTags(afterAdd, [id], { add: ["work"] });
+		expect(tagged.entries[0]!.updatedAt).toBe(updatedAt);
+	});
+
+	// The import path is the only way archived/tagged entries enter a vault in bulk, and
+	// it is a different code path from `add`: it validates a batch, then persists once.
+	it("import preserves archivedAt and tags through the write and back off disk", async () => {
+		const h = harness();
+		const next = await h.mutations.importMany(empty(), [
+			{ ...loginWith("archived-one"), archivedAt: 5000, tags: ["work"] },
+			loginWith("live-one"),
+		]);
+		expect(next.entries[0]?.archivedAt).toBe(5000);
+		expect(next.entries[0]?.tags).toEqual(["work"]);
+		expect(next.entries[1]?.archivedAt).toBeUndefined();
+
+		const payload = await h.mutations.readEntriesPayload();
+		expect(JSON.stringify(payload)).toContain("archivedAt");
+		expect(JSON.stringify(payload)).toContain("work");
+	});
+
+	it("keeps an imported archived entry out of the autofill index", async () => {
+		const h = harness();
+		await h.mutations.importMany(empty(), [
+			{ ...loginWith("archived-one"), archivedAt: 5000 },
+			loginWith("live-one"),
+		]);
+		expect(h.indexCalls.at(-1)).toHaveLength(1);
+	});
+
 	it("never leaks a superseded password into the autofill index", async () => {
 		let t = 1000;
 		const h = harness(() => t);

@@ -1,7 +1,9 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import type { BreachStatus, EntryData, EntryType } from "../../../hooks/useVault";
+import { useVaultState } from "../../../hooks/useVault";
+import { allTags } from "../../../vault/tags";
 import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
 import {
@@ -10,6 +12,7 @@ import {
 	customFieldsToForm,
 	formToCustomFields,
 } from "../../entry-modes/custom-fields";
+import { formToTags, TAGS_NAME, TagsEditor, tagsToForm } from "../../entry-modes/tags";
 
 /**
  * Serializable snapshot of the live form, carried verbatim through a pop-out
@@ -48,6 +51,10 @@ export function EntryForm({
 	const mode = getEntryMode(type);
 	const [busy, setBusy] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
+	// The vault's existing tags, so the editor can suggest them rather than let the user
+	// invent a second spelling of one they already have.
+	const { entries } = useVaultState();
+	const tagSuggestions = useMemo(() => allTags(entries), [entries]);
 
 	const methods = useForm<FieldValues>({
 		// A restored draft wins (it already carries custom fields); otherwise seed
@@ -55,6 +62,7 @@ export function EntryForm({
 		defaultValues: draftValues ?? {
 			...(initialEntry ? mode.toForm(initialEntry) : mode.emptyForm({ defaultUrl })),
 			[CUSTOM_FIELDS_NAME]: customFieldsToForm(initialEntry?.customFields),
+			[TAGS_NAME]: tagsToForm(initialEntry?.tags),
 		},
 	});
 	const { handleSubmit, getValues } = methods;
@@ -72,6 +80,7 @@ export function EntryForm({
 			await onSave({
 				...mode.toEntry(values),
 				customFields: formToCustomFields(values[CUSTOM_FIELDS_NAME]),
+				tags: formToTags(values[TAGS_NAME]),
 			});
 			onBack();
 		} catch (e) {
@@ -101,6 +110,7 @@ export function EntryForm({
 
 						<div className="px-5 py-4 space-y-3">
 							<Fields initialBreach={initialBreach} />
+							<TagsEditor suggestions={tagSuggestions} />
 							<CustomFieldsEditor />
 						</div>
 

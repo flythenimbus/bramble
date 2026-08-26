@@ -7,6 +7,7 @@ import { formatDateTime } from "../../../util/format-date";
 import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
 import { CustomFieldsDetail } from "../../entry-modes/custom-fields";
+import { TagsDetail } from "../../entry-modes/tags";
 
 interface EntryDetailProps {
 	entry: Entry;
@@ -14,12 +15,21 @@ interface EntryDetailProps {
 	onDelete: () => Promise<void>;
 	/** Archive or restore this entry. Reversible, so it runs without a confirmation step. */
 	onSetArchived: (archived: boolean) => Promise<void>;
+	/** Show every entry carrying this tag. */
+	onSelectTag: (tag: string) => void;
 	/** Called after a successful field copy, to record the entry as recently used. */
 	onUse?: () => void;
 }
 
 /** Shared chrome for viewing any entry (banner, header, delete/edit footer); the mode supplies the fields. */
-export function EntryDetail({ entry, onEdit, onDelete, onSetArchived, onUse }: EntryDetailProps) {
+export function EntryDetail({
+	entry,
+	onEdit,
+	onDelete,
+	onSetArchived,
+	onSelectTag,
+	onUse,
+}: EntryDetailProps) {
 	const { clipboard } = usePlatform();
 	const { t } = useLingui();
 	const [copied, setCopied] = useState<string | null>(null);
@@ -160,6 +170,10 @@ export function EntryDetail({ entry, onEdit, onDelete, onSetArchived, onUse }: E
 
 					{entry.customFields && entry.customFields.length > 0 && (
 						<CustomFieldsDetail fields={entry.customFields} copied={copied} copy={copy} />
+					)}
+
+					{entry.tags && entry.tags.length > 0 && (
+						<TagsDetail tags={entry.tags} onSelect={onSelectTag} />
 					)}
 				</div>
 

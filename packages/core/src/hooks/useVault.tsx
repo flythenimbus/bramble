@@ -96,6 +96,12 @@ interface BaseEntryData {
 	/** Epoch ms of the last use (copy/fill); absent until first used. */
 	lastUsedAt?: number;
 	/**
+	 * Free-form labels for organising the vault, searched with `#tag`. Display as typed
+	 * but compare case-insensitively; `core/vault/tags.ts` owns every rule about them.
+	 * Absent rather than empty when the entry has none.
+	 */
+	tags?: string[];
+	/**
 	 * Epoch ms the entry was archived; absent means live. Archiving is a normal entry
 	 * update, so it converges through the same last-writer-wins merge as any edit and a
 	 * concurrent delete still wins (a tombstone beats a record). Archived entries stay in
@@ -294,6 +300,11 @@ export interface VaultActions {
 	 * autofill projection. Ids already in the requested state are skipped.
 	 */
 	setEntriesArchived(ids: string[], archived: boolean): Promise<void>;
+	/**
+	 * Add and/or remove tags across a selection in one write. Removal matches by tag key,
+	 * so "work" also removes "Work". Ids whose tags would not change are skipped.
+	 */
+	setEntriesTags(ids: string[], change: { add?: string[]; remove?: string[] }): Promise<void>;
 	/** Record a use (copy/fill): bumps only the entry's `lastUsedAt`. */
 	touchEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
@@ -975,6 +986,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			commitEntries(await mutations.setArchived(snapshotEntries(), ids, archived)),
 		[mutations, snapshotEntries, commitEntries],
 	);
+	const setEntriesTags = useCallback(
+		async (ids: string[], change: { add?: string[]; remove?: string[] }) =>
+			commitEntries(await mutations.setTags(snapshotEntries(), ids, change)),
+		[mutations, snapshotEntries, commitEntries],
+	);
 	const touchEntry = useCallback(
 		async (id: string) => commitEntries(await mutations.touch(snapshotEntries(), id)),
 		[mutations, snapshotEntries, commitEntries],
@@ -1528,6 +1544,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteEntry,
 			deleteEntries,
 			setEntriesArchived,
+			setEntriesTags,
 			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,
@@ -1563,6 +1580,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			deleteEntry,
 			deleteEntries,
 			setEntriesArchived,
+			setEntriesTags,
 			touchEntry,
 			verifyMasterPassword,
 			verifyWithSecurityKey,

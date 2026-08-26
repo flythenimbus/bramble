@@ -34,10 +34,18 @@ export function FieldOutline({
 	label,
 	invalid,
 	notch,
+	className,
 }: {
 	label: ReactNode;
 	invalid?: boolean;
 	notch: FieldNotch;
+	/**
+	 * Extra border classes, for a composite field whose input is not this outline's `peer`.
+	 * The chip editor nests its input inside a scrolling row, so `peer-focus` can never
+	 * reach it and the field needs `group-focus-within` instead. Everything with a plain
+	 * input leaves this alone.
+	 */
+	className?: string;
 }) {
 	return (
 		<fieldset
@@ -46,6 +54,7 @@ export function FieldOutline({
 				"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
 				"peer-focus:border-primary",
 				invalid && "border-destructive peer-focus:border-destructive",
+				className,
 			)}
 		>
 			<legend

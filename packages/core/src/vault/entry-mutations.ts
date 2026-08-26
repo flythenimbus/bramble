@@ -16,6 +16,7 @@ import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 import { withPasswordChangelog } from "./password-changelog";
+import { normalizeTags, tagKey, tagsEqual } from "./tags";
 
 // Coalesce a burst of uses into one write.
 const USE_COALESCE_MS = 60_000;
@@ -54,6 +55,16 @@ export interface EntryMutations {
 	 * concurrent delete elsewhere still wins the merge.
 	 */
 	setArchived(current: VaultEntries, ids: string[], archived: boolean): Promise<VaultEntries>;
+	/**
+	 * Add and/or remove tags across a selection in one write. `remove` is matched by tag
+	 * key, so removing "work" also removes "Work". Entries whose tag list would not
+	 * actually change are skipped.
+	 */
+	setTags(
+		current: VaultEntries,
+		ids: string[],
+		change: { add?: string[]; remove?: string[] },
+	): Promise<VaultEntries>;
 	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
 	/**
@@ -191,6 +202,49 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		return persist({ entries, stamps, tombstones: current.tombstones });
 	};
 
+	// One write for the selection, like setArchived. Tags are not content in the sense
+	// `update` means: tagging fifty entries should not float all fifty to the top of
+	// "recently updated", so `updatedAt` is left alone here. (Editing tags through the
+	// entry form still goes via `update` and bumps it, because that saves the whole entry.)
+	const setTags = async (
+		current: VaultEntries,
+		ids: string[],
+		change: { add?: string[]; remove?: string[] },
+	): Promise<VaultEntries> => {
+		const add = normalizeTags(change.add) ?? [];
+		const removeKeys = new Set((change.remove ?? []).map(tagKey).filter(Boolean));
+		if (add.length === 0 && removeKeys.size === 0) return current;
+
+		const wanted = new Set(ids);
+		// Resolved up front so the map below is a pure application of an already-decided
+		// change, and so an all-no-op call returns before touching the clock.
+		const changed = new Map<string, string[] | undefined>();
+		for (const entry of current.entries) {
+			if (!wanted.has(entry.id)) continue;
+			const kept = (entry.tags ?? []).filter((t) => !removeKeys.has(tagKey(t)));
+			// Re-normalizing the concatenation is what makes adding an existing tag a no-op
+			// (dedupe by key) rather than a second copy of it.
+			const next = normalizeTags([...kept, ...add]);
+			if (!tagsEqual(entry.tags, next)) changed.set(entry.id, next);
+		}
+		if (changed.size === 0) return current;
+
+		const c = await clock();
+		const stamps = new Map(current.stamps);
+		const entries = current.entries.map((entry) => {
+			if (!changed.has(entry.id)) return entry;
+			stamps.set(entry.id, c.send());
+			const next = changed.get(entry.id);
+			// Dropped, not set to empty: an entry with no tags carries no key at all.
+			if (next === undefined) {
+				const { tags: _tags, ...rest } = entry;
+				return rest as Entry;
+			}
+			return { ...entry, tags: next };
+		});
+		return persist({ entries, stamps, tombstones: current.tombstones });
+	};
+
 	return {
 		readEntriesPayload,
 		writeEntriesBlob,
@@ -298,6 +352,8 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 		removeMany,
 
 		setArchived,
+
+		setTags,
 
 		sealAll,
 	};

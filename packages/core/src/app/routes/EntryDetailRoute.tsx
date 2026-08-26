@@ -50,6 +50,9 @@ export function EntryDetailRoute() {
 					navigate({ to: "/vault" });
 				}}
 				onSetArchived={(archived) => setEntriesArchived([entryId], archived)}
+				// The tag filter lives in `q`, so picking a tag is just a search: one source of
+				// truth, and the resulting URL is the same one typing `#tag` would produce.
+				onSelectTag={(tag) => navigate({ to: "/vault", search: { q: `#${tag}` } })}
 				onUse={() => void touchEntry(entryId)}
 			/>
 		</div>

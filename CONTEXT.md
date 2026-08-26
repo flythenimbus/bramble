@@ -34,6 +34,18 @@ module-level concepts that name good seams.
   archived and live as disjoint views rather than a filter over one list
   (`VaultSearch.archived`), so an archived entry can never be mistaken for a live
   one in a list the user fills from.
+- **Tags** — free-form labels on an entry (`tags?: string[]`), the vault's organisation
+  axis. Every rule about them lives in `core/vault/tags.ts` and nowhere else: tags display
+  as typed but compare case-insensitively (`tagKey`), whitespace is hyphenated so every
+  stored tag is reachable by the whitespace-delimited `#tag` search syntax, and
+  `normalizeTags` is the single gate that entry forms, bulk actions, four importers and
+  the KDBX mapper all go through. `allTags` is the vault's vocabulary, offered as
+  suggestions in both the search box and the editor so spellings don't drift into `work`
+  / `Work` / `wrok`. Filtering is `#tag` inside the existing `q` search param rather than
+  a param of its own, so clicking a tag and typing one produce the same URL. Like
+  Archived, they are an ordinary field on the encrypted entry: no format change, and
+  convergence through the same merge as any edit. They stay OUT of the autofill index,
+  which matches pages, not organisation.
 - **EntriesBlobStore** — the single reader/writer of the on-disk entries format
   for the adapter context (`core/vault/entries-blob.ts`). `writeEntriesBlob(payload)`
   encrypts an `EntriesPayload` under the VEK, preserves the slot list, and writes the

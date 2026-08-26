@@ -77,6 +77,7 @@ function setup() {
 					onEditEntry={() => {}}
 					onDeleteEntry={async () => {}}
 					onUseEntry={() => {}}
+					tags={[]}
 					statsCollapsed
 					onToggleStats={() => {}}
 				/>

@@ -53,7 +53,7 @@ Entry *fields* have the same property one layer in. A decrypted entry is JSON,
 `normalizeEntryData` returns the parsed object rather than a schema-stripped
 copy, and `entryDataSchema` is a gate at the write seam rather than a transform,
 so a key an older build has never heard of survives being read, edited and
-written back by it. That is what let `archivedAt` ship without a format bump.
+written back by it. That is what let `archivedAt` and `tags` ship without a format bump.
 
 The cost is worth stating plainly: an older build preserves the field but does
 not act on it, so between the release that adds a field and the one a given

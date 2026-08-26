@@ -19,6 +19,7 @@ const baseEntryFields = {
 	updatedAt: z.number().optional(),
 	lastUsedAt: z.number().optional(),
 	archivedAt: z.number().optional(),
+	tags: z.array(z.string()).optional(),
 };
 
 // Mirror of PasskeyCredential. Kept in lockstep with the interface in useVault.

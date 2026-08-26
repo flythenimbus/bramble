@@ -38,6 +38,8 @@ export interface VaultListItem {
 	lastUsedAt?: number;
 	/** Archived entries are listed only in the archive view; see VaultSearch.archived. */
 	archived: boolean;
+	/** Lowercased tag keys, for the `#tag` filter. Rows themselves don't show tags. */
+	tagKeys?: string[];
 }
 
 interface VaultHomeProps {
@@ -56,6 +58,8 @@ interface VaultHomeProps {
 	 */
 	entries: Entry[];
 	onUseEntry: (id: string) => void;
+	/** The vault's tag vocabulary, for the search bar's `#` suggestions. */
+	tags: string[];
 	/** Home stats row: collapsed state + toggle, both persisted in prefs. */
 	statsCollapsed: boolean;
 	onToggleStats: () => void;
@@ -73,6 +77,7 @@ export function VaultHome({
 	onDeleteEntry,
 	entries,
 	onUseEntry,
+	tags,
 	statsCollapsed,
 	onToggleStats,
 }: VaultHomeProps) {
@@ -131,6 +136,7 @@ export function VaultHome({
 				search={search}
 				onChange={onSearchChange}
 				archivedCount={archivedCount}
+				tags={tags}
 				trailing={<AddDropdown onCreate={onCreate} />}
 			/>
 

@@ -32,6 +32,21 @@ describe("entryContentKey", () => {
 		expect(entryContentKey(stored(login({ archivedAt: 5000 })))).toBe(entryContentKey(login()));
 	});
 
+	// An import can seed tags, but they are curated locally afterwards. A hand-added tag
+	// must not make the source file look like a brand-new entry on re-import.
+	it("ignores tags", () => {
+		expect(entryContentKey(stored(login({ tags: ["work"] })))).toBe(entryContentKey(login()));
+	});
+
+	// The cost of treating tags and archived state as metadata, stated plainly: an import
+	// can ADD entries but can never UPDATE one that is already there. Re-importing a source
+	// file whose entries have since been tagged or archived brings in nothing at all.
+	it("treats a re-import carrying new tags/archived state as an entire duplicate", () => {
+		const already = [stored(login())];
+		const incoming = [login({ tags: ["work"] })];
+		expect(splitAlreadyImported(already, incoming)).toEqual({ fresh: [], duplicates: 1 });
+	});
+
 	it("survives key reordering, since stored entries are rebuilt on read", () => {
 		const a = { type: "note", name: "x", notes: "y" } as EntryData;
 		const b = { notes: "y", name: "x", type: "note" } as EntryData;

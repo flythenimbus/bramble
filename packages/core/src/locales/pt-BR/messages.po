@@ -49,6 +49,14 @@ msgstr "{0, plural, one {Excluir # entrada?} other {Excluir # entradas?}}"
 msgid "{0} · added {1}"
 msgstr "{0} · adicionado em {1}"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "{affected, plural, one {Tag # entry} other {Tag # entries}}"
+msgstr "{affected, plural, one {Adicionar tag a # entrada} other {Adicionar tag a # entradas}}"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "{affected, plural, one {Untag # entry} other {Untag # entries}}"
+msgstr "{affected, plural, one {Remover tag de # entrada} other {Remover tag de # entradas}}"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "{appName} recovery code"
 msgstr "Código de recuperação {appName}"
@@ -180,6 +188,11 @@ msgstr "Adicionar um dispositivo"
 msgid "Add a new login"
 msgstr "Adicionar um novo login"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Add a tag"
+msgstr "Adicionar uma tag"
+
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Add a vault"
 msgstr "Adicionar um cofre"
@@ -204,6 +217,10 @@ msgstr "Adicionar campo"
 msgid "Add New"
 msgstr "Adicionar Novo"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Add tag"
+msgstr "Adicionar tag"
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Add the desktop's vault"
 msgstr "Adicionar o cofre do desktop"
@@ -215,6 +232,11 @@ msgstr "Adicionar os sites que este login cobre. Deixe em branco se as credencia
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add URL"
 msgstr "Adicionar URL"
+
+#. placeholder {0}: next.length
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Added tag {added}. {0} tags."
+msgstr "Tag {added} adicionada. {0} tags."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
@@ -1079,6 +1101,10 @@ msgstr "Insira seu endereço WebDAV e uma senha de aplicativo para sua conta."
 msgid "eTLD+1 (default, matches all subdomains)"
 msgstr "eTLD+1 (padrão, corresponde a todos os subdomínios)"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Every selected entry already has this tag."
+msgstr "Todas as entradas selecionadas já têm esta tag."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Everything in that transfer is already in your vault, so there is nothing to import."
 msgstr "Tudo naquela transferência já está no seu cofre, portanto não há nada para importar."
@@ -1090,6 +1116,10 @@ msgstr "Tudo neste arquivo já está no seu cofre, portanto não há nada para i
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Exact hostname only"
 msgstr "Apenas o nome de host exato"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Existing tags"
+msgstr "Tags existentes"
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "Expires"
@@ -1604,6 +1634,10 @@ msgstr "Senha mestra definida."
 msgid "Master password updated."
 msgstr "Senha mestre atualizada."
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Matching tags"
+msgstr "Tags correspondentes"
+
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Mode"
 msgstr "Modo"
@@ -1723,6 +1757,10 @@ msgstr "Nenhuma transferência está aguardando. Inicie uma no outro aplicativo 
 #: packages/core/src/hooks/useVault.tsx
 msgid "No vault is selected."
 msgstr "Nenhum cofre selecionado."
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "None of the selected entries have this tag."
+msgstr "Nenhuma das entradas selecionadas tem esta tag."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Nostr relay URL"
@@ -2007,6 +2045,10 @@ msgstr "Aponte a câmera para o código em seu outro dispositivo"
 msgid "Press Enter / submit the form right after the credentials are filled in."
 msgstr "Pressione Enter / envie o formulário logo após preencher as credenciais."
 
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Press Enter or comma to add a tag. Press the left arrow to move into the tags you have already added, then Backspace to remove one. Press the down arrow for suggestions."
+msgstr "Pressione Enter ou vírgula para adicionar uma tag. Pressione a seta para a esquerda para navegar até as tags já adicionadas e Backspace para remover uma. Pressione a seta para baixo para ver sugestões."
+
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "private key"
 msgstr "Chave privada"
@@ -2097,6 +2139,10 @@ msgstr "Remover {0}"
 msgid "Remove {host} from never-save list"
 msgstr "Remover {host} da lista de nunca salvar"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Remove a tag"
+msgstr "Remover uma tag"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Remove field"
 msgstr "Remover campo"
@@ -2105,9 +2151,26 @@ msgstr "Remover campo"
 msgid "Remove passkey"
 msgstr "Remover chave de acesso"
 
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Remove tag"
+msgstr "Remover tag"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Remove tag {tag}"
+msgstr "Remover a tag {tag}"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
 msgstr "Remover URL"
+
+#. placeholder {0}: tags.length - 1
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Removed tag {removed}. {0} tags."
+msgstr "Tag {removed} removida. {0} tags."
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Removing…"
+msgstr "Removendo…"
 
 #. placeholder {0}: formatDateTimeExact(change.changedAt)
 #: packages/core/src/app/entry-modes/login.tsx
@@ -2399,6 +2462,10 @@ msgstr "Mostrar número do cartão"
 msgid "Show CVV"
 msgstr "Mostrar CVV"
 
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Show everything tagged {tag}"
+msgstr "Mostrar tudo com a tag {tag}"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Show matching logins above the keyboard for one-tap autofill."
 msgstr "Mostrar os logins correspondentes acima do teclado para preenchimento automático com um toque."
@@ -2535,6 +2602,22 @@ msgstr "Sincronizado · {0} dispositivos"
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "System"
 msgstr "Sistema"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tag"
+msgstr "Tag"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tag to remove"
+msgstr "Tag a remover"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tagging…"
+msgstr "Adicionando tag…"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Tags"
+msgstr "Tags"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Take a backup first, from Backups, so you have a copy that still opens."
@@ -2722,6 +2805,10 @@ msgstr "Este dispositivo pode ser desbloqueado com {name}."
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This domain and its subdomains"
 msgstr "Este domínio e seus subdomínios"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "This entry has as many tags as it can hold."
+msgstr "Esta entrada atingiu o limite de tags."
 
 #. placeholder {0}: res.skipped
 #: packages/core/src/app/screens/Import/ImportShell.tsx

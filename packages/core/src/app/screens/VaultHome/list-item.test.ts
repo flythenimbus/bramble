@@ -54,6 +54,17 @@ describe("toListItem", () => {
 		expect(toListItem(login({ archivedAt: 5000 }), true).archived).toBe(true);
 	});
 
+	// The `#tag` filter reads these; a projection that dropped them would silently make
+	// every tag search return nothing.
+	it("projects lowercased tag keys for the search filter", () => {
+		expect(toListItem(login({ tags: ["Work", "Bank"] }), true).tagKeys).toEqual(["work", "bank"]);
+		expect(toListItem(login(), true).tagKeys).toBeUndefined();
+	});
+
+	it("folds tags into the search text, so a plain word finds them too", () => {
+		expect(toListItem(login({ tags: ["Payroll"] }), true).searchText).toContain("payroll");
+	});
+
 	it("still hides the breach badge when breach checks are off", () => {
 		const breached = login({ breach: { leaked: true, checkedAt: 1 } });
 		expect(toListItem(breached, true).leaked).toBe(true);

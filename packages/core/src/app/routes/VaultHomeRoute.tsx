@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { isLogin, useVault } from "../../hooks/useVault";
+import { allTags } from "../../vault/tags";
 import { toListItem } from "../screens/VaultHome/list-item";
 import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
 import { DEFAULT_SEARCH, type VaultSearch } from "../screens/VaultHome/vault-search";
@@ -51,6 +52,11 @@ export function VaultHomeRoute() {
 		};
 	}, [shell, entries]);
 
+	// The vault's tag vocabulary, for the search bar's `#` suggestions. Taken from ALL
+	// entries, archived included: an archived entry is still tagged, and the archive view
+	// shares the same search box.
+	const tags = useMemo(() => allTags(entries), [entries]);
+
 	// Project each entry into a list row via its mode descriptor (type-agnostic).
 	const items = useMemo<VaultListItem[]>(
 		() => entries.map((entry) => toListItem(entry, showBreaches)),
@@ -86,6 +92,7 @@ export function VaultHomeRoute() {
 			onDeleteEntry={deleteEntry}
 			entries={entries}
 			onUseEntry={(entryId) => void touchEntry(entryId)}
+			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
 		/>

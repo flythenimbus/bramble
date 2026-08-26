@@ -6,12 +6,20 @@ import {
 	ListFilter,
 	type LucideIcon,
 	Search,
+	Tag,
 } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { tagKey } from "../../../vault/tags";
 import { Button } from "../../components/ui/button";
 import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
 import { TextField } from "../../components/ui/text-field";
-import type { SortKey, TypeFilter, VaultSearch } from "./vault-search";
+import {
+	completeTagFragment,
+	type SortKey,
+	type TypeFilter,
+	trailingTagFragment,
+	type VaultSearch,
+} from "./vault-search";
 
 interface VaultSearchBarProps {
 	search: VaultSearch;
@@ -23,6 +31,8 @@ interface VaultSearchBarProps {
 	 * action lives.
 	 */
 	archivedCount: number;
+	/** The vault's tag vocabulary, offered while the user is typing a `#` token. */
+	tags: string[];
 	/** Rendered to the right of the search input (the add-entry control). */
 	trailing?: ReactNode;
 }
@@ -77,10 +87,22 @@ function SelectPill<T extends string>({
 	);
 }
 
-/** Vault-list controls: text search, a type filter, the sort order, and the archive toggle. */
-export function VaultSearchBar({ search, onChange, archivedCount, trailing }: VaultSearchBarProps) {
+/** Vault-list controls: text search, tag suggestions, a type filter, the sort order, and the archive toggle. */
+export function VaultSearchBar({
+	search,
+	onChange,
+	archivedCount,
+	tags,
+	trailing,
+}: VaultSearchBarProps) {
 	const { t } = useLingui();
 	const chipStrip = useScrollEdges<HTMLDivElement>();
+	const menuId = useId();
+	const wrapRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
+	const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+	// Dismissal is per-query: typing again is a new intent, so the menu comes back.
+	const [dismissed, setDismissed] = useState(false);
 
 	const typeOptions: { value: TypeFilter; label: string }[] = [
 		{ value: "all", label: t`All` },
@@ -107,17 +129,116 @@ export function VaultSearchBar({ search, onChange, archivedCount, trailing }: Va
 		strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
 	}, [search.type, chipStrip.ref]);
 
+	// Only while the caret is inside a `#` token, and only tags that extend it. A trailing
+	// space ends the token, so the list clears once the tag is committed.
+	const fragment = trailingTagFragment(search.q);
+	const tagSuggestions =
+		fragment === null ? [] : tags.filter((tag) => tagKey(tag).startsWith(fragment)).slice(0, 8);
+	const menuOpen = tagSuggestions.length > 0 && !dismissed;
+
+	// Escape and an outside click put the menu away without touching the query, so a user
+	// who wants to keep typing `#wo` as literal text is not fighting a panel.
+	useEffect(() => {
+		if (!menuOpen) return;
+		const onPointer = (e: MouseEvent) => {
+			if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setDismissed(true);
+		};
+		document.addEventListener("mousedown", onPointer);
+		return () => document.removeEventListener("mousedown", onPointer);
+	}, [menuOpen]);
+
+	const pick = (tag: string) => {
+		onChange({ q: completeTagFragment(search.q, tag) });
+		inputRef.current?.focus();
+	};
+
+	const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+		if (!menuOpen) return;
+		if (e.key === "ArrowDown") {
+			e.preventDefault();
+			itemRefs.current[0]?.focus();
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			setDismissed(true);
+		}
+	};
+
+	const onItemKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
+		switch (e.key) {
+			case "ArrowDown":
+				e.preventDefault();
+				itemRefs.current[Math.min(tagSuggestions.length - 1, index + 1)]?.focus();
+				break;
+			case "ArrowUp":
+				e.preventDefault();
+				// Up from the first item is back to the query, not a wrap to the bottom:
+				// the input is what this menu belongs to.
+				if (index === 0) inputRef.current?.focus();
+				else itemRefs.current[index - 1]?.focus();
+				break;
+			case "Escape":
+				e.preventDefault();
+				setDismissed(true);
+				inputRef.current?.focus();
+				break;
+			default:
+				break;
+		}
+	};
+
 	return (
 		<div className="mb-4 space-y-2.5">
 			<div className="flex gap-2 items-stretch">
-				<div className="flex-1">
+				<div className="relative flex-1" ref={wrapRef}>
 					<TextField
+						ref={inputRef}
 						label={t`Search vault`}
 						type="text"
 						value={search.q}
-						onChange={(e) => onChange({ q: e.target.value })}
+						onChange={(e) => {
+							setDismissed(false);
+							onChange({ q: e.target.value });
+						}}
+						onKeyDown={onSearchKeyDown}
 						startAdornment={<Search className="w-4 h-4" />}
+						aria-haspopup="menu"
+						aria-expanded={menuOpen}
+						aria-controls={menuOpen ? menuId : undefined}
 					/>
+
+					{menuOpen && (
+						// Overlays the row below rather than displacing it, so the filters don't
+						// jump down the moment a `#` is typed. Panel styling matches the app's
+						// DropdownMenu; the trigger here is the caret, not a button, which is
+						// why it can't reuse that component outright.
+						<div
+							id={menuId}
+							role="menu"
+							aria-label={t`Matching tags`}
+							className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10"
+						>
+							{/* Capped and scrolled on the inner element so the panel keeps its
+							    rounded corners while the list clips. */}
+							<div className="max-h-[125px] overflow-y-auto overscroll-contain">
+								{tagSuggestions.map((tag, index) => (
+									<button
+										key={tagKey(tag)}
+										ref={(el) => {
+											itemRefs.current[index] = el;
+										}}
+										type="button"
+										role="menuitem"
+										onClick={() => pick(tag)}
+										onKeyDown={(e) => onItemKeyDown(e, index)}
+										className="flex w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left text-xs transition-colors last:border-b-0 hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:outline-none"
+									>
+										<Tag className="w-3 h-3 shrink-0 text-muted-foreground" />
+										{tag}
+									</button>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 				{trailing}
 			</div>

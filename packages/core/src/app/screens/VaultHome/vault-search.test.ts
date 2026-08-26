@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+	completeTagFragment,
 	DEFAULT_SEARCH,
 	filterAndSortEntries,
+	parseQuery,
 	queryTokens,
 	type SearchableEntry,
+	trailingTagFragment,
 	type VaultSearch,
 	vaultSearchSchema,
 } from "./vault-search";
@@ -65,6 +68,48 @@ describe("filterAndSortEntries", () => {
 		expect(
 			filterAndSortEntries(items, search({ archived: true, type: "card" })).map((i) => i.name),
 		).toEqual(["Old card"]);
+	});
+
+	it("filters by tag when the query carries a #token", () => {
+		const items = [
+			item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" }),
+			item({ name: "Netflix", tagKeys: ["home"], searchText: "netflix" }),
+		];
+		expect(filterAndSortEntries(items, search({ q: "#work" })).map((i) => i.name)).toEqual([
+			"Payroll",
+		]);
+	});
+
+	it("ANDs a tag filter with the free text beside it", () => {
+		const items = [
+			item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" }),
+			item({ name: "Jira", tagKeys: ["work"], searchText: "jira" }),
+		];
+		expect(filterAndSortEntries(items, search({ q: "#work jira" })).map((i) => i.name)).toEqual([
+			"Jira",
+		]);
+	});
+
+	it("ANDs two tag filters, so they narrow rather than widen", () => {
+		const items = [
+			item({ name: "Both", tagKeys: ["work", "urgent"], searchText: "both" }),
+			item({ name: "One", tagKeys: ["work"], searchText: "one" }),
+		];
+		expect(filterAndSortEntries(items, search({ q: "#work #urgent" })).map((i) => i.name)).toEqual([
+			"Both",
+		]);
+	});
+
+	// The result list must not empty out while the user is halfway through typing a tag.
+	it("matches a tag by prefix", () => {
+		const items = [item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" })];
+		expect(filterAndSortEntries(items, search({ q: "#wo" }))).toHaveLength(1);
+		expect(filterAndSortEntries(items, search({ q: "#wx" }))).toHaveLength(0);
+	});
+
+	it("drops an entry with no tags at all from a tag search", () => {
+		const items = [item({ name: "Untagged", searchText: "untagged" })];
+		expect(filterAndSortEntries(items, search({ q: "#work" }))).toHaveLength(0);
 	});
 
 	it("filters by type before matching text", () => {
@@ -174,5 +219,44 @@ describe("tokenizer", () => {
 	it("tokenizes on whitespace and lowercases", () => {
 		expect(queryTokens("  Alice   GitHub ")).toEqual(["alice", "github"]);
 		expect(queryTokens("")).toEqual([]);
+	});
+});
+
+describe("parseQuery", () => {
+	it("splits #tokens from free text", () => {
+		expect(parseQuery("#work github alice")).toEqual({
+			text: ["github", "alice"],
+			tags: ["work"],
+		});
+	});
+
+	// A bare "#" is a user mid-word, not a filter matching every tag.
+	it("ignores a bare hash", () => {
+		expect(parseQuery("# github")).toEqual({ text: ["github"], tags: [] });
+	});
+
+	it("lowercases both sides", () => {
+		expect(parseQuery("#Work GitHub")).toEqual({ text: ["github"], tags: ["work"] });
+	});
+});
+
+describe("tag completion", () => {
+	it("reports the #fragment under the caret", () => {
+		expect(trailingTagFragment("github #wo")).toBe("wo");
+		expect(trailingTagFragment("#wo")).toBe("wo");
+	});
+
+	// A trailing space means the token is finished; suggesting against it would leave the
+	// list open after the tag was already chosen.
+	it("reports nothing once the token is closed by a space", () => {
+		expect(trailingTagFragment("#work ")).toBeNull();
+		expect(trailingTagFragment("github")).toBeNull();
+		expect(trailingTagFragment("")).toBeNull();
+	});
+
+	it("replaces the fragment in place and leaves room for the next term", () => {
+		expect(completeTagFragment("github #wo", "work")).toBe("github #work ");
+		expect(completeTagFragment("#wo", "work")).toBe("#work ");
+		expect(completeTagFragment("", "work")).toBe("#work ");
 	});
 });

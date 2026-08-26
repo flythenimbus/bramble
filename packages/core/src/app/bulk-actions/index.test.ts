@@ -43,10 +43,12 @@ describe("availableBulkActions", () => {
 		expect(availableBulkActions(noSave).map((a) => a.id)).not.toContain("export");
 	});
 
-	// Archive, restore and delete all act on the vault alone; only export needs a platform
-	// that can write a file.
+	// Tagging, archiving and deleting all act on the vault alone; only export needs a
+	// platform that can write a file.
 	it("keeps the vault-only actions everywhere, since they need nothing from the platform", () => {
 		expect(availableBulkActions(platform({}, {})).map((a) => a.id)).toEqual([
+			"add-tag",
+			"remove-tag",
 			"archive",
 			"restore",
 			"delete",
