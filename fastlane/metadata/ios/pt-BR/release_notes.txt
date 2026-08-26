@@ -1,6 +1,8 @@
-O que há de novo nesta versão:
+Novidades desta versão:
 
-- A sincronização de dispositivos agora mostra se cada um dos dispositivos emparelhados confirmou a própria identidade aos demais e indica os que ainda não o fizeram. Um dispositivo confirma a própria identidade na próxima vez que o Bramble for aberto nele; assim, o aviso desaparece por conta própria.
-- Espaçamento mais compacto acima da lista do cofre em telas sensíveis ao toque, deixando mais espaço na tela para suas entradas.
+- Marque suas entradas com tags e encontre-as novamente com uma única tecla: digite #trabalho na caixa de pesquisa para ver tudo que está marcado com a tag trabalho. A caixa sugere as tags que você já usa, para que não se transformem em quase duplicatas.
+- Arquive as entradas que você parou de usar em vez de excluí-las. Uma entrada arquivada permanece no seu cofre e nas suas exportações, mas sai da lista e nunca é oferecida para preenchimento automático; você pode restaurá-la quando quiser.
+- As importações agora incluem sua organização. Exportações CSV do LastPass podem ser lidas diretamente, e pastas do LastPass, grupos do KeePass, tags do 1Password, pastas e coleções do Bitwarden e cofres do Proton chegam como tags. Tudo o que você arquivou no Bitwarden permanece arquivado.
+- O editor de login agrupa o nome de usuário, a senha e a chave do autenticador sob um título próprio, para que não pareçam mais parte da lista de sites.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

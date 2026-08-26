@@ -1,6 +1,8 @@
 What's new in this release:
 
-- Device sync now shows whether each of your paired devices has confirmed its identity to the others, and flags any that have not. A device confirms itself the next time you open Bramble on it, so the flag clears on its own.
-- Tighter spacing above the vault list on touch, leaving more of the screen for your entries.
+- Tag your entries, then find them again in one keystroke: type #work in the search box to see everything tagged work. The box suggests the tags you already use, so they don't drift into near-duplicates.
+- Archive entries you have stopped using instead of deleting them. An archived entry stays in your vault and in your exports but leaves the list and is never offered for autofill, and you can restore it whenever you like.
+- Imports now bring your organisation with them. LastPass CSV exports can be read directly, and folders from LastPass, groups from KeePass, tags from 1Password, folders and collections from Bitwarden and vaults from Proton all arrive as tags. Anything you archived in Bitwarden stays archived.
+- The login editor groups the username, password and authenticator key under a heading of their own, so they no longer read as part of the website list.
 
 No account, no cloud. Everything stays on your devices.

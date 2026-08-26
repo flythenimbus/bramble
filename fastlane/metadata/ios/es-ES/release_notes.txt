@@ -1,6 +1,8 @@
 Novedades de esta versión:
 
-- La sincronización de dispositivos ahora muestra si cada uno de sus dispositivos vinculados ha confirmado su identidad ante los demás y marca los que aún no lo han hecho. Un dispositivo se confirma la próxima vez que se abre Bramble en él, de modo que la marca desaparece por sí sola.
-- Espaciado más compacto sobre la lista de la caja fuerte en pantallas táctiles, lo que deja más espacio en pantalla para sus entradas.
+- Etiquete sus entradas y encuéntrelas de nuevo con una sola pulsación: escriba #trabajo en el cuadro de búsqueda para ver todas las entradas etiquetadas como trabajo. El cuadro sugiere las etiquetas que ya usa, para que no se conviertan en casi duplicados.
+- Archive las entradas que haya dejado de usar en lugar de eliminarlas. Una entrada archivada permanece en su caja fuerte y en sus exportaciones, pero desaparece de la lista y nunca se ofrece para autocompletar; puede restaurarla cuando quiera.
+- Las importaciones ahora incluyen su organización. Los archivos CSV exportados de LastPass se pueden leer directamente, y las carpetas de LastPass, los grupos de KeePass, las etiquetas de 1Password, las carpetas y colecciones de Bitwarden y las cajas fuertes de Proton llegan todas como etiquetas. Todo lo que haya archivado en Bitwarden permanece archivado.
+- El editor de inicios de sesión agrupa el nombre de usuario, la contraseña y la clave de autenticación bajo un encabezado propio, de modo que ya no se confunden con la lista de sitios web.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

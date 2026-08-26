@@ -1,6 +1,8 @@
 Novità di questa versione:
 
-- La sincronizzazione dei dispositivi ora mostra se ciascuno dei dispositivi associati ha confermato la propria identità agli altri e segnala quelli che non lo hanno fatto. Un dispositivo conferma la propria identità alla successiva apertura di Bramble su di esso, quindi la segnalazione scompare da sola.
-- Spaziatura più compatta sopra l'elenco del vault sui dispositivi touch, lasciando più spazio sullo schermo per le voci.
+- Taggare le voci e ritrovarle con una sola battitura: digitare #work nella casella di ricerca per vedere tutti gli elementi con il tag work. La casella suggerisce i tag già usati, così non si creano quasi duplicati.
+- Archiviare le voci che non si usano più invece di eliminarle. Una voce archiviata resta nel vault e nelle esportazioni, ma scompare dall'elenco e non viene mai proposta per la compilazione automatica; è possibile ripristinarla in qualsiasi momento.
+- Le importazioni ora mantengono l'organizzazione dei dati. Le esportazioni CSV di LastPass possono essere lette direttamente; le cartelle di LastPass, i gruppi di KeePass, i tag di 1Password, le cartelle e le raccolte di Bitwarden e i vault di Proton arrivano tutti come tag. Tutto ciò che è stato archiviato in Bitwarden rimane archiviato.
+- L'editor di accesso raggruppa il nome utente, la password e la chiave dell'autenticatore sotto un'intestazione dedicata, in modo che non siano più considerati parte dell'elenco dei siti web.
 
 Nessun account, nessun cloud. Tutto rimane sui dispositivi.

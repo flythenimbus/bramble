@@ -1,6 +1,8 @@
 Neu in dieser Version:
 
-- Der Geräte-Sync zeigt jetzt an, ob jedes Ihrer gekoppelten Geräte seine Identität gegenüber den anderen bestätigt hat, und markiert Geräte, bei denen das nicht der Fall ist. Ein Gerät bestätigt sich selbst, sobald Sie Bramble das nächste Mal auf dem Gerät öffnen; die Markierung verschwindet dann von selbst.
-- Kompaktere Abstände oberhalb der Tresorliste auf Touch-Geräten, sodass mehr Platz auf dem Bildschirm für Ihre Einträge bleibt.
+- Versehen Sie Ihre Einträge mit Tags und finden Sie sie dann mit einem Tastendruck wieder: Geben Sie #work in das Suchfeld ein, um alles zu sehen, was mit work getaggt ist. Das Feld schlägt die bereits verwendeten Tags vor, sodass sie nicht zu Beinahe-Duplikaten werden.
+- Archivieren Sie Einträge, die Sie nicht mehr verwenden, anstatt sie zu löschen. Ein archivierter Eintrag bleibt in Ihrem Tresor und in Ihren Exporten erhalten, verschwindet aber aus der Liste und wird nie für Autofill angeboten. Sie können ihn jederzeit wiederherstellen.
+- Importe bringen jetzt Ihre Organisation mit. LastPass-CSV-Exporte können direkt gelesen werden, und Ordner aus LastPass, Gruppen aus KeePass, Tags aus 1Password, Ordner und Sammlungen aus Bitwarden sowie Tresore aus Proton kommen alle als Tags an. Alles, was Sie in Bitwarden archiviert haben, bleibt archiviert.
+- Der Anmelde-Editor gruppiert Benutzername, Passwort und Authentifizierungsschlüssel unter einer eigenen Überschrift, sodass sie nicht mehr als Teil der Website-Liste erscheinen.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

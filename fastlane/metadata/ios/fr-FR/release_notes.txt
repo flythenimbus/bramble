@@ -1,6 +1,8 @@
 Nouveautés de cette version :
 
-- La synchronisation des appareils indique désormais si chacun de vos appareils associés a confirmé son identité auprès des autres appareils et signale ceux qui ne l’ont pas encore fait. Un appareil confirme son identité la prochaine fois que vous ouvrez Bramble sur cet appareil, puis le signalement disparaît de lui-même.
-- Espacement réduit au-dessus de la liste du coffre-fort sur les écrans tactiles, laissant plus de place à vos entrées.
+- Étiquetez vos entrées, puis retrouvez-les en une seule frappe : saisissez #travail dans le champ de recherche pour voir tout ce qui est étiqueté « travail ». Le champ suggère les étiquettes que vous utilisez déjà, afin d’éviter les quasi-doublons.
+- Archivez les entrées que vous n’utilisez plus au lieu de les supprimer. Une entrée archivée reste dans votre coffre et dans vos exports, mais disparaît de la liste et n’est jamais proposée pour le remplissage automatique. Vous pouvez la restaurer à tout moment.
+- Les imports conservent désormais votre organisation. Les exports CSV de LastPass peuvent être lus directement, et les dossiers de LastPass, les groupes de KeePass, les étiquettes de 1Password, les dossiers et collections de Bitwarden ainsi que les coffres de Proton arrivent tous sous forme d’étiquettes. Tout ce que vous avez archivé dans Bitwarden reste archivé.
+- L’éditeur d’identifiant regroupe le nom d’utilisateur, le mot de passe et la clé d’authentification sous un en-tête dédié, afin qu’ils ne soient plus perçus comme faisant partie de la liste des sites web.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.
