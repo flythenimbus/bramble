@@ -100,3 +100,33 @@ describe("parseProtonPass", () => {
 		expect(res.imported[0]).toMatchObject({ expMonth: "3", expYear: "2027" });
 	});
 });
+
+describe("parseProtonPass tags", () => {
+	// Proton organises by vault, which is the closest thing its export has to a tag.
+	it("tags each item with the vault it came from", () => {
+		const res = parseProtonPass(
+			ppx({
+				vaults: {
+					v1: {
+						name: "Work",
+						items: [{ state: 1, data: { type: "login", metadata: { name: "Jira" }, content: {} } }],
+					},
+				},
+			}),
+		);
+		expect(res.imported[0]?.tags).toEqual(["Work"]);
+	});
+
+	it("leaves tags off when the vault is unnamed", () => {
+		const res = parseProtonPass(
+			ppx({
+				vaults: {
+					v1: {
+						items: [{ state: 1, data: { type: "login", metadata: { name: "Jira" }, content: {} } }],
+					},
+				},
+			}),
+		);
+		expect(res.imported[0]?.tags).toBeUndefined();
+	});
+});

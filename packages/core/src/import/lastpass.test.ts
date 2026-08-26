@@ -237,12 +237,13 @@ describe("SSH keys", () => {
 });
 
 describe("folders", () => {
-	it("keeps the folder path as a field and says it did", () => {
+	// One tag per level, not the raw path: an entry in "Dev\\Hosting" should be findable by
+	// #dev as well as #hosting, which a single joined tag could not do.
+	it("imports the folder path as one tag per level and says it did", () => {
 		const res = parseLastPass(csv("https://x.example,a,b,,,X,Dev\\Hosting,0"));
-		expect(fields(res.imported[0] as LoginEntryData).Folder).toBe("Dev\\Hosting");
-		expect(res.warnings).toEqual([
-			'1 item(s) were in a LastPass folder, kept as a "Folder" field because Bramble has no folders yet.',
-		]);
+		expect(res.imported[0]?.tags).toEqual(["Dev", "Hosting"]);
+		expect(fields(res.imported[0] as LoginEntryData).Folder).toBeUndefined();
+		expect(res.warnings).toEqual(["1 item(s) were in a LastPass folder, imported as tags."]);
 	});
 
 	it("says nothing when no entry was in a folder", () => {

@@ -5,6 +5,7 @@ import { base64UrlToBase64, base64UrlToBytes, bytesToBase64, hexToBytes } from "
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
 import { COSE_ES256 } from "../vault/passkey";
+import { normalizeTags } from "../vault/tags";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportParserContext, ImportResult } from "./types";
 
@@ -20,6 +21,8 @@ const itemSchema = z.object({
 	name: z.string().nullish(),
 	notes: z.string().nullish(),
 	creationDate: z.string().nullish(),
+	folderId: z.string().nullish(),
+	collectionIds: z.array(z.string()).nullish(),
 	fields: z.array(fieldSchema).nullish(),
 	login: z
 		.object({
@@ -46,7 +49,15 @@ const itemSchema = z.object({
 	identity: z.record(z.string(), z.unknown()).nullish(),
 	sshKey: z.object({ privateKey: z.string().nullish(), publicKey: z.string().nullish() }).nullish(),
 });
-const exportSchema = z.object({ items: z.array(itemSchema) });
+// `folders` and `collections` are the id -> name lookups for an item's folderId /
+// collectionIds. Personal exports carry folders; organisation exports carry collections.
+const exportSchema = z.object({
+	items: z.array(itemSchema),
+	folders: z.array(z.object({ id: z.string().nullish(), name: z.string().nullish() })).nullish(),
+	collections: z
+		.array(z.object({ id: z.string().nullish(), name: z.string().nullish() }))
+		.nullish(),
+});
 
 // Validate credentials independently so one malformed child never rejects its parent login.
 const passkeySchema = z.object({
@@ -310,9 +321,21 @@ export async function parseBitwarden(
 	const importedAt = Date.now();
 	const tally: ConversionTally = { converted: 0, failed: 0 };
 
+	// Bitwarden's two organisational axes, both by id. A name we can't resolve is dropped
+	// rather than tagged with a raw UUID, which would be noise the user can't act on.
+	const nameById = new Map<string, string>();
+	for (const f of [...(parsed.data.folders ?? []), ...(parsed.data.collections ?? [])]) {
+		if (f.id && f.name) nameById.set(f.id, f.name);
+	}
+
 	for (const item of parsed.data.items) {
 		const name = item.name ?? "";
 		const notes = item.notes || undefined;
+		const tags = normalizeTags(
+			[item.folderId, ...(item.collectionIds ?? [])]
+				.map((id) => (id ? nameById.get(id) : undefined))
+				.filter((n): n is string => !!n),
+		);
 		const fields = mapFields(item.fields);
 		const createdAt = parseDate(item.creationDate);
 
@@ -335,6 +358,7 @@ export async function parseBitwarden(
 				type: "login",
 				name,
 				notes,
+				tags,
 				urls,
 				username: login.username ?? "",
 				password: login.password ?? "",
@@ -351,6 +375,7 @@ export async function parseBitwarden(
 				type: "card",
 				name,
 				notes,
+				tags,
 				cardholderName: card.cardholderName ?? "",
 				number,
 				brand: card.brand || cardBrand(number),
@@ -367,6 +392,7 @@ export async function parseBitwarden(
 				type: "ssh-key",
 				name,
 				notes,
+				tags,
 				publicKey,
 				privateKey,
 				keyType: deriveKeyType(publicKey, privateKey),
@@ -384,6 +410,7 @@ export async function parseBitwarden(
 				type: "note",
 				name,
 				notes,
+				tags,
 				customFields: toCustomFields([...fields, ...identity]),
 			});
 		}

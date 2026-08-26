@@ -58,3 +58,45 @@ describe("parseKeePass", () => {
 		expect(() => parseKeePass("<other/>")).toThrow();
 	});
 });
+
+const NESTED_XML = `<?xml version="1.0" encoding="utf-8"?>
+<KeePassFile><Root>
+  <Group><Name>MyDatabase</Name>
+    <Group><Name>Work</Name>
+      <Group><Name>Clients</Name>
+        <Entry>
+          <Tags>urgent,billing</Tags>
+          <String><Key>Title</Key><Value>Acme</Value></String>
+        </Entry>
+      </Group>
+    </Group>
+  </Group>
+</Root></KeePassFile>`;
+
+describe("parseKeePass tags", () => {
+	// Groups are the only organisation a KeePass database has, and they used to be
+	// flattened away entirely. One tag per level, so an entry buried three deep is
+	// findable by any folder above it.
+	it("turns the group path into one tag per level, skipping the database root", () => {
+		const [entry] = parseKeePass(NESTED_XML).imported;
+		expect(entry?.tags).toEqual(expect.arrayContaining(["Work", "Clients"]));
+		expect(entry?.tags).not.toContain("MyDatabase");
+	});
+
+	it("reads KeePass's own comma-separated Tags element", () => {
+		const [entry] = parseKeePass(NESTED_XML).imported;
+		expect(entry?.tags).toEqual(expect.arrayContaining(["urgent", "billing"]));
+	});
+
+	it("leaves tags off an entry in the root group with no Tags element", () => {
+		expect(parseKeePass(XML).imported[0]?.tags).toBeUndefined();
+	});
+
+	// They are tags now, so they must not ALSO show up as custom fields.
+	it("does not leak Tags or Group into custom fields", () => {
+		const [entry] = parseKeePass(NESTED_XML).imported;
+		const keys = (entry?.customFields ?? []).map((f) => f.key);
+		expect(keys).not.toContain("Tags");
+		expect(keys).not.toContain("Group");
+	});
+});

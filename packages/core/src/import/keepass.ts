@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EntryData } from "../hooks/useVault";
+import { normalizeTags } from "../vault/tags";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
@@ -7,7 +8,7 @@ import type { ImportResult } from "./types";
 // pairs plus a History subtree of past revisions we must NOT import.
 const FORMAT_ERROR = "This doesn't look like a KeePass 2.x XML export.";
 const RECYCLE_BIN = "Recycle Bin";
-const STANDARD_KEYS = new Set(["Title", "UserName", "Password", "URL", "Notes"]);
+const STANDARD_KEYS = new Set(["Title", "UserName", "Password", "URL", "Notes", "Tags", "Group"]);
 
 // fast-xml-parser yields an object for a single child, an array for repeated.
 function toArray<T>(v: T | T[] | undefined): T[] {
@@ -25,6 +26,8 @@ interface XmlString {
 }
 interface XmlEntry {
 	String?: XmlString | XmlString[];
+	/** KeePass's own tag element, comma-separated. */
+	Tags?: string;
 }
 interface XmlGroup {
 	Name?: string;
@@ -38,12 +41,23 @@ function readValue(value: string | XmlValue | undefined): { text: string; hidden
 	return { text: value["#text"] ?? "", hidden: value["@_ProtectInMemory"] === "True" };
 }
 
+/** An entry plus the group path it was found under, which the mapper turns into tags. */
+interface FoundEntry {
+	entry: XmlEntry;
+	path: string[];
+}
+
 // Collect entries from a group tree, skipping the Recycle Bin. History entries
 // nest under Entry.History.Entry, never Group.Entry, so walking groups excludes them.
-function collectEntries(group: XmlGroup): XmlEntry[] {
+//
+// The group path travels with each entry rather than being flattened away: groups are the
+// only organisation a KeePass database has, and dropping them was the whole reason an
+// imported vault arrived unsorted.
+function collectEntries(group: XmlGroup, parents: string[] = []): FoundEntry[] {
 	if (group.Name === RECYCLE_BIN) return [];
-	const here = toArray(group.Entry);
-	const nested = toArray(group.Group).flatMap(collectEntries);
+	const path = group.Name ? [...parents, group.Name] : parents;
+	const here = toArray(group.Entry).map((entry) => ({ entry, path }));
+	const nested = toArray(group.Group).flatMap((g) => collectEntries(g, path));
 	return [...here, ...nested];
 }
 
@@ -56,6 +70,11 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 	let notes = "";
 	let totp: string | undefined;
 	const extras: RawField[] = [];
+	// KeePass organises entirely by group, and its `<Tags>` element is the closest thing
+	// it has to ours. Both arrive as synthetic String pairs (see TAGS_KEY / GROUP_KEY in
+	// core-rust/src/kdbx.rs) and both become tags, so a database's organisation survives
+	// the import instead of being flattened away.
+	const tags: string[] = [];
 
 	for (const { key, value, hidden } of fields) {
 		switch (key) {
@@ -84,6 +103,14 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 				break;
 			case "TOTP Settings":
 				break; // companion to TOTP Seed (period/digits), not needed
+			case "Tags":
+				// KeePass joins its tags with commas (and tolerates semicolons).
+				tags.push(...value.split(/[,;]/));
+				break;
+			case "Group":
+				// One tag per level, so "Work/Clients/Acme" is findable by any of them.
+				tags.push(...value.split("/"));
+				break;
 			default:
 				if (!STANDARD_KEYS.has(key)) extras.push({ key, value, hidden });
 		}
@@ -99,14 +126,21 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 		password,
 		totp: totp || undefined,
 		customFields: toCustomFields(extras),
+		tags: normalizeTags(tags),
 	};
 }
 
-function mapEntry(entry: XmlEntry): EntryData {
+function mapEntry({ entry, path }: FoundEntry): EntryData {
 	const fields: RawField[] = toArray(entry.String).map((s) => {
 		const { text, hidden } = readValue(s.Value);
 		return { key: String(s.Key ?? ""), value: text, hidden };
 	});
+	// Handed to the mapper as the same synthetic pairs the .kdbx path produces, so both
+	// formats reach `mapKeepassFields` looking identical.
+	if (entry.Tags) fields.push({ key: "Tags", value: entry.Tags, hidden: false });
+	// Skip the root group: it names the database, not a folder inside it.
+	const folders = path.slice(1).join("/");
+	if (folders) fields.push({ key: "Group", value: folders, hidden: false });
 	return mapKeepassFields(fields);
 }
 
@@ -128,7 +162,7 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 	const root = parsed?.KeePassFile?.Root;
 	if (!root) throw new Error(FORMAT_ERROR);
 
-	const entries = toArray(root.Group).flatMap(collectEntries);
+	const entries = toArray(root.Group).flatMap((g) => collectEntries(g));
 	const imported = entries.map(mapEntry);
 	return summarize(imported, 0, []);
 }

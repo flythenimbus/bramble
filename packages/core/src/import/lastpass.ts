@@ -6,6 +6,7 @@
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
+import { normalizeTags } from "../vault/tags";
 import { assertFormat, headerLabels, LASTPASS_CSV } from "./csv-format";
 import {
 	asText,
@@ -291,7 +292,7 @@ const CARD_FIELDS = ["Name on Card", "Number", "Security Code", "Expiration Date
 const SSH_FIELDS = ["Public Key", "Private Key", "Passphrase"];
 
 /** Map a typed secure note onto the closest vault type, falling back to a note with custom fields. */
-function fromNoteBlock(block: NoteBlock, name: string, folder: RawField[]): EntryData {
+function fromNoteBlock(block: NoteBlock, name: string, tags: string[] | undefined): EntryData {
 	const f = block.fields;
 	const notes = block.notes || undefined;
 
@@ -311,7 +312,8 @@ function fromNoteBlock(block: NoteBlock, name: string, folder: RawField[]): Entr
 			brand,
 			...splitExpiry(f.get("Expiration Date") ?? ""),
 			cvv: f.get("Security Code") ?? "",
-			customFields: toCustomFields([...leftovers(f, used), ...folder]),
+			customFields: toCustomFields(leftovers(f, used)),
+			tags,
 		};
 	}
 
@@ -326,7 +328,8 @@ function fromNoteBlock(block: NoteBlock, name: string, folder: RawField[]): Entr
 			privateKey,
 			passphrase: f.get("Passphrase") || undefined,
 			keyType: deriveKeyType(publicKey, privateKey),
-			customFields: toCustomFields([...leftovers(f, SSH_FIELDS), ...folder]),
+			customFields: toCustomFields(leftovers(f, SSH_FIELDS)),
+			tags,
 		};
 	}
 
@@ -334,7 +337,8 @@ function fromNoteBlock(block: NoteBlock, name: string, folder: RawField[]): Entr
 		type: "note",
 		name,
 		notes,
-		customFields: toCustomFields([...leftovers(f, []), ...folder]),
+		customFields: toCustomFields(leftovers(f, [])),
+		tags,
 	};
 }
 
@@ -376,16 +380,17 @@ export function parseLastPass(raw: string | Uint8Array): ImportResult {
 			continue;
 		}
 
-		// The vault has no folders, so the path is kept as a field rather than dropped.
-		const folder: RawField[] = grouping ? [{ key: "Folder", value: grouping }] : [];
-		if (grouping) foldered++;
+		// LastPass folders nest with backslashes ("Work\\Clients"). One tag per level, so an
+		// entry deep in a tree is findable by any folder above it.
+		const tags = normalizeTags(grouping.split("\\"));
+		if (tags) foldered++;
 
 		if (url === SECURE_NOTE_URL) {
 			const block = parseNoteBlock(extra);
 			imported.push(
 				block
-					? fromNoteBlock(block, name, folder)
-					: { type: "note", name, notes: extra || undefined, customFields: toCustomFields(folder) },
+					? fromNoteBlock(block, name, tags)
+					: { type: "note", name, notes: extra || undefined, tags },
 			);
 			continue;
 		}
@@ -400,14 +405,12 @@ export function parseLastPass(raw: string | Uint8Array): ImportResult {
 			password,
 			// Either a bare base32 secret or a full otpauth:// URI; parseTotp accepts both.
 			totp: totp || undefined,
-			customFields: toCustomFields(folder),
+			tags,
 		});
 	}
 
 	if (foldered > 0) {
-		warnings.push(
-			`${foldered} item(s) were in a LastPass folder, kept as a "Folder" field because Bramble has no folders yet.`,
-		);
+		warnings.push(`${foldered} item(s) were in a LastPass folder, imported as tags.`);
 	}
 	return summarize(imported, skipped, warnings);
 }

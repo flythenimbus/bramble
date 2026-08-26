@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { CardEntryData, EntryData, LoginEntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
+import { normalizeTags } from "../vault/tags";
 import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
@@ -31,6 +32,7 @@ const itemSchema = z.object({
 			title: z.string().nullish(),
 			url: z.string().nullish(),
 			urls: z.array(z.object({ label: z.string().nullish(), url: z.string().nullish() })).nullish(),
+			tags: z.array(z.string()).nullish(),
 		})
 		.nullish(),
 	details: z
@@ -236,20 +238,26 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 			for (const item of vault.items ?? []) {
 				const name = item.overview?.title ?? "";
 				const notes = item.details?.notesPlain || undefined;
+				// 1Password's own tags, mapped straight across. Applied after the mapper
+				// rather than threaded through all four of them, since it is the same for
+				// every category.
+				const tags = normalizeTags(item.overview?.tags);
+				let entry: EntryData;
 				switch (item.categoryUuid) {
 					case CAT_LOGIN:
 					case CAT_PASSWORD:
-						imported.push(mapLogin(item, name, notes));
+						entry = mapLogin(item, name, notes);
 						break;
 					case CAT_CARD:
-						imported.push(mapCard(item, name, notes));
+						entry = mapCard(item, name, notes);
 						break;
 					case CAT_SSH_KEY:
-						imported.push(mapSshKey(item, name, notes));
+						entry = mapSshKey(item, name, notes);
 						break;
 					default:
-						imported.push(mapNote(item, name, notes));
+						entry = mapNote(item, name, notes);
 				}
+				imported.push(tags ? { ...entry, tags } : entry);
 			}
 		}
 	}

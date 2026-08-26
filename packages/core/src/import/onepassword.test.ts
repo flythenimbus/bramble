@@ -94,3 +94,41 @@ describe("parseOnePassword", () => {
 		expect(() => parseOnePassword(bad)).toThrow();
 	});
 });
+
+describe("parseOnePassword tags", () => {
+	// 1Password's tags are the feature this whole thing mirrors, so they map straight over.
+	it("carries an item's tags across", () => {
+		const res = parseOnePassword(
+			pux(
+				items({
+					categoryUuid: "001",
+					overview: { title: "GitHub", tags: ["work", "dev"] },
+					details: { loginFields: [{ designation: "username", value: "octo" }] },
+				}),
+			),
+		);
+		expect(res.imported[0]?.tags).toEqual(["work", "dev"]);
+	});
+
+	// Tags are per-item, not per-category: a note must get them as readily as a login.
+	it("applies them whatever the item category maps to", () => {
+		const res = parseOnePassword(
+			pux(
+				items({
+					categoryUuid: "003",
+					overview: { title: "Note", tags: ["archive-me"] },
+					details: { notesPlain: "n" },
+				}),
+			),
+		);
+		expect(res.imported[0]?.type).toBe("note");
+		expect(res.imported[0]?.tags).toEqual(["archive-me"]);
+	});
+
+	it("leaves tags off an untagged item", () => {
+		const res = parseOnePassword(
+			pux(items({ categoryUuid: "003", overview: { title: "Note" }, details: {} })),
+		);
+		expect(res.imported[0]?.tags).toBeUndefined();
+	});
+});

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
+import { normalizeTags } from "../vault/tags";
 import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
 import type { ImportResult } from "./types";
 
@@ -81,6 +82,8 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 	const warnings: string[] = [];
 
 	for (const vault of Object.values(parsed.vaults)) {
+		// Proton organises by vault, which is the closest thing its export has to a tag.
+		const tags = normalizeTags([vault.name]);
 		for (const item of vault.items ?? []) {
 			if (item.state === STATE_TRASHED) continue;
 			const d = item.data ?? {};
@@ -110,6 +113,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 						type: "login",
 						name,
 						notes,
+						tags,
 						urls,
 						username,
 						password: content.password ?? "",
@@ -131,6 +135,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 						type: "card",
 						name,
 						notes,
+						tags,
 						cardholderName: content.cardholderName ?? "",
 						number,
 						brand: cardBrand(number),
@@ -142,7 +147,13 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 					break;
 				}
 				case "note":
-					imported.push({ type: "note", name, notes, customFields: toCustomFields(extra) });
+					imported.push({
+						type: "note",
+						name,
+						notes,
+						tags,
+						customFields: toCustomFields(extra),
+					});
 					break;
 				default:
 					// identity / unknown types: a note folding content + extras in.
@@ -150,6 +161,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 						type: "note",
 						name,
 						notes,
+						tags,
 						customFields: toCustomFields([
 							...Object.entries(content).map(([key, value]) => ({
 								key,

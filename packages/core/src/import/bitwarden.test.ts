@@ -488,3 +488,47 @@ describe("parseBitwarden", () => {
 		expect(res.imported).toHaveLength(1);
 	});
 });
+
+describe("parseBitwarden tags", () => {
+	// Bitwarden's two organisational axes, both stored on the item as ids that only the
+	// top-level `folders` / `collections` lists can resolve.
+	it("resolves folder and collection ids to names and tags with them", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({
+				folders: [{ id: "f1", name: "Work" }],
+				collections: [{ id: "c1", name: "Shared" }],
+				items: [
+					{
+						type: 1,
+						name: "GitHub",
+						folderId: "f1",
+						collectionIds: ["c1"],
+						login: { username: "octo", password: "pw" },
+					},
+				],
+			}),
+			context,
+		);
+		expect(res.imported[0]?.tags).toEqual(["Work", "Shared"]);
+	});
+
+	// A raw UUID is noise the user cannot act on, so an unresolvable id is dropped.
+	it("drops an id with no matching name rather than tagging with a UUID", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 1,
+						name: "GitHub",
+						folderId: "missing-id",
+						login: { username: "octo", password: "pw" },
+					},
+				],
+			}),
+			context,
+		);
+		expect(res.imported[0]?.tags).toBeUndefined();
+	});
+});
