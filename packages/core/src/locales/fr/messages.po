@@ -951,6 +951,10 @@ msgstr "Application de bureau"
 msgid "Desktop vault"
 msgstr "Coffre du bureau"
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Details"
+msgstr "Détails"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Code d’accès de l’appareil"

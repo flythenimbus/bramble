@@ -951,6 +951,10 @@ msgstr "Aplicación de escritorio"
 msgid "Desktop vault"
 msgstr "Bóveda del escritorio"
 
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Details"
+msgstr "Detalles"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Código del dispositivo"

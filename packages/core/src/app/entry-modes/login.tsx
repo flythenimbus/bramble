@@ -208,127 +208,141 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				)}
 			</div>
 
-			<TextField
-				label={t`Username or email`}
-				type="text"
-				autoComplete="off"
-				{...register("username")}
-			/>
-
+			{/* The credential itself. Without a heading of their own these read as
+			    children of the Websites group above: a headed group visually claims
+			    everything under it until the next heading. */}
 			<div>
-				<TextField
-					label={t`Password`}
-					type={showPassword ? "text" : "password"}
-					autoComplete="off"
-					endAdornment={
-						<>
-							<Button
-								variant="ghost"
-								size="none"
-								onClick={generatePassword}
-								className="p-1.5 rounded-md"
-								aria-label={t`Generate password`}
-							>
-								<RefreshCw className="w-3.5 h-3.5" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="none"
-								onClick={() => setShowPassword(!showPassword)}
-								className="p-1.5 rounded-md"
-								aria-label={showPassword ? t`Hide password` : t`Show password`}
-							>
-								{showPassword ? (
-									<EyeOff className="w-3.5 h-3.5" />
-								) : (
-									<Eye className="w-3.5 h-3.5" />
-								)}
-							</Button>
-						</>
-					}
-					{...register("password")}
-				/>
+				<span className="block text-sm mb-2">
+					<Trans>Details</Trans>
+				</span>
+				<div className="space-y-3">
+					<TextField
+						label={t`Username or email`}
+						type="text"
+						autoComplete="off"
+						{...register("username")}
+					/>
 
-				{strength && (
-					<div className="mt-2.5">
-						<div className="flex items-center justify-between mb-1.5">
-							<span className="text-xs text-muted-foreground">
-								<Trans>Password strength</Trans>
-							</span>
-							<span
-								className={`text-xs ${
-									isBreached ? "text-destructive" : strengthTextColor(strength.id)
-								}`}
-							>
-								{isBreached ? t`Breached` : strength.value}
-							</span>
-						</div>
-						<div className="h-1.5 bg-muted rounded-full overflow-hidden">
-							<div
-								className={`h-full transition-all duration-300 ${
-									isBreached ? "bg-destructive" : strengthBar(strength.id)
-								}`}
-								style={{
-									width: isBreached ? "5%" : `${((strength.id + 1) / 4) * 100}%`,
-								}}
-							/>
-						</div>
+					<div>
+						<TextField
+							label={t`Password`}
+							type={showPassword ? "text" : "password"}
+							autoComplete="off"
+							endAdornment={
+								<>
+									<Button
+										variant="ghost"
+										size="none"
+										onClick={generatePassword}
+										className="p-1.5 rounded-md"
+										aria-label={t`Generate password`}
+									>
+										<RefreshCw className="w-3.5 h-3.5" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="none"
+										onClick={() => setShowPassword(!showPassword)}
+										className="p-1.5 rounded-md"
+										aria-label={showPassword ? t`Hide password` : t`Show password`}
+									>
+										{showPassword ? (
+											<EyeOff className="w-3.5 h-3.5" />
+										) : (
+											<Eye className="w-3.5 h-3.5" />
+										)}
+									</Button>
+								</>
+							}
+							{...register("password")}
+						/>
+
+						{strength && (
+							<div className="mt-2.5">
+								<div className="flex items-center justify-between mb-1.5">
+									<span className="text-xs text-muted-foreground">
+										<Trans>Password strength</Trans>
+									</span>
+									<span
+										className={`text-xs ${
+											isBreached ? "text-destructive" : strengthTextColor(strength.id)
+										}`}
+									>
+										{isBreached ? t`Breached` : strength.value}
+									</span>
+								</div>
+								<div className="h-1.5 bg-muted rounded-full overflow-hidden">
+									<div
+										className={`h-full transition-all duration-300 ${
+											isBreached ? "bg-destructive" : strengthBar(strength.id)
+										}`}
+										style={{
+											width: isBreached ? "5%" : `${((strength.id + 1) / 4) * 100}%`,
+										}}
+									/>
+								</div>
+							</div>
+						)}
+
+						<Button
+							variant="secondary"
+							size="none"
+							onClick={generatePassword}
+							className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
+						>
+							<Sparkles className="w-3.5 h-3.5" />
+							<Trans>Generate strong password</Trans>
+						</Button>
 					</div>
-				)}
 
-				<Button
-					variant="secondary"
-					size="none"
-					onClick={generatePassword}
-					className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
-				>
-					<Sparkles className="w-3.5 h-3.5" />
-					<Trans>Generate strong password</Trans>
-				</Button>
-			</div>
-
-			<div>
-				<TextField
-					label={t`Authenticator key (TOTP)`}
-					type={showTotp ? "text" : "password"}
-					autoComplete="off"
-					endAdornment={
-						<>
-							<Button
-								variant="ghost"
-								size="none"
-								onClick={scanTotp}
-								disabled={totpScan.kind === "scanning"}
-								className="p-1.5 rounded-md"
-								aria-label={t`Scan QR code from current webpage`}
-								title={t`Scan authenticator QR code from current webpage`}
-							>
-								{totpScan.kind === "scanning" ? (
-									<Loader2 className="w-3.5 h-3.5 animate-spin" />
-								) : (
-									<Camera className="w-3.5 h-3.5" />
-								)}
-							</Button>
-							<Button
-								variant="ghost"
-								size="none"
-								onClick={() => setShowTotp((v) => !v)}
-								className="p-1.5 rounded-md"
-								aria-label={showTotp ? t`Hide authenticator key` : t`Show authenticator key`}
-							>
-								{showTotp ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-							</Button>
-						</>
-					}
-					{...register("totp")}
-				/>
-				<p
-					className={`text-xs mt-1.5 ${
-						totpScan.kind === "failed" ? "text-destructive" : "text-muted-foreground"
-					}`}
-				>
-					{scanHint()}
-				</p>
+					<div>
+						<TextField
+							label={t`Authenticator key (TOTP)`}
+							type={showTotp ? "text" : "password"}
+							autoComplete="off"
+							endAdornment={
+								<>
+									<Button
+										variant="ghost"
+										size="none"
+										onClick={scanTotp}
+										disabled={totpScan.kind === "scanning"}
+										className="p-1.5 rounded-md"
+										aria-label={t`Scan QR code from current webpage`}
+										title={t`Scan authenticator QR code from current webpage`}
+									>
+										{totpScan.kind === "scanning" ? (
+											<Loader2 className="w-3.5 h-3.5 animate-spin" />
+										) : (
+											<Camera className="w-3.5 h-3.5" />
+										)}
+									</Button>
+									<Button
+										variant="ghost"
+										size="none"
+										onClick={() => setShowTotp((v) => !v)}
+										className="p-1.5 rounded-md"
+										aria-label={showTotp ? t`Hide authenticator key` : t`Show authenticator key`}
+									>
+										{showTotp ? (
+											<EyeOff className="w-3.5 h-3.5" />
+										) : (
+											<Eye className="w-3.5 h-3.5" />
+										)}
+									</Button>
+								</>
+							}
+							{...register("totp")}
+						/>
+						<p
+							className={`text-xs mt-1.5 ${
+								totpScan.kind === "failed" ? "text-destructive" : "text-muted-foreground"
+							}`}
+						>
+							{scanHint()}
+						</p>
+					</div>
+				</div>
 			</div>
 
 			{passkeys.length > 0 && (

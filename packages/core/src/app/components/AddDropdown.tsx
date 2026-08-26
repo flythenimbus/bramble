@@ -41,9 +41,12 @@ export function AddDropdown({ onCreate }: AddDropdownProps) {
 				className="flex items-center gap-2 px-4 py-2 h-full"
 			>
 				<Plus className="w-4 h-4" />
-				{/* Dropped on a narrow screen: spelled out, this button takes half the
-					row and the search field next to it wraps its own label. */}
-				<span className="hidden sm:inline text-sm">
+				{/* Dropped only on a genuinely narrow screen: spelled out, this button takes
+					half the row and the search field next to it wraps its own label. The
+					threshold is 480px rather than the `sm` default of 640px, because the label
+					plus its icons is about 130px and anything above ~480px still leaves the
+					search field more than enough room. */}
+				<span className="hidden min-[480px]:inline text-sm">
 					<Trans>Add New</Trans>
 				</span>
 				<ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
