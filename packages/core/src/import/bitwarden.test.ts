@@ -489,6 +489,85 @@ describe("parseBitwarden", () => {
 	});
 });
 
+describe("parseBitwarden archived items", () => {
+	// Real exports carry `archivedDate`; Bitwarden's published import schema does not
+	// document it. Shape taken from an actual export.
+	const archivedItem = {
+		type: 1,
+		name: "accounts.firefox.com",
+		favorite: false,
+		reprompt: 0,
+		id: "83551d8a-858b-4546-8466-b47900fc74d9",
+		collectionIds: null,
+		notes: "n",
+		fields: [],
+		login: { uris: [{ uri: "https://accounts.firefox.com" }], password: "", totp: "otpauth://t" },
+		passwordHistory: [],
+		creationDate: "2026-06-30T15:19:09.940Z",
+		revisionDate: "2026-08-26T01:27:30.585Z",
+		archivedDate: "2026-08-26T01:27:30.585Z",
+	};
+
+	it("imports an archived item as archived rather than live", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(json({ items: [archivedItem] }), context);
+		expect(res.imported[0]?.archivedAt).toBe(Date.parse("2026-08-26T01:27:30.585Z"));
+	});
+
+	// Archived is retired, not deleted. Bitwarden already excludes trash from exports, so
+	// anything present was meant to be kept.
+	it("keeps the archived item rather than dropping it", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(json({ items: [archivedItem] }), context);
+		expect(res.imported).toHaveLength(1);
+		expect(res.imported[0]?.name).toBe("accounts.firefox.com");
+	});
+
+	it("leaves a live item unarchived", async () => {
+		const { context } = importContext();
+		const { archivedDate: _archivedDate, ...live } = archivedItem;
+		const res = await parseBitwarden(json({ items: [live] }), context);
+		expect(res.imported[0]?.archivedAt).toBeUndefined();
+	});
+
+	it("ignores an unparseable archivedDate instead of archiving on garbage", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({ items: [{ ...archivedItem, archivedDate: "not-a-date" }] }),
+			context,
+		);
+		expect(res.imported[0]?.archivedAt).toBeUndefined();
+	});
+
+	// Archiving is per item, not per type: a card or note must carry it as readily.
+	it("applies to every item type, not just logins", async () => {
+		const { context } = importContext();
+		const res = await parseBitwarden(
+			json({
+				items: [
+					{
+						type: 2,
+						name: "Note",
+						secureNote: { type: 0 },
+						archivedDate: "2026-08-26T01:00:00.000Z",
+					},
+					{
+						type: 3,
+						name: "Card",
+						card: { number: "4111111111111111" },
+						archivedDate: "2026-08-26T01:00:00.000Z",
+					},
+				],
+			}),
+			context,
+		);
+		expect(res.imported.map((e) => e.archivedAt)).toEqual([
+			Date.parse("2026-08-26T01:00:00.000Z"),
+			Date.parse("2026-08-26T01:00:00.000Z"),
+		]);
+	});
+});
+
 describe("parseBitwarden tags", () => {
 	// Bitwarden's two organisational axes, both stored on the item as ids that only the
 	// top-level `folders` / `collections` lists can resolve.

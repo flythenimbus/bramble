@@ -21,6 +21,10 @@ const itemSchema = z.object({
 	name: z.string().nullish(),
 	notes: z.string().nullish(),
 	creationDate: z.string().nullish(),
+	// Bitwarden's archive, present on an archived item. Undocumented in their published
+	// import schema but emitted by real exports, so it is read leniently like every other
+	// field here.
+	archivedDate: z.string().nullish(),
 	folderId: z.string().nullish(),
 	collectionIds: z.array(z.string()).nullish(),
 	fields: z.array(fieldSchema).nullish(),
@@ -338,6 +342,10 @@ export async function parseBitwarden(
 		);
 		const fields = mapFields(item.fields);
 		const createdAt = parseDate(item.creationDate);
+		// An archived item is retired, not deleted, so it imports as archived rather than
+		// either being dropped or coming back into the live list. Bitwarden excludes trash
+		// from exports entirely, so anything here was meant to be kept.
+		const archivedAt = parseDate(item.archivedDate);
 
 		if (item.type === 1) {
 			const login = item.login ?? {};
@@ -359,6 +367,7 @@ export async function parseBitwarden(
 				name,
 				notes,
 				tags,
+				archivedAt,
 				urls,
 				username: login.username ?? "",
 				password: login.password ?? "",
@@ -376,6 +385,7 @@ export async function parseBitwarden(
 				name,
 				notes,
 				tags,
+				archivedAt,
 				cardholderName: card.cardholderName ?? "",
 				number,
 				brand: card.brand || cardBrand(number),
@@ -393,6 +403,7 @@ export async function parseBitwarden(
 				name,
 				notes,
 				tags,
+				archivedAt,
 				publicKey,
 				privateKey,
 				keyType: deriveKeyType(publicKey, privateKey),
@@ -411,6 +422,7 @@ export async function parseBitwarden(
 				name,
 				notes,
 				tags,
+				archivedAt,
 				customFields: toCustomFields([...fields, ...identity]),
 			});
 		}
