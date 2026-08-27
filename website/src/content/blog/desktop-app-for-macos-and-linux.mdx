@@ -1,0 +1,117 @@
+---
+title: The desktop app is here, for macOS and Linux
+description: "Bramble now runs natively on macOS and Linux, in beta: a quick-access panel over everything, an always-on sync hub, backups that run while the vault is locked, and installs from Homebrew, apt, AppImage, .deb, .rpm or a Nix flake."
+pubDate: 2026-08-27
+---
+
+Bramble started as a browser extension, grew iOS and Android apps, and spent the whole time being
+asked one question more than any other: when does it get off the browser?
+
+It already has. The desktop app has been quietly shipping for a few weeks now, and 0.6.0 is a good
+moment for it to say hello properly. **macOS and Linux**, Windows coming soon.
+
+It is a **beta**, but with your feedback and support, it will reach 1.0 in no time. Everything below works and is
+in daily use, but the app is a great deal younger than the extension, so keep a backup and tell us when it does something funny.
+
+## Not a browser tab in a costume
+
+It is a real app, and **no, it is not Electron**. You are not installing a second copy of Chrome to
+look after your passwords. The window is the same Bramble you know, but your vault and every bit of
+cryptography live outside the browser engine entirely, in a part of the app that a web page could
+never reach.
+
+Here is what you actually get:
+
+- **A panel over everything else.** Cmd+Shift+Space (Ctrl+Shift+Space off macOS) and a search bar
+  appears on top of whatever you were doing. Find a login, copy the password, fill it into the
+  browser, or open it properly. Then it gets back out of your way.
+- **It fills your browser.** Pair the app with the Bramble extension once and the panel fills the
+  page in front of you. Nothing leaves your machine, and the extension carries on working fine on
+  its own if you never bother.
+- **An always-on sync hub.** Syncing needs two devices awake at the same moment, and two phones
+  rarely are. A computer usually is. Leave it in the tray and everything else has something to sync
+  with whenever it wakes up.
+- **Backups that run while the vault is locked.** Point it at an S3-compatible bucket or your own
+  WebDAV server and it uploads an encrypted backup on your schedule, whether or not you unlocked
+  anything that day.
+
+## Installing it on macOS
+
+[Grab the `.dmg`](https://github.com/flythenimbus/bramble/releases/download/0.6.0-desktop/Bramble_0.6.0_universal.dmg),
+open it, and drag Bramble to Applications.
+
+Or let Homebrew do it:
+
+```bash
+brew install --cask bramble
+```
+
+## Installing it on Linux
+
+### Debian, Ubuntu, and friends
+
+```bash
+curl -fsSL https://apt.bramble.sh/keys.asc | sudo tee /usr/share/keyrings/bramble-keyring.asc > /dev/null
+curl -fsSL https://apt.bramble.sh/bramble.sources | sudo tee /etc/apt/sources.list.d/bramble.sources > /dev/null
+sudo apt update && sudo apt install bramble
+```
+
+Three commands rather than one, because they are three separate decisions: trust our signing key,
+let it vouch for this repository and nothing else, then install. You will not be offered a
+`curl | sudo bash` here and told it is convenience.
+
+After that, `apt upgrade` carries Bramble along with the rest of your system. The APT route is
+x86_64 today; on arm64, take the `.deb` or the AppImage below.
+
+### One file, no package manager
+
+The AppImage runs on most distributions, and it is the Linux build that updates itself in place.
+
+```bash
+chmod +x Bramble_0.6.0_amd64.AppImage
+./Bramble_0.6.0_amd64.AppImage
+```
+
+There is an `aarch64` one sitting right beside it.
+
+### `.deb` and `.rpm`, by hand
+
+```bash
+sudo apt install ./Bramble_0.6.0_amd64.deb       # or Bramble_0.6.0_arm64.deb
+sudo dnf install ./Bramble-0.6.0-1.x86_64.rpm    # or Bramble-0.6.0-1.aarch64.rpm
+```
+
+Every artifact is on the
+[release page](https://github.com/flythenimbus/bramble/releases/tag/0.6.0-desktop), checksums
+included.
+
+### Nix and NixOS
+
+```bash
+nix profile install github:flythenimbus/bramble
+```
+
+Or `nix run github:flythenimbus/bramble` to try it without installing anything.
+
+## A word on updates
+
+The `.dmg` and the AppImage keep themselves up to date. The package-manager routes leave that to
+your package manager, which is the polite thing to do, so `apt upgrade` picks Bramble up with
+everything else and the app does not nag you about it.
+
+## What it cannot do yet
+
+Written down here rather than left for you to discover at an inconvenient moment: Touch ID unlock,
+passkeys, and KeePass import and export. All three already work elsewhere in Bramble, which is the
+good news and also exactly why they are conspicuous here.
+
+Further out, and not built yet anywhere: auto-type into windows that are not a browser, and an SSH
+agent that serves the SSH keys your vault is already storing.
+
+And **Windows**, which is on the way but not here yet. The browser extension works there today.
+
+Everything else is where it has always been. The vault sits on your devices, syncs directly between
+them, and there is no server holding it and no account to sign up for.
+
+[Download it](https://bramble.sh), or read the [source](https://github.com/flythenimbus/bramble).
+Questions welcome, as always.
