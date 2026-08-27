@@ -751,21 +751,21 @@ describe("content: deferred direct response cancellation", () => {
 		expect(submitFromField).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		"pointerdown",
-		"mousedown",
-	] as const)("cancels a scheduled submit on trusted %s after the fill intent is consumed", async (eventType) => {
-		vi.useFakeTimers();
-		const user = document.getElementById("user") as HTMLInputElement;
-		const pass = document.getElementById("pass") as HTMLInputElement;
-		scheduleAutoSubmit(user, pass);
+	it.each(["pointerdown", "mousedown"] as const)(
+		"cancels a scheduled submit on trusted %s after the fill intent is consumed",
+		async (eventType) => {
+			vi.useFakeTimers();
+			const user = document.getElementById("user") as HTMLInputElement;
+			const pass = document.getElementById("pass") as HTMLInputElement;
+			scheduleAutoSubmit(user, pass);
 
-		// jsdom never marks constructed pointer/mouse events trusted. Invoke the exact
-		// registered production listener with the otherwise-native event shape instead.
-		dispatchTrustedInteraction(eventType, pass);
-		await vi.advanceTimersByTimeAsync(50);
-		expect(submitFromField).not.toHaveBeenCalled();
-	});
+			// jsdom never marks constructed pointer/mouse events trusted. Invoke the exact
+			// registered production listener with the otherwise-native event shape instead.
+			dispatchTrustedInteraction(eventType, pass);
+			await vi.advanceTimersByTimeAsync(50);
+			expect(submitFromField).not.toHaveBeenCalled();
+		},
+	);
 
 	it("cancels a scheduled submit on trusted input", async () => {
 		vi.useFakeTimers();
@@ -844,22 +844,21 @@ describe("content: deferred direct response cancellation", () => {
 		focus.mockRestore();
 	});
 
-	it.each([
-		"disabled",
-		"readOnly",
-		"kind-changed",
-	])("cancels scheduled submit when its target is %s", async (state) => {
-		vi.useFakeTimers();
-		const user = document.getElementById("user") as HTMLInputElement;
-		const pass = document.getElementById("pass") as HTMLInputElement;
-		scheduleAutoSubmit(user, pass);
-		if (state === "disabled") pass.disabled = true;
-		else if (state === "readOnly") pass.readOnly = true;
-		else pass.type = "text";
-		invalidatePageFields();
-		await vi.advanceTimersByTimeAsync(50);
-		expect(submitFromField).not.toHaveBeenCalled();
-	});
+	it.each(["disabled", "readOnly", "kind-changed"])(
+		"cancels scheduled submit when its target is %s",
+		async (state) => {
+			vi.useFakeTimers();
+			const user = document.getElementById("user") as HTMLInputElement;
+			const pass = document.getElementById("pass") as HTMLInputElement;
+			scheduleAutoSubmit(user, pass);
+			if (state === "disabled") pass.disabled = true;
+			else if (state === "readOnly") pass.readOnly = true;
+			else pass.type = "text";
+			invalidatePageFields();
+			await vi.advanceTimersByTimeAsync(50);
+			expect(submitFromField).not.toHaveBeenCalled();
+		},
+	);
 
 	it("suppresses delayed submit when an interactive CAPTCHA appears late", () => {
 		vi.useFakeTimers();

@@ -311,7 +311,7 @@ describe("the clock a vault switch leaves behind", () => {
 
 		const second = writes.filter((w) => w.key === `sync.group:${SECOND.vault}`).at(-1);
 		expect(second, "the second vault was never backfilled").toBeDefined();
-		const stamped = (second?.value as { roster: RosterPayload }).roster.devices.find(
+		const stamped = (second!.value as { roster: RosterPayload }).roster.devices.find(
 			(d) => d.publicKey === SECOND.pub,
 		);
 		// The whole point: a clock cached from v1 would sign this with v1's device id.

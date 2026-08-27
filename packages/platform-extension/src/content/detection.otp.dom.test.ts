@@ -131,16 +131,14 @@ describe("otp: bare 'code' needs a code-shaped field behind it", () => {
 		expect(ids('<label for="a">Code</label><input id="a" type="text">')).toEqual([]);
 	});
 
-	it.each([
-		"gift code",
-		"referral code",
-		"discount code",
-		"voucher code",
-	])("rejects %s even when bounded", (label) => {
-		expect(ids(`<label for="a">${label}</label><input id="a" type="text" maxlength="6">`)).toEqual(
-			[],
-		);
-	});
+	it.each(["gift code", "referral code", "discount code", "voucher code"])(
+		"rejects %s even when bounded",
+		(label) => {
+			expect(
+				ids(`<label for="a">${label}</label><input id="a" type="text" maxlength="6">`),
+			).toEqual([]);
+		},
+	);
 });
 
 describe("otp: structural rungs (no readable hint at all)", () => {

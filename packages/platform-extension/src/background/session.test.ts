@@ -116,35 +116,35 @@ describe("CRYPTO_ session state sync", () => {
 		expect(bg.state.alarms[AUTOLOCK]).toBeUndefined();
 	});
 
-	it.each([
-		"CRYPTO_GENERATE_VEK",
-		"CRYPTO_UNWRAP_PASSWORD_SLOT",
-	])("does not resurrect a VEK or broadcast unlocked when held %s completes after lock", async (type) => {
-		let release: ((response: ReturnType<typeof defaultOffscreen>) => void) | undefined;
-		const bg = await loadBackground({
-			offscreen: (message) =>
-				message.type === type
-					? new Promise((resolve) => {
-							release = resolve;
-						})
-					: defaultOffscreen(message),
-			openTabs: [{ id: 1 }],
-		});
-		const pending = bg.send({ type });
-		await bg.flush();
-		expect(release).toBeTypeOf("function");
+	it.each(["CRYPTO_GENERATE_VEK", "CRYPTO_UNWRAP_PASSWORD_SLOT"])(
+		"does not resurrect a VEK or broadcast unlocked when held %s completes after lock",
+		async (type) => {
+			let release: ((response: ReturnType<typeof defaultOffscreen>) => void) | undefined;
+			const bg = await loadBackground({
+				offscreen: (message) =>
+					message.type === type
+						? new Promise((resolve) => {
+								release = resolve;
+							})
+						: defaultOffscreen(message),
+				openTabs: [{ id: 1 }],
+			});
+			const pending = bg.send({ type });
+			await bg.flush();
+			expect(release).toBeTypeOf("function");
 
-		await bg.send({ type: "CRYPTO_LOCK" });
-		release?.(defaultOffscreen({ type }));
-		expect((await pending).resp).toEqual({ ok: false, error: CRYPTO_SESSION_CHANGED });
-		expect(bg.state.session[VEK_KEY]).toBeUndefined();
-		expect(
-			bg.state.tabMessages.filter(
-				(message) =>
-					message.message.type === "VAULT_LOCK_STATE" && message.message.payload.locked === false,
-			),
-		).toHaveLength(0);
-	});
+			await bg.send({ type: "CRYPTO_LOCK" });
+			release?.(defaultOffscreen({ type }));
+			expect((await pending).resp).toEqual({ ok: false, error: CRYPTO_SESSION_CHANGED });
+			expect(bg.state.session[VEK_KEY]).toBeUndefined();
+			expect(
+				bg.state.tabMessages.filter(
+					(message) =>
+						message.message.type === "VAULT_LOCK_STATE" && message.message.payload.locked === false,
+				),
+			).toHaveLength(0);
+		},
+	);
 
 	it("serializes a held VEK persistence commit behind a later lock and rolls it back", async () => {
 		const bg = await loadBackground({ openTabs: [{ id: 1 }] });

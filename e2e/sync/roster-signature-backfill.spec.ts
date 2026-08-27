@@ -169,8 +169,10 @@ test("an unsigned device signs itself on unlock, and its peer converges on the s
 	const after = await readExtGroup(sw);
 	const own = after.group.roster.devices.find((d) => typeof d.sigKey === "string");
 	const wasOwn = before.group.roster.devices.find((d) => d.publicKey === own?.publicKey);
-	expect((own?.hlc as { wall: number }).wall).toBeGreaterThanOrEqual(
-		(wasOwn?.hlc as { wall: number }).wall,
+	expect(own, "no signed device in the roster after the backfill").toBeDefined();
+	expect(wasOwn, "the signed device was absent from the roster before").toBeDefined();
+	expect((own!.hlc as { wall: number }).wall).toBeGreaterThanOrEqual(
+		(wasOwn!.hlc as { wall: number }).wall,
 	);
 
 	// The payoff: that signature crossed a real relay, merged on the peer, and the peer's own UI
