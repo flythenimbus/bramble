@@ -3,8 +3,9 @@ import Mail from "@tabler/icons/outline/mail.svg";
 import { Button } from "@/components/starwind/button";
 import { BUTTONDOWN } from "@/consts";
 
-// Buttondown's embed endpoint. A plain form POST here needs no API key and
-// triggers no CORS preflight, so it works from a fully static build.
+// Buttondown's embed endpoint. It must be the action of a standard HTML form:
+// the response carries the CAPTCHA and validation flows the subscriber has to
+// follow, so it can never be submitted with fetch.
 const action = `https://buttondown.com/api/emails/embed-subscribe/${BUTTONDOWN.username}`;
 ---
 
@@ -23,14 +24,13 @@ const action = `https://buttondown.com/api/emails/embed-subscribe/${BUTTONDOWN.u
 			required, no tracking, and one click to unsubscribe.
 		</p>
 
-		{/* Works without JS: a native POST opens Buttondown's hosted confirm page
-		    in a new tab. With JS it's enhanced below into an inline no-cors submit. */}
+		{/* target="_blank" keeps this page open while Buttondown's response (CAPTCHA,
+		    validation errors, confirmation) renders in a new tab. */}
 		<form
-			data-newsletter
 			action={action}
 			method="post"
 			target="_blank"
-			class="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row"
+			class="embeddable-buttondown-form mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row"
 		>
 			<label for="newsletter-email" class="sr-only">Email address</label>
 			<input
@@ -43,52 +43,11 @@ const action = `https://buttondown.com/api/emails/embed-subscribe/${BUTTONDOWN.u
 				class="h-11 w-full flex-1 rounded-md border bg-background px-4 text-base shadow-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-outline focus-visible:ring-3 focus-visible:ring-outline/50"
 			/>
 			<input type="hidden" name="embed" value="1" />
-			<Button type="submit" class="shrink-0" data-newsletter-submit>Subscribe</Button>
+			<Button type="submit" class="shrink-0">Subscribe</Button>
 		</form>
 
-		<p
-			data-newsletter-status
-			role="status"
-			aria-live="polite"
-			class="mt-3 hidden text-sm text-muted-foreground"
-		>
+		<p class="mt-3 text-sm text-muted-foreground">
+			Subscribing opens a Buttondown tab to confirm your address.
 		</p>
 	</div>
 </section>
-
-<script>
-	// Progressive enhancement: submit in the background so the visitor stays on
-	// the page. Buttondown's embed endpoint doesn't send CORS headers, so we use
-	// a no-cors POST (fire-and-forget: the response is opaque, but the request
-	// still lands) and optimistically confirm. If fetch throws we fall back to
-	// the form's native POST, which navigates to Buttondown's hosted page.
-	const form = document.querySelector<HTMLFormElement>("[data-newsletter]");
-	const status = document.querySelector<HTMLParagraphElement>("[data-newsletter-status]");
-	const submit = form?.querySelector<HTMLButtonElement>("[data-newsletter-submit]");
-
-	form?.addEventListener("submit", async (event) => {
-		event.preventDefault();
-
-		const body = new URLSearchParams();
-		for (const [key, value] of new FormData(form)) {
-			if (typeof value === "string") body.append(key, value);
-		}
-
-		submit?.setAttribute("disabled", "");
-		try {
-			await fetch(form.action, { method: "POST", mode: "no-cors", body });
-			form.reset();
-			if (status) {
-				status.textContent =
-					"Thanks. Check your inbox to confirm your subscription.";
-				status.classList.remove("hidden");
-			}
-		} catch {
-			// Enhancement failed (offline, blocked fetch, etc.). Hand off to the
-			// browser's own submit so the subscriber still reaches Buttondown.
-			form.submit();
-		} finally {
-			submit?.removeAttribute("disabled");
-		}
-	});
-</script>
