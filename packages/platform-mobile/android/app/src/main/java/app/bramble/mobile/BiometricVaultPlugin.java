@@ -192,9 +192,11 @@ public class BiometricVaultPlugin extends Plugin {
                     @Override
                     public void onAuthenticationError(int code, CharSequence message) {
                         if (code == BiometricPrompt.ERROR_USER_CANCELED
-                                || code == BiometricPrompt.ERROR_NEGATIVE_BUTTON
-                                || code == BiometricPrompt.ERROR_CANCELED) {
+                                || code == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
                             call.reject("Cancelled", "cancelled");
+                        } else if (code == BiometricPrompt.ERROR_CANCELED) {
+                            // The OS pulled the prompt, not the user. The caller may ask again.
+                            call.reject("Interrupted", "interrupted");
                         } else {
                             call.reject(message.toString(), "auth-failed");
                         }

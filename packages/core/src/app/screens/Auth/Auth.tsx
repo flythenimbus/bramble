@@ -8,26 +8,36 @@ import {
 	Plus,
 	ScanFace,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { isBiometricCancel } from "../../../adapters/biometric";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
+import { usePrefs } from "../../../hooks/usePrefs";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
+import { StaleBiometricCacheError } from "../../../vault/biometric-unlock";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
+import { shouldAutoPromptBiometric } from "./auto-biometric";
 
 interface FormValues {
 	masterPassword: string;
 }
 
+// iOS refuses the gate for a beat after the app returns to the foreground, so an unasked
+// prompt gets a few tries before giving up (silently - the button is still there).
+const AUTO_PROMPT_ATTEMPTS = 4;
+const AUTO_PROMPT_RETRY_MS = 400;
+
 /** Vault unlock screen: master password, security key, and recovery-code paths. */
 export function Auth() {
 	const {
 		hasVault,
+		lockedByUser,
 		unlock,
 		hasPasswordSlot,
 		hasWebauthnSlot,
@@ -42,6 +52,7 @@ export function Auth() {
 		vaultError,
 	} = useVault();
 	const { shell } = usePlatform();
+	const { prefs } = usePrefs();
 	// Clearing the selection returns to the picker (the auth guard redirects to /select).
 	const { vaults, activeId, clearSelection } = useVaultRegistry();
 	const multipleVaults = vaults.length > 1;
@@ -57,10 +68,19 @@ export function Auth() {
 	const appName = shell.appName;
 	const onPopOut = canPopOut ? popOut : undefined;
 
-	// OS biometry can be turned off while backgrounded; re-probe on foreground so the button reflects it.
+	// OS biometry can be turned off while backgrounded; re-probe on foreground so the button
+	// reflects it. The same listener publishes visibility for the auto-prompt below.
+	const [visible, setVisible] = useState(() => document.visibilityState === "visible");
+	// The OS's own "the app is interactive", which the webview cannot see: on iOS the gate is
+	// refused for over a second after this screen starts painting. Hosts with no app lifecycle
+	// (extension, desktop) have no hook and are always active.
+	const [appActive, setAppActive] = useState(() => shell.onAppStateChange === undefined);
+	useEffect(() => shell.onAppStateChange?.(setAppActive), [shell]);
 	useEffect(() => {
 		const onVisible = () => {
-			if (document.visibilityState === "visible") void refreshBiometric();
+			const nowVisible = document.visibilityState === "visible";
+			setVisible(nowVisible);
+			if (nowVisible) void refreshBiometric();
 		};
 		document.addEventListener("visibilitychange", onVisible);
 		return () => document.removeEventListener("visibilitychange", onVisible);
@@ -113,17 +133,30 @@ export function Auth() {
 		}
 	};
 
-	const handleBiometric = async () => {
-		setBusy(true);
-		try {
-			await unlockWithBiometric();
-		} catch (e) {
-			// A user cancel surfaces here too; the password form stays available below.
-			setError("masterPassword", { message: cryptoError(e) });
-		} finally {
+	// Memoized, unlike its siblings: the auto-prompt effect below depends on it.
+	// "retry" means the gate never opened and is worth asking again; see the effect.
+	const handleBiometric = useCallback(
+		async (auto = false): Promise<"done" | "retry"> => {
+			setBusy(true);
+			try {
+				await unlockWithBiometric();
+			} catch (e) {
+				// A user cancel surfaces here too; the password form stays available below.
+				if (!auto || e instanceof StaleBiometricCacheError) {
+					setError("masterPassword", { message: cryptoError(e) });
+				} else if (!isBiometricCancel(e)) {
+					// Nothing the user asked for should leave an error on screen; they still have
+					// the button, which reports properly. A cancel is an answer, but a gate that
+					// never opened is not: iOS pulls the prompt for a beat after the app returns
+					// to the foreground. Stay busy so the retry does not flicker the label.
+					return "retry";
+				}
+			}
 			setBusy(false);
-		}
-	};
+			return "done";
+		},
+		[unlockWithBiometric, setError, cryptoError],
+	);
 
 	const handleRecovery = async (e: React.SyntheticEvent) => {
 		e.preventDefault();
@@ -154,6 +187,49 @@ export function Auth() {
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
 	const showBiometric = hasVault && biometricEnabled && biometricAvailable;
+	// Opt-in fast unlock: present the gate as soon as this screen is up, one attempt per mount
+	// (= per lock episode, since the guard bounces here on every lock). docs/auth-and-unlock.md.
+	const autoPromptedRef = useRef(false);
+	// The retry sequence outlives the effect that starts it: this effect re-runs on nearly every
+	// render (handleBiometric is rebuilt whenever Lingui's `t` is), and hanging the loop off its
+	// cleanup silently cancelled the retries after the first attempt.
+	const mountedRef = useRef(true);
+	useEffect(
+		() => () => {
+			mountedRef.current = false;
+		},
+		[],
+	);
+	useEffect(() => {
+		const fire = shouldAutoPromptBiometric({
+			enabled: prefs.biometricAutoPrompt,
+			offered: showBiometric,
+			lockedByUser,
+			visible,
+			appActive,
+			attempted: autoPromptedRef.current,
+		});
+		if (!fire) return;
+		// A hidden document is not rendered, so its rAF never runs: this holds the prompt until
+		// the app is genuinely painting, even in a webview that never reports hidden. The flag is
+		// set where it fires, so a re-render that cancels the frame reschedules.
+		let frame = requestAnimationFrame(() => {
+			frame = requestAnimationFrame(() => {
+				autoPromptedRef.current = true;
+				void (async () => {
+					// Painting is not the same as being able to present system UI: on iOS the gate
+					// is refused for a moment after a resume. Ask again rather than dropping the
+					// user on the password form they opted out of.
+					for (let i = 0; i < AUTO_PROMPT_ATTEMPTS && mountedRef.current; i++) {
+						if ((await handleBiometric(true)) === "done") return;
+						await new Promise((r) => setTimeout(r, AUTO_PROMPT_RETRY_MS));
+					}
+					if (mountedRef.current) setBusy(false); // gave up, silently: the button remains
+				})();
+			});
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [prefs.biometricAutoPrompt, showBiometric, lockedByUser, visible, appActive, handleBiometric]);
 	// Label/icon track the enrolled modality: Face ID gets its own icon, a passcode-only
 	// device (iOS, nothing enrolled) gets the lock, everything else the fingerprint.
 	const isFaceId = biometryType === "faceId" || biometryType === "opticId";
@@ -234,7 +310,7 @@ export function Auth() {
 										variant="primary"
 										size="lg"
 										fullWidth
-										onClick={handleBiometric}
+										onClick={() => void handleBiometric()}
 										disabled={busy}
 										className="text-sm"
 									>

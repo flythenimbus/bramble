@@ -230,6 +230,8 @@ const SECURITY_KEY_LABELS_PREF = "pref.securityKeyLabels";
 export interface VaultState {
 	hasVault: boolean;
 	isLocked: boolean;
+	/** The last lock came from the Lock button, not an auto-lock. Suppresses biometric auto-unlock. */
+	lockedByUser: boolean;
 	/** Vault has at least one webauthn slot (gates the "Use security key" button). */
 	hasWebauthnSlot: boolean;
 	/** Vault has a master-password slot. False for a security-key-only vault. */
@@ -393,6 +395,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 	const [hasVault, setHasVault] = useState(false);
 	const [isLocked, setIsLocked] = useState(true);
+	// Cold start is locked, but nobody locked it; only lock() sets this.
+	const [lockedByUser, setLockedByUser] = useState(false);
 	// Device-local biometric gate (mobile). `available` = hardware present + enrolled;
 	// `enabled` = a VEK is cached behind it on this device.
 	const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -634,6 +638,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		if (!isLocked && activeId) void shell.setActiveVault?.(activeId);
 	}, [isLocked, activeId, shell]);
 
+	// Any unlock clears the explicit-lock mark, rather than each of the four unlock paths doing it.
+	useEffect(() => {
+		if (!isLocked) setLockedByUser(false);
+	}, [isLocked]);
+
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
 	// so the guard redirects to the unlock screen.
 	useEffect(() => {
@@ -701,6 +710,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		tombstonesRef.current = new Map();
 		setEntries([]);
 		setIsLocked(true);
+		setLockedByUser(true);
 	}, [crypto, autofill]);
 
 	/** Run a get() assertion over the given slots, returning the PRF secret. */
@@ -1437,6 +1447,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		() => ({
 			hasVault,
 			isLocked,
+			lockedByUser,
 			ready,
 			joining: pendingJoin !== null,
 			joinError,
@@ -1455,6 +1466,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[
 			hasVault,
 			isLocked,
+			lockedByUser,
 			ready,
 			pendingJoin,
 			joinError,

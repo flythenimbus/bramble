@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import { Fingerprint, LockKeyhole, ScanFace } from "lucide-react";
+import { Fingerprint, LockKeyhole, ScanFace, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
 import { Row, Toggle } from "./primitives";
 
@@ -16,6 +17,7 @@ export function BiometricSection() {
 		disableBiometric,
 		refreshBiometric,
 	} = useVault();
+	const { prefs, update } = usePrefs();
 	const { t } = useLingui();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,20 @@ export function BiometricSection() {
 				/>
 			</Row>
 			{error && <p className="ml-12 text-xs text-destructive">{error}</p>}
+			{/* Only once the gate is set up: a switch for a prompt that cannot happen is a puzzle. */}
+			{biometricAvailable && biometricEnabled && (
+				<Row
+					icon={<Zap className="w-4 h-4 text-primary" />}
+					title={t`Unlock on open`}
+					subtitle={t`Ask for ${name} as soon as the unlock screen appears, with no tap.`}
+				>
+					<Toggle
+						checked={prefs.biometricAutoPrompt}
+						onChange={(next) => void update("biometricAutoPrompt", next)}
+						label={t`Toggle unlock on open`}
+					/>
+				</Row>
+			)}
 		</>
 	);
 }

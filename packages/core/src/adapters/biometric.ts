@@ -26,3 +26,16 @@ export interface BiometricUnlock {
 	/** Remove this vault's cached VEK from the device. */
 	disable(vaultId: string): Promise<void>;
 }
+
+/** Both native plugins reject a user-dismissed prompt with this code. A prompt the OS pulled
+ * instead (still transitioning to the foreground) gets "interrupted", which is worth retrying. */
+const BIOMETRIC_CANCELLED = "cancelled";
+
+/** The user dismissed the prompt, as opposed to the gate failing or the OS pulling it. */
+export function isBiometricCancel(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		(error as { code?: unknown }).code === BIOMETRIC_CANCELLED
+	);
+}

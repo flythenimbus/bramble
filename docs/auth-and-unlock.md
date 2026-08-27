@@ -21,6 +21,55 @@ On a successful unlock it also flushes any corner-prompt capture that was parked
 while the vault was locked (the background does the encrypt-and-write; the UI
 just triggers it now that the VEK is live).
 
+### Device-local biometric (mobile)
+
+Face ID / Touch ID / Android BiometricPrompt is deliberately **not** a slot. The
+VEK is cached on one device behind an OS-enforced gate (Secure Enclave /
+Keystore), keyed by vault id, so the vault file stays portable and slot-policy is
+untouched: a device holding the cache skips the Argon2 KDF, and everything above
+remains the way in from anywhere else. `adapters/biometric.ts` is the contract,
+`vault/biometric-unlock.ts` the flow (including stale-cache teardown, which
+disables the gate and sends the user back to their password).
+
+By default the unlock screen offers it as a button. Turning on **Unlock on open**
+(Settings > Security, under the biometric row, off by default) makes the screen
+present the gate itself, so a Face ID user opens the app to no tap at all
+(issue #43). The rules live in `app/screens/Auth/auto-biometric.ts`:
+
+- **One attempt per lock episode.** The route guard bounces to the unlock screen
+  on every lock, so a fresh screen means a fresh attempt; a cancel leaves the
+  user on the password form rather than re-raising the prompt they just
+  dismissed.
+- **Not until the OS calls the app active.** Painting is not the same as being
+  able to present system UI: on the iOS simulator, `evaluatePolicy` answers
+  `-1004 "Caller is not running foreground."` for over a second after this screen
+  starts rendering. `ShellAdapter.onAppStateChange` (mobile only) reports the
+  platform's own answer, and the prompt waits for it. It must be Capacitor's
+  `appStateChange` and **not** `resume`: `resume` fires on
+  `willEnterForeground`, which is just as early, while `appStateChange` fires on
+  `didBecomeActive`, which is the moment LocalAuthentication starts cooperating.
+- **A gate that never opened is not an answer.** Transients remain (`systemCancel`
+  when another sheet is in the way), so a failed unasked prompt is retried a few
+  times, a few hundred ms apart, before giving up silently. This is why the native
+  plugins distinguish a user cancel (`cancelled`, final) from a prompt the OS
+  pulled (`interrupted`, retry) from a real failure (`auth-failed`) — collapsing
+  the first two hid the retry entirely.
+- **An unasked prompt never leaves an error on screen** — the user still has the
+  button, which reports properly when they tap it. The one exception is
+  `StaleBiometricCacheError`, because there the button is gone with the cache,
+  and silence would leave nothing to explain it.
+- **An explicit Lock is honoured** (`lockedByUser`, set only by `lock()`), or
+  locking would be impossible while looking at the phone. Auto-lock does not set
+  it, which is what lets a backgrounded vault re-open on return.
+- **Never while off screen.** Auto-lock fires as the app leaves the foreground, so
+  the unlock screen routinely mounts backgrounded. Document visibility is the cheap
+  check; the screen also waits for a frame, which a hidden document cannot produce,
+  so a webview that never reports hidden still cannot prompt into the void.
+
+The iOS AutoFill extension does the same thing natively from `viewDidAppear`,
+ungated: it exists only to answer a fill request, so there is nothing else to be
+doing there.
+
 ## Invariant B: always one primary method
 
 The slot-mutation rules live in `packages/core/src/vault/slot-policy.ts`,

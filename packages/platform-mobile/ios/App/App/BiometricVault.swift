@@ -194,8 +194,12 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			success, evalError in
 			guard success else {
 				let code = (evalError as? LAError)?.code
-				if code == .userCancel || code == .appCancel || code == .systemCancel {
+				if code == .userCancel || code == .appCancel {
 					call.reject("Cancelled", "cancelled")
+				} else if code == .systemCancel {
+					// The OS pulled the prompt (app still transitioning, another sheet in the way).
+					// Not an answer from anyone, so the caller may ask again.
+					call.reject("Interrupted", "interrupted")
 				} else {
 					call.reject(evalError?.localizedDescription ?? "Authentication failed", "auth-failed")
 				}

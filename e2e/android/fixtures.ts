@@ -24,7 +24,7 @@ import {
  */
 
 const PORT = Number(process.env.ANDROID_CDP_PORT ?? 9222);
-const APP_ID = process.env.ANDROID_APP_ID ?? "app.bramble.mobile";
+export const APP_ID = process.env.ANDROID_APP_ID ?? "app.bramble.mobile";
 
 function adbPath(): string {
 	const candidates = [
@@ -42,7 +42,12 @@ function adbPath(): string {
 	}
 }
 
-const adb = (args: string[]): string => execFileSync(adbPath(), args, { encoding: "utf8" }).trim();
+/** Run an adb command. Exported for the specs that must drive the phone around CDP, which
+ * only ever reaches the WebView. */
+export const adb = (args: string[]): string =>
+	execFileSync(adbPath(), args, { encoding: "utf8" }).trim();
+
+export const adbShell = (cmd: string): string => adb(["shell", cmd]);
 
 function requireDevice(): void {
 	const lines = adb(["devices"]).split("\n").slice(1).filter(Boolean);

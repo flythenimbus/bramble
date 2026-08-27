@@ -19,6 +19,9 @@ export const PREF_OFFER_TO_SAVE = "pref.offerToSave";
 // (matches, the "Vault locked" row, and the generated-password suggestion) and refuses fills.
 export const PREF_AUTOFILL_ENABLED = "pref.autofillEnabled";
 export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
+// Mobile only: present the biometric gate as soon as the unlock screen is up, rather than
+// waiting for a tap. Off by default; see docs/auth-and-unlock.md (issue #43).
+export const PREF_BIOMETRIC_AUTO_PROMPT = "pref.biometricAutoPrompt";
 // Mobile (iOS) only: populate the OS QuickType bar with usernames+domains so logins
 // surface inline in the keyboard. Off by default since it exposes usernames before auth.
 export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
@@ -45,6 +48,7 @@ export const DEFAULT_CLIPBOARD_SECONDS = 30;
 export const DEFAULT_OFFER_TO_SAVE = true;
 export const DEFAULT_AUTOFILL_ENABLED = true;
 const DEFAULT_NEVER_SAVE_SITES: string[] = [];
+const DEFAULT_BIOMETRIC_AUTO_PROMPT = false;
 const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
@@ -61,6 +65,8 @@ export interface Prefs {
 	autofillEnabled: boolean;
 	// eTLD+1 hostnames muted via "Never for this site".
 	neverSaveSites: string[];
+	// Mobile: fire the biometric prompt when the unlock screen appears, with no tap.
+	biometricAutoPrompt: boolean;
 	// iOS QuickType: surface usernames inline in the keyboard (exposes them before auth).
 	autofillQuickType: boolean;
 	// Extension: act as a WebAuthn passkey provider for other sites.
@@ -82,6 +88,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	offerToSave: PREF_OFFER_TO_SAVE,
 	autofillEnabled: PREF_AUTOFILL_ENABLED,
 	neverSaveSites: PREF_NEVER_SAVE_SITES,
+	biometricAutoPrompt: PREF_BIOMETRIC_AUTO_PROMPT,
 	autofillQuickType: PREF_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: PREF_PASSKEY_PROVIDER,
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
@@ -96,6 +103,7 @@ const DEFAULT_PREFS: Prefs = {
 	offerToSave: DEFAULT_OFFER_TO_SAVE,
 	autofillEnabled: DEFAULT_AUTOFILL_ENABLED,
 	neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
+	biometricAutoPrompt: DEFAULT_BIOMETRIC_AUTO_PROMPT,
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
@@ -124,13 +132,14 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g, h, i, j, k] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
 				storage.getMeta<boolean>(PREF_OFFER_TO_SAVE),
 				storage.getMeta<boolean>(PREF_AUTOFILL_ENABLED),
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
+				storage.getMeta<boolean>(PREF_BIOMETRIC_AUTO_PROMPT),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
@@ -145,11 +154,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				offerToSave: typeof d === "boolean" ? d : DEFAULT_OFFER_TO_SAVE,
 				autofillEnabled: typeof e === "boolean" ? e : DEFAULT_AUTOFILL_ENABLED,
 				neverSaveSites: Array.isArray(f) ? f : DEFAULT_NEVER_SAVE_SITES,
-				autofillQuickType: typeof g === "boolean" ? g : DEFAULT_AUTOFILL_QUICKTYPE,
-				passkeyProviderEnabled: typeof h === "boolean" ? h : DEFAULT_PASSKEY_PROVIDER,
-				lockOnScreenLock: typeof i === "boolean" ? i : DEFAULT_LOCK_ON_SCREEN_LOCK,
-				statsCollapsed: typeof j === "boolean" ? j : DEFAULT_STATS_COLLAPSED,
-				autostartPromptDismissed: typeof k === "boolean" ? k : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+				biometricAutoPrompt: typeof g === "boolean" ? g : DEFAULT_BIOMETRIC_AUTO_PROMPT,
+				autofillQuickType: typeof h === "boolean" ? h : DEFAULT_AUTOFILL_QUICKTYPE,
+				passkeyProviderEnabled: typeof i === "boolean" ? i : DEFAULT_PASSKEY_PROVIDER,
+				lockOnScreenLock: typeof j === "boolean" ? j : DEFAULT_LOCK_ON_SCREEN_LOCK,
+				statsCollapsed: typeof k === "boolean" ? k : DEFAULT_STATS_COLLAPSED,
+				autostartPromptDismissed: typeof l === "boolean" ? l : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 			});
 			setLoaded(true);
 		})();

@@ -28,6 +28,10 @@ export async function unlockVekWithBiometric(
 	await crypto.unlockWithVek(vek);
 }
 
+/** The cached VEK no longer opens this vault, so the gate has been torn down. The one biometric
+ * failure worth putting on screen unasked: the button it came from is gone with it. */
+export class StaleBiometricCacheError extends Error {}
+
 /** Full biometric unlock with stale-cache recovery: load the gated VEK, then load
  * entries. If the gate authenticated but its VEK no longer opens this vault (e.g. the
  * vault was reset under it), tear the session + cache down so the UI falls back to the
@@ -48,6 +52,8 @@ export async function biometricUnlockFlow(opts: {
 		await opts.biometric.disable(opts.vaultId).catch(() => {});
 		opts.onStaleCache();
 		console.error("[vault] biometric VEK failed to open the vault; cache cleared:", cause);
-		throw new Error("Biometric unlock is out of date. Unlock with your password to re-enable it.");
+		throw new StaleBiometricCacheError(
+			"Biometric unlock is out of date. Unlock with your password to re-enable it.",
+		);
 	}
 }

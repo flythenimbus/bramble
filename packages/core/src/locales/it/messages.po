@@ -311,6 +311,10 @@ msgstr "Elementi archiviati"
 msgid "Archiving…"
 msgstr "Archiviazione…"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
+msgstr "Richieda {name} non appena appare la schermata di sblocco, senza alcun tocco."
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
 msgstr "A Rischio"
@@ -2911,6 +2915,10 @@ msgstr "Attiva l'offerta di salvare i login"
 msgid "Toggle start at login"
 msgstr "Attivare/disattivare l'avvio all'accesso"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle unlock on open"
+msgstr "Attivare/disattivare lo sblocco all'apertura"
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
 msgstr "Totale elementi"
@@ -2975,6 +2983,10 @@ msgstr "Unicorno"
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock"
 msgstr "Sbloccare"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock on open"
+msgstr "Sblocco all'apertura"
 
 #: packages/core/src/hooks/useVault.tsx
 msgid "Unlock the vault before adding a security key."

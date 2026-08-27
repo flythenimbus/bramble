@@ -311,6 +311,10 @@ msgstr "Éléments archivés"
 msgid "Archiving…"
 msgstr "Archivage…"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
+msgstr "Demander {name} dès que l’écran de déverrouillage apparaît, sans appui."
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
 msgstr "Risqué"
@@ -2911,6 +2915,10 @@ msgstr "Activer l'offre d'enregistrement des identifiants"
 msgid "Toggle start at login"
 msgstr "Activer ou désactiver le démarrage à l’ouverture de session"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle unlock on open"
+msgstr "Activer/désactiver le déverrouillage à l’ouverture"
+
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
 msgstr "Total des éléments"
@@ -2975,6 +2983,10 @@ msgstr "Licorne"
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock"
 msgstr "Déverrouiller"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock on open"
+msgstr "Déverrouiller à l’ouverture"
 
 #: packages/core/src/hooks/useVault.tsx
 msgid "Unlock the vault before adding a security key."

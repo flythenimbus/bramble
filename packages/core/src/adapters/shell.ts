@@ -72,6 +72,14 @@ export interface ShellAdapter {
 	 * whose session isn't foreground-gated (no-op).
 	 */
 	notifyFilePickerOpening?(): void;
+	/**
+	 * Subscribe to foreground-active transitions, reporting the current state immediately.
+	 * "Active" is the OS's own notion (iOS didBecomeActive, Android onResume), which is later
+	 * than the webview painting and later than Capacitor's `resume` (willEnterForeground): iOS
+	 * refuses to present the biometric gate until it, with "Caller is not running foreground".
+	 * Absent on hosts with no app lifecycle (extension, desktop), where callers assume active.
+	 */
+	onAppStateChange?(cb: (active: boolean) => void): () => void;
 	/** Open the current UI in a detached window so it doesn't dismiss on focus loss, closing the originating popup. `handoff` resumes the route + draft. */
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	/** Read (and clear) the handoff stashed by a preceding popOut(). Null when there's nothing to restore. Called once during boot. */

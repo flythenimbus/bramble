@@ -86,6 +86,21 @@ export const mobileShell: ShellAdapter = {
 	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
 	// would fire and drop the in-progress import. See ./auto-lock.ts.
 	notifyFilePickerOpening: armFilePickGrace,
+	// didBecomeActive, not `resume` (willEnterForeground): the unlock screen asks for the
+	// biometric gate here, and iOS refuses one until the app is genuinely active.
+	onAppStateChange(cb) {
+		let disposed = false;
+		void App.getState()
+			.then(({ isActive }) => {
+				if (!disposed) cb(isActive);
+			})
+			.catch(() => {});
+		const sub = App.addListener("appStateChange", ({ isActive }) => cb(isActive));
+		return () => {
+			disposed = true;
+			void sub.then((h) => h.remove());
+		};
+	},
 
 	// Save bytes the user keeps (recovery code, encrypted vault export) via the native share
 	// sheet, so "Save to Files", Mail, etc. are offered - WKWebView has no <a download> or

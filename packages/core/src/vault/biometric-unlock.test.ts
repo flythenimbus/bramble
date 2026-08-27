@@ -4,6 +4,7 @@ import type { CryptoAdapter } from "../adapters/crypto";
 import {
 	biometricUnlockFlow,
 	enableBiometricUnlock,
+	StaleBiometricCacheError,
 	unlockVekWithBiometric,
 } from "./biometric-unlock";
 
@@ -93,11 +94,13 @@ describe("biometricUnlockFlow", () => {
 		const onStaleCache = vi.fn();
 		await expect(
 			biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache }),
-		).rejects.toThrow(/out of date/i);
+		).rejects.toThrow(StaleBiometricCacheError);
 		// The gate's VEK was loaded, then the bad cache was torn down.
 		expect(crypto.unlockWithVek).toHaveBeenCalled();
 		expect(crypto.lock).toHaveBeenCalledTimes(1);
 		expect(biometric.disable).toHaveBeenCalledTimes(1);
+		// The type is the contract: it is the one biometric failure the unlock screen shows for a
+		// prompt the user never asked for, because the button it came from is gone with it.
 		expect(onStaleCache).toHaveBeenCalledTimes(1);
 	});
 
