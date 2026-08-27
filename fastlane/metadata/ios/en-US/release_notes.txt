@@ -1,8 +1,6 @@
 What's new in this release:
 
-- Tag your entries, then find them again in one keystroke: type #work in the search box to see everything tagged work. The box suggests the tags you already use, so they don't drift into near-duplicates.
-- Archive entries you have stopped using instead of deleting them. An archived entry stays in your vault and in your exports but leaves the list and is never offered for autofill, and you can restore it whenever you like.
-- Imports now bring your organisation with them. LastPass CSV exports can be read directly, and folders from LastPass, groups from KeePass, tags from 1Password, folders and collections from Bitwarden and vaults from Proton all arrive as tags. Anything you archived in Bitwarden stays archived.
-- The login editor groups the username, password and authenticator key under a heading of their own, so they no longer read as part of the website list.
+- Open the app and Face ID is already waiting: no button to press, no password to type. Turn on "Unlock on open" in Settings > Security, just under the Face ID switch, and the unlock screen asks the moment it appears. It stays off until you turn it on, and devices that use Touch ID or a passcode work the same way.
+- Locking the vault yourself still means locked. Tapping the lock button leaves you on the password screen rather than asking for your face the instant you glance at your phone.
 
 No account, no cloud. Everything stays on your devices.

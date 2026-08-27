@@ -1,8 +1,6 @@
-Novidades desta versão:
+O que há de novo nesta versão:
 
-- Marque suas entradas com tags e encontre-as novamente com uma única tecla: digite #trabalho na caixa de pesquisa para ver tudo que está marcado com a tag trabalho. A caixa sugere as tags que você já usa, para que não se transformem em quase duplicatas.
-- Arquive as entradas que você parou de usar em vez de excluí-las. Uma entrada arquivada permanece no seu cofre e nas suas exportações, mas sai da lista e nunca é oferecida para preenchimento automático; você pode restaurá-la quando quiser.
-- As importações agora incluem sua organização. Exportações CSV do LastPass podem ser lidas diretamente, e pastas do LastPass, grupos do KeePass, tags do 1Password, pastas e coleções do Bitwarden e cofres do Proton chegam como tags. Tudo o que você arquivou no Bitwarden permanece arquivado.
-- O editor de login agrupa o nome de usuário, a senha e a chave do autenticador sob um título próprio, para que não pareçam mais parte da lista de sites.
+- Abra o app e o Face ID já está esperando: nenhum botão para pressionar, nenhuma senha para digitar. Ative "Desbloquear ao abrir" em Configurações > Segurança, logo abaixo do interruptor do Face ID, e a tela de desbloqueio solicita a autenticação assim que aparece. Ela permanece desativada até você ativar a opção, e dispositivos que usam Touch ID ou código funcionam do mesmo jeito.
+- Bloquear o cofre manualmente ainda significa que ele fica bloqueado. Tocar no botão de bloqueio deixa você na tela de senha, em vez de solicitar seu rosto assim que você olha para o telefone.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

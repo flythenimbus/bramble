@@ -1,8 +1,6 @@
 Neu in dieser Version:
 
-- Versehen Sie Ihre Einträge mit Tags und finden Sie sie dann mit einem Tastendruck wieder: Geben Sie #work in das Suchfeld ein, um alles zu sehen, was mit work getaggt ist. Das Feld schlägt die bereits verwendeten Tags vor, sodass sie nicht zu Beinahe-Duplikaten werden.
-- Archivieren Sie Einträge, die Sie nicht mehr verwenden, anstatt sie zu löschen. Ein archivierter Eintrag bleibt in Ihrem Tresor und in Ihren Exporten erhalten, verschwindet aber aus der Liste und wird nie für Autofill angeboten. Sie können ihn jederzeit wiederherstellen.
-- Importe bringen jetzt Ihre Organisation mit. LastPass-CSV-Exporte können direkt gelesen werden, und Ordner aus LastPass, Gruppen aus KeePass, Tags aus 1Password, Ordner und Sammlungen aus Bitwarden sowie Tresore aus Proton kommen alle als Tags an. Alles, was Sie in Bitwarden archiviert haben, bleibt archiviert.
-- Der Anmelde-Editor gruppiert Benutzername, Passwort und Authentifizierungsschlüssel unter einer eigenen Überschrift, sodass sie nicht mehr als Teil der Website-Liste erscheinen.
+- Öffnen Sie die App und Face ID wartet bereits: keine Taste zu drücken, kein Passwort einzugeben. Aktivieren Sie „Beim Öffnen entsperren“ unter „Einstellungen“ > „Sicherheit“ direkt unter dem Schalter für Face ID, und der Entsperrbildschirm fordert sofort Face ID an, sobald er erscheint. Die Funktion bleibt deaktiviert, bis Sie sie einschalten. Geräte mit Touch ID oder Code funktionieren auf dieselbe Weise.
+- Wenn Sie den Tresor selbst sperren, bleibt er auch gesperrt. Beim Tippen auf die Sperrtaste bleiben Sie auf dem Passwortbildschirm, statt sofort Face ID abzufragen, sobald Sie auf Ihr Telefon schauen.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

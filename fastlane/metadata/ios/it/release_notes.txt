@@ -1,8 +1,6 @@
-Novità di questa versione:
+Novità in questa versione:
 
-- Taggare le voci e ritrovarle con una sola battitura: digitare #work nella casella di ricerca per vedere tutti gli elementi con il tag work. La casella suggerisce i tag già usati, così non si creano quasi duplicati.
-- Archiviare le voci che non si usano più invece di eliminarle. Una voce archiviata resta nel vault e nelle esportazioni, ma scompare dall'elenco e non viene mai proposta per la compilazione automatica; è possibile ripristinarla in qualsiasi momento.
-- Le importazioni ora mantengono l'organizzazione dei dati. Le esportazioni CSV di LastPass possono essere lette direttamente; le cartelle di LastPass, i gruppi di KeePass, i tag di 1Password, le cartelle e le raccolte di Bitwarden e i vault di Proton arrivano tutti come tag. Tutto ciò che è stato archiviato in Bitwarden rimane archiviato.
-- L'editor di accesso raggruppa il nome utente, la password e la chiave dell'autenticatore sotto un'intestazione dedicata, in modo che non siano più considerati parte dell'elenco dei siti web.
+- Apra l'app e Face ID è già in attesa: nessun pulsante da premere, nessuna password da digitare. Attivi "Sblocco all'apertura" in Impostazioni > Sicurezza, appena sotto l'interruttore Face ID, e la schermata di sblocco richiede l'accesso nel momento in cui appare. Resta disattivata finché non la attiva, e i dispositivi che usano Touch ID o un codice funzionano allo stesso modo.
+- Bloccare la cassaforte manualmente significa comunque che è bloccata. Toccando il pulsante di blocco si rimane sulla schermata della password invece di richiedere il volto nell'istante in cui si guarda il telefono.
 
-Nessun account, nessun cloud. Tutto rimane sui dispositivi.
+Nessun account, nessun cloud. Tutto resta sui propri dispositivi.
