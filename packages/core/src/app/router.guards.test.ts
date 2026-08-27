@@ -1,9 +1,13 @@
+// @vitest-environment jsdom
+// Needs a DOM: with `document` undefined the router takes its server load path,
+// which parks a redirect on an internal result object instead of following it,
+// leaving state.matches empty and every assertion below trivially true.
 import { describe, expect, it } from "vitest";
 import type { Entry } from "../hooks/useVault";
 import { createAppRouter } from "./router";
 
-// Guards are pure functions of injected context; headless load() records redirect()
-// on router.state.redirect rather than following it.
+// Guards are pure functions of injected context; a headless load() follows the
+// redirect chain, so the committed pathname is the guard's decision.
 type VaultSlice = { isLocked: boolean; ready: boolean; entries: Entry[] };
 type RegistrySlice = { ready: boolean; count: number; hasActive: boolean };
 
@@ -24,8 +28,7 @@ async function destination(
 	const router = createAppRouter(initialPath);
 	router.update({ context: { vault, registry } });
 	await router.load();
-	const redirect = (router.state as { redirect?: { options: { to: string } } }).redirect;
-	return redirect?.options.to ?? router.state.location.pathname;
+	return router.state.location.pathname;
 }
 
 describe("route guards", () => {
