@@ -73,15 +73,15 @@
 		"@anthropic-ai/sdk": "^0.106.0",
 		"@babel/plugin-syntax-jsx": "^8.0.1",
 		"@babel/preset-typescript": "^8.0.1",
-		"@biomejs/biome": "^2.4.15",
-		"@lingui/babel-plugin-lingui-macro": "^6.4.0",
-		"@lingui/cli": "^6.4.0",
-		"@lingui/format-po": "^6.4.0",
-		"@playwright/test": "^1.61.1",
-		"@types/node": "^24.0.0",
+		"@biomejs/biome": "^2.5.10",
+		"@lingui/babel-plugin-lingui-macro": "^6.6.0",
+		"@lingui/cli": "^6.6.0",
+		"@lingui/format-po": "^6.6.0",
+		"@playwright/test": "^1.62.1",
+		"@types/node": "^24.13.3",
 		"crx3": "^2.0.0",
 		"vite-plugin-babel": "^1.7.3",
-		"web-ext": "^10.5.0",
-		"ws": "^8.21.1"
+		"web-ext": "^10.6.0",
+		"ws": "^8.21.3"
 	}
 }
