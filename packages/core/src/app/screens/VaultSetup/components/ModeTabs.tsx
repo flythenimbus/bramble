@@ -43,6 +43,12 @@ interface TabProps {
 // Segmented-control tab: a subtle container (in ModeTabs) with the active tab raised as a card.
 // leading-tight + text-center keep a two-line label (e.g. "Create new vault" on a narrow phone)
 // neatly stacked rather than a lopsided pill.
+//
+// Every tab reserves the active tab's border, transparent when inactive. Without that the raised
+// tab is ~1.5px wider than its siblings and shifts their sub-pixel offsets, so a label sitting
+// within a pixel of fitting rewrapped depending on which tab was selected ("Restore from backup"
+// went to three lines, issue #84). px-2 rather than px-3 buys the labels 8px of headroom so the
+// wrap is not decided at the boundary in the first place.
 function Tab({ active, disabled, onClick, children }: TabProps) {
 	return (
 		<Button
@@ -50,10 +56,10 @@ function Tab({ active, disabled, onClick, children }: TabProps) {
 			size="none"
 			onClick={onClick}
 			disabled={disabled}
-			className={`flex-1 px-3 py-2 text-sm leading-tight text-center rounded-md transition-all disabled:opacity-50 ${
+			className={`flex-1 px-2 py-2 text-sm leading-tight text-center rounded-md border transition-all disabled:opacity-50 ${
 				active
-					? "bg-card text-foreground shadow-sm border border-border/50"
-					: "text-muted-foreground hover:text-foreground"
+					? "bg-card text-foreground shadow-sm border-border/50"
+					: "border-transparent text-muted-foreground hover:text-foreground"
 			}`}
 		>
 			{children}
