@@ -10,9 +10,11 @@ browser behaviour a spike measured on **2026-08-28** against **Brave 151.1.93.13
 **Google Chrome for Testing 151.0.7922.34** under Playwright. Every claim in
 [What the spike measured](#what-the-spike-measured) is observed, not inferred.
 
-Finding 1 is the load-bearing one and is now a test:
-`e2e/extension/desktop-link-binding-refresh.spec.ts`, which needs `HEADED=1`. The shipped
-ungranted state is covered by `e2e/extension/desktop-link-permission.spec.ts`, which runs anywhere.
+Finding 1 is the load-bearing one and is captured as a repeatable manual probe:
+`e2e/extension/desktop-link-binding-refresh.spec.ts`, which needs `MANUAL_GRANT=1 HEADED=1` and a
+human to click Allow. It is not automated and cannot be (finding 8). The shipped ungranted state is
+covered by `e2e/extension/desktop-link-permission.spec.ts`, which is fully automated and runs
+anywhere.
 
 ## Bottom line
 
@@ -85,15 +87,21 @@ will not ask twice.
 after a grant, and still `"function"` in a page after a revoke that already flipped `contains` to
 `false`. Only `permissions.contains()` is authoritative.
 
-**8. The grant is only automatable headed.** Headless has no way to draw the prompt, so
-`permissions.request()` hangs and never settles: not a rejection, no timeout, nothing to catch.
-Headed Chrome for Testing under Playwright auto-accepts the prompt with no click, which is what
-lets finding 1 be a test at all. Worth knowing before anyone tries to make it a CI gate, because
-the headless failure looks exactly like a hung test.
+**8. The grant cannot be automated at all, in either mode.** Headless has no way to draw the prompt,
+so `permissions.request()` hangs and never settles: not a rejection, no timeout, nothing to catch.
+Headed shows a real dialog that a human has to click, and Playwright cannot reach native browser UI.
+So every measurement here that crosses a grant was hand-driven, and nothing about this permission
+can be a CI gate.
 
-The same automation is why **finding 4 cannot be machine-checked**. With the prompt auto-accepted
-there is no dialog for a window to survive, so "the pop-out lives through it and the action popup
-does not" rests on the hand-driven Brave run and has to be re-checked by hand if it is ever doubted.
+This was briefly and wrongly recorded the other way. Two headed Playwright runs resolved in about
+four seconds and were read as the browser auto-accepting under automation; the operator had in fact
+clicked Allow both times, including on the run staged specifically to test for auto-accept. Fast
+resolution is not evidence of automation. If anyone is tempted to re-derive this, the honest check
+is to walk away from the machine.
+
+The same limit means **finding 4 rests on one hand-driven run**. Confirming "the pop-out survives the
+dialog and the action popup does not" requires a person watching a real prompt, so it has no
+automated backstop and must be re-checked by hand if it is ever doubted.
 
 ## Why the obvious plan fails
 
@@ -196,11 +204,15 @@ call `permission.drop()` from unlink.
 - **Two browsers, one Chromium version.** Brave 151 and Chrome for Testing 151 agree, and they share
   the upstream bindings layer, so the finding is about Chromium rather than a vendor. What is not
   covered is version drift: nothing here says Chromium 160 behaves the same. The binding-refresh
-  spec is the cheap way to re-answer that, and if it ever starts failing the correct response is to
-  DELETE the page-side pairing path, not to repair the test.
-- **Findings 3 to 6 are hand-driven and single-run.** They came from one Brave session and cannot be
-  automated (finding 8). They are UX-shaped rather than load-bearing, so the cost of one being wrong
-  is a clumsy flow rather than a broken link, but none of them has been reproduced.
+  probe is the cheap way to re-answer that, and if it ever stops holding the correct response is to
+  DELETE the page-side pairing path, not to repair the probe.
+- **Nothing that crosses a grant has an automated backstop.** Finding 8 means every one of those
+  measurements needs a person, so version drift will not announce itself: CI will stay green through
+  a Chromium release that invalidates the design. Re-run the probe by hand when bumping the
+  `minimum_chrome_version` floor, and treat that as the trigger rather than waiting for a failure.
+- **Findings 3 to 6 are hand-driven and single-run.** One Brave session, no reproduction. They are
+  UX-shaped rather than load-bearing, so the cost of one being wrong is a clumsy flow rather than a
+  broken link.
 - **Two pairing implementations of one protocol.** Phase 3 leaves a page-side and a background-side
   handshake. They must not drift. Worth a shared module rather than a copy.
 - **The install prompt does not become clean.** `<all_urls>`, `webAuthenticationProxy` and `identity`

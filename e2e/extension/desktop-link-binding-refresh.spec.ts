@@ -10,21 +10,26 @@ import { expect, test } from "./fixtures";
 // docs/desktop-link-optional-permission.md.
 //
 // This is not a security gate. If Chromium ever starts refreshing bindings, nothing breaks: the
-// workaround is strictly more conservative than it would need to be. The test exists so a future
+// workaround is strictly more conservative than it would need to be. This exists so a future
 // maintainer can answer "is that workaround still necessary?" with one command instead of a
 // research session, and delete it when the answer is no.
 //
-// HEADED=1 REQUIRED. Headless cannot draw the permission dialog, so `permissions.request()` hangs
-// forever and never resolves. Headed Chrome for Testing under Playwright auto-accepts the prompt,
-// which is what makes this checkable at all. Skipped rather than failed when headless, because a
-// missing display is not a defect in this codebase.
+// THIS TEST NEEDS A HUMAN. It is a manual probe wearing a spec's clothes, and it CANNOT be
+// automated. `permissions.request()` raises a native browser dialog: headless cannot draw one, so
+// the call hangs forever with nothing to catch, and headed shows a real prompt that somebody has
+// to click Allow on. Playwright cannot reach either. So it is opt-in through its own variable
+// rather than HEADED, which is the general debugging switch and would otherwise hang any run that
+// used it.
 //
-//   HEADED=1 pnpm exec playwright test e2e/extension/desktop-link-binding-refresh.spec.ts
+//   MANUAL_GRANT=1 HEADED=1 pnpm exec playwright test e2e/extension/desktop-link-binding-refresh.spec.ts
 //
-// Last confirmed: Google Chrome for Testing 151.0.7922.34, and Brave 151.1.93.138 by hand.
+// Last confirmed by hand: Google Chrome for Testing 151.0.7922.34, Brave 151.1.93.138.
 
 test("a runtime grant reaches only contexts created after it", async ({ context, extensionId }) => {
-	test.skip(!process.env.HEADED, "needs a display: headless cannot show the permission prompt");
+	test.skip(
+		!process.env.MANUAL_GRANT || !process.env.HEADED,
+		"needs MANUAL_GRANT=1 HEADED=1 and a human to click Allow on the permission prompt",
+	);
 
 	const page = await context.newPage();
 	await page.goto(`chrome-extension://${extensionId}/popup.html`);
@@ -51,7 +56,14 @@ test("a runtime grant reaches only contexts created after it", async ({ context,
 		new Promise((r) => setTimeout(() => r({ state: "never-settled" }), 90_000)),
 	])) as { state: string; granted?: boolean };
 
-	expect(outcome).toEqual({ state: "resolved", granted: true });
+	// Say which of the two it was, because "expected resolved, got never-settled" reads as a
+	// product bug when it almost always means nobody was watching the window.
+	expect(
+		outcome,
+		outcome.state === "never-settled"
+			? "the prompt was never answered: this test needs a human to click Allow within 90s"
+			: "the browser refused the grant",
+	).toEqual({ state: "resolved", granted: true });
 
 	const worker = await context.serviceWorkers()[0].evaluate(async () => ({
 		binding: typeof chrome.runtime.connectNative,
