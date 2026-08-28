@@ -6,8 +6,13 @@ than at install. The goal is one fewer line in the install prompt, and the one b
 "Communicate with cooperating native applications", which reads badly on a password manager.
 
 Read [desktop-port.md](desktop-port.md) first. This document only describes the deltas, plus the
-browser behaviour a spike measured on **2026-08-28** against **Brave 151.1.93.138**. Every claim in
+browser behaviour a spike measured on **2026-08-28** against **Brave 151.1.93.138** by hand and
+**Google Chrome for Testing 151.0.7922.34** under Playwright. Every claim in
 [What the spike measured](#what-the-spike-measured) is observed, not inferred.
+
+Finding 1 is the load-bearing one and is now a test:
+`e2e/extension/desktop-link-binding-refresh.spec.ts`, which needs `HEADED=1`. The shipped
+ungranted state is covered by `e2e/extension/desktop-link-permission.spec.ts`, which runs anywhere.
 
 ## Bottom line
 
@@ -39,10 +44,18 @@ forbidden error would mean it did not.
 **1. No context that already exists ever gains the binding.** After the grant, `permissions.contains`
 returns `true` while `typeof chrome.runtime.connectNative` stays `"undefined"`, in the service worker
 *and* in the page that called `request()` itself. Binding state is fixed when a context is created.
+Reproduced identically on Brave and on Chrome for Testing, so this is upstream Chromium behaviour
+rather than a vendor quirk, which is what makes it safe to design against.
 
 ```
+Brave 151, by hand
 sw   instance onq58thf  workerAgeMs 38299  contains true  bindingType "undefined"
 page detached-window    after-grant        contains true  bindingType "undefined"
+
+Chrome for Testing 151, under Playwright
+worker (pre-existing)  contains true  binding "undefined"
+page that requested                   binding "undefined"
+page created after                    binding "function"
 ```
 
 **2. A worker that restarts after the grant works completely.** Dropping the keepalive port and
@@ -71,6 +84,16 @@ will not ask twice.
 **7. Binding presence is never a valid permission test.** It is stale in both directions: absent
 after a grant, and still `"function"` in a page after a revoke that already flipped `contains` to
 `false`. Only `permissions.contains()` is authoritative.
+
+**8. The grant is only automatable headed.** Headless has no way to draw the prompt, so
+`permissions.request()` hangs and never settles: not a rejection, no timeout, nothing to catch.
+Headed Chrome for Testing under Playwright auto-accepts the prompt with no click, which is what
+lets finding 1 be a test at all. Worth knowing before anyone tries to make it a CI gate, because
+the headless failure looks exactly like a hung test.
+
+The same automation is why **finding 4 cannot be machine-checked**. With the prompt auto-accepted
+there is no dialog for a window to survive, so "the pop-out lives through it and the action popup
+does not" rests on the hand-driven Brave run and has to be re-checked by hand if it is ever doubted.
 
 ## Why the obvious plan fails
 
@@ -170,9 +193,14 @@ call `permission.drop()` from unlink.
 
 ## Risks
 
-- **Only Brave 151 was measured.** Findings 1 to 7 are Chromium behaviour and should hold across the
-  family, but Chrome, Edge and Vivaldi are unverified. Finding 1 is the one worth re-checking on
-  Chrome before shipping, because the whole design is built on it.
+- **Two browsers, one Chromium version.** Brave 151 and Chrome for Testing 151 agree, and they share
+  the upstream bindings layer, so the finding is about Chromium rather than a vendor. What is not
+  covered is version drift: nothing here says Chromium 160 behaves the same. The binding-refresh
+  spec is the cheap way to re-answer that, and if it ever starts failing the correct response is to
+  DELETE the page-side pairing path, not to repair the test.
+- **Findings 3 to 6 are hand-driven and single-run.** They came from one Brave session and cannot be
+  automated (finding 8). They are UX-shaped rather than load-bearing, so the cost of one being wrong
+  is a clumsy flow rather than a broken link, but none of them has been reproduced.
 - **Two pairing implementations of one protocol.** Phase 3 leaves a page-side and a background-side
   handshake. They must not drift. Worth a shared module rather than a copy.
 - **The install prompt does not become clean.** `<all_urls>`, `webAuthenticationProxy` and `identity`
