@@ -54,4 +54,34 @@ export interface DesktopLinkAdapter {
 	/** Forget the desktop app on this side. Revoking on the app's side is separate; doing
 	 * both is what fully severs the link. */
 	unlink(): Promise<void>;
+	/**
+	 * The browser permission the link needs, where the host asks for it at runtime instead of
+	 * being granted it at install.
+	 *
+	 * Absent where there is nothing to ask for, which callers must read as "already allowed"
+	 * rather than "not allowed": a host that holds the permission from install has no runtime
+	 * question to answer, and gating the UI on this being present would hide the feature on
+	 * exactly those hosts. See docs/desktop-link-optional-permission.md.
+	 */
+	permission?: {
+		/**
+		 * Whether the browser holds it right now.
+		 *
+		 * The only honest test. Do not substitute "is the native API callable", which goes stale
+		 * in both directions: a context created before a grant never gains the binding, and one
+		 * created before a revoke keeps it.
+		 */
+		granted(): Promise<boolean>;
+		/**
+		 * Ask the user for it, resolving false if they decline.
+		 *
+		 * Must be called from a user gesture, and only from a surface that survives a modal
+		 * browser dialog. On Chromium the toolbar popup does not: it is torn down when the prompt
+		 * takes focus, and this promise dies with it while the grant still lands. The caller is
+		 * responsible for being somewhere durable first.
+		 */
+		request(): Promise<boolean>;
+		/** Hand it back. Paired with unlink, so severing the link also returns what it needed. */
+		drop(): Promise<void>;
+	};
 }

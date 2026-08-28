@@ -41,6 +41,34 @@ const canNativeMessage = (): boolean => {
 	}
 };
 
+const NATIVE_MESSAGING = { permissions: ["nativeMessaging"] };
+
+/**
+ * Whether the permission is ours to ask for, rather than one we already hold.
+ *
+ * Only the optional declaration gets a runtime question. A build that lists it as required holds
+ * it from install, and `permissions.remove` refuses to give a required permission back, so
+ * offering the controls there would produce a Reconnect button that can never be needed and a
+ * drop that silently fails.
+ */
+const isOptional = (): boolean => {
+	try {
+		return (api.runtime.getManifest().optional_permissions ?? []).includes("nativeMessaging");
+	} catch {
+		return false;
+	}
+};
+
+/** Runs in the page, never through the background: `permissions.request` needs a user gesture,
+ * and a service worker has none to offer. */
+const permission = {
+	granted: () => api.permissions.contains(NATIVE_MESSAGING),
+	request: () => api.permissions.request(NATIVE_MESSAGING),
+	drop: async () => {
+		await api.permissions.remove(NATIVE_MESSAGING);
+	},
+};
+
 const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
 	// The code goes straight through to the background and is never stored here.
@@ -64,6 +92,9 @@ const adapter: DesktopLinkAdapter = {
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},
+	// Omitted where the permission is required rather than optional, which callers read as
+	// already-allowed. See the `permission` docs on DesktopLinkAdapter.
+	...(isOptional() ? { permission } : {}),
 };
 
 /** Undefined where the browser cannot do it, which is what hides the Settings section. */
