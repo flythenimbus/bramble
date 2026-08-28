@@ -74,4 +74,34 @@ describe("auto-lock lifecycle under 'Immediately'", () => {
 		handlers.appStateChange?.({ isActive: false });
 		await vi.waitFor(() => expect(lockForLifecycle).toHaveBeenCalledTimes(1));
 	});
+
+	// Issue #80: the camera permission prompt for a QR scan trips the same trap, but each
+	// platform arrives by a different event, so both sequences are pinned here.
+	describe("camera permission prompt", () => {
+		// Android's permission dialog pauses the activity without stopping it, so Capacitor
+		// never fires appStateChange(false) (that hangs off onStop). The lock came from the
+		// resume backstop alone.
+		it("does not lock on the Android resume-only sequence", async () => {
+			cleanups.push(startAutoLock());
+
+			armFilePickGrace();
+			handlers.resume?.(); // permission answered, activity resumes
+			await flush();
+			expect(lockForLifecycle).not.toHaveBeenCalled();
+
+			handlers.appStateChange?.({ isActive: false });
+			await vi.waitFor(() => expect(lockForLifecycle).toHaveBeenCalledTimes(1));
+		});
+
+		// iOS fires appStateChange(false) on willResignActive for the system alert, and no
+		// resume (the app never entered the background), so the grace is left to expire.
+		it("does not lock on the iOS resign-active-only sequence", async () => {
+			cleanups.push(startAutoLock());
+
+			armFilePickGrace();
+			handlers.appStateChange?.({ isActive: false }); // alert appears
+			await flush();
+			expect(lockForLifecycle).not.toHaveBeenCalled();
+		});
+	});
 });

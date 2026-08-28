@@ -6,8 +6,7 @@ import type { OptionsScreen, ShellAdapter, Target } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { armFilePickGrace } from "../auto-lock";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
-import { scanQrNative } from "../qr-scanner";
-import { scanQrCode } from "../scan";
+import { scanQr } from "../qr-scanner";
 import {
 	ACTIVE_VAULT_KEY,
 	approveEnrollment,
@@ -73,13 +72,10 @@ export const mobileShell: ShellAdapter = {
 	// can't write the vault, so it hands them off (iOS App Group / Android file) and the app drains
 	// them here on launch. drainPendingPasskeys reads the right per-platform source.
 	consumePendingPasskeys: drainPendingPasskeys,
-	async scanQrFromActiveTab() {
-		// On mobile this is a camera scan (the "active tab" concept doesn't apply):
-		// used for sync pairing codes and TOTP otpauth:// QRs. iOS WKWebView can't use
-		// getUserMedia from the capacitor:// scheme, so iOS goes through a native
-		// AVFoundation plugin; Android (served from https://localhost) uses jsQR.
-		return Capacitor.getPlatform() === "ios" ? scanQrNative() : scanQrCode();
-	},
+	// On mobile this is a camera scan (the "active tab" concept doesn't apply): used for
+	// sync pairing codes and TOTP otpauth:// QRs. ../qr-scanner picks the per-platform
+	// scanner and holds the auto-lock guard the permission prompt needs.
+	scanQrFromActiveTab: scanQr,
 	async flushPendingCornerCapture() {
 		return false;
 	},

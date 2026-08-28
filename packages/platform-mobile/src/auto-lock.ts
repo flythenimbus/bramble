@@ -11,10 +11,12 @@ import { decideLock, type LockReason } from "./auto-lock-decision";
 // return). Foreground idle is caught by an interval.
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
 const CHECK_INTERVAL_MS = 15_000;
-// A native file picker (import file, KDBX keyfile) backgrounds the app, which would trip
-// "Immediately" auto-lock and drop the in-progress import. armFilePickGrace() opens a short
-// window in which that one background→foreground cycle is skipped; it's consumed on return
-// and the window itself is the backstop if the picker never opens.
+// OS UI shown over the app (file picker, share sheet, camera permission prompt) takes it out
+// of the foreground, which would trip "Immediately" auto-lock and drop whatever the user was
+// mid-way through. armFilePickGrace() opens a short window in which that one
+// background→foreground cycle is skipped; it's consumed on return, and the window itself is
+// the backstop where the return leg never fires (an iOS system alert resigns active without
+// ever entering the background).
 const FILE_PICK_GRACE_MS = 120_000;
 
 let lastActivity = Date.now();
