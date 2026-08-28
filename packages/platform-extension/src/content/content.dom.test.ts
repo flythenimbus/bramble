@@ -42,12 +42,19 @@ let onSuggestedCb: (() => void) | null = null;
 let regenerateCb: (() => void) | null = null;
 let unlockCb: ((field: HTMLInputElement | null) => void) | null = null;
 let pickCb: ((entryId: string, otpOnly: boolean) => void) | null = null;
+// Models picker.removeDropdown()'s real behavior: on a normal (iframe-mode) site it is a
+// no-op against the visible row, it only clears the anchor. A call site that relies on this
+// alone to hide the picker leaves the row on screen; asserting on `pickerState.host` (not just
+// which mock fired) is what catches that class of regression.
+const removeDropdown = vi.fn(() => {
+	pickerState.anchor = null;
+});
 vi.mock("./picker", () => ({
 	picker: {
 		showMatches,
 		showLocked,
 		remove: removePicker,
-		removeDropdown: vi.fn(),
+		removeDropdown,
 		reposition: vi.fn(),
 		activeHost: () => pickerState.host,
 		anchorField: () => pickerState.anchor,
@@ -552,6 +559,163 @@ describe("content: strong-password suggestion on signup", () => {
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		expect(lastSuggest()).toBeUndefined();
+	});
+});
+
+describe("content: username filter on login picker", () => {
+	const logins = [
+		{ id: "1", name: "GitHub", secondary: "alice@example.com" },
+		{ id: "2", name: "GitHub", secondary: "bob@example.com" },
+		{ id: "3", name: "Work", secondary: "alice.work@corp.com" },
+	];
+
+	beforeEach(() => {
+		showMatches.mockClear();
+		removeDropdown.mockClear();
+		removePicker.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="username" />
+				<input id="pass" type="password" name="password" autocomplete="current-password" />
+			</form>`;
+		invalidatePageFields();
+	});
+
+	it("shows all logins when the username field is empty", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual(logins);
+	});
+
+	it("narrows options as the user types in the username field", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		showMatches.mockClear();
+
+		user.value = "alice";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([
+			{ id: "1", name: "GitHub", secondary: "alice@example.com" },
+			{ id: "3", name: "Work", secondary: "alice.work@corp.com" },
+		]);
+	});
+
+	it("still shows the single row when typing narrows to exactly one match", () => {
+		// Narrowing to the entry you want is the most useful moment to keep it on screen: hiding
+		// it here would leave no way back to a different account short of clearing the field.
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		showMatches.mockClear();
+		removePicker.mockClear();
+
+		user.value = "bob@example.com";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([
+			{ id: "2", name: "GitHub", secondary: "bob@example.com" },
+		]);
+		expect(removePicker).not.toHaveBeenCalled();
+	});
+
+	it("matches either direction: a query typed past the stored value", () => {
+		// A second, unrelated entry keeps the total above one so the static "nothing to
+		// disambiguate" rule doesn't preempt filtering.
+		const twoLogins = [
+			{ id: "1", name: "Example", secondary: "alice" },
+			{ id: "2", name: "Other", secondary: "someone@other.com" },
+		];
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: twoLogins }) });
+		showMatches.mockClear();
+
+		user.value = "alice@example.com";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([
+			{ id: "1", name: "Example", secondary: "alice" },
+		]);
+	});
+
+	it("does not match by entry name alone", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		showMatches.mockClear();
+		removePicker.mockClear();
+
+		// Both entries are named "GitHub", but neither saved username contains "git".
+		user.value = "git";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches).not.toHaveBeenCalled();
+		expect(removePicker).toHaveBeenCalled();
+	});
+
+	it("fully dismisses the picker (not just the shadow renderer) when nothing matches", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		showMatches.mockClear();
+		removePicker.mockClear();
+
+		user.value = "zzzz";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches).not.toHaveBeenCalled();
+		// picker.remove() (+ dropRelayed()), not picker.removeDropdown(): the latter is a no-op
+		// against the primary iframe renderer and would leave the row on screen.
+		expect(removePicker).toHaveBeenCalled();
+		expect(pickerState.host).toBeNull();
+	});
+
+	it("does not filter logins while typing in the password field", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		showMatches.mockClear();
+
+		pass.value = "alice";
+		dispatchTrustedInteraction("input", pass);
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual(logins);
+	});
+
+	it("does not filter a pre-filled value the user never typed", () => {
+		// A remembered email pre-filled by the page (or an autofocus default) sets field.value
+		// without the user ever typing: it must not be treated as a search.
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.value = "zzzz";
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual(logins);
+	});
+
+	it("hides the picker while typing when the site has exactly one saved login", () => {
+		// The static "nothing to disambiguate" rule, kept deliberately separate from filtering:
+		// this must keep working even though the filtered-narrows-to-one case now shows a row
+		// instead of hiding.
+		const oneLogin = [{ id: "1", name: "GitHub", secondary: "alice@example.com" }];
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: oneLogin }) });
+		showMatches.mockClear();
+		removePicker.mockClear();
+
+		user.value = "a";
+		dispatchTrustedInteraction("input", user);
+		expect(showMatches).not.toHaveBeenCalled();
+		expect(removePicker).toHaveBeenCalled();
 	});
 });
 

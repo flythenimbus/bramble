@@ -452,6 +452,35 @@ function regenerateInto(field: HTMLInputElement): string {
 	return password;
 }
 
+/**
+ * Case-insensitive, either-direction prefix match against the saved username: covers both
+ * a query typed further than the stored value (`alice` -> `alice@example.com`) and a stored
+ * value longer than what's typed so far. Entry name is not matched: the user is typing a
+ * username into a username box, not addressing an entry by its label.
+ */
+function filterLoginsByQuery(logins: MatchSummary[], query: string): MatchSummary[] {
+	const q = query.trim().toLowerCase();
+	if (!q) return logins;
+	return logins.filter((m) => {
+		const secondary = m.secondary.toLowerCase();
+		return secondary.startsWith(q) || q.startsWith(secondary);
+	});
+}
+
+// The query to filter by: the last value the user actually typed into the username field via
+// a real "input" event, not whatever value the field merely holds. A page that pre-fills a
+// remembered email (or an autofocus default) must not silently hide every saved login before
+// the user has typed anything themselves; only a genuine keystroke should narrow the list.
+const typedUsernameQuery = new WeakMap<HTMLInputElement, string>();
+
+/** Logins to offer on `field`: all matches, or filtered by what the user has actually typed. */
+function visibleLoginsForField(field: HTMLInputElement, logins: MatchSummary[]): MatchSummary[] {
+	if (field !== getPageFields().login.username) return logins;
+	const query = typedUsernameQuery.get(field);
+	if (!query) return logins;
+	return filterLoginsByQuery(logins, query);
+}
+
 /** Shows the login picker for `field`: existing matches, or ONLY the strong-password row on a signup/rotation form. */
 function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void {
 	const suggest = maybeSuggest(field, logins.length > 0);
@@ -463,8 +492,15 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 	}
 	// Same policy, one field over: the signup form's email box gets nothing either.
 	if (isCreationField(field)) return;
-	if (logins.length === 0) return;
-	showMatchesFor(logins, field);
+	const visible = visibleLoginsForField(field, logins);
+	if (visible.length === 0) {
+		// Full dismissal, not picker.removeDropdown(): that only tears down the shadow-DOM
+		// (COEP-fallback) renderer and is a no-op against the primary iframe renderer, and it
+		// leaves any relayed (cross-origin iframe) picker painted too.
+		removePicker();
+		return;
+	}
+	showMatchesFor(visible, field);
 }
 
 /**
@@ -667,9 +703,14 @@ function showFor(field: HTMLInputElement): void {
 		queryAutofill();
 		return;
 	}
-	if (cachedResult.logins.length > 1 || !field.value) {
-		showLoginPicker(field, cachedResult.logins);
+	// A single saved login has nothing to disambiguate: get out of the way while the user
+	// types their own value. This is a property of the site (how many logins it has), not of
+	// how the typed query narrows them, so it uses the unfiltered count.
+	if (cachedResult.logins.length === 1 && field.value) {
+		removePicker();
+		return;
 	}
+	showLoginPicker(field, cachedResult.logins);
 }
 
 // Nodes that can hold, or turn into, a fillable field. A batch that moves
@@ -990,6 +1031,11 @@ function bootstrap(): void {
 			const target = composedTarget(e);
 			if (!couldBeCandidate(target) || !isCandidate(getPageFields(), target)) return;
 			silenceAutoOpen = false;
+			// Record what the user actually typed, as opposed to whatever the field merely
+			// holds (a pre-filled remembered value, an autofocus default): only a real
+			// keystroke here should narrow the login picker's filter.
+			if (target.value) typedUsernameQuery.set(target, target.value);
+			else typedUsernameQuery.delete(target);
 			if (!cachedResult) {
 				queryAutofill();
 				return;
@@ -1005,7 +1051,7 @@ function bootstrap(): void {
 							? (cachedResult.otps ?? []).length
 							: cachedResult.logins.length;
 				if (count <= 1) {
-					picker.removeDropdown();
+					removePicker();
 					return;
 				}
 			}
