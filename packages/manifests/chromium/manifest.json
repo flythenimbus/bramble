@@ -33,9 +33,9 @@
 		"offscreen",
 		"clipboardWrite",
 		"webAuthenticationProxy",
-		"identity",
-		"nativeMessaging"
+		"identity"
 	],
+	"optional_permissions": ["nativeMessaging"],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [
 		{

@@ -24,10 +24,18 @@ async function dispatch<T = unknown>(type: string, extra?: Record<string, unknow
  *
  * Read from the manifest rather than sniffing the browser, so this turns itself on the day
  * Firefox support is added rather than needing to be remembered.
+ *
+ * BOTH permission arrays count. Chromium asks for `nativeMessaging` at connect time rather than
+ * at install (see docs/desktop-link-optional-permission.md), so it is declared optional there;
+ * declaring it required again must keep working. This answers "could this browser ever do it",
+ * not "may it right now" — that is `permission.granted()`, and it is the only honest test, since
+ * `typeof api.runtime.connectNative` goes stale in both directions across a grant or a revoke.
  */
 const canNativeMessage = (): boolean => {
 	try {
-		return (api.runtime.getManifest().permissions ?? []).includes("nativeMessaging");
+		const manifest = api.runtime.getManifest();
+		const declared = [...(manifest.permissions ?? []), ...(manifest.optional_permissions ?? [])];
+		return declared.includes("nativeMessaging");
 	} catch {
 		return false;
 	}
