@@ -123,6 +123,9 @@ could read it. Instead:
 
 1. On focusing a candidate field, the dropdown shows the matching entries
    (`query` returns only summaries: name plus a username or masked `•••• 1234`).
+   Typing into the username field narrows the list to entries whose saved
+   username matches; a value the field already held before the user typed
+   (a page pre-fill, an autofocus default) does not count as a search.
 2. The user picks one.
 3. Only then does the page-bound `AUTOFILL_SELECT` response return the actual
    secrets for that entry.
