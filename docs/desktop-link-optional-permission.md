@@ -20,10 +20,17 @@ anywhere.
 
 - **It is allowed.** Chrome's non-optional list is `debugger`, `declarativeNetRequest`, `devtools`,
   `geolocation`, `mdns`, `proxy`, `tts`, `ttsEngine`, `wallpaper`. `nativeMessaging` is not on it.
-- **Existing paired users keep working.** Chromium's `extensions/docs/permissions.md`: "Granted
-  permissions are the permissions that the extension has ever been granted by the user (and have not
-  been revoked by the user)." A required-to-optional move keeps the grant and does not disable the
-  extension. The plan detects the ungranted case anyway rather than relying on this.
+- **Existing paired users keep working. Measured, not assumed.** Same extension id, same profile,
+  version bumped so it is a real update rather than a reload, and only the manifest differing:
+  before the update the permission is required and held; after it, it is optional and STILL held,
+  and the freshly started worker has the `connectNative` binding. So a paired browser carries on
+  with no prompt and no interruption. This matches Chromium's `extensions/docs/permissions.md`
+  ("Granted permissions are the permissions that the extension has ever been granted by the user
+  (and have not been revoked by the user)"), which is what the change was originally shipped on.
+  The one gap: this was an unpacked in-place swap, not a CRX install from the store. The grant lives
+  in the same per-extension-id profile pref either way, but the store path itself is unexercised.
+  The ungranted case is detected regardless, so a surprise there degrades to the "Permission needed"
+  row rather than to a dead link.
 - **The desktop app needs no change.** `packages/platform-desktop/src-tauri/src/manifest.rs` keys the
   host manifest on the extension id, which is fixed by the `key` in the Chromium manifest and is
   unaffected.
