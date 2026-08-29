@@ -258,11 +258,11 @@ msgstr "Todos"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Allow again"
-msgstr ""
+msgstr "Permitir de nuevo"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Allow and continue"
-msgstr ""
+msgstr "Permitir y continuar"
 
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
@@ -462,11 +462,11 @@ msgstr "Bramble está actualizado."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Bramble needs that permission to talk to the desktop app."
-msgstr ""
+msgstr "Bramble necesita ese permiso para comunicarse con la aplicación de escritorio."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Bramble needs your permission to talk to the desktop app on this computer. Your browser will ask you to confirm."
-msgstr ""
+msgstr "Bramble necesita su permiso para comunicarse con la aplicación de escritorio de este equipo. Su navegador le pedirá que lo confirme."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving out delete, limits what it can do if it is ever stolen."
@@ -2043,7 +2043,7 @@ msgstr "Pingüino"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Permission needed"
-msgstr ""
+msgstr "Permiso necesario"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
@@ -2736,7 +2736,7 @@ msgstr "La aplicación de escritorio muestra los mismos símbolos y espera que a
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app is still linked, but this browser's permission to talk to it was turned off."
-msgstr ""
+msgstr "La aplicación de escritorio sigue vinculada, pero el permiso de este navegador para comunicarse con ella se ha desactivado."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app offered to share its vault with this browser. Enter the master password you use there, then compare the symbols both screens show."

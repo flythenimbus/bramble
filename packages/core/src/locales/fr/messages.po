@@ -258,11 +258,11 @@ msgstr "Tous"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Allow again"
-msgstr ""
+msgstr "Autoriser à nouveau"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Allow and continue"
-msgstr ""
+msgstr "Autoriser et continuer"
 
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
@@ -462,11 +462,11 @@ msgstr "Bramble est à jour."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Bramble needs that permission to talk to the desktop app."
-msgstr ""
+msgstr "Bramble a besoin de cette autorisation pour communiquer avec l’application de bureau."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Bramble needs your permission to talk to the desktop app on this computer. Your browser will ask you to confirm."
-msgstr ""
+msgstr "Bramble a besoin de votre autorisation pour communiquer avec l’application de bureau sur cet ordinateur. Votre navigateur vous demandera de confirmer."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving out delete, limits what it can do if it is ever stolen."
@@ -2043,7 +2043,7 @@ msgstr "Pingouin"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Permission needed"
-msgstr ""
+msgstr "Autorisation requise"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
@@ -2736,7 +2736,7 @@ msgstr "L'application de bureau affiche les mêmes symboles et attend que vous a
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app is still linked, but this browser's permission to talk to it was turned off."
-msgstr ""
+msgstr "L’application de bureau est toujours liée, mais l’autorisation accordée à ce navigateur pour communiquer avec elle a été désactivée."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app offered to share its vault with this browser. Enter the master password you use there, then compare the symbols both screens show."
