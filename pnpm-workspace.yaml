@@ -23,3 +23,4 @@ overrides:
   sharp: ^0.35.0 # wrangler > miniflare, astro
   minimatch@3>brace-expansion: ^2.1.4
   undici: ^7.29.0 # web-ext > addons-linter > cheerio, vitest > jsdom
+  xcode>uuid: ^11.1.1 # GHSA-w5hq-g745-h8pq; xcode pins uuid@^7 and has no newer release
