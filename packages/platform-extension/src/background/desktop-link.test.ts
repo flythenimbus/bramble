@@ -17,6 +17,15 @@ const h = vi.hoisted(() => ({
 	onDisconnect: [] as (() => void)[],
 	/** Listeners registered on runtime.onConnect, so a test can hand in a proxy port. */
 	onConnect: [] as ((port: unknown) => void)[],
+	/** Whether the user has granted nativeMessaging. */
+	permitted: true,
+	/**
+	 * Whether THIS context was handed the connectNative binding. Independent of `permitted` on
+	 * purpose: a worker that was already running when the grant happened has one and not the other,
+	 * and that combination is the entire reason the gating exists.
+	 */
+	hasBinding: true,
+	onPermissionRemoved: [] as ((p: { permissions?: string[] }) => void)[],
 	/** How many native ports have been opened; the count IS the connection count. */
 	connects: 0,
 	disconnects: 0,
@@ -25,25 +34,28 @@ const h = vi.hoisted(() => ({
 	stored: {} as Record<string, unknown>,
 }));
 
+/** The native port chrome.runtime.connectNative hands back. */
+const nativePort = () => {
+	h.connects++;
+	return {
+		postMessage: (msg: Record<string, unknown>) => {
+			h.posted.push(msg);
+		},
+		onMessage: { addListener: (cb: (msg: unknown) => void) => h.onMessage.push(cb) },
+		onDisconnect: { addListener: (cb: () => void) => h.onDisconnect.push(cb) },
+		disconnect: () => {
+			h.disconnects++;
+		},
+	};
+};
+
 vi.mock("../platform-api", () => ({
 	api: {
 		runtime: {
-			connectNative: () => {
-				h.connects++;
-				return {
-					postMessage: (msg: Record<string, unknown>) => {
-						h.posted.push(msg);
-					},
-					onMessage: {
-						addListener: (cb: (msg: unknown) => void) => h.onMessage.push(cb),
-					},
-					onDisconnect: {
-						addListener: (cb: () => void) => h.onDisconnect.push(cb),
-					},
-					disconnect: () => {
-						h.disconnects++;
-					},
-				};
+			// A getter, so a test can model the context that HAS the permission and still has no
+			// API to call, which is what a worker that predates the grant looks like.
+			get connectNative() {
+				return h.hasBinding ? nativePort : undefined;
 			},
 			lastError: undefined,
 			// The module now guards its proxy port with isExtensionSender, which resolves the
@@ -54,6 +66,13 @@ vi.mock("../platform-api", () => ({
 			getURL: (p: string) => `https://bramble-test.example/${p}`,
 			onConnect: {
 				addListener: (cb: (port: unknown) => void) => h.onConnect.push(cb),
+			},
+		},
+		permissions: {
+			contains: async () => h.permitted,
+			onRemoved: {
+				addListener: (cb: (p: { permissions?: string[] }) => void) =>
+					h.onPermissionRemoved.push(cb),
 			},
 		},
 		storage: {
@@ -125,8 +144,11 @@ async function load() {
 	h.onMessage.length = 0;
 	h.onDisconnect.length = 0;
 	h.onConnect.length = 0;
+	h.onPermissionRemoved.length = 0;
 	h.connects = 0;
 	h.disconnects = 0;
+	h.permitted = true;
+	h.hasBinding = true;
 	h.sealed.clear();
 	h.stored = {
 		desktopLink: {
@@ -446,5 +468,93 @@ describe("pairing borrows the page's native transport", () => {
 		page.die("Specified native messaging host not found.");
 
 		await expect(paired).rejects.toThrow(/not found/);
+	});
+});
+
+// The permission is optional, so a paired browser can be unable to use its own link. Two distinct
+// causes with the same symptom, and the difference matters: REVOKED is the user taking it away and
+// is permanent until they give it back, while NO BINDING is this worker having started before the
+// grant and repairs itself on the next start. Neither may reach connectNative, which is undefined
+// in the second case and would throw a TypeError into whatever was awaiting.
+describe("a paired browser that cannot use native messaging", () => {
+	it("arms nothing when the permission was revoked", async () => {
+		const mod = await load();
+		h.permitted = false;
+
+		expect(await mod.openDesktopLink()).toBe(false);
+		expect(h.connects).toBe(0);
+	});
+
+	it("arms nothing when this worker predates the grant", async () => {
+		// Permitted, and still no API to call. The combination that made the naive
+		// permissions.onAdded design impossible.
+		const mod = await load();
+		h.hasBinding = false;
+
+		expect(await mod.openDesktopLink()).toBe(false);
+		expect(h.connects).toBe(0);
+	});
+
+	it("does not poll a pipe it can never open", async () => {
+		vi.useFakeTimers();
+		const mod = await load();
+		h.permitted = false;
+		await mod.openDesktopLink();
+
+		await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+		expect(h.connects).toBe(0);
+		vi.useRealTimers();
+	});
+
+	it("refuses a delegated request in words rather than a TypeError", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+
+		// A fill the user is watching. "connectNative is not a function" in a console is not an
+		// explanation of why their password did not appear.
+		await expect(mod.askDesktop({ op: "query", hostname: "example.com" })).rejects.toThrow(
+			/cannot reach the desktop app/,
+		);
+	});
+
+	it("declines to reconnect", async () => {
+		const mod = await load();
+		h.permitted = false;
+
+		expect(await mod.connectToDesktop()).toBe(false);
+		expect(h.connects).toBe(0);
+	});
+
+	it("reports paired and unpermitted, so the UI can say which", async () => {
+		const mod = await load();
+		h.permitted = false;
+
+		// Still paired: the keys are intact and nothing was forgotten. Only the browser's
+		// permission is missing, which is a different thing to tell the user than "not connected".
+		expect(await mod.desktopLinkStatus()).toEqual({ paired: true, pairedAt: 1, permitted: false });
+	});
+
+	it("drops the held pipe when the permission is revoked mid-session", async () => {
+		const mod = await load();
+		const frames: string[] = [];
+		await open(mod, frames);
+		expect(h.disconnects).toBe(0);
+
+		h.permitted = false;
+		for (const cb of h.onPermissionRemoved) cb({ permissions: ["nativeMessaging"] });
+
+		// Held open, the keepalive would rediscover the refusal every twenty seconds forever.
+		await vi.waitFor(() => expect(h.disconnects).toBe(1));
+	});
+
+	it("ignores the removal of some other permission", async () => {
+		const mod = await load();
+		const frames: string[] = [];
+		await open(mod, frames);
+
+		for (const cb of h.onPermissionRemoved) cb({ permissions: ["clipboardWrite"] });
+
+		await vi.waitFor(() => expect(h.disconnects).toBe(0));
 	});
 });

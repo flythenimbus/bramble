@@ -186,13 +186,16 @@ out, no frame ever read. `pairWithDesktop` picks the lent transport when one is 
 direct `NativeSession` otherwise, so a worker that restarted after the grant needs no page at all.
 One state machine, one wire format, nothing to keep in sync.
 
-**Phase 4: background hardening.** One `hasNativeMessaging()` in
-`packages/platform-extension/src/background/desktop-link.ts` reading `permissions.contains`, gating
-`openDesktopLink()` and `ensureHeld()` so an ungranted browser arms nothing, in the same shape as the
-existing unpaired short-circuit. Register `permissions.onRemoved` to `closeDesktopLink()`. Add
-`permitted: boolean` to `desktopLinkStatus()` so the UI can tell "paired but revoked in
-chrome://extensions" from "not paired". Do not add an `onAdded` handler that tries to connect: per
-finding 1 it cannot work, and having one would be a trap for the next reader.
+**Phase 4: background hardening (done).** Two predicates in
+`packages/platform-extension/src/background/desktop-link.ts`, and keeping them apart is the point.
+`permitted()` reads `permissions.contains` and answers "has the user allowed this", which is what
+`desktopLinkStatus().permitted` reports. `canOpenNativePipe()` adds a binding check and answers "can
+THIS worker do it", which is a capability question rather than a permission one and is the only
+place binding presence may be consulted. Both have to hold before anything opens a pipe:
+`openDesktopLink`, `ensureHeld`, `askDesktop`, `connectToDesktop`, and pairing's direct-session
+fallback. `permissions.onRemoved` closes a held link. There is deliberately no `onAdded` handler;
+per finding 1 it would run in the worker that cannot have gained the binding, so it could only fail,
+and a comment in the source says so because adding one looks obviously right.
 
 **Phase 5: UI.** `DesktopLinkSection.tsx` keeps its current visibility (the adapter is already
 present for every Chromium user, so no section appears or disappears). Connect gains the

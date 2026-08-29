@@ -45,6 +45,37 @@ interface LinkState {
 	pairedAt: number;
 }
 
+/**
+ * Whether the user has allowed native messaging.
+ *
+ * `permissions.contains` is the only honest answer. Do NOT substitute a check for the API being
+ * callable: the two disagree, in both directions and for as long as a context lives.
+ */
+async function permitted(): Promise<boolean> {
+	try {
+		return await api.permissions.contains({ permissions: ["nativeMessaging"] });
+	} catch {
+		// No permissions API at all (some hosts, and the unit-test stubs). Nothing to promise.
+		return false;
+	}
+}
+
+/**
+ * Whether THIS worker can open a native pipe right now, which is a different question.
+ *
+ * Two things have to be true and they fail independently. `permitted()` is whether the user has
+ * allowed it. The binding is whether this particular context was created late enough to have been
+ * handed the API: Chromium fixes bindings at context creation, so a worker that was already
+ * running when the grant happened answers "allowed, and I still cannot". That is not a permission
+ * test and must not be used as one; it is this worker asking what it is able to do.
+ *
+ * Nothing can repair it in place. The worker gains the binding when it next starts, and
+ * background.ts calls openDesktopLink() on every start, so the link comes up on its own.
+ */
+async function canOpenNativePipe(): Promise<boolean> {
+	return typeof api.runtime.connectNative === "function" && (await permitted());
+}
+
 async function loadState(): Promise<LinkState | null> {
 	const stored = (await api.storage.local.get(STORAGE_KEY))[STORAGE_KEY] as LinkState | undefined;
 	return stored?.privateKey && stored?.appPublicKey ? stored : null;
@@ -235,6 +266,10 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 	// The pairing window's transport when it lent one, which is the ordinary case on a browser
 	// that has just granted the permission. A direct session otherwise: a worker that started
 	// after the grant has the binding and needs no help.
+	if (!proxyPort && !(await canOpenNativePipe())) {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		throw new Error("This browser cannot reach the desktop app yet.");
+	}
 	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
 	try {
 		session.send({
@@ -280,6 +315,10 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 export async function askDesktop(request: Record<string, unknown>): Promise<any> {
 	const state = await loadState();
 	if (!state) throw new Error("Not linked to the desktop app.");
+	// Said plainly rather than surfacing as a TypeError on an undefined connectNative, because a
+	// fill the user is watching fails here and the reason has to be legible in a log.
+	if (!(await canOpenNativePipe()))
+		throw new Error("This browser cannot reach the desktop app yet.");
 
 	// Ride the held link when sync has one open. A second connection would displace it as the
 	// target for the app's pushes, and closing this short-lived one would take that queue with
@@ -343,6 +382,7 @@ async function askOverHeld(link: HeldLink, request: Record<string, unknown>): Pr
 export async function connectToDesktop(): Promise<boolean> {
 	const state = await loadState();
 	if (!state) return false;
+	if (!(await canOpenNativePipe())) return false;
 
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
@@ -482,6 +522,10 @@ export async function openDesktopLink(): Promise<boolean> {
 	// paired, and an unconditional keepalive woke every one of those service workers every twenty
 	// seconds, forever, to discover the same thing each time.
 	if (!(await loadState())) return false;
+	// Paired but unreachable from here: the permission was revoked, or this worker predates the
+	// grant. Arming the keepalive would poll a pipe this context can never open. The next worker
+	// start calls this again, which is what recovers it.
+	if (!(await canOpenNativePipe())) return false;
 	linkWanted = true;
 	startKeepalive();
 	const up = (await ensureHeld()) !== null;
@@ -552,6 +596,9 @@ async function ensureHeld(): Promise<HeldLink | null> {
 	// Not paired. The ordinary case, and openDesktopLink already declined to arm anything, so this
 	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
 	if (!state) return null;
+	// Revoked while the keepalive was live. Without this the constructor below calls an undefined
+	// connectNative and throws a TypeError into whatever happened to be awaiting.
+	if (!(await canOpenNativePipe())) return null;
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
@@ -654,10 +701,31 @@ export async function unlinkDesktop(): Promise<void> {
 	await api.storage.local.remove(STORAGE_KEY);
 }
 
-export async function desktopLinkStatus(): Promise<{ paired: boolean; pairedAt?: number }> {
+export async function desktopLinkStatus(): Promise<{
+	paired: boolean;
+	pairedAt?: number;
+	permitted: boolean;
+}> {
 	const state = await loadState();
-	return state ? { paired: true, pairedAt: state.pairedAt } : { paired: false };
+	// The permission, not this worker's ability to use it. The UI is asking "did the user take
+	// this away", which stays true across a worker that simply started too early.
+	const allowed = await permitted();
+	return state
+		? { paired: true, pairedAt: state.pairedAt, permitted: allowed }
+		: { paired: false, permitted: allowed };
 }
+
+// Revoked in chrome://extensions while paired. Stop holding a pipe the browser will now refuse,
+// rather than leaving the keepalive to rediscover it every twenty seconds.
+//
+// There is deliberately NO matching onAdded handler. It would run in THIS worker, which cannot
+// have gained the binding (see canOpenNativePipe), so it could only fail. The link comes up when
+// the worker next starts. Adding one looks obviously right and is the trap this comment exists to
+// prevent; see docs/desktop-link-optional-permission.md.
+api.permissions?.onRemoved?.addListener((removed) => {
+	if (!removed.permissions?.includes("nativeMessaging")) return;
+	void closeDesktopLink().catch(() => {});
+});
 
 on(
 	"DESKTOP_LINK_CLAIM_INVITE",

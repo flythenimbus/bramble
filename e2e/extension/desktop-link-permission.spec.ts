@@ -59,3 +59,48 @@ test("an unpaired browser stores no link state", async ({ context }) => {
 
 	expect(stored).toBeNull();
 });
+
+// The regression this whole phase exists for, and the one the unit tests structurally cannot
+// catch. A browser that PAIRED while it held the permission, and no longer holds it: the stored
+// link state loads, so every early return that keys off "not paired" is passed, and the next step
+// is a connectNative that Chrome never installed. In a mock that is a stubbed function; here it is
+// genuinely undefined, so an ungated path throws a TypeError into whatever was awaiting it and the
+// link dies with nothing said.
+test("a paired browser that lost the grant fails in words, not a TypeError", async ({
+	context,
+	extensionId,
+}) => {
+	const [sw] = context.serviceWorkers();
+	await sw.evaluate(() => {
+		// Real 32-byte base64 keys, not placeholders. Junk here dies in the offscreen crypto on
+		// its way to the handshake, which would make this pass for a reason that has nothing to do
+		// with the permission.
+		const key = btoa(String.fromCharCode(...new Uint8Array(32)));
+		return chrome.storage.local.set({
+			desktopLink: { privateKey: key, publicKey: key, appPublicKey: key, pairedAt: 1 },
+		});
+	});
+
+	const errors: string[] = [];
+	sw.on("console", (m) => {
+		if (m.type() === "error") errors.push(m.text());
+	});
+
+	const page = await context.newPage();
+	await page.goto(`chrome-extension://${extensionId}/popup.html`);
+	const ask = (type: string) =>
+		page.evaluate((t) => chrome.runtime.sendMessage({ type: t }), type) as Promise<{
+			ok: boolean;
+			data?: unknown;
+		}>;
+
+	// Paired and unpermitted are independent facts, and the UI needs both to say which of the two
+	// unhappy states this is.
+	expect(await ask("DESKTOP_LINK_STATUS")).toEqual({
+		ok: true,
+		data: { paired: true, pairedAt: 1, permitted: false },
+	});
+	// A refusal, not a rejection and not a crash.
+	expect(await ask("DESKTOP_LINK_CONNECT")).toEqual({ ok: true, data: false });
+	expect(errors.join("\n")).not.toContain("connectNative");
+});

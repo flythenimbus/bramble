@@ -13,6 +13,15 @@ export interface DesktopLinkStatus {
 	paired: boolean;
 	/** Epoch ms, when paired. */
 	pairedAt?: number;
+	/**
+	 * Whether the host still holds the permission the link needs.
+	 *
+	 * `paired && !permitted` is the one state worth saying out loud: the user revoked it in the
+	 * browser's own settings, so a link that looks connected can do nothing until it is granted
+	 * again. Optional, and undefined means "not reported"; only an explicit `false` should be
+	 * treated as revoked, so a host that never answers this is never accused of it.
+	 */
+	permitted?: boolean;
 }
 
 export interface DesktopLinkAdapter {
