@@ -17,11 +17,15 @@
 // This module owns the port and the persistence and relays handshake messages across.
 
 import { api } from "../platform-api";
+import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, on } from "./router";
 
 /** Must match the `name` in the host manifest the desktop app writes. */
 const HOST_NAME = "app.bramble.desktop";
+
+/** Must match `NATIVE_PROXY_PORT` in ../desktop-link.ts (page side). */
+const NATIVE_PROXY_PORT = "link-native-proxy";
 
 /** Wire protocol version, checked by the app. */
 const PROTOCOL_VERSION = 1;
@@ -45,6 +49,90 @@ async function loadState(): Promise<LinkState | null> {
 	const stored = (await api.storage.local.get(STORAGE_KEY))[STORAGE_KEY] as LinkState | undefined;
 	return stored?.privateKey && stored?.appPublicKey ? stored : null;
 }
+
+/**
+ * What the handshakes need from a pipe to the desktop app, so the pairing state machine does not
+ * care which end of the extension is holding it open.
+ *
+ * There are two, and the reason is the optional permission. Chromium fixes a context's API
+ * bindings when the context is created, so a worker that was already running when the user granted
+ * `nativeMessaging` never gains `connectNative` and cannot get it back without restarting. During
+ * pairing the worker is exactly that worker, and the open pairing window is what stops it
+ * restarting. So pairing borrows the transport from a page created after the grant, and everything
+ * afterwards uses a direct session once the worker has restarted on its own.
+ * See docs/desktop-link-optional-permission.md.
+ */
+interface LinkTransport {
+	request(message: Record<string, unknown>): Promise<any>;
+	send(message: Record<string, unknown>): void;
+	close(): void;
+}
+
+/**
+ * A pipe whose native end lives in a page, relayed frame for frame over a runtime port.
+ *
+ * The page is a dumb pipe and deliberately so: it forwards opaque handshake frames and never
+ * inspects them. Key generation, the Noise state machine and the write to storage all stay in the
+ * background, so this adds a transport rather than a second implementation of pairing.
+ */
+class ProxiedSession implements LinkTransport {
+	private queue: Array<(value: any) => void> = [];
+	private failed: string | null = null;
+
+	constructor(private port: chrome.runtime.Port) {
+		port.onMessage.addListener((msg: { frame?: unknown; dead?: string }) => {
+			if (typeof msg?.dead === "string") return this.die(msg.dead);
+			const next = this.queue.shift();
+			if (next) next(msg?.frame);
+		});
+		// The page closing mid-handshake is a dead pipe, not a silent stall: whoever is waiting
+		// has to be told, or pairing hangs on a promise nothing will ever settle.
+		port.onDisconnect.addListener(() => this.die("the pairing window closed"));
+	}
+
+	private die(reason: string): void {
+		this.failed = reason;
+		for (const pending of this.queue.splice(0)) pending(null);
+	}
+
+	request(message: Record<string, unknown>): Promise<any> {
+		if (this.failed) return Promise.reject(new Error(this.failed));
+		return new Promise((resolve, reject) => {
+			this.queue.push((value) => {
+				if (value === null || value === undefined) reject(new Error(this.failed ?? "disconnected"));
+				else resolve(value);
+			});
+			this.send(message);
+		});
+	}
+
+	send(message: Record<string, unknown>): void {
+		this.port.postMessage({ frame: message });
+	}
+
+	close(): void {
+		// The page owns the native port and closes it when its own proxy handle is released.
+		// Disconnecting here would race that and orphan the host process.
+	}
+}
+
+/** The pairing window's borrowed transport, while one is open. At most one: pairing is modal. */
+let proxyPort: chrome.runtime.Port | null = null;
+
+api.runtime.onConnect.addListener((port) => {
+	if (port.name !== NATIVE_PROXY_PORT) return;
+	// A page-origin sender must never drive native messaging. Same rule as extensionOnly() on the
+	// message router; a port is just another way in. See docs/sec-audit-7726.md (A3).
+	if (!port.sender || !isExtensionSender(port.sender)) return port.disconnect();
+	proxyPort = port;
+	port.onDisconnect.addListener(() => {
+		if (proxyPort === port) proxyPort = null;
+	});
+	// Acked so the page can wait for this before asking to pair. Without it the pair request can
+	// overtake the connect and find no transport registered, which is a race that only shows up
+	// on a cold worker.
+	port.postMessage({ ready: true });
+});
 
 /** A single request/response over a freshly spawned host. */
 class NativeSession {
@@ -144,7 +232,10 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 		psk,
 	})) as { sessionId: number; message: string };
 
-	const session = new NativeSession();
+	// The pairing window's transport when it lent one, which is the ordinary case on a browser
+	// that has just granted the permission. A direct session otherwise: a worker that started
+	// after the grant has the binding and needs no help.
+	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
 	try {
 		session.send({
 			kind: "pair",

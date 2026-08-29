@@ -32,6 +32,10 @@ vi.mock("./sync-clock", () => ({ witnessStamp: vi.fn(async () => {}), witnessSta
 
 // chrome stub with local + session storage, alarms, and runtime (./sync adds a status listener at
 // import). No `offscreen` key -> the code treats the host as suspend-y and arms the keepalive alarm.
+//
+// `runtime` also has to carry getURL, id and onConnect: ./sync imports ./desktop-link, which
+// registers a port listener at import and resolves the extension origin through ../sender. An
+// https stand-in for getURL, because Node gives chrome-extension:// an opaque origin.
 function stubChrome(
 	localSeed: Record<string, unknown> = {},
 	sessionSeed: Record<string, unknown> = {},
@@ -41,7 +45,12 @@ function stubChrome(
 	vi.stubGlobal("chrome", {
 		storage: { local: memoryStorageArea(local), session: memoryStorageArea(session) },
 		alarms: { create: vi.fn(), clear: vi.fn(async () => {}) },
-		runtime: { onMessage: { addListener: vi.fn() } },
+		runtime: {
+			onMessage: { addListener: vi.fn() },
+			onConnect: { addListener: vi.fn() },
+			id: "bramble-test",
+			getURL: (p: string) => `https://bramble-test.example/${p}`,
+		},
 	});
 }
 

@@ -133,17 +133,26 @@ it relocks the vault in the middle of a flow the user deliberately started.
 3. In the pop-out, call `permissions.request()`. Finding 4 says the window survives the dialog and
    the promise resolves.
 4. Reload the pop-out. Finding 1 says this is the only way to get a context with the binding.
-5. Run the pairing handshake page-side in that fresh context, relaying crypto to the offscreen
-   document the way the background does today, and write the same `LinkState` to `storage.local`
-   under the same key.
+5. Lend that context's native pipe to the background, which runs the handshake over it.
 6. The background picks up native messaging on its next natural restart. `background.ts:51` already
    calls `openDesktopLink()` at every start, so the steady state self-heals with no new signalling.
 
-Step 5 is the only architectural move: a page-side twin of `pairWithDesktop()`. It is lateral rather
-than a downgrade on the security posture, because `pairWithDesktop` already pulls the generated
-private key back out of the offscreen document into the worker in order to store it, and the typed
-code is already handled in the page. Nothing that is currently confined to the offscreen document
-leaves it.
+Step 5 is the only architectural move, and the smallest one that works. The obvious reading of
+finding 1 is "pairing must move to the page", which would mean a second copy of the Noise handshake
+living next to the first and drifting from it. It does not have to. Only the TRANSPORT is
+permission-gated, so the page opens the native port and relays opaque frames over a runtime port
+while the key generation, the state machine and the write to `storage.local` all stay in the
+background exactly as they are. `LinkTransport` is the seam: `NativeSession` for a worker that can
+open its own pipe, `ProxiedSession` for one borrowing a page's.
+
+The page is a dumb pipe and never inspects a frame, so nothing confined to the offscreen document
+leaves it and no key material passes anywhere new.
+
+Two consequences worth stating. The proxy port is guarded by `isExtensionSender`, because a port is
+another way in and a page-origin sender must no more be able to drive native messaging than it can
+drive `CRYPTO_*` (see `docs/sec-audit-7726.md` A3). And the background acknowledges the port before
+the page asks to pair, because a pair request that overtakes its own transport finds none
+registered, which is a race that only appears on a cold worker.
 
 Everything after pairing stays where it is. Delegation, sync frames and `reportActiveTab` are all
 background-owned and none of them is on a path where a sub-minute delay is visible.
@@ -169,11 +178,13 @@ permission?: {
 Optional, so a host that grants at install omits it and the UI reads absent as always-granted.
 Implement it in the page against `api.permissions`, never dispatched to the background.
 
-**Phase 3: page-side pairing.** The twin of `pairWithDesktop()` in
-`packages/platform-extension/src/desktop-link.ts`, holding the native port in the pop-out and
-relaying `LINK_*` messages to the offscreen document. Writes the same `STORAGE_KEY` shape. The
-background's version stays for the already-permitted path, so there are two callers of one protocol
-and the wire format must not fork.
+**Phase 3: lend the transport (done).** `LinkTransport` in
+`packages/platform-extension/src/background/desktop-link.ts` splits the pipe from the handshake, and
+`ProxiedSession` implements it over a runtime port from the page. `openNativeProxy()` in
+`packages/platform-extension/src/desktop-link.ts` is the page half: native port in, runtime port
+out, no frame ever read. `pairWithDesktop` picks the lent transport when one is registered and a
+direct `NativeSession` otherwise, so a worker that restarted after the grant needs no page at all.
+One state machine, one wire format, nothing to keep in sync.
 
 **Phase 4: background hardening.** One `hasNativeMessaging()` in
 `packages/platform-extension/src/background/desktop-link.ts` reading `permissions.contains`, gating
@@ -213,7 +224,9 @@ call `permission.drop()` from unlink.
 - **Findings 3 to 6 are hand-driven and single-run.** One Brave session, no reproduction. They are
   UX-shaped rather than load-bearing, so the cost of one being wrong is a clumsy flow rather than a
   broken link.
-- **Two pairing implementations of one protocol.** Phase 3 leaves a page-side and a background-side
-  handshake. They must not drift. Worth a shared module rather than a copy.
+- **Pairing now depends on a window staying open.** Lending the transport means the pairing window
+  closing mid-handshake kills it. That is handled (the port's disconnect fails the pending request
+  with a named error rather than leaving it pending forever), but it is a failure mode the old
+  background-only path did not have.
 - **The install prompt does not become clean.** `<all_urls>`, `webAuthenticationProxy` and `identity`
   remain. This removes one line, not the warning screen.

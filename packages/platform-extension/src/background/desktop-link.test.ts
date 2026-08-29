@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
 	/** Handlers registered on the live port. */
 	onMessage: [] as ((msg: unknown) => void)[],
 	onDisconnect: [] as (() => void)[],
+	/** Listeners registered on runtime.onConnect, so a test can hand in a proxy port. */
+	onConnect: [] as ((port: unknown) => void)[],
 	/** How many native ports have been opened; the count IS the connection count. */
 	connects: 0,
 	disconnects: 0,
@@ -44,6 +46,15 @@ vi.mock("../platform-api", () => ({
 				};
 			},
 			lastError: undefined,
+			// The module now guards its proxy port with isExtensionSender, which resolves the
+			// extension origin at import time. An https stand-in, not a real chrome-extension://
+			// URL: Node gives non-special schemes an opaque "null" origin, which would reject
+			// every port including the legitimate ones. Same trick as sender.test.ts.
+			id: "bramble-test",
+			getURL: (p: string) => `https://bramble-test.example/${p}`,
+			onConnect: {
+				addListener: (cb: (port: unknown) => void) => h.onConnect.push(cb),
+			},
 		},
 		storage: {
 			local: {
@@ -62,8 +73,16 @@ vi.mock("./offscreen-client", () => ({
 		switch (msg.type) {
 			case "LINK_START_INITIATOR":
 				return { ok: true, data: { sessionId: 7, message: "kk1" } };
+			// Pairing (XXpsk3) rather than reconnect (KK). Only the pairing tests reach these.
+			case "SYNC_GENERATE_KEYPAIR":
+				return { ok: true, data: { privateKey: "priv", publicKey: "pub" } };
+			case "LINK_ENROLL_INITIATOR":
+				return { ok: true, data: { sessionId: 9, message: "xx1" } };
+			case "LINK_REMOTE_STATIC":
+				return { ok: true, data: "app-pub" };
+			// The KK path ignores this; the pairing path reads `message` off it.
 			case "LINK_READ":
-				return { ok: true, data: undefined };
+				return { ok: true, data: { message: "xx3", done: false } };
 			case "LINK_SEAL": {
 				const plaintext = msg.payload?.plaintext as string;
 				const blob = `sealed:${plaintext}`;
@@ -105,6 +124,7 @@ async function load() {
 	h.posted.length = 0;
 	h.onMessage.length = 0;
 	h.onDisconnect.length = 0;
+	h.onConnect.length = 0;
 	h.connects = 0;
 	h.disconnects = 0;
 	h.sealed.clear();
@@ -306,5 +326,125 @@ describe("a browser with no desktop app", () => {
 		await vi.advanceTimersByTimeAsync(5 * 60_000);
 		expect(h.connects).toBe(0);
 		vi.useRealTimers();
+	});
+});
+
+// Pairing runs on a transport the PAGE opens, because the worker cannot open one. A worker that
+// was already running when the user granted nativeMessaging never gains connectNative, and the
+// open pairing window is itself what stops it restarting to pick the binding up. So the page
+// lends a pipe and the handshake, the keys and the storage write all stay here.
+describe("pairing borrows the page's native transport", () => {
+	/** Hand the background a proxy port, as runtime.onConnect would. */
+	function lend(sender: unknown) {
+		const sent: Record<string, unknown>[] = [];
+		let onMessage: ((m: unknown) => void) | undefined;
+		let onDisconnect: (() => void) | undefined;
+		let disconnected = false;
+		const port = {
+			name: "link-native-proxy",
+			sender,
+			postMessage: (m: Record<string, unknown>) => sent.push(m),
+			onMessage: {
+				addListener: (cb: (m: unknown) => void) => {
+					onMessage = cb;
+				},
+			},
+			onDisconnect: {
+				addListener: (cb: () => void) => {
+					onDisconnect = cb;
+				},
+			},
+			disconnect: () => {
+				disconnected = true;
+			},
+		};
+		for (const cb of h.onConnect) cb(port);
+		return {
+			sent,
+			get disconnected() {
+				return disconnected;
+			},
+			/** A frame arriving from the desktop app, relayed by the page. */
+			deliver: (frame: unknown) => onMessage?.({ frame }),
+			/** The page reporting that its native port died. */
+			die: (dead: string) => onMessage?.({ dead }),
+			/** The pairing window closing. */
+			drop: () => onDisconnect?.(),
+		};
+	}
+
+	/** A popup or pop-out: the extension origin. See the getURL note on the platform-api mock. */
+	const EXT_SENDER = { origin: "https://bramble-test.example" };
+
+	/** Drive a pairing to completion over `page`, resolving what pairWithDesktop returned. */
+	async function pairOver(
+		mod: { pairWithDesktop: (c: string) => Promise<unknown> },
+		page: ReturnType<typeof lend>,
+	) {
+		const paired = mod.pairWithDesktop("ABCD1234");
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		page.deliver({ ok: true, message: "xx2" });
+		await vi.waitFor(() => expect(page.sent.length).toBe(4));
+		page.deliver({ done: true });
+		return paired;
+	}
+
+	it("acks the port, so the page can pair without racing the connect", async () => {
+		await load();
+
+		expect(lend(EXT_SENDER).sent[0]).toEqual({ ready: true });
+	});
+
+	it("pairs over the lent port and never opens a native port of its own", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+
+		await expect(pairOver(mod, page)).resolves.toMatchObject({
+			publicKey: "pub",
+			appPublicKey: "app-pub",
+		});
+		// The assertion the whole design rests on. A direct connectNative here would be the
+		// undefined binding, i.e. a TypeError swallowed into a silently dead link.
+		expect(h.connects).toBe(0);
+		// Opaque frames only: the page relays what it is given and reads none of it.
+		expect(page.sent[1]).toMatchObject({ frame: { kind: "pair" } });
+		expect(page.sent[2]).toEqual({ frame: { message: "xx1" } });
+	});
+
+	it("refuses a port from a content script and does not pair over it", async () => {
+		const mod = await load();
+		const evil = lend({ origin: "https://evil.example", tab: { id: 1 } });
+
+		expect(evil.disconnected).toBe(true);
+		// Rejecting the port is only half of it; it must also never have become the transport.
+		// Falling back to a direct session is what proves it did not.
+		void mod.pairWithDesktop("ABCD1234").catch(() => {});
+		await vi.waitFor(() => expect(h.connects).toBe(1));
+		expect(evil.sent).toEqual([]);
+	});
+
+	it("fails the handshake when the pairing window closes mid-flight", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+
+		const paired = mod.pairWithDesktop("ABCD1234");
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		page.drop();
+
+		// Without this the pairing sits on a promise nothing will ever settle, and the UI spins.
+		await expect(paired).rejects.toThrow(/pairing window closed/);
+	});
+
+	it("surfaces a native host the page could not reach", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+
+		const paired = mod.pairWithDesktop("ABCD1234");
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		// The ordinary "desktop app is not installed" case: Chrome reports it as a bare
+		// disconnect and the page forwards the reason.
+		page.die("Specified native messaging host not found.");
+
+		await expect(paired).rejects.toThrow(/not found/);
 	});
 });

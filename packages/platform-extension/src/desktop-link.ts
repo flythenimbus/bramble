@@ -69,11 +69,82 @@ const permission = {
 	},
 };
 
+/** Must match `NATIVE_PROXY_PORT` in ./background/desktop-link.ts. */
+const NATIVE_PROXY_PORT = "link-native-proxy";
+
+/** Must match `HOST_NAME` in ./background/desktop-link.ts. */
+const HOST_NAME = "app.bramble.desktop";
+
+/**
+ * Lend the background a native pipe this context can open and it cannot.
+ *
+ * Chromium fixes a context's API bindings when the context is created, so the worker that was
+ * running when the user granted `nativeMessaging` never gains `connectNative`, and the open
+ * pairing window is itself what stops it restarting to pick it up. This page was created after
+ * the grant, so it has the binding; it forwards frames and reads none of them. The keys, the
+ * handshake and the storage write all stay in the background.
+ *
+ * Null when this context has no binding either, which means the grant has not happened or this
+ * page predates it. The caller then pairs the ordinary way and the background decides.
+ */
+function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
+	if (typeof api.runtime.connectNative !== "function") return null;
+
+	let native: chrome.runtime.Port;
+	try {
+		native = api.runtime.connectNative(HOST_NAME);
+	} catch {
+		// A binding that exists but refuses, e.g. the permission was revoked between the check
+		// and here. Nothing to lend.
+		return null;
+	}
+	const relay = api.runtime.connect({ name: NATIVE_PROXY_PORT });
+
+	let settle: () => void;
+	const ready = new Promise<void>((resolve) => {
+		settle = resolve;
+	});
+
+	relay.onMessage.addListener((msg: { ready?: boolean; frame?: Record<string, unknown> }) => {
+		if (msg?.ready) return settle();
+		if (msg?.frame) native.postMessage(msg.frame);
+	});
+	native.onMessage.addListener((frame) => relay.postMessage({ frame }));
+	native.onDisconnect.addListener(() => {
+		// Tell the background rather than just going quiet. Chrome reports a missing host, a
+		// manifest that does not name this extension, and a host that exited all as the same bare
+		// disconnect, so this is the only signal there is.
+		const dead = api.runtime.lastError?.message ?? "disconnected";
+		try {
+			relay.postMessage({ dead });
+		} catch {
+			// The relay is already gone; the background has its own disconnect handler.
+		}
+	});
+	// Unblock rather than hang if the background never acks (an old worker without this listener).
+	setTimeout(() => settle(), 2000);
+
+	return {
+		ready,
+		close: () => {
+			native.disconnect();
+			relay.disconnect();
+		},
+	};
+}
+
 const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
-	// The code goes straight through to the background and is never stored here.
+	// The code goes straight through to the background and is never stored here. The native pipe
+	// is lent for the duration and torn down either way; see openNativeProxy.
 	pair: async (code) => {
-		await dispatch("DESKTOP_LINK_PAIR", { code });
+		const proxy = openNativeProxy();
+		try {
+			await proxy?.ready;
+			await dispatch("DESKTOP_LINK_PAIR", { code });
+		} finally {
+			proxy?.close();
+		}
 	},
 	connect: () => dispatch<boolean>("DESKTOP_LINK_CONNECT"),
 	query: async (hostname) => {
