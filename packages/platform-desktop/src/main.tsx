@@ -13,6 +13,7 @@ import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/s
 import { desktopStorage } from "./adapters/storage";
 import { onVaultStateChange } from "./adapters/vault-session";
 import { startBackupSchedule } from "./backup";
+import { forwardConsoleToLog } from "./log-forward";
 import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 import { installWindowShortcuts, syncTrayTheme } from "./window-chrome";
@@ -82,6 +83,9 @@ const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
 
 void (async () => {
+	// First, and before any await: a failure during boot is exactly the kind this is here to
+	// capture, and a release build has no devtools to read it from.
+	forwardConsoleToLog();
 	// Settings' "About" row reads this synchronously, so resolve it before the first render.
 	await resolveAppVersion();
 	// Ctrl-W / Ctrl-Q, and a tray icon that stays visible against the panel. Both are no-ops on

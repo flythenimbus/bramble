@@ -16,6 +16,7 @@
 		"process:allow-restart",
 		"autostart:allow-is-enabled",
 		"autostart:allow-enable",
-		"autostart:allow-disable"
+		"autostart:allow-disable",
+		"log:default"
 	]
 }
