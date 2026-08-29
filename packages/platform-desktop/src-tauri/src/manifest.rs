@@ -13,9 +13,16 @@
 //!
 //! macOS and Linux. Windows keeps this in the registry rather than the filesystem, so it is a
 //! different mechanism and not a path table. Firefox is absent on both: it reads a different
-//! manifest schema from a different directory, and the Firefox build of the extension does not
-//! request the `nativeMessaging` permission, so a host manifest for it would be a file no
+//! manifest schema from a different directory, and the Firefox build of the extension declares
+//! `nativeMessaging` in neither permission array, so a host manifest for it would be a file no
 //! browser would ever act on. See docs/desktop-port.md.
+//!
+//! Nothing here depends on HOW the Chromium extension holds that permission. It is optional there
+//! now, asked for when the user connects rather than at install, but this file keys on the
+//! extension id and a browser refuses an unpermitted `connectNative` before any manifest is
+//! consulted. So a manifest written for a browser that has not been granted it yet is harmless
+//! and correct: it is what makes the connection work the moment the user says yes.
+//! See docs/desktop-link-optional-permission.md.
 
 use std::{
     ffi::OsStr,

@@ -159,12 +159,12 @@ background-owned and none of them is on a path where a sub-minute delay is visib
 
 ## Execution plan
 
-**Phase 1: manifest and gate.** Move `"nativeMessaging"` from `permissions` to
+**Phase 1: manifest and gate (done).** Moved `"nativeMessaging"` from `permissions` to
 `"optional_permissions"` in `packages/manifests/chromium/manifest.json`. Change `canNativeMessage()`
 in `packages/platform-extension/src/desktop-link.ts:30` to read both arrays, so Firefox stays gated
 off and the "turns itself on the day Firefox lands" property survives.
 
-**Phase 2: adapter surface.** Add to `DesktopLinkAdapter` in
+**Phase 2: adapter surface (done).** Added to `DesktopLinkAdapter` in
 `packages/core/src/adapters/desktop-link.ts`:
 
 ```ts
@@ -219,16 +219,24 @@ deliberate. The grant still lands, and reopening the popup is itself the fresh c
 `restoreRoute` putting the user back in Settings. Nothing in the flow treats "did not return" as
 failure.
 
-**Phase 6: tests, i18n, docs.**
+**Phase 6: tests, i18n, docs (done).** Tests landed with the phase that motivated each, rather than
+in a batch at the end, so a failing one names the change that broke it.
 
-- `packages/platform-extension/src/desktop-link.test.ts`: gate cases for `optional_permissions`, and
-  a case asserting the gate does not consult binding presence.
-- `packages/platform-extension/src/background/desktop-link.test.ts`: the mock needs `api.permissions`.
-  Add "arms nothing without the grant", mirroring the existing "a browser with no desktop app" case.
-- `DesktopLinkSection.test.tsx`: ungranted, denied, and revoked-while-paired.
-- New strings mean `pnpm i18n:extract`; the catalogs fall back to English silently otherwise.
-- Update the Firefox and "link's lifetime" sections of `desktop-port.md`, both of which assert the
-  manifest gate, and the header comment in `manifest.rs`.
+- `desktop-link.test.ts` (page): the gate counts both arrays, and the sub-adapter is withheld where
+  the permission is required. One case gives the mock no `connectNative` at all, so any future
+  shortcut through `typeof` throws instead of quietly passing.
+- `background/desktop-link.test.ts`: the lent transport, a content-script port being refused, a
+  window closed mid-handshake, and both unusable-while-paired causes kept apart.
+- `DesktopLinkSection.test.tsx`: ungranted, declined, revoked-while-paired, `drop()` ordering on
+  unlink, and a host with no permission to ask for.
+- `e2e/extension/desktop-link-permission.spec.ts`: the shipped ungranted state and the
+  paired-but-revoked regression, in a real browser because a mocked `connectNative` cannot be
+  genuinely undefined. Verified by removing the gate and watching it fail on the right line.
+- Translations via `pnpm i18n:translate` (DeepSeek; Ollama needs a model pulled first). `i18n:check`
+  is a real gate and fails on English fallbacks, which are otherwise invisible.
+- `desktop-port.md` and the `manifest.rs` header both asserted the always-required manifest gate.
+  The Rust one now says explicitly that nothing there depends on how the extension holds the
+  permission, since a host manifest written for a not-yet-granted browser is harmless and correct.
 
 ## Risks
 

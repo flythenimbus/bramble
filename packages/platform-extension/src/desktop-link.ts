@@ -27,9 +27,11 @@ async function dispatch<T = unknown>(type: string, extra?: Record<string, unknow
  *
  * BOTH permission arrays count. Chromium asks for `nativeMessaging` at connect time rather than
  * at install (see docs/desktop-link-optional-permission.md), so it is declared optional there;
- * declaring it required again must keep working. This answers "could this browser ever do it",
- * not "may it right now" — that is `permission.granted()`, and it is the only honest test, since
- * `typeof api.runtime.connectNative` goes stale in both directions across a grant or a revoke.
+ * declaring it required again must keep working.
+ *
+ * This answers "could this browser ever do it", not "may it right now". That second question is
+ * `permission.granted()`, and it is the only honest test of it: `typeof connectNative` goes stale
+ * in both directions across a grant or a revoke, so it is never evidence of a permission.
  */
 const canNativeMessage = (): boolean => {
 	try {

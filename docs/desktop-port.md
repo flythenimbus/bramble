@@ -723,9 +723,10 @@ place, because a browser may be running the previous one.
 
 Firefox is still not covered, on any platform. It reads a different schema
 (`allowed_extensions` with the addon id) from a different directory, but the blocker is upstream
-of that: the Firefox build of the extension does not request the `nativeMessaging` permission, so
-a manifest for it would be a file no browser would ever act on. Adding it means a permission the
-extension has to declare and AMO has to review.
+of that: the Firefox build of the extension declares `nativeMessaging` in neither permission array,
+so a manifest for it would be a file no browser would ever act on. Adding it means a permission the
+extension has to declare and AMO has to review, though the Chromium side now declares it optional
+and asks at connect time, which is the cheaper shape to ask a reviewer for.
 
 **A hybrid-GPU laptop can stall once on first draw, and it is not ours.** On a machine with an
 Intel iGPU rendering and a discrete card runtime-suspended in `D3hot`, the first interaction can
@@ -786,17 +787,31 @@ filling while locked, the entire point, could not work), and to an unlock TRANSI
 worker restarting with an already-unlocked session never opened it). An open pipe grants nothing on
 its own: the app answers only while its own vault is unlocked, and the handshake still has to pass.
 
+Since `nativeMessaging` became an optional permission there is a fourth condition, and it is not
+the lock state either. A paired browser can be unable to open the pipe at all: the user revoked the
+permission, or the worker started before it was granted and Chromium never handed that context the
+API. Both are gated in `background/desktop-link.ts`, and the second repairs itself on the next
+worker start, which is why `openDesktopLink()` runs there unconditionally. See
+[desktop-link-optional-permission.md](desktop-link-optional-permission.md).
+
 ### Firefox
 
-Firefox has no part in the browser link. The manifest does not ask for `nativeMessaging`, and the
-desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium support
-directories, where Firefox wants `allowed_extensions` under Mozilla's. Both ends would need work.
+Firefox has no part in the browser link. Its manifest names `nativeMessaging` in neither permission
+array, and the desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium
+support directories, where Firefox wants `allowed_extensions` under Mozilla's. Both ends would need
+work.
 
-The extension adapter is therefore absent unless the running manifest asks for the permission,
-which is what keeps the Settings section from appearing. Read from the manifest rather than sniffed
-from the browser, so it turns itself on the day Firefox support lands instead of needing to be
-remembered. Without that gate a Firefox release would have shipped a Connect button whose only
-possible outcome is an error.
+The extension adapter is therefore absent unless the running manifest declares the permission
+somewhere, which is what keeps the Settings section from appearing. BOTH arrays count: Chromium now
+declares it optional and asks at connect time, so reading only `permissions` would hide the section
+on the very build that ships the feature. Read from the manifest rather than sniffed from the
+browser, so it turns itself on the day Firefox support lands instead of needing to be remembered.
+Without that gate a Firefox release would have shipped a Connect button whose only possible outcome
+is an error.
+
+Note the two questions this gate does not answer. Whether the permission is HELD is
+`permission.granted()`, and whether a given context can actually call the API is a third thing
+again; see [desktop-link-optional-permission.md](desktop-link-optional-permission.md).
 
 ## Releasing and updating
 
