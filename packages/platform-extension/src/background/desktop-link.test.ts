@@ -558,3 +558,68 @@ describe("a paired browser that cannot use native messaging", () => {
 		await vi.waitFor(() => expect(h.disconnects).toBe(0));
 	});
 });
+
+// Pairing was not the only thing that needs a borrowed pipe. Everything the UI does immediately
+// AFTER pairing runs on the worker that just paired, which has no binding of its own and will not
+// get one until it restarts. Claiming the desktop's sync invite is exactly that, and while it was
+// gated on this worker's own ability the claim silently answered "no invite" every time: the
+// browser got the link and never the vault.
+describe("a borrowed pipe serves link requests, not just pairing", () => {
+	function lend() {
+		const sent: Record<string, unknown>[] = [];
+		let onMessage: ((m: unknown) => void) | undefined;
+		const port = {
+			name: "link-native-proxy",
+			sender: { origin: "https://bramble-test.example" },
+			postMessage: (m: Record<string, unknown>) => sent.push(m),
+			onMessage: {
+				addListener: (cb: (m: unknown) => void) => {
+					onMessage = cb;
+				},
+			},
+			onDisconnect: { addListener: () => {} },
+			disconnect: () => {},
+		};
+		for (const cb of h.onConnect) cb(port);
+		return { sent, deliver: (frame: unknown) => onMessage?.({ frame }) };
+	}
+
+	it("answers a request over the lent pipe when this worker has no binding", async () => {
+		const mod = await load();
+		h.hasBinding = false; // the worker that just paired
+		const page = lend();
+
+		const asked = mod.askDesktop({ op: "syncInvite" });
+		// hello, then the KK handshake message.
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		page.deliver({ ok: true, done: true, message: "kk2" });
+		await vi.waitFor(() => expect(page.sent.length).toBe(4));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, invite: "INVITE-CODE" })}` });
+
+		// Before this fix the claim rejected here, and the caller reported "no invite armed".
+		await expect(asked).resolves.toEqual({ ok: true, invite: "INVITE-CODE" });
+		expect(h.connects).toBe(0);
+	});
+
+	it("still refuses when there is neither a binding nor a lent pipe", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+
+		await expect(mod.askDesktop({ op: "syncInvite" })).rejects.toThrow(
+			/cannot reach the desktop app/,
+		);
+	});
+
+	it("tells a page to lend only when this worker cannot open its own pipe", async () => {
+		// Lending on top of a working background would open a SECOND connection, which displaces
+		// the first as the target for the app's pushes and takes the queue with it on close.
+		const mod = await load();
+
+		expect(await mod.transportNeeded()).toBe(false);
+		h.hasBinding = false;
+		expect(await mod.transportNeeded()).toBe(true);
+		h.hasBinding = true;
+		h.permitted = false;
+		expect(await mod.transportNeeded()).toBe(true);
+	});
+});

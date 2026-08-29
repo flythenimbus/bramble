@@ -315,10 +315,6 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 export async function askDesktop(request: Record<string, unknown>): Promise<any> {
 	const state = await loadState();
 	if (!state) throw new Error("Not linked to the desktop app.");
-	// Said plainly rather than surfacing as a TypeError on an undefined connectNative, because a
-	// fill the user is watching fails here and the reason has to be legible in a log.
-	if (!(await canOpenNativePipe()))
-		throw new Error("This browser cannot reach the desktop app yet.");
 
 	// Ride the held link when sync has one open. A second connection would displace it as the
 	// target for the app's pushes, and closing this short-lived one would take that queue with
@@ -326,12 +322,20 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 	const link = await ensureHeld();
 	if (link) return askOverHeld(link, request);
 
+	// A pipe this worker can open, or one a page has lent it. The second case is not an edge:
+	// everything the UI does immediately AFTER pairing runs on the worker that just paired, which
+	// still has no binding of its own and will not until it restarts. Claiming the desktop's sync
+	// invite is exactly that, and it is why a first pairing used to hand over the link and never
+	// the vault. See docs/desktop-link-optional-permission.md.
+	if (!proxyPort && !(await canOpenNativePipe()))
+		throw new Error("This browser cannot reach the desktop app yet.");
+
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
 	})) as { sessionId: number; message: string };
 
-	const session = new NativeSession();
+	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
@@ -789,6 +793,23 @@ on(
 on(
 	"DESKTOP_LINK_CONNECT",
 	extensionOnly(async () => ({ ok: true, data: await connectToDesktop() })),
+);
+
+/**
+ * Whether this worker needs a page to lend it a native pipe, because it cannot open one itself.
+ *
+ * The page asks BEFORE lending rather than always lending, and the reason is not thrift. The app
+ * keys its outbound queue by our static key, so a second connection displaces the first as the
+ * target for its pushes and closing the second takes that queue with it: sync would go quiet with
+ * nothing reporting a fault. Lending is only safe when there is nothing to displace.
+ */
+export async function transportNeeded(): Promise<boolean> {
+	return !proxyPort && !(await canOpenNativePipe());
+}
+
+on(
+	"DESKTOP_LINK_TRANSPORT_NEEDED",
+	extensionOnly(async () => ({ ok: true, data: await transportNeeded() })),
 );
 
 on(

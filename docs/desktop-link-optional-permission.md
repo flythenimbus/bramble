@@ -137,6 +137,18 @@ it relocks the vault in the middle of a flow the user deliberately started.
 6. The background picks up native messaging on its next natural restart. `background.ts:51` already
    calls `openDesktopLink()` at every start, so the steady state self-heals with no new signalling.
 
+The lending is not confined to pairing, and confining it was a bug. Everything the UI does
+immediately after pairing runs on the worker that just paired, which has no binding of its own
+until it restarts. Claiming the desktop's sync invite is exactly that, so while `askDesktop` was
+gated on this worker's own ability the claim silently answered "no invite armed" on every
+first-time pairing: the browser got the link and never the vault. `askDesktop` now takes a lent
+pipe too, and the page lends around `claimSyncInvite`, `desktopSyncKey` and `connect`.
+
+The page asks `DESKTOP_LINK_TRANSPORT_NEEDED` before lending rather than lending unconditionally.
+The app keys its outbound queue by our static key, so a second connection displaces the first as
+the target for its pushes and closing the second takes that queue with it, which would leave sync
+quiet with nothing reporting a fault. Lending is only safe when there is nothing to displace.
+
 Step 5 is the only architectural move, and the smallest one that works. The obvious reading of
 finding 1 is "pairing must move to the page", which would mean a second copy of the Noise handshake
 living next to the first and drifting from it. It does not have to. Only the TRANSPORT is

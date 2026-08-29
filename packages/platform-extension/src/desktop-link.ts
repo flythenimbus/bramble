@@ -135,20 +135,34 @@ function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
 	};
 }
 
+/**
+ * Run a link request, lending the background a native pipe if it has no way to open one.
+ *
+ * Asked rather than assumed. Lending unconditionally would open a SECOND connection whenever the
+ * background already had one, and the app keys its outbound queue by our static key: the second
+ * displaces the first as the target for its pushes, and closing it takes that queue with it, so
+ * sync goes quiet with nothing reporting a fault. Lending is only safe when there is nothing to
+ * displace, which is exactly when the background says it needs it.
+ */
+async function withNativeProxy<T>(run: () => Promise<T>): Promise<T> {
+	// Lend on an unclear answer. Failing to lend is the bug this exists to fix; lending when it
+	// was not needed costs one short-lived connection.
+	const needed = await dispatch<boolean>("DESKTOP_LINK_TRANSPORT_NEEDED").catch(() => true);
+	if (!needed) return run();
+	const proxy = openNativeProxy();
+	try {
+		await proxy?.ready;
+		return await run();
+	} finally {
+		proxy?.close();
+	}
+}
+
 const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
-	// The code goes straight through to the background and is never stored here. The native pipe
-	// is lent for the duration and torn down either way; see openNativeProxy.
-	pair: async (code) => {
-		const proxy = openNativeProxy();
-		try {
-			await proxy?.ready;
-			await dispatch("DESKTOP_LINK_PAIR", { code });
-		} finally {
-			proxy?.close();
-		}
-	},
-	connect: () => dispatch<boolean>("DESKTOP_LINK_CONNECT"),
+	// The code goes straight through to the background and is never stored here.
+	pair: (code) => withNativeProxy(async () => void (await dispatch("DESKTOP_LINK_PAIR", { code }))),
+	connect: () => withNativeProxy(() => dispatch<boolean>("DESKTOP_LINK_CONNECT")),
 	query: async (hostname) => {
 		const answer = await dispatch<{ ok: boolean; error?: string; matches?: unknown[] }>(
 			"DESKTOP_LINK_QUERY",
@@ -160,8 +174,13 @@ const adapter: DesktopLinkAdapter = {
 	// The invite the app armed when the user clicked Connect. Null rather than an error when
 	// there is none: the app arms one only while its dialog is open, and a version that predates
 	// this arms none at all, so "no invite" is an ordinary answer and not a fault.
-	claimSyncInvite: () => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE"),
-	desktopSyncKey: () => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY"),
+	//
+	// Lent a transport like pairing, and for the same reason: this runs on the worker that JUST
+	// paired, which has no binding of its own. Without it the claim silently answered "no invite"
+	// on every first-time pairing, so the browser got the link and never the vault.
+	claimSyncInvite: () =>
+		withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE")),
+	desktopSyncKey: () => withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY")),
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},
