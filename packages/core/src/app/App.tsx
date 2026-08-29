@@ -61,11 +61,15 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 	usePendingPasskeys();
 
 	// Stash the current route so a closed-then-reopened popup resumes it (restore in the
-	// platform boot, gated on an unlocked session). Skip the detached window (it has its own
-	// pop-out handoff) and the "/" unlock/redirect route, so a lock never clobbers the last
-	// real route with the unlock screen.
+	// platform boot, gated on an unlocked session). Skip the "/" unlock/redirect route, so a
+	// lock never clobbers the last real route with the unlock screen.
+	//
+	// The detached window persists too. Its pop-out handoff is a one-shot read consumed at boot,
+	// so it covers being opened but not being RELOADED, and a reload is how a window picks up a
+	// permission granted during its own lifetime (see docs/desktop-link-optional-permission.md).
+	// Without this such a reload silently dumps the user back at the vault list.
 	useEffect(() => {
-		if (!shell.persistRoute || shell.isDetached()) return;
+		if (!shell.persistRoute) return;
 		const persist = () => {
 			const href = router.state.location.href;
 			if (href && href !== "/") shell.persistRoute?.(href);

@@ -25,6 +25,13 @@ const h = vi.hoisted(() => ({
 	/** The app's sync device key, and which vaults have it in their roster. */
 	desktopKey: null as string | null,
 	rosterOf: new Map<string, string[]>(),
+	paired: true,
+	/** What status() reports. Undefined is a host that does not answer the question at all. */
+	permitted: undefined as boolean | undefined,
+	/** Whether the host has a runtime permission to ask for. Mobile and desktop do not. */
+	askable: false,
+	granted: true,
+	requestGrants: true,
 }));
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
@@ -71,10 +78,27 @@ const platform = {
 	},
 	shell: { onSyncEvent: () => () => {} },
 	desktopLink: {
-		status: async () => ({ paired: true, pairedAt: 1 }),
+		status: async () => ({ paired: h.paired, pairedAt: 1, permitted: h.permitted }),
 		claimSyncInvite: async () => h.invite,
 		desktopSyncKey: async () => h.desktopKey,
-		unlink: async () => {},
+		unlink: async () => {
+			h.steps.push("unlink");
+		},
+		// A getter, so a test can model a host with no runtime permission to ask for.
+		get permission() {
+			return h.askable
+				? {
+						granted: async () => h.granted,
+						request: async () => {
+							h.steps.push("request");
+							return h.requestGrants;
+						},
+						drop: async () => {
+							h.steps.push("drop");
+						},
+					}
+				: undefined;
+		},
 	},
 } as unknown as Platform;
 
@@ -109,6 +133,11 @@ afterEach(() => {
 	h.activeVault = "v1";
 	h.desktopKey = null;
 	h.rosterOf.clear();
+	h.paired = true;
+	h.permitted = undefined;
+	h.askable = false;
+	h.granted = true;
+	h.requestGrants = true;
 });
 
 describe("what a desktop connect will do to this browser", () => {
@@ -292,5 +321,96 @@ describe("disconnecting", () => {
 		fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
 		expect(screen.queryByText(/keeps syncing with it/i)).toBeNull();
+	});
+});
+
+// The permission the link needs is asked for here rather than granted at install, so the section
+// has three states this suite did not previously have: not yet allowed, allowed, and allowed-then-
+// revoked. The last is the dangerous one, because the pairing survives it and the link looks fine.
+describe("the browser permission the link needs", () => {
+	/** happy-dom's reload would navigate; the assertion is only that it was reached. */
+	function stubReload() {
+		const reload = vi.fn();
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { ...window.location, reload },
+		});
+		return reload;
+	}
+
+	it("asks for permission instead of offering the code field", async () => {
+		h.paired = false;
+		h.askable = true;
+		h.granted = false;
+		mount();
+
+		expect(await screen.findByRole("button", { name: /allow and continue/i })).toBeTruthy();
+		// Offering the code first would walk the user into a pairing that cannot complete.
+		expect(screen.queryByLabelText(/pairing code/i)).toBeNull();
+	});
+
+	it("reloads after a grant, because the context that asked never gains the API", async () => {
+		const reload = stubReload();
+		h.paired = false;
+		h.askable = true;
+		h.granted = false;
+		mount();
+
+		fireEvent.click(await screen.findByRole("button", { name: /allow and continue/i }));
+
+		// Chromium fixes bindings at context creation. Pairing without this would reach for a
+		// connectNative that this page will never have.
+		await waitFor(() => expect(reload).toHaveBeenCalled());
+		expect(h.steps).toEqual(["request"]);
+	});
+
+	it("does not reload when the user declines", async () => {
+		const reload = stubReload();
+		h.paired = false;
+		h.askable = true;
+		h.granted = false;
+		h.requestGrants = false;
+		mount();
+
+		fireEvent.click(await screen.findByRole("button", { name: /allow and continue/i }));
+
+		expect(await screen.findByText(/needs that permission/i)).toBeTruthy();
+		expect(reload).not.toHaveBeenCalled();
+	});
+
+	it("shows the link as still linked when the permission was revoked, not as disconnected", async () => {
+		// The keys are intact, so this is one grant away from working. Reading it as
+		// "disconnected" would push the user into re-pairing, which needs a fresh code from a
+		// desktop app they would have to go and open.
+		h.askable = true;
+		h.permitted = false;
+		mount();
+
+		expect(await screen.findByText(/permission needed/i)).toBeTruthy();
+		expect(await screen.findByText(/still linked/i)).toBeTruthy();
+		expect(screen.queryByText(/^Connected$/)).toBeNull();
+	});
+
+	it("hands the permission back when the link is removed", async () => {
+		h.askable = true;
+		mount();
+
+		fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /stop using the app/i }));
+
+		// Order matters: the unlink is the thing the user asked for, and dropping the permission
+		// must not be able to prevent it.
+		await waitFor(() => expect(h.steps).toEqual(["unlink", "drop"]));
+	});
+
+	it("stays out of the way where the host has no permission to ask for", async () => {
+		// Mobile and desktop hold it from install. Absent must read as allowed, or the section
+		// would offer a grant button on hosts with nothing to grant.
+		h.paired = false;
+		h.askable = false;
+		mount();
+
+		expect(await screen.findByLabelText(/pairing code/i)).toBeTruthy();
+		expect(screen.queryByRole("button", { name: /allow and continue/i })).toBeNull();
 	});
 });

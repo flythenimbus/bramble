@@ -197,10 +197,27 @@ fallback. `permissions.onRemoved` closes a held link. There is deliberately no `
 per finding 1 it would run in the worker that cannot have gained the binding, so it could only fail,
 and a comment in the source says so because adding one looks obviously right.
 
-**Phase 5: UI.** `DesktopLinkSection.tsx` keeps its current visibility (the adapter is already
-present for every Chromium user, so no section appears or disappears). Connect gains the
-grant-then-pop-out-then-reload path. Add the revoked-while-paired row with a Reconnect action, and
-call `permission.drop()` from unlink.
+**Phase 5: UI (done).** `DesktopLinkSection.tsx` keeps its visibility (the adapter is already there
+for every Chromium user, so no section appears or disappears) and gains two states. Ungranted shows
+"Allow and continue" INSTEAD of the code field, because offering the code first walks the user into
+a pairing that cannot complete. Paired-but-revoked shows "Permission needed" rather than reading as
+disconnected: the keys are intact, so it is one grant away from working, and calling it
+disconnected would push the user into re-pairing and a trip to the desktop app for a fresh code.
+Unlink also calls `permission.drop()`, best-effort, since failing to give the permission back must
+not fail the unlink that already happened.
+
+The grant ends in `location.reload()`, which is load-bearing rather than cosmetic: the page that
+asks never gains the API it just unlocked (finding 1), so pairing from it would reach for a
+`connectNative` it will never have. That reload needed one change outside this feature. Route
+persistence was disabled for detached windows on the grounds that the pop-out handoff covers them,
+but the handoff is a one-shot read consumed at boot, so it covers being OPENED and not being
+RELOADED; without persistence a reloading pop-out dumps the user back at the vault list. Both the
+guard in `App.tsx` and the boot fallback in `popup.tsx` were relaxed.
+
+In the toolbar popup none of this runs: the prompt tears the popup down mid-call. That is fine and
+deliberate. The grant still lands, and reopening the popup is itself the fresh context, with
+`restoreRoute` putting the user back in Settings. Nothing in the flow treats "did not return" as
+failure.
 
 **Phase 6: tests, i18n, docs.**
 

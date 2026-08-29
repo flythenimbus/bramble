@@ -256,6 +256,14 @@ msgstr "Aeroplano"
 msgid "All"
 msgstr "Tutti"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Allow again"
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Allow and continue"
+msgstr ""
+
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
@@ -451,6 +459,14 @@ msgstr "Bramble è aggiornato"
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Bramble is up to date."
 msgstr "Bramble è aggiornato."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Bramble needs that permission to talk to the desktop app."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Bramble needs your permission to talk to the desktop app on this computer. Your browser will ask you to confirm."
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving out delete, limits what it can do if it is ever stolen."
@@ -2025,6 +2041,10 @@ msgstr "Matita"
 msgid "Penguin"
 msgstr "Pinguino"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Permission needed"
+msgstr ""
+
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Pick a master password to protect your vault."
 msgstr "Selezionare una password principale per proteggere la vostra vault."
@@ -2713,6 +2733,10 @@ msgstr "L'app desktop non ha accettato quel codice."
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
 msgstr "L'app desktop mostra gli stessi simboli e attende l'approvazione. Approvi solo se corrispondono."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop app is still linked, but this browser's permission to talk to it was turned off."
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app offered to share its vault with this browser. Enter the master password you use there, then compare the symbols both screens show."

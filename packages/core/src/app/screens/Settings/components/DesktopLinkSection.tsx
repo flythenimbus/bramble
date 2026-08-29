@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CheckCircle2, Monitor } from "lucide-react";
+import { CheckCircle2, Monitor, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { DesktopLinkStatus } from "../../../../adapters/desktop-link";
 import { usePlatform } from "../../../../context/PlatformContext";
@@ -40,6 +40,12 @@ export function DesktopLinkSection() {
 	 */
 	const [sharesThisVault, setSharesThisVault] = useState<boolean | undefined>(undefined);
 	const [status, setStatus] = useState<DesktopLinkStatus | null>(null);
+	/**
+	 * Whether the browser currently allows the link. Undefined while unknown, and true where the
+	 * host has no runtime permission to ask for (mobile, desktop, a build that requires it), which
+	 * is why absence reads as allowed rather than denied.
+	 */
+	const [allowed, setAllowed] = useState<boolean | undefined>(undefined);
 	const [code, setCode] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -70,10 +76,34 @@ export function DesktopLinkSection() {
 		if (!desktopLink) return;
 		try {
 			setStatus(await desktopLink.status());
+			// No sub-adapter means nothing to ask for, which is a grant, not a refusal.
+			setAllowed(desktopLink.permission ? await desktopLink.permission.granted() : true);
 		} catch (e) {
 			setError(String(e));
 		}
 	}, [desktopLink]);
+
+	/**
+	 * Ask for the browser permission, then reload so the grant is usable.
+	 *
+	 * The reload is not cosmetic. Chromium fixes a context's API bindings when the context is
+	 * created, so the page that asks for a permission never gains the API it just unlocked, and
+	 * neither does the background worker that was already running. Only a context created
+	 * afterwards has it, and pairing borrows this page's. See
+	 * docs/desktop-link-optional-permission.md.
+	 *
+	 * In the toolbar popup the browser's prompt takes focus and tears the popup down, so this
+	 * function simply stops existing mid-call; the grant still lands, and reopening the popup is
+	 * itself the fresh context. Nothing here has to handle that, but nothing may ASSUME it either,
+	 * which is why the caller never treats "did not return" as failure.
+	 */
+	const requestPermission = useCallback(async () => {
+		if (!desktopLink?.permission) return;
+		setError(null);
+		const granted = await desktopLink.permission.request().catch(() => false);
+		if (granted) location.reload();
+		else setError(t`Bramble needs that permission to talk to the desktop app.`);
+	}, [desktopLink, t]);
 
 	useEffect(() => {
 		void refresh();
@@ -194,6 +224,11 @@ export function DesktopLinkSection() {
 		setBusy(true);
 		try {
 			await desktopLink.unlink();
+			// Hand the permission back too. Severing the link should return what the link needed,
+			// rather than leaving a browser that can still talk to local programs for a feature it
+			// is no longer using. Best-effort: failing to give it back must not fail the unlink,
+			// which has already happened.
+			await desktopLink.permission?.drop().catch(() => {});
 			setConfirmUnlink(false);
 			await refresh();
 		} finally {
@@ -239,7 +274,26 @@ export function DesktopLinkSection() {
 
 	return (
 		<Section icon={<Monitor className="w-4 h-4" />} title={t`Desktop app`}>
-			{status?.paired ? (
+			{status?.paired && status.permitted === false ? (
+				// Paired and unusable: the permission was taken away in the browser's own settings,
+				// which nothing in this UI would otherwise reveal. Only an explicit false, so a host
+				// that never reports it is never accused. The pairing keys are untouched, so this is
+				// one grant away from working and must not read as "disconnected".
+				<Row
+					icon={<TriangleAlert className="w-4 h-4 text-destructive" />}
+					title={t`Permission needed`}
+					subtitle={t`The desktop app is still linked, but this browser's permission to talk to it was turned off.`}
+				>
+					<Button
+						variant="primary"
+						size="sm"
+						disabled={busy}
+						onClick={() => void requestPermission()}
+					>
+						<Trans>Allow again</Trans>
+					</Button>
+				</Row>
+			) : status?.paired ? (
 				<>
 					<Row
 						icon={<CheckCircle2 className="w-4 h-4 text-primary" />}
@@ -296,6 +350,20 @@ export function DesktopLinkSection() {
 						</p>
 					)}
 				</>
+			) : allowed === false ? (
+				// Declared but not held. Asked for here rather than at install, so the permission
+				// warning lands on people who actually use the desktop app instead of everyone.
+				<div className="space-y-3">
+					<p className="text-sm text-muted-foreground">
+						<Trans>
+							Bramble needs your permission to talk to the desktop app on this computer. Your
+							browser will ask you to confirm.
+						</Trans>
+					</p>
+					<Button variant="primary" fullWidth onClick={() => void requestPermission()}>
+						<Trans>Allow and continue</Trans>
+					</Button>
+				</div>
 			) : (
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">

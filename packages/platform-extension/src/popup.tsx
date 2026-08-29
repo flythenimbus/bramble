@@ -47,6 +47,12 @@ async function boot() {
 		if (handoff) {
 			initialPath = handoff.path;
 			initialDraft = handoff.draft;
+		} else if (!(await extensionCrypto.isLocked())) {
+			// No handoff means this window was RELOADED rather than opened: the boot read already
+			// consumed it. Fall back to the persisted route so a reload stays where it was, which
+			// is how a window picks up a permission granted during its own lifetime.
+			const stored = await extensionShell.restoreRoute?.();
+			if (stored) initialPath = stored;
 		}
 	} else {
 		// Normal popup: resume the route from the last close, but only when the session is
