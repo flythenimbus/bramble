@@ -9,7 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { SubdomainMatchMode } from "../adapters/autofill";
+import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import type { BiometryType } from "../adapters/biometric";
 import { usePlatform } from "../context/PlatformContext";
 import {
@@ -499,17 +499,47 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 	}, [readDecodedBlob, storage]);
 
+	/**
+	 * Publish the autofill index, best-effort.
+	 *
+	 * A refusal here is not an unlock failure and must never be raised as one. The host refuses
+	 * when the lease no longer names the current session, and refusing is the SAFE outcome: it
+	 * means stale plaintext was kept out of the index (see the lease notes in the extension's
+	 * autofill adapter). The vault is genuinely open either way, so the cost of a refusal is an
+	 * index that misses this load, not a vault the user cannot get into.
+	 *
+	 * Letting it propagate is how a correct master password came to be reported as "unavailable",
+	 * with the raw host token rendered in the password field: the VEK unwrapped, this threw, and
+	 * so `setIsLocked(false)` never ran. It survived every reopen, because the session generation
+	 * only resets when the worker restarts.
+	 */
+	const publishIndex = useCallback(
+		async (entries: IndexEntry[], lease: unknown) => {
+			try {
+				await autofill.setIndex(entries, lease);
+			} catch (e) {
+				console.warn("[vault] autofill index not updated for this load:", e);
+			}
+		},
+		[autofill],
+	);
+
 	/** Decrypt all entries and push the autofill index. */
 	const loadEntries = useCallback(async () => {
 		// Bind the eventual plaintext cache publish to the unlocked session that started this
 		// load, before any blob read/decrypt await can cross a lock/unlock or vault switch.
-		const indexLease = await autofill.beginIndexUpdate?.();
+		// A lease that cannot be issued is the same class of refusal as one that is rejected
+		// later, so it drops the index update rather than the unlock.
+		const indexLease = await autofill.beginIndexUpdate?.().catch((e: unknown) => {
+			console.warn("[vault] no autofill index lease for this load:", e);
+			return undefined;
+		});
 		const { blob } = await readDecodedBlob();
 		if (blob.entriesCiphertext.length === 0) {
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
 			setEntries([]);
-			await autofill.setIndex([], indexLease);
+			await publishIndex([], indexLease);
 			return;
 		}
 		// A blob that decodes but won't decrypt is the issue-#27 signature; recover from the
@@ -558,8 +588,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			return { id: enc.id, ...data };
 		});
 		setEntries(decrypted);
-		await autofill.setIndex(toAutofillIndex(decrypted), indexLease);
-	}, [readDecodedBlob, crypto, storage, autofill, ensureClock]);
+		await publishIndex(toAutofillIndex(decrypted), indexLease);
+	}, [readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex]);
 
 	// On mount (and when the active vault resolves): detect an existing vault handle and
 	// whether crypto is already unlocked (popup reopened mid-session). Waits for the registry
@@ -681,9 +711,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// unwrap succeeds (session.ts cryptoHandler), and reads this to pick which vault to sync.
 			// Awaited so the write lands first; otherwise the first sync targets the previous vault.
 			// An explicit id wins over `activeId`, which a caller that just minted this vault has not
-			// seen yet. Recording null there instead would leave every untagged crypto op with no
-			// vault to resolve, so the unwrapped VEK is cached nowhere and the load reads as locked.
-			await shell.setActiveVault?.(vaultId ?? activeId ?? null);
+			// seen yet.
+			//
+			// Never null. The paragraph above used to end by explaining that recording null leaves
+			// every untagged crypto op with no vault to resolve, and then the code recorded null
+			// anyway whenever neither id was known. Downstream that is not a degraded unlock, it is
+			// a failed one: with no active vault the background has no autofill session owner, so
+			// the index lease loadEntries takes is refused, unlock throws, and a correct password is
+			// reported as wrong. Leaving the existing value alone cannot be worse than clearing it.
+			const target = vaultId ?? activeId ?? null;
+			if (target !== null) await shell.setActiveVault?.(target);
 			const ok = await crypto.unwrapVekPassword({
 				password,
 				saltB64: bytesToBase64(slot.salt),

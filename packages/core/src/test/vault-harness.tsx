@@ -7,7 +7,7 @@ import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { render } from "@testing-library/react";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
-import { useVaultActions, VaultProvider } from "../hooks/useVault";
+import { useVault, useVaultActions, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 
 // VaultProvider translates the errors it rejects with, so it needs a live i18n context.
@@ -31,12 +31,15 @@ export function mountVaultActions(platform: Platform): () => ReturnType<typeof u
 export function mountVault(platform: Platform): {
 	actions: () => ReturnType<typeof useVaultActions>;
 	registry: () => ReturnType<typeof useVaultRegistry>;
+	state: () => ReturnType<typeof useVault>;
 } {
 	let actions: ReturnType<typeof useVaultActions> | null = null;
 	let registry: ReturnType<typeof useVaultRegistry> | null = null;
+	let state: ReturnType<typeof useVault> | null = null;
 	function Consumer() {
 		actions = useVaultActions();
 		registry = useVaultRegistry();
+		state = useVault();
 		return null;
 	}
 	render(
@@ -58,6 +61,12 @@ export function mountVault(platform: Platform): {
 		registry: () => {
 			if (!registry) throw new Error("registry not captured");
 			return registry;
+		},
+		// `isLocked` and friends live on the state context, not on actions, so a test asserting
+		// that an unlock actually took needs this rather than the action's return.
+		state: () => {
+			if (!state) throw new Error("state not captured");
+			return state;
 		},
 	};
 }
