@@ -978,9 +978,14 @@ mod tests {
 
         // In-bounds (tiny) params derive without tripping the safety gate.
         assert!(argon2_transform(&mk(64 * 1024, 1, 1), &composite).is_ok());
-        // Many passes over little memory is cheap, and is what a low-memory KeePassXC benchmark
-        // produces. This is the #78 case, which a per-axis pass ceiling used to reject.
-        assert!(!too_expensive(1024 * 1024, 3000, 2));
+        // Many passes over little memory: the #78 shape, which the old per-axis ceiling of 64
+        // passes rejected. 300 rather than the reported 3000 because this actually derives, and
+        // argon2 in a debug build costs ~20s at 3000; 300 still clears the old ceiling five times
+        // over, so it regresses the same way. is_ok rather than "not too expensive" so the
+        // derivation has to succeed, not merely clear the gate and fail inside argon2.
+        assert!(argon2_transform(&mk(1024 * 1024, 300, 2), &composite).is_ok());
+        // The reported parameters themselves, gate only: 1 MiB over 3000 passes is inside budget.
+        assert!(1024u64 * 3000 < (1 << 26));
         // Memory and parallelism keep their own ceilings: one bounds the allocation, the other
         // the thread count, and neither is captured by the work product.
         assert!(too_expensive(2 << 30, 1, 1));
