@@ -358,10 +358,43 @@ Three consequences, in severity order.
    on a redundant call, so "treat a failed attach as possibly-attached" is unnecessary. A genuine
    failure string (another extension holding the proxy) remains the only case worth surfacing.
 
+**The proxy intercepts our own extension origin.** Measured: with the proxy attached, both
+`get()` and `create()` issued from `chrome-extension://<id>/popup.html` are delivered to our
+listener. So the PAUSE/RESUME machinery is load-bearing and cannot be deleted; without it
+Bramble's security-key PRF unlock would be hijacked by Bramble's own proxy. (Firefox differs: its
+MAIN-world override deliberately skips the extension's own `moz-extension` origin.)
+
+### The pause window is a hole in the provider, and it is structural
+
+Confirmed on a real browser (Brave, 2026-08-29) with a screenshot: a passkey sign-in on a **locked**
+vault opens our unlock popup; the user unlocks with a **security key**; the pauser detaches; the
+page's in-flight request dies with `AbortError`, and every WebAuthn call for the rest of that
+window (PIN entry can take 30 seconds) goes to the platform authenticator instead. The observed
+result was **Chromium's own WebAuthn sheet** taking the request over, listing the OS-level
+providers it knows about (iCloud Keychain, phone or tablet) and not Bramble, while Bramble sat in
+its popup asking for a security-key PIN.
+
+The three requirements genuinely conflict:
+
+1. Serving a page's passkey request needs the proxy **attached**.
+2. Bramble's own security-key unlock needs the proxy **detached** (see above: our origin is not
+   exempt).
+3. Serving a request from a locked vault **requires an unlock**, which may be a security-key unlock.
+
+There is no passthrough in this API, so nothing can satisfy all three. Whatever we do, a
+security-key unlock triggered by a provider ceremony cannot complete that same ceremony. The
+options are to avoid the combination (steer the ceremony's unlock away from the security key when
+another method exists), or to fail the page's request cleanly and early so the site shows a real
+error instead of the user watching it silently reroute. Both, ideally.
+
+Note this hole is not unique to Bramble: any provider on this API that authenticates its own unlock
+with WebAuthn has it. It is the price of all-or-nothing interception.
+
 **Not covered, still manual:** whether Chrome destroys the toolbar popup when its own WebAuthn
-dialog takes focus. That decides whether a lost `PASSKEY_PROXY_RESUME` (which strands the proxy
-detached, since the send lives in a `finally` in the popup's realm) happens on every security-key
-unlock or only when the user clicks away mid-tap. Needs a real key on real Chrome.
+dialog takes focus. Device testing (2026-08-29) found the toolbar popup **survives** the dialog and
+in fact cannot be dismissed during the ceremony, and Vivaldi's dialog forces cancel-or-proceed, so
+the stranded-RESUME path looks hard to reach in practice. Left pinned as a HOLE test rather than
+driving a rewrite.
 
 ## Cross-cutting decisions
 
