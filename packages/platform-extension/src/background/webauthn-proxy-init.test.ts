@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
 	handlers: new Map<string, (m: unknown) => Promise<unknown>>(),
 	/** The attach/detach hook the module hands to the provider module. */
 	applyHook: undefined as ((enabled: boolean) => Promise<void>) | undefined,
+	/** The persisted opt-in, which RESUME re-checks before re-attaching. */
+	enabled: true,
 }));
 
 const proxy = {
@@ -74,6 +76,7 @@ vi.mock("./router", () => ({
 
 vi.mock("./webauthn-provider", () => ({
 	productionDeps: {},
+	isProviderEnabled: () => h.enabled,
 	setProviderApplyHook: (fn: (enabled: boolean) => Promise<void>) => {
 		h.applyHook = fn;
 	},
@@ -84,15 +87,18 @@ vi.mock("./webauthn-proxy", () => ({
 	handleGet: vi.fn(async () => ({ requestId: 1, responseJson: "{}" })),
 }));
 
-async function load() {
+/** Fresh module state, as a re-woken service worker has. `hasProxy: false` is Firefox, and must
+ *  be set before the import now that listener registration happens at module scope. */
+async function load({ hasProxy = true } = {}) {
 	vi.resetModules();
 	h.attachCalls = 0;
 	h.detachCalls = 0;
 	h.attachResult = undefined;
-	h.hasProxy = true;
+	h.hasProxy = hasProxy;
 	h.listeners = { create: 0, get: 0, isUvpaa: 0 };
 	h.handlers.clear();
 	h.applyHook = undefined;
+	h.enabled = true;
 	return import("./webauthn-proxy-init");
 }
 
@@ -107,6 +113,14 @@ describe("initWebauthnProxy", () => {
 		vi.clearAllMocks();
 	});
 
+	it("registers listeners at import, before anything attaches", async () => {
+		// The window this closes: attachment survives worker death, listeners do not, and a
+		// request arriving before they exist is lost for good.
+		await load();
+		expect(h.listeners).toEqual({ create: 1, get: 1, isUvpaa: 1 });
+		expect(h.attachCalls).toBe(0);
+	});
+
 	it("attaches once and registers each listener exactly once across re-init", async () => {
 		const m = await load();
 		await m.initWebauthnProxy();
@@ -116,8 +130,7 @@ describe("initWebauthnProxy", () => {
 	});
 
 	it("does nothing on a platform without the proxy namespace", async () => {
-		const m = await load();
-		h.hasProxy = false;
+		const m = await load({ hasProxy: false }); // Firefox
 		await expect(m.initWebauthnProxy()).resolves.toBeUndefined();
 		expect(h.attachCalls).toBe(0);
 		expect(h.listeners).toEqual({ create: 0, get: 0, isUvpaa: 0 });
@@ -176,24 +189,27 @@ describe("pause and resume", () => {
 		expect(h.detachCalls).toBe(1);
 	});
 
-	it("HOLE: resume re-attaches even after the provider was toggled off", async () => {
-		// Toggling off while paused is a no-op (already detached), so RESUME resurrects a proxy
-		// the user just disabled, and nothing downstream re-checks the pref. Flip target: F1.
+	it("does not resurrect a proxy the user turned off mid-ceremony", async () => {
+		// The toggle's own detach is a no-op while we are already paused-detached, so RESUME is the
+		// only place left to notice. Without the pref re-check this re-attached with the pref off.
 		const m = await load();
 		await m.initWebauthnProxy();
 		await pause();
 		await h.applyHook?.(false);
+		h.enabled = false;
 		expect(h.detachCalls).toBe(1); // the toggle's detach did nothing; pause had already detached
 		await resume();
-		expect(h.attachCalls).toBe(2); // attached again, with the pref off
+		expect(h.attachCalls).toBe(1); // still just the original attach
 	});
 
-	it("HOLE: a startup attach ignores a ceremony already in progress", async () => {
-		// PAUSE before the startup attach lands: `attached` is false so the pause is not recorded,
-		// then init attaches mid-ceremony and can hijack our own security-key tap. Flip target: F4.
+	it("defers a startup attach that lands during a ceremony", async () => {
+		// PAUSE before the startup attach: attaching anyway would intercept our own security-key
+		// tap, since the proxy does NOT exempt our extension origin (docs/passkey-provider.md).
 		const m = await load();
 		await pause();
 		await m.initWebauthnProxy();
+		expect(h.attachCalls).toBe(0);
+		await resume(); // the deferred attach lands when the ceremony ends
 		expect(h.attachCalls).toBe(1);
 	});
 

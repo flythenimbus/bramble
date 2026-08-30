@@ -8,7 +8,7 @@
 
 import { api } from "../platform-api";
 import { on, whenReady } from "./router";
-import { productionDeps, setProviderApplyHook } from "./webauthn-provider";
+import { isProviderEnabled, productionDeps, setProviderApplyHook } from "./webauthn-provider";
 import { handleCreate, handleGet } from "./webauthn-proxy";
 
 // The proxy events carry no origin/tab, but WebAuthn requires a focused top-level
@@ -49,7 +49,9 @@ on("PASSKEY_PROXY_RESUME", async () => {
 	if (pauseDepth > 0) pauseDepth--;
 	if (pauseDepth === 0 && pausedWhileAttached) {
 		pausedWhileAttached = false;
-		await initWebauthnProxy();
+		// Re-check the pref: the user can toggle the provider off mid-ceremony, and the toggle's
+		// own detach is a no-op while we are already paused-detached.
+		if (isProviderEnabled()) await initWebauthnProxy();
 	}
 	return { ok: true, data: null };
 });
@@ -124,14 +126,28 @@ function registerListeners(): void {
 	});
 }
 
+// Registered at module scope rather than from the attach path, and this is load-bearing: the
+// ATTACHMENT outlives the service worker but these listeners do not, and a request that arrives
+// before they exist is dropped permanently (not queued, and no fallback to the platform
+// authenticator), so the page hangs until its own timeout. Reaching registration only after an
+// async pref read left that window open on every worker wake. Listeners without an attach are
+// inert, so registering unconditionally costs nothing. See docs/passkey-provider.md.
+registerListeners();
+
 /**
- * Attach the proxy (registering listeners once). Gated behind a Settings pref (default
- * off): attach() intercepts ALL browser WebAuthn, including Bramble's own security-key
- * unlock, which is why we pause around our own ceremonies. End-to-end needs a real Chrome.
+ * Attach the proxy. Gated behind a Settings pref (default off): attach() intercepts ALL browser
+ * WebAuthn, including Bramble's own security-key unlock, which is why we pause around our own
+ * ceremonies. Idempotent in Chrome (a redundant attach returns no error). Needs a real Chrome
+ * end-to-end.
  */
 export async function initWebauthnProxy(): Promise<void> {
 	if (typeof api.webAuthenticationProxy === "undefined") return; // Firefox: no proxy API
-	registerListeners();
+	// A ceremony is mid-flight (startup racing a PAUSE, or the toggle flipped on during one):
+	// attaching now would intercept our own security-key tap. Defer to the matching RESUME.
+	if (pauseDepth > 0) {
+		pausedWhileAttached = true;
+		return;
+	}
 	if (attached) return;
 	const err = await api.webAuthenticationProxy.attach();
 	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);
