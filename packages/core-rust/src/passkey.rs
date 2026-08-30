@@ -288,6 +288,59 @@ mod tests {
         assert!(verifying_key.verify(&signed, &signature).is_ok());
     }
 
+    /// A P-256 key in the encoding `crypto.subtle.exportKey("pkcs8", ...)` produces, which is
+    /// what Bitwarden writes into `fido2Credentials.keyValue`. Unlike p256's own
+    /// `to_pkcs8_der` (used by the test above) it carries the optional public key in the inner
+    /// SEC1 structure, so the two tests cover genuinely different bytes. Pinned because #87
+    /// reported every Bitwarden passkey being skipped as invalid key material.
+    const WEBCRYPTO_PKCS8_B64: &str = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBnZeheB/70OqF+B614VjAYBwjGxhQ33Dseb5CSTrH/WhRANCAAQ1mlLzgkRmXz/ixAscFjTFYAc6Jf5+f3/a1Bw2kADusY6Ss6yRf7GMpIXnAwfR9VvTe8NWEd+8epdwMks8hAVx";
+
+    #[test]
+    fn import_pkcs8_accepts_the_webcrypto_encoding_bitwarden_exports() {
+        let der = B64.decode(WEBCRYPTO_PKCS8_B64).unwrap();
+        let imported = passkey_import_pkcs8_core(WEBCRYPTO_PKCS8_B64).unwrap();
+
+        // The last 64 bytes of this encoding are the uncompressed public point (x || y).
+        // Comparing the re-derived COSE half against those, rather than against a key we
+        // re-derived ourselves, is what catches a scalar read from the wrong field.
+        let (x, y) = der[der.len() - 64..].split_at(32);
+        let cose = CoseKey::from_slice(&B64.decode(&imported.public_key_cose).unwrap()).unwrap();
+        assert_eq!(
+            cose.params,
+            vec![
+                (
+                    Label::Int(iana::Ec2KeyParameter::Crv as i64),
+                    Value::from(iana::EllipticCurve::P_256 as u64),
+                ),
+                (
+                    Label::Int(iana::Ec2KeyParameter::X as i64),
+                    Value::Bytes(x.to_vec()),
+                ),
+                (
+                    Label::Int(iana::Ec2KeyParameter::Y as i64),
+                    Value::Bytes(y.to_vec()),
+                ),
+            ]
+        );
+
+        // And the stored scalar signs for that same public key.
+        let client_data_hash = B64.encode([0x11u8; 32]);
+        let assertion = passkey_get_assertion_core(
+            "npmjs.com",
+            &imported.private_key,
+            &client_data_hash,
+            true,
+        )
+        .unwrap();
+        let mut signed = B64.decode(&assertion.authenticator_data).unwrap();
+        signed.extend_from_slice(&B64.decode(client_data_hash).unwrap());
+        let signature = Signature::from_der(&B64.decode(assertion.signature).unwrap()).unwrap();
+        let mut point = vec![0x04];
+        point.extend_from_slice(&der[der.len() - 64..]);
+        let verifying_key = VerifyingKey::from_sec1_bytes(&point).unwrap();
+        assert!(verifying_key.verify(&signed, &signature).is_ok());
+    }
+
     #[test]
     fn import_pkcs8_rejects_malformed_and_wrong_curve_keys() {
         assert!(passkey_import_pkcs8_core("not base64!").is_err());

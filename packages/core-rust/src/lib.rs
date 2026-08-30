@@ -32,20 +32,20 @@ use wasm_bindgen::prelude::*;
 
 type HmacSha256 = Hmac<Sha256>;
 
-// The `allow(dead_code)` on the modules below is scoped to the desktop build (`native`
-// without `ffi`): they compile there, but the shell has no caller yet and neither binding
-// layer's attributes are present to make them reachable, so every function reads as dead.
-// The wasm and ffi builds keep full dead-code linting. Drop each allow as the desktop app
-// grows into that module. See docs/desktop-port.md.
-
 // KDBX4 import compiles into both layers: import runs in the main app, which uses
 // native crypto under Lockdown Mode, so `open_kdbx4` is on the FFI surface too.
-#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod kdbx;
 // Passkey authenticator (provider role): mint/assert WebAuthn credentials for other
 // sites. Pure + sync, compiled into both layers. See docs/passkey-provider.md.
-#[cfg_attr(all(feature = "native", not(feature = "ffi")), allow(dead_code))]
 mod passkey;
+// The desktop shell links this crate as an ordinary cargo dependency with no binding layer
+// in between, so every type its Tauri command signatures name has to be reachable from the
+// crate root (`handshake` and `nostr` are public for the same reason). Re-exported instead
+// of publishing the modules, so the surface stays the entry points and their records.
+#[cfg(any(feature = "ffi", feature = "native"))]
+pub use kdbx::{open_kdbx4, OutEntry, OutString};
+#[cfg(any(feature = "ffi", feature = "native"))]
+pub use passkey::{PasskeyAssertion, PasskeyImportResult, PasskeyRegistration};
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
 pub mod roster_sig;

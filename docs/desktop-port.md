@@ -93,11 +93,16 @@ own WebRTC, the browser link, and the whole release and packaging story below.
   window via the activation policy (`Regular` ↔ `Accessory`). Needed for the spotlight to be
   reachable at all, and the same scaffolding the sync hub will want.
 
-Not yet wired, and deliberately loud about it rather than silently broken: passkey provider and
-KDBX import (both sit behind private modules in core-rust that need a re-export), autofill of any
-kind, sync, and biometric unlock. The security-key slot commands *are* wired since they cost
-nothing, but `securityKeys` stays `false` for desktop because the webview cannot produce an
-hmac-secret.
+Not yet wired, and deliberately loud about it rather than silently broken: the passkey *provider*
+role, autofill of any kind, and biometric unlock. The security-key slot commands *are* wired since
+they cost nothing, but `securityKeys` stays `false` for desktop because the webview cannot produce
+an hmac-secret.
+
+**Foreign-format import is wired** (`crypto_open_kdbx`, `crypto_passkey_import_pkcs8`). It was the
+one gap where "loud rather than silent" was not good enough: both throws surfaced as generic import
+failures with no way forward, and because desktop is a full sync peer, a passkey dropped here never
+reached the user's phone or browser either. Reported twice before it was found, as #78 (KDBX, where
+`notWired` fell through to "Couldn't open this database") and #87 (Bitwarden passkeys).
 
 Run it with `pnpm dev:desktop`. `build:macos` bundles it and `test:desktop` runs the shell's
 cargo tests. `build:macos` is named for where a release is cut rather than for what it can
@@ -220,7 +225,7 @@ First-pass desktop capability values:
 | `cloudBackup` | `true` | **Shipped.** The only target that can keep a schedule: tray-resident, credentials in the OS credential store rather than under the vault key, so a vault's timer is honoured while it is locked. S3 + WebDAV; the one-click OAuth tile needs `connectBackupOAuth` first. See [cloud-storage-backups.md](cloud-storage-backups.md) |
 | `securityKeys` | `false` (v1) | Webview WebAuthn is unavailable/unreliable. Native CTAP is the follow-on, below |
 | `saveCapture` | `false` | The desktop app has no page to capture from; the extension keeps doing this |
-| `passkeyProviderToggle` | `false` (v1) | |
+| `passkeyProviderToggle` | `false` | Settled, not deferred: a webview has no WebAuthn call to intercept and no OS registration, so there is nothing here to serve. macOS gets the provider role through an `ASCredentialProviderExtension` instead (Swift over this same core), see [macos-credential-provider.md](macos-credential-provider.md). Importing and syncing passkeys is unaffected and works |
 | `credentialExchange` | `false` | iOS only |
 | `filePickerAcceptFilter` | `true` | Native desktop pickers filter by extension properly |
 | `lockOnScreenLock` | `true` | Desktop OSes emit real screen-lock signals `[unverified: exact APIs]` |
@@ -1256,8 +1261,9 @@ Each phase retires a risk.
   and packages as well, and has now been run: the UI renders under WebKitGTK, retiring risk 1.
   Windows is still unbuilt.
 - **Phase 1, vault MVP. MOSTLY DONE.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK
-  held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. Outstanding: KDBX import
-  and the passkey provider (both need core-rust re-exports), and biometric unlock.
+  held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. KDBX and passkey import
+  now go through the core (the re-exports landed). Outstanding: biometric unlock, and KDBX
+  *export* (`saveKdbx` is optional in the contract and stays absent here, so the UI hides it).
 - **Phase 2, spotlight. IN PROGRESS.** Shell done (window, hotkey, vibrancy, collapse-to-search,
   tray and app lifetime). Next: a metadata-only search index held in Rust and pushed from the
   main window, `spotlightActions` on `EntryMode`, and the combobox with Cmd+O / Cmd+E. Actions

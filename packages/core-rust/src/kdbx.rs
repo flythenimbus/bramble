@@ -114,11 +114,13 @@ pub fn open_kdbx4(
     serde_wasm_bindgen::to_value(&entries).map_err(|e| JsError::new(&format!("KDBX_SERIALIZE:{e}")))
 }
 
-/// FFI entry point (uniffi -> Swift/Kotlin). Same core as the WASM path; the
-/// `KdbxError` code becomes the `CryptoError` message so the TS layer's switch on
-/// the code string (e.g. `KDBX_WRONG_CREDENTIAL`) works identically across layers.
-#[cfg(feature = "ffi")]
-#[uniffi::export]
+/// Native entry point: uniffi (Swift/Kotlin), and bare for the desktop shell, which links
+/// this crate as an ordinary cargo dependency and re-exposes it as a Tauri command. Same
+/// core as the WASM path; the `KdbxError` code becomes the `CryptoError` message so the TS
+/// layer's switch on the code string (e.g. `KDBX_WRONG_CREDENTIAL`) works identically
+/// across layers.
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn open_kdbx4(
     file: Vec<u8>,
     password: String,

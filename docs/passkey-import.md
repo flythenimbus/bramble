@@ -63,6 +63,11 @@ A run where every passkey failed conversion adds one further line pointing at th
 rather than the file. That is nearly always a stale build: the WASM or the uniffi bindings are
 older than the Rust. Rebuild with `pnpm core:build` and the platform's `ffi:build:*`.
 
+Its other cause was a platform whose adapter never reached the core at all. The desktop app threw
+`notWired` from `passkeyImportPkcs8` until the Tauri command landed, so *every* Bitwarden passkey
+was rejected there, on any file (issue #87). Worth checking first on a new platform: an adapter
+that cannot answer looks exactly like a file full of corrupt keys.
+
 ## Where these limits come from, and which are ours to relax
 
 The caps exist to bound what crosses the bridge, not to enforce the WebAuthn spec on someone

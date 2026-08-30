@@ -8,7 +8,10 @@
 //! The core's structs already serialize camelCase, so they land on the TS side matching
 //! `@core/adapters/crypto` exactly and need no mapping layer.
 
-use vault_crypto::{CryptoError, EncryptedPayload, MasterEncrypted, PasswordSlotBlob};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use vault_crypto::{
+    CryptoError, EncryptedPayload, MasterEncrypted, OutEntry, PasskeyImportResult, PasswordSlotBlob,
+};
 
 /// Errors ride to JS as a plain string, which `invoke` rejects with. The core already
 /// sanitizes these (no key material in a message), so passing Display through is safe.
@@ -210,4 +213,41 @@ pub fn crypto_encrypt_with_vek(plaintext: String) -> CmdResult<MasterEncrypted> 
 #[tauri::command]
 pub fn crypto_decrypt_with_vek(iv: String, ciphertext: String) -> CmdResult<String> {
     map(vault_crypto::decrypt_with_vek(iv, ciphertext))
+}
+
+// ---- Foreign-format import ----
+//
+// Both are pure conversions with no VEK involved: the caller encrypts what comes back
+// through the ordinary entry path. They are commands rather than webview code only because
+// the parsers live in this crate. See docs/passkey-import.md and docs/vault-format.md.
+
+/// Convert a foreign P-256 PKCS#8 passkey into the scalar + COSE pair we store. Without
+/// this every Bitwarden passkey is dropped on import, which is silent data loss at exactly
+/// the moment a user is migrating in.
+#[tauri::command]
+pub fn crypto_passkey_import_pkcs8(pkcs8_b64: String) -> CmdResult<PasskeyImportResult> {
+    map(vault_crypto::passkey_import_pkcs8(pkcs8_b64))
+}
+
+/// Open a KDBX4 database. The file rides as base64 rather than a byte array because Tauri's
+/// IPC is JSON, where a `Vec<u8>` is a list of decimal numbers (~4x the bytes for a whole
+/// database), and the webview already holds it as base64.
+#[tauri::command]
+pub fn crypto_open_kdbx(
+    file_b64: String,
+    password: String,
+    keyfile_b64: Option<String>,
+) -> CmdResult<Vec<OutEntry>> {
+    let file = decode_b64(&file_b64, "file")?;
+    let keyfile = keyfile_b64
+        .map(|k| decode_b64(&k, "key file"))
+        .transpose()?;
+    map(vault_crypto::open_kdbx4(file, password, keyfile))
+}
+
+/// Decode an IPC base64 argument. A failure here is a bug on our side, not a bad database,
+/// so it deliberately carries no `KDBX_*` code: the UI must not blame the user's file.
+fn decode_b64(value: &str, what: &str) -> CmdResult<Vec<u8>> {
+    B64.decode(value)
+        .map_err(|_| format!("could not decode the {what} sent over IPC"))
 }

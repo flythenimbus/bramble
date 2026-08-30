@@ -237,6 +237,8 @@ pub fn run() {
             crypto::crypto_decrypt_entries,
             crypto::crypto_encrypt_with_vek,
             crypto::crypto_decrypt_with_vek,
+            crypto::crypto_passkey_import_pkcs8,
+            crypto::crypto_open_kdbx,
             storage::storage_has_vault,
             storage::storage_read_vault,
             storage::storage_write_vault,

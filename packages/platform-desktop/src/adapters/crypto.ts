@@ -141,12 +141,27 @@ export const desktopCrypto: CryptoAdapter = {
 	encryptWithVek: (plaintext) => invoke<VekEncrypted>("crypto_encrypt_with_vek", { plaintext }),
 	decryptWithVek: (iv, ciphertext) => invoke<string>("crypto_decrypt_with_vek", { iv, ciphertext }),
 
-	// Passkey provider: the core calls exist but sit behind a private module, so exposing
-	// them needs a core-rust re-export first. Desktop is not a passkey provider yet anyway.
+	// Passkey PROVIDER (mint/assert for other sites) stays unwired, and not just for effort:
+	// a Tauri webview has no WebAuthn surface to intercept and no OS registration, so there is
+	// nothing here to serve. macOS gets it through an ASCredentialProviderExtension instead,
+	// which is Swift calling this same core. See docs/macos-credential-provider.md.
 	passkeyMakeCredential: (): Promise<PasskeyRegistration> => notWired("Passkey provider"),
-	passkeyImportPkcs8: (): Promise<PasskeyImportResult> => notWired("Passkey import"),
 	passkeyGetAssertion: (): Promise<PasskeyAssertion> => notWired("Passkey assertion"),
 
-	// KDBX import: same story, `open_kdbx4` lives in a private module in core-rust.
-	openKdbx: (_input: OpenKdbxInput): Promise<KdbxRawEntry[]> => notWired("KeePass import"),
+	// Importing them is a different question, and the answer is yes: desktop is a full sync
+	// peer, so a passkey dropped here never reaches the user's phone or browser either.
+	passkeyImportPkcs8: (pkcs8B64) =>
+		invoke<PasskeyImportResult>("crypto_passkey_import_pkcs8", { pkcs8B64 }),
+
+	// Rejects with a bare KDBX_* code string (Tauri rejects with the command's error, not an
+	// Error object); `kdbxErrorMessage` reads either. Import only: `saveKdbx` stays absent
+	// because the whole save half of core-rust's kdbx.rs is `cfg(feature = "wasm")`. Note the
+	// Settings export row is gated on `shell.exportBytes`, which desktop HAS, so that button
+	// is visible here and can only throw "KDBX export isn't available here."
+	openKdbx: (input: OpenKdbxInput) =>
+		invoke<KdbxRawEntry[]>("crypto_open_kdbx", {
+			fileB64: input.fileB64,
+			password: input.password,
+			keyfileB64: input.keyfileB64,
+		}),
 };
