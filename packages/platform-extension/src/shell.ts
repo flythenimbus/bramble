@@ -169,11 +169,15 @@ export const extensionShell: ShellAdapter = {
 	async setAutofillEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({ type: "AUTOFILL_SET_ENABLED", payload: { enabled } });
 	},
+	// Reports failure, unlike setAutofillEnabled above: turning this on can genuinely fail
+	// (another extension holds the WebAuthn proxy), and a switch that says "on" while nothing is
+	// attached is worse than an error.
 	async setPasskeyProviderEnabled(enabled: boolean) {
-		await api.runtime.sendMessage({
+		const res = (await api.runtime.sendMessage({
 			type: "PASSKEY_PROVIDER_SET_ENABLED",
 			payload: { enabled },
-		});
+		})) as { ok?: boolean; error?: string } | undefined;
+		if (res && res.ok === false) throw new Error(res.error ?? "Couldn't change the setting.");
 	},
 	onPasskeySaved(callback) {
 		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 // The passkey-provider enabled flag: one in-memory boolean that gates both deliveries (Chrome's
-// attach, Firefox's content transport). Two things can leave it disagreeing with reality, and
-// both are pinned below as HOLE cases with the fix that will flip them.
+// attach, Firefox's content transport). Both ways it used to end up disagreeing with reality (a
+// stale startup read overwriting a newer toggle, and a failed apply leaving it claiming enabled)
+// are covered here.
 //
 // See webauthn-proxy-init.test.ts for the attach state machine itself, and
 // docs/passkey-provider.md for the spike these came out of.
@@ -85,10 +86,10 @@ describe("the provider enabled flag", () => {
 		expect(h.applied).toEqual([true, false]);
 	});
 
-	it("HOLE: a slow startup read clobbers a toggle the user made in the meantime", async () => {
-		// loadProviderEnabled() is fire-and-forget at background.ts, outside the hydration chain
-		// the router gates dispatch on, so a SET_ENABLED can land while the read is still in
-		// flight and then be overwritten by the stale stored value. Flip target: F3.
+	it("keeps an explicit toggle when a slower startup read lands afterwards", async () => {
+		// The load is now part of the hydration barrier the router gates dispatch on, so this
+		// ordering should not arise; the module refuses it anyway, in case a future caller reads
+		// the pref off that path.
 		const m = await load();
 		const startup = m.loadProviderEnabled(); // read pending
 
@@ -98,17 +99,33 @@ describe("the provider enabled flag", () => {
 		h.settlePref?.(false); // the stale read finally lands
 		await startup;
 
-		expect(m.isProviderEnabled()).toBe(false); // the user's explicit choice is gone
-		expect(h.applied).toEqual([true]); // ...while the proxy stays attached
+		expect(m.isProviderEnabled()).toBe(true); // the user's choice survives
+		expect(h.applied).toEqual([true]);
 	});
 
-	it("HOLE: a failed apply leaves the flag claiming enabled", async () => {
-		// The flag is assigned before the hook is awaited and never rolled back, so a failing
-		// attach (another extension holds the proxy) leaves the flag on with nothing attached.
-		// On Firefox that flag alone gates the content transport. Flip target: F5.
+	it("still takes the stored value when the user has not toggled", async () => {
+		const m = await load();
+		const startup = m.loadProviderEnabled();
+		h.settlePref?.(true);
+		await startup;
+		expect(m.isProviderEnabled()).toBe(true);
+	});
+
+	it("rolls the flag back when the apply hook fails", async () => {
+		// Chrome's attach() fails outright if another extension holds the proxy. Leaving the flag
+		// on would claim we are the provider with nothing attached, and on Firefox that flag alone
+		// gates the transport.
 		const m = await load();
 		h.hookThrows = true;
 		await expect(setEnabled(true)).rejects.toThrow(/another extension is attached/);
+		expect(m.isProviderEnabled()).toBe(false);
+	});
+
+	it("rolls back to the previous value, not to off", async () => {
+		const m = await load();
+		await setEnabled(true);
+		h.hookThrows = true;
+		await expect(setEnabled(false)).rejects.toThrow();
 		expect(m.isProviderEnabled()).toBe(true);
 	});
 });

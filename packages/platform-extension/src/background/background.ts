@@ -37,8 +37,10 @@ import { startViewLock } from "./view-lock";
 import { isProviderEnabled, loadProviderEnabled } from "./webauthn-provider";
 import { initWebauthnProxy } from "./webauthn-proxy-init";
 
-// Gate every handler on both hydrations (session VEK + known hostnames) completing.
-const hydrated = Promise.all([sessionHydration, indexHydration]);
+// Gate every handler on hydration completing: session VEK, known hostnames, and the
+// passkey-provider opt-in. The last one is in here so a PASSKEY_PROVIDER_SET_ENABLED can never
+// dispatch while its stored value is still in flight and then be clobbered by it.
+const hydrated = Promise.all([sessionHydration, indexHydration, loadProviderEnabled()]);
 setReady(hydrated);
 
 // Resume continuous sync after a service-worker restart if the vault is unlocked,
@@ -56,11 +58,12 @@ void hydrated.then(() => {
 	void scheduleBackups();
 });
 
-// Load the passkey-provider opt-in into the in-memory flag (default off). On Chrome the
-// flag also drives attach() of the webAuthenticationProxy; on Firefox the flag alone gates
-// the MAIN-world content transport (which is always injected and passes through when off).
-// See docs/passkey-provider.md and docs/firefox-port.md.
-void loadProviderEnabled().then(() => {
+// Attach the proxy if the user opted in (default off). The flag itself is loaded as part of
+// `hydrated` above; on Chrome it also drives attach(), while on Firefox the flag alone gates the
+// MAIN-world content transport (always injected, passes through when off). The proxy's own
+// listeners are registered at import, not here, because a request that arrives before they exist
+// is lost. See docs/passkey-provider.md and docs/firefox-port.md.
+void hydrated.then(() => {
 	if (isProviderEnabled())
 		void initWebauthnProxy().catch((e) => console.warn("[bramble:bg] passkey proxy", e));
 });
