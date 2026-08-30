@@ -282,6 +282,20 @@ export async function handleCreate(
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
+		const entries = await deps.loadEntries();
+		// excludeCredentials lists what the RP already holds FOR THE ACCOUNT BEING ENROLLED, so
+		// it does not stop a second account on the same site, nor a second device for the same
+		// account (whose credential ids this vault has never seen). It stops exactly one thing:
+		// minting a twin of a credential we already store, which the sign-in picker cannot tell
+		// apart (both label by userName) and only one of which the RP may still honour.
+		//
+		// After the ceremony, not before: the spec has the authenticator obtain consent first so
+		// the error cannot be used as a silent oracle for what the vault holds.
+		const excluded = opts.excludeCredentialsB64Url.map(base64UrlToBase64);
+		if (excluded.length && findPasskeys(entries, rpId, excluded).length) {
+			throw new WebAuthnError("InvalidStateError", "a passkey for this account is already stored");
+		}
+
 		const reg = await deps.crypto.passkeyMakeCredential(rpId, decision.userVerified);
 		const credential: PasskeyCredential = {
 			credentialId: reg.credentialId,
@@ -296,7 +310,6 @@ export async function handleCreate(
 			signCount: 0,
 			createdAt: deps.now(),
 		};
-		const entries = await deps.loadEntries();
 		const plan = resolveCreatePlan(decision, entries, rpId, opts.rpName, credential);
 		await deps.savePlacement(plan);
 		deps.onSaved?.({

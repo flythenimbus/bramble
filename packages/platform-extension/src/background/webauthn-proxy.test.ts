@@ -89,6 +89,35 @@ describe("handleCreate", () => {
 		expect(r.response.clientDataJSON).toBeTruthy();
 	});
 
+	it("refuses a twin of a credential we already hold, with InvalidStateError", async () => {
+		const d = deps({ loadEntries: vi.fn(async () => githubEntries) });
+		const res = await handleCreate(
+			d,
+			1,
+			createJson({ excludeCredentials: [{ type: "public-key", id: "Q0lE" }] }),
+			"https://github.com",
+		);
+		expect(res.error?.name).toBe("InvalidStateError");
+		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
+		expect(d.savePlacement).not.toHaveBeenCalled();
+		// Consent first: the RP must not be able to probe the vault without the user seeing a card.
+		expect(d.ceremony).toHaveBeenCalledTimes(1);
+	});
+
+	it("still mints when excludeCredentials names credentials this vault has never seen", async () => {
+		// The second-device and second-account cases: the RP lists what it has, none of it ours.
+		const d = deps({ loadEntries: vi.fn(async () => githubEntries) });
+		const res = await handleCreate(
+			d,
+			1,
+			createJson({ excludeCredentials: [{ type: "public-key", id: "b3RoZXI" }] }),
+			"https://github.com",
+		);
+		expect(res.error).toBeUndefined();
+		expect(d.crypto.passkeyMakeCredential).toHaveBeenCalledTimes(1);
+		expect(d.savePlacement).toHaveBeenCalledTimes(1);
+	});
+
 	it("rejects a cross-origin rpId with SecurityError", async () => {
 		const d = deps();
 		const res = await handleCreate(d, 1, createJson(), "https://evil.com");
