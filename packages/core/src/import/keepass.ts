@@ -35,10 +35,38 @@ interface XmlGroup {
 	Entry?: XmlEntry | XmlEntry[];
 }
 
+// Entity processing is off in the parser below to block expansion bombs, which also switches off
+// the five PREDEFINED entities and numeric character references. Those cannot recurse and carry no
+// DoS risk, so decode them here; leaving them raw silently corrupts any password containing & < > "
+// or '. One pass, never sequential replaces: `&amp;lt;` must decode to `&lt;`, not to `<`.
+const XML_ENTITY = /&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6}));/g;
+const NAMED_ENTITIES: Record<string, string> = {
+	amp: "&",
+	lt: "<",
+	gt: ">",
+	quot: '"',
+	apos: "'",
+};
+
+export function unescapeXml(value: string): string {
+	if (!value.includes("&")) return value;
+	return value.replace(XML_ENTITY, (whole, name: string | undefined, dec, hex) => {
+		if (name) return NAMED_ENTITIES[name] ?? whole;
+		const code = Number.parseInt(dec ?? hex, dec ? 10 : 16);
+		// Out of range or a lone surrogate: leave the text exactly as the file had it rather
+		// than inventing a replacement character inside someone's password.
+		if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return whole;
+		return String.fromCodePoint(code);
+	});
+}
+
 function readValue(value: string | XmlValue | undefined): { text: string; hidden: boolean } {
 	if (value == null) return { text: "", hidden: false };
-	if (typeof value === "string") return { text: value, hidden: false };
-	return { text: value["#text"] ?? "", hidden: value["@_ProtectInMemory"] === "True" };
+	if (typeof value === "string") return { text: unescapeXml(value), hidden: false };
+	return {
+		text: unescapeXml(value["#text"] ?? ""),
+		hidden: value["@_ProtectInMemory"] === "True",
+	};
 }
 
 /** An entry plus the group path it was found under, which the mapper turns into tags. */
@@ -54,8 +82,9 @@ interface FoundEntry {
 // only organisation a KeePass database has, and dropping them was the whole reason an
 // imported vault arrived unsorted.
 function collectEntries(group: XmlGroup, parents: string[] = []): FoundEntry[] {
-	if (group.Name === RECYCLE_BIN) return [];
-	const path = group.Name ? [...parents, group.Name] : parents;
+	const name = group.Name ? unescapeXml(group.Name) : undefined;
+	if (name === RECYCLE_BIN) return [];
+	const path = name ? [...parents, name] : parents;
 	const here = toArray(group.Entry).map((entry) => ({ entry, path }));
 	const nested = toArray(group.Group).flatMap((g) => collectEntries(g, path));
 	return [...here, ...nested];
@@ -133,11 +162,11 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 function mapEntry({ entry, path }: FoundEntry): EntryData {
 	const fields: RawField[] = toArray(entry.String).map((s) => {
 		const { text, hidden } = readValue(s.Value);
-		return { key: String(s.Key ?? ""), value: text, hidden };
+		return { key: unescapeXml(String(s.Key ?? "")), value: text, hidden };
 	});
 	// Handed to the mapper as the same synthetic pairs the .kdbx path produces, so both
 	// formats reach `mapKeepassFields` looking identical.
-	if (entry.Tags) fields.push({ key: "Tags", value: entry.Tags, hidden: false });
+	if (entry.Tags) fields.push({ key: "Tags", value: unescapeXml(entry.Tags), hidden: false });
 	// Skip the root group: it names the database, not a folder inside it.
 	const folders = path.slice(1).join("/");
 	if (folders) fields.push({ key: "Group", value: folders, hidden: false });
@@ -153,7 +182,8 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 			ignoreAttributes: false,
 			attributeNamePrefix: "@_",
 			parseTagValue: false,
-			// Disable entity processing to block billion-laughs payloads.
+			// Off to block expansion bombs (the parser would expand DOCTYPE-declared entities).
+			// The predefined entities it also disables are decoded by `unescapeXml` above.
 			processEntities: false,
 		}).parse(text);
 	} catch {

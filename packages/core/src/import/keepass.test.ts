@@ -100,3 +100,49 @@ describe("parseKeePass tags", () => {
 		expect(keys).not.toContain("Group");
 	});
 });
+
+// Issue #79. The parser runs with entity processing off to block expansion bombs, which also
+// switches off the predefined entities, so these have to be decoded by hand.
+describe("XML entity decoding", () => {
+	const xml = (password: string, extra = "") => `<?xml version="1.0"?>
+<KeePassFile><Root><Group><Name>Root</Name>
+<Group><Name>${extra || "Folder"}</Name>
+<Entry><String><Key>Title</Key><Value>Site</Value></String>
+<String><Key>Password</Key><Value>${password}</Value></String></Entry>
+</Group></Group></Root></KeePassFile>`;
+
+	const passwordFrom = (raw: string) =>
+		(parseKeePass(xml(raw)).imported[0] as { password: string }).password;
+
+	it("decodes the five predefined entities", () => {
+		expect(passwordFrom("P@ssw&amp;rd123")).toBe("P@ssw&rd123");
+		expect(passwordFrom("admin&lt;root&gt;")).toBe("admin<root>");
+		expect(passwordFrom("&quot;hello&quot;")).toBe('"hello"');
+		expect(passwordFrom("it&apos;s")).toBe("it's");
+	});
+
+	it("decodes numeric character references, decimal and hex", () => {
+		expect(passwordFrom("a&#38;b")).toBe("a&b");
+		expect(passwordFrom("a&#x26;b")).toBe("a&b");
+		expect(passwordFrom("&#128273;")).toBe("🔑"); // outside the BMP
+	});
+
+	it("does not double-decode", () => {
+		// The whole reason for one regex pass: sequential replaces would turn this into "<".
+		expect(passwordFrom("&amp;lt;")).toBe("&lt;");
+		expect(passwordFrom("&amp;amp;")).toBe("&amp;");
+	});
+
+	it("leaves anything that is not a known entity exactly as it was", () => {
+		expect(passwordFrom("100% &raw; text")).toBe("100% &raw; text");
+		expect(passwordFrom("a & b")).toBe("a & b");
+		expect(passwordFrom("&#xD800;")).toBe("&#xD800;"); // lone surrogate
+		expect(passwordFrom("&#1114112;")).toBe("&#1114112;"); // past the last code point
+	});
+
+	it("decodes group names too, since they become tags", () => {
+		// normalizeTags slugifies the spaces; the point is the "&", which read "&amp;" before.
+		const res = parseKeePass(xml("pw", "Work &amp; Home"));
+		expect((res.imported[0] as { tags: string[] }).tags).toContain("Work-&-Home");
+	});
+});
