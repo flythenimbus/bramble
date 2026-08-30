@@ -319,6 +319,50 @@ Two things make this the hard surface:
 3. **Ceremony UI is a popup window**, not the in-page autofill picker, because the proxy intercepts
    below the page. Different UX path from current autofill.
 
+### Measured proxy semantics (2026-08-29, Playwright bundled Chromium)
+
+The API's undocumented edges, established by a scripted spike rather than reasoning. Chrome's
+reference documents none of these. Measured against Playwright's bundled Chromium with the built
+extension loaded; the API surface is identical to real Chrome (`attach`, `detach`, the three
+`complete*` calls, `onCreateRequest`/`onGetRequest`/`onIsUvpaaRequest`/`onRequestCanceled`,
+`onRemoteSessionStateChange`), so these should hold there, but the one flow that needs real
+hardware (a security-key tap) was not covered and is flagged below.
+
+| Question | Answer |
+|---|---|
+| `attach()` when we are already attached | **Succeeds**, returns `undefined`. Idempotent, no error. |
+| `attach()` after the worker was killed | **Succeeds**, returns `undefined`. |
+| `detach()` when not attached | **No-op**, returns `undefined`, does not throw. |
+| Does the attachment survive service-worker death? | **Yes.** A page's `get()` still routes to the extension after the worker is killed and respawned. |
+| Do the listeners survive? | **No.** The revived worker is a fresh module graph with all state reset. |
+| A request arriving while no listener is registered | **Lost permanently.** Not queued: registering a listener afterwards never delivers it, and the page hangs until its own WebAuthn timeout. A *later* request is served normally. |
+| `detach()` while one of our requests is in flight | The page's promise rejects **`AbortError: The operation was aborted.`** |
+| Does `onRequestCanceled` fire on that abort? | **No.** Nor when the requesting tab is closed mid-request. |
+| Completing a request after such an abort | Throws **`Error: Invalid sender`**. |
+
+Three consequences, in severity order.
+
+1. **Attached-with-no-listener is a real window on every worker wake, and it swallows WebAuthn
+   browser-wide.** Because the attachment outlives the worker but the listeners do not, and because
+   `registerListeners()` is reached only through `initWebauthnProxy()` after `loadProviderEnabled()`
+   resolves its async storage read, every wake has a gap in which any WebAuthn call in the browser
+   is lost forever rather than falling back to the platform authenticator. Registering the listeners
+   synchronously at module top level closes it; listeners without an attach are inert, so there is
+   no cost to registering them unconditionally.
+2. **Detaching mid-ceremony kills the page's sign-in.** This is reachable today: a provider `get()`
+   opens our unlock popup, and if the user unlocks with a security key there, the pauser detaches
+   and the site's request dies with `AbortError`. `onRequestCanceled` does not fire, so we cannot
+   even notice and clean up; our later `completeGetRequest` throws `Invalid sender` into a
+   swallowed catch.
+3. **`attach()`/`detach()` need no defensive bookkeeping.** Both are idempotent and neither throws
+   on a redundant call, so "treat a failed attach as possibly-attached" is unnecessary. A genuine
+   failure string (another extension holding the proxy) remains the only case worth surfacing.
+
+**Not covered, still manual:** whether Chrome destroys the toolbar popup when its own WebAuthn
+dialog takes focus. That decides whether a lost `PASSKEY_PROXY_RESUME` (which strands the proxy
+detached, since the send lives in a `finally` in the popup's realm) happens on every security-key
+unlock or only when the user clicks away mid-tap. Needs a real key on real Chrome.
+
 ## Cross-cutting decisions
 
 - **`signCount` = 0, always.** The spec permits it and synced passkeys require it: a real counter

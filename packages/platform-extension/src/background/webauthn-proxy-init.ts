@@ -28,8 +28,9 @@ async function activeTabOrigin(): Promise<string | null> {
 // Pause the proxy while Bramble runs its OWN WebAuthn (security-key PRF) ceremony, so
 // attach()'s browser-wide interception doesn't hijack our unlock. The popup/options send
 // PAUSE before navigator.credentials and RESUME after (see webauthn-ceremony pauser).
-// Reentrant: createPrfCredential nests a get() inside create(), so count depth and only
-// detach/reattach at the edges. Firefox never fires this (security keys disabled there,
+// Depth-counted, but nothing nests today: createPrfCredential's create() and its fallback
+// get() are SEQUENTIAL, each with its own pause cycle (webauthn-ceremony.ts), so the depth
+// never exceeds 1. Firefox never fires this (security keys disabled there,
 // and the override doesn't touch the extension's own moz-extension origin). See
 // docs/passkey-provider.md.
 let pauseDepth = 0;
