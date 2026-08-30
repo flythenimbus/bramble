@@ -36,9 +36,36 @@ async function activeTabOrigin(): Promise<string | null> {
 let pauseDepth = 0;
 let pausedWhileAttached = false;
 
+// Requests Chrome has handed us and we have not answered yet. Detaching kills them: measured,
+// the page gets a bare `AbortError` and onRequestCanceled never fires, so we would not otherwise
+// know. Answering first gives the site a reason, and clearing the map stops the ceremony from
+// walking the user through a picker for a request that no longer exists.
+const inFlight = new Map<number, "create" | "get">();
+
+async function failInFlightRequests(): Promise<void> {
+	if (typeof api.webAuthenticationProxy === "undefined" || inFlight.size === 0) return;
+	const pending = [...inFlight];
+	inFlight.clear();
+	for (const [requestId, kind] of pending) {
+		const details = {
+			requestId,
+			error: {
+				name: "NotAllowedError",
+				message: "Bramble paused passkey handling to unlock its own vault. Try again.",
+			},
+		};
+		const done =
+			kind === "create"
+				? api.webAuthenticationProxy.completeCreateRequest(details)
+				: api.webAuthenticationProxy.completeGetRequest(details);
+		await done.catch(() => {});
+	}
+}
+
 on("PASSKEY_PROXY_PAUSE", async () => {
 	if (pauseDepth === 0 && attached) {
 		pausedWhileAttached = true;
+		await failInFlightRequests();
 		await detachWebauthnProxy();
 	}
 	pauseDepth++;
@@ -74,6 +101,7 @@ function registerListeners(): void {
 		});
 	});
 	api.webAuthenticationProxy.onCreateRequest.addListener((req) => {
+		inFlight.set(req.requestId, "create");
 		void (async () => {
 			// These listeners bypass the message router, so await hydration ourselves: on a
 			// fresh SW wake the session VEK is restored asynchronously, and reading lock state
@@ -86,6 +114,8 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
+			// Gone means a pause already failed it; completing again throws "Invalid sender".
+			if (!inFlight.delete(req.requestId)) return;
 			try {
 				await api.webAuthenticationProxy.completeCreateRequest(details);
 			} catch (e) {
@@ -102,6 +132,7 @@ function registerListeners(): void {
 		})();
 	});
 	api.webAuthenticationProxy.onGetRequest.addListener((req) => {
+		inFlight.set(req.requestId, "get");
 		void (async () => {
 			await whenReady(); // as in onCreateRequest: don't read lock state before hydration
 			const origin = await activeTabOrigin();
@@ -111,6 +142,7 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
+			if (!inFlight.delete(req.requestId)) return; // as in onCreateRequest
 			try {
 				await api.webAuthenticationProxy.completeGetRequest(details);
 			} catch (e) {

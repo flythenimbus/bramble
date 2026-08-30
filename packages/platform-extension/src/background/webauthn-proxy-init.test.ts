@@ -27,6 +27,16 @@ const h = vi.hoisted(() => ({
 	applyHook: undefined as ((enabled: boolean) => Promise<void>) | undefined,
 	/** The persisted opt-in, which RESUME re-checks before re-attaching. */
 	enabled: true,
+	/** Completions we sent back to Chrome, in order. */
+	completed: [] as { requestId: number; kind: string; error?: string }[],
+	/** The request listeners themselves, so a test can deliver a request. */
+	fire: {} as {
+		create?: (r: { requestId: number }) => void;
+		get?: (r: { requestId: number }) => void;
+	},
+	/** Hold the handler mid-ceremony, which is where a real one spends most of its life. */
+	holdHandler: false,
+	release: undefined as (() => void) | undefined,
 }));
 
 const proxy = {
@@ -38,17 +48,23 @@ const proxy = {
 		h.detachCalls++;
 		return undefined;
 	},
-	completeCreateRequest: async () => {},
-	completeGetRequest: async () => {},
+	completeCreateRequest: async (d: { requestId: number; error?: { message: string } }) => {
+		h.completed.push({ requestId: d.requestId, kind: "create", error: d.error?.message });
+	},
+	completeGetRequest: async (d: { requestId: number; error?: { message: string } }) => {
+		h.completed.push({ requestId: d.requestId, kind: "get", error: d.error?.message });
+	},
 	completeIsUvpaaRequest: () => {},
 	onCreateRequest: {
-		addListener: () => {
+		addListener: (cb: (r: { requestId: number }) => void) => {
 			h.listeners.create++;
+			h.fire.create = cb;
 		},
 	},
 	onGetRequest: {
-		addListener: () => {
+		addListener: (cb: (r: { requestId: number }) => void) => {
 			h.listeners.get++;
+			h.fire.get = cb;
 		},
 	},
 	onIsUvpaaRequest: {
@@ -82,9 +98,18 @@ vi.mock("./webauthn-provider", () => ({
 	},
 }));
 
+// Echo the requestId back, as the real handlers do; the tests below key on it. `holdHandler`
+// parks the handler where a real ceremony sits: awaiting the user, for up to two minutes.
+const answer = (requestId: number) => {
+	if (!h.holdHandler) return Promise.resolve({ requestId, responseJson: "{}" });
+	return new Promise((resolve) => {
+		h.release = () => resolve({ requestId, responseJson: "{}" });
+	});
+};
+
 vi.mock("./webauthn-proxy", () => ({
-	handleCreate: vi.fn(async () => ({ requestId: 1, responseJson: "{}" })),
-	handleGet: vi.fn(async () => ({ requestId: 1, responseJson: "{}" })),
+	handleCreate: vi.fn((_deps: unknown, requestId: number) => answer(requestId)),
+	handleGet: vi.fn((_deps: unknown, requestId: number) => answer(requestId)),
 }));
 
 /** Fresh module state, as a re-woken service worker has. `hasProxy: false` is Firefox, and must
@@ -99,6 +124,10 @@ async function load({ hasProxy = true } = {}) {
 	h.handlers.clear();
 	h.applyHook = undefined;
 	h.enabled = true;
+	h.completed = [];
+	h.fire = {};
+	h.holdHandler = false;
+	h.release = undefined;
 	return import("./webauthn-proxy-init");
 }
 
@@ -224,6 +253,49 @@ describe("pause and resume", () => {
 		const revived = await load(); // service-worker death
 		await revived.initWebauthnProxy();
 		expect(h.attachCalls).toBe(1); // counters reset with the module; the point is it attached
+	});
+});
+
+describe("in-flight requests during a pause", () => {
+	/** Let the listener's async body run to the point where it would complete the request. */
+	const settle = () => new Promise((r) => setTimeout(r, 0));
+
+	it("fails a request the pause is about to kill, with a reason", async () => {
+		// Detaching aborts it anyway, but as a bare AbortError with onRequestCanceled never firing,
+		// so the site gets no reason and we would not know to stop the ceremony.
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.holdHandler = true;
+		h.fire.get?.({ requestId: 42 });
+		await settle(); // the ceremony is now awaiting the user
+
+		await pause();
+		expect(h.completed).toEqual([
+			{ requestId: 42, kind: "get", error: expect.stringContaining("paused passkey handling") },
+		]);
+	});
+
+	it("does not complete a request twice when the ceremony finishes after the pause", async () => {
+		// The second completion throws "Invalid sender", and the user has been walked through a
+		// picker for a request that no longer exists.
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.holdHandler = true;
+		h.fire.get?.({ requestId: 7 });
+		await settle();
+		await pause();
+		h.completed = []; // drop the pause's own failure; we care about what comes after
+		h.release?.(); // the user finally finishes the ceremony
+		await settle();
+		expect(h.completed).toEqual([]);
+	});
+
+	it("completes normally when no pause interrupts", async () => {
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.fire.get?.({ requestId: 9 });
+		await settle();
+		expect(h.completed).toEqual([{ requestId: 9, kind: "get", error: undefined }]);
 	});
 });
 
