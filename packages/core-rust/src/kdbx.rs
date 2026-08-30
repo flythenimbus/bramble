@@ -64,8 +64,9 @@ pub enum KdbxError {
     UnsupportedKdf,
     UnsupportedStream,
     WrongCredential,
-    /// KDF parameters from the file exceed our safety ceilings (OOM / hang guard).
-    KdfTooExpensive,
+    /// KDF parameters from the file exceed our safety ceilings (OOM / hang guard). Carries the
+    /// numbers so a bug report says which setting was too high instead of just "it failed".
+    KdfTooExpensive { mem_kib: u64, iterations: u64 },
     Corrupt(&'static str),
 }
 
@@ -78,7 +79,9 @@ impl KdbxError {
             KdbxError::UnsupportedKdf => "KDBX_UNSUPPORTED_KDF".into(),
             KdbxError::UnsupportedStream => "KDBX_UNSUPPORTED_STREAM".into(),
             KdbxError::WrongCredential => "KDBX_WRONG_CREDENTIAL".into(),
-            KdbxError::KdfTooExpensive => "KDBX_KDF_TOO_EXPENSIVE".into(),
+            KdbxError::KdfTooExpensive { mem_kib, iterations } => {
+                format!("KDBX_KDF_TOO_EXPENSIVE:{mem_kib}KiB/{iterations}")
+            }
             KdbxError::Corrupt(s) => format!("KDBX_CORRUPT:{s}"),
         }
     }
@@ -204,19 +207,31 @@ fn argon2_transform(kdf: &Kdf, composite: &[u8]) -> Res<Zeroizing<[u8; 32]>> {
     } else {
         return Err(KdbxError::UnsupportedKdf);
     };
-    // Reject implausible parameters from the untrusted file before allocating: a
-    // malicious .kdbx could request terabytes of memory or millions of passes
-    // (OOM / hang). These ceilings sit far above any real KeePass file.
-    const MAX_KDF_MEM_BYTES: u64 = 1 << 30; // 1 GiB
-    const MAX_KDF_ITERATIONS: u64 = 64;
+    // Reject implausible parameters from the untrusted file before allocating: a malicious
+    // .kdbx could request terabytes of memory or millions of passes (OOM / hang).
+    //
+    // Argon2's cost is roughly memory x passes, so the budget bounds the PRODUCT. Capping
+    // passes on their own was the wrong shape (#78): it rejected 1 MiB over 3000 rounds, about
+    // a second of work and exactly what KeePassXC's one-second benchmark produces at low memory
+    // settings, while admitting 1 GiB over 64 rounds, twenty times the work. The budget is set
+    // at that former worst case, so nothing that used to open stops opening.
+    const MAX_KDF_MEM_BYTES: u64 = 1 << 30; // 1 GiB, bounding the allocation itself
     const MAX_KDF_PARALLELISM: u32 = 64;
+    const MAX_KDF_WORK_KIB_PASSES: u64 = 1 << 26; // 1 GiB x 64 passes
+    let mem_kib_u64 = kdf.mem_bytes / 1024;
+    // `.max(1)` so a file declaring under 1 KiB cannot buy unlimited passes for free; argon2
+    // rejects anything under 8 KiB below anyway.
+    let work = mem_kib_u64.max(1).saturating_mul(kdf.iterations);
     if kdf.mem_bytes > MAX_KDF_MEM_BYTES
-        || kdf.iterations > MAX_KDF_ITERATIONS
         || kdf.parallelism > MAX_KDF_PARALLELISM
+        || work > MAX_KDF_WORK_KIB_PASSES
     {
-        return Err(KdbxError::KdfTooExpensive);
+        return Err(KdbxError::KdfTooExpensive {
+            mem_kib: mem_kib_u64,
+            iterations: kdf.iterations,
+        });
     }
-    let mem_kib = u32::try_from(kdf.mem_bytes / 1024).map_err(|_| KdbxError::Corrupt("KDF mem"))?;
+    let mem_kib = u32::try_from(mem_kib_u64).map_err(|_| KdbxError::Corrupt("KDF mem"))?;
     let iters = u32::try_from(kdf.iterations).map_err(|_| KdbxError::Corrupt("KDF iters"))?;
     let params = Params::new(mem_kib, iters, kdf.parallelism, Some(32))
         .map_err(|_| KdbxError::Corrupt("KDF params"))?;
@@ -958,21 +973,22 @@ mod tests {
             version: 0x13,
         };
         let composite = [0u8; 32];
+        let too_expensive =
+            |m, i, p| matches!(argon2_transform(&mk(m, i, p), &composite), Err(KdbxError::KdfTooExpensive { .. }));
+
         // In-bounds (tiny) params derive without tripping the safety gate.
         assert!(argon2_transform(&mk(64 * 1024, 1, 1), &composite).is_ok());
-        // Each axis over its ceiling is rejected before any allocation.
-        assert_eq!(
-            argon2_transform(&mk(2 << 30, 1, 1), &composite),
-            Err(KdbxError::KdfTooExpensive)
-        );
-        assert_eq!(
-            argon2_transform(&mk(64 * 1024, 1000, 1), &composite),
-            Err(KdbxError::KdfTooExpensive)
-        );
-        assert_eq!(
-            argon2_transform(&mk(64 * 1024, 1, 1000), &composite),
-            Err(KdbxError::KdfTooExpensive)
-        );
+        // Many passes over little memory is cheap, and is what a low-memory KeePassXC benchmark
+        // produces. This is the #78 case, which a per-axis pass ceiling used to reject.
+        assert!(!too_expensive(1024 * 1024, 3000, 2));
+        // Memory and parallelism keep their own ceilings: one bounds the allocation, the other
+        // the thread count, and neither is captured by the work product.
+        assert!(too_expensive(2 << 30, 1, 1));
+        assert!(too_expensive(64 * 1024, 1, 1000));
+        // Over the work budget: 1 GiB over 65 passes is more than the former worst case.
+        assert!(too_expensive(1 << 30, 65, 1));
+        // A tiny-memory file cannot buy unlimited passes.
+        assert!(too_expensive(512, 1 << 27, 1));
     }
 
     // Byte-mutation negative tests: corrupt one field of a real fixture.
