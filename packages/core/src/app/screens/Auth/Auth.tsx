@@ -10,13 +10,17 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { isBiometricCancel } from "../../../adapters/biometric";
+import {
+	isBiometricCancel,
+	isBiometricInvalidated,
+	isBiometricLockout,
+} from "../../../adapters/biometric";
 import { useCan, usePlatform } from "../../../context/PlatformContext";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { usePrefs } from "../../../hooks/usePrefs";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
-import { StaleBiometricCacheError } from "../../../vault/biometric-unlock";
+import { effectiveAllowPasscode, StaleBiometricCacheError } from "../../../vault/biometric-unlock";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { Button } from "../../components/ui/button";
@@ -47,7 +51,9 @@ export function Auth() {
 		biometricEnabled,
 		biometricAvailable,
 		biometryType,
+		biometryEnrolled,
 		unlockWithBiometric,
+		rearmBiometric,
 		refreshBiometric,
 		vaultError,
 	} = useVault();
@@ -97,10 +103,24 @@ export function Auth() {
 		setError,
 	} = useForm<FormValues>({ defaultValues: { masterPassword: "" } });
 
+	// The cached VEK's OS gate is fixed when it is written, so bring it back in line with the
+	// setting on the way in. One keychain write, never prompts, and it is what converts a device
+	// armed by a build that predates the passcode-fallback setting (those always allowed it).
+	// Fire-and-forget: this screen unmounts the moment the vault opens, and nothing here is
+	// worth blocking or reporting on.
+	// Which gate the setting asks for on THIS device: a phone with nothing enrolled in Face ID /
+	// Touch ID can only ever use the passcode, whatever the preference says.
+	const allowPasscode = effectiveAllowPasscode(biometryEnrolled, prefs.biometricPasscodeFallback);
+
+	const rearm = useCallback(() => {
+		void rearmBiometric(allowPasscode).catch(() => {});
+	}, [rearmBiometric, allowPasscode]);
+
 	const onSubmit = async ({ masterPassword }: FormValues) => {
 		setBusy(true);
 		try {
 			await unlock(masterPassword);
+			rearm();
 		} catch (e) {
 			// Keep the typed value; the inline field error is the failure signal.
 			// Do not resetField here: in RHF v7 it clears the error and makes failures silent.
@@ -125,6 +145,7 @@ export function Auth() {
 		setBusy(true);
 		try {
 			await unlockWithSecurityKey();
+			rearm();
 		} catch (e) {
 			// Surface in the same field-error region as a wrong master password.
 			setError("masterPassword", { message: cryptoError(e) });
@@ -139,10 +160,23 @@ export function Auth() {
 		async (auto = false): Promise<"done" | "retry"> => {
 			setBusy(true);
 			try {
-				await unlockWithBiometric();
+				await unlockWithBiometric(allowPasscode);
+				rearm();
 			} catch (e) {
-				// A user cancel surfaces here too; the password form stays available below.
-				if (!auto || e instanceof StaleBiometricCacheError) {
+				// The gate itself is gone (the enrolled set changed under it), so the button is
+				// gone with it - say so even when nobody asked, like a stale cache.
+				if (isBiometricInvalidated(e)) {
+					setError("masterPassword", {
+						message: t`Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again.`,
+					});
+				} else if (isBiometricLockout(e)) {
+					// ...WithBiometrics has no passcode route out of a lockout, so name the way out.
+					if (!auto)
+						setError("masterPassword", {
+							message: t`Too many failed attempts. Unlock your device with its passcode first, or use your master password.`,
+						});
+					// A user cancel surfaces here too; the password form stays available below.
+				} else if (!auto || e instanceof StaleBiometricCacheError) {
 					setError("masterPassword", { message: cryptoError(e) });
 				} else if (!isBiometricCancel(e)) {
 					// Nothing the user asked for should leave an error on screen; they still have
@@ -155,7 +189,7 @@ export function Auth() {
 			setBusy(false);
 			return "done";
 		},
-		[unlockWithBiometric, setError, cryptoError],
+		[unlockWithBiometric, allowPasscode, rearm, setError, cryptoError, t],
 	);
 
 	const handleRecovery = async (e: React.SyntheticEvent) => {
@@ -164,6 +198,7 @@ export function Auth() {
 		setBusy(true);
 		try {
 			await unlockWithRecoveryCode(recoveryCode);
+			rearm();
 		} catch (err) {
 			setRecoveryError(cryptoError(err));
 		} finally {

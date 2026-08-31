@@ -1,7 +1,7 @@
 What's new in this release:
 
-- Moving over from KeePass now brings your passkeys with you. Import a .kdbx file or a KeePass XML export and any passkeys inside arrive as real passkeys you can sign in with, instead of a handful of unreadable fields. They work with AutoFill straight away, and they sync to your other devices like everything else.
-- KeePass databases that refused to open should open now. Databases saved with stronger security settings were being turned away by a check that measured the wrong thing. If a database really is too heavy to open, the message now tells you which setting to lower rather than just saying it failed.
-- Passwords containing ampersands, angle brackets or quote marks now import correctly from a KeePass XML export. They were arriving with extra characters in them, so they quietly stopped working on the sites they belonged to.
+- Face ID and Touch ID now mean exactly that. On iPhone they have always shared one lock with your device passcode, so anyone who knew that passcode could open your vault without your master password. Unlocking with your face or fingerprint is now separate from the passcode, and that is what you get by default.
+- If you would rather keep the passcode as a backup, a new Allow passcode fallback switch sits under the Face ID row in Settings, under Security. Turn it on and your device passcode opens the vault again. On an iPhone with no face or fingerprint set up it stays on by itself, since there the passcode is the only lock there is.
+- Both settings apply to AutoFill too, so filling a password in another app asks for exactly what the app does. Adding or removing a face or fingerprint in iOS Settings now clears this device's saved key as well, so a newly added face cannot be used to get in. Unlock once with your master password to set it up again.
 
 No account, no cloud. Everything stays on your devices.

@@ -22,6 +22,10 @@ export const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 // Mobile only: present the biometric gate as soon as the unlock screen is up, rather than
 // waiting for a tap. Off by default; see docs/auth-and-unlock.md (issue #43).
 export const PREF_BIOMETRIC_AUTO_PROMPT = "pref.biometricAutoPrompt";
+// iOS only: let the device passcode open the biometric gate as well as Face ID / Touch ID.
+// Off by default, so "Face ID" means Face ID. Changing it re-arms the cached VEK with a
+// different Keychain access control; see docs/auth-and-unlock.md.
+export const PREF_BIOMETRIC_PASSCODE_FALLBACK = "pref.biometricPasscodeFallback";
 // Mobile (iOS) only: populate the OS QuickType bar with usernames+domains so logins
 // surface inline in the keyboard. Off by default since it exposes usernames before auth.
 export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
@@ -49,6 +53,7 @@ export const DEFAULT_OFFER_TO_SAVE = true;
 export const DEFAULT_AUTOFILL_ENABLED = true;
 const DEFAULT_NEVER_SAVE_SITES: string[] = [];
 const DEFAULT_BIOMETRIC_AUTO_PROMPT = false;
+const DEFAULT_BIOMETRIC_PASSCODE_FALLBACK = false;
 const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
@@ -67,6 +72,7 @@ export interface Prefs {
 	neverSaveSites: string[];
 	// Mobile: fire the biometric prompt when the unlock screen appears, with no tap.
 	biometricAutoPrompt: boolean;
+	biometricPasscodeFallback: boolean;
 	// iOS QuickType: surface usernames inline in the keyboard (exposes them before auth).
 	autofillQuickType: boolean;
 	// Extension: act as a WebAuthn passkey provider for other sites.
@@ -89,6 +95,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	autofillEnabled: PREF_AUTOFILL_ENABLED,
 	neverSaveSites: PREF_NEVER_SAVE_SITES,
 	biometricAutoPrompt: PREF_BIOMETRIC_AUTO_PROMPT,
+	biometricPasscodeFallback: PREF_BIOMETRIC_PASSCODE_FALLBACK,
 	autofillQuickType: PREF_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: PREF_PASSKEY_PROVIDER,
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
@@ -104,6 +111,7 @@ const DEFAULT_PREFS: Prefs = {
 	autofillEnabled: DEFAULT_AUTOFILL_ENABLED,
 	neverSaveSites: DEFAULT_NEVER_SAVE_SITES,
 	biometricAutoPrompt: DEFAULT_BIOMETRIC_AUTO_PROMPT,
+	biometricPasscodeFallback: DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
@@ -132,7 +140,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [a, b, c, d, e, f, g, h, i, j, k, l] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -145,6 +153,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
 				storage.getMeta<boolean>(PREF_STATS_COLLAPSED),
 				storage.getMeta<boolean>(PREF_AUTOSTART_PROMPT_DISMISSED),
+				storage.getMeta<boolean>(PREF_BIOMETRIC_PASSCODE_FALLBACK),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -160,6 +169,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				lockOnScreenLock: typeof j === "boolean" ? j : DEFAULT_LOCK_ON_SCREEN_LOCK,
 				statsCollapsed: typeof k === "boolean" ? k : DEFAULT_STATS_COLLAPSED,
 				autostartPromptDismissed: typeof l === "boolean" ? l : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+				biometricPasscodeFallback: typeof m === "boolean" ? m : DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
 			});
 			setLoaded(true);
 		})();

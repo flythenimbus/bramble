@@ -117,6 +117,18 @@ export const CAPABILITIES = {
 	// selectable at all. See github issue #36.
 	// Desktop's native dialogs filter by extension properly, unlike the mobile pickers.
 	filePickerAcceptFilter: { extension: true, mobile: false, desktop: true },
+	// Separate "let the device passcode open the biometric gate" toggle. iOS only: the gate is
+	// a Keychain access control picked at write time, so both options exist there (.userPresence
+	// vs .biometryCurrentSet). Android's Keystore key is biometry-only already - allowing
+	// DEVICE_CREDENTIAL needs the key authorized for it at generation (API 30+, minSdk is 24) -
+	// and no other target has a biometric gate at all. See docs/auth-and-unlock.md.
+	biometricPasscodeFallback: {
+		chromium: false,
+		firefox: false,
+		android: false,
+		ios: true,
+		desktop: false,
+	},
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.
 	// Desktop OSes emit a real screen-lock signal, but nothing subscribes to it yet.

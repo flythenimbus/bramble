@@ -91,14 +91,17 @@ ground truth of what exists.
   keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish
   landed. **Biometric unlock is built** as a device-local, OS-gated convenience unlock (not a
   vault-format slot, so the vault stays portable): the VEK is cached behind a hardware biometric
-  gate by an in-house local Capacitor plugin (`BiometricVault` — iOS Keychain `.userPresence`
+  gate by an in-house local Capacitor plugin (`BiometricVault` — iOS Keychain access control
   + Secure Enclave; Android Keystore key `setUserAuthenticationRequired` + invalidated-by-enrollment
   wrapping the VEK), surfaced through an optional sixth `Platform.biometric` capability in `@core`.
-  On iOS the gate is `.userPresence`, not `.biometryCurrentSet`, so the **device passcode** opens it
-  too: `isAvailable`/`getSecret` evaluate `.deviceOwnerAuthentication`, a passcode-only iPhone reports
-  `biometryType: "passcode"` for the UI copy, and a Face ID user gets an "Enter Passcode" fallback.
-  The trade-off is deliberate (it's what the AutoFill extension has always relied on) but it does mean
-  iOS has no enrollment-change invalidation; Android keeps it, and stays biometry-only.
+  On iOS the gate is picked by the **Allow passcode fallback** setting (iOS only, off by default):
+  off gives `.biometryCurrentSet` (biometry only, dropped when the enrolled set changes) and on gives
+  `.userPresence` (biometry OR the **device passcode**). `getSecret` evaluates a matching LA policy
+  either way, a passcode-only iPhone reports `biometryType: "passcode"` and has the setting forced on,
+  and re-arming after every unlock is what converts devices armed before the setting existed.
+  Android has no such toggle: its key is `BIOMETRIC_STRONG` + invalidate-on-enrollment already, and
+  allowing `DEVICE_CREDENTIAL` needs the key authorized for it at generation (API 30+, minSdk 24).
+  See docs/auth-and-unlock.md.
   Decided the attack-surface trade-off in favor of OS-enforced gating (not an app-level check), so
   it also seeds the Phase 3 autofill biometric-unwrap path. **iOS functionally verified on the
   simulator** (enable -> lock -> Face ID unlock, plus cancel/non-match/disable); Android compiles
@@ -106,8 +109,9 @@ ground truth of what exists.
   `ShellAdapter.supportsSecurityKeys` flag (false on mobile) since PRF can't work there, and biometric
   takes its slot in Settings. The mobile package also gained its **first test harness** (was zero):
   `platform-mobile` 9 tests, `@core` biometric paths 7. Remaining Phase 2: the broader vault
-  list/detail/edit small-screen sweep, the biometric re-enrollment edge (re-enrolling invalidates the
-  cached item but the toggle still reads on until toggled off/on), and the Android device pass.
+  list/detail/edit small-screen sweep, and the Android device pass. The biometric re-enrollment edge
+  is **closed**: an invalidated item now surfaces as the `invalidated` error code, which deletes the
+  dead Keychain item (app and extension) and turns the toggle off.
 - **Architecture:** the pure P2P transport/host modules moved from the extension into
   `@core/sync/transport`; the on-disk entries format now has one writer (`EntriesBlobStore`);
   the wasm->CryptoAdapter mapping is shared by mobile + the extension offscreen
@@ -159,9 +163,10 @@ ground truth of what exists.
     an opt-in setting can populate it (see "Domain filtering + QuickType opt-in" below).
   - **Three unlock paths** (in `CredentialProviderViewController.swift`): the **master password** run
     natively in the extension (`unwrapVekPassword` = Argon2id 64 MiB; fits the ~120 MB cap, Bitwarden-style;
-    the app shares the non-secret password slot via `AutofillBridge`); a **biometric/passcode** fast path
-    (the cached VEK item's access control is `.userPresence`, so Face ID OR the device passcode; label is the
-    device's actual biometry, e.g. Face ID / Touch ID); and a **keep-unlocked session** (below).
+    the app shares the non-secret password slot via `AutofillBridge`); a **biometric** fast path (the
+    cached VEK item's access control drives its own prompt, so the app's "Allow passcode fallback" setting
+    is enforced here with no policy of its own; the label follows the mirrored flag, e.g. "Face ID" vs
+    "Face ID or passcode"); and a **keep-unlocked session** (below).
   - **One setting governs lock + keep-unlocked.** The **Auto-lock timeout** gained an **"Immediately"**
     option (first, **mobile default**); it controls both the in-app vault auto-lock and the provider's
     keep-unlocked window. Immediately = lock on app-leave + ask for the master password every fill; 5/15/30/60
@@ -256,9 +261,10 @@ Phase 4 passkey/PRF work. In rough priority order:
    **device-tested** (see "Android autofill" in Implementation status). Nothing load-bearing is left here;
    the remaining Android items are the Phase 2 closeouts below and release packaging. Prereq for any Android
    build: `pnpm ffi:build:android` (jniLibs + glue are gitignored), same as iOS's `ffi:build:ios`.
-3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the
-   biometric **re-enrollment edge** (`isEnabled()` should detect an invalidated item); the broader **vault
-   list/detail/edit small-screen UI sweep**.
+3. **Phase 2 closeouts:** Android biometric **on-device/emulator pass** (only compiled so far); the broader
+   **vault list/detail/edit small-screen UI sweep**. The biometric **re-enrollment edge** is closed: the
+   invalidated item is detected on read (`errSecAuthFailed` -> `invalidated`), deleted, and the toggle
+   follows.
 4. **Polish / decisions:** the **QuickType opt-in** shipped (build 204423099) - confirm the exposure tradeoff
    reads well on device; the ASC app **Name** / subtitle metadata; export the autofill provider behind a real
    (renamed) extension target if desired.
@@ -595,8 +601,9 @@ The provider is native code with no webview and no WASM. On its own it must:
    (encrypted blob) plus a **Keychain Access Group** (keys); on Android the provider is in the same
    app/package, so it shares internal app storage and the **Keystore** directly (no App Group
    needed).
-2. **Unlock via biometric**: iOS stores a wrapping key in the Keychain behind `kSecAccessControl`
-   `.userPresence` + Secure Enclave, and the Keychain read itself triggers Face ID or passcode; Android
+2. **Unlock via biometric**: iOS stores a wrapping key in the Keychain behind a `kSecAccessControl`
+   (`.biometryCurrentSet`, or `.userPresence` when passcode fallback is on) + Secure Enclave, and the
+   Keychain read itself triggers the prompt that access control implies; Android
    uses a Keystore key created `setUserAuthenticationRequired(true)`, unlocked with `BiometricPrompt`
    + a `CryptoObject`. (iOS gotcha: `LAContext.evaluatePolicy` fails with "not running foreground"
    if called too early; defer the prompt to `viewDidAppear`.)

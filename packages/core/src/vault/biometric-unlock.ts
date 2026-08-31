@@ -1,4 +1,4 @@
-import type { BiometricUnlock } from "../adapters/biometric";
+import { type BiometricUnlock, isBiometricInvalidated } from "../adapters/biometric";
 import type { CryptoAdapter } from "../adapters/crypto";
 
 // The two adapter-bound steps of device-local biometric unlock, kept off the React
@@ -6,15 +6,29 @@ import type { CryptoAdapter } from "../adapters/crypto";
 // The VEK transits as base64 here exactly as it does during session resume; the
 // biometric adapter is responsible for the OS-gated cache, the crypto adapter for the
 // in-memory session.
+//
+// `allowPasscode` (iOS) is fixed into the cached VEK's OS gate when it is written, so it is
+// threaded through both the enable and the unlock side: the prompt has to ask for the same
+// thing the item was armed with. See docs/auth-and-unlock.md.
+
+/** The gate to actually ask for, given the setting and what the device has enrolled. With no
+ * biometric enrolled there is no biometry-only access control to build, so the passcode is the
+ * only thing that can hold the cache and the preference doesn't get a say - asking for
+ * biometrics-only there would fail to arm and, worse, fail to unlock. Both the unlock screen and
+ * Settings resolve it through here so they can't disagree about which gate the item carries. */
+export function effectiveAllowPasscode(biometryEnrolled: boolean, prefAllows: boolean): boolean {
+	return !biometryEnrolled || prefAllows;
+}
 
 /** Cache the in-memory VEK behind the device biometric gate, keyed to this vault. The vault must be unlocked. */
 export async function enableBiometricUnlock(
 	crypto: CryptoAdapter,
 	biometric: BiometricUnlock,
 	vaultId: string,
+	allowPasscode: boolean,
 ): Promise<void> {
 	const vek = await crypto.exportVek();
-	await biometric.enable(vek, vaultId);
+	await biometric.enable(vek, vaultId, allowPasscode);
 }
 
 /** Biometric-unwrap this vault's cached VEK and load it into the crypto session. The caller
@@ -23,14 +37,30 @@ export async function unlockVekWithBiometric(
 	crypto: CryptoAdapter,
 	biometric: BiometricUnlock,
 	vaultId: string,
+	allowPasscode: boolean,
 ): Promise<void> {
-	const vek = await biometric.unlock(vaultId);
+	const vek = await biometric.unlock(vaultId, allowPasscode);
 	await crypto.unlockWithVek(vek);
 }
 
 /** The cached VEK no longer opens this vault, so the gate has been torn down. The one biometric
  * failure worth putting on screen unasked: the button it came from is gone with it. */
 export class StaleBiometricCacheError extends Error {}
+
+/** Re-cache the VEK under the gate the settings now ask for. The OS access control is chosen
+ * when the item is written, so this is the only way to change it - and running it after every
+ * unlock is also what converts a device armed by an older build, which had no such setting and
+ * always allowed the passcode. A no-op when the gate isn't set up; never prompts. */
+export async function reconcileBiometricGate(opts: {
+	crypto: CryptoAdapter;
+	biometric: BiometricUnlock;
+	vaultId: string;
+	enabled: boolean;
+	allowPasscode: boolean;
+}): Promise<void> {
+	if (!opts.enabled) return;
+	await enableBiometricUnlock(opts.crypto, opts.biometric, opts.vaultId, opts.allowPasscode);
+}
 
 /** Full biometric unlock with stale-cache recovery: load the gated VEK, then load
  * entries. If the gate authenticated but its VEK no longer opens this vault (e.g. the
@@ -41,10 +71,23 @@ export async function biometricUnlockFlow(opts: {
 	crypto: CryptoAdapter;
 	biometric: BiometricUnlock;
 	vaultId: string;
+	allowPasscode: boolean;
 	loadEntries: () => Promise<void>;
 	onStaleCache: () => void;
 }): Promise<void> {
-	await unlockVekWithBiometric(opts.crypto, opts.biometric, opts.vaultId);
+	try {
+		await unlockVekWithBiometric(opts.crypto, opts.biometric, opts.vaultId, opts.allowPasscode);
+	} catch (cause) {
+		// The OS discarded the cached VEK because the enrolled biometric set changed (iOS
+		// biometrics-only, and Android always). Nothing can reopen it, so retire the gate here
+		// rather than leave a button that can only ever fail. The native side has already
+		// dropped the item; this is the UI half.
+		if (isBiometricInvalidated(cause)) {
+			await opts.biometric.disable(opts.vaultId).catch(() => {});
+			opts.onStaleCache();
+		}
+		throw cause;
+	}
 	try {
 		await opts.loadEntries();
 	} catch (cause) {

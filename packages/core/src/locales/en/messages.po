@@ -264,6 +264,10 @@ msgstr "Allow again"
 msgid "Allow and continue"
 msgstr "Allow and continue"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Allow passcode fallback"
+msgstr "Allow passcode fallback"
+
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
@@ -1820,6 +1824,10 @@ msgstr "Notes (optional)"
 msgid "Nothing is archived. Archived items are kept here, out of autofill."
 msgstr "Nothing is archived. Archived items are kept here, out of autofill."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
+msgstr "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
+
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
 msgstr "Nothing to import"
@@ -1855,6 +1863,10 @@ msgstr "Older version on the other device? Compare this instead:"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
 msgstr "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2935,6 +2947,10 @@ msgstr "Toggle lock when the screen locks"
 msgid "Toggle offer to save logins"
 msgstr "Toggle offer to save logins"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle passcode fallback"
+msgstr "Toggle passcode fallback"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle start at login"
 msgstr "Toggle start at login"
@@ -2942,6 +2958,10 @@ msgstr "Toggle start at login"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Toggle unlock on open"
 msgstr "Toggle unlock on open"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Too many failed attempts. Unlock your device with its passcode first, or use your master password."
+msgstr "Too many failed attempts. Unlock your device with its passcode first, or use your master password."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
@@ -3303,12 +3323,20 @@ msgid "Your backup was added as a new vault. Open it from the vault list and unl
 msgstr "Your backup was added as a new vault. Open it from the vault list and unlock it with its master password."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again."
+msgstr "Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Your browser may ask for access to your vault file when you unlock."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "your device passcode"
 msgstr "your device passcode"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Your device passcode can also unlock this vault."
+msgstr "Your device passcode can also unlock this vault."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

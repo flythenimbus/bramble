@@ -1,8 +1,10 @@
 import { useLingui } from "@lingui/react/macro";
-import { Fingerprint, LockKeyhole, ScanFace, Zap } from "lucide-react";
+import { Fingerprint, KeyRound, LockKeyhole, ScanFace, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useCan } from "../../../../context/PlatformContext";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
+import { effectiveAllowPasscode } from "../../../../vault/biometric-unlock";
 import { Row, Toggle } from "./primitives";
 
 /** Settings row to enable/disable this device's biometric unlock. Only rendered on
@@ -13,11 +15,13 @@ export function BiometricSection() {
 		biometricAvailable,
 		biometricEnabled,
 		biometryType,
+		biometryEnrolled,
 		enableBiometric,
 		disableBiometric,
 		refreshBiometric,
 	} = useVault();
 	const { prefs, update } = usePrefs();
+	const canChoosePasscodeFallback = useCan("biometricPasscodeFallback");
 	const { t } = useLingui();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -56,13 +60,39 @@ export function BiometricSection() {
 						? t`your device passcode`
 						: t`Face ID or a fingerprint`;
 
+	// With nothing enrolled there is no biometry-only gate to build, so the passcode is the
+	// only thing that can open the cache and the choice isn't the user's to make.
+	const passcodeForced = !biometryEnrolled;
+	const passcodeFallback = effectiveAllowPasscode(
+		biometryEnrolled,
+		prefs.biometricPasscodeFallback,
+	);
+
 	const onToggle = async (next: boolean) => {
 		setError(null);
 		setBusy(true);
 		try {
-			if (next) await enableBiometric();
+			if (next) await enableBiometric(passcodeFallback);
 			else await disableBiometric();
 		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	// The gate's access control is fixed when the VEK is cached, so changing this setting means
+	// re-caching it (which also republishes the flag the AutoFill extension labels itself with).
+	// Settings is only reachable unlocked, so the VEK is in hand. If the re-arm fails the item
+	// still holds the old gate, so put the setting back rather than misreport it.
+	const onPasscodeToggle = async (next: boolean) => {
+		setError(null);
+		setBusy(true);
+		try {
+			await update("biometricPasscodeFallback", next);
+			if (biometricEnabled) await enableBiometric(effectiveAllowPasscode(biometryEnrolled, next));
+		} catch (e) {
+			await update("biometricPasscodeFallback", !next).catch(() => {});
 			setError((e as Error).message);
 		} finally {
 			setBusy(false);
@@ -75,6 +105,12 @@ export function BiometricSection() {
 			? t`This device can unlock with ${name}.`
 			: t`Skip your password on this device with ${name}.`;
 
+	const passcodeSubtitle = passcodeForced
+		? t`Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate.`
+		: passcodeFallback
+			? t`Your device passcode can also unlock this vault.`
+			: t`Only ${name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`;
+
 	return (
 		<>
 			<Row icon={<Icon className="w-4 h-4 text-primary" />} title={title} subtitle={subtitle}>
@@ -86,6 +122,22 @@ export function BiometricSection() {
 				/>
 			</Row>
 			{error && <p className="ml-12 text-xs text-destructive">{error}</p>}
+			{/* Sits under the gate it modifies: with biometric unlock off there is no cached VEK
+			    to re-arm, so the switch is shown but inert. */}
+			{canChoosePasscodeFallback && (
+				<Row
+					icon={<KeyRound className="w-4 h-4 text-primary" />}
+					title={t`Allow passcode fallback`}
+					subtitle={passcodeSubtitle}
+				>
+					<Toggle
+						checked={passcodeFallback}
+						onChange={(next) => void onPasscodeToggle(next)}
+						label={t`Toggle passcode fallback`}
+						disabled={busy || passcodeForced || !biometricAvailable || !biometricEnabled}
+					/>
+				</Row>
+			)}
 			{/* Only once the gate is set up: a switch for a prompt that cannot happen is a puzzle. */}
 			{biometricAvailable && biometricEnabled && (
 				<Row

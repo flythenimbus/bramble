@@ -805,17 +805,40 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		unlockWithBiometric()
 	}
 
-	// The device's biometry name + the passcode fallback (the cached VEK is gated by
-	// `.userPresence`, so the device passcode always works too). The SF Symbol is derived
-	// here from the biometry type, not from the (localized) label text. Touch ID devices and
-	// devices with no enrolled biometric are covered.
+	// Whether the app armed the cached VEK with a passcode-accepting gate. Mirrored into the App
+	// Group by AutofillBridge; defaults to false to match the app's own default. Read-only here -
+	// the Keychain item's access control is what actually enforces it.
+	private func passcodeFallbackAllowed() -> Bool {
+		UserDefaults(suiteName: BrambleVault.appGroup)?
+			.bool(forKey: BrambleVault.biometricPasscodeFallbackKey) ?? false
+	}
+
+	// The device's biometry name, naming the passcode only when the cached VEK is actually
+	// gated by `.userPresence`. With biometry-only (`.biometryCurrentSet`) the passcode is
+	// refused, so promising it would be a lie. The SF Symbol is derived here from the biometry
+	// type, not from the (localized) label text. Touch ID devices and devices with no enrolled
+	// biometric are covered.
 	private func biometryInfo() -> (label: String, symbol: String) {
 		let ctx = LAContext()
 		_ = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+		let passcode = passcodeFallbackAllowed()
 		switch ctx.biometryType {
-		case .faceID: return (String(localized: "Face ID or passcode"), "faceid")
-		case .touchID: return (String(localized: "Touch ID or passcode"), "touchid")
-		default: return (String(localized: "biometrics or passcode"), "lock")
+		case .faceID:
+			return (
+				passcode ? String(localized: "Face ID or passcode") : String(localized: "Face ID"),
+				"faceid"
+			)
+		case .touchID:
+			return (
+				passcode ? String(localized: "Touch ID or passcode") : String(localized: "Touch ID"),
+				"touchid"
+			)
+		default:
+			return (
+				passcode
+					? String(localized: "biometrics or passcode") : String(localized: "biometrics"),
+				"lock"
+			)
 		}
 	}
 
@@ -1105,8 +1128,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		return status == errSecSuccess || status == errSecInteractionNotAllowed
 	}
 
-	// `.userPresence` access control makes SecItemCopyMatching present Face ID or the
-	// device passcode; run off the main thread since it blocks while the prompt is up.
+	// The item's own access control drives the prompt (`.userPresence` = Face ID or the device
+	// passcode; `.biometryCurrentSet` = biometry only), so there is no policy to pick here - the
+	// app's setting is enforced by how it armed the item. Run off the main thread since
+	// SecItemCopyMatching blocks while the prompt is up.
 	private func readVek(reason: String, completion: @escaping (VekOutcome) -> Void) {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let ctx = LAContext()
@@ -1128,6 +1153,22 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				completion(.ok(secret))
 			} else if status == errSecItemNotFound {
 				completion(.missing)
+			} else if status == errSecAuthFailed {
+				// A biometry-only item killed by an enrolment change: it can never open again.
+				// Drop it so the button stops being offered, and say what to do about it.
+				SecItemDelete(
+					[
+						kSecClass as String: kSecClassGenericPassword,
+						kSecAttrService as String: BrambleVault.biometricService,
+						kSecAttrAccount as String: BrambleVault.vekAccount,
+						kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+					] as CFDictionary)
+				completion(
+					.denied(
+						String(
+							localized:
+								"Your biometric enrolment changed. Open Bramble and turn on biometric unlock again."
+						)))
 			} else {
 				// A raw OSStatus means nothing to the user, and two of these aren't errors at
 				// all: a cancel, and interactionNotAllowed (the Keychain couldn't put its prompt

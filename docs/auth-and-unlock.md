@@ -31,6 +31,73 @@ remains the way in from anywhere else. `adapters/biometric.ts` is the contract,
 `vault/biometric-unlock.ts` the flow (including stale-cache teardown, which
 disables the gate and sends the user back to their password).
 
+#### Passcode fallback (iOS)
+
+The gate is a `SecAccessControl` on the cached-VEK Keychain item, and iOS gives us
+two of them. Which one is used is the **Allow passcode fallback** toggle
+(Settings > Security, under the biometric row, iOS only via the
+`biometricPasscodeFallback` capability), **off by default**:
+
+| Toggle | Access control | Opens with | On enrolment change |
+| --- | --- | --- | --- |
+| off (default) | `.biometryCurrentSet` | Face ID / Touch ID only | OS destroys the cached VEK |
+| on | `.userPresence` | biometry **or** the device passcode | survives |
+
+Off is the default because "Face ID" that a passcode also opens is not Face ID:
+anyone holding the device passcode could otherwise open the vault without the
+master password. `.biometryCurrentSet` rather than `.biometryAny` for the same
+reason - otherwise that same person just enrols their own face in iOS Settings and
+walks in. This matches Android, whose Keystore key has always been
+`BIOMETRIC_STRONG` + `setInvalidatedByBiometricEnrollment(true)`; allowing
+`DEVICE_CREDENTIAL` there needs the key authorized for it at generation (API 30+,
+minSdk is 24), so Android has no such toggle and the flag is ignored.
+
+Three consequences worth knowing:
+
+- **The choice is baked in when the VEK is cached**, so changing it means
+  re-caching. `reconcileBiometricGate` runs after every successful unlock (one
+  Keychain write, no prompt), which is also how a device armed by a build that
+  predates the setting converts: those items are all `.userPresence`.
+- **The prompt policy must match the item.** `getSecret` evaluates
+  `.deviceOwnerAuthentication` or `.deviceOwnerAuthenticationWithBiometrics`
+  accordingly - a passcode-authenticated `LAContext` cannot open a
+  `.biometryCurrentSet` item. In biometrics-only mode it also blanks
+  `localizedFallbackTitle`, since that button can only ever return
+  `LAError.userFallback`.
+- **Re-enrolling Face ID retires the cache.** The read comes back
+  `errSecAuthFailed`, which the plugin reports as `invalidated` after deleting the
+  dead item; `biometricUnlockFlow` disables the gate and the unlock screen says so
+  (the one other failure, besides a stale cache, worth showing unasked - the
+  button it came from is gone with it). Repeated failures give `lockout`, which in
+  biometrics-only mode has no way out inside the policy: unlock the device with its
+  passcode first, or use the master password.
+
+A device with **nothing enrolled** in Face ID / Touch ID can't open a
+biometry-only gate, so `effectiveAllowPasscode` forces the passcode on there
+whatever the preference says (`isAvailable` reports `biometryEnrolled: false`),
+and the row reads "Device passcode" with the toggle on and disabled.
+
+**None of this is testable on the simulator, and the reason is worth recording so
+nobody re-derives it.** Probed by running the two `SecAccessControl`s inside the
+real signed app (the only way to get a keychain-access-group entitlement there -
+`simctl spawn` refuses an entitled bare binary, and an unentitled app gets
+`errSecMissingEntitlement`):
+
+- `SecAccessControlCreateWithFlags(.biometryCurrentSet)` and the matching
+  `SecItemAdd` both **succeed with nothing enrolled**. The constraint is lazy -
+  it is only evaluated on read - so the plugin's `no-biometry` rejection is a
+  backstop, not the guard that matters. `effectiveAllowPasscode` is.
+- Reading either item back with `kSecUseAuthenticationUISkip` returns
+  `errSecSuccess` **and the data**, with no prompt, both before and after
+  toggling Face ID enrolment. The simulator has no Secure Enclave and does not
+  enforce these access controls at all.
+
+So a passing simulator run says nothing about whether the passcode is refused, or
+about enrolment invalidation. Both need a real device. (One incidental
+consequence: `hasSecret` / `vekExists` see `errSecSuccess` there rather than the
+`errSecInteractionNotAllowed` their comments describe - they already treat both
+as "present", so the toggle still reads correctly.)
+
 By default the unlock screen offers it as a button. Turning on **Unlock on open**
 (Settings > Security, under the biometric row, off by default) makes the screen
 present the gate itself, so a Face ID user opens the app to no tap at all
@@ -68,7 +135,12 @@ present the gate itself, so a Face ID user opens the app to no tap at all
 
 The iOS AutoFill extension does the same thing natively from `viewDidAppear`,
 ungated: it exists only to answer a fill request, so there is nothing else to be
-doing there.
+doing there. It has **no policy to pick**: `readVek` hands an unauthenticated
+`LAContext` to the Keychain and lets the item's own access control raise the
+prompt, so the passcode-fallback setting is enforced there by construction. It
+reads the mirrored flag (`autofill.biometricPasscodeFallback` in the App Group,
+written by `BiometricVault.setSecret` alongside the item it describes, so the two
+can't drift) only to label the button - "Face ID" versus "Face ID or passcode".
 
 ## Invariant B: always one primary method
 

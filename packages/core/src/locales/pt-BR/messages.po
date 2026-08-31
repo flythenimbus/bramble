@@ -264,6 +264,10 @@ msgstr "Permitir novamente"
 msgid "Allow and continue"
 msgstr "Permitir e continuar"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Allow passcode fallback"
+msgstr "Permitir código como alternativa"
+
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
@@ -1820,6 +1824,10 @@ msgstr "Notas (opcional)"
 msgid "Nothing is archived. Archived items are kept here, out of autofill."
 msgstr "Nada está arquivado. Itens arquivados são mantidos aqui, fora do preenchimento automático."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
+msgstr "Nada está cadastrado no Face ID ou Touch ID, portanto o código do dispositivo é a única proteção."
+
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
 msgstr "Nada a importar"
@@ -1855,6 +1863,10 @@ msgstr "Versão mais antiga no outro dispositivo? Compare esta em vez disso:"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
 msgstr "O login com um clique para {name} estará disponível em uma futura atualização. Por enquanto, selecione um provedor em \\"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Apenas {name} pode desbloquear. Adicionar ou remover um rosto ou uma impressão digital desativa esse recurso, e você precisará reativá-lo com sua senha mestra."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2935,6 +2947,10 @@ msgstr "Alternar bloqueio ao bloquear a tela"
 msgid "Toggle offer to save logins"
 msgstr "Alternar oferta para salvar credenciais"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle passcode fallback"
+msgstr "Alternar código como alternativa"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle start at login"
 msgstr "Alternar início no login"
@@ -2942,6 +2958,10 @@ msgstr "Alternar início no login"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Toggle unlock on open"
 msgstr "Alternar desbloqueio ao abrir"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Too many failed attempts. Unlock your device with its passcode first, or use your master password."
+msgstr "Muitas tentativas malsucedidas. Desbloqueie seu dispositivo primeiro com o código ou use sua senha mestra."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
@@ -3303,12 +3323,20 @@ msgid "Your backup was added as a new vault. Open it from the vault list and unl
 msgstr "Seu backup foi adicionado como um novo cofre. Abra-o na lista de cofres e desbloqueie-o com sua senha mestra."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again."
+msgstr "Seu cadastro biométrico mudou, portanto a chave salva neste dispositivo foi descartada. Desbloqueie com sua senha mestra para configurá-lo novamente."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Seu navegador pode solicitar acesso ao arquivo do cofre ao desbloquear."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "your device passcode"
 msgstr "código do seu dispositivo"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Your device passcode can also unlock this vault."
+msgstr "O código do dispositivo também pode desbloquear este cofre."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

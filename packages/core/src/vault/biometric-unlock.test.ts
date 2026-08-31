@@ -3,10 +3,17 @@ import type { BiometricUnlock } from "../adapters/biometric";
 import type { CryptoAdapter } from "../adapters/crypto";
 import {
 	biometricUnlockFlow,
+	effectiveAllowPasscode,
 	enableBiometricUnlock,
+	reconcileBiometricGate,
 	StaleBiometricCacheError,
 	unlockVekWithBiometric,
 } from "./biometric-unlock";
+
+/** What the native plugins reject with when the OS discarded the cached VEK. */
+function invalidated(): Error {
+	return Object.assign(new Error("enrolment changed"), { code: "invalidated" });
+}
 
 function fakeCrypto(over: Partial<CryptoAdapter> = {}): CryptoAdapter {
 	return {
@@ -33,9 +40,16 @@ describe("enableBiometricUnlock", () => {
 	it("exports the live VEK and hands it to the biometric cache keyed by vault id", async () => {
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric();
-		await enableBiometricUnlock(crypto, biometric, VID);
+		await enableBiometricUnlock(crypto, biometric, VID, false);
 		expect(crypto.exportVek).toHaveBeenCalledTimes(1);
-		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID);
+		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID, false);
+	});
+
+	it("passes the passcode-fallback choice through, since it picks the OS gate", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric();
+		await enableBiometricUnlock(crypto, biometric, VID, true);
+		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID, true);
 	});
 
 	it("does not cache anything if the VEK export fails (vault locked)", async () => {
@@ -45,7 +59,7 @@ describe("enableBiometricUnlock", () => {
 			}),
 		});
 		const biometric = fakeBiometric();
-		await expect(enableBiometricUnlock(crypto, biometric, VID)).rejects.toThrow("locked");
+		await expect(enableBiometricUnlock(crypto, biometric, VID, false)).rejects.toThrow("locked");
 		expect(biometric.enable).not.toHaveBeenCalled();
 	});
 });
@@ -54,8 +68,8 @@ describe("unlockVekWithBiometric", () => {
 	it("reads the gated VEK and loads it into the crypto session", async () => {
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric({ unlock: vi.fn(async () => "GATED_VEK") });
-		await unlockVekWithBiometric(crypto, biometric, VID);
-		expect(biometric.unlock).toHaveBeenCalledWith(VID);
+		await unlockVekWithBiometric(crypto, biometric, VID, false);
+		expect(biometric.unlock).toHaveBeenCalledWith(VID, false);
 		expect(crypto.unlockWithVek).toHaveBeenCalledWith("GATED_VEK");
 	});
 
@@ -66,7 +80,7 @@ describe("unlockVekWithBiometric", () => {
 				throw new Error("cancelled");
 			}),
 		});
-		await expect(unlockVekWithBiometric(crypto, biometric, VID)).rejects.toThrow("cancelled");
+		await expect(unlockVekWithBiometric(crypto, biometric, VID, true)).rejects.toThrow("cancelled");
 		expect(crypto.unlockWithVek).not.toHaveBeenCalled();
 	});
 });
@@ -77,7 +91,14 @@ describe("biometricUnlockFlow", () => {
 		const biometric = fakeBiometric({ unlock: vi.fn(async () => "GATED") });
 		const loadEntries = vi.fn(async () => {});
 		const onStaleCache = vi.fn();
-		await biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache });
+		await biometricUnlockFlow({
+			crypto,
+			biometric,
+			vaultId: VID,
+			allowPasscode: false,
+			loadEntries,
+			onStaleCache,
+		});
 		expect(crypto.unlockWithVek).toHaveBeenCalledWith("GATED");
 		expect(loadEntries).toHaveBeenCalledTimes(1);
 		expect(onStaleCache).not.toHaveBeenCalled();
@@ -93,7 +114,14 @@ describe("biometricUnlockFlow", () => {
 		});
 		const onStaleCache = vi.fn();
 		await expect(
-			biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache }),
+			biometricUnlockFlow({
+				crypto,
+				biometric,
+				vaultId: VID,
+				allowPasscode: false,
+				loadEntries,
+				onStaleCache,
+			}),
 		).rejects.toThrow(StaleBiometricCacheError);
 		// The gate's VEK was loaded, then the bad cache was torn down.
 		expect(crypto.unlockWithVek).toHaveBeenCalled();
@@ -111,7 +139,104 @@ describe("biometricUnlockFlow", () => {
 			throw new Error("zod: invalid payload internals");
 		});
 		await expect(
-			biometricUnlockFlow({ crypto, biometric, vaultId: VID, loadEntries, onStaleCache: vi.fn() }),
+			biometricUnlockFlow({
+				crypto,
+				biometric,
+				vaultId: VID,
+				allowPasscode: false,
+				loadEntries,
+				onStaleCache: vi.fn(),
+			}),
 		).rejects.not.toThrow(/zod/i);
+	});
+
+	it("retires the gate when the OS invalidated it, and rethrows so the caller can say why", async () => {
+		const crypto = fakeCrypto({ lock: vi.fn(async () => {}) });
+		const biometric = fakeBiometric({
+			unlock: vi.fn(async () => {
+				throw invalidated();
+			}),
+		});
+		const loadEntries = vi.fn(async () => {});
+		const onStaleCache = vi.fn();
+		await expect(
+			biometricUnlockFlow({
+				crypto,
+				biometric,
+				vaultId: VID,
+				allowPasscode: false,
+				loadEntries,
+				onStaleCache,
+			}),
+		).rejects.toMatchObject({ code: "invalidated" });
+		// The cached VEK is unreadable forever, so the toggle goes off with it.
+		expect(biometric.disable).toHaveBeenCalledTimes(1);
+		expect(onStaleCache).toHaveBeenCalledTimes(1);
+		expect(loadEntries).not.toHaveBeenCalled();
+	});
+
+	it("leaves the gate alone when the user simply cancelled", async () => {
+		const crypto = fakeCrypto({ lock: vi.fn(async () => {}) });
+		const biometric = fakeBiometric({
+			unlock: vi.fn(async () => {
+				throw Object.assign(new Error("Cancelled"), { code: "cancelled" });
+			}),
+		});
+		const onStaleCache = vi.fn();
+		await expect(
+			biometricUnlockFlow({
+				crypto,
+				biometric,
+				vaultId: VID,
+				allowPasscode: false,
+				loadEntries: vi.fn(async () => {}),
+				onStaleCache,
+			}),
+		).rejects.toThrow("Cancelled");
+		expect(biometric.disable).not.toHaveBeenCalled();
+		expect(onStaleCache).not.toHaveBeenCalled();
+	});
+});
+
+describe("reconcileBiometricGate", () => {
+	it("re-caches the VEK under the gate the setting now asks for", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric();
+		await reconcileBiometricGate({
+			crypto,
+			biometric,
+			vaultId: VID,
+			enabled: true,
+			allowPasscode: true,
+		});
+		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID, true);
+	});
+
+	it("does nothing when the gate isn't set up, so an unlock never arms one by surprise", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric();
+		await reconcileBiometricGate({
+			crypto,
+			biometric,
+			vaultId: VID,
+			enabled: false,
+			allowPasscode: false,
+		});
+		expect(crypto.exportVek).not.toHaveBeenCalled();
+		expect(biometric.enable).not.toHaveBeenCalled();
+	});
+});
+
+describe("effectiveAllowPasscode", () => {
+	it("follows the preference when a biometric is enrolled", () => {
+		expect(effectiveAllowPasscode(true, false)).toBe(false);
+		expect(effectiveAllowPasscode(true, true)).toBe(true);
+	});
+
+	// A passcode-only iPhone has no biometry-only access control to build, so asking for one
+	// would neither arm nor unlock. The preference doesn't get a say there.
+	it("forces the passcode on when nothing is enrolled, whatever the preference says", () => {
+		expect(effectiveAllowPasscode(false, false)).toBe(true);
+		expect(effectiveAllowPasscode(false, true)).toBe(true);
 	});
 });

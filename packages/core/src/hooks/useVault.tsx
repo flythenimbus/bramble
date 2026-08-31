@@ -191,7 +191,11 @@ import {
 import { PER_VAULT_SYNC_KEYS, syncKeyFor } from "../sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { toAutofillIndex } from "../vault/autofill-index";
-import { biometricUnlockFlow, enableBiometricUnlock } from "../vault/biometric-unlock";
+import {
+	biometricUnlockFlow,
+	enableBiometricUnlock,
+	reconcileBiometricGate,
+} from "../vault/biometric-unlock";
 import {
 	wrapPasswordSlot as buildPasswordSlot,
 	wrapRecoverySlot as buildRecoverySlot,
@@ -258,6 +262,9 @@ export interface VaultState {
 	biometricEnabled: boolean;
 	/** Enrolled modality, for labelling the unlock UI (Face ID vs Touch ID). */
 	biometryType: BiometryType;
+	/** A biometric is actually enrolled, so a biometry-only gate is possible. False on a
+	 * passcode-only device, where passcode fallback is the only gate there is. */
+	biometryEnrolled: boolean;
 }
 
 /** Vault actions. Referentially stable for the provider's lifetime. */
@@ -326,12 +333,17 @@ export interface VaultActions {
 	 * recovery code (a new one is returned) and drops security-key slots. See rotateSecret. */
 	rotateSecret(password: string): Promise<string>;
 	unlockWithRecoveryCode(code: string): Promise<void>;
-	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
-	enableBiometric(): Promise<void>;
+	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked.
+	 * `allowPasscode` picks the OS gate; re-calling it is how that setting is changed. */
+	enableBiometric(allowPasscode: boolean): Promise<void>;
 	/** Forget the device's biometric-cached VEK. */
 	disableBiometric(): Promise<void>;
-	/** Biometric-prompt, unwrap the cached VEK, and unlock. Disables itself if the cache is stale. */
-	unlockWithBiometric(): Promise<void>;
+	/** Re-cache the VEK under the gate the settings now ask for, if biometric is enabled.
+	 * Never prompts; run after a successful unlock so the gate follows the setting. */
+	rearmBiometric(allowPasscode: boolean): Promise<void>;
+	/** Biometric-prompt, unwrap the cached VEK, and unlock. Disables itself if the cache is stale
+	 * or the OS invalidated it. `allowPasscode` must match how the gate was armed. */
+	unlockWithBiometric(allowPasscode: boolean): Promise<void>;
 	/** Re-probe biometric availability + enabled (e.g. when Settings opens). */
 	refreshBiometric(): Promise<void>;
 	/** Start adding a device: returns a one-time pairing code and listens for the joiner. `password`
@@ -402,6 +414,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [biometricAvailable, setBiometricAvailable] = useState(false);
 	const [biometricEnabled, setBiometricEnabled] = useState(false);
 	const [biometryType, setBiometryType] = useState<BiometryType>("biometric");
+	const [biometryEnrolled, setBiometryEnrolled] = useState(false);
 	const [ready, setReady] = useState(false);
 	const [entries, setEntries] = useState<Entry[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -419,8 +432,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// current entries / labels / lock state without listing them as deps. That keeps every
 	// action referentially stable (its own context, never re-firing pure-action subscribers).
 	// Assigned during render: idempotent, the blessed idiom for a latest-value ref.
-	const latestRef = useRef({ entries, securityKeyLabels, isLocked });
-	latestRef.current = { entries, securityKeyLabels, isLocked };
+	const latestRef = useRef({ entries, securityKeyLabels, isLocked, biometricEnabled });
+	latestRef.current = { entries, securityKeyLabels, isLocked, biometricEnabled };
 
 	// Sync metadata kept alongside (not on) the user-facing Entry: per-entry HLC
 	// stamps and the deletion graveyard. Held in refs because mutations thread
@@ -1291,15 +1304,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const refreshBiometric = useCallback(async () => {
 		if (!biometric) return;
 		try {
-			const [available, enabled, type] = await Promise.all([
+			const [available, enabled, type, enrolled] = await Promise.all([
 				biometric.isAvailable(),
 				// Biometric is keyed per vault; without a selected vault there's nothing to probe.
 				activeId ? biometric.isEnabled(activeId) : Promise.resolve(false),
 				biometric.biometryType?.() ?? Promise.resolve<BiometryType>("biometric"),
+				biometric.biometryEnrolled?.() ?? biometric.isAvailable(),
 			]);
 			setBiometricAvailable(available);
 			setBiometricEnabled(enabled);
 			setBiometryType(type);
+			setBiometryEnrolled(enrolled);
 		} catch (e) {
 			console.error("[vault] biometric state probe failed:", e);
 		}
@@ -1309,15 +1324,37 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		void refreshBiometric();
 	}, [refreshBiometric]);
 
-	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked. */
-	const enableBiometric = useCallback(async () => {
-		if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
-		if (latestRef.current.isLocked)
-			throw new Error(t`Unlock the vault before enabling biometric unlock.`);
-		if (!activeId) throw new Error(t`No vault is selected.`);
-		await enableBiometricUnlock(crypto, biometric, activeId);
-		setBiometricEnabled(true);
-	}, [biometric, crypto, activeId, t]);
+	/** Cache the in-memory VEK behind the device biometric gate. Requires the vault unlocked.
+	 * `allowPasscode` picks the OS gate (iOS: device passcode accepted, or biometry only), and
+	 * because it is baked into the item, calling this again is how the setting is changed. */
+	const enableBiometric = useCallback(
+		async (allowPasscode: boolean) => {
+			if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
+			if (latestRef.current.isLocked)
+				throw new Error(t`Unlock the vault before enabling biometric unlock.`);
+			if (!activeId) throw new Error(t`No vault is selected.`);
+			await enableBiometricUnlock(crypto, biometric, activeId, allowPasscode);
+			setBiometricEnabled(true);
+		},
+		[biometric, crypto, activeId, t],
+	);
+
+	/** Re-cache the VEK under the gate the settings now ask for, if the gate is set up at all.
+	 * Called after a successful unlock: it costs one keychain write, never prompts, and is what
+	 * migrates a device armed by a build that predates the passcode-fallback setting. */
+	const rearmBiometric = useCallback(
+		async (allowPasscode: boolean) => {
+			if (!biometric || !activeId) return;
+			await reconcileBiometricGate({
+				crypto,
+				biometric,
+				vaultId: activeId,
+				enabled: latestRef.current.biometricEnabled,
+				allowPasscode,
+			});
+		},
+		[biometric, crypto, activeId],
+	);
 
 	/** Forget this vault's biometric-cached VEK. */
 	const disableBiometric = useCallback(async () => {
@@ -1329,20 +1366,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	/** Biometric-prompt, unwrap the cached VEK, and unlock. A stale cache (the VEK no
 	 * longer decrypts this vault, e.g. after a reset) disables itself and surfaces a
 	 * fall-back-to-password error. */
-	const unlockWithBiometric = useCallback(async () => {
-		if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
-		if (!activeId) throw new Error(t`No vault is selected.`);
-		setError(null);
-		await biometricUnlockFlow({
-			crypto,
-			biometric,
-			vaultId: activeId,
-			loadEntries,
-			onStaleCache: () => setBiometricEnabled(false),
-		});
-		setIsLocked(false);
-		void shell.flushPendingCornerCapture().catch(() => {});
-	}, [biometric, crypto, loadEntries, shell, activeId, t]);
+	const unlockWithBiometric = useCallback(
+		async (allowPasscode: boolean) => {
+			if (!biometric) throw new Error(t`Biometric unlock isn't available on this device.`);
+			if (!activeId) throw new Error(t`No vault is selected.`);
+			setError(null);
+			await biometricUnlockFlow({
+				crypto,
+				biometric,
+				vaultId: activeId,
+				allowPasscode,
+				loadEntries,
+				onStaleCache: () => setBiometricEnabled(false),
+			});
+			setIsLocked(false);
+			void shell.flushPendingCornerCapture().catch(() => {});
+		},
+		[biometric, crypto, loadEntries, shell, activeId, t],
+	);
 
 	// Device enrollment lives in its own hook; it consumes the shared clock, blob
 	// read, unlock, and entries-payload read from here.
@@ -1499,6 +1540,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			biometricAvailable,
 			biometricEnabled,
 			biometryType,
+			biometryEnrolled,
 		}),
 		[
 			hasVault,
@@ -1518,6 +1560,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			biometricAvailable,
 			biometricEnabled,
 			biometryType,
+			biometryEnrolled,
 		],
 	);
 
@@ -1608,6 +1651,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			unlockWithRecoveryCode,
 			enableBiometric,
 			disableBiometric,
+			rearmBiometric,
 			unlockWithBiometric,
 			refreshBiometric,
 			inviteDevice,
@@ -1644,6 +1688,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			unlockWithRecoveryCode,
 			enableBiometric,
 			disableBiometric,
+			rearmBiometric,
 			unlockWithBiometric,
 			refreshBiometric,
 			inviteDevice,

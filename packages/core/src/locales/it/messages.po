@@ -264,6 +264,10 @@ msgstr "Consentire di nuovo"
 msgid "Allow and continue"
 msgstr "Consentire e continuare"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Allow passcode fallback"
+msgstr "Consentire il fallback con codice dispositivo"
+
 #. placeholder {0}: entries.length
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Also copy this vault's {0} entries into it, so everything is in one place. They stay here too; nothing is deleted."
@@ -1820,6 +1824,10 @@ msgstr "Note (opzionale)"
 msgid "Nothing is archived. Archived items are kept here, out of autofill."
 msgstr "Non c'è nulla di archiviato. Gli elementi archiviati vengono conservati qui, fuori dal riempimento automatico."
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
+msgstr "Non è registrato alcun dato per Face ID o Touch ID, quindi il codice del dispositivo è l'unico accesso."
+
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
 msgstr "Niente da importare"
@@ -1855,6 +1863,10 @@ msgstr "Versione più vecchia sull’altro dispositivo? Confronti invece questo:
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
 msgstr "L'accesso con un clic per {name} sarà disponibile in un futuro aggiornamento. Per ora, seleziona un provider in \\"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Solo {name} può sbloccare. L'aggiunta o la rimozione di un volto o di un'impronta digitale disattiva questa funzione, che potrà essere riattivata con la password principale."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2935,6 +2947,10 @@ msgstr "Attiva/disattiva il blocco quando lo schermo si blocca"
 msgid "Toggle offer to save logins"
 msgstr "Attiva l'offerta di salvare i login"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle passcode fallback"
+msgstr "Attivare/disattivare il fallback con codice dispositivo"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle start at login"
 msgstr "Attivare/disattivare l'avvio all'accesso"
@@ -2942,6 +2958,10 @@ msgstr "Attivare/disattivare l'avvio all'accesso"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Toggle unlock on open"
 msgstr "Attivare/disattivare lo sblocco all'apertura"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Too many failed attempts. Unlock your device with its passcode first, or use your master password."
+msgstr "Troppi tentativi non riusciti. Sblocchi prima il dispositivo con il relativo codice oppure usi la password principale."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Total Items"
@@ -3303,12 +3323,20 @@ msgid "Your backup was added as a new vault. Open it from the vault list and unl
 msgstr "Il backup è stato aggiunto come un nuovo vault. Aprilo dall'elenco dei vault e sbloccalo con la sua password principale."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again."
+msgstr "I dati biometrici registrati sono cambiati, quindi la chiave salvata su questo dispositivo è stata eliminata. Sblocchi con la password principale per configurarla di nuovo."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Il suo browser potrebbe richiedere l'accesso al file del caveau quando lo sblocca."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "your device passcode"
 msgstr "il codice di accesso del tuo dispositivo"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Your device passcode can also unlock this vault."
+msgstr "Il codice del dispositivo può anche sbloccare questo archivio."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

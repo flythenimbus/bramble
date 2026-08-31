@@ -4,10 +4,16 @@ import LocalAuthentication
 import Security
 
 // Local Capacitor plugin: caches the vault VEK in the Keychain behind an OS-enforced
-// user-presence gate. The item uses .userPresence, so the Secure Enclave releases it on a
-// Face ID / Touch ID match OR the device passcode; that fallback is what lets a
-// passcode-only device (and the AutoFill extension) unlock. We never run Argon2 here; this
-// is the device-local convenience-unlock cache described in docs/mobile-port.md (Phase 2).
+// biometric gate. The caller picks the gate per call via `allowPasscode` (the
+// "Allow passcode fallback" setting):
+//   true  -> .userPresence, released by Face ID / Touch ID OR the device passcode. The only
+//            gate a passcode-only device can use.
+//   false -> .biometryCurrentSet, biometry only. The item is destroyed by the OS whenever an
+//            enrolled face/finger changes, so someone holding the device passcode can't enrol
+//            their own biometry and walk in. Matches what Android has always done.
+// The ACL is fixed at write time, so the setting is applied by re-arming (see setSecret).
+// We never run Argon2 here; this is the device-local convenience-unlock cache described in
+// docs/mobile-port.md (Phase 2) and docs/auth-and-unlock.md.
 @objc(BiometricVaultPlugin)
 public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	public let identifier = "BiometricVaultPlugin"
@@ -82,7 +88,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		if ok {
 			type = enrolled ? Self.biometryName(context) : "passcode"
 		}
-		call.resolve(["available": ok, "biometryType": type])
+		// biometryEnrolled tells the UI whether a biometrics-only gate is possible at all:
+		// with nothing enrolled, .biometryCurrentSet can't be created and passcode fallback
+		// is the only option, so the setting is forced on there.
+		call.resolve(["available": ok, "biometryType": type, "biometryEnrolled": enrolled])
 	}
 
 	// LAContext.biometryType is only meaningful once canEvaluatePolicy has run.
@@ -105,7 +114,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing vaultId")
 			return
 		}
-		// UIFail (not UISkip): report the .userPresence item as existing via
+		// UIFail (not UISkip): report the auth-gated item as existing via
 		// errSecInteractionNotAllowed instead of silently skipping it (which returns
 		// errSecItemNotFound and made the toggle revert). Neither prompts for Face ID.
 		let query = Self.identity(vaultId).merging([
@@ -151,18 +160,31 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing secret")
 			return
 		}
+		// The gate is chosen here, at write time, so changing the setting means re-arming:
+		// the settings toggle rewrites the item, and so does every successful unlock while
+		// biometric is enabled (which is what converts installs armed by an older build).
+		let allowPasscode = call.getBool("allowPasscode") ?? true
 		var acError: Unmanaged<CFError>?
 		guard
 			let access = SecAccessControlCreateWithFlags(
 				nil,
 				kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-				// userPresence = Face ID / Touch ID, with device-passcode fallback. Lets the
-				// AutoFill extension read the cached VEK even when biometrics aren't enrolled,
-				// and keeps the in-app unlock working via biometrics.
-				.userPresence,
+				// userPresence = Face ID / Touch ID OR the device passcode (the only gate a
+				// passcode-only device can use). biometryCurrentSet = biometry only, and the OS
+				// destroys the item when the enrolled set changes.
+				allowPasscode ? .userPresence : .biometryCurrentSet,
 				&acError
 			)
 		else {
+			// Rarely reached: SecAccessControlCreateWithFlags is lazy, and probing it on the
+			// simulator showed .biometryCurrentSet being created happily with NOTHING enrolled -
+			// the constraint is only evaluated when the item is read. So this is a backstop, not
+			// the thing that stops a biometrics-only gate being armed on a device that can't open
+			// one; `effectiveAllowPasscode` on the JS side is what actually prevents that.
+			if !allowPasscode {
+				call.reject("No biometric is enrolled on this device", "no-biometry")
+				return
+			}
 			call.reject("Couldn't create the biometric access control")
 			return
 		}
@@ -170,6 +192,11 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		// extension reads. The per-vault write is authoritative; the mirror is best-effort.
 		let status = Self.store(Self.identity(vaultId), data: data, access: access)
 		_ = Self.store(Self.autofillIdentity(), data: data, access: access)
+		// Tell the extension which gate the mirror carries, so its unlock button doesn't promise a
+		// passcode the Keychain will refuse. Written here rather than through AutofillBridge so it
+		// can't drift from the access control it describes.
+		UserDefaults(suiteName: BrambleVault.appGroup)?
+			.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
 		if status == errSecSuccess {
 			call.resolve()
 		} else {
@@ -183,23 +210,34 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			return
 		}
 		let reason = call.getString("reason") ?? "Unlock your vault"
+		let allowPasscode = call.getBool("allowPasscode") ?? true
 		let context = LAContext()
 		// Authenticate once, then read the protected item reusing that authenticated
 		// context (skip the keychain's own prompt). Cleaner cancel detection than the
-		// deprecated kSecUseOperationPrompt path. The policy must stay
-		// deviceOwnerAuthentication (not ...WithBiometrics) to match the item's
-		// .userPresence gate: passcode-only devices have no other way in, and a
-		// passcode-authenticated context would fail a .biometryCurrentSet item.
-		context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) {
+		// deprecated kSecUseOperationPrompt path. The policy MUST match the gate the item
+		// was armed with: a passcode-authenticated context fails a .biometryCurrentSet item.
+		if !allowPasscode {
+			// ...WithBiometrics still shows a fallback button, but it only reports
+			// LAError.userFallback - it cannot authenticate. An empty title hides it, so the
+			// prompt doesn't offer a passcode route the user has switched off.
+			context.localizedFallbackTitle = ""
+		}
+		let policy: LAPolicy =
+			allowPasscode ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
+		context.evaluatePolicy(policy, localizedReason: reason) {
 			success, evalError in
 			guard success else {
 				let code = (evalError as? LAError)?.code
-				if code == .userCancel || code == .appCancel {
+				if code == .userCancel || code == .appCancel || code == .userFallback {
 					call.reject("Cancelled", "cancelled")
 				} else if code == .systemCancel {
 					// The OS pulled the prompt (app still transitioning, another sheet in the way).
 					// Not an answer from anyone, so the caller may ask again.
 					call.reject("Interrupted", "interrupted")
+				} else if code == .biometryLockout {
+					// Too many failed matches. With passcode fallback off there is no way out
+					// inside this policy: the device itself has to be unlocked by passcode first.
+					call.reject("Biometry is locked out", "lockout")
 				} else {
 					call.reject(evalError?.localizedDescription ?? "Authentication failed", "auth-failed")
 				}
@@ -225,10 +263,32 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			}
 			if lastStatus == errSecItemNotFound {
 				call.reject("No biometric secret stored", "no-secret")
+			} else if lastStatus == errSecAuthFailed {
+				// The gate authenticated but the item won't decrypt: a .biometryCurrentSet item
+				// killed by an enrolment change. It can never open again, so drop it (and the
+				// autofill mirror) rather than leave hasSecret advertising a dead gate.
+				_ = Self.purge(vaultId)
+				call.reject("Biometric enrolment changed; the cached key was discarded", "invalidated")
 			} else {
 				call.reject("Couldn't read the stored secret (\(lastStatus))", "auth-failed")
 			}
 		}
+	}
+
+	// Remove this vault's per-vault item AND the shared autofill mirror, from both groups so no
+	// copy lingers. Clearing the mirror stops autofill until biometric is re-enabled (re-armed).
+	// Returns the last status and whether anything is now definitely gone.
+	private static func purge(_ vaultId: String) -> (ok: Bool, status: OSStatus) {
+		var lastStatus: OSStatus = errSecItemNotFound
+		var ok = false
+		for identity in [identity(vaultId), autofillIdentity()] {
+			for q in groupVariants(identity) {
+				let status = SecItemDelete(q as CFDictionary)
+				lastStatus = status
+				if status == errSecSuccess || status == errSecItemNotFound { ok = true }
+			}
+		}
+		return (ok, lastStatus)
 	}
 
 	@objc func deleteSecret(_ call: CAPPluginCall) {
@@ -236,17 +296,7 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing vaultId")
 			return
 		}
-		// Remove this vault's per-vault item AND the shared autofill mirror, from both groups so no
-		// copy lingers. Clearing the mirror stops autofill until biometric is re-enabled (re-armed).
-		var lastStatus: OSStatus = errSecItemNotFound
-		var ok = false
-		for identity in [Self.identity(vaultId), Self.autofillIdentity()] {
-			for q in Self.groupVariants(identity) {
-				let status = SecItemDelete(q as CFDictionary)
-				lastStatus = status
-				if status == errSecSuccess || status == errSecItemNotFound { ok = true }
-			}
-		}
+		let (ok, lastStatus) = Self.purge(vaultId)
 		if ok {
 			call.resolve()
 		} else {

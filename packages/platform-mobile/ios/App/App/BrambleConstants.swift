@@ -28,6 +28,10 @@ enum BrambleVault {
 	static let bundleKey = "autofill.bundle"
 	static let slotKey = "autofill.slot"
 	static let keepUnlockedKey = "autofill.keepUnlockedMinutes"
+	// Whether the biometric VEK item was armed with a passcode-accepting gate (.userPresence)
+	// rather than biometry-only (.biometryCurrentSet). The ACL is what actually enforces this;
+	// the extension reads the flag only to label its unlock button honestly.
+	static let biometricPasscodeFallbackKey = "autofill.biometricPasscodeFallback"
 	// The VEK-encrypted passkey bundle (provider role); a second blob alongside the logins so
 	// the password-fill path is untouched. The extension decrypts it to assert a passkey.
 	static let passkeyBundleKey = "autofill.passkeys"
