@@ -197,3 +197,42 @@ test("recognises the same passkey imported from the other container", async ({
 	await page.getByRole("button", { name: /Open database/i }).click();
 	await expect(page.getByText(/already in your vault/i)).toBeVisible({ timeout: 30_000 });
 });
+
+test("imports a passkey from a database KeePassXC itself wrote", async ({
+	context,
+	extensionId,
+}) => {
+	// The fixtures above were written by Bramble's own KDBX exporter, so alone they cannot show
+	// that we read a real KeePassXC file rather than one shaped the way we happen to write them.
+	// This one is genuine KeePassXC 2.7.12 output: stock Argon2d benchmark settings (64 MiB, 106
+	// rounds, which the pre-#78 ceiling rejected), a Recycle Bin copy that must be skipped, and an
+	// Ed25519 passkey. See the README in the fixtures directory for why it is safe to commit.
+	const page = await context.newPage();
+	await createVault(page, extensionId);
+	await page.goto(`${optionsUrl(extensionId)}?screen=import`);
+
+	await chooseProvider(page, /KeePass \(\.kdbx\)/, "passkey_db.kdbx");
+	await page
+		.getByLabel(/password/i)
+		.first()
+		.fill("qwerty");
+	await page.getByRole("button", { name: /Open database/i }).click();
+
+	// One entry, not two: the Recycle Bin holds a second copy that must not be imported.
+	await expect(page.getByRole("button", { name: /Import 1 item/i })).toBeVisible({
+		timeout: 30_000,
+	});
+	await expect(page.getByText(/1 passkey/i)).toBeVisible();
+	await page.getByRole("button", { name: /Import 1 item/i }).click();
+	await expect(page.getByRole("heading", { name: /Imported 1 item/i })).toBeVisible();
+
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	await popup.getByLabel(/Search vault/i).fill("webauthn");
+	await popup
+		.getByText(/webauthn\.io \(Passkey\)/)
+		.first()
+		.click();
+	await expect(popup.getByText(/KPEX_PASSKEY/)).toHaveCount(0);
+});
