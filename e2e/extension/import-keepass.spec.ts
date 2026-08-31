@@ -116,3 +116,84 @@ test("decodes XML entities from a KeePass XML export (#79)", async ({ context, e
 	await popup.getByRole("button", { name: /Show password/i }).click();
 	await expect(popup.getByText(`P@ssw&rd<1>"2"'3'&4`)).toBeVisible({ timeout: 10_000 });
 });
+
+// KeePassXC passkeys. Both fixtures hold the same credential with a throwaway Ed25519 key, which
+// is what KeePassXC actually writes: it prefers EdDSA whenever a site offers it, so an ES256
+// fixture would exercise a case few users have.
+//
+// Fixture provenance, since it is not obvious: `keepassxc-cli import` writes an AES-KDF database,
+// which our reader refuses by design, so keepass-passkeys.kdbx was produced by Bramble's own
+// KDBX exporter (Argon2id) from the same attributes as the .xml. KeePassXC opens it, which is
+// the cross-check that it is a real KDBX4.
+const PASSKEY_LABEL = /webauthn\.io \(Passkey\)/;
+
+/** Open the first imported passkey entry in the popup and return its detail view. */
+async function openPasskeyEntry(
+	context: import("@playwright/test").BrowserContext,
+	extensionId: string,
+) {
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	await popup.getByLabel(/Search vault/i).fill("webauthn");
+	await popup.getByText(PASSKEY_LABEL).first().click();
+	return popup;
+}
+
+for (const [label, file] of [
+	["XML export", "keepass-passkeys.xml"],
+	[".kdbx", "keepass-passkeys.kdbx"],
+] as const) {
+	test(`imports a KeePassXC passkey from a ${label}`, async ({ context, extensionId }) => {
+		const page = await context.newPage();
+		await createVault(page, extensionId);
+		await page.goto(`${optionsUrl(extensionId)}?screen=import`);
+
+		const provider = file.endsWith(".xml") ? /KeePass \(XML\)/ : /KeePass \(\.kdbx\)/;
+		await chooseProvider(page, provider, file);
+		if (!file.endsWith(".xml")) {
+			await page
+				.getByLabel(/password/i)
+				.first()
+				.fill(PASSWORD);
+			await page.getByRole("button", { name: /Open database/i }).click();
+		}
+
+		// The preview counts passkeys generically, so this proves one was converted rather than
+		// left as custom fields.
+		await expect(page.getByText(/1 passkey/i)).toBeVisible({ timeout: 30_000 });
+		await page.getByRole("button", { name: /Import \d+ items?/i }).click();
+		await expect(page.getByRole("heading", { name: /Imported \d+ items?/i })).toBeVisible();
+
+		const popup = await openPasskeyEntry(context, extensionId);
+		// The badge keys off entry.passkeys, so seeing it means the credential is really stored.
+		await expect(popup.getByLabel(/passkey/i).first()).toBeVisible();
+		// And the raw attributes are gone: leaving them would keep a plaintext copy of the
+		// private key in a custom field beside the credential that already holds it.
+		await expect(popup.getByText(/KPEX_PASSKEY/)).toHaveCount(0);
+	});
+}
+
+test("recognises the same passkey imported from the other container", async ({
+	context,
+	extensionId,
+}) => {
+	// De-duplication hashes the whole entry including its passkey, so this fails the moment the
+	// XML and .kdbx paths stop producing identical bytes for one credential.
+	const page = await context.newPage();
+	await createVault(page, extensionId);
+
+	await page.goto(`${optionsUrl(extensionId)}?screen=import`);
+	await chooseProvider(page, /KeePass \(XML\)/, "keepass-passkeys.xml");
+	await page.getByRole("button", { name: /Import \d+ items?/i }).click();
+	await expect(page.getByRole("heading", { name: /Imported \d+ items?/i })).toBeVisible();
+
+	await page.goto(`${optionsUrl(extensionId)}?screen=import`);
+	await chooseProvider(page, /KeePass \(\.kdbx\)/, "keepass-passkeys.kdbx");
+	await page
+		.getByLabel(/password/i)
+		.first()
+		.fill(PASSWORD);
+	await page.getByRole("button", { name: /Open database/i }).click();
+	await expect(page.getByText(/already in your vault/i)).toBeVisible({ timeout: 30_000 });
+});

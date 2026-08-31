@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<KeePassFile>
+  <Meta>
+    <Generator>KeePassXC</Generator>
+    <DatabaseName>Bramble Passkey Sample</DatabaseName>
+  </Meta>
+  <Root>
+    <Group>
+      <Name>Root</Name>
+      <Entry>
+        <String><Key>Title</Key><Value>Plain Login</Value></String>
+        <String><Key>UserName</Key><Value>nopasskey@example.com</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">hunter2</Value></String>
+        <String><Key>URL</Key><Value>https://example.com</Value></String>
+      </Entry>
+      <Group>
+        <Name>KeePassXC-Browser Passkeys</Name>
+        <Entry>
+          <String><Key>Title</Key><Value>webauthn.io (Passkey)</Value></String>
+          <String><Key>UserName</Key><Value>testy</Value></String>
+          <String><Key>URL</Key><Value>https://webauthn.io</Value></String>
+          <String><Key>KPEX_PASSKEY_CREDENTIAL_ID</Key><Value ProtectInMemory="True">_lt5pHIIIowqyWHmHwPxBdxXYmxge4sSpTaWy1XOs6Q</Value></String>
+          <String><Key>KPEX_PASSKEY_FLAG_BE</Key><Value>1</Value></String>
+          <String><Key>KPEX_PASSKEY_FLAG_BS</Key><Value>1</Value></String>
+          <String><Key>KPEX_PASSKEY_PRIVATE_KEY_PEM</Key><Value ProtectInMemory="True">-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIOOO0h6TPWiDuKE/5iLREORnBCswBsTNmP6RRAqHpA6z
+-----END PRIVATE KEY-----
+</Value></String>
+          <String><Key>KPEX_PASSKEY_RELYING_PARTY</Key><Value>webauthn.io</Value></String>
+          <String><Key>KPEX_PASSKEY_USERNAME</Key><Value>testy</Value></String>
+          <String><Key>KPEX_PASSKEY_USER_HANDLE</Key><Value ProtectInMemory="True">d2ViYXV0aG5pby10ZXN0eQ</Value></String>
+        </Entry>
+      </Group>
+    </Group>
+  </Root>
+</KeePassFile>
