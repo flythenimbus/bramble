@@ -112,3 +112,10 @@ strip = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
+# Dependencies are optimised even in dev builds. Argon2 is the reason: opening a default
+# KeePassXC database (64 MiB, 106 rounds) costs ~51s unoptimised against ~3s optimised, which
+# made `tauri dev` look broken and dominated `cargo test`. Only dependencies are affected, so
+# this crate still compiles fast, and release output is unchanged.
+[profile.dev.package."*"]
+opt-level = 2

@@ -340,6 +340,19 @@ hardware (a security-key tap) was not covered and is flagged below.
 | Does `onRequestCanceled` fire on that abort? | **No.** Nor when the requesting tab is closed mid-request. |
 | Completing a request after such an abort | Throws **`Error: Invalid sender`**. |
 
+**EdDSA (-8) works through the proxy, and Chrome enforces canonical CBOR.** Measured 2026-08-30
+with a hand-built Ed25519 registration: `create()` resolves and the page reads back
+`publicKeyAlgorithm: -8` with a valid 44-byte Ed25519 SPKI, so nothing about the API restricts us
+to ES256. Note the trap found on the way: an `attestationObject` whose `authData` byte string used
+the two-byte length form (`0x59`) for a 113-byte payload was rejected as **"Invalid responseJson:
+field missing or invalid: attestationObject"**, which reads like a missing field rather than a
+non-canonical length. CTAP2 requires canonical CBOR and Chrome checks it. `ciborium` emits
+canonical encodings, so the Rust core is unaffected; this is a warning for anyone hand-assembling
+one, and a hint that this error message means "malformed" rather than "absent".
+
+Chrome does **not** verify assertion signatures (the relying party does), so `get()` is
+algorithm-agnostic and `create()` is the only place algorithm support can bite.
+
 Three consequences, in severity order.
 
 1. **Attached-with-no-listener is a real window on every worker wake, and it swallows WebAuthn
