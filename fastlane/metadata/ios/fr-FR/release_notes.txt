@@ -2,6 +2,6 @@ Nouveautés de cette version :
 
 - En migrant depuis KeePass, vous emportez désormais vos clés d’accès. Importez un fichier .kdbx ou un export XML KeePass : les clés d’accès qui s’y trouvent deviennent de véritables clés d’accès utilisables pour vous connecter, au lieu d’une poignée de champs illisibles. Elles fonctionnent immédiatement avec AutoFill et se synchronisent avec vos autres appareils comme tout le reste.
 - Les bases de données KeePass qui refusaient de s’ouvrir devraient maintenant s’ouvrir. Les bases enregistrées avec des paramètres de sécurité renforcés étaient refusées par un contrôle qui évaluait le mauvais critère. Si une base est réellement trop lourde à ouvrir, le message indique désormais quel paramètre réduire plutôt que d’indiquer simplement un échec.
-- Les mots de passe contenant &, <, > ou des guillemets sont désormais importés correctement depuis un export XML KeePass. Ils arrivaient avec des caractères supplémentaires et cessaient donc discrètement de fonctionner sur les sites auxquels ils appartenaient.
+- Les mots de passe contenant des esperluettes, des chevrons ou des guillemets sont désormais importés correctement depuis un export XML KeePass. Ils arrivaient avec des caractères supplémentaires et cessaient donc discrètement de fonctionner sur les sites auxquels ils appartenaient.
 
 Aucun compte, aucun cloud. Tout reste sur vos appareils.

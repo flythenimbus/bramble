@@ -1,7 +1,7 @@
 Neu in dieser Version:
 
-- Der Umstieg von KeePass bringt jetzt Ihre Passkeys mit. Importieren Sie eine .kdbx-Datei oder einen KeePass-XML-Export, und alle darin enthaltenen Passkeys werden als echte Passkeys übernommen, mit denen Sie sich anmelden können, statt als eine Handvoll unlesbarer Felder. Sie funktionieren sofort mit AutoFill und synchronisieren sich wie alles andere mit Ihren anderen Geräten.
-- KeePass-Datenbanken, die sich bisher nicht öffnen ließen, sollten sich jetzt öffnen lassen. Mit strengeren Sicherheitseinstellungen gespeicherte Datenbanken wurden von einer Prüfung abgewiesen, die den falschen Wert gemessen hat. Ist eine Datenbank wirklich zu groß zum Öffnen, nennt die Meldung jetzt die Einstellung, die Sie verringern sollten, statt nur einen Fehler zu melden.
-- Passwörter, die &, <, > oder Anführungszeichen enthalten, werden jetzt korrekt aus einem KeePass-XML-Export importiert. Sie wurden mit zusätzlichen Zeichen übernommen und funktionierten daher auf den zugehörigen Websites unbemerkt nicht mehr.
+- Beim Umstieg von KeePass kommen jetzt Ihre Passkeys mit. Importieren Sie eine .kdbx-Datei oder einen KeePass-XML-Export, und alle enthaltenen Passkeys werden zu echten Passkeys, mit denen Sie sich anmelden können – statt zu einer Handvoll unlesbarer Felder. Sie funktionieren sofort mit AutoFill und werden wie alles andere mit Ihren anderen Geräten synchronisiert.
+- KeePass-Datenbanken, die sich bisher nicht öffnen ließen, sollten sich jetzt öffnen lassen. Datenbanken mit strengeren Sicherheitseinstellungen wurden von einer Prüfung zurückgewiesen, die das falsche Kriterium bewertet hat. Wenn eine Datenbank wirklich zu groß zum Öffnen ist, sagt Ihnen die Meldung jetzt, welche Einstellung Sie senken sollten, statt nur einen Fehler zu melden.
+- Passwörter, die Et-Zeichen, spitze Klammern oder Anführungszeichen enthalten, werden jetzt korrekt aus einem KeePass-XML-Export importiert. Sie kamen zuvor mit zusätzlichen Zeichen an und funktionierten dadurch auf den Websites, zu denen sie gehörten, still und leise nicht mehr.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

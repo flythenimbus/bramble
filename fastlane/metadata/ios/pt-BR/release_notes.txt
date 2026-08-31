@@ -2,6 +2,6 @@ Novidades desta versão:
 
 - Ao migrar do KeePass, suas passkeys agora vêm junto. Importe um arquivo .kdbx ou uma exportação XML do KeePass e todas as passkeys incluídas chegam como passkeys reais com as quais é possível entrar, em vez de um punhado de campos ilegíveis. Elas funcionam imediatamente com o AutoFill e são sincronizadas com seus outros dispositivos como todo o resto.
 - Bancos de dados do KeePass que se recusavam a abrir agora devem abrir. Bancos de dados salvos com configurações de segurança mais fortes estavam sendo rejeitados por uma verificação que avaliava o parâmetro errado. Se um banco de dados for realmente pesado demais para abrir, a mensagem agora informa qual configuração reduzir, em vez de apenas dizer que falhou.
-- Senhas que contêm &, <, > ou aspas agora são importadas corretamente de uma exportação XML do KeePass. Elas chegavam com caracteres extras e, por isso, paravam de funcionar silenciosamente nos sites aos quais pertenciam.
+- Senhas que contêm o E comercial, sinais de maior e menor ou aspas agora são importadas corretamente de uma exportação XML do KeePass. Elas chegavam com caracteres extras e, por isso, paravam de funcionar silenciosamente nos sites aos quais pertenciam.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

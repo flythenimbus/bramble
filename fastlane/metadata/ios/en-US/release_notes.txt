@@ -2,6 +2,6 @@ What's new in this release:
 
 - Moving over from KeePass now brings your passkeys with you. Import a .kdbx file or a KeePass XML export and any passkeys inside arrive as real passkeys you can sign in with, instead of a handful of unreadable fields. They work with AutoFill straight away, and they sync to your other devices like everything else.
 - KeePass databases that refused to open should open now. Databases saved with stronger security settings were being turned away by a check that measured the wrong thing. If a database really is too heavy to open, the message now tells you which setting to lower rather than just saying it failed.
-- Passwords containing &, <, > or quote marks now import correctly from a KeePass XML export. They were arriving with extra characters in them, so they quietly stopped working on the sites they belonged to.
+- Passwords containing ampersands, angle brackets or quote marks now import correctly from a KeePass XML export. They were arriving with extra characters in them, so they quietly stopped working on the sites they belonged to.
 
 No account, no cloud. Everything stays on your devices.
