@@ -6,6 +6,7 @@
 
 import type { PasskeyImportResult } from "../adapters/crypto";
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
+import { type ConversionTally, systemicFailureWarning } from "../import/passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "../import/shared";
 import type { ImportParserContext, ImportResult } from "../import/types";
 import { base64UrlToBase64 } from "../util/bytes";
@@ -110,7 +111,7 @@ async function toPasskeys(
 	createdAt: number,
 	warnings: string[],
 	context: ImportParserContext,
-	tally: { converted: number; failed: number },
+	tally: ConversionTally,
 ): Promise<PasskeyCredential[]> {
 	const out: PasskeyCredential[] = [];
 	for (const p of raw) {
@@ -173,7 +174,7 @@ async function entryFor(
 	item: CxfItem,
 	warnings: string[],
 	context: ImportParserContext,
-	tally: { converted: number; failed: number },
+	tally: ConversionTally,
 ): Promise<EntryData | null> {
 	const g = group(item.credentials ?? []);
 	const name = item.title || item.subtitle || "Untitled";
@@ -286,13 +287,8 @@ export async function parseCxf(
 		}
 	}
 
-	// Every key failing means the converter isn't answering (stale WASM, or native bindings that
-	// were never regenerated), not that the sender's passkeys are corrupt.
-	if (tally.failed > 0 && tally.converted === 0) {
-		warnings.push(
-			"No passkey could be converted, which usually means the app's crypto module is out of date rather than a problem with the transfer.",
-		);
-	}
+	const systemic = systemicFailureWarning(tally, "transfer");
+	if (systemic) warnings.push(systemic);
 
 	return summarize(imported, skipped, warnings);
 }

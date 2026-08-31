@@ -1,10 +1,22 @@
 import { z } from "zod";
 import type { SubdomainMatchMode } from "../adapters/autofill";
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
-import { base64UrlToBase64, base64UrlToBytes, bytesToBase64, hexToBytes } from "../util/bytes";
+import { bytesToBase64, hexToBytes } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
 import { normalizeTags } from "../vault/tags";
+import {
+	bareBase64UrlToBase64,
+	type ConversionTally,
+	MAX_CREDENTIAL_ID_BYTES,
+	maxBase64UrlLength,
+	pkcs8ToStandardBase64,
+	reject,
+	rejectionReason,
+	systemicFailureWarning,
+	userHandleToBase64,
+	validRpId,
+} from "./passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportParserContext, ImportResult } from "./types";
 
@@ -88,96 +100,27 @@ const FORMAT_ERROR = "This doesn't look like a Bitwarden JSON export.";
 const ENCRYPTED_ERROR =
 	'This is an encrypted (password-protected) Bitwarden export. Re-export from Bitwarden as a plain .json with "Password protected" turned off, then import that file.';
 
-const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const UUID = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i;
-const MAX_CREDENTIAL_ID_BYTES = 1023;
-// Bounds the bridge, nothing more: WebAuthn's 64-byte user.id cap binds the RP, not us (#40).
-const MAX_USER_HANDLE_BYTES = 1023;
-const MAX_RP_ID_LENGTH = 253;
-// Cap bridge input at 1 KiB while allowing optional PKCS#8 metadata.
-const MAX_PKCS8_BYTES = 1024;
 
-function maxBase64UrlLength(decodedBytes: number): number {
-	return Math.ceil((decodedBytes * 4) / 3);
-}
-
-/**
- * Rejections carry a reason so the warning can say WHICH field failed and WHY, instead of one
- * "invalid credential encoding" covering three conversions (github issue #40). The sentinel
- * marks the message as ours and therefore safe to show: anything else that escapes these
- * helpers is reported generically, so a foreign error can never put value bytes in the UI.
- */
-const OURS = "\u0000";
-function reject(reason: string): never {
-	throw new Error(OURS + reason);
-}
-
-/** The reason phrase for a rejection we raised, or null for anything unexpected. */
-function rejectionReason(e: unknown): string | null {
-	const message = e instanceof Error ? e.message : "";
-	return message.startsWith(OURS) ? message.slice(OURS.length) : null;
-}
-
-function strictBase64Url(value: string, maxDecodedBytes: number): string {
-	if (value.length === 0) reject("empty");
-	if (value.length > maxBase64UrlLength(maxDecodedBytes)) {
-		reject(`longer than the ${maxDecodedBytes}-byte maximum`);
-	}
-	// Canonical base64url: no padding, no + or /. Anything else is a format we don't read.
-	if (!BASE64URL.test(value) || value.length % 4 === 1) reject("not valid unpadded base64url");
-	return value;
-}
-
+/** Bitwarden's own credential-id spelling: a UUID, or base64url behind a `b64.` prefix. */
 function credentialIdToBase64(value: string): string {
-	let bytes: Uint8Array;
 	const uuid = UUID.exec(value);
 	if (uuid) {
-		bytes = hexToBytes(uuid.slice(1).join(""));
-	} else if (value.startsWith("b64.")) {
-		if (value.length > 4 + maxBase64UrlLength(MAX_CREDENTIAL_ID_BYTES)) {
-			reject(`longer than the ${MAX_CREDENTIAL_ID_BYTES}-byte maximum`);
-		}
-		bytes = base64UrlToBytes(strictBase64Url(value.slice(4), MAX_CREDENTIAL_ID_BYTES));
-	} else {
-		reject("neither a UUID nor a b64.-prefixed value");
+		const bytes = hexToBytes(uuid.slice(1).join(""));
+		if (bytes.length === 0) reject("empty");
+		return bytesToBase64(bytes);
 	}
-	if (bytes.length === 0) reject("empty");
-	if (bytes.length > MAX_CREDENTIAL_ID_BYTES) {
+	if (!value.startsWith("b64.")) reject("neither a UUID nor a b64.-prefixed value");
+	if (value.length > 4 + maxBase64UrlLength(MAX_CREDENTIAL_ID_BYTES)) {
 		reject(`longer than the ${MAX_CREDENTIAL_ID_BYTES}-byte maximum`);
 	}
-	return bytesToBase64(bytes);
-}
-
-function userHandleToBase64(value: string): string {
-	const bytes = base64UrlToBytes(strictBase64Url(value, MAX_USER_HANDLE_BYTES));
-	if (bytes.length === 0) reject("empty");
-	if (bytes.length > MAX_USER_HANDLE_BYTES) {
-		reject(`longer than the ${MAX_USER_HANDLE_BYTES}-byte maximum`);
-	}
-	return bytesToBase64(bytes);
-}
-
-function pkcs8ToStandardBase64(value: string): string {
-	return base64UrlToBase64(strictBase64Url(value, MAX_PKCS8_BYTES));
+	return bareBase64UrlToBase64(value.slice(4), MAX_CREDENTIAL_ID_BYTES);
 }
 
 function parseDate(value: string | null | undefined): number | undefined {
 	if (!value) return undefined;
 	const parsed = Date.parse(value);
 	return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function validRpId(value: string): boolean {
-	if (value.length === 0 || value.length > MAX_RP_ID_LENGTH) return false;
-	return value
-		.split(".")
-		.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
-}
-
-/** Conversion outcomes across the whole file, so a systemic failure can be named once. */
-interface ConversionTally {
-	converted: number;
-	failed: number;
 }
 
 async function importPasskeys(
@@ -429,14 +372,8 @@ export async function parseBitwarden(
 		}
 	}
 
-	// Every key failing is not a file full of corrupt passkeys, it is the converter not
-	// answering: a stale WASM build, or native bindings that were never regenerated. Without
-	// this the per-key warnings blame the user's data for a build problem.
-	if (tally.failed > 0 && tally.converted === 0) {
-		warnings.push(
-			"No passkey could be converted, which usually means the app's crypto module is out of date rather than a problem with your export.",
-		);
-	}
+	const systemic = systemicFailureWarning(tally, "export");
+	if (systemic) warnings.push(systemic);
 
 	return summarize(imported, 0, warnings);
 }
