@@ -4,7 +4,6 @@ import type { EntryData, PasskeyCredential } from "../hooks/useVault";
 import { base64UrlToBase64, base64UrlToBytes, bytesToBase64, hexToBytes } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
-import { COSE_ES256 } from "../vault/passkey";
 import { normalizeTags } from "../vault/tags";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
 import type { ImportParserContext, ImportResult } from "./types";
@@ -260,7 +259,9 @@ async function importPasskeys(
 			userHandle,
 			userName: credential.userName || undefined,
 			userDisplayName: credential.userDisplayName || undefined,
-			alg: COSE_ES256,
+			// From the key itself. The gate above already limits this path to P-256, so it is
+			// -7 today; reading it keeps the credential honest if that gate ever widens.
+			alg: key.alg,
 			publicKeyCose: key.publicKeyCose,
 			privateKey: key.privateKey,
 			signCount: 0,

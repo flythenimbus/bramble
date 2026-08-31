@@ -174,6 +174,32 @@ describe("handleCreate", () => {
 });
 
 describe("handleGet", () => {
+	it("hands the stored algorithm to the signer, not an assumed one", async () => {
+		// A 32-byte secret cannot say whether it is a P-256 scalar or an Ed25519 seed, so the
+		// credential's own alg is what lets the core pick. Signing an imported EdDSA passkey as
+		// ES256 would produce a signature the site rejects.
+		const eddsa: Entry[] = [
+			{
+				...(githubEntries[0] as Extract<Entry, { type: "login" }>),
+				passkeys: [
+					{
+						...(githubEntries[0] as Extract<Entry, { type: "login" }>).passkeys![0],
+						alg: -8,
+					},
+				],
+			} as Entry,
+		];
+		const d = deps({ loadEntries: vi.fn(async () => eddsa) });
+		await handleGet(d, 1, getJson(), "https://github.com");
+		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith(
+			"github.com",
+			"U0s",
+			-8,
+			expect.any(String),
+			true,
+		);
+	});
+
 	const getJson = (over: Record<string, unknown> = {}) =>
 		JSON.stringify({
 			origin: "https://github.com",
@@ -195,7 +221,13 @@ describe("handleGet", () => {
 		const res = await handleGet(d, 9, getJson(), "https://github.com");
 		expect(res.requestId).toBe(9);
 		expect(res.error).toBeUndefined();
-		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith("github.com", "U0s", "aGFzaA", true);
+		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith(
+			"github.com",
+			"U0s",
+			-7,
+			"aGFzaA",
+			true,
+		);
 		const r = JSON.parse(res.responseJson as string);
 		expect(r.response.signature).toBeTruthy();
 		expect(r.response.userHandle).toBeTruthy();

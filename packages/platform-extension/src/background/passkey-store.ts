@@ -41,12 +41,13 @@ export async function passkeyMakeCredential(
 export async function passkeyGetAssertion(
 	rpId: string,
 	privateKeyB64: string,
+	alg: number,
 	clientDataHashB64: string,
 	userVerified: boolean,
 ): Promise<PasskeyAssertion> {
 	const res = await sendToOffscreen({
 		type: "CRYPTO_PASSKEY_GET",
-		payload: { rpId, privateKeyB64, clientDataHashB64, userVerified },
+		payload: { rpId, privateKeyB64, alg, clientDataHashB64, userVerified },
 	});
 	if (!res.ok || !res.data) throw new Error(res.error ?? "passkey assertion failed");
 	return res.data as PasskeyAssertion;

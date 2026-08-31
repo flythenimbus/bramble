@@ -89,8 +89,8 @@ describe("buildCryptoAdapter", () => {
 		expect(wasm.passkey_make_credential).toHaveBeenCalledWith("github.com", true);
 		await a.passkeyImportPkcs8("pkcs8");
 		expect(wasm.passkey_import_pkcs8).toHaveBeenCalledWith("pkcs8");
-		await a.passkeyGetAssertion("github.com", "sk", "hash", false);
-		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", "hash", false);
+		await a.passkeyGetAssertion("github.com", "sk", -7, "hash", false);
+		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", -7, "hash", false);
 	});
 
 	it("decryptEntries falls back to a per-entry loop when the module has no batch", async () => {

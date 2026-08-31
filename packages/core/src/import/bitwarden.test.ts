@@ -12,7 +12,8 @@ function importContext(
 	convert: (pkcs8StandardB64: string) => Promise<{
 		privateKey: string;
 		publicKeyCose: string;
-	}> = async () => ({ privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==" }),
+		alg: number;
+	}> = async () => ({ privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==", alg: -7 }),
 ) {
 	const passkeyImportPkcs8 = vi.fn(convert);
 	return { context: { passkeyImportPkcs8 }, passkeyImportPkcs8 };
@@ -266,7 +267,7 @@ describe("parseBitwarden", () => {
 	it("skips malformed and unsupported passkeys without dropping the login or valid siblings", async () => {
 		const { context } = importContext(async (pkcs8) => {
 			if (pkcs8 === "cmVqZWN0") throw new Error("synthetic conversion failure");
-			return { privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==" };
+			return { privateKey: "c2NhbGFy", publicKeyCose: "Y29zZQ==", alg: -7 };
 		});
 		const res = await parseBitwarden(
 			json({

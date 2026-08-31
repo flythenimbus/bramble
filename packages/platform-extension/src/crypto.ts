@@ -201,10 +201,11 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 				rpId,
 				userVerified,
 			} satisfies CryptoPasskeyMake),
-		passkeyGetAssertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
+		passkeyGetAssertion: (rpId, privateKeyB64, alg, clientDataHashB64, userVerified) =>
 			send<PasskeyAssertion>("CRYPTO_PASSKEY_GET", {
 				rpId,
 				privateKeyB64,
+				alg,
 				clientDataHashB64,
 				userVerified,
 			} satisfies CryptoPasskeyGet),

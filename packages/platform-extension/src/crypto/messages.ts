@@ -111,6 +111,9 @@ export const CryptoPasskeyMakeSchema = z.object({
 export const CryptoPasskeyGetSchema = z.object({
 	rpId: z.string(),
 	privateKeyB64: z.string(),
+	// Required, not defaulted: a missing alg must fail the parse rather than quietly sign
+	// with the wrong primitive.
+	alg: z.number().int(),
 	clientDataHashB64: z.string(),
 	userVerified: z.boolean(),
 });

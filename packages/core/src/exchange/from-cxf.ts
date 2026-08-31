@@ -11,7 +11,6 @@ import type { ImportParserContext, ImportResult } from "../import/types";
 import { base64UrlToBase64 } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
-import { COSE_ES256 } from "../vault/passkey";
 import { normalizeTags } from "../vault/tags";
 
 import {
@@ -134,7 +133,9 @@ async function toPasskeys(
 			userHandle: base64UrlToBase64(p.userHandle),
 			userName: p.username || undefined,
 			userDisplayName: p.userDisplayName || undefined,
-			alg: COSE_ES256,
+			// From the key's OID, not assumed: CXF carries no algorithm, so this is the only
+			// place the truth is available. Hardcoding -7 mislabelled an Ed25519 key.
+			alg: material.alg,
 			publicKeyCose: material.publicKeyCose,
 			// The raw scalar unpacked from the PKCS#8, which is what core-rust signs with.
 			privateKey: material.privateKey,

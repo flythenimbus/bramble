@@ -57,6 +57,8 @@ export async function fakePasskeyImportPkcs8(pkcs8B64: string): Promise<PasskeyI
 	return {
 		privateKey: bytesToBase64(coord(jwk.d)),
 		publicKeyCose: bytesToBase64(coseEc2Key(coord(jwk.x), coord(jwk.y))),
+		// This stand-in only imports P-256; the real core reads the algorithm off the key's OID.
+		alg: -7,
 	};
 }
 
