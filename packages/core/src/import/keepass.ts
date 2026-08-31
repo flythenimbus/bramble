@@ -1,8 +1,11 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EntryData } from "../hooks/useVault";
 import { normalizeTags } from "../vault/tags";
+import { convertKeepassPasskey } from "./keepass-passkey";
+import type { ConversionTally } from "./passkey-fields";
+import { systemicFailureWarning } from "./passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
-import type { ImportResult } from "./types";
+import type { ImportParserContext, ImportResult } from "./types";
 
 // KeePass 2.x XML export: entries under nested Groups, each with String{Key,Value}
 // pairs plus a History subtree of past revisions we must NOT import.
@@ -159,7 +162,34 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 	};
 }
 
-function mapEntry({ entry, path }: FoundEntry): EntryData {
+/**
+ * Map one entry's String pairs, converting a KeePassXC passkey if it carries one. Both KeePass
+ * paths funnel through here rather than each calling `mapKeepassFields` themselves: import
+ * de-duplication hashes the whole entry, so the XML and .kdbx paths have to produce identical
+ * bytes for the same credential or importing both would store the private key twice.
+ */
+export async function mapKeepassEntry(
+	fields: RawField[],
+	context: ImportParserContext,
+	importedAt: number,
+	warnings: string[],
+	tally: ConversionTally,
+): Promise<EntryData> {
+	const name = fields.find((f) => f.key === "Title")?.value || "Untitled";
+	const { credential, fields: kept } = await convertKeepassPasskey(
+		fields,
+		name,
+		importedAt,
+		context,
+		warnings,
+		tally,
+	);
+	const data = mapKeepassFields(kept);
+	if (!credential || data.type !== "login") return data;
+	return { ...data, passkeys: [credential] };
+}
+
+function entryFields({ entry, path }: FoundEntry): RawField[] {
 	const fields: RawField[] = toArray(entry.String).map((s) => {
 		const { text, hidden } = readValue(s.Value);
 		return { key: unescapeXml(String(s.Key ?? "")), value: text, hidden };
@@ -170,11 +200,14 @@ function mapEntry({ entry, path }: FoundEntry): EntryData {
 	// Skip the root group: it names the database, not a folder inside it.
 	const folders = path.slice(1).join("/");
 	if (folders) fields.push({ key: "Group", value: folders, hidden: false });
-	return mapKeepassFields(fields);
+	return fields;
 }
 
 /** Parse a KeePass 2.x XML export into importable login entries. */
-export function parseKeePass(raw: string | Uint8Array): ImportResult {
+export async function parseKeePass(
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+): Promise<ImportResult> {
 	const text = asText(raw);
 	let parsed: { KeePassFile?: { Root?: XmlGroup } };
 	try {
@@ -193,6 +226,14 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 	if (!root) throw new Error(FORMAT_ERROR);
 
 	const entries = toArray(root.Group).flatMap((g) => collectEntries(g));
-	const imported = entries.map(mapEntry);
-	return summarize(imported, 0, []);
+	const warnings: string[] = [];
+	const tally: ConversionTally = { converted: 0, failed: 0 };
+	const importedAt = Date.now();
+	const imported: EntryData[] = [];
+	for (const found of entries) {
+		imported.push(await mapKeepassEntry(entryFields(found), context, importedAt, warnings, tally));
+	}
+	const systemic = systemicFailureWarning(tally, "export");
+	if (systemic) warnings.push(systemic);
+	return summarize(imported, 0, warnings);
 }

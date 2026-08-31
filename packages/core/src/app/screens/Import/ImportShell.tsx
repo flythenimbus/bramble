@@ -309,7 +309,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				password,
 				keyfileB64,
 			});
-			return kdbxEntriesToResult(entries);
+			return await kdbxEntriesToResult(entries, parserContext);
 		} catch (err) {
 			throw new Error(kdbxErrorMessage(err));
 		}
