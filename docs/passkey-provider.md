@@ -453,8 +453,20 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
   (SPKI DER). Note `publicKey` is marked *optional* in the W3C spec but Chrome's proxy requires it
   anyway, so the Rust core returns the SPKI alongside the attestation object. The assertion response
   needs `clientDataJSON`, `authenticatorData`, `signature`, and `userHandle` (null when absent).
-- **Algorithms.** Support ES256 (COSE -7) at minimum; add Ed25519 (-8) and RS256 (-257) as RP demand
-  shows. `passkey-rs` covers the common set.
+- **Algorithms. We MINT ES256 only, and ASSERT ES256 or Ed25519.** The split is deliberate.
+  Ed25519 (COSE -8) landed because KeePassXC prefers it whenever a relying party offers it, so
+  importing its passkeys needs a core that can sign with one; see docs/passkey-import.md. Minting
+  stays ES256 because nothing asks us for anything else and every create-path gate (the proxy's
+  `pubKeyCredParams` check, iOS's `.ES256` guard, Android's `-7` scan) is one fewer thing to get
+  wrong. RS256 (-257) is unimplemented and would need a different key shape entirely.
+- **A stored private key is 32 bytes for both algorithms**, so it cannot say which one owns it.
+  The credential's `alg` is what the signer dispatches on, and the core refuses an algorithm it
+  cannot sign for rather than defaulting: a wrong guess yields a signature the RP rejects, which
+  reads to the user as a corrupt passkey instead of a refusal. Import derives `alg` from the key's
+  own PKCS#8 OID and never from anything the file declares.
+- **Version skew fails closed.** A peer running an older build that receives an Ed25519 passkey
+  over sync will try to sign it as P-256 and produce a signature the relying party rejects. The
+  stored credential is unharmed, and the same passkey works again from any updated device.
 
 ## Security notes
 
