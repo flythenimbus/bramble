@@ -1,6 +1,7 @@
-Novità in questa versione:
+Novità di questa versione:
 
-- Apra l'app e Face ID è già in attesa: nessun pulsante da premere, nessuna password da digitare. Attivi "Sblocco all'apertura" in Impostazioni > Sicurezza, appena sotto l'interruttore Face ID, e la schermata di sblocco richiede l'accesso nel momento in cui appare. Resta disattivata finché non la attiva, e i dispositivi che usano Touch ID o un codice funzionano allo stesso modo.
-- Bloccare la cassaforte manualmente significa comunque che è bloccata. Toccando il pulsante di blocco si rimane sulla schermata della password invece di richiedere il volto nell'istante in cui si guarda il telefono.
+- Il passaggio da KeePass ora include anche le passkey. Basta importare un file .kdbx o un'esportazione XML di KeePass: le eventuali passkey contenute arrivano come passkey reali con cui è possibile accedere, invece di una serie di campi illeggibili. Funzionano subito con AutoFill e si sincronizzano sugli altri dispositivi come tutto il resto.
+- I database KeePass che non si aprivano ora dovrebbero aprirsi. I database salvati con impostazioni di sicurezza più elevate venivano rifiutati da un controllo che verificava il parametro sbagliato. Se un database è davvero troppo pesante per essere aperto, il messaggio ora indica quale impostazione ridurre invece di dire solo che l'apertura non è riuscita.
+- Le password contenenti &, <, > o virgolette ora vengono importate correttamente da un'esportazione XML di KeePass. In precedenza arrivavano con caratteri aggiuntivi, quindi smettevano di funzionare senza preavviso sui siti a cui appartenevano.
 
-Nessun account, nessun cloud. Tutto resta sui propri dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui dispositivi.

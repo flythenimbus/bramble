@@ -1,6 +1,7 @@
-Quoi de neuf dans cette version :
+Nouveautés de cette version :
 
-- Ouvrez l’app et Face ID vous attend déjà : aucun bouton à appuyer, aucun mot de passe à saisir. Activez « Déverrouiller à l’ouverture » dans Paramètres > Sécurité, juste sous l’interrupteur Face ID, et l’écran de déverrouillage demande votre visage dès qu’il apparaît. Cette option reste désactivée tant que vous ne l’activez pas, et les appareils qui utilisent Touch ID ou un code fonctionnent de la même façon.
-- Verrouiller le coffre-fort vous-même signifie qu’il reste verrouillé. Appuyer sur le bouton de verrouillage vous laisse sur l’écran de mot de passe au lieu de demander votre visage dès que vous regardez votre téléphone.
+- En migrant depuis KeePass, vous emportez désormais vos clés d’accès. Importez un fichier .kdbx ou un export XML KeePass : les clés d’accès qui s’y trouvent deviennent de véritables clés d’accès utilisables pour vous connecter, au lieu d’une poignée de champs illisibles. Elles fonctionnent immédiatement avec AutoFill et se synchronisent avec vos autres appareils comme tout le reste.
+- Les bases de données KeePass qui refusaient de s’ouvrir devraient maintenant s’ouvrir. Les bases enregistrées avec des paramètres de sécurité renforcés étaient refusées par un contrôle qui évaluait le mauvais critère. Si une base est réellement trop lourde à ouvrir, le message indique désormais quel paramètre réduire plutôt que d’indiquer simplement un échec.
+- Les mots de passe contenant &, <, > ou des guillemets sont désormais importés correctement depuis un export XML KeePass. Ils arrivaient avec des caractères supplémentaires et cessaient donc discrètement de fonctionner sur les sites auxquels ils appartenaient.
 
 Aucun compte, aucun cloud. Tout reste sur vos appareils.

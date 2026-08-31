@@ -1,6 +1,6 @@
 Novedades de esta versión:
-
-- Abra la app y Face ID ya estará esperando: sin pulsar ningún botón ni escribir ninguna contraseña. Active "Desbloquear al abrir" en Configuración > Seguridad, justo debajo del interruptor de Face ID, y la pantalla de desbloqueo le solicitará el desbloqueo en cuanto aparezca. Esta opción permanece desactivada hasta que la active, y los dispositivos que usan Touch ID o un código funcionan del mismo modo.
-- Si bloquea la caja fuerte manualmente, esta sigue bloqueada. Al tocar el botón de bloqueo, permanece en la pantalla de contraseña en lugar de pedirle el desbloqueo facial en cuanto mira el teléfono.
+- La migración desde KeePass ahora incluye sus passkeys. Importe un archivo .kdbx o una exportación XML de KeePass y las passkeys que contenga llegan como passkeys reales con las que puede iniciar sesión, en lugar de un puñado de campos ilegibles. Funcionan con AutoFill de inmediato y se sincronizan con sus otros dispositivos como todo lo demás.
+- Las bases de datos de KeePass que se negaban a abrir deberían abrirse ahora. Las bases de datos guardadas con ajustes de seguridad más fuertes estaban siendo rechazadas por una comprobación que medía el parámetro equivocado. Si una base de datos es realmente demasiado pesada para abrir, el mensaje ahora le indica qué ajuste reducir en lugar de simplemente decir que falló.
+- Las contraseñas que contienen &, <, > o comillas ahora se importan correctamente desde una exportación XML de KeePass. Llegaban con caracteres adicionales, por lo que dejaban de funcionar silenciosamente en los sitios a los que pertenecían.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

@@ -1,6 +1,7 @@
 What's new in this release:
 
-- Open the app and Face ID is already waiting: no button to press, no password to type. Turn on "Unlock on open" in Settings > Security, just under the Face ID switch, and the unlock screen asks the moment it appears. It stays off until you turn it on, and devices that use Touch ID or a passcode work the same way.
-- Locking the vault yourself still means locked. Tapping the lock button leaves you on the password screen rather than asking for your face the instant you glance at your phone.
+- Moving over from KeePass now brings your passkeys with you. Import a .kdbx file or a KeePass XML export and any passkeys inside arrive as real passkeys you can sign in with, instead of a handful of unreadable fields. They work with AutoFill straight away, and they sync to your other devices like everything else.
+- KeePass databases that refused to open should open now. Databases saved with stronger security settings were being turned away by a check that measured the wrong thing. If a database really is too heavy to open, the message now tells you which setting to lower rather than just saying it failed.
+- Passwords containing &, <, > or quote marks now import correctly from a KeePass XML export. They were arriving with extra characters in them, so they quietly stopped working on the sites they belonged to.
 
 No account, no cloud. Everything stays on your devices.
