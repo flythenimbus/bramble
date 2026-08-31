@@ -1,8 +1,11 @@
 import { XMLParser } from "fast-xml-parser";
 import type { EntryData } from "../hooks/useVault";
 import { normalizeTags } from "../vault/tags";
+import { convertKeepassPasskey } from "./keepass-passkey";
+import type { ConversionTally } from "./passkey-fields";
+import { systemicFailureWarning } from "./passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "./shared";
-import type { ImportResult } from "./types";
+import type { ImportParserContext, ImportResult } from "./types";
 
 // KeePass 2.x XML export: entries under nested Groups, each with String{Key,Value}
 // pairs plus a History subtree of past revisions we must NOT import.
@@ -35,10 +38,38 @@ interface XmlGroup {
 	Entry?: XmlEntry | XmlEntry[];
 }
 
+// Entity processing is off in the parser below to block expansion bombs, which also switches off
+// the five PREDEFINED entities and numeric character references. Those cannot recurse and carry no
+// DoS risk, so decode them here; leaving them raw silently corrupts any password containing & < > "
+// or '. One pass, never sequential replaces: `&amp;lt;` must decode to `&lt;`, not to `<`.
+const XML_ENTITY = /&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6}));/g;
+const NAMED_ENTITIES: Record<string, string> = {
+	amp: "&",
+	lt: "<",
+	gt: ">",
+	quot: '"',
+	apos: "'",
+};
+
+export function unescapeXml(value: string): string {
+	if (!value.includes("&")) return value;
+	return value.replace(XML_ENTITY, (whole, name: string | undefined, dec, hex) => {
+		if (name) return NAMED_ENTITIES[name] ?? whole;
+		const code = Number.parseInt(dec ?? hex, dec ? 10 : 16);
+		// Out of range or a lone surrogate: leave the text exactly as the file had it rather
+		// than inventing a replacement character inside someone's password.
+		if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return whole;
+		return String.fromCodePoint(code);
+	});
+}
+
 function readValue(value: string | XmlValue | undefined): { text: string; hidden: boolean } {
 	if (value == null) return { text: "", hidden: false };
-	if (typeof value === "string") return { text: value, hidden: false };
-	return { text: value["#text"] ?? "", hidden: value["@_ProtectInMemory"] === "True" };
+	if (typeof value === "string") return { text: unescapeXml(value), hidden: false };
+	return {
+		text: unescapeXml(value["#text"] ?? ""),
+		hidden: value["@_ProtectInMemory"] === "True",
+	};
 }
 
 /** An entry plus the group path it was found under, which the mapper turns into tags. */
@@ -54,8 +85,9 @@ interface FoundEntry {
 // only organisation a KeePass database has, and dropping them was the whole reason an
 // imported vault arrived unsorted.
 function collectEntries(group: XmlGroup, parents: string[] = []): FoundEntry[] {
-	if (group.Name === RECYCLE_BIN) return [];
-	const path = group.Name ? [...parents, group.Name] : parents;
+	const name = group.Name ? unescapeXml(group.Name) : undefined;
+	if (name === RECYCLE_BIN) return [];
+	const path = name ? [...parents, name] : parents;
 	const here = toArray(group.Entry).map((entry) => ({ entry, path }));
 	const nested = toArray(group.Group).flatMap((g) => collectEntries(g, path));
 	return [...here, ...nested];
@@ -130,22 +162,52 @@ export function mapKeepassFields(fields: RawField[]): EntryData {
 	};
 }
 
-function mapEntry({ entry, path }: FoundEntry): EntryData {
+/**
+ * Map one entry's String pairs, converting a KeePassXC passkey if it carries one. Both KeePass
+ * paths funnel through here rather than each calling `mapKeepassFields` themselves: import
+ * de-duplication hashes the whole entry, so the XML and .kdbx paths have to produce identical
+ * bytes for the same credential or importing both would store the private key twice.
+ */
+export async function mapKeepassEntry(
+	fields: RawField[],
+	context: ImportParserContext,
+	importedAt: number,
+	warnings: string[],
+	tally: ConversionTally,
+): Promise<EntryData> {
+	const name = fields.find((f) => f.key === "Title")?.value || "Untitled";
+	const { credential, fields: kept } = await convertKeepassPasskey(
+		fields,
+		name,
+		importedAt,
+		context,
+		warnings,
+		tally,
+	);
+	const data = mapKeepassFields(kept);
+	if (!credential || data.type !== "login") return data;
+	return { ...data, passkeys: [credential] };
+}
+
+function entryFields({ entry, path }: FoundEntry): RawField[] {
 	const fields: RawField[] = toArray(entry.String).map((s) => {
 		const { text, hidden } = readValue(s.Value);
-		return { key: String(s.Key ?? ""), value: text, hidden };
+		return { key: unescapeXml(String(s.Key ?? "")), value: text, hidden };
 	});
 	// Handed to the mapper as the same synthetic pairs the .kdbx path produces, so both
 	// formats reach `mapKeepassFields` looking identical.
-	if (entry.Tags) fields.push({ key: "Tags", value: entry.Tags, hidden: false });
+	if (entry.Tags) fields.push({ key: "Tags", value: unescapeXml(entry.Tags), hidden: false });
 	// Skip the root group: it names the database, not a folder inside it.
 	const folders = path.slice(1).join("/");
 	if (folders) fields.push({ key: "Group", value: folders, hidden: false });
-	return mapKeepassFields(fields);
+	return fields;
 }
 
 /** Parse a KeePass 2.x XML export into importable login entries. */
-export function parseKeePass(raw: string | Uint8Array): ImportResult {
+export async function parseKeePass(
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+): Promise<ImportResult> {
 	const text = asText(raw);
 	let parsed: { KeePassFile?: { Root?: XmlGroup } };
 	try {
@@ -153,7 +215,8 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 			ignoreAttributes: false,
 			attributeNamePrefix: "@_",
 			parseTagValue: false,
-			// Disable entity processing to block billion-laughs payloads.
+			// Off to block expansion bombs (the parser would expand DOCTYPE-declared entities).
+			// The predefined entities it also disables are decoded by `unescapeXml` above.
 			processEntities: false,
 		}).parse(text);
 	} catch {
@@ -163,6 +226,14 @@ export function parseKeePass(raw: string | Uint8Array): ImportResult {
 	if (!root) throw new Error(FORMAT_ERROR);
 
 	const entries = toArray(root.Group).flatMap((g) => collectEntries(g));
-	const imported = entries.map(mapEntry);
-	return summarize(imported, 0, []);
+	const warnings: string[] = [];
+	const tally: ConversionTally = { converted: 0, failed: 0 };
+	const importedAt = Date.now();
+	const imported: EntryData[] = [];
+	for (const found of entries) {
+		imported.push(await mapKeepassEntry(entryFields(found), context, importedAt, warnings, tally));
+	}
+	const systemic = systemicFailureWarning(tally, "export");
+	if (systemic) warnings.push(systemic);
+	return summarize(imported, 0, warnings);
 }

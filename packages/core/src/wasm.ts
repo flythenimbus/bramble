@@ -92,6 +92,7 @@ export interface VaultCrypto {
 	passkey_get_assertion(
 		rpId: string,
 		privateKeyB64: string,
+		alg: number,
 		clientDataHashB64: string,
 		userVerified: boolean,
 	): Awaitable<PasskeyAssertion>;

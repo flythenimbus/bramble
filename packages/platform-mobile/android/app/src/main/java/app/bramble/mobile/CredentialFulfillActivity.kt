@@ -174,7 +174,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             )
         }
         // userVerified=true: the unlock just performed (biometric / master password) is a UV.
-        val assertion = passkeyGetAssertion(pk.rpId, pk.privateKey, clientDataHashStdB64, true)
+        val assertion = passkeyGetAssertion(pk.rpId, pk.privateKey, pk.alg, clientDataHashStdB64, true)
         val json = WebauthnJson.authenticationResponseJson(
             pk.credentialId, assertion.authenticatorData, assertion.signature, pk.userHandle, clientDataJson,
         )

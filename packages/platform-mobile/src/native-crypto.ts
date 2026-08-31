@@ -95,6 +95,7 @@ interface NativeCryptoPlugin {
 	passkeyGetAssertion(o: {
 		rpId: string;
 		privateKeyB64: string;
+		alg: number;
 		clientDataHashB64: string;
 		userVerified: boolean;
 	}): Promise<PasskeyAssertion>;
@@ -265,8 +266,8 @@ const nativeModule: VaultCrypto = {
 
 	passkey_make_credential: (rpId, userVerified) =>
 		Native.passkeyMakeCredential({ rpId, userVerified }),
-	passkey_get_assertion: (rpId, privateKeyB64, clientDataHashB64, userVerified) =>
-		Native.passkeyGetAssertion({ rpId, privateKeyB64, clientDataHashB64, userVerified }),
+	passkey_get_assertion: (rpId, privateKeyB64, alg, clientDataHashB64, userVerified) =>
+		Native.passkeyGetAssertion({ rpId, privateKeyB64, alg, clientDataHashB64, userVerified }),
 	passkey_import_pkcs8: (pkcs8B64) => Native.passkeyImportPkcs8({ pkcs8B64 }),
 
 	open_kdbx4: async (file, password, keyfile) =>

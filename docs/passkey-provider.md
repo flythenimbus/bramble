@@ -319,6 +319,96 @@ Two things make this the hard surface:
 3. **Ceremony UI is a popup window**, not the in-page autofill picker, because the proxy intercepts
    below the page. Different UX path from current autofill.
 
+### Measured proxy semantics (2026-08-29, Playwright bundled Chromium)
+
+The API's undocumented edges, established by a scripted spike rather than reasoning. Chrome's
+reference documents none of these. Measured against Playwright's bundled Chromium with the built
+extension loaded; the API surface is identical to real Chrome (`attach`, `detach`, the three
+`complete*` calls, `onCreateRequest`/`onGetRequest`/`onIsUvpaaRequest`/`onRequestCanceled`,
+`onRemoteSessionStateChange`), so these should hold there, but the one flow that needs real
+hardware (a security-key tap) was not covered and is flagged below.
+
+| Question | Answer |
+|---|---|
+| `attach()` when we are already attached | **Succeeds**, returns `undefined`. Idempotent, no error. |
+| `attach()` after the worker was killed | **Succeeds**, returns `undefined`. |
+| `detach()` when not attached | **No-op**, returns `undefined`, does not throw. |
+| Does the attachment survive service-worker death? | **Yes.** A page's `get()` still routes to the extension after the worker is killed and respawned. |
+| Do the listeners survive? | **No.** The revived worker is a fresh module graph with all state reset. |
+| A request arriving while no listener is registered | **Lost permanently.** Not queued: registering a listener afterwards never delivers it, and the page hangs until its own WebAuthn timeout. A *later* request is served normally. |
+| `detach()` while one of our requests is in flight | The page's promise rejects **`AbortError: The operation was aborted.`** |
+| Does `onRequestCanceled` fire on that abort? | **No.** Nor when the requesting tab is closed mid-request. |
+| Completing a request after such an abort | Throws **`Error: Invalid sender`**. |
+
+**EdDSA (-8) works through the proxy, and Chrome enforces canonical CBOR.** Measured 2026-08-30
+with a hand-built Ed25519 registration: `create()` resolves and the page reads back
+`publicKeyAlgorithm: -8` with a valid 44-byte Ed25519 SPKI, so nothing about the API restricts us
+to ES256. Note the trap found on the way: an `attestationObject` whose `authData` byte string used
+the two-byte length form (`0x59`) for a 113-byte payload was rejected as **"Invalid responseJson:
+field missing or invalid: attestationObject"**, which reads like a missing field rather than a
+non-canonical length. CTAP2 requires canonical CBOR and Chrome checks it. `ciborium` emits
+canonical encodings, so the Rust core is unaffected; this is a warning for anyone hand-assembling
+one, and a hint that this error message means "malformed" rather than "absent".
+
+Chrome does **not** verify assertion signatures (the relying party does), so `get()` is
+algorithm-agnostic and `create()` is the only place algorithm support can bite.
+
+Three consequences, in severity order.
+
+1. **Attached-with-no-listener is a real window on every worker wake, and it swallows WebAuthn
+   browser-wide.** Because the attachment outlives the worker but the listeners do not, and because
+   `registerListeners()` is reached only through `initWebauthnProxy()` after `loadProviderEnabled()`
+   resolves its async storage read, every wake has a gap in which any WebAuthn call in the browser
+   is lost forever rather than falling back to the platform authenticator. Registering the listeners
+   synchronously at module top level closes it; listeners without an attach are inert, so there is
+   no cost to registering them unconditionally.
+2. **Detaching mid-ceremony kills the page's sign-in.** This is reachable today: a provider `get()`
+   opens our unlock popup, and if the user unlocks with a security key there, the pauser detaches
+   and the site's request dies with `AbortError`. `onRequestCanceled` does not fire, so we cannot
+   even notice and clean up; our later `completeGetRequest` throws `Invalid sender` into a
+   swallowed catch.
+3. **`attach()`/`detach()` need no defensive bookkeeping.** Both are idempotent and neither throws
+   on a redundant call, so "treat a failed attach as possibly-attached" is unnecessary. A genuine
+   failure string (another extension holding the proxy) remains the only case worth surfacing.
+
+**The proxy intercepts our own extension origin.** Measured: with the proxy attached, both
+`get()` and `create()` issued from `chrome-extension://<id>/popup.html` are delivered to our
+listener. So the PAUSE/RESUME machinery is load-bearing and cannot be deleted; without it
+Bramble's security-key PRF unlock would be hijacked by Bramble's own proxy. (Firefox differs: its
+MAIN-world override deliberately skips the extension's own `moz-extension` origin.)
+
+### The pause window is a hole in the provider, and it is structural
+
+Confirmed on a real browser (Brave, 2026-08-29) with a screenshot: a passkey sign-in on a **locked**
+vault opens our unlock popup; the user unlocks with a **security key**; the pauser detaches; the
+page's in-flight request dies with `AbortError`, and every WebAuthn call for the rest of that
+window (PIN entry can take 30 seconds) goes to the platform authenticator instead. The observed
+result was **Chromium's own WebAuthn sheet** taking the request over, listing the OS-level
+providers it knows about (iCloud Keychain, phone or tablet) and not Bramble, while Bramble sat in
+its popup asking for a security-key PIN.
+
+The three requirements genuinely conflict:
+
+1. Serving a page's passkey request needs the proxy **attached**.
+2. Bramble's own security-key unlock needs the proxy **detached** (see above: our origin is not
+   exempt).
+3. Serving a request from a locked vault **requires an unlock**, which may be a security-key unlock.
+
+There is no passthrough in this API, so nothing can satisfy all three. Whatever we do, a
+security-key unlock triggered by a provider ceremony cannot complete that same ceremony. The
+options are to avoid the combination (steer the ceremony's unlock away from the security key when
+another method exists), or to fail the page's request cleanly and early so the site shows a real
+error instead of the user watching it silently reroute. Both, ideally.
+
+Note this hole is not unique to Bramble: any provider on this API that authenticates its own unlock
+with WebAuthn has it. It is the price of all-or-nothing interception.
+
+**Not covered, still manual:** whether Chrome destroys the toolbar popup when its own WebAuthn
+dialog takes focus. Device testing (2026-08-29) found the toolbar popup **survives** the dialog and
+in fact cannot be dismissed during the ceremony, and Vivaldi's dialog forces cancel-or-proceed, so
+the stranded-RESUME path looks hard to reach in practice. Left pinned as a HOLE test rather than
+driving a rewrite.
+
 ## Cross-cutting decisions
 
 - **`signCount` = 0, always.** The spec permits it and synced passkeys require it: a real counter
@@ -363,8 +453,23 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
   (SPKI DER). Note `publicKey` is marked *optional* in the W3C spec but Chrome's proxy requires it
   anyway, so the Rust core returns the SPKI alongside the attestation object. The assertion response
   needs `clientDataJSON`, `authenticatorData`, `signature`, and `userHandle` (null when absent).
-- **Algorithms.** Support ES256 (COSE -7) at minimum; add Ed25519 (-8) and RS256 (-257) as RP demand
-  shows. `passkey-rs` covers the common set.
+- **Algorithms. We MINT ES256 only, and ASSERT ES256 or Ed25519.** The split is deliberate.
+  Ed25519 (COSE -8) landed because KeePassXC prefers it whenever a relying party offers it, so
+  importing its passkeys needs a core that can sign with one; see docs/passkey-import.md. Minting
+  stays ES256 because nothing asks us for anything else and every create-path gate (the proxy's
+  `pubKeyCredParams` check, iOS's `.ES256` guard, Android's `-7` scan) is one fewer thing to get
+  wrong. RS256 (-257) is unimplemented and would need a different key shape entirely.
+  Ed25519 assertion is **device-verified on iOS and Android (2026-08-30)** as well as in the
+  extension, in both cases beside a freshly minted ES256 passkey to confirm the older path is
+  unaffected.
+- **A stored private key is 32 bytes for both algorithms**, so it cannot say which one owns it.
+  The credential's `alg` is what the signer dispatches on, and the core refuses an algorithm it
+  cannot sign for rather than defaulting: a wrong guess yields a signature the RP rejects, which
+  reads to the user as a corrupt passkey instead of a refusal. Import derives `alg` from the key's
+  own PKCS#8 OID and never from anything the file declares.
+- **Version skew fails closed.** A peer running an older build that receives an Ed25519 passkey
+  over sync will try to sign it as P-256 and produce a signature the relying party rejects. The
+  stored credential is unharmed, and the same passkey works again from any updated device.
 
 ## Security notes
 

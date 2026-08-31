@@ -653,6 +653,7 @@ checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
  "signature",
+ "zeroize",
 ]
 
 [[package]]
@@ -2595,6 +2596,7 @@ dependencies = [
  "chacha20",
  "ciborium",
  "coset",
+ "ed25519",
  "ed25519-dalek",
  "flate2",
  "getrandom 0.2.17",

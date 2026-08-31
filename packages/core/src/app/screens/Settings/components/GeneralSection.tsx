@@ -42,6 +42,9 @@ export function GeneralSection() {
 	const canSaveCapture = useCan("saveCapture");
 	const { entries } = useVault();
 	const { t } = useLingui();
+	// Turning the passkey provider on can fail in the background (another extension already holds
+	// the browser's WebAuthn proxy), so the switch reverts and says why.
+	const [passkeyProviderError, setPasskeyProviderError] = useState<string | null>(null);
 
 	// The current vault's name, edited inline. rename() only ever touches the active vault.
 	const { vaults, activeId, rename } = useVaultRegistry();
@@ -231,16 +234,29 @@ export function GeneralSection() {
 					title={t`Use Bramble for passkeys`}
 					subtitle={t`Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser.`}
 				>
-					<Toggle
-						checked={prefs.passkeyProviderEnabled}
-						onChange={(enabled) =>
-							void (async () => {
-								await update("passkeyProviderEnabled", enabled);
-								await shell.setPasskeyProviderEnabled?.(enabled);
-							})()
-						}
-						label={t`Toggle Bramble passkey provider`}
-					/>
+					<div className="flex flex-col items-end gap-1">
+						<Toggle
+							checked={prefs.passkeyProviderEnabled}
+							onChange={(enabled) =>
+								void (async () => {
+									setPasskeyProviderError(null);
+									await update("passkeyProviderEnabled", enabled);
+									try {
+										await shell.setPasskeyProviderEnabled?.(enabled);
+									} catch (e) {
+										// The pref is persisted first, so put it back: leaving it on would attach
+										// on the next startup without the user having asked again.
+										await update("passkeyProviderEnabled", !enabled);
+										setPasskeyProviderError(e instanceof Error ? e.message : String(e));
+									}
+								})()
+							}
+							label={t`Toggle Bramble passkey provider`}
+						/>
+						{passkeyProviderError && (
+							<span className="text-xs text-red-500 text-right">{passkeyProviderError}</span>
+						)}
+					</div>
 				</Row>
 			)}
 

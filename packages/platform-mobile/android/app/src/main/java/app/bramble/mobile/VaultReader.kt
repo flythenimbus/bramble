@@ -31,6 +31,8 @@ class StoredPasskey(
     val userName: String,
     val userHandle: String,
     val privateKey: String,
+    /** COSE algorithm. Defaulted to ES256 for records written before imports could be EdDSA. */
+    val alg: Int,
 )
 
 // Reads and decrypts the real VLT1 vault the webview manages. The service runs in our own
@@ -166,6 +168,7 @@ object VaultReader {
                         userName = pk.optString("userName", ""),
                         userHandle = pk.optString("userHandle", ""),
                         privateKey = privateKey,
+                        alg = pk.optInt("alg", -7),
                     )
                 )
             }
@@ -203,6 +206,7 @@ object VaultReader {
                         userName = pk.optString("userName", ""),
                         userHandle = pk.optString("userHandle", ""),
                         privateKey = privateKey,
+                        alg = pk.optInt("alg", -7),
                     )
                 )
             } catch (e: Exception) {

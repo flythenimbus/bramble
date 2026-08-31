@@ -185,9 +185,15 @@ export function isProviderEnabled(): boolean {
 	return providerEnabled;
 }
 
+// Set once the user has toggled explicitly, so a slower startup read cannot overwrite the newer
+// choice. Belt and braces alongside folding the load into `hydrated`: this holds even if some
+// future caller reads the pref off the hydration path.
+let flagSetExplicitly = false;
+
 /** Load the persisted pref into the in-memory flag (called once at startup). */
 export async function loadProviderEnabled(): Promise<void> {
-	providerEnabled = await getPasskeyProviderEnabled();
+	const stored = await getPasskeyProviderEnabled();
+	if (!flagSetExplicitly) providerEnabled = stored;
 }
 
 // The delivery-specific side effect of toggling (Chrome: attach/detach; Firefox: none).
@@ -211,7 +217,17 @@ on("PASSKEY_PROMPT_RESPONSE", async (message) => {
 // both deliveries; the hook does the Chrome-only attach/detach.
 on("PASSKEY_PROVIDER_SET_ENABLED", async (message) => {
 	const { enabled } = (message.payload ?? {}) as { enabled?: boolean };
+	const previous = providerEnabled;
 	providerEnabled = !!enabled;
-	await applyHook(!!enabled);
+	flagSetExplicitly = true;
+	try {
+		await applyHook(!!enabled);
+	} catch (e) {
+		// Chrome's attach() can fail outright when another extension holds the proxy. Restore the
+		// old value rather than reordering the assignment, because Firefox's hook is a no-op and
+		// the flag alone is what gates its transport there.
+		providerEnabled = previous;
+		throw e;
+	}
 	return { ok: true, data: null };
 });

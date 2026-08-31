@@ -302,7 +302,13 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		guard let pkcs8 = str(call, "pkcs8B64") else { return }
 		do {
 			let imported = try App.passkeyImportPkcs8(pkcs8B64: pkcs8)
-			call.resolve(["privateKey": imported.privateKey, "publicKeyCose": imported.publicKeyCose])
+			// `alg` is not optional: the entry schema requires it, and a passkey missing it is
+			// dropped along with its whole login on import.
+			call.resolve([
+				"privateKey": imported.privateKey,
+				"publicKeyCose": imported.publicKeyCose,
+				"alg": Int(imported.alg),
+			])
 		} catch { fail(call, error) }
 	}
 

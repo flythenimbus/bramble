@@ -720,7 +720,7 @@ mod wasm_exports {
         serde_wasm_bindgen::to_value(&reg).map_err(|e| err(format!("serialize: {e}")))
     }
 
-    /// Convert a base64 P-256 PKCS#8 key into Bramble's scalar and ES256 COSE key.
+    /// Convert a base64 PKCS#8 key into Bramble's stored secret, COSE public key, and alg.
     #[wasm_bindgen]
     pub fn passkey_import_pkcs8(pkcs8_b64: String) -> Result<JsValue, CryptoError> {
         let imported = crate::passkey::passkey_import_pkcs8_core(&pkcs8_b64)?;
@@ -732,12 +732,14 @@ mod wasm_exports {
     pub fn passkey_get_assertion(
         rp_id: String,
         private_key_b64: String,
+        alg: i32,
         client_data_hash_b64: String,
         user_verified: bool,
     ) -> Result<JsValue, CryptoError> {
         let a = crate::passkey::passkey_get_assertion_core(
             &rp_id,
             &private_key_b64,
+            alg,
             &client_data_hash_b64,
             user_verified,
         )?;
@@ -819,7 +821,7 @@ mod ffi_exports {
         crate::passkey::passkey_make_credential_core(&rp_id, user_verified)
     }
 
-    /// Convert a standard-base64 P-256 PKCS#8 private key into stored key material.
+    /// Convert a standard-base64 PKCS#8 private key into stored key material plus its alg.
     #[cfg_attr(feature = "ffi", uniffi::export)]
     pub fn passkey_import_pkcs8(
         pkcs8_b64: String,
@@ -832,12 +834,14 @@ mod ffi_exports {
     pub fn passkey_get_assertion(
         rp_id: String,
         private_key_b64: String,
+        alg: i32,
         client_data_hash_b64: String,
         user_verified: bool,
     ) -> Result<crate::passkey::PasskeyAssertion, CryptoError> {
         crate::passkey::passkey_get_assertion_core(
             &rp_id,
             &private_key_b64,
+            alg,
             &client_data_hash_b64,
             user_verified,
         )

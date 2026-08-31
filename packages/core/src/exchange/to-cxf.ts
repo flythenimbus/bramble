@@ -8,6 +8,7 @@
 import type { CardEntryData, Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
 import { base64ToBase64Url, bytesToBase64Url } from "../util/bytes";
 import { parseTotp } from "../util/totp";
+import { COSE_ES256 } from "../vault/passkey";
 import { pkcs8FromScalar } from "./passkey-key";
 import {
 	CXF_VERSION,
@@ -65,6 +66,10 @@ function toUrls(urls: readonly string[]): string[] {
 
 /** Null when the stored key isn't a P-256 scalar we can express as PKCS#8. */
 function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
+	// pkcs8FromScalar wraps ANY 32 bytes in a P-256 PKCS#8 prefix, and an Ed25519 seed is also
+	// 32 bytes, so without this gate an imported EdDSA passkey would export as a corrupt P-256
+	// key that decodes fine and then verifies against nothing. Skipping is warned about upstream.
+	if (p.alg !== COSE_ES256) return null;
 	// CXF's `key` is PKCS#8 DER; we store the bare 32-byte scalar. Sending the scalar as-is
 	// decodes cleanly on the far side and then fails when the importer tries to USE it, which
 	// is what "contains unsupported data" looks like from the user's end.

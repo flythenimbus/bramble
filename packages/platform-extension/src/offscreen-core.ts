@@ -429,7 +429,13 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 		}
 		case "CRYPTO_PASSKEY_GET": {
 			const p = CryptoPasskeyGetSchema.parse(payload);
-			return a.passkeyGetAssertion(p.rpId, p.privateKeyB64, p.clientDataHashB64, p.userVerified);
+			return a.passkeyGetAssertion(
+				p.rpId,
+				p.privateKeyB64,
+				p.alg,
+				p.clientDataHashB64,
+				p.userVerified,
+			);
 		}
 		case "CRYPTO_PASSKEY_IMPORT_PKCS8": {
 			const p = CryptoPasskeyImportPkcs8Schema.parse(payload);

@@ -62,6 +62,8 @@ interface PasskeyIdentity {
 // the native side and the Rust core both consume verbatim.
 interface StoredPasskey extends PasskeyIdentity {
 	privateKey: string;
+	/** COSE algorithm. Required by the signer: 32 bytes cannot say which primitive owns them. */
+	alg: number;
 }
 
 interface AutofillBridgePlugin {
@@ -145,6 +147,7 @@ export const mobileAutofill: AutofillAdapter = {
 					userName: p.userName ?? "",
 					userHandle: p.userHandle,
 					privateKey: p.privateKey,
+					alg: p.alg,
 				});
 			}
 		}

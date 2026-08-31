@@ -42,6 +42,9 @@ private struct Passkey: Decodable {
 	let userName: String
 	let userHandle: String
 	let privateKey: String
+	/// Optional so a bundle written before imported passkeys existed still decodes; those are
+	/// all ES256, which is what the call site defaults to.
+	let alg: Int?
 }
 
 // A passkey sign-in (get) the OS asked us to satisfy, captured so the post-unlock path can
@@ -615,7 +618,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		guard let credID = Data(base64Encoded: pk.credentialId),
 			let userHandle = Data(base64Encoded: pk.userHandle),
 			let assertion = try? passkeyGetAssertion(
-				rpId: pk.rpId, privateKeyB64: pk.privateKey,
+				rpId: pk.rpId, privateKeyB64: pk.privateKey, alg: Int32(pk.alg ?? -7),
 				clientDataHashB64: clientDataHash.base64EncodedString(), userVerified: userVerified),
 			let authData = Data(base64Encoded: assertion.authenticatorData),
 			let sig = Data(base64Encoded: assertion.signature)
@@ -714,12 +717,14 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	@available(iOS 17.0, *)
 	private func appendToPasskeyBundle(_ reg: PasskeyRegistration, req: PasskeyCreate) {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		var list: [[String: String]] = []
+		// [String: Any], not [String: String]: `alg` is a number, and the stricter cast would
+		// return nil for a bundle containing one, silently dropping every passkey already in it.
+		var list: [[String: Any]] = []
 		if let data = defaults?.data(forKey: BrambleVault.passkeyBundleKey),
 			let d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
 			let iv = d["iv"] as? String, let ct = d["ciphertext"] as? String,
 			let json = try? decryptWithVek(ivB64: iv, ciphertextB64: ct),
-			let existing = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [[String: String]]
+			let existing = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [[String: Any]]
 		{
 			list = existing
 		}
@@ -729,6 +734,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			"userName": req.userName,
 			"userHandle": req.userHandle.base64EncodedString(),
 			"privateKey": reg.privateKey,
+			// We only ever mint ES256; imported EdDSA passkeys reach this bundle from the main
+			// app's setIndex rebuild, not from here.
+			"alg": -7,
 		])
 		guard let plain = try? JSONSerialization.data(withJSONObject: list),
 			let str = String(data: plain, encoding: .utf8),

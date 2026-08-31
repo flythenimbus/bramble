@@ -8,7 +8,7 @@
 
 import { api } from "../platform-api";
 import { on, whenReady } from "./router";
-import { productionDeps, setProviderApplyHook } from "./webauthn-provider";
+import { isProviderEnabled, productionDeps, setProviderApplyHook } from "./webauthn-provider";
 import { handleCreate, handleGet } from "./webauthn-proxy";
 
 // The proxy events carry no origin/tab, but WebAuthn requires a focused top-level
@@ -28,16 +28,44 @@ async function activeTabOrigin(): Promise<string | null> {
 // Pause the proxy while Bramble runs its OWN WebAuthn (security-key PRF) ceremony, so
 // attach()'s browser-wide interception doesn't hijack our unlock. The popup/options send
 // PAUSE before navigator.credentials and RESUME after (see webauthn-ceremony pauser).
-// Reentrant: createPrfCredential nests a get() inside create(), so count depth and only
-// detach/reattach at the edges. Firefox never fires this (security keys disabled there,
+// Depth-counted, but nothing nests today: createPrfCredential's create() and its fallback
+// get() are SEQUENTIAL, each with its own pause cycle (webauthn-ceremony.ts), so the depth
+// never exceeds 1. Firefox never fires this (security keys disabled there,
 // and the override doesn't touch the extension's own moz-extension origin). See
 // docs/passkey-provider.md.
 let pauseDepth = 0;
 let pausedWhileAttached = false;
 
+// Requests Chrome has handed us and we have not answered yet. Detaching kills them: measured,
+// the page gets a bare `AbortError` and onRequestCanceled never fires, so we would not otherwise
+// know. Answering first gives the site a reason, and clearing the map stops the ceremony from
+// walking the user through a picker for a request that no longer exists.
+const inFlight = new Map<number, "create" | "get">();
+
+async function failInFlightRequests(): Promise<void> {
+	if (typeof api.webAuthenticationProxy === "undefined" || inFlight.size === 0) return;
+	const pending = [...inFlight];
+	inFlight.clear();
+	for (const [requestId, kind] of pending) {
+		const details = {
+			requestId,
+			error: {
+				name: "NotAllowedError",
+				message: "Bramble paused passkey handling to unlock its own vault. Try again.",
+			},
+		};
+		const done =
+			kind === "create"
+				? api.webAuthenticationProxy.completeCreateRequest(details)
+				: api.webAuthenticationProxy.completeGetRequest(details);
+		await done.catch(() => {});
+	}
+}
+
 on("PASSKEY_PROXY_PAUSE", async () => {
 	if (pauseDepth === 0 && attached) {
 		pausedWhileAttached = true;
+		await failInFlightRequests();
 		await detachWebauthnProxy();
 	}
 	pauseDepth++;
@@ -48,7 +76,9 @@ on("PASSKEY_PROXY_RESUME", async () => {
 	if (pauseDepth > 0) pauseDepth--;
 	if (pauseDepth === 0 && pausedWhileAttached) {
 		pausedWhileAttached = false;
-		await initWebauthnProxy();
+		// Re-check the pref: the user can toggle the provider off mid-ceremony, and the toggle's
+		// own detach is a no-op while we are already paused-detached.
+		if (isProviderEnabled()) await initWebauthnProxy();
 	}
 	return { ok: true, data: null };
 });
@@ -71,6 +101,7 @@ function registerListeners(): void {
 		});
 	});
 	api.webAuthenticationProxy.onCreateRequest.addListener((req) => {
+		inFlight.set(req.requestId, "create");
 		void (async () => {
 			// These listeners bypass the message router, so await hydration ourselves: on a
 			// fresh SW wake the session VEK is restored asynchronously, and reading lock state
@@ -83,6 +114,8 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
+			// Gone means a pause already failed it; completing again throws "Invalid sender".
+			if (!inFlight.delete(req.requestId)) return;
 			try {
 				await api.webAuthenticationProxy.completeCreateRequest(details);
 			} catch (e) {
@@ -99,6 +132,7 @@ function registerListeners(): void {
 		})();
 	});
 	api.webAuthenticationProxy.onGetRequest.addListener((req) => {
+		inFlight.set(req.requestId, "get");
 		void (async () => {
 			await whenReady(); // as in onCreateRequest: don't read lock state before hydration
 			const origin = await activeTabOrigin();
@@ -108,6 +142,7 @@ function registerListeners(): void {
 						requestId: req.requestId,
 						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
 					};
+			if (!inFlight.delete(req.requestId)) return; // as in onCreateRequest
 			try {
 				await api.webAuthenticationProxy.completeGetRequest(details);
 			} catch (e) {
@@ -123,14 +158,28 @@ function registerListeners(): void {
 	});
 }
 
+// Registered at module scope rather than from the attach path, and this is load-bearing: the
+// ATTACHMENT outlives the service worker but these listeners do not, and a request that arrives
+// before they exist is dropped permanently (not queued, and no fallback to the platform
+// authenticator), so the page hangs until its own timeout. Reaching registration only after an
+// async pref read left that window open on every worker wake. Listeners without an attach are
+// inert, so registering unconditionally costs nothing. See docs/passkey-provider.md.
+registerListeners();
+
 /**
- * Attach the proxy (registering listeners once). Gated behind a Settings pref (default
- * off): attach() intercepts ALL browser WebAuthn, including Bramble's own security-key
- * unlock, which is why we pause around our own ceremonies. End-to-end needs a real Chrome.
+ * Attach the proxy. Gated behind a Settings pref (default off): attach() intercepts ALL browser
+ * WebAuthn, including Bramble's own security-key unlock, which is why we pause around our own
+ * ceremonies. Idempotent in Chrome (a redundant attach returns no error). Needs a real Chrome
+ * end-to-end.
  */
 export async function initWebauthnProxy(): Promise<void> {
 	if (typeof api.webAuthenticationProxy === "undefined") return; // Firefox: no proxy API
-	registerListeners();
+	// A ceremony is mid-flight (startup racing a PAUSE, or the toggle flipped on during one):
+	// attaching now would intercept our own security-key tap. Defer to the matching RESUME.
+	if (pauseDepth > 0) {
+		pausedWhileAttached = true;
+		return;
+	}
 	if (attached) return;
 	const err = await api.webAuthenticationProxy.attach();
 	if (err) throw new Error(`webAuthenticationProxy.attach failed: ${err}`);

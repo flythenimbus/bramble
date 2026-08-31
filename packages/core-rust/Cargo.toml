@@ -90,7 +90,11 @@ ciborium = "0.2"
 # --- Roster entry signing (Ed25519 device keys) for authenticated sync-roster
 # mutations (Item A), both layers. from_bytes seed keygen (no rng feature needed;
 # getrandom above supplies the seed). See docs/p2p-sync-revocation-hardening.md. ---
-ed25519-dalek = { version = "2", default-features = false, features = ["alloc", "zeroize"] }
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc", "zeroize", "pkcs8"] }
+# Named directly only to turn on its `zeroize`: dalek's `pkcs8` feature is exactly
+# ["ed25519/pkcs8"] and does not forward zeroize, so without this the 32-byte seed inside
+# `KeypairBytes` is not wiped on drop when importing an Ed25519 passkey.
+ed25519 = { version = "2", default-features = false, features = ["alloc", "pkcs8", "zeroize"] }
 
 # --- KDBX4 import (both layers: import runs in the main app) ---
 aes = "0.8"
@@ -112,3 +116,10 @@ strip = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
+# Dependencies are optimised even in dev builds. Argon2 is the reason: opening a default
+# KeePassXC database (64 MiB, 106 rounds) costs ~51s unoptimised against ~3s optimised, which
+# made `tauri dev` look broken and dominated `cargo test`. Only dependencies are affected, so
+# this crate still compiles fast, and release output is unchanged.
+[profile.dev.package."*"]
+opt-level = 2

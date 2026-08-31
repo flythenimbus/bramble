@@ -36,10 +36,13 @@ export interface PasskeyRegistration {
 	publicKey: string;
 }
 
-/** P-256 PKCS#8 key material converted to Bramble's stored representation. All base64. */
+/** PKCS#8 key material converted to Bramble's stored representation. All base64. */
 export interface PasskeyImportResult {
+	/** 32 bytes either way: a P-256 scalar for ES256, an Ed25519 seed for EdDSA. */
 	privateKey: string;
 	publicKeyCose: string;
+	/** COSE algorithm, read from the key's own OID. Store it: the bytes above can't say. */
+	alg: number;
 }
 
 /** A passkey assertion: the two parts that require the private key. All base64. */
@@ -167,6 +170,8 @@ export interface CryptoAdapter {
 	passkeyGetAssertion(
 		rpId: string,
 		privateKeyB64: string,
+		/** The credential's stored `alg`. The core refuses one it can't sign for. */
+		alg: number,
 		clientDataHashB64: string,
 		userVerified: boolean,
 	): Promise<PasskeyAssertion>;

@@ -27,7 +27,7 @@
       <Entry>
         <String><Key>Title</Key><Value>Amazon</Value></String>
         <String><Key>UserName</Key><Value>jdoe-shopping@example.com</Value></String>
-        <String><Key>Password</Key><Value ProtectInMemory="True">Pr1me-Sh1pping!2024</Value></String>
+        <String><Key>Password</Key><Value ProtectInMemory="True">P@ssw&amp;rd&lt;1&gt;&quot;2&quot;&apos;3&apos;&#38;4</Value></String>
         <String><Key>URL</Key><Value>https://www.amazon.com</Value></String>
         <String><Key>Notes</Key><Value>Shopping; card on file.</Value></String>
       </Entry>

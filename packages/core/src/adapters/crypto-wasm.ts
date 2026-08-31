@@ -144,10 +144,11 @@ export function buildCryptoAdapter(
 		async passkeyImportPkcs8(pkcs8B64) {
 			return (await getWasm()).passkey_import_pkcs8(pkcs8B64);
 		},
-		async passkeyGetAssertion(rpId, privateKeyB64, clientDataHashB64, userVerified) {
+		async passkeyGetAssertion(rpId, privateKeyB64, alg, clientDataHashB64, userVerified) {
 			return (await getWasm()).passkey_get_assertion(
 				rpId,
 				privateKeyB64,
+				alg,
 				clientDataHashB64,
 				userVerified,
 			);

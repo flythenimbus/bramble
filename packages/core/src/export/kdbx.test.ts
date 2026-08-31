@@ -3,10 +3,15 @@ import type { EntryData } from "../hooks/useVault";
 import { kdbxEntriesToResult } from "../import/kdbx";
 import { toKdbxEntries } from "./kdbx";
 
+/** No KeePass fixture here carries a passkey, so reaching the crypto bridge is itself a bug. */
+const noPasskeys = {
+	passkeyImportPkcs8: () => Promise.reject(new Error("no passkey expected in this test")),
+};
+
 /** Export then re-import through the real KDBX import path, which is what a user
  * moving a file between Bramble installs actually goes through. */
-const roundTrip = (e: EntryData): EntryData => {
-	const [back] = kdbxEntriesToResult(toKdbxEntries([e])).imported;
+const roundTrip = async (e: EntryData): Promise<EntryData> => {
+	const [back] = (await kdbxEntriesToResult(toKdbxEntries([e]), noPasskeys)).imported;
 	if (!back) throw new Error("nothing re-imported");
 	return back;
 };
@@ -29,7 +34,7 @@ const login = (over: Partial<Extract<EntryData, { type: "login" }>> = {}): Entry
 });
 
 describe("toKdbxEntries: logins", () => {
-	it("maps the standard KeePass fields and protects only the password", () => {
+	it("maps the standard KeePass fields and protects only the password", async () => {
 		const e = login({ notes: "a note" });
 		expect(value(e, "Title")).toBe("GitHub");
 		expect(value(e, "UserName")).toBe("octocat");
@@ -40,7 +45,7 @@ describe("toKdbxEntries: logins", () => {
 		expect(isProtected(e, "Title")).toBe(false);
 	});
 
-	it("keeps extra URLs as numbered fields rather than dropping them", () => {
+	it("keeps extra URLs as numbered fields rather than dropping them", async () => {
 		// KeePass 2.x has one URL per entry; a multi-site credential must not lose the rest.
 		const e = login({ urls: ["https://a.com", "https://b.com", "https://c.com"] });
 		expect(value(e, "URL")).toBe("https://a.com");
@@ -48,7 +53,7 @@ describe("toKdbxEntries: logins", () => {
 		expect(value(e, "URL 3")).toBe("https://c.com");
 	});
 
-	it("writes an otpauth URI to `otp` and a bare secret to `TOTP Seed`", () => {
+	it("writes an otpauth URI to `otp` and a bare secret to `TOTP Seed`", async () => {
 		const uri = login({ totp: "otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP" });
 		expect(value(uri, "otp")).toBe("otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP");
 		expect(value(uri, "TOTP Seed")).toBeUndefined();
@@ -59,7 +64,7 @@ describe("toKdbxEntries: logins", () => {
 		expect(isProtected(bare, "TOTP Seed")).toBe(true);
 	});
 
-	it("omits fields with no value", () => {
+	it("omits fields with no value", async () => {
 		const keys = fields(login({ urls: [] })).map((s) => s.key);
 		expect(keys).not.toContain("URL");
 		expect(keys).not.toContain("Notes");
@@ -69,21 +74,21 @@ describe("toKdbxEntries: logins", () => {
 describe("toKdbxEntries: tags", () => {
 	// Comma-joined into a single pair, which the Rust writer lifts into KeePass's own
 	// <Tags> element so other clients read them as tags rather than a custom field.
-	it("joins tags with commas, KeePass's own separator", () => {
+	it("joins tags with commas, KeePass's own separator", async () => {
 		expect(value(login({ tags: ["work", "bank"] }), "Tags")).toBe("work,bank");
 	});
 
-	it("leaves the pair off an untagged entry", () => {
+	it("leaves the pair off an untagged entry", async () => {
 		expect(value(login(), "Tags")).toBeUndefined();
 		expect(value(login({ tags: [] }), "Tags")).toBeUndefined();
 	});
 
-	it("is not protected: a tag is not a secret", () => {
+	it("is not protected: a tag is not a secret", async () => {
 		expect(isProtected(login({ tags: ["work"] }), "Tags")).toBe(false);
 	});
 
-	it("round-trips back to tags rather than a custom field", () => {
-		const back = roundTrip(login({ tags: ["work", "bank"] }));
+	it("round-trips back to tags rather than a custom field", async () => {
+		const back = await roundTrip(login({ tags: ["work", "bank"] }));
 		expect(back.tags).toEqual(["work", "bank"]);
 		expect(back.customFields?.some((f) => f.key === "Tags")).toBeFalsy();
 	});
@@ -93,23 +98,23 @@ describe("toKdbxEntries: archived entries", () => {
 	// KeePass has no archived state and this writer emits a flat list, so the state rides
 	// as a String field rather than a recycle-bin group. Exported, not dropped: a .kdbx is
 	// a backup, and silently losing the archive would be worse than losing the label.
-	it("writes an ISO date for an archived entry", () => {
+	it("writes an ISO date for an archived entry", async () => {
 		expect(value(login({ archivedAt: Date.UTC(2026, 1, 3, 4, 5, 6) }), "Archived")).toBe(
 			"2026-02-03T04:05:06.000Z",
 		);
 	});
 
-	it("leaves the field off a live entry", () => {
+	it("leaves the field off a live entry", async () => {
 		expect(value(login(), "Archived")).toBeUndefined();
 	});
 
-	it("is not protected: it is a date, not a secret", () => {
+	it("is not protected: it is a date, not a secret", async () => {
 		expect(isProtected(login({ archivedAt: 1 }), "Archived")).toBe(false);
 	});
 });
 
 describe("toKdbxEntries: non-login types", () => {
-	it("writes card fields, protecting the number and CVV", () => {
+	it("writes card fields, protecting the number and CVV", async () => {
 		const e: EntryData = {
 			type: "card",
 			name: "Personal Visa",
@@ -128,7 +133,7 @@ describe("toKdbxEntries: non-login types", () => {
 		expect(isProtected(e, "Brand")).toBe(false);
 	});
 
-	it("writes SSH key fields, protecting the private key and passphrase", () => {
+	it("writes SSH key fields, protecting the private key and passphrase", async () => {
 		const e: EntryData = {
 			type: "ssh-key",
 			name: "Deploy key",
@@ -143,14 +148,14 @@ describe("toKdbxEntries: non-login types", () => {
 		expect(isProtected(e, "Public Key")).toBe(false);
 	});
 
-	it("reduces a note to Title plus Notes", () => {
+	it("reduces a note to Title plus Notes", async () => {
 		const e: EntryData = { type: "note", name: "Wi-Fi", notes: "SSID: Nimbus" };
 		expect(fields(e).map((s) => s.key)).toEqual(["Title", "Notes"]);
 	});
 });
 
 describe("toKdbxEntries: custom fields", () => {
-	it("carries custom fields and maps hidden to protected", () => {
+	it("carries custom fields and maps hidden to protected", async () => {
 		const e = login({
 			customFields: [
 				{ key: "Recovery email", value: "backup@example.com" },
@@ -162,7 +167,7 @@ describe("toKdbxEntries: custom fields", () => {
 		expect(isProtected(e, "Recovery email")).toBe(false);
 	});
 
-	it("suffixes a custom field that would shadow a standard KeePass key", () => {
+	it("suffixes a custom field that would shadow a standard KeePass key", async () => {
 		// Two <String>s sharing a <Key> is malformed, and dropping the value is worse.
 		const e = login({ customFields: [{ key: "Password", value: "not-the-real-one" }] });
 		expect(value(e, "Password")).toBe("pw");
@@ -170,7 +175,7 @@ describe("toKdbxEntries: custom fields", () => {
 		expect(fields(e).filter((s) => s.key === "Password")).toHaveLength(1);
 	});
 
-	it("keeps two identically-named custom fields distinct", () => {
+	it("keeps two identically-named custom fields distinct", async () => {
 		const e = login({
 			customFields: [
 				{ key: "Note", value: "first" },
@@ -183,7 +188,7 @@ describe("toKdbxEntries: custom fields", () => {
 });
 
 describe("export/import agree", () => {
-	it("round-trips a login through the KeePass field mapper", () => {
+	it("round-trips a login through the KeePass field mapper", async () => {
 		const original = login({
 			name: "GitHub",
 			username: "octocat@example.com",
@@ -194,7 +199,7 @@ describe("export/import agree", () => {
 			customFields: [{ key: "Recovery email", value: "backup@example.com" }],
 		});
 
-		const back = roundTrip(original);
+		const back = await roundTrip(original);
 
 		expect(back).toMatchObject({
 			type: "login",
@@ -208,7 +213,7 @@ describe("export/import agree", () => {
 		expect(back.customFields).toEqual([{ key: "Recovery email", value: "backup@example.com" }]);
 	});
 
-	it("re-imports a card as a login carrying its fields (KeePass has no card type)", () => {
+	it("re-imports a card as a login carrying its fields (KeePass has no card type)", async () => {
 		const card: EntryData = {
 			type: "card",
 			name: "Personal Visa",
@@ -219,7 +224,7 @@ describe("export/import agree", () => {
 			cvv: "123",
 		};
 
-		const back = roundTrip(card);
+		const back = await roundTrip(card);
 
 		expect(back.type).toBe("login");
 		expect(back.name).toBe("Personal Visa");

@@ -373,9 +373,12 @@ export async function handleGet(
 
 		const clientData = buildClientData("webauthn.get", opts.challenge, origin);
 		const clientDataHash = await deps.sha256(clientData.bytes);
+		// The stored alg travels with the key: 32 bytes alone cannot say whether they are a
+		// P-256 scalar or an Ed25519 seed, and the core refuses an alg it can't sign for.
 		const assertion = await deps.crypto.passkeyGetAssertion(
 			rpId,
 			chosen.passkey.privateKey,
+			chosen.passkey.alg,
 			clientDataHash,
 			decision.userVerified,
 		);
