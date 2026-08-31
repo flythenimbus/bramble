@@ -329,10 +329,13 @@ class NativeCryptoPlugin : Plugin() {
         val pkcs8 = str(call, "pkcs8B64") ?: return
         call.runCrypto {
             val imported = uniffi.vault_crypto.passkeyImportPkcs8(pkcs8)
+            // `alg` is not optional: the entry schema requires it, and a passkey missing it is
+            // dropped along with its whole login on import.
             call.resolve(
                 JSObject()
                     .put("privateKey", imported.privateKey)
                     .put("publicKeyCose", imported.publicKeyCose)
+                    .put("alg", imported.alg)
             )
         }
     }
