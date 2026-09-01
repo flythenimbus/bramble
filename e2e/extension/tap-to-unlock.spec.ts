@@ -56,7 +56,7 @@ test("a security key still registers after platform keys moved to a shared rpID"
 	context,
 	extensionId,
 }) => {
-	// Regression guard for the rpID split: platform keys register under bramble.app, security
+	// Regression guard for the rpID split: platform keys register under bramble.sh, security
 	// keys deliberately stayed on the implicit extension-id rpID. Moving them would silently
 	// invalidate every already-registered YubiKey.
 	const setup = await context.newPage();

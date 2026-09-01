@@ -60,9 +60,9 @@ into both dist builds; every cell is a real ceremony, not an inference:
 | Host | rpID | Authenticator | Result |
 | --- | --- | --- | --- |
 | macOS, Chromium | implicit (extension id) | Apple Passwords | PRF ok, one tap, **synced** |
-| macOS, Firefox 154 | explicit `bramble.app` | Apple Passwords | PRF ok, one tap, **synced** |
+| macOS, Firefox 154 | explicit `bramble.sh` | Apple Passwords | PRF ok, one tap, **synced** |
 | Windows 11 25H2, Chromium | implicit (extension id) | Windows Hello | PRF ok, one tap, **device-bound** |
-| Windows 11 25H2, Firefox | explicit `bramble.app` | Windows Hello | PRF ok, one tap, **device-bound** |
+| Windows 11 25H2, Firefox | explicit `bramble.sh` | Windows Hello | PRF ok, one tap, **device-bound** |
 
 Unlike a security key, PRF is evaluated at create, so **registration is one tap**,
 not the two above. The secret is deterministic across create and get, as required.
@@ -106,7 +106,14 @@ exactly like an authenticator that does not support PRF.
 
 ### One rpID for platform keys, the implicit one for security keys
 
-Platform keys register under a **shared explicit rpID** (`bramble.app`) on BOTH browsers, so a
+The rpID is `bramble.sh` because that is the domain we own. WebAuthn does not verify ownership
+(no DNS or `.well-known` lookup happens for a plain `rp.id`), so an unowned domain works fine
+and this was briefly `bramble.app`, which we do not own. It would still have been wrong:
+password managers display the rpID to the user as the site a passkey belongs to, so every key
+would have shown a stranger's domain. The apex is used rather than a subdomain because an rpID
+can be narrowed later but never widened.
+
+Platform keys register under a **shared explicit rpID** (`bramble.sh`) on BOTH browsers, so a
 key registered in Chrome unlocks in Firefox: Apple Passwords syncs the credential and Windows
 Hello is an OS store both browsers reach, so a matching rpID was the only thing missing.
 Measured accepted on Chromium from a `chrome-extension://` origin, with PRF, 2026-08-31. This

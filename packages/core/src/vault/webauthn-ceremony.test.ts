@@ -82,10 +82,10 @@ describe("explicit rpID (Firefox)", () => {
 		// No PRF at create forces the second ceremony, which must target the same rpID.
 		const create = vi.fn(async () => credential({ prf: { enabled: true } }));
 		const api = stubCredentials({ create });
-		await createPrfCredential("Touch ID", { kind: "platform", rpId: "bramble.app" });
+		await createPrfCredential("Touch ID", { kind: "platform", rpId: "bramble.sh" });
 
-		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault", id: "bramble.app" });
-		expect(publicKeyArg(api.get).rpId).toBe("bramble.app");
+		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault", id: "bramble.sh" });
+		expect(publicKeyArg(api.get).rpId).toBe("bramble.sh");
 	});
 
 	it("omits rp.id entirely on Chromium, which must keep its implicit extension rpID", async () => {
@@ -98,17 +98,17 @@ describe("explicit rpID (Firefox)", () => {
 
 	it("uses the rpID the platform installed, so callers do not thread it", async () => {
 		const api = stubCredentials();
-		setWebauthnRpId("bramble.app");
+		setWebauthnRpId("bramble.sh");
 		await createPrfCredential("Touch ID", { kind: "platform" });
 
-		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault", id: "bramble.app" });
+		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault", id: "bramble.sh" });
 	});
 
 	it("leaves security keys on the implicit rpID even once a shared one is installed", async () => {
 		// Moving them would invalidate every already-registered key, and buys nothing: Firefox
 		// has no PRF for external keys, so there is no roaming to gain.
 		const api = stubCredentials();
-		setWebauthnRpId("bramble.app");
+		setWebauthnRpId("bramble.sh");
 		await createPrfCredential("YubiKey", { kind: "securityKey" });
 
 		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault" });
@@ -119,7 +119,7 @@ describe("explicit rpID (Firefox)", () => {
 			throw Object.assign(new Error("The operation is insecure."), { name: "SecurityError" });
 		});
 		stubCredentials({ create });
-		setWebauthnRpId("bramble.app");
+		setWebauthnRpId("bramble.sh");
 
 		await expect(createPrfCredential("Touch ID", { kind: "platform" })).rejects.toThrow(
 			/Chrome 122 or Firefox 150/,
@@ -140,10 +140,10 @@ describe("explicit rpID (Firefox)", () => {
 	it("passes rpId through getPrfSecret for unlock", async () => {
 		const api = stubCredentials();
 		await getPrfSecret([{ credentialId: new Uint8Array([9]) }], new Uint8Array(32), {
-			rpId: "bramble.app",
+			rpId: "bramble.sh",
 		});
 
-		expect(publicKeyArg(api.get).rpId).toBe("bramble.app");
+		expect(publicKeyArg(api.get).rpId).toBe("bramble.sh");
 	});
 });
 
@@ -245,7 +245,7 @@ describe("passkey-provider interception", () => {
 			}
 		});
 
-		await createPrfCredential("Touch ID", { kind: "platform", rpId: "bramble.app" });
+		await createPrfCredential("Touch ID", { kind: "platform", rpId: "bramble.sh" });
 
 		expect(order).toEqual(["pause", "resume", "pause", "resume"]);
 	});
@@ -295,19 +295,19 @@ describe("unlock failures across browsers", () => {
 
 describe("rpID selection", () => {
 	it("routes platform keys to the shared rpID and security keys to the implicit one", () => {
-		setWebauthnRpId("bramble.app");
-		expect(rpIdFor("platform")).toBe("bramble.app");
+		setWebauthnRpId("bramble.sh");
+		expect(rpIdFor("platform")).toBe("bramble.sh");
 		expect(rpIdFor("securityKey")).toBeUndefined();
 	});
 
 	it("tries the platform rpID first when this device registered a platform key", () => {
-		setWebauthnRpId("bramble.app");
-		expect(unlockRpIdOrder(true)).toEqual(["bramble.app", undefined]);
+		setWebauthnRpId("bramble.sh");
+		expect(unlockRpIdOrder(true)).toEqual(["bramble.sh", undefined]);
 	});
 
 	it("tries the implicit rpID first otherwise, so existing security-key users keep one prompt", () => {
-		setWebauthnRpId("bramble.app");
-		expect(unlockRpIdOrder(false)).toEqual([undefined, "bramble.app"]);
+		setWebauthnRpId("bramble.sh");
+		expect(unlockRpIdOrder(false)).toEqual([undefined, "bramble.sh"]);
 	});
 
 	it("never prompts twice for the same rpID when none is installed", () => {
@@ -332,11 +332,11 @@ describe("unlocking across both rpIDs", () => {
 	}
 
 	it("falls through to the second rpID and reports which one worked", async () => {
-		const get = getForRpId("bramble.app");
+		const get = getForRpId("bramble.sh");
 		stubCredentials({ get });
 
-		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
-		expect(r.rpId).toBe("bramble.app");
+		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.sh"]);
+		expect(r.rpId).toBe("bramble.sh");
 		expect(get).toHaveBeenCalledTimes(2);
 	});
 
@@ -344,7 +344,7 @@ describe("unlocking across both rpIDs", () => {
 		const get = getForRpId(undefined);
 		stubCredentials({ get });
 
-		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
+		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.sh"]);
 		expect(r.rpId).toBeUndefined();
 		expect(get).toHaveBeenCalledOnce();
 	});
@@ -352,10 +352,10 @@ describe("unlocking across both rpIDs", () => {
 	it("does not blame the user for an intermediate miss", async () => {
 		// The first rpID failing means "no credential here", not "you dismissed it". Surfacing
 		// that would accuse the user of cancelling a prompt they are about to be shown.
-		const get = getForRpId("bramble.app");
+		const get = getForRpId("bramble.sh");
 		stubCredentials({ get });
 
-		await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
+		await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.sh"]);
 		const firstCall = get.mock.calls[0]![0] as { publicKey: { rpId?: string } };
 		expect(firstCall.publicKey.rpId).toBeUndefined();
 	});
@@ -366,7 +366,7 @@ describe("unlocking across both rpIDs", () => {
 		});
 		stubCredentials({ get });
 
-		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"])).rejects.toThrow(
+		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.sh"])).rejects.toThrow(
 			/registered per browser/,
 		);
 		expect(get).toHaveBeenCalledTimes(2);
@@ -380,7 +380,7 @@ describe("unlocking across both rpIDs", () => {
 		});
 		stubCredentials({ get });
 
-		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"])).rejects.toThrow(
+		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.sh"])).rejects.toThrow(
 			/proxy detached/,
 		);
 		expect(get).toHaveBeenCalledOnce();

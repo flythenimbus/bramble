@@ -60,10 +60,17 @@ export const extensionTarget: Target =
 // Both browsers register PLATFORM keys (Touch ID / Windows Hello) under this shared rpID, so one
 // registration unlocks in either. Firefox additionally needs it because it rejects its own
 // moz-extension:// origin as an RP. Security keys are unaffected and keep Chromium's implicit
-// extension-id rpID; see rpIdFor(). Depends on bramble.app being covered by host_permissions
+// extension-id rpID; see rpIdFor(). Depends on bramble.sh being covered by host_permissions
 // (<all_urls> today) - narrowing that would break unlock. Needs Chrome M122+ / Firefox 150+.
-// See docs/security-keys.md.
-setWebauthnRpId("bramble.app");
+// bramble.sh because we OWN it. WebAuthn never verifies ownership of an rpID (there is no DNS or
+// .well-known lookup for a plain rp.id; the check is only "could an origin I have permission for
+// claim this"), so the earlier bramble.app worked despite belonging to someone else. It would
+// still have been wrong: password managers show the rpID to the user as the site a passkey
+// belongs to, so every Bramble key would have listed a stranger's domain. See docs/security-keys.md.
+//
+// The apex, not a subdomain: an rpID can be narrowed later but never widened, so this keeps the
+// door open for bramble.sh itself to share credentials one day.
+setWebauthnRpId("bramble.sh");
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {

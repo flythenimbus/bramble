@@ -356,7 +356,7 @@ hides — because registering throws **"The operation is insecure"**: the defaul
 `moz-extension://` origin, which Firefox rejects as a WebAuthn RP.
 
 **Platform-authenticator unlock is now measured working on Firefox** (2026-08-31, FF 154 on
-both macOS and Windows): explicit `rp.id: "bramble.app"` plus
+both macOS and Windows): explicit `rp.id: "bramble.sh"` plus
 `authenticatorAttachment: "platform"` and `residentKey: "required"` returns a PRF secret in one
 tap, from Apple Passwords and Windows Hello respectively. See
 [security-keys.md](security-keys.md) for the full matrix. External-key (YubiKey) unlock stays
@@ -366,7 +366,7 @@ What it would take, and why it stayed deferred (verified 2026-07, confirmed by m
 2026-08-31):
 
 - **The rpID error is fixable (Firefox 150+).** An extension can specify an explicit `rp.id` for any
-  domain in its `host_permissions` (`<all_urls>` covers any), so `rp.id: "bramble.app"` on Firefox is
+  domain in its `host_permissions` (`<all_urls>` covers any), so `rp.id: "bramble.sh"` on Firefox is
   accepted. Keep Chrome's *implicit* rpID (the extension origin) unchanged — changing it invalidates
   every already-registered Chrome user's key.
 - **The real blocker is PRF over external keys.** Firefox supports the PRF extension for **platform**
@@ -381,8 +381,8 @@ What it would take, and why it stayed deferred (verified 2026-07, confirmed by m
 - **Dead ends:** WebHID / WebUSB (raw CTAP2 would bypass the rpID) — Firefox implements neither.
 
 Plan, now confirmed by measurement: enable on FF 150+ as **platform-authenticator** PRF unlock
-(explicit `bramble.app` rpID, version-gated, Chrome untouched), leaving YubiKey unlock
-Chrome-only pending Firefox. The explicit rpID depends on `bramble.app` being covered by
+(explicit `bramble.sh` rpID, version-gated, Chrome untouched), leaving YubiKey unlock
+Chrome-only pending Firefox. The explicit rpID depends on `bramble.sh` being covered by
 `host_permissions`; the manifest ships `<all_urls>`, so narrowing that would break this path.
 
 ## Namespace: `chrome.*` vs `browser.*`
