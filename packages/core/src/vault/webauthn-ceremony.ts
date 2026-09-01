@@ -183,6 +183,37 @@ export async function getPrfSecret(
 }
 
 /**
+ * Unlock across both rpIDs. A vault can hold platform slots (shared rpID) and security-key slots
+ * (implicit rpID) at once, and the vault file does not record which is which, so the wrong guess
+ * has to be survivable rather than fatal.
+ *
+ * Only the LAST candidate may report failure. An earlier one failing means "no credential for
+ * this rpID", which is not something to tell the user about when another prompt is coming. Any
+ * error that is not NotAllowedError is a real fault (the passkey proxy, a dead authenticator) and
+ * is rethrown immediately rather than burning the user's second prompt on it.
+ */
+export async function getPrfSecretAcrossRpIds(
+	allow: { credentialId: Uint8Array }[],
+	salt: Uint8Array,
+	candidates: (string | undefined)[],
+): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array; rpId: string | undefined }> {
+	let lastError: unknown;
+	for (let i = 0; i < candidates.length; i++) {
+		const rpId = candidates[i];
+		const isLast = i === candidates.length - 1;
+		try {
+			const got = await getPrfSecret(allow, salt, { rpId, forUnlock: isLast });
+			return { ...got, rpId };
+		} catch (e) {
+			if (isLast) throw e;
+			if ((e as { name?: string })?.name !== "NotAllowedError") throw e;
+			lastError = e;
+		}
+	}
+	throw lastError ?? new Error("No rpID to try.");
+}
+
+/**
  * create() a fresh PRF credential and obtain its secret. Platform authenticators evaluate
  * PRF during create, so registering Touch ID / Windows Hello is one tap. Most security keys
  * lack that capability (`hmac-secret-mc`) and need a second get() to read the secret; PRF is

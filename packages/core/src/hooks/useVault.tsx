@@ -228,6 +228,7 @@ import {
 import {
 	createPrfCredential,
 	getPrfSecret,
+	getPrfSecretAcrossRpIds,
 	unlockRpIdOrder,
 	type WebauthnKeyKind,
 } from "../vault/webauthn-ceremony";
@@ -818,33 +819,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 
 		// Platform keys and security keys live under different rpIDs and the vault file does not
-		// record which is which, so a mixed vault may need both tried. Ordered by what this
-		// device knows it registered, so a single-kind vault still costs one prompt.
-		const labels = latestRef.current.webauthnKeyLabels;
-		const hasPlatformKey = Object.values(labels).some((l) => l.kind === "platform");
-		const candidates = unlockRpIdOrder(hasPlatformKey);
+		// record which is which, so a mixed vault may need both tried. Order by what THIS vault
+		// holds: the labels pref is not vault-scoped, so reading it raw would let a platform key
+		// in another vault cost this one an extra prompt.
+		const hasPlatformKey = describeWebauthnKeys(
+			slots,
+			latestRef.current.webauthnKeyLabels,
+			bytesToBase64,
+		).some((k) => k.kind === "platform");
 
 		// First tap uses slot[0]'s salt; if a different credential with a
 		// different salt is tapped, re-ask narrowed to it with its own salt.
 		const firstSalt = slots[0]!.salt;
-		let firstAttempt: Awaited<ReturnType<typeof getPrfSecret>> | null = null;
-		let rpId: string | undefined;
-		for (const [i, candidate] of candidates.entries()) {
-			try {
-				firstAttempt = await getPrfSecret(slots, firstSalt, {
-					rpId: candidate,
-					// Only the last candidate may report failure; an earlier one just means
-					// "not this rpID", and the user has another prompt coming.
-					forUnlock: i === candidates.length - 1,
-				});
-				rpId = candidate;
-				break;
-			} catch (e) {
-				if (i === candidates.length - 1) throw e;
-				if ((e as { name?: string })?.name !== "NotAllowedError") throw e;
-			}
-		}
-		if (!firstAttempt) throw new Error(t`Authenticator returned no credential.`);
+		const firstAttempt = await getPrfSecretAcrossRpIds(
+			slots,
+			firstSalt,
+			unlockRpIdOrder(hasPlatformKey),
+		);
+		const rpId = firstAttempt.rpId;
 		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
 		if (!used) {
 			throw new Error(t`Authenticator returned an unknown credential.`);

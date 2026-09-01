@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	createPrfCredential,
 	getPrfSecret,
+	getPrfSecretAcrossRpIds,
 	rpIdFor,
 	setWebauthnInterceptionPauser,
 	setWebauthnRpId,
@@ -314,5 +315,82 @@ describe("rpID selection", () => {
 		setWebauthnRpId(undefined);
 		expect(unlockRpIdOrder(true)).toEqual([undefined]);
 		expect(unlockRpIdOrder(false)).toEqual([undefined]);
+	});
+});
+
+describe("unlocking across both rpIDs", () => {
+	const ALLOW = [{ credentialId: new Uint8Array([9]) }];
+	const SALT = new Uint8Array(32);
+	const notAllowed = () => Object.assign(new Error(""), { name: "NotAllowedError" });
+
+	/** get() that only answers for one rpID, as a real authenticator does. */
+	function getForRpId(match: string | undefined) {
+		return vi.fn(async (arg: { publicKey: { rpId?: string } }) => {
+			if (arg.publicKey.rpId !== match) throw notAllowed();
+			return credential({ prf: { results: { first: SECRET } } });
+		});
+	}
+
+	it("falls through to the second rpID and reports which one worked", async () => {
+		const get = getForRpId("bramble.app");
+		stubCredentials({ get });
+
+		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
+		expect(r.rpId).toBe("bramble.app");
+		expect(get).toHaveBeenCalledTimes(2);
+	});
+
+	it("stops at the first rpID that answers, so a single-kind vault costs one prompt", async () => {
+		const get = getForRpId(undefined);
+		stubCredentials({ get });
+
+		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
+		expect(r.rpId).toBeUndefined();
+		expect(get).toHaveBeenCalledOnce();
+	});
+
+	it("does not blame the user for an intermediate miss", async () => {
+		// The first rpID failing means "no credential here", not "you dismissed it". Surfacing
+		// that would accuse the user of cancelling a prompt they are about to be shown.
+		const get = getForRpId("bramble.app");
+		stubCredentials({ get });
+
+		await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"]);
+		const firstCall = get.mock.calls[0]![0] as { publicKey: { rpId?: string } };
+		expect(firstCall.publicKey.rpId).toBeUndefined();
+	});
+
+	it("reports the cross-browser message only once every rpID has been tried", async () => {
+		const get = vi.fn(async () => {
+			throw notAllowed();
+		});
+		stubCredentials({ get });
+
+		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"])).rejects.toThrow(
+			/registered per browser/,
+		);
+		expect(get).toHaveBeenCalledTimes(2);
+	});
+
+	it("rethrows a real fault immediately instead of burning the second prompt on it", async () => {
+		// A detached passkey proxy or a dead authenticator is not "wrong rpID"; retrying would
+		// show a second doomed prompt and then hide the actual cause behind the generic message.
+		const get = vi.fn(async () => {
+			throw Object.assign(new Error("proxy detached"), { name: "InvalidStateError" });
+		});
+		stubCredentials({ get });
+
+		await expect(getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined, "bramble.app"])).rejects.toThrow(
+			/proxy detached/,
+		);
+		expect(get).toHaveBeenCalledOnce();
+	});
+
+	it("handles a single candidate, which is every non-extension platform", async () => {
+		const get = getForRpId(undefined);
+		stubCredentials({ get });
+
+		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined]);
+		expect(r.rpId).toBeUndefined();
 	});
 });
