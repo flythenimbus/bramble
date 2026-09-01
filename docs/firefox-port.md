@@ -355,7 +355,15 @@ credential (the PRF / hmac-secret extension derives a key that wraps the VEK). O
 hides — because registering throws **"The operation is insecure"**: the default rpID is the
 `moz-extension://` origin, which Firefox rejects as a WebAuthn RP.
 
-What it would take, and why it stays deferred (verified 2026-07):
+**Platform-authenticator unlock is now measured working on Firefox** (2026-08-31, FF 154 on
+both macOS and Windows): explicit `rp.id: "bramble.app"` plus
+`authenticatorAttachment: "platform"` and `residentKey: "required"` returns a PRF secret in one
+tap, from Apple Passwords and Windows Hello respectively. See
+[security-keys.md](security-keys.md) for the full matrix. External-key (YubiKey) unlock stays
+Chrome-only, for the reason below. The notes below stand as the analysis that predicted this:
+
+What it would take, and why it stayed deferred (verified 2026-07, confirmed by measurement
+2026-08-31):
 
 - **The rpID error is fixable (Firefox 150+).** An extension can specify an explicit `rp.id` for any
   domain in its `host_permissions` (`<all_urls>` covers any), so `rp.id: "bramble.app"` on Firefox is
@@ -372,8 +380,10 @@ What it would take, and why it stays deferred (verified 2026-07):
   give YubiKey roaming (Firefox PRF gap), so it isn't worth it.
 - **Dead ends:** WebHID / WebUSB (raw CTAP2 would bypass the rpID) — Firefox implements neither.
 
-Plan if revisited: enable on FF 150+ as **platform-authenticator** PRF unlock (explicit `bramble.app`
-rpID, version-gated, Chrome untouched), leaving YubiKey unlock Chrome-only pending Firefox.
+Plan, now confirmed by measurement: enable on FF 150+ as **platform-authenticator** PRF unlock
+(explicit `bramble.app` rpID, version-gated, Chrome untouched), leaving YubiKey unlock
+Chrome-only pending Firefox. The explicit rpID depends on `bramble.app` being covered by
+`host_permissions`; the manifest ships `<all_urls>`, so narrowing that would break this path.
 
 ## Namespace: `chrome.*` vs `browser.*`
 

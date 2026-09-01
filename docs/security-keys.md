@@ -51,6 +51,59 @@ message instead of the raw WebAuthn error.
 
 The non-secret label for the key is stored separately, keyed by slot id.
 
+## Platform authenticators (Touch ID / Windows Hello)
+
+The same PRF machinery works with a **platform** authenticator, which is what
+github issue #67 asks for. Measured 2026-08-31 with a throwaway probe page loaded
+into both dist builds; every cell is a real ceremony, not an inference:
+
+| Host | rpID | Authenticator | Result |
+| --- | --- | --- | --- |
+| macOS, Chromium | implicit (extension id) | Apple Passwords | PRF ok, one tap, **synced** |
+| macOS, Firefox 154 | explicit `bramble.app` | Apple Passwords | PRF ok, one tap, **synced** |
+| Windows 11 25H2, Chromium | implicit (extension id) | Windows Hello | PRF ok, one tap, **device-bound** |
+| Windows 11 25H2, Firefox | explicit `bramble.app` | Windows Hello | PRF ok, one tap, **device-bound** |
+
+Unlike a security key, PRF is evaluated at create, so **registration is one tap**,
+not the two above. The secret is deterministic across create and get, as required.
+
+Four things the measurement settled:
+
+- **The extension origin is a valid rpID for a platform authenticator on Chromium.**
+  That was the open architectural question. Firefox still rejects its implicit
+  `moz-extension://` rpID and needs an explicit `rp.id`, see
+  [firefox-port.md](firefox-port.md).
+- **Only the OS provider returns PRF.** The browsers' own passkey stores do not:
+  Chromium's internal authenticator (aaguid `b5397666-4885-aa6b-cebf-e52262a439a2`)
+  creates a user-verified credential and then reports `prf.enabled: false` with no
+  secret from either ceremony. The user picks the provider in the OS dialog, so
+  registration MUST detect a missing PRF secret and say "choose iCloud Keychain /
+  Windows Hello". The two-taps message above is wrong for this path.
+- **Options differ from a security key.** Platform needs
+  `authenticatorAttachment: "platform"`, `residentKey: "required"` (Apple Passwords
+  will not answer otherwise) and `userVerification: "required"` (without it the
+  secret can come back ungated, defeating the point). `residentKey: "required"` was
+  deliberately rejected for security keys and stays rejected there, so these are two
+  separate entry points, not a flag on one.
+- **Portability differs by OS and is measurable.** The BE/BS bits in `authData` say
+  whether the credential syncs: macOS gives `backedUp: true` (every Mac on the Apple
+  account), Windows gives `false` (that machine only). Read the bits at registration
+  rather than inferring from the OS.
+
+Requirements: Windows needs 11 25H2 with KB5077181 (build 26200.7840+, which adds
+`hmac-secret` to Hello) plus Chrome/Edge 147+ or Firefox 148+; older Windows has no
+PRF in Hello at all, so registration has to fail gracefully. Linux has no platform
+authenticator in any browser and is out; a security key remains its answer.
+
+**Trap:** the passkey provider (`chrome.webAuthenticationProxy`) intercepts all
+browser WebAuthn while attached and fails an extension-originated request with
+`NotAllowedError: no resolvable tab origin`
+(`background/webauthn-proxy-init.ts`, because such a request has no active tab).
+Anything doing WebAuthn must go through `createPrfCredential` / `getPrfSecret`,
+which carry the `PASSKEY_PROXY_PAUSE` / `RESUME` envelope from
+`platform-extension/src/shell.ts`. Calling `navigator.credentials` directly looks
+exactly like an authenticator that does not support PRF.
+
 ## Enrolling a device with a security key
 
 Joining a P2P sync group (see [p2p-sync.md](p2p-sync.md)) can unlock the new

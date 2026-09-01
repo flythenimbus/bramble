@@ -31,6 +31,28 @@ remains the way in from anywhere else. `adapters/biometric.ts` is the contract,
 `vault/biometric-unlock.ts` the flow (including stale-cache teardown, which
 disables the gate and sends the user back to their password).
 
+### Platform-authenticator unlock (extension)
+
+Touch ID / Windows Hello in the browser extension is the **opposite** design to the
+mobile cache above, despite the similar name: it **is** a slot. The OS passkey
+provider derives a PRF secret, that becomes the KEK, and it wraps the VEK in a
+normal webauthn slot, identical in the vault file to a security key's. So it obeys
+slot-policy, counts as a primary method, and revokes like any other slot.
+
+The practical differences to keep straight when writing copy:
+
+| | Mobile biometric | Extension platform authenticator |
+| --- | --- | --- |
+| Mechanism | OS-gated VEK cache, not a slot | Webauthn slot |
+| Vault file | Untouched | Gains a slot |
+| Scope | That device only | macOS: every Mac on the Apple account. Windows: that machine |
+
+The macOS case is the surprising one: Apple Passwords credentials sync, so a slot
+registered on one Mac unlocks on another. `authData`'s BE/BS bits report this at
+registration, so the UI can state which the user got. See
+[security-keys.md](security-keys.md) for the ceremony, the measured support matrix,
+and the provider-choice failure mode.
+
 #### Passcode fallback (iOS)
 
 The gate is a `SecAccessControl` on the cached-VEK Keychain item, and iOS gives us
