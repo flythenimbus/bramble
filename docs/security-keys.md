@@ -137,6 +137,23 @@ option turns that error into a message naming both possibilities. Registration's
 `get()` deliberately does not use it, because there the credential was just created and a
 refusal means something else.
 
+### Testing it without hardware
+
+`e2e/extension/tap-to-unlock.spec.ts` drives the real Settings and unlock UI against a **CDP
+virtual authenticator** (`addVirtualAuthenticator` in `e2e/extension/helpers.ts`), so the whole
+feature runs headless in CI. `transport: "internal"` emulates Touch ID / Windows Hello and
+`"usb"` a security key.
+
+`hasPrf` is the useful knob: turning it off reproduces the failure a real user hits by choosing
+their browser's own passkey store over iCloud Keychain, which is otherwise awkward to trigger on
+purpose. The fallback test removes the platform authenticator after registering, so the ordering's
+first guess must miss and the retry is what completes the unlock; without that removal the
+platform rpID answers immediately and the retry never runs.
+
+**What this cannot cover:** cross-browser unlock, the entire point of the shared rpID. It needs
+one credential shared by a real OS provider across two browsers, and Playwright's Firefox has no
+virtual authenticator. That stays a manual check, as does the old-browser `SecurityError` path.
+
 ### How it is surfaced
 
 One Settings section, **Tap to unlock** (`TapToUnlockSection`), holds platform

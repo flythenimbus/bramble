@@ -137,3 +137,54 @@ export async function localStorageKeys(context: BrowserContext): Promise<string[
 	const sw = await backgroundWorker(context);
 	return sw.evaluate(async () => Object.keys(await chrome.storage.local.get(null)));
 }
+
+/**
+ * Attach a CDP virtual authenticator to `page`, so a WebAuthn ceremony completes with no
+ * hardware and no human. This is what makes tap-to-unlock testable in CI at all.
+ *
+ * `hasPrf` is the interesting knob. With it off you get the failure a real user hits by
+ * choosing their browser's own passkey store instead of iCloud Keychain: a perfectly good
+ * user-verified credential that then declines to produce a secret. That case is awkward to
+ * trigger by hand (you have to hope the OS dialog offers the wrong option) and trivial here.
+ *
+ * `transport: "internal"` emulates a platform authenticator (Touch ID / Windows Hello);
+ * "usb" emulates a security key. See docs/security-keys.md.
+ */
+export async function addVirtualAuthenticator(
+	page: Page,
+	opts: { hasPrf?: boolean; transport?: "internal" | "usb" } = {},
+): Promise<{ authenticatorId: string; remove: () => Promise<void> }> {
+	const { hasPrf = true, transport = "internal" } = opts;
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("WebAuthn.enable");
+	const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+		options: {
+			protocol: "ctap2",
+			ctap2Version: "ctap2_1",
+			transport,
+			hasResidentKey: true,
+			hasUserVerification: true,
+			hasPrf,
+			// No prompt to click: the authenticator reports presence and verification itself.
+			isUserVerified: true,
+			automaticPresenceSimulation: true,
+		},
+	});
+	return {
+		authenticatorId,
+		remove: () => cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }),
+	};
+}
+
+/** Register a key through the real Settings UI. Requires an unlocked vault on `page`. */
+export async function addTapToUnlockKey(
+	page: Page,
+	kind: "This device" | "Security key",
+	label?: string,
+) {
+	await page.getByRole("button", { name: "Settings" }).click();
+	await page.getByRole("button", { name: "Security", exact: true }).click();
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	if (label) await page.getByPlaceholder(/Name this key/i).fill(label);
+	await page.getByRole("button", { name: kind, exact: true }).click();
+}
