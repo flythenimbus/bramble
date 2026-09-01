@@ -104,12 +104,31 @@ which carry the `PASSKEY_PROXY_PAUSE` / `RESUME` envelope from
 `platform-extension/src/shell.ts`. Calling `navigator.credentials` directly looks
 exactly like an authenticator that does not support PRF.
 
-### Keys are per browser, and unlock says so
+### One rpID for platform keys, the implicit one for security keys
 
-Chromium and Firefox register under different rpIDs, so a vault synced between them holds
-slots the local authenticator cannot match. Nothing in the vault file records which slot
-belongs to which rpID, and local labels do not help: they live in per-browser extension
-storage, so a foreign slot is simply absent rather than marked. A filter would never fire.
+Platform keys register under a **shared explicit rpID** (`bramble.app`) on BOTH browsers, so a
+key registered in Chrome unlocks in Firefox: Apple Passwords syncs the credential and Windows
+Hello is an OS store both browsers reach, so a matching rpID was the only thing missing.
+Measured accepted on Chromium from a `chrome-extension://` origin, with PRF, 2026-08-31. This
+is supported behaviour on both engines, not a trick: Chrome M122+ and Firefox 150+ both let an
+extension claim an rpID that a domain in its `host_permissions` could claim.
+
+**Security keys deliberately did not move.** They keep Chromium's implicit extension-id rpID,
+because changing it would invalidate every already-registered key and wins nothing: Firefox has
+no PRF for external keys, so there is no roaming to gain. `rpIdFor()` holds that rule.
+
+The cost is that a vault can hold slots under two rpIDs, and the vault file does not record
+which is which. Unlock therefore tries both, ordered by what this device knows it registered
+(`unlockRpIdOrder`), so a single-kind vault still costs one prompt and only a mixed vault pays
+for a second. `minimum_chrome_version` stays at 116 so existing security-key users on older
+Chrome keep working; a platform registration there fails with a version message instead.
+
+### When neither rpID matches, unlock says so
+
+After both rpIDs have been tried, a slot may still not match: a security key registered in
+Chrome cannot be used from Firefox at all. Nothing in the vault file records which slot belongs
+to which rpID, and local labels do not help - they live in per-browser extension storage, so a
+foreign slot is simply absent rather than marked. A filter would never fire.
 
 WebAuthn also refuses to distinguish "user dismissed the prompt" from "nothing matched" -
 both are a bare `NotAllowedError`, deliberately, so a site cannot probe which credentials

@@ -20,13 +20,35 @@ export function setWebauthnInterceptionPauser(pauser: WebauthnPauser): void {
 	pauseHostInterception = pauser;
 }
 
-// Firefox rejects its own moz-extension:// origin as an RP and needs an explicit rp.id for a
-// domain in host_permissions; Chromium leaves this unset and keeps its implicit extension
-// rpID, which must never change or every registered key stops unlocking. The platform installs
-// it once, the same way it installs the pauser above. See docs/firefox-port.md.
-let defaultRpId: string | undefined;
+// Platform authenticators register under a SHARED explicit rpID on both browsers, so a key made
+// in Chrome unlocks in Firefox: Apple Passwords syncs the credential and Windows Hello is an OS
+// store both browsers reach, so a matching rpID is all that is missing. Chrome M122+ and Firefox
+// 150+ both let an extension claim an rpID that a host_permissions origin could claim, so this
+// is supported on both, not a trick.
+//
+// Security keys deliberately do NOT move: they keep Chromium's implicit extension-id rpID,
+// because changing it would invalidate every already-registered key, and there is no roaming
+// benefit to win (Firefox has no PRF for external keys anyway). The platform installs the value,
+// the same way it installs the pauser above. See docs/security-keys.md.
+let platformRpId: string | undefined;
 export function setWebauthnRpId(rpId: string | undefined): void {
-	defaultRpId = rpId;
+	platformRpId = rpId;
+}
+
+/** The rpID a given kind registers under; undefined means the implicit extension origin. */
+export function rpIdFor(kind: WebauthnKeyKind): string | undefined {
+	return kind === "platform" ? platformRpId : undefined;
+}
+
+/**
+ * Unlock cannot tell which rpID a slot belongs to (the vault file does not record it), so it may
+ * have to try both. Ordered by what this device knows it registered, so the common single-kind
+ * vault still costs one prompt; a vault holding both kinds costs two when the first guess is
+ * wrong. See docs/security-keys.md.
+ */
+export function unlockRpIdOrder(hasPlatformKey: boolean): (string | undefined)[] {
+	const order = hasPlatformKey ? [platformRpId, undefined] : [undefined, platformRpId];
+	return order.filter((v, i) => order.indexOf(v) === i);
 }
 
 /**
@@ -126,7 +148,7 @@ export async function getPrfSecret(
 ): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array }> {
 	const challenge = new Uint8Array(32);
 	globalThis.crypto.getRandomValues(challenge);
-	const rpId = opts.rpId ?? defaultRpId;
+	const rpId = opts.rpId;
 	const publicKey = {
 		challenge: challenge as BufferSource,
 		...(rpId ? { rpId } : {}),
@@ -176,7 +198,7 @@ export async function createPrfCredential(
 	globalThis.crypto.getRandomValues(userId);
 	const salt = new Uint8Array(LEN_HMAC_SECRET_SALT);
 	globalThis.crypto.getRandomValues(salt);
-	const rpId = opts.rpId ?? defaultRpId;
+	const rpId = opts.rpId ?? rpIdFor(opts.kind);
 	try {
 		const created = (await pauseHostInterception(() =>
 			navigator.credentials.create({
@@ -215,11 +237,13 @@ export async function createPrfCredential(
 			synced: readSyncedFlag(created.response as AuthenticatorAttestationResponse),
 		};
 	} catch (e) {
-		// Firefox only accepts an explicit rp.id from version 150. Below that it refuses the
-		// ceremony outright, and so does any browser where the domain is not in host_permissions.
+		// Claiming an rpID from a host_permissions domain needs Chrome M122+ or Firefox 150+.
+		// Older builds refuse the ceremony outright, as does any browser where the domain is not
+		// in host_permissions. Now that BOTH browsers use the shared rpID for platform keys, this
+		// message cannot name just one of them.
 		if (rpId && (e as { name?: string })?.name === "SecurityError") {
 			throw new Error(
-				"This browser refused to register a key for Bramble. Firefox 150 or newer is required.",
+				"This browser is too old to register a key for Bramble. Chrome 122 or Firefox 150 and newer are supported.",
 			);
 		}
 		if ((e as { name?: string })?.name === "NotAllowedError") {

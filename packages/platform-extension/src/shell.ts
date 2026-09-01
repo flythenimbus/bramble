@@ -57,13 +57,13 @@ export const extensionTarget: Target =
 		? "firefox"
 		: "chromium";
 
-// Firefox rejects a moz-extension:// origin as a WebAuthn RP, so its keys are registered
-// against an explicit domain instead (covered by host_permissions' <all_urls>; narrowing that
-// would break unlock). Chromium deliberately gets nothing here and keeps its implicit
-// extension-id rpID: changing it would invalidate every already-registered key. The two
-// browsers therefore hold separate slots for the same vault, which the multi-slot design
-// already expects. See docs/firefox-port.md and docs/security-keys.md.
-if (extensionTarget === "firefox") setWebauthnRpId("bramble.app");
+// Both browsers register PLATFORM keys (Touch ID / Windows Hello) under this shared rpID, so one
+// registration unlocks in either. Firefox additionally needs it because it rejects its own
+// moz-extension:// origin as an RP. Security keys are unaffected and keep Chromium's implicit
+// extension-id rpID; see rpIdFor(). Depends on bramble.app being covered by host_permissions
+// (<all_urls> today) - narrowing that would break unlock. Needs Chrome M122+ / Firefox 150+.
+// See docs/security-keys.md.
+setWebauthnRpId("bramble.app");
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {

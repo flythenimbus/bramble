@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	createPrfCredential,
 	getPrfSecret,
+	rpIdFor,
 	setWebauthnInterceptionPauser,
 	setWebauthnRpId,
+	unlockRpIdOrder,
 } from "./webauthn-ceremony";
 
 const RAW_ID = new Uint8Array([1, 2, 3, 4]).buffer;
@@ -101,7 +103,17 @@ describe("explicit rpID (Firefox)", () => {
 		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault", id: "bramble.app" });
 	});
 
-	it("translates an old Firefox's refusal instead of surfacing SecurityError", async () => {
+	it("leaves security keys on the implicit rpID even once a shared one is installed", async () => {
+		// Moving them would invalidate every already-registered key, and buys nothing: Firefox
+		// has no PRF for external keys, so there is no roaming to gain.
+		const api = stubCredentials();
+		setWebauthnRpId("bramble.app");
+		await createPrfCredential("YubiKey", { kind: "securityKey" });
+
+		expect(publicKeyArg(api.create).rp).toEqual({ name: "Vault" });
+	});
+
+	it("translates an old browser's refusal without naming only one of them", async () => {
 		const create = vi.fn(async () => {
 			throw Object.assign(new Error("The operation is insecure."), { name: "SecurityError" });
 		});
@@ -109,7 +121,7 @@ describe("explicit rpID (Firefox)", () => {
 		setWebauthnRpId("bramble.app");
 
 		await expect(createPrfCredential("Touch ID", { kind: "platform" })).rejects.toThrow(
-			/Firefox 150 or newer/,
+			/Chrome 122 or Firefox 150/,
 		);
 	});
 
@@ -277,5 +289,30 @@ describe("unlock failures across browsers", () => {
 				forUnlock: true,
 			}),
 		).rejects.toThrow(/registered per browser/);
+	});
+});
+
+describe("rpID selection", () => {
+	it("routes platform keys to the shared rpID and security keys to the implicit one", () => {
+		setWebauthnRpId("bramble.app");
+		expect(rpIdFor("platform")).toBe("bramble.app");
+		expect(rpIdFor("securityKey")).toBeUndefined();
+	});
+
+	it("tries the platform rpID first when this device registered a platform key", () => {
+		setWebauthnRpId("bramble.app");
+		expect(unlockRpIdOrder(true)).toEqual(["bramble.app", undefined]);
+	});
+
+	it("tries the implicit rpID first otherwise, so existing security-key users keep one prompt", () => {
+		setWebauthnRpId("bramble.app");
+		expect(unlockRpIdOrder(false)).toEqual([undefined, "bramble.app"]);
+	});
+
+	it("never prompts twice for the same rpID when none is installed", () => {
+		// Mobile and desktop install nothing; both entries would collapse to undefined.
+		setWebauthnRpId(undefined);
+		expect(unlockRpIdOrder(true)).toEqual([undefined]);
+		expect(unlockRpIdOrder(false)).toEqual([undefined]);
 	});
 });

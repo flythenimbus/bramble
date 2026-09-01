@@ -223,6 +223,7 @@ import {
 import {
 	createPrfCredential,
 	getPrfSecret,
+	unlockRpIdOrder,
 	type WebauthnKeyKind,
 } from "../vault/webauthn-ceremony";
 import { useSyncEnrollment } from "./useSyncEnrollment";
@@ -811,17 +812,41 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			throw new Error(t`No security key registered on this vault.`);
 		}
 
+		// Platform keys and security keys live under different rpIDs and the vault file does not
+		// record which is which, so a mixed vault may need both tried. Ordered by what this
+		// device knows it registered, so a single-kind vault still costs one prompt.
+		const labels = latestRef.current.webauthnKeyLabels;
+		const hasPlatformKey = Object.values(labels).some((l) => l.kind === "platform");
+		const candidates = unlockRpIdOrder(hasPlatformKey);
+
 		// First tap uses slot[0]'s salt; if a different credential with a
 		// different salt is tapped, re-ask narrowed to it with its own salt.
 		const firstSalt = slots[0]!.salt;
-		const firstAttempt = await getPrfSecret(slots, firstSalt, { forUnlock: true });
+		let firstAttempt: Awaited<ReturnType<typeof getPrfSecret>> | null = null;
+		let rpId: string | undefined;
+		for (const [i, candidate] of candidates.entries()) {
+			try {
+				firstAttempt = await getPrfSecret(slots, firstSalt, {
+					rpId: candidate,
+					// Only the last candidate may report failure; an earlier one just means
+					// "not this rpID", and the user has another prompt coming.
+					forUnlock: i === candidates.length - 1,
+				});
+				rpId = candidate;
+				break;
+			} catch (e) {
+				if (i === candidates.length - 1) throw e;
+				if ((e as { name?: string })?.name !== "NotAllowedError") throw e;
+			}
+		}
+		if (!firstAttempt) throw new Error(t`Authenticator returned no credential.`);
 		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
 		if (!used) {
 			throw new Error(t`Authenticator returned an unknown credential.`);
 		}
 		let hmacSecret = firstAttempt.hmacSecret;
 		if (needsSaltMismatchRetry(used, firstSalt)) {
-			const second = await getPrfSecret([used], used.salt);
+			const second = await getPrfSecret([used], used.salt, { rpId });
 			used = matchSlotByCredentialId([used], second.rawId);
 			if (!used) throw new Error(t`Authenticator returned an unknown credential.`);
 			hmacSecret = second.hmacSecret;
