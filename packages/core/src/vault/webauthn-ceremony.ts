@@ -1,4 +1,4 @@
-// The WebAuthn PRF dance, shared by adding a security key (registerSecurityKey)
+// The WebAuthn PRF dance, shared by adding a key (registerWebauthnKey)
 // and joining a group with one (security-key enrollment). Chromium honours only
 // the `prf` extension (not raw hmacGetSecret), so the option objects are cast.
 // See docs/security-keys.md, docs/p2p-sync.md.

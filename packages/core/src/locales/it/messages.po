@@ -172,7 +172,7 @@ msgstr "ID della chiave di accesso"
 msgid "Actions"
 msgstr "Azioni"
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Add"
 msgstr "Aggiungi"
 
@@ -530,8 +530,8 @@ msgstr "Torta"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Cancel"
 msgstr "Annullare"
 
@@ -1708,7 +1708,7 @@ msgstr "Nome"
 msgid "Name A-Z"
 msgstr "Nome A-Z"
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Name this key (e.g. YubiKey office)"
 msgstr "Assegna un nome a questa chiave (es. ufficio YubiKey)"
 
@@ -2155,7 +2155,7 @@ msgstr "Codice di recupero"
 msgid "Region"
 msgstr "Regione"
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Register"
 msgstr "Registra"
 
@@ -2178,8 +2178,8 @@ msgstr "Rimuovere"
 
 #. placeholder {0}: d.label || "device"
 #. placeholder {0}: k.label
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Remove {0}"
 msgstr "Rimuovere {0}"
 
@@ -2409,11 +2409,11 @@ msgstr "Nota sicura"
 msgid "Security"
 msgstr "Sicurezza"
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Security key"
 msgstr "Chiave di sicurezza"
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Security keys"
 msgstr "Chiavi di sicurezza"
 
@@ -2671,7 +2671,7 @@ msgstr "Tag"
 msgid "Take a backup first, from Backups, so you have a copy that still opens."
 msgstr "Esegua prima un backup dalla schermata Backup, così avrà una copia ancora funzionante."
 
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Tap a security key to unlock instead of typing the master password."
 msgstr "Tappi una chiave di sicurezza per sbloccare invece di digitare la password principale."
 
@@ -2680,7 +2680,7 @@ msgid "Tap to scan again"
 msgstr "Tocca per scansionare di nuovo"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
-#: packages/core/src/app/screens/Settings/components/SecurityKeysSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Tap your key…"
 msgstr "Tappi la sua chiave..."
 

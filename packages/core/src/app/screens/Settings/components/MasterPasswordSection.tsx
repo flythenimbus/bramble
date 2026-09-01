@@ -25,7 +25,7 @@ interface PwFormValues {
 export function MasterPasswordSection() {
 	const {
 		hasPasswordSlot,
-		securityKeys,
+		webauthnKeys,
 		verifyMasterPassword,
 		changeMasterPassword,
 		setMasterPassword,
@@ -33,7 +33,7 @@ export function MasterPasswordSection() {
 	} = useVault();
 	const { t } = useLingui();
 	const cryptoError = useCryptoErrorMessage();
-	const hasSecurityKey = securityKeys.length > 0;
+	const hasWebauthnKey = webauthnKeys.length > 0;
 	// "change" reveals current+new+confirm; "set" reveals new+confirm (re-enable
 	// or first-time on a key-only vault); null = form closed.
 	const [formMode, setFormMode] = useState<null | "change" | "set">(null);
@@ -108,7 +108,7 @@ export function MasterPasswordSection() {
 			setFormError(null);
 			reset();
 			setFormMode("set");
-		} else if (!next && hasPasswordSlot && hasSecurityKey) {
+		} else if (!next && hasPasswordSlot && hasWebauthnKey) {
 			setDisableError(null);
 			setConfirmingDisable(true);
 		}
@@ -141,7 +141,7 @@ export function MasterPasswordSection() {
 				<Toggle
 					checked={hasPasswordSlot}
 					onChange={onToggle}
-					disabled={hasPasswordSlot && !hasSecurityKey}
+					disabled={hasPasswordSlot && !hasWebauthnKey}
 					label={t`Require master password to unlock`}
 				/>
 			</Row>
@@ -167,7 +167,7 @@ export function MasterPasswordSection() {
 				</div>
 			)}
 
-			{hasPasswordSlot && !hasSecurityKey && (
+			{hasPasswordSlot && !hasWebauthnKey && (
 				<p className="text-xs text-muted-foreground pl-12">
 					<Trans>Register a security key below before you can turn off the master password.</Trans>
 				</p>

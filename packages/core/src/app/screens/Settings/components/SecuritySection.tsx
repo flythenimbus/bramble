@@ -5,7 +5,7 @@ import { BiometricSection } from "./BiometricSection";
 import { MasterPasswordSection } from "./MasterPasswordSection";
 import { Section } from "./primitives";
 import { RecoveryCodeSection } from "./RecoveryCodeSection";
-import { SecurityKeysSection } from "./SecurityKeysSection";
+import { TapToUnlockSection } from "./TapToUnlockSection";
 
 /** Security tab: master password, security keys, biometric unlock, recovery code. */
 export function SecuritySection() {
@@ -15,7 +15,7 @@ export function SecuritySection() {
 		<Section icon={<Lock className="w-4 h-4 text-primary" />} title={t`Security`}>
 			<MasterPasswordSection />
 			{/* Security keys (WebAuthn) don't work on mobile; biometric unlock takes their slot there. */}
-			{canSecurityKeys && <SecurityKeysSection />}
+			{canSecurityKeys && <TapToUnlockSection />}
 			<BiometricSection />
 			<RecoveryCodeSection />
 		</Section>

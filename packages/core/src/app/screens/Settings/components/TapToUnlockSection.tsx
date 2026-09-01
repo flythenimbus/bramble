@@ -5,8 +5,8 @@ import { useVault } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { Row } from "./primitives";
 
-export function SecurityKeysSection() {
-	const { securityKeys, registerSecurityKey, revokeSecurityKey } = useVault();
+export function TapToUnlockSection() {
+	const { webauthnKeys, registerWebauthnKey, revokeWebauthnKey } = useVault();
 	const { t } = useLingui();
 	const [adding, setAdding] = useState(false);
 	const [label, setLabel] = useState("");
@@ -18,7 +18,7 @@ export function SecurityKeysSection() {
 		setError(null);
 		setBusy(true);
 		try {
-			await registerSecurityKey(label.trim() || t`Security key`);
+			await registerWebauthnKey(label.trim() || t`Security key`);
 			setLabel("");
 			setAdding(false);
 		} catch (err) {
@@ -31,7 +31,7 @@ export function SecurityKeysSection() {
 	const handleRevoke = async (slotIdB64: string) => {
 		setError(null);
 		try {
-			await revokeSecurityKey(slotIdB64);
+			await revokeWebauthnKey(slotIdB64);
 		} catch (err) {
 			setError(String(err instanceof Error ? err.message : err));
 		}
@@ -58,9 +58,9 @@ export function SecurityKeysSection() {
 				) : null}
 			</Row>
 
-			{securityKeys.length > 0 && (
+			{webauthnKeys.length > 0 && (
 				<ul className="ml-12 mt-2 space-y-1.5">
-					{securityKeys.map((k) => (
+					{webauthnKeys.map((k) => (
 						<li
 							key={k.slotIdB64}
 							className="flex items-center justify-between gap-3 text-xs rounded-md border border-border/40 px-3 py-1.5"

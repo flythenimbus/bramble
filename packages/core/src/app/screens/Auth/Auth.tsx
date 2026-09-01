@@ -45,7 +45,7 @@ export function Auth() {
 		unlock,
 		hasPasswordSlot,
 		hasWebauthnSlot,
-		unlockWithSecurityKey,
+		unlockWithWebauthnKey,
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
 		biometricEnabled,
@@ -141,10 +141,10 @@ export function Auth() {
 		}
 	};
 
-	const handleSecurityKey = async () => {
+	const handleWebauthnKey = async () => {
 		setBusy(true);
 		try {
-			await unlockWithSecurityKey();
+			await unlockWithWebauthnKey();
 			rearm();
 		} catch (e) {
 			// Surface in the same field-error region as a wrong master password.
@@ -217,7 +217,7 @@ export function Auth() {
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
 	// Security-key unlock is hidden where it can't work (mobile): no PRF, so offering it
 	// would be a dead end even for a vault synced from desktop with a registered key.
-	const securityKeyAvailable = hasVault && canSecurityKeys && (hasWebauthnSlot || couldNotRead);
+	const webauthnKeyAvailable = hasVault && canSecurityKeys && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
@@ -340,7 +340,7 @@ export function Auth() {
 					{!firstRun && (
 						<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
 							{showBiometric && (
-								<div className={showPasswordForm || securityKeyAvailable ? "p-6 pb-0" : "p-6"}>
+								<div className={showPasswordForm || webauthnKeyAvailable ? "p-6 pb-0" : "p-6"}>
 									<Button
 										variant="primary"
 										size="lg"
@@ -376,20 +376,20 @@ export function Auth() {
 										<Asterisk className="w-4 h-4" />
 										{busy
 											? t`Unlocking…`
-											: securityKeyAvailable || showBiometric
+											: webauthnKeyAvailable || showBiometric
 												? t`Unlock with master password`
 												: t`Unlock Vault`}
 									</Button>
 								</form>
 							)}
 
-							{securityKeyAvailable && (
+							{webauthnKeyAvailable && (
 								<div className={showPasswordForm ? "px-6 pb-6 -mt-3" : "p-6"}>
 									<Button
 										variant={showPasswordForm ? "secondary" : "primary"}
 										size="lg"
 										fullWidth
-										onClick={handleSecurityKey}
+										onClick={handleWebauthnKey}
 										disabled={busy}
 										className="text-sm"
 									>

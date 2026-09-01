@@ -169,10 +169,10 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 /** How a joining device unlocks its rebuilt vault: a master password or a security key. */
 export type JoinUnlock =
 	| { kind: "password"; password: string }
-	| { kind: "securityKey"; label?: string };
+	| { kind: "webauthnKey"; label?: string };
 
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
-export type DeleteVaultAuth = { password: string } | { securityKey: true };
+export type DeleteVaultAuth = { password: string } | { webauthnKey: true };
 
 import { backupTargetsKeyFor } from "../backup/config";
 import { exportToOs } from "../exchange";
@@ -222,13 +222,13 @@ import { useSyncEnrollment } from "./useSyncEnrollment";
 
 export { entryDataSchema };
 
-export interface SecurityKeyMeta {
+export interface WebauthnKeyMeta {
 	slotIdB64: string;
 	label: string;
 	addedAt: number;
 }
 
-const SECURITY_KEY_LABELS_PREF = "pref.securityKeyLabels";
+const WEBAUTHN_KEY_LABELS_PREF = "pref.securityKeyLabels";
 
 /** Reactive vault state. A change here re-renders components that read it. */
 export interface VaultState {
@@ -243,7 +243,7 @@ export interface VaultState {
 	/** Vault has a recovery code on file. False for pre-recovery-code vaults. */
 	hasRecoveryCode: boolean;
 	/** Webauthn slots joined with their stored labels, for Settings. */
-	securityKeys: SecurityKeyMeta[];
+	webauthnKeys: WebauthnKeyMeta[];
 	/** False until mount-time hydration resolves; route guards gate on this. */
 	ready: boolean;
 	/** A setup-flow join is in progress (created a new vault, now pairing into it). */
@@ -318,15 +318,15 @@ export interface VaultActions {
 	touchEntry(id: string): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
 	/** Prove possession of a registered key (a tap) without changing lock state. */
-	verifyWithSecurityKey(): Promise<boolean>;
+	verifyWithWebauthnKey(): Promise<boolean>;
 	changeMasterPassword(newPassword: string): Promise<void>;
 	/** Set (or re-enable) the master password by re-wrapping the in-memory VEK. */
 	setMasterPassword(password: string): Promise<void>;
 	/** Remove the master-password slot. Requires a security key (invariant B). */
 	disableMasterPassword(): Promise<void>;
-	unlockWithSecurityKey(): Promise<void>;
-	registerSecurityKey(label: string): Promise<void>;
-	revokeSecurityKey(slotIdB64: string): Promise<void>;
+	unlockWithWebauthnKey(): Promise<void>;
+	registerWebauthnKey(label: string): Promise<void>;
+	revokeWebauthnKey(slotIdB64: string): Promise<void>;
 	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
 	/** Re-encrypt the vault under a fresh key. Destructive: orphans other devices, invalidates the
@@ -424,7 +424,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Set when a vault exists on disk but its blob can't be read/decoded (e.g. an
 	// FSA file whose read permission needs a fresh user gesture, or a corrupt blob).
 	const [vaultError, setVaultError] = useState<string | null>(null);
-	const [securityKeyLabels, setSecurityKeyLabels] = useState<
+	const [webauthnKeyLabels, setWebauthnKeyLabels] = useState<
 		Record<string, { label: string; addedAt: number }>
 	>({});
 
@@ -432,8 +432,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// current entries / labels / lock state without listing them as deps. That keeps every
 	// action referentially stable (its own context, never re-firing pure-action subscribers).
 	// Assigned during render: idempotent, the blessed idiom for a latest-value ref.
-	const latestRef = useRef({ entries, securityKeyLabels, isLocked, biometricEnabled });
-	latestRef.current = { entries, securityKeyLabels, isLocked, biometricEnabled };
+	const latestRef = useRef({ entries, webauthnKeyLabels, isLocked, biometricEnabled });
+	latestRef.current = { entries, webauthnKeyLabels, isLocked, biometricEnabled };
 
 	// Sync metadata kept alongside (not on) the user-facing Entry: per-entry HLC
 	// stamps and the deletion graveyard. Held in refs because mutations thread
@@ -492,13 +492,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const [{ blob }, stored] = await Promise.all([
 				readDecodedBlob(),
 				storage.getMeta<Record<string, { label: string; addedAt: number }>>(
-					SECURITY_KEY_LABELS_PREF,
+					WEBAUTHN_KEY_LABELS_PREF,
 				),
 			]);
 			setWebauthnSlots(findWebauthnSlots(blob));
 			setHasPasswordSlot(findPasswordSlot(blob) !== null);
 			setHasRecoveryCode(findRecoverySlots(blob).length > 0);
-			setSecurityKeyLabels(stored ?? {});
+			setWebauthnKeyLabels(stored ?? {});
 			setVaultError(null);
 		} catch (e) {
 			// Don't swallow: a vault that exists but can't be read must surface, not
@@ -507,7 +507,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setWebauthnSlots([]);
 			setHasPasswordSlot(false);
 			setHasRecoveryCode(false);
-			setSecurityKeyLabels({});
+			setWebauthnKeyLabels({});
 			setVaultError((e as Error).message);
 		}
 	}, [readDecodedBlob, storage]);
@@ -798,7 +798,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
-	const unlockWithSecurityKey = useCallback(async () => {
+	const unlockWithWebauthnKey = useCallback(async () => {
 		setError(null);
 		let slots: WebauthnSlot[];
 		try {
@@ -835,7 +835,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * Prove possession of a registered key (a tap) without touching lock state.
 	 * Authorizes sensitive actions on a password-less vault.
 	 */
-	const verifyWithSecurityKey = useCallback(async (): Promise<boolean> => {
+	const verifyWithWebauthnKey = useCallback(async (): Promise<boolean> => {
 		const { blob } = await readDecodedBlob();
 		const slots = findWebauthnSlots(blob);
 		if (slots.length === 0) return false;
@@ -852,7 +852,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * to be unlocked (wraps the in-memory VEK). Usually two taps: create() then a
 	 * get() to read the PRF secret, unless the key supports one-tap hmac-secret-mc.
 	 */
-	const registerSecurityKey = useCallback(
+	const registerWebauthnKey = useCallback(
 		async (label: string) => {
 			setError(null);
 			if (await crypto.isLocked()) {
@@ -881,9 +881,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const newBlob = addWebauthnSlot(blob, slot);
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 
-			const labels = { ...latestRef.current.securityKeyLabels };
+			const labels = { ...latestRef.current.webauthnKeyLabels };
 			labels[slotIdB64] = { label: label.trim() || "Security key", addedAt: Date.now() };
-			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
+			await storage.setMeta(WEBAUTHN_KEY_LABELS_PREF, labels);
 
 			await refreshSlotMetadata();
 		},
@@ -891,15 +891,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	/** Remove a security-key slot and its stored label. */
-	const revokeSecurityKey = useCallback(
+	const revokeWebauthnKey = useCallback(
 		async (slotIdB64: string) => {
 			setError(null);
 			const { blob } = await readDecodedBlob();
 			const newBlob = removeWebauthnSlot(blob, base64ToBytes(slotIdB64));
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
-			const labels = { ...latestRef.current.securityKeyLabels };
+			const labels = { ...latestRef.current.webauthnKeyLabels };
 			delete labels[slotIdB64];
-			await storage.setMeta(SECURITY_KEY_LABELS_PREF, labels);
+			await storage.setMeta(WEBAUTHN_KEY_LABELS_PREF, labels);
 			await refreshSlotMetadata();
 		},
 		[readDecodedBlob, storage, refreshSlotMetadata],
@@ -1507,18 +1507,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	}, [pendingJoin, activeId, registryReady, joinGroup, dropActiveRecord]);
 
 	const hasWebauthnSlot = webauthnSlots.length > 0;
-	const securityKeys = useMemo<SecurityKeyMeta[]>(
+	const webauthnKeys = useMemo<WebauthnKeyMeta[]>(
 		() =>
 			webauthnSlots.map((slot) => {
 				const slotIdB64 = bytesToBase64(slot.slotId);
-				const meta = securityKeyLabels[slotIdB64];
+				const meta = webauthnKeyLabels[slotIdB64];
 				return {
 					slotIdB64,
 					label: meta?.label ?? "Security key",
 					addedAt: meta?.addedAt ?? 0,
 				};
 			}),
-		[webauthnSlots, securityKeyLabels],
+		[webauthnSlots, webauthnKeyLabels],
 	);
 
 	const state = useMemo<VaultState>(
@@ -1535,7 +1535,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasWebauthnSlot,
 			hasPasswordSlot,
 			hasRecoveryCode,
-			securityKeys,
+			webauthnKeys,
 			biometricSupported: biometric !== undefined,
 			biometricAvailable,
 			biometricEnabled,
@@ -1555,7 +1555,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasWebauthnSlot,
 			hasPasswordSlot,
 			hasRecoveryCode,
-			securityKeys,
+			webauthnKeys,
 			biometric,
 			biometricAvailable,
 			biometricEnabled,
@@ -1571,7 +1571,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const ok =
 				"password" in auth
 					? await verifyMasterPassword(auth.password)
-					: await verifyWithSecurityKey();
+					: await verifyWithWebauthnKey();
 			if (!ok || !activeId) return false;
 			await lock();
 			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
@@ -1607,7 +1607,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		},
 		[
 			verifyMasterPassword,
-			verifyWithSecurityKey,
+			verifyWithWebauthnKey,
 			activeId,
 			lock,
 			storage,
@@ -1639,13 +1639,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setEntriesTags,
 			touchEntry,
 			verifyMasterPassword,
-			verifyWithSecurityKey,
+			verifyWithWebauthnKey,
 			changeMasterPassword,
 			setMasterPassword,
 			disableMasterPassword,
-			unlockWithSecurityKey,
-			registerSecurityKey,
-			revokeSecurityKey,
+			unlockWithWebauthnKey,
+			registerWebauthnKey,
+			revokeWebauthnKey,
 			generateRecoveryCode,
 			rotateSecret,
 			unlockWithRecoveryCode,
@@ -1676,13 +1676,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setEntriesTags,
 			touchEntry,
 			verifyMasterPassword,
-			verifyWithSecurityKey,
+			verifyWithWebauthnKey,
 			changeMasterPassword,
 			setMasterPassword,
 			disableMasterPassword,
-			unlockWithSecurityKey,
-			registerSecurityKey,
-			revokeSecurityKey,
+			unlockWithWebauthnKey,
+			registerWebauthnKey,
+			revokeWebauthnKey,
 			generateRecoveryCode,
 			rotateSecret,
 			unlockWithRecoveryCode,

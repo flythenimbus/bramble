@@ -34,11 +34,11 @@ export function DeleteVaultSection() {
 		}
 	};
 
-	const withSecurityKey = async () => {
+	const withWebauthnKey = async () => {
 		setError(null);
 		setBusy(true);
 		try {
-			if (!(await deleteVault({ securityKey: true })))
+			if (!(await deleteVault({ webauthnKey: true })))
 				setError(t`Couldn't verify your security key.`);
 		} catch (err) {
 			setError((err as Error).message);
@@ -108,7 +108,7 @@ export function DeleteVaultSection() {
 								<Button
 									variant="destructive"
 									size="none"
-									onClick={() => void withSecurityKey()}
+									onClick={() => void withWebauthnKey()}
 									disabled={busy}
 									className="px-4 py-2 text-sm"
 								>

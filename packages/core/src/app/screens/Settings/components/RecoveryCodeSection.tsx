@@ -14,7 +14,7 @@ export function RecoveryCodeSection() {
 		hasPasswordSlot,
 		hasRecoveryCode,
 		verifyMasterPassword,
-		verifyWithSecurityKey,
+		verifyWithWebauthnKey,
 		generateRecoveryCode,
 	} = useVault();
 	const { t } = useLingui();
@@ -34,7 +34,7 @@ export function RecoveryCodeSection() {
 		}
 		setBusy(true);
 		try {
-			const ok = await verifyWithSecurityKey();
+			const ok = await verifyWithWebauthnKey();
 			if (!ok) {
 				setError(t`Couldn't verify your security key. Try again.`);
 				return;
