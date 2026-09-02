@@ -26,6 +26,7 @@ import { consumePendingAutofillSave } from "./autofill-pending";
 import { hasPendingImport, onImportAvailable } from "./credential-exchange";
 import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/sync-manager";
+import { onTotpHandoff } from "./totp-handoff";
 
 // iOS WKWebView (capacitor:// scheme) has no RTCPeerConnection; install the native-backed
 // shim before any sync transport runs. No-op on Android/extension/dev-browser.
@@ -52,6 +53,7 @@ function Root() {
 	// back to "app" on completion/close.
 	const [view, setView] = useState<"app" | "setup" | "import" | "restore">("app");
 	const [pendingLogin, setPendingLogin] = useState<PendingLogin | null>(null);
+	const [pendingTotp, setPendingTotp] = useState<string | null>(null);
 	// The back-button listener is registered once; read the current view through a ref.
 	const viewRef = useRef(view);
 	viewRef.current = view;
@@ -108,6 +110,11 @@ function Root() {
 		};
 	}, []);
 
+	// A 2FA key handed over by another app or the OS. Held here until App can route it,
+	// which is after the vault unlocks: with the default "Immediately" auto-lock, being
+	// launched from another app means arriving locked almost every time.
+	useEffect(() => onTotpHandoff(setPendingTotp), []);
+
 	// Auto-lock after the configured inactivity timeout (background time counts as
 	// inactivity); honors the "Never" setting. onExternalLock then re-locks the UI.
 	useEffect(() => startAutoLock(), []);
@@ -116,7 +123,13 @@ function Root() {
 	useEffect(() => initRosterSync(), []);
 
 	if (view === "app")
-		return <App pendingLogin={pendingLogin ?? undefined} preferredLocale={deviceLocale} />;
+		return (
+			<App
+				pendingLogin={pendingLogin ?? undefined}
+				pendingTotp={pendingTotp ?? undefined}
+				preferredLocale={deviceLocale}
+			/>
+		);
 	return (
 		<OptionsApp
 			onComplete={() => setView("app")}

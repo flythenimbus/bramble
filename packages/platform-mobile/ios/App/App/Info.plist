@@ -54,6 +54,23 @@
 	<array>
 		<string>ASCredentialExchangeActivity</string>
 	</array>
+	<!-- Setting up a 2FA code elsewhere hands the otpauth:// URI to whichever app the user
+	     picked under Settings > Apps > Passwords > "Set Up Codes In". Registering the scheme
+	     is the WHOLE mechanism for appearing in that list; there is no API for it. An arriving
+	     URI only ever prefills a form, never writes to the vault. See docs/totp-uri-handler.md. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>app.bramble.mobile.otpauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>otpauth</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Bramble uses the camera to scan device pairing codes and 2FA QR codes.</string>
 	<key>NSFaceIDUsageDescription</key>

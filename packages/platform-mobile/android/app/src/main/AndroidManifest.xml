@@ -34,6 +34,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Inbound 2FA setup: another app or a browser hands us an otpauth:// URI and
+                 Android offers Bramble in the chooser. Any app on the device can fire this,
+                 so an arriving URI only ever prefills a form the user submits; it never
+                 writes to the vault. Deliberately MainActivity, not the :autofill process,
+                 so it is nowhere near a decrypted VEK. See docs/totp-uri-handler.md. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="otpauth" />
+            </intent-filter>
+
         </activity>
 
         <provider
