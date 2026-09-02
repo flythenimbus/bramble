@@ -31,10 +31,6 @@ export async function launchExtensionContext(reuseProfileDir?: string): Promise<
 			`--disable-extensions-except=${EXTENSION_PATH}`,
 			`--load-extension=${EXTENSION_PATH}`,
 			"--no-sandbox",
-			// Chrome hides local ICE candidates behind .local mDNS names. A desktop resolves them;
-			// a CI container does not, so the two sync peers never form a candidate pair and the
-			// handshake stalls waiting for a SAS that never arrives. Harmless for the other specs.
-			"--disable-features=WebRtcHideLocalIpsWithMdns",
 		],
 	});
 	let [sw] = context.serviceWorkers();

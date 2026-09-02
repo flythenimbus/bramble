@@ -41,10 +41,7 @@ export interface Peer {
  * would wipe the key anyway (see launchExtensionPeer).
  */
 async function launchMobilePeer(): Promise<Peer> {
-	// Same reason as the extension peer: see e2e/extension/fixtures.ts.
-	const browser = await chromium.launch({
-		args: ["--disable-features=WebRtcHideLocalIpsWithMdns"],
-	});
+	const browser = await chromium.launch();
 	const context = await browser.newContext();
 	const page = await context.newPage();
 	await page.goto(MOBILE_URL, { waitUntil: "domcontentloaded" });

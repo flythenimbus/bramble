@@ -93,7 +93,21 @@ jobs:
       - name: Build extension
         run: pnpm run build
 
-      # Handed to the e2e job so it doesn't repeat the Rust + WASM build, which is the slow part.
+      # The sync suite runs the mobile SPA, which loads its crypto from public/wasm - a
+      # gitignored directory built by a DIFFERENT wasm-pack target than the extension's. Without
+      # this the mobile peer dies on "Failed to fetch dynamically imported module" and simply
+      # never joins, which reads as a WebRTC failure and is not one.
+      - name: Build WASM (mobile target)
+        run: pnpm run wasm:build:mobile
+
+      # Handed to the e2e jobs so they don't repeat the Rust + WASM build, which is the slow part.
+      - name: Upload the mobile WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-wasm
+          path: packages/platform-mobile/public/wasm
+          retention-days: 1
+
       - name: Upload the built extension
         uses: actions/upload-artifact@v4
         with:
@@ -239,6 +253,13 @@ jobs:
         with:
           name: dist-chromium
           path: packages/platform-extension/dist-chromium
+
+      # The mobile peer is a real SPA and loads its crypto from here; see the build job.
+      - name: Download the mobile WASM
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-wasm
+          path: packages/platform-mobile/public/wasm
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
