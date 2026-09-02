@@ -68,6 +68,30 @@ describe("route guards", () => {
 	});
 });
 
+// The destination picker for an OS-handed 2FA key. It sits under /vault next to the
+// $entryId route, and it is reached while the vault is still locked far more often than
+// any other route (an app launched from another app with "Immediately" auto-lock).
+describe("totp setup route", () => {
+	it("is matched as a static path, not read as an entry id", async () => {
+		expect(
+			await destination("/vault/totp-setup", { isLocked: false, ready: true, entries: [] }),
+		).toBe("/vault/totp-setup");
+	});
+
+	// The parked key is what survives this trip; the route is re-entered after unlock.
+	it("bounces to the unlock screen when the vault is locked", async () => {
+		expect(
+			await destination("/vault/totp-setup", { isLocked: true, ready: true, entries: [] }),
+		).toBe("/");
+	});
+
+	it("does not bounce during hydration (ready=false)", async () => {
+		expect(
+			await destination("/vault/totp-setup", { isLocked: true, ready: false, entries: [] }),
+		).toBe("/vault/totp-setup");
+	});
+});
+
 // The launch-time chooser: several vaults + none selected -> /select; else the unlock
 // screen. authRoute and selectVaultRoute redirects are exact complements (no loop).
 describe("vault picker guards", () => {

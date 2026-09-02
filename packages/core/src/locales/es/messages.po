@@ -339,6 +339,10 @@ msgstr "Solicitar {name} en cuanto aparezca la pantalla de desbloqueo, sin tocar
 msgid "At Risk"
 msgstr "En riesgo"
 
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Authenticator key"
+msgstr "Clave de autenticador"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Authenticator key (TOTP)"
 msgstr "Clave de autenticador (TOTP)"
@@ -366,6 +370,10 @@ msgstr "Autorrelleno en páginas web"
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
 msgstr "Atrás"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Back to vault"
+msgstr "Volver a la bóveda"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Back up now"
@@ -529,6 +537,10 @@ msgstr "Cactus"
 msgid "Cake"
 msgstr "Pastel"
 
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Can't save this code"
+msgstr "No se puede guardar este código"
+
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
@@ -632,6 +644,10 @@ msgstr "Seleccionar otro archivo"
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Choose the vault these items should go into"
 msgstr "Elija la caja fuerte a la que deben ir estos elementos"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Choose where to save this 2FA code."
+msgstr "Elija dónde guardar este código de 2FA."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault. Add as many as you like."
@@ -1797,6 +1813,10 @@ msgstr "No se encontraron elementos importables en este archivo."
 msgid "No items found matching your search."
 msgstr "No se encontraron elementos que coincidan con su búsqueda."
 
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "No logins match."
+msgstr "No hay inicios de sesión que coincidan."
+
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "No QR code detected. Try again, or paste the code."
 msgstr "No se detectó ningún código QR. Intente de nuevo o pegue el código."
@@ -1871,6 +1891,10 @@ msgstr "No hay nada registrado en Face ID o Touch ID, por lo que el código de a
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"
 msgstr "Nada que importar"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Nothing usable was handed over. Open the site's 2FA page and add the code from the login instead."
+msgstr "No se ha entregado nada utilizable. Abra la página de 2FA del sitio y, en su lugar, añada el código desde el inicio de sesión."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "Numbers match, approve"
@@ -1969,6 +1993,10 @@ msgstr "Opcional (p. ej., Restaurado)"
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Optional (e.g. Work)"
 msgstr "Opcional (p. ej., Trabajo)"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Or add it to an existing login"
+msgstr "O añadirlo a un inicio de sesión existente"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Other vendors"
@@ -2273,6 +2301,10 @@ msgstr "Quitando…"
 msgid "Replaced {0}"
 msgstr "Reemplazada {0}"
 
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Replaces code"
+msgstr "Reemplaza el código"
+
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Replaces the key everything in this vault is encrypted with. Worth doing if you believe a copy of the vault file has been exposed, since anything taken before cannot be opened with the new key."
 msgstr "Reemplaza la clave con la que se cifra todo en esta bóveda. Vale la pena hacerlo si cree que una copia del archivo de la bóveda ha quedado expuesta, ya que cualquier dato obtenido anteriormente no puede abrirse con la nueva clave."
@@ -2395,6 +2427,10 @@ msgstr "Guarde una copia cifrada .bramble de su bóveda. Aún necesita su contra
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
 msgstr "Guárdelo en un lugar seguro y sin conexión ahora. Es la única forma de recuperarlo si olvida su contraseña maestra y pierde sus claves de seguridad, y nosotros no podemos recuperarlo por usted."
 
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Save to a new login"
+msgstr "Guardar en un nuevo inicio de sesión"
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save your recovery code"
 msgstr "Guardar su código de recuperación"
@@ -2439,6 +2475,10 @@ msgstr "Las copias de seguridad programadas solo se ejecutan mientras Bramble es
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Scissors"
 msgstr "Tijeras"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Search logins"
+msgstr "Buscar inicios de sesión"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Search vault"
@@ -2764,6 +2804,19 @@ msgstr "Eso no parece un archivo de exportación de Bramble (.bramble)."
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "That isn't the right number of digits for this type of card."
 msgstr "Ese no es el número correcto de dígitos para este tipo de tarjeta."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link is an authenticator export holding several accounts, not a setup code. Add each account from its own site instead."
+msgstr "Ese enlace es una exportación de autenticador que contiene varias cuentas, no un código de configuración. En su lugar, añada cada cuenta desde su propio sitio."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link isn't an authenticator setup code Bramble can use. Counter-based (HOTP) codes aren't supported."
+msgstr "Ese enlace no es un código de configuración de autenticador que Bramble pueda usar. No se admiten códigos basados en contador (HOTP)."
+
+#. placeholder {0}: vendor ?? "another authenticator app"
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link sets up {0}, so it holds no key to save. On the site, choose to use a different authenticator app, then use the code it offers."
+msgstr "Ese enlace configura {0}, por lo que no contiene ninguna clave que guardar. En el sitio, elija usar una aplicación de autenticación diferente y, a continuación, use el código que le ofrezca."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "That password didn't open the file."

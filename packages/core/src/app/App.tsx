@@ -14,6 +14,7 @@ import { PopOutProvider } from "./hooks/usePopOut";
 import { ThemeProvider } from "./hooks/useTheme";
 import { LocaleGate } from "./LocaleGate";
 import { setPendingCreateEntry } from "./pending-create-entry";
+import { setPendingTotp } from "./pending-totp";
 import { type AppRouter, createAppRouter } from "./router";
 
 /** A credential the mobile autofill provider captured, to seed a prefilled add-login form. */
@@ -32,6 +33,9 @@ interface AppProps {
 	// Mobile only: a captured sign-in to save, surfaced as a prefilled add-login form
 	// once the vault is unlocked. Absent on desktop / the extension.
 	pendingLogin?: PendingLogin;
+	// Mobile only: an `otpauth://` key the OS handed over (iOS "Set Up Codes In", an
+	// Android otpauth:// intent), routed to the setup screen once unlocked.
+	pendingTotp?: string;
 	// BCP-47 tag the host detected (mobile reads Capacitor Device.getLanguageTag,
 	// which is reliable where WKWebView's navigator.language is clamped to the app
 	// bundle's localizations). Falls back to navigator.language.
@@ -47,7 +51,15 @@ function DevFlags() {
 	return <DevFlagsModal />;
 }
 
-function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: PendingLogin }) {
+function InnerApp({
+	router,
+	pendingLogin,
+	pendingTotp,
+}: {
+	router: AppRouter;
+	pendingLogin?: PendingLogin;
+	pendingTotp?: string;
+}) {
 	const { isLocked, ready, entries } = useVault();
 	const { ready: registryReady, vaults, activeId } = useVaultRegistry();
 	const { shell } = usePlatform();
@@ -58,6 +70,10 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 		[registryReady, vaults.length, activeId],
 	);
 	const consumed = useRef(false);
+	// The key already routed, not a spent flag: setting up 2FA on a second site in the same
+	// session is ordinary, and a boolean would silently drop every handoff after the first.
+	// Comparing the key itself still refuses to route the SAME one twice.
+	const routedTotp = useRef<string | null>(null);
 
 	// Mobile: persist passkeys the native provider minted during a sign-in registration.
 	usePendingPasskeys();
@@ -125,6 +141,17 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 		void router.navigate({ to: "/vault/new/$type", params: { type: "login" } });
 	}, [pendingLogin, ready, isLocked, router]);
 
+	// TOTP handoff: an authenticator key another app sent us. Deferred past unlock for the
+	// same reason as the save handoff, and more often, since being launched from another app
+	// while locked is the NORMAL case here rather than the edge one. Parked rather than
+	// passed down, because the setup screen is a route component with no props to hand it to.
+	useEffect(() => {
+		if (!pendingTotp || !ready || isLocked || routedTotp.current === pendingTotp) return;
+		routedTotp.current = pendingTotp;
+		setPendingTotp(pendingTotp);
+		void router.navigate({ to: "/vault/totp-setup" });
+	}, [pendingTotp, ready, isLocked, router]);
+
 	return <RouterProvider router={router} context={{ vault, registry }} />;
 }
 
@@ -134,6 +161,7 @@ export default function App({
 	initialDraft,
 	initialVaultId,
 	pendingLogin,
+	pendingTotp,
 	preferredLocale,
 }: AppProps = {}) {
 	// One router per tree, seeded once with the handed-over path.
@@ -155,7 +183,11 @@ export default function App({
 							<VaultProvider>
 								<PrefsProvider>
 									<PopOutProvider router={router} initialDraft={initialDraft}>
-										<InnerApp router={router} pendingLogin={pendingLogin} />
+										<InnerApp
+											router={router}
+											pendingLogin={pendingLogin}
+											pendingTotp={pendingTotp}
+										/>
 									</PopOutProvider>
 								</PrefsProvider>
 							</VaultProvider>

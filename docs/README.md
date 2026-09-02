@@ -13,6 +13,7 @@ comments point here instead of repeating it.
 | [auth-and-unlock.md](auth-and-unlock.md) | Unlock flows, the slot-policy invariant (always one primary method), verify-without-unlock, error sanitization |
 | [security-keys.md](security-keys.md) | WebAuthn PRF / hmac-secret unlock, two-ceremony registration, salt-mismatch retry |
 | [totp.md](totp.md) | Stored authenticator keys: accepted input shapes and the "only digits reach the page" model |
+| [totp-uri-handler.md](totp-uri-handler.md) | Appearing in iOS's "Set Up Codes In" and Android's chooser by handling inbound `otpauth://` URIs, and why an arriving URI is both untrusted and a secret |
 | [recovery-codes.md](recovery-codes.md) | High-entropy offline recovery codes: format, entropy, normalization |
 | [vault-format.md](vault-format.md) | The VLT1 v2 on-disk binary layout and TLV slots |
 | [password-changelog.md](password-changelog.md) | Superseded passwords kept on a login for propagation lag: the cap, who may write the field, and where it must not leak |

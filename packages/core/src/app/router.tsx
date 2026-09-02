@@ -37,6 +37,10 @@ const EntryEditRoute = lazyRouteComponent(
 	"EntryEditRoute",
 );
 const SettingsRoute = lazyRouteComponent(() => import("./routes/SettingsRoute"), "SettingsRoute");
+const TotpSetupRoute = lazyRouteComponent(
+	() => import("./routes/TotpSetupRoute"),
+	"TotpSetupRoute",
+);
 
 // Slice of vault state route guards read; injected via RouterProvider context.
 // Stays `undefined` until React fills it, so guards treat missing vault as
@@ -118,6 +122,14 @@ const createEntryRoute = createRoute({
 	component: CreateEntryRoute,
 });
 
+// Static, so it out-ranks /vault/$entryId rather than being read as an entry id.
+const totpSetupRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/vault/totp-setup",
+	staticData: { back: { to: "/vault" } },
+	component: TotpSetupRoute,
+});
+
 const entryDetailRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/vault/$entryId",
@@ -159,6 +171,7 @@ const routeTree = rootRoute.addChildren([
 	appLayoutRoute.addChildren([
 		vaultHomeRoute,
 		createEntryRoute,
+		totpSetupRoute,
 		entryDetailRoute,
 		entryEditRoute,
 		settingsRoute,
