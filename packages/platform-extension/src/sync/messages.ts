@@ -70,13 +70,6 @@ export const EnrollJoinMsgSchema = z.object({
 	inviterPub: z.string(),
 	ownEntry: RosterEntrySchema,
 	password: z.string().optional(),
-	webauthn: z
-		.object({
-			hmacSecretB64: z.string(),
-			credentialIdB64: z.string(),
-			saltB64: z.string(),
-		})
-		.optional(),
 });
 
 /** offscreen -> background: a peer's entries payload (JSON) to merge locally. */

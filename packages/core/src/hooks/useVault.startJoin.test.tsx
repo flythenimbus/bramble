@@ -127,8 +127,8 @@ describe("the vault a join creates", () => {
 	});
 });
 
-describe("joining with a key instead of a password", () => {
-	/** A credential stub good enough for the ceremony: PRF secret straight from create(). */
+describe("joining is master-password only", () => {
+	/** A credential stub, present so a stray ceremony would be caught rather than silently pass. */
 	function stubAuthenticator() {
 		const create = vi.fn(async (_opts: { publicKey: unknown }) => ({
 			rawId: new Uint8Array([1, 2, 3]).buffer,
@@ -143,48 +143,10 @@ describe("joining with a key instead of a password", () => {
 
 	afterEach(() => vi.unstubAllGlobals());
 
-	/** The authenticatorSelection the ceremony asked for, out of an opaque options bag. */
-	function publicKeyOf(create: { mock: { calls: { publicKey: unknown }[][] } }) {
-		return create.mock.calls[0]![0]!.publicKey as {
-			authenticatorSelection: { authenticatorAttachment?: string; residentKey: string };
-		};
-	}
-
-	it("registers a platform key by default, not a security key", async () => {
-		// This is the whole point of the option: a vault whose master password is off has no
-		// password to type, so joining with one would silently put a password slot back.
-		const create = stubAuthenticator();
-		const { platform } = makePlatform();
-		const getActions = mountVaultActions(platform);
-		await act(async () => {});
-
-		await act(async () => {
-			void getActions().startJoin(CODE, { kind: "webauthnKey", label: "This device" });
-		});
-		await act(async () => {});
-
-		expect(create).toHaveBeenCalledOnce();
-		const selection = publicKeyOf(create).authenticatorSelection;
-		expect(selection.authenticatorAttachment).toBe("platform");
-		expect(selection.residentKey).toBe("required");
-	});
-
-	it("still honours an explicit security-key join", async () => {
-		const create = stubAuthenticator();
-		const { platform } = makePlatform();
-		const getActions = mountVaultActions(platform);
-		await act(async () => {});
-
-		await act(async () => {
-			void getActions().startJoin(CODE, { kind: "webauthnKey", keyKind: "securityKey" });
-		});
-		await act(async () => {});
-
-		const selection = publicKeyOf(create).authenticatorSelection;
-		expect(selection.residentKey).toBe("discouraged");
-	});
-
-	it("runs no ceremony for a password join", async () => {
+	it("runs no webauthn ceremony", async () => {
+		// The key-based join was removed: it skipped a joiner-side check that never gated the VEK
+		// anyway, and nothing but a password-less vault wanted it. This guards the removal, since
+		// the ceremony is invisible in the UI and would come back unnoticed.
 		const create = stubAuthenticator();
 		const { platform } = makePlatform();
 		const getActions = mountVaultActions(platform);

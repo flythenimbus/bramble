@@ -167,14 +167,13 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 }
 
 /**
- * How a joining device unlocks its rebuilt vault. The webauthn variant mints a key against THIS
- * device's own authenticator: nothing is transferred from the inviter, exactly as a typed
- * password is not. It is the only way to add a device to a vault whose master password is off
- * without silently putting a password slot back. See docs/security-keys.md.
+ * How a joining device unlocks its rebuilt vault: the master password, always. A key-based join
+ * was removed - it skipped a check that turned out not to gate anything anyway, and it left
+ * password-less vaults as the only caller. They cannot add a device until a per-invite temporary
+ * password exists, which has to be enforced by the INVITER before it releases the VEK. See
+ * docs/p2p-sync.md.
  */
-export type JoinUnlock =
-	| { kind: "password"; password: string }
-	| { kind: "webauthnKey"; label?: string; keyKind?: WebauthnKeyKind };
+export type JoinUnlock = { kind: "password"; password: string };
 
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { webauthnKey: true };
@@ -1426,7 +1425,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		rotateDeviceId,
 		readDecodedBlob,
 		unlock,
-		finishWebauthnUnlock,
 		readEntriesPayload: mutations.readEntriesPayload,
 	});
 

@@ -76,8 +76,11 @@ describe("EnrollJoinMsgSchema", () => {
 		expect(EnrollJoinMsgSchema.parse(ok)).toEqual(ok);
 	});
 
-	it("accepts a security-key joiner payload (webauthn, no password)", () => {
-		const ok = {
+	it("drops a webauthn block, so the removed keyless join cannot be driven through it", () => {
+		// Joining by key is gone. Zod strips unknown keys rather than rejecting, so a payload
+		// carrying one still parses - but the field does not survive, and the receiving side has
+		// no option to read it into. Asserted because silence here would look like acceptance.
+		const sent = {
 			relayUrl: "wss://r",
 			groupKeyB64: "g",
 			psk: "p",
@@ -86,12 +89,8 @@ describe("EnrollJoinMsgSchema", () => {
 			ownEntry: rosterEntry,
 			webauthn: { hmacSecretB64: "h", credentialIdB64: "c", saltB64: "s" },
 		};
-		expect(EnrollJoinMsgSchema.parse(ok)).toEqual(ok);
-	});
-
-	it("rejects a webauthn block missing a field", () => {
-		const bad = { ...base, ownEntry: rosterEntry, webauthn: { hmacSecretB64: "h", saltB64: "s" } };
-		expect(EnrollJoinMsgSchema.safeParse(bad).success).toBe(false);
+		const parsed = EnrollJoinMsgSchema.parse(sent);
+		expect(parsed).not.toHaveProperty("webauthn");
 	});
 
 	it("rejects a joiner payload with a malformed ownEntry", () => {

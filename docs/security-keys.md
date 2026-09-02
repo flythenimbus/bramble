@@ -231,34 +231,16 @@ Hello. Labels live in the `pref.securityKeyLabels` local pref and never travel w
 vault file, so a slot registered on another device reads as an unnamed security key;
 `describeWebauthnKeys` in `slot-policy.ts` holds those fallbacks and their tests.
 
-## Enrolling a device with a security key
+## Enrolling a device (master password only)
 
-Joining a P2P sync group (see [p2p-sync.md](p2p-sync.md)) can unlock the new
-device with a security key instead of a master password. It reuses the same
-`createPrfCredential` ceremony, with two wrinkles from the enrollment flow:
+Joining a sync group is master-password only. A key-based join existed in the engine and was
+briefly offered in the UI; both are gone. It skipped a joiner-side password check that turned out
+not to gate anything (see [p2p-sync.md](p2p-sync.md)), and the only case that needed it was a
+password-less vault.
 
-- The ceremony runs **first**, on the Join click's user activation, before the
-  (async, multi-second) handshake; otherwise the gesture is spent and `create()`
-  fails. The resulting `{ credentialId, salt, hmacSecret }` is held while the group
-  VEK arrives over the channel.
-- The VEK never reaches the popup: only the hmac-secret crosses to the offscreen
-  (exactly as a password would), which mints the webauthn slot against the
-  transferred VEK via `wrapWebauthnSlot`. The popup then finishes the unlock with
-  the in-hand secret (`finishWebauthnUnlock`), no second tap.
-
-The join screen offers **Master password**, **This device** (Touch ID / Windows Hello)
-and, where `securityKeys` allows, **Security key**, gated on `webauthnUnlock` so it is
-hidden where PRF can't work (mobile webviews; see [mobile-port.md](mobile-port.md)).
-
-The key options are not a convenience. A vault whose master password is off has no
-password slot, so the inviter ships no `passwordCheck` and nothing verifies what the
-joiner types (`enroll-host.ts` falls back to a local confirm-password guard, which only
-catches typos). Joining such a vault with a password therefore invents one, wraps the VEK
-under it, and puts a password slot back into a vault that deliberately had none. Joining
-with a key mints a slot against the joining device's OWN authenticator instead, so the
-vault stays password-less and each device keeps its own key. Nothing is transferred from
-the inviter either way: the hmac-secret goes popup to offscreen on one machine, exactly as
-a typed password does.
+So a vault with no password slot **cannot add a device**. The intended answer is a per-invite
+temporary password, which only works if the INVITER withholds the VEK until the joiner answers a
+challenge, before `sendBundle`. Not built.
 
 ## Unlock and the salt-mismatch retry
 

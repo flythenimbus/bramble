@@ -233,23 +233,21 @@ describe("receiveBundle — provable password match", () => {
 		expect(onJoined).toHaveBeenCalledOnce();
 	});
 
-	it("skips the password check when this device joins with a security key", async () => {
+	it("checks the password even when none was typed, now that a keyless join is gone", async () => {
+		// This used to assert the opposite: a security-key join skipped the check entirely. That
+		// path is removed, so an empty password must fail rather than sail through.
 		const verify = vi.fn(() => false);
 		const onJoined = vi.fn();
 		const wasm = mockWasm({ verify_password_slot: verify });
 
 		await receiveBundle(
-			joinerOpts(wasm, {
-				password: undefined,
-				webauthn: { hmacSecretB64: b64(32), credentialIdB64: b64(20), saltB64: b64(32) },
-				onJoined,
-			}),
+			joinerOpts(wasm, { password: undefined, onJoined }),
 			joinerPeer(bundleJson({ primaryPasswordCheck: CHECK })),
 			sess,
 		);
 
-		expect(verify).not.toHaveBeenCalled();
-		expect(onJoined).toHaveBeenCalledOnce();
+		expect(verify).toHaveBeenCalledOnce();
+		expect(onJoined).not.toHaveBeenCalled();
 	});
 });
 

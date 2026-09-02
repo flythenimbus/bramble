@@ -13,17 +13,15 @@ import {
 	type RecoverySlot,
 	SLOT_KIND_PASSWORD,
 	SLOT_KIND_RECOVERY,
-	SLOT_KIND_WEBAUTHN,
 	type Slot,
 	type VaultBlob,
 	verifierPrefix,
-	type WebauthnSlot,
 } from "../vault-format";
 
 /** The crypto ops the builder needs; both the CryptoAdapter and a wasm wrapper satisfy this. */
 export type VaultBuildCrypto = Pick<
 	CryptoAdapter,
-	"generateSalt" | "generateSlotId" | "wrapVekPassword" | "wrapVekWebauthn" | "encryptWithVek"
+	"generateSalt" | "generateSlotId" | "wrapVekPassword" | "encryptWithVek"
 >;
 
 // The fields common to a password and a recovery slot (everything but the kind).
@@ -62,29 +60,6 @@ export async function wrapRecoverySlot(
 	code: string,
 ): Promise<RecoverySlot> {
 	return { kind: SLOT_KIND_RECOVERY, ...(await wrapVek(crypto, code)) };
-}
-
-/** Wrap the loaded VEK under a security key. salt + credentialId come from the PRF
- * ceremony (so unlock can re-derive); only the slot id is freshly generated. */
-export async function wrapWebauthnSlot(
-	crypto: VaultBuildCrypto,
-	input: { hmacSecretB64: string; credentialId: Uint8Array; salt: Uint8Array },
-): Promise<WebauthnSlot> {
-	const slotIdB64 = await crypto.generateSlotId();
-	const wrapped = await crypto.wrapVekWebauthn({
-		hmacSecretB64: input.hmacSecretB64,
-		slotIdB64,
-		magicVersion: verifierPrefix(),
-	});
-	return {
-		kind: SLOT_KIND_WEBAUTHN,
-		slotId: base64ToBytes(slotIdB64),
-		credentialId: input.credentialId,
-		salt: input.salt,
-		verifier: base64ToBytes(wrapped.verifier),
-		wrapIv: base64ToBytes(wrapped.wrapIv),
-		wrappedVek: base64ToBytes(wrapped.wrappedVek),
-	};
 }
 
 /** Encode a vault blob: the given slots plus the entries payload sealed under the loaded VEK. */

@@ -3,12 +3,7 @@
 // then does the inviter seal {vek, roster, entries} over the Noise session. See docs/p2p-sync.md.
 
 import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
-import {
-	buildVaultBytes,
-	type VaultBuildCrypto,
-	wrapPasswordSlot,
-	wrapWebauthnSlot,
-} from "../../vault/build-vault";
+import { buildVaultBytes, type VaultBuildCrypto, wrapPasswordSlot } from "../../vault/build-vault";
 import { type RecoverySlot, SLOT_KIND_RECOVERY, verifierPrefix } from "../../vault-format";
 import {
 	decodeEnrollmentBundle,
@@ -83,11 +78,6 @@ interface CryptoWasm {
 		slotIdB64: string,
 		magicVersion: Uint8Array,
 	): Awaitable<{ verifier: string; wrapIv: string; wrappedVek: string }>;
-	wrap_vek_webauthn(
-		hmacSecretB64: string,
-		slotIdB64: string,
-		magicVersion: Uint8Array,
-	): Awaitable<{ verifier: string; wrapIv: string; wrappedVek: string }>;
 	encrypt_with_vek(plaintext: string): Awaitable<{ iv: string; ciphertext: string }>;
 	/** Constant-time verifier check (no VEK unwrap) used to prove the joiner's typed
 	 * password matches the inviter's existing master password. */
@@ -137,7 +127,6 @@ export interface EnrollOptions {
 	 * inviter so both rosters end up symmetric. */
 	inviterPub?: string;
 	password?: string;
-	webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
 	ownEntry?: RosterEntry;
 	/** Joiner: deliver the rebuilt (VEK-wrapped) vault blob to the host for writing. */
 	onJoined?: (result: JoinResult) => void;
@@ -222,10 +211,6 @@ function wasmSlotCrypto(wasm: CryptoWasm, vekB64: string): VaultBuildCrypto {
 		wrapVekPassword: (i) =>
 			loadThen(wasm, vekB64, () =>
 				wasm.wrap_vek_password(i.password, i.saltB64, i.slotIdB64, i.magicVersion),
-			),
-		wrapVekWebauthn: (i) =>
-			loadThen(wasm, vekB64, () =>
-				wasm.wrap_vek_webauthn(i.hmacSecretB64, i.slotIdB64, i.magicVersion),
 			),
 		encryptWithVek: (p) => loadThen(wasm, vekB64, () => wasm.encrypt_with_vek(p)),
 	};
@@ -479,9 +464,7 @@ export async function receiveBundle(
 	// entry, the INVITER would have to withhold the VEK pending a challenge-response, which is a
 	// protocol change, not a check moved around. See docs/p2p-sync.md.
 	//
-	// `opts.webauthn` skips it because there is no typed password to check. No UI reaches that
-	// branch today: the join screen is master-password only.
-	if (bundle.primaryPasswordCheck && !opts.webauthn) {
+	if (bundle.primaryPasswordCheck) {
 		const ok = await opts.wasm.verify_password_slot(
 			opts.password ?? "",
 			bundle.primaryPasswordCheck.saltB64,
@@ -498,13 +481,7 @@ export async function receiveBundle(
 	}
 	await opts.wasm.unlock_with_vek(bundle.vek); // adopt the group VEK (stays in the wasm)
 	const slotCrypto = wasmSlotCrypto(opts.wasm, bundle.vek);
-	const slot = opts.webauthn
-		? await wrapWebauthnSlot(slotCrypto, {
-				hmacSecretB64: opts.webauthn.hmacSecretB64,
-				credentialId: base64ToBytes(opts.webauthn.credentialIdB64),
-				salt: base64ToBytes(opts.webauthn.saltB64),
-			})
-		: await wrapPasswordSlot(slotCrypto, opts.password ?? "");
+	const slot = await wrapPasswordSlot(slotCrypto, opts.password ?? "");
 	// Copy the inviter's recovery slot(s) verbatim: they wrap the same (group) VEK, so the group's
 	// recovery code unlocks this device too. Without this the rebuilt vault would have no recovery
 	// path (it's rebuilt with just the unlock slot above).

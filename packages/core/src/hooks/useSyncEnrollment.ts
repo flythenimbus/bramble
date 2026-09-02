@@ -21,14 +21,11 @@ import {
 } from "../sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { defaultDeviceLabel } from "../util/device-label";
-import { createPrfCredential } from "../vault/webauthn-ceremony";
 import {
 	findPasswordSlot,
 	findRecoverySlots,
-	findWebauthnSlots,
 	type PasswordSlot,
 	type VaultBlob,
-	type WebauthnSlot,
 } from "../vault-format";
 import type { JoinUnlock, UseVault } from "./useVault";
 
@@ -82,7 +79,6 @@ export interface SyncEnrollmentDeps {
 	readDecodedBlob: () => Promise<{ blob: VaultBlob }>;
 	unlock: (password: string) => Promise<void>;
 	/** Finish a security-key unlock with an in-hand PRF secret (no extra tap). */
-	finishWebauthnUnlock: (slot: WebauthnSlot, hmacSecret: Uint8Array) => Promise<void>;
 	/** Decrypt the on-disk entries payload (the inviter ships it in the bundle). */
 	readEntriesPayload: () => Promise<EntriesPayload>;
 }
@@ -105,7 +101,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 		rotateDeviceId,
 		readDecodedBlob,
 		unlock,
-		finishWebauthnUnlock,
 		readEntriesPayload,
 	} = deps;
 	const { shell } = usePlatform();
@@ -352,15 +347,6 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				throw new Error("That pairing code has expired. Generate a new one and try again.");
 			}
 			// Security-key path: run the PRF create() ceremony FIRST, on this click's
-			// fresh user activation, before any await can spend it. One tap; we keep the
-			// secret so the offscreen can wrap a webauthn slot and we finish the local
-			// unlock without a second tap.
-			const cred =
-				method.kind === "webauthnKey"
-					? await createPrfCredential(method.label ?? "", {
-							kind: method.keyKind ?? "platform",
-						})
-					: undefined;
 			// Enter the group as a fresh device: mint a new id first, so a device re-added after being
 			// revoked doesn't reuse its old (now-tombstoned) id, which would be dropped everywhere.
 			await rotateDeviceId();
@@ -396,15 +382,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				psk: code.psk,
 				inviterPub: code.inviterPub,
 				ownEntry,
-				...(cred
-					? {
-							webauthn: {
-								hmacSecretB64: bytesToBase64(cred.hmacSecret),
-								credentialIdB64: bytesToBase64(cred.credentialId),
-								saltB64: bytesToBase64(cred.salt),
-							},
-						}
-					: { password: method.kind === "password" ? method.password : "" }),
+				password: method.password,
 			});
 			let vaultBlobB64: string;
 			let roster: RosterPayload;
@@ -425,26 +403,9 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			await storage.setMeta("sync.iceUrl", code.iceUrl ?? ""); // adopt the inviter's TURN endpoint
 			await shell.stopSyncSpike();
 
-			if (cred) {
-				// Unlock with the secret already in hand (the slot the offscreen just minted).
-				const { blob } = await readDecodedBlob();
-				const slot = findWebauthnSlots(blob)[0];
-				if (!slot) throw new Error("Joined vault has no security-key slot.");
-				await finishWebauthnUnlock(slot, cred.hmacSecret);
-			} else if (method.kind === "password") {
-				await unlock(method.password);
-			}
+			await unlock(method.password);
 		},
-		[
-			shell,
-			storage,
-			syncKey,
-			ensureClock,
-			rotateDeviceId,
-			unlock,
-			finishWebauthnUnlock,
-			readDecodedBlob,
-		],
+		[shell, storage, syncKey, ensureClock, rotateDeviceId, unlock],
 	);
 
 	// Revoke a device: a roster tombstone that ongoing sync gossips to peers (so it

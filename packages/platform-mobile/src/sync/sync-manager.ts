@@ -274,7 +274,6 @@ export async function startEnrollJoin(opts: {
 	inviterPub: string;
 	ownEntry: RosterEntry;
 	password?: string;
-	webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
 }): Promise<void> {
 	const wasm = await loadSyncCrypto();
 	const { privateKey } = await deviceKeypair();
@@ -287,7 +286,6 @@ export async function startEnrollJoin(opts: {
 		inviterPub: opts.inviterPub,
 		ownEntry: opts.ownEntry,
 		password: opts.password,
-		webauthn: opts.webauthn,
 		devicePrivB64: privateKey,
 		wasm,
 		report,
