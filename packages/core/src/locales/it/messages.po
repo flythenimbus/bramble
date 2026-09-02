@@ -348,8 +348,8 @@ msgid "Authenticator returned an unknown credential."
 msgstr "L'autenticatore ha restituito una credenziale sconosciuta."
 
 #: packages/core/src/hooks/useVault.tsx
-msgid "Authenticator returned no credential."
-msgstr "L'autenticatore non ha restituito alcuna credenziale."
+#~ msgid "Authenticator returned no credential."
+#~ msgstr "L'autenticatore non ha restituito alcuna credenziale."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Auto-lock timeout"
@@ -1419,6 +1419,10 @@ msgstr "Cavallo"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Hourglass"
 msgstr "Clessidra"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "How will you unlock on this device?"
+msgstr "Come desidera sbloccare su questo dispositivo?"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
@@ -2905,8 +2909,12 @@ msgid "This creates a new vault on this device and syncs it from your other devi
 msgstr "Questa operazione crea un nuovo vault su questo dispositivo e lo sincronizza dall'altro dispositivo. Utilizzare la stessa password principale di quel dispositivo."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
-msgstr "Questa operazione crea una nuova cassaforte su questo dispositivo e la sincronizza dall'altro dispositivo. Verrà registrata una chiave che sblocca solo su questo dispositivo, quindi l'altro dispositivo conserva la propria."
+#~ msgid "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+#~ msgstr "Questa operazione crea una nuova cassaforte su questo dispositivo e la sincronizza dall'altro dispositivo. Verrà registrata una chiave che sblocca solo su questo dispositivo, quindi l'altro dispositivo conserva la propria."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
+msgstr "Viene creata una nuova cassaforte su questo dispositivo e viene sincronizzata dall'altro dispositivo. Qui, su questo dispositivo, verrà registrata una nuova chiave, così non sarà mai necessario digitare la password principale. L'altro dispositivo mantiene la propria chiave."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
@@ -3038,6 +3046,10 @@ msgstr "Totale elementi"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Touch ID"
 msgstr "Touch ID"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Touch ID or Windows Hello"
+msgstr "Touch ID o Windows Hello"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Train"

@@ -376,8 +376,21 @@ this reason.)
 - **Entry vs tombstone:** compare the entry's HLC against any tombstone for the same id; the
   greater wins. A delete is a stamped tombstone, never a silent removal, so a stale copy on
   another device cannot resurrect it. An edit stamped *after* a delete correctly undeletes.
-- **Slots:** union by `slotId`; revocation is a slot tombstone. All slots wrap the same VEK, so
-  union is valid, and `OpaqueSlot` round-trip preserves slot kinds a device does not understand.
+- **Slots:** NOT merged. This describes a design that was never built: `mergeReplicas` handles
+  entry records only, `apply-remote.ts` has no slot handling, and `OpaqueSlot` is purely a
+  `vault-format.ts` parser fall-through for unknown slot kinds, unrelated to sync. Verified on a
+  device 2026-09-01: a webauthn key registered on one browser is absent from a vault joined from
+  it.
+
+  What actually happens: **each device mints its own slots and they never travel.** A joining
+  device rebuilds its vault (`enroll-host.ts` via `buildVaultBytes`) with the slot it just made,
+  plus the inviter's forwarded `recoverySlots`. So the master password works everywhere because
+  the same password re-derives on each device, not because a slot moved.
+
+  Union would be valid if implemented (all slots wrap the same VEK), and the absence has real
+  consequences: a key added on one device is invisible to the others, and revoking one there does
+  not propagate. The only way a vault gains another device's slots today is **restoring that
+  device's backup**, since a `.bramble` backup is the sealed blob (`backup/run.ts`).
 
 ### Conflict loser
 

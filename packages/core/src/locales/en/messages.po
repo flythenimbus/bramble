@@ -348,8 +348,8 @@ msgid "Authenticator returned an unknown credential."
 msgstr "Authenticator returned an unknown credential."
 
 #: packages/core/src/hooks/useVault.tsx
-msgid "Authenticator returned no credential."
-msgstr "Authenticator returned no credential."
+#~ msgid "Authenticator returned no credential."
+#~ msgstr "Authenticator returned no credential."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Auto-lock timeout"
@@ -1419,6 +1419,10 @@ msgstr "Horse"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Hourglass"
 msgstr "Hourglass"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "How will you unlock on this device?"
+msgstr "How will you unlock on this device?"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
@@ -2905,8 +2909,12 @@ msgid "This creates a new vault on this device and syncs it from your other devi
 msgstr "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
-msgstr "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+#~ msgid "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+#~ msgstr "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
+msgstr "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
@@ -3038,6 +3046,10 @@ msgstr "Total Items"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Touch ID"
 msgstr "Touch ID"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Touch ID or Windows Hello"
+msgstr "Touch ID or Windows Hello"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Train"

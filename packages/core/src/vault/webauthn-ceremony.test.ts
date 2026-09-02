@@ -310,6 +310,27 @@ describe("rpID selection", () => {
 		expect(unlockRpIdOrder(false)).toEqual([undefined, "bramble.sh"]);
 	});
 
+	it("never offers Firefox an rpID it is refused outright", () => {
+		// Firefox rejects its own moz-extension:// origin as an RP with SecurityError - a hard
+		// refusal, not a miss - so offering it is not a cheap wrong guess. It has no security keys
+		// registered under an implicit rpID either, so there is nothing to lose by dropping it.
+		setWebauthnRpId("bramble.sh", { implicitUsable: false });
+		expect(unlockRpIdOrder(true)).toEqual(["bramble.sh"]);
+		expect(unlockRpIdOrder(false)).toEqual(["bramble.sh"]);
+	});
+
+	it("still offers the implicit rpID where it works, for existing security keys", () => {
+		setWebauthnRpId("bramble.sh", { implicitUsable: true });
+		expect(unlockRpIdOrder(false)).toEqual([undefined, "bramble.sh"]);
+	});
+
+	it("falls back to the implicit rpID when no explicit one is installed", () => {
+		// Otherwise a platform that installs nothing would be left with an empty candidate list
+		// and could never unlock at all.
+		setWebauthnRpId(undefined, { implicitUsable: false });
+		expect(unlockRpIdOrder(true)).toEqual([undefined]);
+	});
+
 	it("never prompts twice for the same rpID when none is installed", () => {
 		// Mobile and desktop install nothing; both entries would collapse to undefined.
 		setWebauthnRpId(undefined);

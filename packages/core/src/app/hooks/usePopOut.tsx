@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from "react";
 import { useCan, usePlatform } from "../../context/PlatformContext";
+import { useVaultRegistry } from "../../hooks/useVaultRegistry";
 import type { AppRouter } from "../router";
 
 /** Getter the active form route registers so pop-out can snapshot its in-flight draft. */
@@ -9,8 +10,9 @@ type DraftGetter = () => unknown;
 interface PopOutContextValue {
 	/** False when already detached (hides the affordance). */
 	canPopOut: boolean;
-	/** Snapshot the current route + draft and open a detached window. */
-	popOut: () => void;
+	/** Snapshot the current route + draft and open a detached window. Pass `draft` to hand over
+	 * something else instead, e.g. a ceremony to resume (see webauthnNeedsWindow in flags.ts). */
+	popOut: (draft?: unknown) => void;
 	/** Active form route registers its draft getter on mount, null on unmount. */
 	registerDraftGetter: (getter: DraftGetter | null) => void;
 	/** Returns the draft this window opened with, exactly once (undefined after). */
@@ -31,6 +33,9 @@ export function PopOutProvider({
 }) {
 	const { shell } = usePlatform();
 	const popOutCapable = useCan("popOut");
+	// Which vault to reopen on. A locked selection is not persisted anywhere, so without this the
+	// new window starts at the picker whenever more than one vault exists.
+	const { activeId } = useVaultRegistry();
 	const draftGetterRef = useRef<DraftGetter | null>(null);
 	const initialDraftRef = useRef<unknown>(initialDraft);
 
@@ -44,11 +49,17 @@ export function PopOutProvider({
 		return draft;
 	}, []);
 
-	const popOut = useCallback(() => {
-		const path = router.state.location.href;
-		const draft = draftGetterRef.current?.();
-		void shell.popOut({ path, draft });
-	}, [router, shell]);
+	const popOut = useCallback(
+		(draft?: unknown) => {
+			const path = router.state.location.href;
+			void shell.popOut({
+				path,
+				draft: draft ?? draftGetterRef.current?.(),
+				vaultId: activeId,
+			});
+		},
+		[router, shell, activeId],
+	);
 
 	const value = useMemo<PopOutContextValue>(
 		() => ({

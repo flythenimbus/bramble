@@ -100,6 +100,19 @@ export const CAPABILITIES = {
 		ios: false,
 		desktop: false,
 	},
+	// Firefox destroys its panel popup on focus loss, which aborts a WebAuthn ceremony before the
+	// OS dialog even renders: no prompt, no error, and the console dies with the document. Both
+	// register and unlock are affected, so the ceremony is handed to the detached window instead.
+	// Chromium's popup survives and is left alone. There is no in-popup fix: Firefox has no API to
+	// keep a panel open, the background event page has no focus, and a content script would run
+	// under the page's origin and get the wrong rpID. See docs/security-keys.md.
+	webauthnNeedsWindow: {
+		chromium: false,
+		firefox: true,
+		android: false,
+		ios: false,
+		desktop: false,
+	},
 	// In-app runtime toggle for the passkey provider (extension only; mobile's provider is OS-managed).
 	passkeyProviderToggle: {
 		chromium: true,

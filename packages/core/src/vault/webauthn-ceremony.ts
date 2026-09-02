@@ -31,8 +31,17 @@ export function setWebauthnInterceptionPauser(pauser: WebauthnPauser): void {
 // benefit to win (Firefox has no PRF for external keys anyway). The platform installs the value,
 // the same way it installs the pauser above. See docs/security-keys.md.
 let platformRpId: string | undefined;
-export function setWebauthnRpId(rpId: string | undefined): void {
+// Whether the implicit rpID (the extension's own origin) can be used at all. Firefox rejects a
+// moz-extension:// origin as an RP outright - it does not miss, it throws SecurityError - so
+// offering it there is not a cheap wrong guess but a hard failure. Chromium's implicit rpID is
+// what every existing security key is registered under, so it stays.
+let implicitRpIdUsable = true;
+export function setWebauthnRpId(
+	rpId: string | undefined,
+	opts: { implicitUsable?: boolean } = {},
+): void {
 	platformRpId = rpId;
+	implicitRpIdUsable = opts.implicitUsable ?? true;
 }
 
 /** The rpID a given kind registers under; undefined means the implicit extension origin. */
@@ -48,7 +57,11 @@ export function rpIdFor(kind: WebauthnKeyKind): string | undefined {
  */
 export function unlockRpIdOrder(hasPlatformKey: boolean): (string | undefined)[] {
 	const order = hasPlatformKey ? [platformRpId, undefined] : [undefined, platformRpId];
-	return order.filter((v, i) => order.indexOf(v) === i);
+	const deduped = order.filter((v, i) => order.indexOf(v) === i);
+	const usable = deduped.filter((v) => v !== undefined || implicitRpIdUsable);
+	// Never return nothing: a platform with no explicit rpID installed has only the implicit one,
+	// whatever we think of it.
+	return usable.length > 0 ? usable : [undefined];
 }
 
 /**
@@ -206,7 +219,11 @@ export async function getPrfSecretAcrossRpIds(
 			return { ...got, rpId };
 		} catch (e) {
 			if (isLast) throw e;
-			if ((e as { name?: string })?.name !== "NotAllowedError") throw e;
+			// NotAllowedError is "nothing matched"; SecurityError is "this origin may not claim
+			// that rpID at all". Both mean try the next one. Anything else is a real fault worth
+			// surfacing now rather than after a second doomed prompt.
+			const name = (e as { name?: string })?.name;
+			if (name !== "NotAllowedError" && name !== "SecurityError") throw e;
 			lastError = e;
 		}
 	}

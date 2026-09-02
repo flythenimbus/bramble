@@ -15,6 +15,11 @@ export interface PopOutHandoff {
 	path: string;
 	/** Serializable form snapshot of the active route, or undefined when there's nothing to restore. Transported via chrome.storage.session not the URL, since a draft can contain a plaintext password. */
 	draft?: unknown;
+	/** Which vault was selected. The selection is React state that is only persisted once a vault
+	 * UNLOCKS (shell.setActiveVault), so a locked one is invisible to a new window: with several
+	 * vaults the router would send it to the picker instead of the unlock screen it was opened
+	 * for. Carrying the id keeps the new window pointed where the user was. */
+	vaultId?: string;
 }
 
 /** Full-tab screens the options page can boot into, via `?screen=`. Default (omitted) is the vault setup flow. */

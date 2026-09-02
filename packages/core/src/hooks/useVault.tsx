@@ -822,11 +822,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		// record which is which, so a mixed vault may need both tried. Order by what THIS vault
 		// holds: the labels pref is not vault-scoped, so reading it raw would let a platform key
 		// in another vault cost this one an extra prompt.
-		const hasPlatformKey = describeWebauthnKeys(
-			slots,
-			latestRef.current.webauthnKeyLabels,
-			bytesToBase64,
-		).some((k) => k.kind === "platform");
+		//
+		// Read the pref rather than the mounted state: the state loads asynchronously, so a window
+		// that unlocks the instant it opens (the Firefox pop-out handoff does exactly that) would
+		// see an empty map, assume no platform key, and try the wrong rpID first.
+		const storedLabels =
+			(await storage.getMeta<Record<string, StoredKeyLabel>>(WEBAUTHN_KEY_LABELS_PREF)) ?? {};
+		const hasPlatformKey = describeWebauthnKeys(slots, storedLabels, bytesToBase64).some(
+			(k) => k.kind === "platform",
+		);
 
 		// First tap uses slot[0]'s salt; if a different credential with a
 		// different salt is tapped, re-ask narrowed to it with its own salt.
@@ -850,7 +854,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 
 		await finishWebauthnUnlock(used, hmacSecret);
-	}, [readDecodedBlob, finishWebauthnUnlock, t]);
+	}, [readDecodedBlob, finishWebauthnUnlock, storage, t]);
 
 	/**
 	 * Prove possession of a registered key (a tap) without touching lock state.

@@ -29,6 +29,7 @@ async function boot() {
 
 	let initialPath: string | undefined;
 	let initialDraft: unknown;
+	let initialVaultId: string | undefined;
 
 	if (extensionShell.isDetached()) {
 		// In the popped-out window the popup.html's fixed 400px height would
@@ -47,6 +48,7 @@ async function boot() {
 		if (handoff) {
 			initialPath = handoff.path;
 			initialDraft = handoff.draft;
+			initialVaultId = handoff.vaultId;
 		} else if (!(await extensionCrypto.isLocked())) {
 			// No handoff means this window was RELOADED rather than opened: the boot read already
 			// consumed it. Fall back to the persisted route so a reload stays where it was, which
@@ -66,7 +68,7 @@ async function boot() {
 
 	createRoot(root).render(
 		<PlatformProvider platform={platform}>
-			<App initialPath={initialPath} initialDraft={initialDraft} />
+			<App initialPath={initialPath} initialDraft={initialDraft} initialVaultId={initialVaultId} />
 		</PlatformProvider>,
 	);
 }

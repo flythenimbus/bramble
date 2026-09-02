@@ -27,6 +27,8 @@ interface AppProps {
 	// Route + form draft handed over from a pop-out; absent for a normal popup.
 	initialPath?: string;
 	initialDraft?: unknown;
+	/** Vault to boot selected, so a detached window lands where the popup was. */
+	initialVaultId?: string;
 	// Mobile only: a captured sign-in to save, surfaced as a prefilled add-login form
 	// once the vault is unlocked. Absent on desktop / the extension.
 	pendingLogin?: PendingLogin;
@@ -130,6 +132,7 @@ function InnerApp({ router, pendingLogin }: { router: AppRouter; pendingLogin?: 
 export default function App({
 	initialPath,
 	initialDraft,
+	initialVaultId,
 	pendingLogin,
 	preferredLocale,
 }: AppProps = {}) {
@@ -148,7 +151,7 @@ export default function App({
 						    shortcut is obscure enough not to be found by accident, and what it flips is
 						    UI gating rather than anything standing between a user and their data. */}
 						<DevFlags />
-						<VaultRegistryProvider>
+						<VaultRegistryProvider initialActiveId={initialVaultId}>
 							<VaultProvider>
 								<PrefsProvider>
 									<PopOutProvider router={router} initialDraft={initialDraft}>

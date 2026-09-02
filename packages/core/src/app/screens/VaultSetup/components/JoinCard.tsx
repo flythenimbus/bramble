@@ -168,34 +168,40 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 							</>
 						)}
 					</div>
+					{canWebauthnUnlock && (
+						<div>
+							{/* Above the password field, because it decides whether that field applies at all. */}
+							<p className="text-sm mb-1.5">
+								<Trans>How will you unlock on this device?</Trans>
+							</p>
+							<div className="flex flex-wrap gap-2 text-xs">
+								{METHODS.filter((m) => m !== "securityKey" || canSecurityKeys).map((m) => (
+									<Button
+										key={m}
+										variant={method === m ? "primary" : "secondary"}
+										size="sm"
+										onClick={() => {
+											setMethod(m);
+											setLocalError(null);
+										}}
+										disabled={disabled}
+									>
+										{m === "password"
+											? t`Master password`
+											: m === "platform"
+												? t`Touch ID or Windows Hello`
+												: t`Security key`}
+									</Button>
+								))}
+							</div>
+						</div>
+					)}
 					{method === "password" && (
 						<PasswordField
 							label={t`Master password`}
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
 						/>
-					)}
-					{canWebauthnUnlock && (
-						<div className="flex flex-wrap gap-2 text-xs">
-							{METHODS.filter((m) => m !== "securityKey" || canSecurityKeys).map((m) => (
-								<Button
-									key={m}
-									variant={method === m ? "primary" : "secondary"}
-									size="sm"
-									onClick={() => {
-										setMethod(m);
-										setLocalError(null);
-									}}
-									disabled={disabled}
-								>
-									{m === "password"
-										? t`Master password`
-										: m === "platform"
-											? t`This device`
-											: t`Security key`}
-								</Button>
-							))}
-						</div>
 					)}
 					<div className="rounded-md p-3 bg-muted/40 border border-border/50 text-xs text-muted-foreground">
 						{method === "password" ? (
@@ -206,8 +212,8 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 						) : (
 							<Trans>
 								This creates a new vault on this device and syncs it from your other device. You'll
-								register a key here that unlocks only on this device, so the other device keeps its
-								own.
+								register a new key here, on this device, so you never type the master password. Your
+								other device keeps its own key.
 							</Trans>
 						)}
 					</div>

@@ -1,10 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Fingerprint, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useCan } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import type { WebauthnKeyKind } from "../../../../vault/webauthn-ceremony";
 import { Button } from "../../../components/ui/button";
+import { useWebauthnHandoff, type WebauthnHandoff } from "../../../hooks/useWebauthnHandoff";
 import { Row } from "./primitives";
 
 /**
@@ -25,19 +26,43 @@ export function TapToUnlockSection() {
 	const [busy, setBusy] = useState<WebauthnKeyKind | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
-	const handleAdd = async (kind: WebauthnKeyKind) => {
-		setError(null);
-		setBusy(kind);
-		try {
-			const fallback = kind === "platform" ? t`This device` : t`Security key`;
-			await registerWebauthnKey(label.trim() || fallback, kind);
-			setLabel("");
-			setAdding(false);
-		} catch (err) {
-			setError(String(err instanceof Error ? err.message : err));
-		} finally {
-			setBusy(null);
+	const runRegister = useCallback(
+		async (kind: WebauthnKeyKind, named: string) => {
+			setError(null);
+			setBusy(kind);
+			try {
+				await registerWebauthnKey(named, kind);
+				setLabel("");
+				setAdding(false);
+			} catch (err) {
+				setError(String(err instanceof Error ? err.message : err));
+			} finally {
+				setBusy(null);
+			}
+		},
+		[registerWebauthnKey],
+	);
+
+	// Resume a registration the popup could not host (Firefox); no-op everywhere else. The name
+	// travels with it so the user does not retype what they already entered.
+	const onResume = useCallback(
+		(intent: WebauthnHandoff) => {
+			if (intent.webauthn !== "register") return;
+			setAdding(true);
+			setLabel(intent.label);
+			void runRegister(intent.kind, intent.label);
+		},
+		[runRegister],
+	);
+	const { mustHandOff, handOff } = useWebauthnHandoff(onResume);
+
+	const handleAdd = (kind: WebauthnKeyKind) => {
+		const named = label.trim() || (kind === "platform" ? t`This device` : t`Security key`);
+		if (mustHandOff) {
+			handOff({ webauthn: "register", kind, label: named });
+			return;
 		}
+		void runRegister(kind, named);
 	};
 
 	const handleRevoke = async (slotIdB64: string) => {
@@ -126,7 +151,7 @@ export function TapToUnlockSection() {
 						<Button
 							variant="primary"
 							size="sm"
-							onClick={() => void handleAdd("platform")}
+							onClick={() => handleAdd("platform")}
 							disabled={busy !== null}
 						>
 							{busy === "platform" ? t`Confirm on your device…` : t`This device`}
@@ -135,7 +160,7 @@ export function TapToUnlockSection() {
 							<Button
 								variant="secondary"
 								size="sm"
-								onClick={() => void handleAdd("securityKey")}
+								onClick={() => handleAdd("securityKey")}
 								disabled={busy !== null}
 							>
 								{busy === "securityKey" ? t`Tap your key…` : t`Security key`}

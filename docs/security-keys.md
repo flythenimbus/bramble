@@ -130,6 +130,20 @@ which is which. Unlock therefore tries both, ordered by what this device knows i
 for a second. `minimum_chrome_version` stays at 116 so existing security-key users on older
 Chrome keep working; a platform registration there fails with a version message instead.
 
+**Firefox is never offered the implicit rpID.** It rejects its own `moz-extension://` origin as
+an RP with `SecurityError: The operation is insecure` - a hard refusal, not a miss - so trying it
+is not a cheap wrong guess. It has no security keys registered under an implicit rpID to lose
+either (`securityKeys` is false there), so the shared rpID is its only candidate. The shell
+declares this via `setWebauthnRpId(rpId, { implicitUsable })`.
+
+Registration was never affected, which is why it worked while unlock did not: `createPrfCredential`
+always asks with `rpIdFor(kind)`, an explicit value, and never consults the candidate order.
+
+The order depends on the labels pref, which is read from storage at unlock rather than from
+mounted state. The state loads asynchronously, so a window that unlocks the instant it opens -
+exactly what the Firefox pop-out handoff does - would otherwise see an empty map, conclude there
+is no platform key, and try the wrong rpID first.
+
 ### When neither rpID matches, unlock says so
 
 After both rpIDs have been tried, a slot may still not match: a security key registered in
@@ -143,6 +157,36 @@ you hold. So unlock cannot detect this case, only describe it: `getPrfSecret`'s 
 option turns that error into a message naming both possibilities. Registration's fallback
 `get()` deliberately does not use it, because there the credential was just created and a
 refusal means something else.
+
+### Firefox cannot run a ceremony in the toolbar popup
+
+Firefox destroys its panel popup on focus loss, and the OS passkey dialog takes focus, so the
+document is torn down before the dialog even renders. The symptom is total silence: no prompt,
+no error, nothing in the console, because the console dies with the document. Register and
+unlock are both affected, so the normal path (open the popup, unlock) is the broken one.
+
+There is no in-popup fix. Firefox has no API to keep a panel open, the background event page has
+no focus, and a content script would run under the page's origin and so present the wrong rpID.
+The ceremony has to happen in a window.
+
+So on Firefox the button hands the ceremony to the **detached window** rather than running it:
+`useWebauthnHandoff` (gated on `webauthnNeedsWindow` in `flags.ts`) sends the intent through the
+existing pop-out handoff, and the detached window resumes it on mount. Chromium's popup survives
+the dialog - measured on a device - and deliberately keeps running in place, since sending those
+users to a second window would be a regression.
+
+The resume waits for the screen to be ready rather than firing on mount. `finishWebauthnUnlock`
+records the active vault before unwrapping, and the vault registry loads asynchronously, so a
+resume on a bare mount sets the active vault to `null` and the unwrap is refused with
+`vault locked` (`background/session.ts`). The symptom is a working Touch ID prompt followed by a
+failed unlock that succeeds on a second press, because by then the registry has loaded.
+
+The handoff also carries which vault was selected. A locked selection lives only in React state
+(`useVaultRegistry`); `shell.setActiveVault` records it only once a vault UNLOCKS. So a new window
+starts with no active vault, and with more than one vault `router.tsx` sends it to the picker
+instead of the unlock screen it was opened for. `PopOutHandoff.vaultId` seeds the registry so the
+window boots where the user was. Single-vault installs never saw this, because the registry
+auto-selects a lone vault.
 
 ### Testing it without hardware
 
@@ -160,6 +204,12 @@ platform rpID answers immediately and the retry never runs.
 **What this cannot cover:** cross-browser unlock, the entire point of the shared rpID. It needs
 one credential shared by a real OS provider across two browsers, and Playwright's Firefox has no
 virtual authenticator. That stays a manual check, as does the old-browser `SecurityError` path.
+
+**What this cannot cover: popup lifetime.** `e2e/extension/helpers.ts` opens the popup with
+`page.goto(popupUrl(...))`, which loads `popup.html` as a TAB with unlimited lifetime, and
+Playwright cannot click a toolbar icon to get a real panel popup. That blind spot let a fully
+broken Firefox feature through a green 125-test suite; it was found by hand on the second manual
+test. Anything touching popup lifetime, or a real OS dialog, needs a device.
 
 ### How it is surfaced
 

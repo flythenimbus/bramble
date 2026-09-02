@@ -77,11 +77,18 @@ export function useVaultRegistry(): VaultRegistryValue {
 }
 
 /** Loads the device-local vault registry and tracks which vault is active. */
-export function VaultRegistryProvider({ children }: { children: ReactNode }) {
+export function VaultRegistryProvider({
+	children,
+	// A detached window boots pointed at the vault the popup was on; see PopOutHandoff.vaultId.
+	initialActiveId,
+}: {
+	children: ReactNode;
+	initialActiveId?: string;
+}) {
 	const { storage, shell } = usePlatform();
 	const [ready, setReady] = useState(false);
 	const [registry, setRegistry] = useState<VaultRegistry>(EMPTY_REGISTRY);
-	const [activeId, setActiveId] = useState<string | undefined>(undefined);
+	const [activeId, setActiveId] = useState<string | undefined>(initialActiveId);
 
 	const refresh = useCallback(async () => {
 		const reg = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));

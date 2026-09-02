@@ -26,6 +26,7 @@ import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
+import { useWebauthnHandoff, type WebauthnHandoff } from "../../hooks/useWebauthnHandoff";
 import { shouldAutoPromptBiometric } from "./auto-biometric";
 
 interface FormValues {
@@ -141,7 +142,7 @@ export function Auth() {
 		}
 	};
 
-	const handleWebauthnKey = async () => {
+	const runWebauthnUnlock = useCallback(async () => {
 		setBusy(true);
 		try {
 			await unlockWithWebauthnKey();
@@ -152,6 +153,30 @@ export function Auth() {
 		} finally {
 			setBusy(false);
 		}
+	}, [unlockWithWebauthnKey, rearm, setError, cryptoError]);
+
+	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
+	// Hidden where it can't work (mobile): no PRF, so offering it would be a dead end even for
+	// a vault synced from a browser with a registered key. Declared up here because it doubles as
+	// the handoff's readiness gate: a resume before this is true would unlock against no active
+	// vault. See useWebauthnHandoff.
+	const webauthnKeyAvailable = hasVault && canWebauthnUnlock && (hasWebauthnSlot || couldNotRead);
+
+	// Resume an unlock the popup could not host (Firefox); no-op everywhere else.
+	const onResume = useCallback(
+		(intent: WebauthnHandoff) => {
+			if (intent.webauthn === "unlock") void runWebauthnUnlock();
+		},
+		[runWebauthnUnlock],
+	);
+	const { mustHandOff, handOff } = useWebauthnHandoff(onResume, webauthnKeyAvailable);
+
+	const handleWebauthnKey = () => {
+		if (mustHandOff) {
+			handOff({ webauthn: "unlock" });
+			return;
+		}
+		void runWebauthnUnlock();
 	};
 
 	// Memoized, unlike its siblings: the auto-prompt effect below depends on it.
@@ -213,11 +238,7 @@ export function Auth() {
 	// show the unlock controls optimistically: the unlock click is itself a gesture,
 	// so it grants file access, reads, and unlocks in one go. We can't know which
 	// methods the vault has until it's read, so offer both password and security key.
-	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
-	// Hidden where it can't work (mobile): no PRF, so offering it would be a dead end even for
-	// a vault synced from a browser with a registered key.
-	const webauthnKeyAvailable = hasVault && canWebauthnUnlock && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.

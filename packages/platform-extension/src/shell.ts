@@ -70,7 +70,9 @@ export const extensionTarget: Target =
 //
 // The apex, not a subdomain: an rpID can be narrowed later but never widened, so this keeps the
 // door open for bramble.sh itself to share credentials one day.
-setWebauthnRpId("bramble.sh");
+// Firefox cannot use its implicit moz-extension:// rpID at all (SecurityError, not a miss), and
+// has no security keys to have registered under one either, so the shared rpID is its only option.
+setWebauthnRpId("bramble.sh", { implicitUsable: extensionTarget !== "firefox" });
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {
