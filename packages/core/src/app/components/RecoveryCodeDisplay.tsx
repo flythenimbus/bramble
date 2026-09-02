@@ -45,7 +45,7 @@ export function RecoveryCodeDisplay({
 			"",
 			code,
 			"",
-			t`Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys.`,
+			t`Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose access to your keys.`,
 			"",
 		].join("\n");
 		// Hardcoded rather than built from appName: a file name would need slugging, and this

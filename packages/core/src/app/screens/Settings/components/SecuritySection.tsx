@@ -7,15 +7,16 @@ import { Section } from "./primitives";
 import { RecoveryCodeSection } from "./RecoveryCodeSection";
 import { TapToUnlockSection } from "./TapToUnlockSection";
 
-/** Security tab: master password, security keys, biometric unlock, recovery code. */
+/** Security tab: master password, tap to unlock, biometric unlock, recovery code. */
 export function SecuritySection() {
-	const canSecurityKeys = useCan("securityKeys");
+	const canWebauthnUnlock = useCan("webauthnUnlock");
 	const { t } = useLingui();
 	return (
 		<Section icon={<Lock className="w-4 h-4 text-primary" />} title={t`Security`}>
 			<MasterPasswordSection />
-			{/* Security keys (WebAuthn) don't work on mobile; biometric unlock takes their slot there. */}
-			{canSecurityKeys && <TapToUnlockSection />}
+			{/* Webauthn unlock is extension-only; mobile's biometric cache takes its place there.
+			    Firefox shows this but hides the security-key option inside it. */}
+			{canWebauthnUnlock && <TapToUnlockSection />}
 			<BiometricSection />
 			<RecoveryCodeSection />
 		</Section>

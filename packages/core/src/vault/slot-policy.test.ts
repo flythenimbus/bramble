@@ -18,10 +18,12 @@ import {
 } from "../vault-format";
 import {
 	addWebauthnSlot,
+	describeWebauthnKeys,
 	matchSlotByCredentialId,
 	needsSaltMismatchRetry,
 	removePasswordSlot,
 	removeWebauthnSlot,
+	type StoredKeyLabel,
 	upsertPasswordSlot,
 	upsertRecoverySlot,
 } from "./slot-policy";
@@ -317,5 +319,49 @@ describe("upsertRecoverySlot", () => {
 		const before = blob.slots.length;
 		upsertRecoverySlot(blob, makeRecoverySlot());
 		expect(blob.slots.length).toBe(before);
+	});
+});
+
+describe("describeWebauthnKeys", () => {
+	const b64 = (b: Uint8Array) => `slot-${b[0]}`;
+	const slots = [{ slotId: new Uint8Array([1]) }, { slotId: new Uint8Array([2]) }];
+
+	it("reads back what registration stored", () => {
+		const labels: Record<string, StoredKeyLabel> = {
+			"slot-1": { label: "Touch ID", addedAt: 5, kind: "platform", synced: true },
+		};
+		expect(describeWebauthnKeys([slots[0]!], labels, b64)[0]).toEqual({
+			slotIdB64: "slot-1",
+			label: "Touch ID",
+			addedAt: 5,
+			kind: "platform",
+			synced: true,
+		});
+	});
+
+	it("treats an entry written before the platform path as a security key", () => {
+		// Shipped releases wrote { label, addedAt } and nothing else. Losing these would
+		// mislabel every existing user's keys.
+		const labels = { "slot-1": { label: "YubiKey", addedAt: 5 } } as Record<string, StoredKeyLabel>;
+		const [key] = describeWebauthnKeys([slots[0]!], labels, b64);
+		expect(key).toMatchObject({ label: "YubiKey", kind: "securityKey", synced: false });
+	});
+
+	it("does not claim a slot registered on another device is synced", () => {
+		// Labels are local, so a slot that arrived with the vault file has no entry here. The
+		// safe default is the conservative one: not a platform key, not synced.
+		const [key] = describeWebauthnKeys([slots[1]!], {}, b64);
+		expect(key).toMatchObject({ kind: "securityKey", synced: false, addedAt: 0 });
+	});
+
+	it("keeps slot order so the list is stable across renders", () => {
+		const labels: Record<string, StoredKeyLabel> = {
+			"slot-2": { label: "Second", addedAt: 2 },
+			"slot-1": { label: "First", addedAt: 1 },
+		};
+		expect(describeWebauthnKeys(slots, labels, b64).map((k) => k.label)).toEqual([
+			"First",
+			"Second",
+		]);
 	});
 });

@@ -210,24 +210,27 @@ import {
 } from "../vault/recovery-code";
 import {
 	addWebauthnSlot,
+	describeWebauthnKeys,
 	matchSlotByCredentialId,
 	needsSaltMismatchRetry,
 	removePasswordSlot,
 	removeWebauthnSlot,
+	type StoredKeyLabel,
 	upsertPasswordSlot,
 	upsertRecoverySlot,
+	type WebauthnKeyMeta,
 } from "../vault/slot-policy";
-import { createPrfCredential, getPrfSecret } from "../vault/webauthn-ceremony";
+import {
+	createPrfCredential,
+	getPrfSecret,
+	type WebauthnKeyKind,
+} from "../vault/webauthn-ceremony";
 import { useSyncEnrollment } from "./useSyncEnrollment";
 
+export type { WebauthnKeyMeta };
 export { entryDataSchema };
 
-export interface WebauthnKeyMeta {
-	slotIdB64: string;
-	label: string;
-	addedAt: number;
-}
-
+// Renaming this VALUE would orphan every existing user's key labels; only the constant moved.
 const WEBAUTHN_KEY_LABELS_PREF = "pref.securityKeyLabels";
 
 /** Reactive vault state. A change here re-renders components that read it. */
@@ -325,7 +328,7 @@ export interface VaultActions {
 	/** Remove the master-password slot. Requires a security key (invariant B). */
 	disableMasterPassword(): Promise<void>;
 	unlockWithWebauthnKey(): Promise<void>;
-	registerWebauthnKey(label: string): Promise<void>;
+	registerWebauthnKey(label: string, kind?: WebauthnKeyKind): Promise<void>;
 	revokeWebauthnKey(slotIdB64: string): Promise<void>;
 	/** Generate (or reset) the recovery code; returns the plaintext to show once. */
 	generateRecoveryCode(): Promise<string>;
@@ -424,9 +427,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Set when a vault exists on disk but its blob can't be read/decoded (e.g. an
 	// FSA file whose read permission needs a fresh user gesture, or a corrupt blob).
 	const [vaultError, setVaultError] = useState<string | null>(null);
-	const [webauthnKeyLabels, setWebauthnKeyLabels] = useState<
-		Record<string, { label: string; addedAt: number }>
-	>({});
+	const [webauthnKeyLabels, setWebauthnKeyLabels] = useState<Record<string, StoredKeyLabel>>({});
 
 	// Latest render's reactive state, mirrored to a ref so action callbacks can read
 	// current entries / labels / lock state without listing them as deps. That keeps every
@@ -491,9 +492,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		try {
 			const [{ blob }, stored] = await Promise.all([
 				readDecodedBlob(),
-				storage.getMeta<Record<string, { label: string; addedAt: number }>>(
-					WEBAUTHN_KEY_LABELS_PREF,
-				),
+				storage.getMeta<Record<string, StoredKeyLabel>>(WEBAUTHN_KEY_LABELS_PREF),
 			]);
 			setWebauthnSlots(findWebauthnSlots(blob));
 			setHasPasswordSlot(findPasswordSlot(blob) !== null);
@@ -815,7 +814,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		// First tap uses slot[0]'s salt; if a different credential with a
 		// different salt is tapped, re-ask narrowed to it with its own salt.
 		const firstSalt = slots[0]!.salt;
-		const firstAttempt = await getPrfSecret(slots, firstSalt);
+		const firstAttempt = await getPrfSecret(slots, firstSalt, { forUnlock: true });
 		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
 		if (!used) {
 			throw new Error(t`Authenticator returned an unknown credential.`);
@@ -840,7 +839,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		const slots = findWebauthnSlots(blob);
 		if (slots.length === 0) return false;
 		try {
-			const attempt = await getPrfSecret(slots, slots[0]!.salt);
+			const attempt = await getPrfSecret(slots, slots[0]!.salt, { forUnlock: true });
 			return matchSlotByCredentialId(slots, attempt.rawId) !== null;
 		} catch {
 			return false;
@@ -853,14 +852,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * get() to read the PRF secret, unless the key supports one-tap hmac-secret-mc.
 	 */
 	const registerWebauthnKey = useCallback(
-		async (label: string) => {
+		async (label: string, kind: WebauthnKeyKind = "securityKey") => {
 			setError(null);
 			if (await crypto.isLocked()) {
-				throw new Error(t`Unlock the vault before adding a security key.`);
+				throw new Error(t`Unlock the vault before adding a key.`);
 			}
 			const { blob } = await readDecodedBlob();
 
-			const { credentialId, salt, hmacSecret } = await createPrfCredential(label);
+			const { credentialId, salt, hmacSecret, synced } = await createPrfCredential(label, {
+				kind,
+			});
 
 			const slotIdB64 = await crypto.generateSlotId();
 			const wrapped = await crypto.wrapVekWebauthn({
@@ -882,7 +883,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 
 			const labels = { ...latestRef.current.webauthnKeyLabels };
-			labels[slotIdB64] = { label: label.trim() || "Security key", addedAt: Date.now() };
+			labels[slotIdB64] = {
+				label: label.trim() || (kind === "platform" ? "This device" : "Security key"),
+				addedAt: Date.now(),
+				kind,
+				synced,
+			};
 			await storage.setMeta(WEBAUTHN_KEY_LABELS_PREF, labels);
 
 			await refreshSlotMetadata();
@@ -1508,16 +1514,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	const hasWebauthnSlot = webauthnSlots.length > 0;
 	const webauthnKeys = useMemo<WebauthnKeyMeta[]>(
-		() =>
-			webauthnSlots.map((slot) => {
-				const slotIdB64 = bytesToBase64(slot.slotId);
-				const meta = webauthnKeyLabels[slotIdB64];
-				return {
-					slotIdB64,
-					label: meta?.label ?? "Security key",
-					addedAt: meta?.addedAt ?? 0,
-				};
-			}),
+		() => describeWebauthnKeys(webauthnSlots, webauthnKeyLabels, bytesToBase64),
 		[webauthnSlots, webauthnKeyLabels],
 	);
 

@@ -15,6 +15,17 @@ describe("can()", () => {
 		expect(can("cloudBackup", "ios")).toBe(false);
 	});
 
+	it("keeps webauthnUnlock a superset of securityKeys, which is the whole point of two flags", () => {
+		// Firefox does `prf` for platform authenticators (Touch ID / Windows Hello) but not for
+		// external keys, so it can unlock via a webauthn slot while still refusing a YubiKey.
+		// Everywhere else the two agree. See docs/security-keys.md.
+		expect(can("webauthnUnlock", "firefox")).toBe(true);
+		expect(can("securityKeys", "firefox")).toBe(false);
+		for (const target of TARGETS) {
+			if (can("securityKeys", target)) expect(can("webauthnUnlock", target)).toBe(true);
+		}
+	});
+
 	it("resolves a per-target capability that varies within a surface", () => {
 		// `securityKeys`: chromium yes, firefox no (moz-extension origin rejected); mobile no.
 		expect(can("securityKeys", "chromium")).toBe(true);

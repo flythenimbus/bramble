@@ -3,7 +3,7 @@
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
 import type { Target } from "@core/flags";
 import { extractHostname } from "@core/vault/autofill-index";
-import { setWebauthnInterceptionPauser } from "@core/vault/webauthn-ceremony";
+import { setWebauthnInterceptionPauser, setWebauthnRpId } from "@core/vault/webauthn-ceremony";
 import { hostnameMatches } from "./dedupe";
 import { api } from "./platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "./session-keys";
@@ -56,6 +56,14 @@ export const extensionTarget: Target =
 	typeof location !== "undefined" && location.protocol === "moz-extension:"
 		? "firefox"
 		: "chromium";
+
+// Firefox rejects a moz-extension:// origin as a WebAuthn RP, so its keys are registered
+// against an explicit domain instead (covered by host_permissions' <all_urls>; narrowing that
+// would break unlock). Chromium deliberately gets nothing here and keeps its implicit
+// extension-id rpID: changing it would invalidate every already-registered key. The two
+// browsers therefore hold separate slots for the same vault, which the multi-slot design
+// already expects. See docs/firefox-port.md and docs/security-keys.md.
+if (extensionTarget === "firefox") setWebauthnRpId("bramble.app");
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {

@@ -133,9 +133,7 @@ export function MasterPasswordSection() {
 				icon={<Asterisk className="w-4 h-4 text-primary" />}
 				title={t`Master password`}
 				subtitle={
-					hasPasswordSlot
-						? t`Required to unlock your vault.`
-						: t`Off. You unlock with a security key.`
+					hasPasswordSlot ? t`Required to unlock your vault.` : t`Off. You unlock by tapping a key.`
 				}
 			>
 				<Toggle
@@ -169,7 +167,7 @@ export function MasterPasswordSection() {
 
 			{hasPasswordSlot && !hasWebauthnKey && (
 				<p className="text-xs text-muted-foreground pl-12">
-					<Trans>Register a security key below before you can turn off the master password.</Trans>
+					<Trans>Add a key under Tap to unlock before you can turn off the master password.</Trans>
 				</p>
 			)}
 
@@ -266,9 +264,9 @@ export function MasterPasswordSection() {
 							</h2>
 							<p className="text-sm text-muted-foreground mt-1">
 								<Trans>
-									You'll unlock this vault with your security key only. If you lose all your
-									security keys, your recovery code is the only way back in. There's no master
-									password to fall back on.
+									You'll unlock this vault by tapping a key only. If you lose access to all of them,
+									your recovery code is the only way back in. There's no master password to fall
+									back on.
 								</Trans>
 							</p>
 						</div>

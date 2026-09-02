@@ -9,7 +9,7 @@ import { Section } from "./primitives";
 /**
  * Delete the current vault. All the re-auth + erase logic lives in useVault.deleteVault, which
  * verifies then deletes atomically; this component only collects the credential. deleteVault
- * uses the master password when the vault has one, otherwise a security-key tap.
+ * uses the master password when the vault has one, otherwise a tap-to-unlock key.
  */
 export function DeleteVaultSection() {
 	const { hasPasswordSlot, deleteVault } = useVault();
@@ -38,8 +38,7 @@ export function DeleteVaultSection() {
 		setError(null);
 		setBusy(true);
 		try {
-			if (!(await deleteVault({ webauthnKey: true })))
-				setError(t`Couldn't verify your security key.`);
+			if (!(await deleteVault({ webauthnKey: true }))) setError(t`Couldn't verify your key.`);
 		} catch (err) {
 			setError((err as Error).message);
 		} finally {
@@ -113,7 +112,7 @@ export function DeleteVaultSection() {
 									className="px-4 py-2 text-sm"
 								>
 									<KeyRound className="w-4 h-4" />
-									{busy ? t`Waiting for your key…` : t`Confirm with security key`}
+									{busy ? t`Waiting for your key…` : t`Confirm with your key`}
 								</Button>
 								<Button
 									variant="secondary"

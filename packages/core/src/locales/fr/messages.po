@@ -184,6 +184,10 @@ msgstr "Ajouter une cible de sauvegarde"
 msgid "Add a device"
 msgstr "Ajouter un appareil"
 
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Add a key under Tap to unlock before you can turn off the master password."
+msgstr ""
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add a new login"
 msgstr "Ajouter une nouvelle connexion"
@@ -255,6 +259,10 @@ msgstr "Avion"
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "All"
 msgstr "Tous"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "all your devices"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Allow again"
@@ -693,13 +701,21 @@ msgstr "Confirmer le mot de passe maître"
 msgid "Confirm new password"
 msgstr "Confirmer le nouveau mot de passe"
 
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Confirm on your device…"
+msgstr ""
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confirmer le mot de passe"
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
-msgid "Confirm with security key"
-msgstr "Confirmer avec la clé de sécurité"
+#~ msgid "Confirm with security key"
+#~ msgstr "Confirmer avec la clé de sécurité"
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Confirm with your key"
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm your master password to generate the recovery code."
@@ -844,12 +860,20 @@ msgid "Couldn't unlock the vault."
 msgstr "Impossible de déverrouiller le coffre-fort."
 
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
-msgid "Couldn't verify your security key."
-msgstr "Impossible de vérifier votre clé de sécurité."
+msgid "Couldn't verify your key."
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
-msgid "Couldn't verify your security key. Try again."
-msgstr "Impossible de vérifier votre clé de sécurité. Veuillez réessayer."
+msgid "Couldn't verify your key. Try again."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#~ msgid "Couldn't verify your security key."
+#~ msgstr "Impossible de vérifier votre clé de sécurité."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#~ msgid "Couldn't verify your security key. Try again."
+#~ msgstr "Impossible de vérifier votre clé de sécurité. Veuillez réessayer."
 
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 #~ msgid "Couldn't write the .kdbx file."
@@ -1521,8 +1545,12 @@ msgid "Keep this screen open until pairing finishes."
 msgstr "Gardez cet écran ouvert jusqu’à ce que l’appariement soit terminé."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
-msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
-msgstr "Conservez ceci en lieu sûr et hors ligne. Toute personne disposant de ce code peut déverrouiller votre coffre-fort, et c'est le seul moyen de réaccès si vous oubliez votre mot de passe maître ou perdez vos clés de sécurité."
+msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose access to your keys."
+msgstr ""
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#~ msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose your security keys."
+#~ msgstr "Conservez ceci en lieu sûr et hors ligne. Toute personne disposant de ce code peut déverrouiller votre coffre-fort, et c'est le seul moyen de réaccès si vous oubliez votre mot de passe maître ou perdez vos clés de sécurité."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "KeePass master password"
@@ -1709,8 +1737,12 @@ msgid "Name A-Z"
 msgstr "Nom A-Z"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-msgid "Name this key (e.g. YubiKey office)"
-msgstr "Nommez cette clé (par exemple, bureau YubiKey)"
+#~ msgid "Name this key (e.g. YubiKey office)"
+#~ msgstr "Nommez cette clé (par exemple, bureau YubiKey)"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Name this key (optional)"
+msgstr ""
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Name Z-A"
@@ -1845,8 +1877,12 @@ msgid "Off"
 msgstr "Désactivé"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Off. You unlock with a security key."
-msgstr "Désactivé. Déverrouillage avec une clé de sécurité."
+msgid "Off. You unlock by tapping a key."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Off. You unlock with a security key."
+#~ msgstr "Désactivé. Déverrouillage avec une clé de sécurité."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Offer saved logins, cards, and generated passwords in a dropdown on the page. When off, copy from the vault instead."
@@ -2156,12 +2192,16 @@ msgid "Region"
 msgstr "Région"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-msgid "Register"
-msgstr "Enregistrer"
+#~ msgid "Register"
+#~ msgstr "Enregistrer"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Register a security key below before you can turn off the master password."
-msgstr "Enregistrez une clé de sécurité ci-dessous avant de désactiver le mot de passe maître."
+#~ msgid "Register a security key below before you can turn off the master password."
+#~ msgstr "Enregistrez une clé de sécurité ci-dessous avant de désactiver le mot de passe maître."
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Registering with this device takes one tap. A security key takes two: one to create the key, then one to unlock its secret."
+msgstr ""
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Reject"
@@ -2414,12 +2454,12 @@ msgid "Security key"
 msgstr "Clé de sécurité"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-msgid "Security keys"
-msgstr "Clés de sécurité"
+#~ msgid "Security keys"
+#~ msgstr "Clés de sécurité"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
-msgid "Security keys are removed from this vault and have to be added again. Your master password keeps working."
-msgstr "Les clés de sécurité sont retirées de ce coffre et doivent être ajoutées à nouveau. Votre mot de passe principal reste valide."
+#~ msgid "Security keys are removed from this vault and have to be added again. Your master password keeps working."
+#~ msgstr "Les clés de sécurité sont retirées de ce coffre et doivent être ajoutées à nouveau. Votre mot de passe principal reste valide."
 
 #: packages/core/src/hooks/useVault.tsx
 msgid "Security-key unlock failed (verifier mismatch)."
@@ -2672,17 +2712,30 @@ msgid "Take a backup first, from Backups, so you have a copy that still opens."
 msgstr "Faites d’abord une sauvegarde depuis Sauvegardes, afin de disposer d’une copie qui s’ouvre encore."
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-msgid "Tap a security key to unlock instead of typing the master password."
-msgstr "Tapotez une clé de sécurité pour déverrouiller au lieu de saisir le mot de passe maître."
+#~ msgid "Tap a security key to unlock instead of typing the master password."
+#~ msgstr "Tapotez une clé de sécurité pour déverrouiller au lieu de saisir le mot de passe maître."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Tap to scan again"
 msgstr "Appuyez pour scanner à nouveau"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Tap to unlock"
+msgstr ""
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Tap your key to unlock your vault"
+msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Tap your key…"
 msgstr "Tapotez votre clé..."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Tap-to-unlock keys are removed from this vault and have to be added again. Your master password keeps working."
+msgstr ""
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Telephone"
@@ -2847,12 +2900,17 @@ msgid "This creates a new vault on this device and syncs it from your other devi
 msgstr "Cette action crée un nouveau coffre sur cet appareil et le synchronise depuis votre autre appareil. Utilisez le même mot de passe principal que sur cet appareil."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "This device"
 msgstr "Cet appareil"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "This device can unlock with {name}."
 msgstr "Cet appareil peut être déverrouillé avec {name}."
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "this device only"
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "This domain and its subdomains"
@@ -3033,8 +3091,12 @@ msgid "Unlock on open"
 msgstr "Déverrouiller à l’ouverture"
 
 #: packages/core/src/hooks/useVault.tsx
-msgid "Unlock the vault before adding a security key."
-msgstr "Déverrouiller le coffre avant d’ajouter une clé de sécurité."
+msgid "Unlock the vault before adding a key."
+msgstr ""
+
+#: packages/core/src/hooks/useVault.tsx
+#~ msgid "Unlock the vault before adding a security key."
+#~ msgstr "Déverrouiller le coffre avant d’ajouter une clé de sécurité."
 
 #: packages/core/src/hooks/useVault.tsx
 msgid "Unlock the vault before changing the master password."
@@ -3089,8 +3151,8 @@ msgid "Unlock with recovery code"
 msgstr "Déverrouiller avec le code de récupération"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
-msgid "Unlock with security key"
-msgstr "Déverrouiller avec la clé de sécurité"
+#~ msgid "Unlock with security key"
+#~ msgstr "Déverrouiller avec la clé de sécurité"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Unlock with Touch ID"
@@ -3101,8 +3163,8 @@ msgid "Unlock your vault to import into it"
 msgstr "Déverrouillez votre coffre pour importer dedans"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
-msgid "Unlock your vault with your security key"
-msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
+#~ msgid "Unlock your vault with your security key"
+#~ msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
@@ -3165,6 +3227,14 @@ msgstr "Utilisez uniquement des chiffres, des espaces ou des tirets."
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"
 msgstr "Utiliser ce mot de passe malgré tout"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Use Touch ID or Windows Hello instead of typing your master password."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Use Touch ID, Windows Hello or a security key like a YubiKey instead of typing your master password."
+msgstr ""
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "username"
@@ -3306,8 +3376,12 @@ msgid "You won't be able to see this code again."
 msgstr "Vous ne pourrez plus voir ce code."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
-msgstr "Vous déverrouillerez ce coffre uniquement avec votre clé de sécurité. Si vous perdez toutes vos clés, le code de récupération est la seule façon d'y accéder à nouveau. Il n'existe pas de mot de passe maître de secours."
+msgid "You'll unlock this vault by tapping a key only. If you lose access to all of them, your recovery code is the only way back in. There's no master password to fall back on."
+msgstr ""
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
+#~ msgstr "Vous déverrouillerez ce coffre uniquement avec votre clé de sécurité. Si vous perdez toutes vos clés, le code de récupération est la seule façon d'y accéder à nouveau. Il n'existe pas de mot de passe maître de secours."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Your backup is now the vault on this device."

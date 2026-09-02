@@ -67,7 +67,7 @@ export function Auth() {
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
 	const vaultLabel =
 		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
-	const canSecurityKeys = useCan("securityKeys");
+	const canWebauthnUnlock = useCan("webauthnUnlock");
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
 	const cryptoError = useCryptoErrorMessage();
@@ -215,9 +215,9 @@ export function Auth() {
 	// methods the vault has until it's read, so offer both password and security key.
 	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
 	const showPasswordForm = hasVault && (hasPasswordSlot || couldNotRead);
-	// Security-key unlock is hidden where it can't work (mobile): no PRF, so offering it
-	// would be a dead end even for a vault synced from desktop with a registered key.
-	const webauthnKeyAvailable = hasVault && canSecurityKeys && (hasWebauthnSlot || couldNotRead);
+	// Hidden where it can't work (mobile): no PRF, so offering it would be a dead end even for
+	// a vault synced from a browser with a registered key.
+	const webauthnKeyAvailable = hasVault && canWebauthnUnlock && (hasWebauthnSlot || couldNotRead);
 	const recoveryAvailable = hasVault && hasRecoveryCode;
 	// Device-local biometric is the fast path when set up; the password/security-key/
 	// recovery methods stay as the fallback below it.
@@ -314,7 +314,7 @@ export function Auth() {
 								? t`Welcome to ${appName}`
 								: showPasswordForm
 									? t`Enter your master password to unlock your vault`
-									: t`Unlock your vault with your security key`}
+									: t`Tap your key to unlock your vault`}
 						</h1>
 						{firstRun && (
 							<p className="mt-2 text-sm text-muted-foreground">
@@ -394,7 +394,7 @@ export function Auth() {
 										className="text-sm"
 									>
 										<KeyRound className="w-4 h-4" />
-										{busy ? t`Waiting for your key…` : t`Unlock with security key`}
+										{busy ? t`Waiting for your key…` : t`Tap to unlock`}
 									</Button>
 								</div>
 							)}

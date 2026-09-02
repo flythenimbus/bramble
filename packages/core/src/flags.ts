@@ -78,9 +78,16 @@ export const CAPABILITIES = {
 	// it is locked. Its S3 + WebDAV tiles work; the one-click OAuth tile stays hidden there until
 	// the shell adapter grows `connectBackupOAuth`.
 	cloudBackup: { extension: true, mobile: false, desktop: true },
-	// Firefox's moz-extension origin is rejected as a WebAuthn RP; mobile has no `prf`.
-	// Desktop webviews have no usable WebAuthn at all, so it waits on a native CTAP path.
+	// EXTERNAL security keys (YubiKey). Firefox supports `prf` for platform authenticators only,
+	// not for external keys, so this stays off there even though webauthnUnlock is on. Mobile has
+	// no `prf`; desktop webviews have no usable WebAuthn at all and wait on a native CTAP path.
 	securityKeys: { chromium: true, firefox: false, android: false, ios: false, desktop: false },
+	// Unlocking via a webauthn slot at all, by either a platform authenticator (Touch ID /
+	// Windows Hello) or an external key. Measured working on both browsers, on macOS and Windows;
+	// Firefox needs an explicit rpID to get there, see `webauthnRpId` below and
+	// docs/security-keys.md. Superset of securityKeys: it gates the Tap to unlock section, while
+	// securityKeys decides whether that section offers to add an external key.
+	webauthnUnlock: { chromium: true, firefox: true, android: false, ios: false, desktop: false },
 	// Corner-prompt / Android autofill save; no iOS save surface. Desktop has no page of
 	// its own to capture from; the extension keeps doing this even once the two are paired.
 	saveCapture: { chromium: true, firefox: true, android: true, ios: false, desktop: false },

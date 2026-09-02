@@ -36,7 +36,7 @@ export function RecoveryCodeSection() {
 		try {
 			const ok = await verifyWithWebauthnKey();
 			if (!ok) {
-				setError(t`Couldn't verify your security key. Try again.`);
+				setError(t`Couldn't verify your key. Try again.`);
 				return;
 			}
 			setFreshCode(await generateRecoveryCode());

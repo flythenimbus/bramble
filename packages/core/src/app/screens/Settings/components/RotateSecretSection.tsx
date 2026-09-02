@@ -145,8 +145,8 @@ export function RotateSecretSection() {
 						</li>
 						<li>
 							<Trans>
-								Security keys are removed from this vault and have to be added again. Your master
-								password keeps working.
+								Tap-to-unlock keys are removed from this vault and have to be added again. Your
+								master password keeps working.
 							</Trans>
 						</li>
 					</ul>

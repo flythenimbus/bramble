@@ -104,6 +104,40 @@ which carry the `PASSKEY_PROXY_PAUSE` / `RESUME` envelope from
 `platform-extension/src/shell.ts`. Calling `navigator.credentials` directly looks
 exactly like an authenticator that does not support PRF.
 
+### Keys are per browser, and unlock says so
+
+Chromium and Firefox register under different rpIDs, so a vault synced between them holds
+slots the local authenticator cannot match. Nothing in the vault file records which slot
+belongs to which rpID, and local labels do not help: they live in per-browser extension
+storage, so a foreign slot is simply absent rather than marked. A filter would never fire.
+
+WebAuthn also refuses to distinguish "user dismissed the prompt" from "nothing matched" -
+both are a bare `NotAllowedError`, deliberately, so a site cannot probe which credentials
+you hold. So unlock cannot detect this case, only describe it: `getPrfSecret`'s `forUnlock`
+option turns that error into a message naming both possibilities. Registration's fallback
+`get()` deliberately does not use it, because there the credential was just created and a
+refusal means something else.
+
+### How it is surfaced
+
+One Settings section, **Tap to unlock** (`TapToUnlockSection`), holds platform
+authenticators and security keys together, because they are one mechanism: same slot,
+same list, same revoke path. Add asks which one, and that is forced rather than a UX
+preference, since the two need incompatible `residentKey` values and the ceremony is
+chosen before the OS dialog opens.
+
+Gating is two capabilities, deliberately:
+
+- `webauthnUnlock` (chromium + firefox) gates the section and the unlock-screen button.
+- `securityKeys` (chromium only) decides whether Add offers **Security key**. Firefox
+  shows the section with only the device option.
+
+Rows report where a key works, from the `synced` flag the ceremony measured, not from the
+OS: "all your devices" for an Apple Passwords credential, "this device only" for Windows
+Hello. Labels live in the `pref.securityKeyLabels` local pref and never travel with the
+vault file, so a slot registered on another device reads as an unnamed security key;
+`describeWebauthnKeys` in `slot-policy.ts` holds those fallbacks and their tests.
+
 ## Enrolling a device with a security key
 
 Joining a P2P sync group (see [p2p-sync.md](p2p-sync.md)) can unlock the new

@@ -9,6 +9,7 @@ import {
 	type VaultBlob,
 	type WebauthnSlot,
 } from "../vault-format";
+import type { WebauthnKeyKind } from "./webauthn-ceremony";
 
 // Pure slot-mutation policy for unlock methods.
 // Invariant B: a vault must always keep at least one primary unlock method
@@ -49,6 +50,49 @@ export function needsSaltMismatchRetry(
 }
 
 /** Append a security-key slot. Refuses at the slot ceiling. */
+/** Local, non-secret display data for a slot. Kept out of the vault file. */
+export interface StoredKeyLabel {
+	label: string;
+	addedAt: number;
+	kind?: WebauthnKeyKind;
+	synced?: boolean;
+}
+
+export interface WebauthnKeyMeta {
+	slotIdB64: string;
+	label: string;
+	addedAt: number;
+	kind: WebauthnKeyKind;
+	synced: boolean;
+}
+
+/**
+ * Pair each webauthn slot with its locally stored label.
+ *
+ * Two sources of missing data, both normal and neither an error: entries written before the
+ * platform path existed carry no `kind`, and a slot registered on ANOTHER device has no local
+ * entry at all, because labels never travel with the vault file. Both fall back to the only
+ * kind that used to exist, so an unknown slot reads as a security key rather than claiming to
+ * be a synced platform credential it might not be.
+ */
+export function describeWebauthnKeys(
+	slots: { slotId: Uint8Array }[],
+	labels: Record<string, StoredKeyLabel>,
+	toB64: (b: Uint8Array) => string,
+): WebauthnKeyMeta[] {
+	return slots.map((slot) => {
+		const slotIdB64 = toB64(slot.slotId);
+		const meta = labels[slotIdB64];
+		return {
+			slotIdB64,
+			label: meta?.label ?? "Security key",
+			addedAt: meta?.addedAt ?? 0,
+			kind: meta?.kind ?? "securityKey",
+			synced: meta?.synced ?? false,
+		};
+	});
+}
+
 export function addWebauthnSlot(blob: VaultBlob, slot: WebauthnSlot): VaultBlob {
 	return withSlotLimit({ ...blob, slots: [...blob.slots, slot] });
 }
