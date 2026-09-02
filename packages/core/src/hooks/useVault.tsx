@@ -166,10 +166,15 @@ export function isLogin<T extends EntryData>(entry: T): entry is Extract<T, Logi
 	return entry.type === "login";
 }
 
-/** How a joining device unlocks its rebuilt vault: a master password or a security key. */
+/**
+ * How a joining device unlocks its rebuilt vault. The webauthn variant mints a key against THIS
+ * device's own authenticator: nothing is transferred from the inviter, exactly as a typed
+ * password is not. It is the only way to add a device to a vault whose master password is off
+ * without silently putting a password slot back. See docs/security-keys.md.
+ */
 export type JoinUnlock =
 	| { kind: "password"; password: string }
-	| { kind: "webauthnKey"; label?: string };
+	| { kind: "webauthnKey"; label?: string; keyKind?: WebauthnKeyKind };
 
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { webauthnKey: true };

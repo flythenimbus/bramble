@@ -172,9 +172,19 @@ device with a security key instead of a master password. It reuses the same
   transferred VEK via `wrapWebauthnSlot`. The popup then finishes the unlock with
   the in-hand secret (`finishWebauthnUnlock`), no second tap.
 
-The option is gated on `isWebauthnAvailable()`, so it's hidden where WebAuthn / PRF
-can't work (mobile webviews; see [mobile-port.md](mobile-port.md)). Desktop only
-for now.
+The join screen offers **Master password**, **This device** (Touch ID / Windows Hello)
+and, where `securityKeys` allows, **Security key**, gated on `webauthnUnlock` so it is
+hidden where PRF can't work (mobile webviews; see [mobile-port.md](mobile-port.md)).
+
+The key options are not a convenience. A vault whose master password is off has no
+password slot, so the inviter ships no `passwordCheck` and nothing verifies what the
+joiner types (`enroll-host.ts` falls back to a local confirm-password guard, which only
+catches typos). Joining such a vault with a password therefore invents one, wraps the VEK
+under it, and puts a password slot back into a vault that deliberately had none. Joining
+with a key mints a slot against the joining device's OWN authenticator instead, so the
+vault stays password-less and each device keeps its own key. Nothing is transferred from
+the inviter either way: the hmac-secret goes popup to offscreen on one machine, exactly as
+a typed password does.
 
 ## Unlock and the salt-mismatch retry
 

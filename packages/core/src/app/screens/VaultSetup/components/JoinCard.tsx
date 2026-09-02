@@ -2,13 +2,18 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Check, QrCode, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
+import type { JoinUnlock } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
 
+/** How this device will unlock the vault it is about to receive. */
+type JoinMethod = "password" | "platform" | "securityKey";
+const METHODS: JoinMethod[] = ["password", "platform", "securityKey"];
+
 interface JoinCardProps {
-	/** Create a new vault by joining the group behind this pairing code, using the shared master
-	 * password. Rejects on a bad code / password mismatch (surfaced inline). */
-	onJoin: (pairingCode: string, password: string) => Promise<void>;
+	/** Create a new vault by joining the group behind this pairing code. Rejects on a bad code /
+	 * password mismatch (surfaced inline). */
+	onJoin: (pairingCode: string, unlock: JoinUnlock) => Promise<void>;
 	busy: boolean;
 	/** A join failure reported by the async join effect (password mismatch, transfer error). */
 	error: string | null;
@@ -22,6 +27,12 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 	const { shell } = usePlatform();
 	// Camera scan of the pairing QR (mobile only; extension pastes).
 	const canScan = useCan("cameraScan");
+	// A vault whose master password is off has no password to type and nothing to verify one
+	// against, so without these the only way in would be to invent a password and silently put a
+	// password slot back. See docs/security-keys.md.
+	const canWebauthnUnlock = useCan("webauthnUnlock");
+	const canSecurityKeys = useCan("securityKeys");
+	const [method, setMethod] = useState<JoinMethod>("password");
 	const [code, setCode] = useState("");
 	const [password, setPassword] = useState("");
 	const [localError, setLocalError] = useState<string | null>(null);
@@ -51,13 +62,20 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 			setLocalError(t`Paste the pairing code from your other device.`);
 			return;
 		}
-		if (!password) {
+		if (method === "password" && !password) {
 			setLocalError(t`Enter the master password shared with your other device.`);
 			return;
 		}
 		setSubmitting(true);
 		try {
-			await onJoin(code.trim(), password);
+			// No await before this call: the key ceremony needs the click's user activation, and
+			// an await here would spend it. See docs/security-keys.md.
+			await onJoin(
+				code.trim(),
+				method === "password"
+					? { kind: "password", password }
+					: { kind: "webauthnKey", keyKind: method, label: t`This device` },
+			);
 		} catch (err) {
 			setLocalError((err as Error).message);
 		} finally {
@@ -150,16 +168,48 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 							</>
 						)}
 					</div>
-					<PasswordField
-						label={t`Master password`}
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-					/>
+					{method === "password" && (
+						<PasswordField
+							label={t`Master password`}
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+						/>
+					)}
+					{canWebauthnUnlock && (
+						<div className="flex flex-wrap gap-2 text-xs">
+							{METHODS.filter((m) => m !== "securityKey" || canSecurityKeys).map((m) => (
+								<Button
+									key={m}
+									variant={method === m ? "primary" : "secondary"}
+									size="sm"
+									onClick={() => {
+										setMethod(m);
+										setLocalError(null);
+									}}
+									disabled={disabled}
+								>
+									{m === "password"
+										? t`Master password`
+										: m === "platform"
+											? t`This device`
+											: t`Security key`}
+								</Button>
+							))}
+						</div>
+					)}
 					<div className="rounded-md p-3 bg-muted/40 border border-border/50 text-xs text-muted-foreground">
-						<Trans>
-							This creates a new vault on this device and syncs it from your other device. Use the
-							same master password as that device.
-						</Trans>
+						{method === "password" ? (
+							<Trans>
+								This creates a new vault on this device and syncs it from your other device. Use the
+								same master password as that device.
+							</Trans>
+						) : (
+							<Trans>
+								This creates a new vault on this device and syncs it from your other device. You'll
+								register a key here that unlocks only on this device, so the other device keeps its
+								own.
+							</Trans>
+						)}
 					</div>
 				</div>
 				<div

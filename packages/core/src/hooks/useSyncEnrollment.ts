@@ -356,7 +356,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			// secret so the offscreen can wrap a webauthn slot and we finish the local
 			// unlock without a second tap.
 			const cred =
-				method.kind === "webauthnKey" ? await createPrfCredential(method.label ?? "") : undefined;
+				method.kind === "webauthnKey"
+					? await createPrfCredential(method.label ?? "", {
+							kind: method.keyKind ?? "platform",
+						})
+					: undefined;
 			// Enter the group as a fresh device: mint a new id first, so a device re-added after being
 			// revoked doesn't reuse its old (now-tombstoned) id, which would be dropped everywhere.
 			await rotateDeviceId();

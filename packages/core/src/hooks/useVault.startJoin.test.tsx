@@ -126,3 +126,75 @@ describe("the vault a join creates", () => {
 		expect(createdLabels(storage)).toEqual([""]);
 	});
 });
+
+describe("joining with a key instead of a password", () => {
+	/** A credential stub good enough for the ceremony: PRF secret straight from create(). */
+	function stubAuthenticator() {
+		const create = vi.fn(async (_opts: { publicKey: unknown }) => ({
+			rawId: new Uint8Array([1, 2, 3]).buffer,
+			response: { getAuthenticatorData: () => new Uint8Array(37).buffer },
+			getClientExtensionResults: () => ({
+				prf: { results: { first: new Uint8Array(32).fill(9).buffer } },
+			}),
+		}));
+		vi.stubGlobal("navigator", { credentials: { create, get: vi.fn() } });
+		return create;
+	}
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	/** The authenticatorSelection the ceremony asked for, out of an opaque options bag. */
+	function publicKeyOf(create: { mock: { calls: { publicKey: unknown }[][] } }) {
+		return create.mock.calls[0]![0]!.publicKey as {
+			authenticatorSelection: { authenticatorAttachment?: string; residentKey: string };
+		};
+	}
+
+	it("registers a platform key by default, not a security key", async () => {
+		// This is the whole point of the option: a vault whose master password is off has no
+		// password to type, so joining with one would silently put a password slot back.
+		const create = stubAuthenticator();
+		const { platform } = makePlatform();
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions().startJoin(CODE, { kind: "webauthnKey", label: "This device" });
+		});
+		await act(async () => {});
+
+		expect(create).toHaveBeenCalledOnce();
+		const selection = publicKeyOf(create).authenticatorSelection;
+		expect(selection.authenticatorAttachment).toBe("platform");
+		expect(selection.residentKey).toBe("required");
+	});
+
+	it("still honours an explicit security-key join", async () => {
+		const create = stubAuthenticator();
+		const { platform } = makePlatform();
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions().startJoin(CODE, { kind: "webauthnKey", keyKind: "securityKey" });
+		});
+		await act(async () => {});
+
+		const selection = publicKeyOf(create).authenticatorSelection;
+		expect(selection.residentKey).toBe("discouraged");
+	});
+
+	it("runs no ceremony for a password join", async () => {
+		const create = stubAuthenticator();
+		const { platform } = makePlatform();
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions().startJoin(CODE, { kind: "password", password: "pw" });
+		});
+		await act(async () => {});
+
+		expect(create).not.toHaveBeenCalled();
+	});
+});

@@ -111,8 +111,8 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 			onCreate={async (password, label) => {
 				setRecoveryCode(await createVault(password, label));
 			}}
-			onJoin={async (pairingCode, password) => {
-				await startJoin(pairingCode, { kind: "password", password });
+			onJoin={async (pairingCode, unlock) => {
+				await startJoin(pairingCode, unlock);
 				if (onComplete) onComplete();
 				else setDone("opened");
 			}}

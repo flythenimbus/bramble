@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
+import type { JoinUnlock } from "../../../hooks/useVault";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { SasDisplay } from "../../components/SasDisplay";
 import { BackButton } from "../../components/ui/back-button";
@@ -22,7 +23,7 @@ interface VaultSetupProps {
 	/** Create a new vault by pairing to another device with its invite code (both first-run and
 	 * adding). Resolves when the join completes; the parent drives the terminal screen. Absent
 	 * (no join tab) where per-vault sync isn't supported (mobile, for now). */
-	onJoin?: (pairingCode: string, password: string) => Promise<void>;
+	onJoin?: (pairingCode: string, unlock: JoinUnlock) => Promise<void>;
 	/** A setup-flow join is running (new vault created, pairing into it): show the connecting state. */
 	joining?: boolean;
 	/** The last join failure, surfaced in the join form. */

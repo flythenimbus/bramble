@@ -347,6 +347,10 @@ msgstr "Authenticator key (TOTP)"
 msgid "Authenticator returned an unknown credential."
 msgstr "Authenticator returned an unknown credential."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Authenticator returned no credential."
+msgstr "Authenticator returned no credential."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Auto-lock timeout"
 msgstr "Auto-lock timeout"
@@ -2450,6 +2454,7 @@ msgid "Security"
 msgstr "Security"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Security key"
 msgstr "Security key"
 
@@ -2899,8 +2904,13 @@ msgstr "This copy of Bramble is kept up to date by your system's package manager
 msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
 msgstr "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
 
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+msgstr "This creates a new vault on this device and syncs it from your other device. You'll register a key here that unlocks only on this device, so the other device keeps its own."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This device"
 msgstr "This device"
 
