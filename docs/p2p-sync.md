@@ -369,6 +369,28 @@ would require unwrapping DEKs and reconciling plaintext fields. That is the only
 exposes secrets during merge, and it is **deferred**. Entry-level is the v1 choice partly for
 this reason.)
 
+### What actually authorises a join
+
+Two things, and neither is the master password:
+
+1. Possession of a live **pairing code** (single-use, expiring).
+2. The **SAS confirmation** a human performs on the inviting device.
+
+The password check in `receiveBundle` looks like a third, and is not. It runs on the **joiner**,
+against a bundle that already contains the VEK: `sendBundle` ships `{vek, roster, entries,
+primaryPasswordCheck, ...}` in a single frame, so any peer that reaches SAS approval holds the
+vault before the check executes. A modified or older client skips it and loses nothing. It earns
+its place as a guard against honest mistakes - a typo, the wrong vault's password - not against
+an attacker.
+
+The inviter cannot compensate, because nothing tells it which unlock method the joiner chose:
+`recvJoinerHello` carries a label and a public key, and that is all. So this cannot be fixed on
+the joining side, in any version, by any UI change.
+
+Making the password (or a per-invite temporary one) genuinely gate entry means the **inviter**
+withholding the VEK until the joiner answers a challenge, before `sendBundle`. That is a protocol
+change, not a check moved around.
+
 ### Rules
 
 - **Entry vs entry:** for a given `id`, the greatest HLC wins; the whole losing entry is

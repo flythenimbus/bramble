@@ -1421,8 +1421,8 @@ msgid "Hourglass"
 msgstr "Sanduhr"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "How will you unlock on this device?"
-msgstr "Wie werden Sie auf diesem Gerät entsperren?"
+#~ msgid "How will you unlock on this device?"
+#~ msgstr "Wie werden Sie auf diesem Gerät entsperren?"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
@@ -2458,7 +2458,6 @@ msgid "Security"
 msgstr "Sicherheit"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Security key"
 msgstr "Sicherheitsschlüssel"
 
@@ -2913,12 +2912,11 @@ msgstr "Dies erstellt einen neuen Tresor auf diesem Gerät und synchronisiert ih
 #~ msgstr "Dadurch wird auf diesem Gerät ein neuer Tresor erstellt und von Ihrem anderen Gerät synchronisiert. Sie registrieren hier einen Schlüssel, der nur auf diesem Gerät zum Entsperren verwendet werden kann, sodass das andere Gerät seinen eigenen behält."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
-msgstr "Dadurch wird auf diesem Gerät ein neuer Tresor erstellt und von Ihrem anderen Gerät synchronisiert. Hier auf diesem Gerät registrieren Sie einen neuen Schlüssel, sodass Sie das Master-Passwort nie eingeben müssen. Ihr anderes Gerät behält seinen eigenen Schlüssel."
+#~ msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
+#~ msgstr "Dadurch wird auf diesem Gerät ein neuer Tresor erstellt und von Ihrem anderen Gerät synchronisiert. Hier auf diesem Gerät registrieren Sie einen neuen Schlüssel, sodass Sie das Master-Passwort nie eingeben müssen. Ihr anderes Gerät behält seinen eigenen Schlüssel."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This device"
 msgstr "Dieses Gerät"
 
@@ -3048,8 +3046,8 @@ msgid "Touch ID"
 msgstr "Touch ID"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "Touch ID or Windows Hello"
-msgstr "Touch ID oder Windows Hello"
+#~ msgid "Touch ID or Windows Hello"
+#~ msgstr "Touch ID oder Windows Hello"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Train"

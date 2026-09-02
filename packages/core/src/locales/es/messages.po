@@ -1421,8 +1421,8 @@ msgid "Hourglass"
 msgstr "Reloj de arena"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "How will you unlock on this device?"
-msgstr "¿Cómo desea desbloquear en este dispositivo?"
+#~ msgid "How will you unlock on this device?"
+#~ msgstr "¿Cómo desea desbloquear en este dispositivo?"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
@@ -2458,7 +2458,6 @@ msgid "Security"
 msgstr "Seguridad"
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Security key"
 msgstr "Clave de seguridad"
 
@@ -2913,12 +2912,11 @@ msgstr "Esto crea una nueva bóveda en este dispositivo y la sincroniza desde su
 #~ msgstr "Esto crea una nueva bóveda en este dispositivo y la sincroniza desde su otro dispositivo. Aquí registrará una llave que solo desbloquea en este dispositivo, de modo que el otro dispositivo conserva la suya."
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
-msgstr "Esto crea una nueva bóveda en este dispositivo y la sincroniza desde su otro dispositivo. Registrará una nueva clave aquí, en este dispositivo, para que nunca tenga que escribir la contraseña maestra. Su otro dispositivo conserva su propia clave."
+#~ msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
+#~ msgstr "Esto crea una nueva bóveda en este dispositivo y la sincroniza desde su otro dispositivo. Registrará una nueva clave aquí, en este dispositivo, para que nunca tenga que escribir la contraseña maestra. Su otro dispositivo conserva su propia clave."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "This device"
 msgstr "Este dispositivo"
 
@@ -3048,8 +3046,8 @@ msgid "Touch ID"
 msgstr "Touch ID"
 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
-msgid "Touch ID or Windows Hello"
-msgstr "Touch ID o Windows Hello"
+#~ msgid "Touch ID or Windows Hello"
+#~ msgstr "Touch ID o Windows Hello"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Train"

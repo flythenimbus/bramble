@@ -468,10 +468,19 @@ export async function receiveBundle(
 		return;
 	}
 	const bundle = decodeEnrollmentBundle(first);
-	// Provable same-password enforcement: when the inviter shipped its password-slot
-	// verifier and this device is joining with a password, the typed password MUST
-	// match the existing device's master password. An absent check (security-key
-	// inviter or older build) falls back to the joiner-local confirm-password guard.
+	// NOT AN ACCESS CONTROL, despite reading like one. This runs on the JOINER, and the bundle it
+	// is checking already contains the VEK: sendBundle ships {vek, ...} in one frame, so anything
+	// that reaches SAS approval holds the vault before this line executes. A modified or older
+	// client simply skips it. The real gates are the single-use pairing code and the human SAS
+	// confirmation on the inviting device.
+	//
+	// It is kept because it catches the honest case - a typo, or the wrong vault's password -
+	// before the user ends up with a vault they cannot open. To make the password actually gate
+	// entry, the INVITER would have to withhold the VEK pending a challenge-response, which is a
+	// protocol change, not a check moved around. See docs/p2p-sync.md.
+	//
+	// `opts.webauthn` skips it because there is no typed password to check. No UI reaches that
+	// branch today: the join screen is master-password only.
 	if (bundle.primaryPasswordCheck && !opts.webauthn) {
 		const ok = await opts.wasm.verify_password_slot(
 			opts.password ?? "",
