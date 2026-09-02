@@ -214,3 +214,18 @@ consecutive runs. A mid-test failure leaves a stray `e2e-*` vault for you to cle
 
 Anything else added here must create and delete **its own** vaults. A test that deletes "the first
 vault" deletes somebody's passwords. There is no sandbox and no undo.
+
+## The sync suite runs in CI now
+
+`test:e2e:sync` pairs two peers over a real relay and is the only automated coverage of an actual
+join. It used to be excluded from CI as unsuitable for a shared runner. That was wrong on both
+counts: `playwright.sync.config.ts` starts the relay and the mobile dev server itself, and the
+whole suite finishes in under a minute.
+
+The cost of leaving it out: it sat red from 2026-07-09 to 2026-09-01 on a one-word selector bug.
+`getByRole("button", { name: /Continue/i })` began matching two buttons the day a master-password
+gate was added next to DesktopLinkSection's "Allow and continue", and Playwright's strict mode
+refused to click either. Nothing was wrong with sync itself, and nobody could see it, because no
+job ran it.
+
+If you add a suite that CI does not run, it is not covered - it is only untested more slowly.

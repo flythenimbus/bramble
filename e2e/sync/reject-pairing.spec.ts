@@ -24,7 +24,7 @@ test("rejecting the prompt sends nothing and kills the code", async ({ ext, mobi
 		.last()
 		.click();
 	await ext.page.locator('input[type="password"]').first().fill(PW);
-	await ext.page.getByRole("button", { name: /Continue/i }).click();
+	await ext.page.getByRole("button", { name: "Continue", exact: true }).click();
 
 	const code = await ext.page.locator("input[readonly]").inputValue();
 	const decoded = JSON.parse(

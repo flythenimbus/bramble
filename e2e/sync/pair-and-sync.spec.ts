@@ -28,7 +28,7 @@ async function invite(page: Page): Promise<string> {
 		.click();
 	// Re-auth: adding a device is authorised by the master password, not just an unlocked session.
 	await page.locator('input[type="password"]').first().fill(PW);
-	await page.getByRole("button", { name: /Continue/i }).click();
+	await page.getByRole("button", { name: "Continue", exact: true }).click();
 
 	const codeField = page.locator("input[readonly]");
 	await expect(codeField).toBeVisible();

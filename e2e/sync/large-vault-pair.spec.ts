@@ -99,7 +99,7 @@ test("a multi-frame vault survives the transfer and the teardown that follows it
 		.last()
 		.click();
 	await ext.page.locator('input[type="password"]').first().fill(PW);
-	await ext.page.getByRole("button", { name: /Continue/i }).click();
+	await ext.page.getByRole("button", { name: "Continue", exact: true }).click();
 
 	const codeField = ext.page.locator("input[readonly]");
 	await expect(codeField).toBeVisible();

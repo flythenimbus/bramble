@@ -34,7 +34,7 @@ async function invite(page: Page): Promise<string> {
 		.last()
 		.click();
 	await page.locator('input[type="password"]').first().fill(PW);
-	await page.getByRole("button", { name: /Continue/i }).click();
+	await page.getByRole("button", { name: "Continue", exact: true }).click();
 	const codeField = page.locator("input[readonly]");
 	await expect(codeField).toBeVisible();
 	return codeField.inputValue();
