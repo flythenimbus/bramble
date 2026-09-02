@@ -105,8 +105,8 @@ ground truth of what exists.
   Decided the attack-surface trade-off in favor of OS-enforced gating (not an app-level check), so
   it also seeds the Phase 3 autofill biometric-unwrap path. **iOS functionally verified on the
   simulator** (enable -> lock -> Face ID unlock, plus cancel/non-match/disable); Android compiles
-  (no on-device/emulator pass yet). Security-key (WebAuthn) unlock is now **hidden on mobile** via a
-  `ShellAdapter.supportsSecurityKeys` flag (false on mobile) since PRF can't work there, and biometric
+  (no on-device/emulator pass yet). Security-key (WebAuthn) unlock is now **hidden on mobile** via the
+  `securityKeys` capability (`flags.ts`, false on mobile) since PRF can't work there, and biometric
   takes its slot in Settings. The mobile package also gained its **first test harness** (was zero):
   `platform-mobile` 9 tests, `@core` biometric paths 7. Remaining Phase 2: the broader vault
   list/detail/edit small-screen sweep, and the Android device pass. The biometric re-enrollment edge
@@ -392,8 +392,8 @@ memory constraint, and the shared-Rust-core enabler are in the dedicated section
 ### 2. WebAuthn / PRF / security keys: re-architect mobile unlock
 
 **Status: addressed for v1.** Biometric unlock shipped as the mobile primary-unlock class (see the
-implementation status up top), and the security-key UI is hidden on mobile behind a
-`ShellAdapter.supportsSecurityKeys` flag (false on mobile): the Settings registration row and the Auth
+implementation status up top), and the security-key UI is hidden on mobile behind the
+`securityKeys` capability (`flags.ts`, false on mobile): the Settings registration row and the Auth
 "unlock with security key" button no longer render there, so a vault synced from a desktop that has a
 registered key doesn't dangle a non-functional path on the phone. Platform-passkey/PRF unlock (the
 native ASAuthorization / Credential Manager route) remains the optional, long-lead Phase 4 item.

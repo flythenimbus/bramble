@@ -4,7 +4,7 @@ How a FIDO2 security key unlocks the vault. The crypto (HKDF KEK derivation, the
 uniform slot layout) is in [cryptography.md](cryptography.md); this doc covers the
 WebAuthn ceremonies and their quirks. The create()/get() PRF dance lives in
 `vault/webauthn-ceremony.ts` (`createPrfCredential`, `getPrfSecret`,
-`isWebauthnAvailable`), shared by `registerSecurityKey`, `unlockWithSecurityKey`,
+`isWebauthnAvailable`), shared by `registerWebauthnKey`, `unlockWithWebauthnKey`,
 and device enrollment; the slot bookkeeping stays in `useVault.tsx` +
 `slot-policy.ts`.
 

@@ -351,7 +351,7 @@ Chrome/iOS via sync and vice-versa (the core bytes are identical, so it should j
 
 Distinct from the passkey *provider* above: this is Bramble's **own vault unlock** via a WebAuthn
 credential (the PRF / hmac-secret extension derives a key that wraps the VEK). On Firefox it is
-**disabled** — `shell.supportsSecurityKeys` is false on `moz-extension://`, so the Settings section
+**disabled** — the `securityKeys` capability (`flags.ts`) is false for firefox, so the option
 hides — because registering throws **"The operation is insecure"**: the default rpID is the
 `moz-extension://` origin, which Firefox rejects as a WebAuthn RP.
 

@@ -38,7 +38,7 @@ Three kinds are understood:
   The salt here is 32 bytes (the CTAP2 hmac-secret salt requirement). The
   credentialId is not secret; it drives `allowCredentials` on the unlock prompt.
 - **Recovery** (`0x03`): byte-identical to the password payload. The codec is
-  shared (`encodeRecoveryPayload` just delegates with the kind swapped); only the
+  shared (`encodePasswordPayload` takes either slot type); only the
   kind byte differs so the two never collapse into one slot type. See
   [recovery-codes.md](recovery-codes.md).
 

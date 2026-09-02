@@ -547,8 +547,9 @@ device management). Notes on how it maps to code:
   on-connect; an instant on-change nudge is a follow-up.
 - **Fully headless writes:** the vault lives in `chrome.storage.local` (see
   [storage.md](storage.md)), which the background reads and writes with no gesture and no
-  permission, so headless merge just writes through. `canReadFromBackground` /
-  `canWriteFromBackground` are always true (the earlier FSA write-queue is gone).
+  permission, so headless merge just writes through. The `canReadFromBackground` /
+  `canWriteFromBackground` flags this used to describe are gone along with the FSA write-queue;
+  nothing gates a background write today.
 - **Deferred:** VEK-never-in-JS hardening (the VEK is currently a transient JS string
   during enrollment + session caching, no worse than the existing session cache);
   instant on-change nudge; VEK rotation; async (offline store-and-forward mailbox);

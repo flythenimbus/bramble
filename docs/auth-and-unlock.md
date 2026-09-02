@@ -14,7 +14,7 @@ A vault has one or more **slots**, each a way to unlock:
 - **Recovery code**: a high-entropy offline passphrase, cryptographically a
   password slot but flagged as a backup. Never a primary method.
 
-Each unlock path (`unlock` with a password, `unlockWithSecurityKey`,
+Each unlock path (`unlock` with a password, `unlockWithWebauthnKey`,
 `unlockWithRecoveryCode` in `useVault.tsx`) reads the vault blob, derives the
 KEK for the chosen slot, unwraps the VEK, loads entries, and flips `isLocked`.
 On a successful unlock it also flushes any corner-prompt capture that was parked
@@ -194,7 +194,7 @@ resetting the recovery code) without changing lock state:
 
 - `verifyMasterPassword`: a verifier-only check against the password slot. Works
   while the vault is already unlocked because it never touches the in-memory VEK.
-- `verifyWithSecurityKey`: a single tap that proves possession of a registered
+- `verifyWithWebauthnKey`: a single tap that proves possession of a registered
   key. Used on a password-less vault, where there is no master password to
   confirm with.
 
