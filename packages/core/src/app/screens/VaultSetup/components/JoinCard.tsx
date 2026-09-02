@@ -5,6 +5,7 @@ import { useCan, usePlatform } from "../../../../context/PlatformContext";
 import type { JoinUnlock } from "../../../../hooks/useVault";
 import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
+import { useWebauthnUnlock } from "../../../hooks/useWebauthnUnlock";
 
 /** How this device will unlock the vault it is about to receive. */
 type JoinMethod = "password" | "platform" | "securityKey";
@@ -30,7 +31,7 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 	// A vault whose master password is off has no password to type and nothing to verify one
 	// against, so without these the only way in would be to invent a password and silently put a
 	// password slot back. See docs/security-keys.md.
-	const canWebauthnUnlock = useCan("webauthnUnlock");
+	const canWebauthnUnlock = useWebauthnUnlock();
 	const canSecurityKeys = useCan("securityKeys");
 	const [method, setMethod] = useState<JoinMethod>("password");
 	const [code, setCode] = useState("");

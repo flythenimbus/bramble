@@ -7,6 +7,7 @@ import {
 	setWebauthnInterceptionPauser,
 	setWebauthnRpId,
 	unlockRpIdOrder,
+	webauthnUnlockPossible,
 } from "./webauthn-ceremony";
 
 const RAW_ID = new Uint8Array([1, 2, 3, 4]).buffer;
@@ -413,5 +414,25 @@ describe("unlocking across both rpIDs", () => {
 
 		const r = await getPrfSecretAcrossRpIds(ALLOW, SALT, [undefined]);
 		expect(r.rpId).toBeUndefined();
+	});
+});
+
+describe("whether webauthn unlock is offerable at all", () => {
+	it("is off when no rpID is usable, so old Firefox hides instead of failing", () => {
+		// Firefox refuses its own moz-extension:// origin as an RP, and only learned to claim one
+		// from host_permissions in 150. The manifest supports 128+, so those users exist and would
+		// otherwise get "The operation is insecure" on every tap. The shell installs no rpID there.
+		setWebauthnRpId(undefined, { implicitUsable: false });
+		expect(webauthnUnlockPossible()).toBe(false);
+	});
+
+	it("is on for Firefox 150+, which can claim the shared rpID", () => {
+		setWebauthnRpId("bramble.sh", { implicitUsable: false });
+		expect(webauthnUnlockPossible()).toBe(true);
+	});
+
+	it("is on for Chromium, whose implicit rpID works even with no explicit one", () => {
+		setWebauthnRpId(undefined, { implicitUsable: true });
+		expect(webauthnUnlockPossible()).toBe(true);
 	});
 });

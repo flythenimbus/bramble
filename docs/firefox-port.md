@@ -99,9 +99,10 @@ below for what it needs.
   writeText("")` may be rejected from an unfocused background page, and the usual `<textarea>` +
   `execCommand` fallback also needs a focused document the background lacks. May need a rethink
   (clear from the popup, or on next popup open). See "Risks / open items".
-- AMO listed submission: the release pipeline + source-code submission + reproducible-build docs
-  are wired (`docs/amo-source-build.md`); what remains is dashboard-only and one-time (screenshots,
-  category, `data_collection_permissions`, privacy-policy URL) plus AMO's manual review.
+- AMO listed submission: **done, publicly released**. The gecko id (`firefox@bramble.app`) is
+  therefore fixed: AMO has registered it, so changing it now would mean a new listing and
+  abandoning existing users. It is an opaque identifier no user sees, so the fact that it names a
+  domain we do not own is cosmetic and permanent.
 
 ## Chrome API surface in use
 
@@ -379,6 +380,13 @@ What it would take, and why it stayed deferred (verified 2026-07, confirmed by m
   rpID would need a breaking re-registration migration for existing Chrome users *and* still wouldn't
   give YubiKey roaming (Firefox PRF gap), so it isn't worth it.
 - **Dead ends:** WebHID / WebUSB (raw CTAP2 would bypass the rpID) — Firefox implements neither.
+
+**Version floor.** Claiming an rpID from `host_permissions` needs **Firefox 150+**, while
+`strict_min_version` is `128.0`. Older Firefox is refused both rpIDs (its own origin outright, and
+it cannot claim `bramble.sh`), so the shell installs none and `webauthnUnlockPossible()` reports
+false, hiding the section rather than offering a button that always throws. Raising the manifest
+floor instead was rejected: it would cut 128-149 users off from every future update to fix one
+optional feature.
 
 Plan, now confirmed by measurement: enable on FF 150+ as **platform-authenticator** PRF unlock
 (explicit `bramble.sh` rpID, version-gated, Chrome untouched), leaving YubiKey unlock

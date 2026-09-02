@@ -15,7 +15,7 @@ import {
 	isBiometricInvalidated,
 	isBiometricLockout,
 } from "../../../adapters/biometric";
-import { useCan, usePlatform } from "../../../context/PlatformContext";
+import { usePlatform } from "../../../context/PlatformContext";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { usePrefs } from "../../../hooks/usePrefs";
 import { useVault } from "../../../hooks/useVault";
@@ -27,6 +27,7 @@ import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
 import { useWebauthnHandoff, type WebauthnHandoff } from "../../hooks/useWebauthnHandoff";
+import { useWebauthnUnlock } from "../../hooks/useWebauthnUnlock";
 import { shouldAutoPromptBiometric } from "./auto-biometric";
 
 interface FormValues {
@@ -68,7 +69,7 @@ export function Auth() {
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
 	const vaultLabel =
 		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
-	const canWebauthnUnlock = useCan("webauthnUnlock");
+	const canWebauthnUnlock = useWebauthnUnlock();
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
 	const cryptoError = useCryptoErrorMessage();

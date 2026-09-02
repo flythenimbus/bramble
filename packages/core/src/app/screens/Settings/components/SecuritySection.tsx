@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { Lock } from "lucide-react";
-import { useCan } from "../../../../context/PlatformContext";
+import { useWebauthnUnlock } from "../../../hooks/useWebauthnUnlock";
 import { BiometricSection } from "./BiometricSection";
 import { MasterPasswordSection } from "./MasterPasswordSection";
 import { Section } from "./primitives";
@@ -9,7 +9,7 @@ import { TapToUnlockSection } from "./TapToUnlockSection";
 
 /** Security tab: master password, tap to unlock, biometric unlock, recovery code. */
 export function SecuritySection() {
-	const canWebauthnUnlock = useCan("webauthnUnlock");
+	const canWebauthnUnlock = useWebauthnUnlock();
 	const { t } = useLingui();
 	return (
 		<Section icon={<Lock className="w-4 h-4 text-primary" />} title={t`Security`}>

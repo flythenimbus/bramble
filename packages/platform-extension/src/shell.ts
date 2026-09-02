@@ -72,7 +72,20 @@ export const extensionTarget: Target =
 // door open for bramble.sh itself to share credentials one day.
 // Firefox cannot use its implicit moz-extension:// rpID at all (SecurityError, not a miss), and
 // has no security keys to have registered under one either, so the shared rpID is its only option.
-setWebauthnRpId("bramble.sh", { implicitUsable: extensionTarget !== "firefox" });
+//
+// Claiming an rpID from host_permissions needs Firefox 150+, and the manifest supports 128+, so
+// older Firefox gets NO rpID: its implicit origin is refused too, leaving nothing usable, and
+// webauthnUnlockPossible() reports false so the UI hides instead of offering a button that always
+// throws. A major-version parse rather than getBrowserInfo() because capabilities are read
+// synchronously during render.
+const FIREFOX_RPID_CLAIM_MIN = 150;
+const firefoxMajor = Number(
+	/Firefox\/(\d+)/.exec(typeof navigator === "undefined" ? "" : navigator.userAgent)?.[1] ?? 0,
+);
+const canClaimRpId = extensionTarget !== "firefox" || firefoxMajor >= FIREFOX_RPID_CLAIM_MIN;
+setWebauthnRpId(canClaimRpId ? "bramble.sh" : undefined, {
+	implicitUsable: extensionTarget !== "firefox",
+});
 
 /** ShellAdapter for the browser-extension platform (options page, pop-out, tab origin, QR scan). */
 export const extensionShell: ShellAdapter = {

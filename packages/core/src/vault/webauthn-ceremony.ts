@@ -44,6 +44,19 @@ export function setWebauthnRpId(
 	implicitRpIdUsable = opts.implicitUsable ?? true;
 }
 
+/**
+ * Whether ANY rpID is usable here. False leaves nothing to register against, so the UI must hide
+ * rather than offer a button that always throws.
+ *
+ * The case that matters is Firefox before 150: it refuses its own moz-extension:// origin as an
+ * RP, and only gained the ability to claim an rpID from `host_permissions` in 150. The manifest
+ * supports 128+, so those users exist and would otherwise see a section that fails every time
+ * with "The operation is insecure". The shell installs no rpID for them.
+ */
+export function webauthnUnlockPossible(): boolean {
+	return platformRpId !== undefined || implicitRpIdUsable;
+}
+
 /** The rpID a given kind registers under; undefined means the implicit extension origin. */
 export function rpIdFor(kind: WebauthnKeyKind): string | undefined {
 	return kind === "platform" ? platformRpId : undefined;
