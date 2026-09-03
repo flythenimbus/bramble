@@ -86,6 +86,40 @@ module-level concepts that name good seams.
   selection does not suit. Every action owns a dialog and there is deliberately no
   run-immediately path, because these mutate or export many secrets at once.
 
+## Vault scoping
+
+**MUST: no setting affects a vault other than the one it was set in.**
+
+Every persisted value is one of two things, and which one is a decision, never a
+default:
+
+- **Device-scoped** — describes the app or the machine, and is deliberately the
+  same in every vault: auto-lock timeout, theme, locale, the sync relay endpoint.
+- **Vault-scoped** — describes ONE vault: its unlock gate, its sync identity, its
+  backup targets. Stored at `<key>:<vaultId>` (`syncKeyFor`), listed in
+  docs/multiple-vaults.md.
+
+Anything that grants a capability against a vault's data is vault-scoped. When the
+two readings are arguable, it is vault-scoped: a setting wrongly shared hands one
+vault a permission its owner never granted, and that is not a cosmetic bug. It
+shipped once — `pref.biometricPasscodeFallback` was flat, so a second vault opened
+with passcode fallback already on and the gate re-arm honoured it, leaving a vault
+openable by a device passcode its owner had never allowed.
+
+The rule is enforced where it can be. `PREF_SCOPE` in `hooks/usePrefs.tsx` is
+exhaustive over `Prefs`, so a new preference does not compile until its scope is
+declared. Prefer that shape to a comment for anything else that grows this way.
+
+Two consequences worth stating, because both have been got wrong:
+
+- **Reading is scoped too, not just writing.** The provider re-reads vault-scoped
+  prefs when the active vault changes, and resets them to their defaults first, so
+  the window before the read lands shows the closed position rather than the
+  previous vault's answer.
+- **Native caches are settings too.** A keychain item or an App Group value that
+  gates a vault is subject to this rule exactly as a pref is: it is keyed by vault
+  id, and a process that cannot know the vault id has no business reading it.
+
 ## Autofill detection
 
 - **PageFieldModel** — the parsed, in-memory description of a web page's fillable

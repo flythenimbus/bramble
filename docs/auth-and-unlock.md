@@ -115,11 +115,15 @@ contradicting each other; multi-vault testing then found two more, and rules 5 a
    writes the access control, the passcode flag and the vault id; `purge` clears
    all three. A flag outliving its item tells the extension a gate is armed that
    is not.
-4. **The extension only offers a gate it can actually use.** The mirror item is
-   un-suffixed and, like every Keychain item, **survives app deletion**, so its
-   mere presence is not evidence: it kept offering unlock for a vault that had
-   turned it off, and for vaults from previous installs. `vekExists()` therefore
-   also requires `autofill.biometricVaultId == autofill.bundleVaultId`.
+4. **The extension only offers a gate it can actually use.** Keychain items
+   **survive app deletion**, so presence is evidence only once it is presence of
+   *this vault's* item. Everything the extension caches is keyed by the vault it
+   holds a bundle for (`autofill.bundleVaultId`): the VEK (`vek:<id>`), the
+   keep-unlocked session, and the passcode-fallback flag. That replaced comparing
+   a separately-stamped mirror id against the bundle's - keying by vault makes the
+   comparison unnecessary, because finding the item *is* the match. The one shared
+   item it replaced meant arming a second vault overwrote the first's cache and
+   disabling either deleted both.
 5. **Nothing about the gate is device-wide.** The gate is per vault, so the
    settings describing it are stored per vault too (`<key>:<vaultId>`, the same
    convention as the sync keys). `pref.biometricAutoPrompt` and
@@ -203,9 +207,11 @@ ungated: it exists only to answer a fill request, so there is nothing else to be
 doing there. It has **no policy to pick**: `readVek` hands an unauthenticated
 `LAContext` to the Keychain and lets the item's own access control raise the
 prompt, so the passcode-fallback setting is enforced there by construction. It
-reads the mirrored flag (`autofill.biometricPasscodeFallback` in the App Group,
-written by `BiometricVault.setSecret` alongside the item it describes, so the two
-can't drift) only to label the button - "Face ID" versus "Face ID or passcode".
+reads the mirrored flag (`autofill.biometricPasscodeFallback:<vaultId>` in the App
+Group, written by `BiometricVault.setSecret` alongside the item it describes, so
+the two can't drift) only to label the button - "Face ID" versus "Face ID or
+passcode". Keyed by vault like the item: with two vaults armed at once a single
+flag would name only the one armed last.
 
 ## Invariant B: always one primary method
 

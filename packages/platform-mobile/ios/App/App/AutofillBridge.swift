@@ -142,13 +142,9 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		defaults?.removeObject(forKey: BrambleVault.slotKey)
 		defaults?.removeObject(forKey: BrambleVault.passkeyBundleKey)
 		defaults?.removeObject(forKey: BrambleVault.pendingPasskeysKey)
-		SecItemDelete(
-			[
-				kSecClass as String: kSecClassGenericPassword,
-				kSecAttrService as String: BrambleVault.sessionService,
-				kSecAttrAccount as String: BrambleVault.vekAccount,
-				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
-			] as CFDictionary)
+		// Without this the extension still believes it holds a bundle for the deleted vault.
+		defaults?.removeObject(forKey: BrambleVault.bundleVaultKey)
+		Self.deleteAllSessions()
 		ASCredentialIdentityStore.shared.removeAllCredentialIdentities { _, _ in call.resolve() }
 	}
 
@@ -157,15 +153,21 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 	@objc func setKeepUnlocked(_ call: CAPPluginCall) {
 		let minutes = call.getInt("minutes") ?? 0
 		UserDefaults(suiteName: BrambleVault.appGroup)?.set(minutes, forKey: BrambleVault.keepUnlockedKey)
-		if minutes == 0 {
-			SecItemDelete(
-				[
-					kSecClass as String: kSecClassGenericPassword,
-					kSecAttrService as String: BrambleVault.sessionService,
-					kSecAttrAccount as String: BrambleVault.vekAccount,
-					kSecAttrAccessGroup as String: BrambleVault.accessGroup,
-				] as CFDictionary)
-		}
+		if minutes == 0 { Self.deleteAllSessions() }
 		call.resolve()
+	}
+
+	// Every vault's keep-unlocked session, by omitting the account from the query. Sessions are
+	// keyed `vek:<vaultId>` so one vault's window cannot open another; both callers here mean
+	// "no session may survive this" (the window was switched off, or the vault is gone), so
+	// they clear the lot rather than guess at an id. Also catches the un-suffixed item an
+	// older build wrote.
+	private static func deleteAllSessions() {
+		SecItemDelete(
+			[
+				kSecClass as String: kSecClassGenericPassword,
+				kSecAttrService as String: BrambleVault.sessionService,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+			] as CFDictionary)
 	}
 }

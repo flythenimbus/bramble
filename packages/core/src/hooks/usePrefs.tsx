@@ -106,13 +106,37 @@ const META_KEYS: Record<keyof Prefs, string> = {
 };
 
 /**
- * Prefs that describe ONE VAULT's unlock gate rather than the device, stored per vault at
- * `<key>:<vaultId>` like the sync keys (see sync-keys.ts and docs/multiple-vaults.md).
- * Both of these were flat, so every vault read the same value: a second vault showed passcode
- * fallback and unlock-on-open already switched on, having never been given either, and the
- * re-arm then honoured that borrowed setting when writing the second vault's gate.
+ * MUST: no setting may affect a vault other than the one it was set in. See CONTEXT.md.
+ *
+ * "device" describes the app or the machine and is the same everywhere by intent. "vault"
+ * describes ONE vault and is stored at `<key>:<vaultId>`, the convention the sync keys already
+ * use (sync-keys.ts, docs/multiple-vaults.md). Anything granting a capability against a vault's
+ * data is "vault": the two biometric prefs shipped flat, and a second vault then opened with
+ * passcode fallback already on, having never been given it.
+ *
+ * Exhaustive over `Prefs`, so a new pref cannot be added without deciding - a compile error
+ * rather than a silent device-wide default, which is the direction that leaks a permission.
  */
-const PER_VAULT_PREFS = new Set<keyof Prefs>(["biometricAutoPrompt", "biometricPasscodeFallback"]);
+type PrefScope = "device" | "vault";
+const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
+	autoLockMinutes: "device",
+	breachCheckEnabled: "device",
+	clipboardClearSeconds: "device",
+	offerToSave: "device",
+	autofillEnabled: "device",
+	neverSaveSites: "device",
+	biometricAutoPrompt: "vault",
+	autofillQuickType: "device",
+	passkeyProviderEnabled: "device",
+	lockOnScreenLock: "device",
+	statsCollapsed: "device",
+	autostartPromptDismissed: "device",
+	biometricPasscodeFallback: "vault",
+};
+
+const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
+	(k) => PREF_SCOPE[k] === "vault",
+);
 
 const DEFAULT_PREFS: Prefs = {
 	autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
@@ -154,7 +178,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	const keyFor = useCallback(
 		(pref: keyof Prefs) => {
 			const base = META_KEYS[pref];
-			return PER_VAULT_PREFS.has(pref) && vaultId ? syncKeyFor(base, vaultId) : base;
+			return PREF_SCOPE[pref] === "vault" && vaultId ? syncKeyFor(base, vaultId) : base;
 		},
 		[vaultId],
 	);
@@ -167,8 +191,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		// position, so the worst a stale window can do now is ask for one tap too many.
 		setPrefs((prev) => ({
 			...prev,
-			biometricAutoPrompt: DEFAULT_BIOMETRIC_AUTO_PROMPT,
-			biometricPasscodeFallback: DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
+			...Object.fromEntries(VAULT_SCOPED.map((k) => [k, DEFAULT_PREFS[k]])),
 		}));
 		void (async () => {
 			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([

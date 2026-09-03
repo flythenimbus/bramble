@@ -507,6 +507,14 @@ Full multi-vault autofill (search all vaults, label results by vault) is still a
 fast-follow - this is single-active (the service fills whichever vault the app is in), not
 multi-vault-at-once.
 
+Single-active is a *product* limit, not a shared cache. Every native cache the iOS extension
+keeps is keyed by the vault the published bundle belongs to (`autofill.bundleVaultId`): the
+biometric VEK item `vek:<vaultId>`, the keep-unlocked session, and
+`autofill.biometricPasscodeFallback:<vaultId>`. These were one shared un-suffixed item each,
+which meant arming a second vault overwrote the first's cached VEK, disabling either deleted
+both, and a keep-unlocked window opened for one vault carried into the next. Per CONTEXT.md,
+a native cache that gates a vault is a setting and obeys the same scoping rule.
+
 ---
 
 The original v1 plan is kept below for context (superseded: active-vault, not primary-vault). Autofill

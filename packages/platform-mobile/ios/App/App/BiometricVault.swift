@@ -48,10 +48,12 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		]
 	}
 
-	// The un-suffixed item the AutoFill extension reads: it runs out-of-process and can't know the
-	// app's active vault id, so setSecret mirrors the (active) vault's VEK here and deleteSecret
-	// clears it. Effectively autofill follows the active vault; per-vault autofill data is Tier 2.
-	private static func autofillIdentity() -> [String: Any] {
+	// The un-suffixed item the AutoFill extension USED to read: one cache shared by every vault,
+	// so arming a second vault overwrote the first's and disabling either deleted both. The
+	// extension now reads the per-vault item directly, keyed by the vault it holds a bundle for
+	// (autofill.bundleVaultId), so nothing writes this any more. Kept only to delete it: keychain
+	// items survive app deletion, so a stale VEK would otherwise sit there forever.
+	private static func legacySharedIdentity() -> [String: Any] {
 		[
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,
@@ -199,18 +201,17 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 				call.reject("Couldn't create the biometric access control")
 				return
 			}
-			// Per-vault item (the in-app unlock reads this) + the shared un-suffixed mirror the AutoFill
-			// extension reads. The per-vault write is authoritative; the mirror is best-effort.
+			// One item, this vault's; the AutoFill extension now reads the very same one.
 			let status = Self.store(Self.identity(vaultId), data: data, access: access)
-			_ = Self.store(Self.autofillIdentity(), data: data, access: access)
-			// Tell the extension which gate the mirror carries, so its unlock button doesn't promise a
-			// passcode the Keychain will refuse. Written here rather than through AutofillBridge so it
-			// can't drift from the access control it describes.
-			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-			defaults?.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
-			// And which vault the mirror now carries, so the extension can tell it apart from one left
-			// behind by another vault or an earlier install.
-			defaults?.set(vaultId, forKey: BrambleVault.biometricVaultKey)
+			// Drop the shared item an older build wrote. Nothing reads it now, but it holds a real
+			// VEK, and keychain items outlive the app that made them.
+			for q in Self.groupVariants(Self.legacySharedIdentity()) { SecItemDelete(q as CFDictionary) }
+			// Which gate this vault's item carries, so the extension's button doesn't promise a
+			// passcode the Keychain will refuse. Written here rather than through AutofillBridge so
+			// it can't drift from the access control it describes, and keyed by vault like the item:
+			// with two vaults armed at once a single flag names only the one armed last.
+			UserDefaults(suiteName: BrambleVault.appGroup)?
+				.set(allowPasscode, forKey: "\(BrambleVault.biometricPasscodeFallbackKey):\(vaultId)")
 			if status == errSecSuccess {
 				call.resolve()
 			} else {
@@ -292,18 +293,18 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		}
 	}
 
-	// Remove this vault's per-vault item AND the shared autofill mirror, from both groups so no
-	// copy lingers. Clearing the mirror stops autofill until biometric is re-enabled (re-armed).
+	// Remove THIS vault's item, from both groups so no copy lingers, plus the shared item an
+	// older build may have left behind. Another vault's gate is untouched: disabling one vault
+	// used to delete the shared cache and silently take autofill down for every other.
 	// Returns the last status and whether anything is now definitely gone.
 	private static func purge(_ vaultId: String) -> (ok: Bool, status: OSStatus) {
-		// Clear what described the mirror too. Left behind, they tell the extension a gate is
-		// armed with a passcode route, for a vault, that no longer exists.
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		defaults?.removeObject(forKey: BrambleVault.biometricPasscodeFallbackKey)
-		defaults?.removeObject(forKey: BrambleVault.biometricVaultKey)
+		// Clear what described this vault's gate too. Left behind, it tells the extension a gate
+		// is armed with a passcode route that no longer exists.
+		UserDefaults(suiteName: BrambleVault.appGroup)?
+			.removeObject(forKey: "\(BrambleVault.biometricPasscodeFallbackKey):\(vaultId)")
 		var lastStatus: OSStatus = errSecItemNotFound
 		var ok = false
-		for identity in [identity(vaultId), autofillIdentity()] {
+		for identity in [identity(vaultId), legacySharedIdentity()] {
 			for q in groupVariants(identity) {
 				let status = SecItemDelete(q as CFDictionary)
 				lastStatus = status

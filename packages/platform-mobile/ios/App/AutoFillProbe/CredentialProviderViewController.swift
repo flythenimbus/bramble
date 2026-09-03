@@ -862,8 +862,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// Group by AutofillBridge; defaults to false to match the app's own default. Read-only here -
 	// the Keychain item's access control is what actually enforces it.
 	private func passcodeFallbackAllowed() -> Bool {
-		UserDefaults(suiteName: BrambleVault.appGroup)?
-			.bool(forKey: BrambleVault.biometricPasscodeFallbackKey) ?? false
+		guard let vaultId = bundleVaultId() else { return false }
+		return UserDefaults(suiteName: BrambleVault.appGroup)?
+			.bool(forKey: "\(BrambleVault.biometricPasscodeFallbackKey):\(vaultId)") ?? false
 	}
 
 	// The device's biometry name, naming the passcode only when the cached VEK is actually
@@ -994,7 +995,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			// The gate opened but its VEK does not decrypt this bundle: the cache belongs to another
 			// vault, or to an install before this one. The underlying error is a Rust aead failure
 			// and means nothing to anyone, so retire the cache and ask for the master password.
-			discardMirror()
+			discardCachedVek()
 			showUnlock(
 				message: String(
 					localized: "This device's saved key is out of date. Enter your master password."))
@@ -1117,11 +1118,15 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		UserDefaults(suiteName: BrambleVault.appGroup)?.integer(forKey: BrambleVault.keepUnlockedKey) ?? 0
 	}
 
-	private func sessionBaseQuery() -> [String: Any] {
-		[
+	// Keyed by vault like the cached VEK above: a keep-unlocked window is permission to open ONE
+	// vault without re-auth, and a shared item handed it to whichever vault became active next.
+	// Returns nil before the app has published a bundle, which reads as "no session".
+	private func sessionBaseQuery() -> [String: Any]? {
+		guard let vaultId = bundleVaultId() else { return nil }
+		return [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.sessionService,
-			kSecAttrAccount as String: BrambleVault.vekAccount,
+			kSecAttrAccount as String: "\(BrambleVault.vekAccount):\(vaultId)",
 			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
 		]
 	}
@@ -1133,8 +1138,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				"vek": vek, "at": Date().timeIntervalSince1970,
 			])
 		else { return }
-		SecItemDelete(sessionBaseQuery() as CFDictionary)
-		var add = sessionBaseQuery()
+		guard let base = sessionBaseQuery() else { return }
+		SecItemDelete(base as CFDictionary)
+		var add = base
 		add[kSecValueData as String] = data
 		add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 		SecItemAdd(add as CFDictionary, nil)
@@ -1143,7 +1149,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func loadSession() -> String? {
 		let minutes = keepUnlockedMinutes()
 		guard minutes != 0 else { return nil }  // 0 = off
-		var q = sessionBaseQuery()
+		guard var q = sessionBaseQuery() else { return nil }
 		q[kSecReturnData as String] = true
 		q[kSecMatchLimit as String] = kSecMatchLimitOne
 		var item: CFTypeRef?
@@ -1160,7 +1166,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	private func clearSession() {
-		SecItemDelete(sessionBaseQuery() as CFDictionary)
+		guard let base = sessionBaseQuery() else { return }
+		SecItemDelete(base as CFDictionary)
 	}
 
 	// --- hosting + Keychain ---
@@ -1179,48 +1186,50 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		h.didMove(toParent: self)
 	}
 
-	// The vault the cached VEK was armed for, and the one the published bundle was encrypted for.
-	// Both are stamped into the App Group when they are written.
-	private func mirrorMatchesBundle() -> Bool {
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		let armedFor = defaults?.string(forKey: BrambleVault.biometricVaultKey) ?? ""
-		let bundleFor = defaults?.string(forKey: BrambleVault.bundleVaultKey) ?? ""
-		return !armedFor.isEmpty && armedFor == bundleFor
+	/// The vault whose data we are holding: whichever one the app last published a bundle for.
+	/// Everything below is keyed by it, so a gate armed for one vault can never open another.
+	private func bundleVaultId() -> String? {
+		let id = UserDefaults(suiteName: BrambleVault.appGroup)?
+			.string(forKey: BrambleVault.bundleVaultKey) ?? ""
+		return id.isEmpty ? nil : id
 	}
 
-	/// Drop the mirror and everything describing it. Called when the cached VEK is shown to be
-	/// unusable, so the button stops being offered instead of failing the same way next time.
-	private func discardMirror() {
-		SecItemDelete(
-			[
-				kSecClass as String: kSecClassGenericPassword,
-				kSecAttrService as String: BrambleVault.biometricService,
-				kSecAttrAccount as String: BrambleVault.vekAccount,
-				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
-			] as CFDictionary)
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		defaults?.removeObject(forKey: BrambleVault.biometricVaultKey)
-		defaults?.removeObject(forKey: BrambleVault.biometricPasscodeFallbackKey)
+	/// This vault's cached-VEK item. Was un-suffixed, one item shared by every vault, so arming
+	/// a second vault overwrote the first's and disabling either deleted both. Keyed by vault
+	/// now, which also removes the need to compare ids: finding the item IS the match.
+	private func vekQuery(_ vaultId: String) -> [String: Any] {
+		[
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: BrambleVault.biometricService,
+			kSecAttrAccount as String: "\(BrambleVault.vekAccount):\(vaultId)",
+			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+		]
+	}
+
+	/// Drop this vault's cached VEK and what describes it. Called when it is shown to be unusable,
+	/// so the button stops being offered instead of failing the same way next time. Touches only
+	/// the vault in hand: another vault's gate is none of this one's business.
+	private func discardCachedVek() {
+		guard let vaultId = bundleVaultId() else { return }
+		SecItemDelete(vekQuery(vaultId) as CFDictionary)
+		UserDefaults(suiteName: BrambleVault.appGroup)?
+			.removeObject(forKey: "\(BrambleVault.biometricPasscodeFallbackKey):\(vaultId)")
 		clearSession()
 	}
 
 	private func vekExists() -> Bool {
-		// Keychain items survive app deletion and the mirror carries no vault id in its account, so
-		// presence alone kept offering a fast unlock for a vault that had turned it off, or for one
-		// that no longer exists. Entering the passcode then produced a VEK that could not decrypt
-		// the bundle, surfacing as a raw aead error. Require the two to name the same vault.
-		guard mirrorMatchesBundle() else { return false }
-		let q: [String: Any] = [
-			kSecClass as String: kSecClassGenericPassword,
-			kSecAttrService as String: BrambleVault.biometricService,
-			kSecAttrAccount as String: BrambleVault.vekAccount,
-			kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+		// Keychain items survive app deletion, so presence is only meaningful once it is presence
+		// of THIS vault's item: the shared one kept offering a fast unlock for a vault that had
+		// turned it off, or for one that no longer exists, and the passcode then produced a VEK
+		// that could not decrypt the bundle (a raw aead error on screen).
+		guard let vaultId = bundleVaultId() else { return false }
+		let q = vekQuery(vaultId).merging([
 			kSecReturnData as String: false,
 			// UIFail (not UISkip): report the auth-required item as existing via
 			// errSecInteractionNotAllowed rather than silently skipping it (errSecItemNotFound).
 			kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
 			kSecMatchLimit as String: kSecMatchLimitOne,
-		]
+		]) { _, new in new }
 		let status = SecItemCopyMatching(q as CFDictionary, nil)
 		return status == errSecSuccess || status == errSecInteractionNotAllowed
 	}
@@ -1233,15 +1242,15 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		DispatchQueue.global(qos: .userInitiated).async {
 			let ctx = LAContext()
 			ctx.localizedReason = reason
-			let query: [String: Any] = [
-				kSecClass as String: kSecClassGenericPassword,
-				kSecAttrService as String: BrambleVault.biometricService,
-				kSecAttrAccount as String: BrambleVault.vekAccount,
-				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+			guard let vaultId = self.bundleVaultId() else {
+				completion(.missing)
+				return
+			}
+			let query = self.vekQuery(vaultId).merging([
 				kSecReturnData as String: true,
 				kSecMatchLimit as String: kSecMatchLimitOne,
 				kSecUseAuthenticationContext as String: ctx,
-			]
+			]) { _, new in new }
 			var item: CFTypeRef?
 			let status = SecItemCopyMatching(query as CFDictionary, &item)
 			if status == errSecSuccess, let data = item as? Data,
@@ -1253,13 +1262,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			} else if status == errSecAuthFailed {
 				// A biometry-only item killed by an enrolment change: it can never open again.
 				// Drop it so the button stops being offered, and say what to do about it.
-				SecItemDelete(
-					[
-						kSecClass as String: kSecClassGenericPassword,
-						kSecAttrService as String: BrambleVault.biometricService,
-						kSecAttrAccount as String: BrambleVault.vekAccount,
-						kSecAttrAccessGroup as String: BrambleVault.accessGroup,
-					] as CFDictionary)
+				SecItemDelete(self.vekQuery(vaultId) as CFDictionary)
 				completion(
 					.denied(
 						String(

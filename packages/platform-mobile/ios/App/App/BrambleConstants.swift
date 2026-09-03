@@ -32,11 +32,10 @@ enum BrambleVault {
 	// rather than biometry-only (.biometryCurrentSet). The ACL is what actually enforces this;
 	// the extension reads the flag only to label its unlock button honestly.
 	static let biometricPasscodeFallbackKey = "autofill.biometricPasscodeFallback"
-	// Which vault the cached VEK mirror, and the published bundle, each belong to. The mirror is
-	// un-suffixed and survives app deletion, so on its own it goes on offering a fast unlock for a
-	// vault whose bundle it can no longer decrypt (which surfaced as a raw aead error). The
-	// extension only offers the gate when these two agree.
-	static let biometricVaultKey = "autofill.biometricVaultId"
+	// Which vault the published bundle belongs to. The extension keys everything it caches off
+	// this: the VEK item (`vek:<id>`), the keep-unlocked session, and the passcode-fallback flag
+	// (`<key>:<id>`). It replaced a comparison against a separately-stamped mirror id, because
+	// keying by vault makes the comparison unnecessary - finding the item IS the match.
 	static let bundleVaultKey = "autofill.bundleVaultId"
 	// The VEK-encrypted passkey bundle (provider role); a second blob alongside the logins so
 	// the password-fill path is untouched. The extension decrypts it to assert a passkey.
