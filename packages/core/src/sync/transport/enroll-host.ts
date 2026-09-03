@@ -3,6 +3,7 @@
 // then does the inviter seal {vek, roster, entries} over the Noise session. See docs/p2p-sync.md.
 
 import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
+import { withTimeout } from "../../util/with-timeout";
 import { buildVaultBytes, type VaultBuildCrypto, wrapPasswordSlot } from "../../vault/build-vault";
 import { type RecoverySlot, SLOT_KIND_RECOVERY, verifierPrefix } from "../../vault-format";
 import {
@@ -33,7 +34,6 @@ import {
 	startMeshSession,
 } from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
-import { withTimeout } from "./with-timeout";
 
 // Per-frame, and machine-speed only: handshake, introduction, continuation frames.
 const ENROLL_TIMEOUT_MS = 30_000;

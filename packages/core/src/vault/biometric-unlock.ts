@@ -1,5 +1,6 @@
 import { type BiometricUnlock, isBiometricInvalidated } from "../adapters/biometric";
 import type { CryptoAdapter } from "../adapters/crypto";
+import { withTimeout } from "../util/with-timeout";
 
 // The two adapter-bound steps of device-local biometric unlock, kept off the React
 // hook so they can be unit-tested against fake adapters (mirrors vault/build-vault).
@@ -20,6 +21,14 @@ export function effectiveAllowPasscode(biometryEnrolled: boolean, prefAllows: bo
 	return !biometryEnrolled || prefAllows;
 }
 
+// Neither step here waits on a person: exporting the VEK is a memory read, and arming the gate
+// is a Keychain/Keystore WRITE, which by contract never prompts. So either one taking seconds
+// means it is not coming back. On device that stalled the Settings toggle mid-flight - `busy`
+// never cleared, so the row read as off and disabled with no error - and left the vault with no
+// gate armed. Bounded so a stall becomes a named failure the user (and we) can act on.
+// Deliberately NOT applied to unlock: that one does wait on a person answering Face ID.
+const GATE_WRITE_TIMEOUT_MS = 10_000;
+
 /** Cache the in-memory VEK behind the device biometric gate, keyed to this vault. The vault must be unlocked. */
 export async function enableBiometricUnlock(
 	crypto: CryptoAdapter,
@@ -27,8 +36,17 @@ export async function enableBiometricUnlock(
 	vaultId: string,
 	allowPasscode: boolean,
 ): Promise<void> {
-	const vek = await crypto.exportVek();
-	await biometric.enable(vek, vaultId, allowPasscode);
+	// Labels are user-visible and name the step, so a repeat report says which call stalled.
+	const vek = await withTimeout(
+		crypto.exportVek(),
+		GATE_WRITE_TIMEOUT_MS,
+		"Reading this vault's key",
+	);
+	await withTimeout(
+		biometric.enable(vek, vaultId, allowPasscode),
+		GATE_WRITE_TIMEOUT_MS,
+		"Saving the key to this device",
+	);
 }
 
 /** Biometric-unwrap this vault's cached VEK and load it into the crypto session. The caller

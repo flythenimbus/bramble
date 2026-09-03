@@ -37,6 +37,36 @@ function fakeBiometric(over: Partial<BiometricUnlock> = {}): BiometricUnlock {
 const VID = "vault-1";
 
 describe("enableBiometricUnlock", () => {
+	it("gives up on a native call that never comes back, naming the step", async () => {
+		// A hung plugin call used to leave the Settings toggle busy forever, which renders as
+		// off AND disabled with no error: the one failure mode that looks like nothing happened.
+		vi.useFakeTimers();
+		try {
+			const crypto = { exportVek: () => new Promise<string>(() => {}) } as unknown as CryptoAdapter;
+			const biometric = { enable: async () => {} } as unknown as BiometricUnlock;
+			const p = enableBiometricUnlock(crypto, biometric, VID, true);
+			const assertion = expect(p).rejects.toThrow(/Reading this vault's key timed out/);
+			await vi.advanceTimersByTimeAsync(11_000);
+			await assertion;
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("names the arming step when it is the gate that stalls, not the key read", async () => {
+		vi.useFakeTimers();
+		try {
+			const crypto = { exportVek: async () => "vek" } as unknown as CryptoAdapter;
+			const biometric = { enable: () => new Promise<void>(() => {}) } as unknown as BiometricUnlock;
+			const p = enableBiometricUnlock(crypto, biometric, VID, true);
+			const assertion = expect(p).rejects.toThrow(/Saving the key to this device timed out/);
+			await vi.advanceTimersByTimeAsync(11_000);
+			await assertion;
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("exports the live VEK and hands it to the biometric cache keyed by vault id", async () => {
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric();

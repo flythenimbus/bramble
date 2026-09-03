@@ -8,6 +8,7 @@
 // See docs/p2p-sync.md.
 
 import { flags } from "../../flags";
+import { withTimeout } from "../../util/with-timeout";
 import {
 	canonicalRosterEntry,
 	decodeRoster,
@@ -22,7 +23,6 @@ import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
 import { type MeshSession, type PeerSource, startMeshSession } from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
-import { withTimeout } from "./with-timeout";
 
 /** The Noise KK roster-auth + transport exports. Returns are Awaitable so the native
  * plugin (async bridge) and the in-webview WASM module share one interface. */
