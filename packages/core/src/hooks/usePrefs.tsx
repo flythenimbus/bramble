@@ -167,9 +167,39 @@ const PrefsContext = createContext<UsePrefs | null>(null);
  * plain hook, so every caller kept its own copy: N loads on mount and a Settings update()
  * never reached the routes holding a stale snapshot. A single provider fixes both.
  */
+/**
+ * Read a vault-scoped pref, adopting the value an older build wrote to the flat key.
+ *
+ * `adopt` is the caller's proof that the flat value belongs to THIS vault - true only when the
+ * install has exactly one. With several vaults we cannot know which one set it, and taking it
+ * anyway would hand a setting to vaults that never had it, which is the bug the scoping fixed.
+ * Multi-vault installs therefore fall back to the default, which is the closed position.
+ *
+ * The flat key is removed once adopted, so this happens once and a later second vault starts
+ * from the default rather than inheriting the first one's answer.
+ */
+async function readVaultPref<T>(
+	storage: {
+		getMeta<V>(k: string): Promise<V | undefined>;
+		setMeta<V>(k: string, v: V): Promise<void>;
+		removeMeta(k: string): Promise<void>;
+	},
+	base: string,
+	scoped: string,
+	adopt: boolean,
+): Promise<T | undefined> {
+	const current = await storage.getMeta<T>(scoped);
+	if (current !== undefined || !adopt || scoped === base) return current;
+	const legacy = await storage.getMeta<T>(base);
+	if (legacy === undefined) return undefined;
+	await storage.setMeta(scoped, legacy);
+	await storage.removeMeta(base).catch(() => {});
+	return legacy;
+}
+
 export function PrefsProvider({ children }: { children: ReactNode }) {
 	const { storage } = usePlatform();
-	const { activeId, vaults } = useVaultRegistry();
+	const { activeId, vaults, ready } = useVaultRegistry();
 	const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 	const [loaded, setLoaded] = useState(false);
 	// Same resolution syncKey uses: the active vault, falling back to the first before one is
@@ -185,6 +215,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
 	useEffect(() => {
 		let cancelled = false;
+		// Only a single-vault install can prove the old flat value belongs to the vault in hand.
+		// Waiting for `ready` matters: an empty registry mid-load would read as "one vault" and
+		// adopt on behalf of a vault that has not been resolved yet.
+		const adoptLegacy = ready && vaults.length <= 1;
 		// Drop the previous vault's per-vault values before reading the new one's. Until the read
 		// lands the gate settings would otherwise still describe the vault we just left, and
 		// Auth turns them straight into the access control it arms. Defaults are the closed
@@ -201,13 +235,23 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<boolean>(PREF_OFFER_TO_SAVE),
 				storage.getMeta<boolean>(PREF_AUTOFILL_ENABLED),
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
-				storage.getMeta<boolean>(keyFor("biometricAutoPrompt")),
+				readVaultPref<boolean>(
+					storage,
+					PREF_BIOMETRIC_AUTO_PROMPT,
+					keyFor("biometricAutoPrompt"),
+					adoptLegacy,
+				),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
 				storage.getMeta<boolean>(PREF_STATS_COLLAPSED),
 				storage.getMeta<boolean>(PREF_AUTOSTART_PROMPT_DISMISSED),
-				storage.getMeta<boolean>(keyFor("biometricPasscodeFallback")),
+				readVaultPref<boolean>(
+					storage,
+					PREF_BIOMETRIC_PASSCODE_FALLBACK,
+					keyFor("biometricPasscodeFallback"),
+					adoptLegacy,
+				),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -232,7 +276,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		};
 		// keyFor changes with the active vault, which is what re-reads the per-vault prefs on a
 		// switch. Without it the second vault kept showing the first one's gate settings.
-	}, [storage, keyFor]);
+	}, [storage, keyFor, ready, vaults.length]);
 
 	const update = useCallback(
 		async <K extends keyof Prefs>(key: K, value: Prefs[K]) => {

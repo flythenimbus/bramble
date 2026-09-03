@@ -515,6 +515,20 @@ which meant arming a second vault overwrote the first's cached VEK, disabling ei
 both, and a keep-unlocked window opened for one vault carried into the next. Per CONTEXT.md,
 a native cache that gates a vault is a setting and obeys the same scoping rule.
 
+**Upgrading.** The scoped keys are absent on an existing install, so both biometric prefs
+would silently reset. `readVaultPref` adopts the old flat value **only when the install has
+exactly one vault**, where it can only have meant that vault, and retires the flat key so a
+later second vault starts from the default instead of inheriting. Multi-vault installs do not
+adopt: we cannot know which vault set it, and guessing hands a setting to vaults that never
+had it. Those users re-enable per vault, once.
+
+The native side needs a real migration rather than a default, because nothing would ever read
+the old items again and Keychain items outlive the app that wrote them - an uninstall does not
+clear them. `BiometricVaultPlugin.purgeLegacySharedItems()` runs at `capacitorDidLoad` and
+deletes the shared cached VEK, the shared keep-unlocked session (both hold real key material)
+and the two App Group values that described them. `setSecret`/`purge` drop them too, but only
+for someone who arms or disarms a gate again.
+
 ---
 
 The original v1 plan is kept below for context (superseded: active-vault, not primary-vault). Autofill

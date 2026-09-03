@@ -6,13 +6,19 @@ import { PrefsProvider, usePrefs } from "./usePrefs";
 
 // The active vault drives which keys the per-vault prefs resolve to; mocked so a test can
 // switch vaults without standing up the whole registry.
-const reg = vi.hoisted(() => ({ activeId: undefined as string | undefined }));
+const reg = vi.hoisted(() => ({
+	activeId: undefined as string | undefined,
+	vaults: [] as { id: string }[],
+	ready: true,
+}));
 vi.mock("./useVaultRegistry", () => ({
-	useVaultRegistry: () => ({ activeId: reg.activeId, vaults: [] }),
+	useVaultRegistry: () => ({ activeId: reg.activeId, vaults: reg.vaults, ready: reg.ready }),
 }));
 
 afterEach(() => {
 	reg.activeId = undefined;
+	reg.vaults = [];
+	reg.ready = true;
 	cleanup();
 });
 
@@ -25,8 +31,11 @@ function makePlatform() {
 		setMeta: vi.fn(async (k: string, v: unknown) => {
 			store.set(k, v);
 		}),
+		removeMeta: vi.fn(async (k: string) => {
+			store.delete(k);
+		}),
 	};
-	return { platform: { storage } as unknown as Platform, storage };
+	return { platform: { storage } as unknown as Platform, storage, store };
 }
 
 describe("usePrefs shared provider", () => {
@@ -187,5 +196,60 @@ describe("per-vault prefs", () => {
 		const keys = storage.getMeta.mock.calls.map(([k]) => k);
 		expect(keys).toContain("pref.autoLockMinutes");
 		expect(keys).toContain("pref.biometricAutoPrompt:vault-a");
+	});
+});
+
+describe("adopting the pre-scoping flat value", () => {
+	function mount(platform: Platform) {
+		function Reader() {
+			const { prefs } = usePrefs();
+			return <div data-testid="v">{String(prefs.biometricPasscodeFallback)}</div>;
+		}
+		return render(
+			<PlatformProvider platform={platform}>
+				<PrefsProvider>
+					<Reader />
+				</PrefsProvider>
+			</PlatformProvider>,
+		);
+	}
+
+	it("keeps a single-vault user's setting, where it can only have meant that vault", async () => {
+		const { platform, store, storage } = makePlatform();
+		store.set("pref.biometricPasscodeFallback", true);
+		reg.activeId = "vault-a";
+		reg.vaults = [{ id: "vault-a" }];
+		mount(platform);
+		await act(async () => {});
+		expect(screen.getByTestId("v").textContent).toBe("true");
+		// Rewritten under the vault, and the flat key retired so it cannot be adopted twice.
+		expect(store.get("pref.biometricPasscodeFallback:vault-a")).toBe(true);
+		expect(storage.removeMeta).toHaveBeenCalledWith("pref.biometricPasscodeFallback");
+	});
+
+	it("refuses to adopt with several vaults, since it cannot know which one set it", async () => {
+		// Taking it anyway would hand the setting to vaults that never had it - the bug the
+		// scoping fixed. Falling back to the default is the closed position.
+		const { platform, store } = makePlatform();
+		store.set("pref.biometricPasscodeFallback", true);
+		reg.activeId = "vault-b";
+		reg.vaults = [{ id: "vault-a" }, { id: "vault-b" }];
+		mount(platform);
+		await act(async () => {});
+		expect(screen.getByTestId("v").textContent).toBe("false");
+		expect(store.get("pref.biometricPasscodeFallback:vault-b")).toBeUndefined();
+	});
+
+	it("does not adopt before the registry is ready", async () => {
+		// An empty registry mid-load reads as "one vault" and would adopt on behalf of a vault
+		// that has not resolved yet.
+		const { platform, store } = makePlatform();
+		store.set("pref.biometricPasscodeFallback", true);
+		reg.ready = false;
+		reg.activeId = "vault-a";
+		reg.vaults = [{ id: "vault-a" }];
+		mount(platform);
+		await act(async () => {});
+		expect(screen.getByTestId("v").textContent).toBe("false");
 	});
 });

@@ -61,6 +61,39 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		]
 	}
 
+	// The keep-unlocked session an older build wrote: also un-suffixed, also shared by every
+	// vault, and it holds a VEK behind nothing stronger than device-unlock.
+	private static func legacySharedSessionIdentity() -> [String: Any] {
+		[
+			kSecClass as String: kSecClassGenericPassword,
+			kSecAttrService as String: BrambleVault.sessionService,
+			kSecAttrAccount as String: BrambleVault.vekAccount,
+		]
+	}
+
+	/// Delete what older builds shared between vaults: one cached VEK and one keep-unlocked
+	/// session, both un-suffixed, plus the App Group values that described them.
+	///
+	/// This is a migration, not housekeeping. Nothing reads any of it now, so without this it is
+	/// never touched again - and Keychain items outlive the app that wrote them, so it survives
+	/// even an uninstall. Both items hold a real VEK. setSecret and purge also drop them, but only
+	/// for someone who arms or disarms a gate again; this covers everyone else.
+	///
+	/// Runs on every launch: deleting something already gone costs one errSecItemNotFound.
+	static func purgeLegacySharedItems() {
+		keychainQueue.async {
+			for identity in [legacySharedIdentity(), legacySharedSessionIdentity()] {
+				for q in groupVariants(identity) { SecItemDelete(q as CFDictionary) }
+			}
+			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+			// The mirror's vault stamp, needed only while a shared item had to be told apart from
+			// the bundle. Keying by vault retired the comparison and the constant with it.
+			defaults?.removeObject(forKey: "autofill.biometricVaultId")
+			// The un-suffixed flag, replaced by one per vault.
+			defaults?.removeObject(forKey: BrambleVault.biometricPasscodeFallbackKey)
+		}
+	}
+
 	// Add the shared access group to a query. The iOS Simulator's keychain doesn't support access
 	// groups (a query carrying kSecAttrAccessGroup fails with -34018), so omit it there.
 	private static func withAccessGroup(_ query: [String: Any]) -> [String: Any] {
@@ -334,6 +367,8 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 // plugin can be registered the moment the bridge loads.
 public class BiometricBridgeViewController: CAPBridgeViewController {
 	override public func capacitorDidLoad() {
+		// Before anything can read them: see purgeLegacySharedItems.
+		BiometricVaultPlugin.purgeLegacySharedItems()
 		bridge?.registerPluginInstance(BiometricVaultPlugin())
 		bridge?.registerPluginInstance(NativeCryptoPlugin())
 		bridge?.registerPluginInstance(NativeWebRTCPlugin())
