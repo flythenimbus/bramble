@@ -52,6 +52,7 @@ import {
 	EnrollJoinMsgSchema,
 	type PendingEnrollApproval,
 	RosterSignHostMsgSchema,
+	type RosterSyncMsg,
 	RosterSyncMsgSchema,
 	type SyncEventMsg,
 	type SyncStatusMsg,
@@ -108,6 +109,72 @@ let syncSession: MeshSession | null = null;
  * they both feed is serialised in the background.
  */
 let linkSyncSession: MeshSession | null = null;
+
+/**
+ * The config the live sync sessions were started with. A repeat SYNC_ROSTER_SYNC carrying the same
+ * config keeps those sessions rather than replacing them.
+ *
+ * On Chrome the background is a service worker that suspends after seconds of idle and restarts on
+ * any event — including the storage round-trips and status broadcasts sync itself sends it. Its
+ * "already running" flag is worker-local, so every restart re-sent this message, and this handler
+ * used to tear down healthy relay + WebRTC sessions and rebuild them. Peer discovery and the Noise
+ * handshake both have to outlive a single worker lifetime, so they mostly didn't: peers went stale
+ * mid-handshake and an edit made in the browser never reached the phone.
+ *
+ * The roster is deliberately not part of the key: it is read fresh per use (fetchLocalRoster), and
+ * roster gossip rewrites it constantly, so keying on it would restart-loop the sessions doing the
+ * gossiping. Nor is the device private key, since the public half already identifies the keypair
+ * and there is no reason to keep a second copy of secret material in a module global.
+ */
+let syncConfigKey: string | null = null;
+
+/**
+ * Serializes the start/stop of those sessions. Two SYNC_ROSTER_SYNCs arriving together (a service
+ * worker waking twice in quick succession) would otherwise both pass the idempotence check while
+ * the first was still awaiting the wasm, and leak a session neither of them holds. A SYNC_DISCONNECT
+ * joins the same chain so it can't be overtaken by a start it was meant to cancel.
+ */
+let rosterSyncInFlight: Promise<void> = Promise.resolve();
+
+function rosterSyncConfigKey(opts: RosterSyncMsg): string {
+	return JSON.stringify([opts.relayUrl, opts.iceUrl ?? "", opts.groupKeyB64, opts.devicePubB64]);
+}
+
+/** Tear down both sync sessions and forget their config. */
+function stopSyncSessions(): void {
+	syncSession?.stop();
+	syncSession = null;
+	linkSyncSession?.stop();
+	linkSyncSession = null;
+	syncConfigKey = null;
+}
+
+/**
+ * Start the continuous sync sessions, or keep the running ones when they already match `opts`.
+ * Idempotent by design; see syncConfigKey.
+ */
+async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promise<void> {
+	const key = rosterSyncConfigKey(opts);
+	// Already syncing this group over this relay as this device: leave the live sessions alone.
+	if (syncSession && linkSyncSession && syncConfigKey === key) return;
+	const w = await getWasm();
+	stopSyncSessions();
+	const common = {
+		...opts,
+		wasm: w,
+		report: reportSyncStatus,
+		fetchLocalPayload: bridge.fetchLocalPayload,
+		pushRemotePayload: bridge.pushRemotePayload,
+		fetchLocalRoster: bridge.fetchLocalRoster,
+		pushRemoteRoster: bridge.pushRemoteRoster,
+	};
+	syncSession = await startRosterSync(common);
+	// The desktop app on this machine, over the pipe it already has. Started second so
+	// a relay failure does not cost the local peer, which is the one that works offline.
+	linkSyncSession = await startRosterSync({ ...common, peerSource: desktopPeerSource });
+	// Recorded only once both are up, so a half-started pair is rebuilt rather than kept.
+	syncConfigKey = key;
+}
 
 /** Sinks for frames the desktop app sends, delivered here by the background. */
 const linkFrameSinks = new Set<(frame: string) => void>();
@@ -530,16 +597,17 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				if (typeof dataUrl !== "string") throw new Error("QR_DECODE requires a dataUrl");
 				return { ok: true, data: await decodeQrDataUrl(dataUrl) };
 			}
-			case "SYNC_DISCONNECT":
+			case "SYNC_DISCONNECT": {
 				settleApproval(false);
 				enrollSession?.stop();
 				enrollSession = null;
-				syncSession?.stop();
-				syncSession = null;
-				linkSyncSession?.stop();
-				linkSyncSession = null;
+				// Queued behind any start still in flight, so it can't leave one running. See rosterSyncInFlight.
+				const stopping = rosterSyncInFlight.then(() => stopSyncSessions());
+				rosterSyncInFlight = stopping.catch(() => {});
+				await stopping;
 				reportSyncStatus("disconnected");
 				return { ok: true };
+			}
 			case "SYNC_ENROLL_STOP":
 				// The pairing window closed: stop listening for a joiner, but leave ongoing sync up.
 				// Dismissing the UI is not approval, so any prompt still parked here is a refusal.
@@ -579,22 +647,9 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 			}
 			case "SYNC_ROSTER_SYNC": {
 				const opts = RosterSyncMsgSchema.parse(payload);
-				const w = await getWasm();
-				syncSession?.stop();
-				linkSyncSession?.stop();
-				const common = {
-					...opts,
-					wasm: w,
-					report: reportSyncStatus,
-					fetchLocalPayload: bridge.fetchLocalPayload,
-					pushRemotePayload: bridge.pushRemotePayload,
-					fetchLocalRoster: bridge.fetchLocalRoster,
-					pushRemoteRoster: bridge.pushRemoteRoster,
-				};
-				syncSession = await startRosterSync(common);
-				// The desktop app on this machine, over the pipe it already has. Started second so
-				// a relay failure does not cost the local peer, which is the one that works offline.
-				linkSyncSession = await startRosterSync({ ...common, peerSource: desktopPeerSource });
+				const starting = rosterSyncInFlight.then(() => startSyncSessions(opts, bridge));
+				rosterSyncInFlight = starting.catch(() => {});
+				await starting;
 				return { ok: true };
 			}
 			case "SYNC_GENERATE_KEYPAIR": {

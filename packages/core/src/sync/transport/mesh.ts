@@ -100,6 +100,13 @@ const EPOCH_MS = 60 * 60 * 1000;
 const ROLL_CHECK_MS = 60 * 1000;
 const epochNow = (): number => Math.floor(Date.now() / EPOCH_MS);
 
+// Re-announce this often. The relay stores nothing, so a hello published while the other side's
+// socket was down is simply gone, and the two devices then sit in the same room indefinitely, each
+// believing it already discovered the other. Frequent socket drops used to paper over this by
+// producing a fresh hello every minute or two; now that the keepalive holds sockets open, this is
+// what rediscovers a peer whose channel died without saying so.
+const ANNOUNCE_MS = 30 * 1000;
+
 class Mesh {
 	private readonly peers = new Map<string, Peer>();
 	private readonly relayPeers = new Map<
@@ -113,6 +120,7 @@ class Mesh {
 	private rooms: string[] = [];
 	private publishRoom = "";
 	private rollTimer: ReturnType<typeof setInterval> | undefined;
+	private announceTimer: ReturnType<typeof setInterval> | undefined;
 	private clockWarned = false;
 	/** Set by stop(), so a socket closing during teardown is not treated as a drop. */
 	private stopped = false;
@@ -188,9 +196,29 @@ class Mesh {
 			},
 		);
 		this.sendHello();
-		if (this.opts.epochRooms) {
+		// Armed once, not per connection: start() runs again on every reconnect, and these timers
+		// belong to the session rather than to the socket. Re-arming leaked one of each per drop.
+		if (this.opts.epochRooms && !this.rollTimer) {
 			this.rollTimer = setInterval(() => void this.maybeRoll(), ROLL_CHECK_MS);
 		}
+		if (!this.announceTimer) {
+			this.announceTimer = setInterval(() => this.announce(), ANNOUNCE_MS);
+		}
+	}
+
+	/**
+	 * Say hello again, having first forgotten every peer we hold no transport for.
+	 *
+	 * `known` exists to keep one hello from answering itself forever. Left alone it also suppresses
+	 * the rediscovery of a peer whose channel is long dead — which relay-forward never reports, so
+	 * the entry can only be cleared by the roster-sync reaper closing it. Pruning here means the next
+	 * hello (ours or theirs) starts a fresh connection instead of being ignored as a duplicate.
+	 */
+	private announce(): void {
+		for (const remote of this.known) {
+			if (!this.peers.has(remote) && !this.relayPeers.has(remote)) this.known.delete(remote);
+		}
+		this.sendHello();
 	}
 
 	// On an epoch boundary re-derive the room set, re-subscribe (same subId → the relay
@@ -228,6 +256,7 @@ class Mesh {
 		this.stopped = true;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		if (this.rollTimer) clearInterval(this.rollTimer);
+		if (this.announceTimer) clearInterval(this.announceTimer);
 		for (const peer of this.peers.values()) peer.close();
 		for (const relay of this.relayPeers.values()) relay.close();
 		this.client?.close();

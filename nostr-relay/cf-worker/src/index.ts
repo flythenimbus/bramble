@@ -14,6 +14,14 @@
 
 import { DurableObject } from "cloudflare:workers";
 
+// Keepalive, in parity with node/relay.mjs and @core/sync/signaling-client. Cloudflare drops an
+// idle WebSocket after a minute or two, which for a password manager syncing in the background is
+// most of the time. Registered as a hibernation auto-response so the runtime answers it without
+// waking (and billing) the Durable Object; the explicit branch in webSocketMessage covers a socket
+// that predates the registration.
+const PING = "ping";
+const PONG = "pong";
+
 // Cheap abuse guards for the dumb pipe. A signaling blob is a few KB of
 // encrypted SDP/ICE, so reject anything larger before parsing: Cloudflare now
 // allows WebSocket frames up to 32 MiB, and parsing attacker-sized payloads on
@@ -88,6 +96,12 @@ function matches(filter: NostrFilter, event: NostrEvent): boolean {
 }
 
 export class Relay extends DurableObject {
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env);
+		// Answered while hibernating, so an idle-but-alive client costs nothing to keep.
+		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
+	}
+
 	async fetch(req: Request): Promise<Response> {
 		// Non-WebSocket hits (health probe) get the banner, same as the node relay.
 		if (req.headers.get("Upgrade") !== "websocket")
@@ -101,6 +115,7 @@ export class Relay extends DurableObject {
 
 	async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
 		if ((typeof raw === "string" ? raw.length : raw.byteLength) > MAX_MSG_BYTES) return;
+		if (raw === PING) return void ws.send(PONG); // normally the auto-response; see PING
 
 		let msg: unknown;
 		try {

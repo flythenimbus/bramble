@@ -21,6 +21,12 @@ const PORT = Number(process.env.PORT ?? 7400);
 const MAX_MSG_BYTES = 64 * 1024;
 const MAX_SUBS_PER_CONN = 8;
 
+// Keepalive, in parity with cf-worker (where it is a hibernation auto-response) and
+// @core/sync/signaling-client. Clients ping a quiet socket so an intermediary doesn't drop it, and
+// read the answer as proof the relay is still there.
+const PING = "ping";
+const PONG = "pong";
+
 /** True if `event` matches a single REQ `filter` (kinds, authors, #<tag>). */
 function matches(filter, event) {
 	if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
@@ -52,6 +58,7 @@ wss.on("connection", (ws) => {
 
 	ws.on("message", (raw) => {
 		if (raw.length > MAX_MSG_BYTES) return;
+		if (raw.toString() === PING) return ws.send(PONG);
 
 		let msg;
 		try {

@@ -334,6 +334,38 @@ This converges because the merge (next section) is a deterministic function of t
 stamps and tombstones, so it is order-independent: pairwise merges gossiping across the mesh
 reach the same final vault on every device regardless of who synced with whom first.
 
+## Staying connected
+
+Convergence assumes the two devices are actually in contact. Three things had to be fixed before
+that was true for a browser sitting idle in the background, and all three are about a session
+outliving something that keeps ending.
+
+**The session outlives the service worker.** On Chrome the sync sessions live in the offscreen
+document, but the background that starts them is an MV3 service worker that suspends after seconds
+of idle and restarts on any event — including the storage round-trips and status broadcasts that
+sync itself sends it. Its "already running" flag is worker-local, so every restart re-sent
+`SYNC_ROSTER_SYNC`, and the host obeyed each one: healthy relay and WebRTC sessions were torn down
+and rebuilt, over and over. Peer discovery and the Noise handshake both take longer than one worker
+lifetime, so they rarely finished. The handler is now idempotent — a repeat carrying the same relay,
+group key and device identity keeps the live sessions (`syncConfigKey` in `offscreen-core.ts`). The
+roster is deliberately not part of that comparison: it is read fresh per use, and roster gossip
+rewrites it constantly, so keying on it would restart-loop the sessions doing the gossiping.
+
+**The relay socket outlives being idle.** Cloudflare drops an idle WebSocket after a minute or two,
+which for a password manager syncing in the background is most of the time. Clients ping every 25s
+(`signaling-client.ts`) and the relay answers from the Durable Object's hibernation auto-response, so
+a held-open socket costs one frame each way and never wakes (or bills) the relay. The reply doubles
+as liveness: a relay that has answered a ping and then goes quiet for 70s is treated as gone and the
+socket is closed, which drives the existing reconnect. A relay that has *never* answered one is a
+stock Nostr relay that doesn't know the frame, and is never declared dead for it.
+
+**Discovery outlives a missed hello.** The relay stores nothing, so a hello published while the
+other side's socket was down is simply gone, and `known` (which stops one hello from answering
+itself forever) then suppresses the rediscovery too: both devices sit in the same room, each
+believing it already found the other. Frequent socket drops used to hide this by producing a fresh
+hello every minute or two — which the keepalive above removes. So the mesh now re-announces every
+30s, first forgetting any peer it holds no transport for (`Mesh.announce`).
+
 ## Merge engine: entry-level last-writer-wins
 
 ### Stamps
