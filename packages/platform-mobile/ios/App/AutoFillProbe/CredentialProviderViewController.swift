@@ -147,11 +147,24 @@ private struct CredentialListView: View {
 	let onSelect: (Cred) -> Void
 	let onCancel: () -> Void
 	@State private var showAll = false
+	@State private var query = ""
 
 	// Everything that isn't already a domain match (shown under "Show all items").
 	private var others: [Cred] {
 		let ids = Set(matches.map { $0.recordId })
 		return all.filter { !ids.contains($0.recordId) }
+	}
+
+	// A search collapses the sections: the point of typing is that the thing you want is not
+	// where the page's own matches are, so scope it to the whole vault and show one flat list.
+	// Same fields Android's matchesQuery uses, so the two behave alike.
+	private var found: [Cred] {
+		let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+		guard !q.isEmpty else { return [] }
+		return all.filter {
+			$0.name.lowercased().contains(q) || $0.username.lowercased().contains(q)
+				|| $0.services.contains { s in s.lowercased().contains(q) }
+		}
 	}
 
 	var body: some View {
@@ -173,9 +186,17 @@ private struct CredentialListView: View {
 					.font(.footnote).foregroundColor(Theme.muted).multilineTextAlignment(.center).padding(24)
 				Spacer()
 			} else {
+				searchField
 				ScrollView {
 					VStack(alignment: .leading, spacing: 10) {
-						if matches.isEmpty {
+						if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+							if found.isEmpty {
+								sectionLabel(loc("No logins matching \(query)"))
+							} else {
+								sectionLabel(loc("Results (\(found.count))"))
+								ForEach(found) { row($0) }
+							}
+						} else if matches.isEmpty {
 							// No domain match for this page: show the whole vault.
 							sectionLabel(requestedHost.map { loc("No matches for \($0)") } ?? loc("Items (\(all.count))"))
 							ForEach(all) { row($0) }
@@ -207,6 +228,32 @@ private struct CredentialListView: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Theme.background.ignoresSafeArea())
+	}
+
+	// Styled to match the master-password field on the unlock screen rather than using
+	// `.searchable`, which needs a NavigationStack this hosted view does not have.
+	private var searchField: some View {
+		HStack(spacing: 8) {
+			Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundColor(Theme.muted)
+			TextField("Search logins", text: $query)
+				.autocorrectionDisabled()
+				.textInputAutocapitalization(.never)
+				.foregroundColor(Theme.foreground)
+			if !query.isEmpty {
+				Button { query = "" } label: {
+					Image(systemName: "xmark.circle.fill").font(.system(size: 15))
+						.foregroundColor(Theme.muted)
+				}
+				.buttonStyle(.plain)
+				.accessibilityLabel("Clear search")
+			}
+		}
+		.padding(10)
+		.background(Theme.input)
+		.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+		.overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.border, lineWidth: 1))
+		.padding(.horizontal, 20)
+		.padding(.top, 12)
 	}
 
 	private func sectionLabel(_ text: String) -> some View {

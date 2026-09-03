@@ -161,6 +161,41 @@
         }
       }
     },
+    "Clear search": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suche löschen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar búsqueda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer la recherche"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpar pesquisa"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancella ricerca"
+          }
+        }
+      }
+    },
     "Couldn't load logins": {
       "localizations": {
         "de": {
@@ -601,6 +636,41 @@
         }
       }
     },
+    "No logins matching %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Logins, die zu %@ passen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay inicios de sesión que coincidan con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun identifiant ne correspond à %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum login correspondente a %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun accesso corrispondente a %@"
+          }
+        }
+      }
+    },
     "No logins saved yet.\nAdd one in Bramble.": {
       "localizations": {
         "de": {
@@ -761,6 +831,76 @@
         }
       }
     },
+    "Results (%lld)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ergebnisse (%lld)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultados (%lld)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résultats (%lld)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultados (%lld)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risultati (%lld)"
+          }
+        }
+      }
+    },
+    "Search logins": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logins durchsuchen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar inicios de sesión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher des identifiants"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pesquisar logins"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca accessi"
+          }
+        }
+      }
+    },
     "Show all items (%lld more)": {
       "localizations": {
         "de": {
@@ -822,16 +962,16 @@
             "value": "La clé enregistrée sur cet appareil est obsolète. Saisissez votre mot de passe principal."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A chave salva deste dispositivo está desatualizada. Digite sua senha mestra."
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "La chiave salvata su questo dispositivo non è aggiornata. Inserisca la sua password principale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A chave salva deste dispositivo está desatualizada. Digite sua senha mestra."
           }
         }
       }
@@ -1217,16 +1357,16 @@
             "value": "code d’accès"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Código"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Codice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código"
           }
         }
       }
