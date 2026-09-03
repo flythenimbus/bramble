@@ -332,8 +332,20 @@ msgid "Archiving…"
 msgstr "Archiving…"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
-msgstr "Ask for {name} as soon as the unlock screen appears, with no tap."
+msgid "Ask for {brand} as soon as the unlock screen appears, with no tap."
+msgstr "Ask for {brand} as soon as the unlock screen appears, with no tap."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
+#~ msgstr "Ask for {name} as soon as the unlock screen appears, with no tap."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
+msgstr "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
+msgstr "Ask for your passcode as soon as the unlock screen appears, with no tap."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -1258,8 +1270,8 @@ msgid "Face ID"
 msgstr "Face ID"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Face ID or a fingerprint"
-msgstr "Face ID or a fingerprint"
+#~ msgid "Face ID or a fingerprint"
+#~ msgstr "Face ID or a fingerprint"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Failed"
@@ -1933,8 +1945,20 @@ msgid "One-click sign-in for {name} is coming in a future update. For now, pick 
 msgstr "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
-msgstr "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgid "Only {brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Only {brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+#~ msgstr "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2550,8 +2574,16 @@ msgid "Set password"
 msgstr "Set password"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Set up {name} on this device to use this."
-msgstr "Set up {name} on this device to use this."
+msgid "Set up {brand} on this device to use this."
+msgstr "Set up {brand} on this device to use this."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Set up {name} on this device to use this."
+#~ msgstr "Set up {name} on this device to use this."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up a passcode on this device to use this."
+msgstr "Set up a passcode on this device to use this."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Set up a vault"
@@ -2560,6 +2592,10 @@ msgstr "Set up a vault"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Set up a vault to start saving your passwords, cards, and notes."
 msgstr "Set up a vault to start saving your passwords, cards, and notes."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up Face ID or a fingerprint on this device to use this."
+msgstr "Set up Face ID or a fingerprint on this device to use this."
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -3236,12 +3272,36 @@ msgid "Unlock your vault to import into it"
 msgstr "Unlock your vault to import into it"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}, instead of your master password."
-msgstr "Unlock your vault using {name}, instead of your master password."
+msgid "Unlock your vault using {brand}, instead of your master password."
+msgstr "Unlock your vault using {brand}, instead of your master password."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}."
-msgstr "Unlock your vault using {name}."
+msgid "Unlock your vault using {brand}."
+msgstr "Unlock your vault using {brand}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}, instead of your master password."
+#~ msgstr "Unlock your vault using {name}, instead of your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}."
+#~ msgstr "Unlock your vault using {name}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint, instead of your master password."
+msgstr "Unlock your vault using Face ID or a fingerprint, instead of your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint."
+msgstr "Unlock your vault using Face ID or a fingerprint."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode, instead of your master password."
+msgstr "Unlock your vault using your passcode, instead of your master password."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode."
+msgstr "Unlock your vault using your passcode."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
@@ -3514,8 +3574,8 @@ msgid "Your other devices stop being able to read this vault. They all share the
 msgstr "Your other devices stop being able to read this vault. They all share the key being replaced, so each one has to be paired again from Device sync."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "your passcode"
-msgstr "your passcode"
+#~ msgid "your passcode"
+#~ msgstr "your passcode"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."

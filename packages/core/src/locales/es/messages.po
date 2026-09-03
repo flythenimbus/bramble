@@ -332,8 +332,20 @@ msgid "Archiving…"
 msgstr "Archivando…"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
-msgstr "Solicitar {name} en cuanto aparezca la pantalla de desbloqueo, sin tocar."
+msgid "Ask for {brand} as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar {brand} en cuanto aparezca la pantalla de desbloqueo, sin tocar."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
+#~ msgstr "Solicitar {name} en cuanto aparezca la pantalla de desbloqueo, sin tocar."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar Face ID o una huella dactilar en cuanto aparezca la pantalla de desbloqueo, sin tocar."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar el código de acceso en cuanto aparezca la pantalla de desbloqueo, sin tocar."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -1258,8 +1270,8 @@ msgid "Face ID"
 msgstr "Face ID"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Face ID or a fingerprint"
-msgstr "Face ID o huella dactilar"
+#~ msgid "Face ID or a fingerprint"
+#~ msgstr "Face ID o huella dactilar"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Failed"
@@ -1933,8 +1945,20 @@ msgid "One-click sign-in for {name} is coming in a future update. For now, pick 
 msgstr "El inicio de sesión con un solo clic para {name} estará disponible en una futura actualización. Por ahora, seleccione un proveedor en \\\""
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
-msgstr "Solo {name} puede desbloquear. Añadir o eliminar un rostro o una huella dactilar desactiva esta opción, y tendrá que volver a activarla con su contraseña maestra."
+msgid "Only {brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Solo {brand} puede desbloquear. Si añade o elimina un rostro o una huella dactilar, esta opción se desactivará y deberá volver a activarla con su contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+#~ msgstr "Solo {name} puede desbloquear. Añadir o eliminar un rostro o una huella dactilar desactiva esta opción, y tendrá que volver a activarla con su contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Solo Face ID o una huella dactilar pueden desbloquear. Si añade o elimina un rostro o una huella dactilar, esta opción se desactivará y deberá volver a activarla con su contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Solo su código de acceso puede desbloquear. Si añade o elimina un rostro o una huella dactilar, esta opción se desactivará y deberá volver a activarla con su contraseña maestra."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2550,8 +2574,16 @@ msgid "Set password"
 msgstr "Establecer contraseña"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Set up {name} on this device to use this."
-msgstr "Configure {name} en este dispositivo para usar esto."
+msgid "Set up {brand} on this device to use this."
+msgstr "Configurar {brand} en este dispositivo para usar esta función."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Set up {name} on this device to use this."
+#~ msgstr "Configure {name} en este dispositivo para usar esto."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up a passcode on this device to use this."
+msgstr "Configurar un código de acceso en este dispositivo para usar esta función."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Set up a vault"
@@ -2560,6 +2592,10 @@ msgstr "Configurar una bóveda"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Set up a vault to start saving your passwords, cards, and notes."
 msgstr "Configure una bóveda para empezar a guardar sus contraseñas, tarjetas y notas."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up Face ID or a fingerprint on this device to use this."
+msgstr "Configurar Face ID o una huella dactilar en este dispositivo para usar esta función."
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -3236,12 +3272,36 @@ msgid "Unlock your vault to import into it"
 msgstr "Desbloquee su bóveda para importar"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}, instead of your master password."
-msgstr "Desbloquee su bóveda con {name} en lugar de su contraseña maestra."
+msgid "Unlock your vault using {brand}, instead of your master password."
+msgstr "Desbloquear la caja fuerte con {brand}, en lugar de la contraseña maestra."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}."
-msgstr "Desbloquee su bóveda con {name}."
+msgid "Unlock your vault using {brand}."
+msgstr "Desbloquear la caja fuerte con {brand}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}, instead of your master password."
+#~ msgstr "Desbloquee su bóveda con {name} en lugar de su contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}."
+#~ msgstr "Desbloquee su bóveda con {name}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint, instead of your master password."
+msgstr "Desbloquear la caja fuerte con Face ID o una huella dactilar, en lugar de la contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint."
+msgstr "Desbloquear la caja fuerte con Face ID o una huella dactilar."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode, instead of your master password."
+msgstr "Desbloquear la caja fuerte con el código de acceso, en lugar de la contraseña maestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode."
+msgstr "Desbloquear la caja fuerte con el código de acceso."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
@@ -3514,8 +3574,8 @@ msgid "Your other devices stop being able to read this vault. They all share the
 msgstr "Sus otros dispositivos dejan de poder leer esta bóveda. Todos comparten la clave que se está reemplazando, por lo que cada uno debe vincularse de nuevo desde Device sync."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "your passcode"
-msgstr "su código de acceso"
+#~ msgid "your passcode"
+#~ msgstr "su código de acceso"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."

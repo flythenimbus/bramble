@@ -332,8 +332,20 @@ msgid "Archiving…"
 msgstr "Arquivando…"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
-msgstr "Solicitar {name} assim que a tela de desbloqueio aparecer, sem toque."
+msgid "Ask for {brand} as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar {brand} assim que a tela de desbloqueio aparecer, sem toque."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Ask for {name} as soon as the unlock screen appears, with no tap."
+#~ msgstr "Solicitar {name} assim que a tela de desbloqueio aparecer, sem toque."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar Face ID ou uma impressão digital assim que a tela de desbloqueio aparecer, sem toque."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
+msgstr "Solicitar seu código de acesso assim que a tela de desbloqueio aparecer, sem toque."
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
@@ -1258,8 +1270,8 @@ msgid "Face ID"
 msgstr "Face ID"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Face ID or a fingerprint"
-msgstr "Face ID ou impressão digital"
+#~ msgid "Face ID or a fingerprint"
+#~ msgstr "Face ID ou impressão digital"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Failed"
@@ -1933,8 +1945,20 @@ msgid "One-click sign-in for {name} is coming in a future update. For now, pick 
 msgstr "O login com um clique para {name} estará disponível em uma futura atualização. Por enquanto, selecione um provedor em \\"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
-msgstr "Apenas {name} pode desbloquear. Adicionar ou remover um rosto ou uma impressão digital desativa esse recurso, e você precisará reativá-lo com sua senha mestra."
+msgid "Only {brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Somente {brand} pode desbloquear. Adicionar ou remover uma face ou impressão digital desativa esse recurso, e será necessário reativá-lo com sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Only {name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+#~ msgstr "Apenas {name} pode desbloquear. Adicionar ou remover um rosto ou uma impressão digital desativa esse recurso, e você precisará reativá-lo com sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Somente Face ID ou uma impressão digital pode desbloquear. Adicionar ou remover uma face ou impressão digital desativa esse recurso, e será necessário reativá-lo com sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Somente seu código de acesso pode desbloquear. Adicionar ou remover uma face ou impressão digital desativa esse recurso, e será necessário reativá-lo com sua senha mestra."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
@@ -2550,8 +2574,16 @@ msgid "Set password"
 msgstr "Definir senha"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Set up {name} on this device to use this."
-msgstr "Configure o {name} neste dispositivo para usar isto."
+msgid "Set up {brand} on this device to use this."
+msgstr "Configurar {brand} neste dispositivo para usar esse recurso."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Set up {name} on this device to use this."
+#~ msgstr "Configure o {name} neste dispositivo para usar isto."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up a passcode on this device to use this."
+msgstr "Configurar um código de acesso neste dispositivo para usar esse recurso."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Set up a vault"
@@ -2560,6 +2592,10 @@ msgstr "Configurar um cofre"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Set up a vault to start saving your passwords, cards, and notes."
 msgstr "Configure um cofre para começar a salvar suas senhas, cartões e notas."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up Face ID or a fingerprint on this device to use this."
+msgstr "Configurar Face ID ou uma impressão digital neste dispositivo para usar esse recurso."
 
 #. placeholder {0}: shell.appName
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -3236,12 +3272,36 @@ msgid "Unlock your vault to import into it"
 msgstr "Desbloqueie o cofre para importar nele"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}, instead of your master password."
-msgstr "Desbloqueie seu cofre usando {name}, em vez da sua senha mestra."
+msgid "Unlock your vault using {brand}, instead of your master password."
+msgstr "Desbloquear seu cofre usando {brand}, em vez de sua senha mestra."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Unlock your vault using {name}."
-msgstr "Desbloqueie seu cofre usando {name}."
+msgid "Unlock your vault using {brand}."
+msgstr "Desbloquear seu cofre usando {brand}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}, instead of your master password."
+#~ msgstr "Desbloqueie seu cofre usando {name}, em vez da sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#~ msgid "Unlock your vault using {name}."
+#~ msgstr "Desbloqueie seu cofre usando {name}."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint, instead of your master password."
+msgstr "Desbloquear seu cofre usando Face ID ou uma impressão digital, em vez de sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint."
+msgstr "Desbloquear seu cofre usando Face ID ou uma impressão digital."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode, instead of your master password."
+msgstr "Desbloquear seu cofre usando seu código de acesso, em vez de sua senha mestra."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode."
+msgstr "Desbloquear seu cofre usando seu código de acesso."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
@@ -3514,8 +3574,8 @@ msgid "Your other devices stop being able to read this vault. They all share the
 msgstr "Seus outros dispositivos deixam de poder ler este cofre. Todos compartilham a chave que está sendo substituída, portanto cada um precisa ser emparelhado novamente em Sincronização de dispositivos."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "your passcode"
-msgstr "seu código de acesso"
+#~ msgid "your passcode"
+#~ msgstr "seu código de acesso"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."

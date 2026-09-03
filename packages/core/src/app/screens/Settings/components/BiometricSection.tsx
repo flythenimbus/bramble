@@ -48,19 +48,22 @@ export function BiometricSection() {
 					: biometryType === "passcode"
 						? t`Device passcode`
 						: t`Biometric unlock`;
-	// Noun phrase woven into the subtitle copy below ("...using Face ID"). The passcode case is
-	// "your passcode", not "your device passcode": the row's own title is already "Device
-	// passcode", and the longer form stutters against the "on this device" in the copy below.
-	const name =
-		biometryType === "faceId"
-			? t`Face ID`
-			: biometryType === "opticId"
-				? t`Optic ID`
-				: biometryType === "touchId"
-					? t`Touch ID`
-					: biometryType === "passcode"
-						? t`your passcode`
-						: t`Face ID or a fingerprint`;
+	// Every sentence below is written out per modality rather than built by dropping a noun into
+	// a template. German (and every other case-marking language) declines the noun after a
+	// preposition, so an interpolated "your passcode" came out as "mit Ihr Passcode" where it
+	// wants "mit Ihrem Passcode" - and a translator handed a fragment cannot fix that.
+	// Face ID / Optic ID / Touch ID stay interpolated: they are invariant brand names, so one
+	// string covers all three in any language, and only the two real noun phrases need spelling
+	// out. Three forms per sentence instead of five.
+	const brand =
+		biometryType === "opticId"
+			? t`Optic ID`
+			: biometryType === "touchId"
+				? t`Touch ID`
+				: t`Face ID`;
+	/** Pick the sentence for this device's modality; all three are evaluated so all three extract. */
+	const say = (branded: string, passcode: string, generic: string) =>
+		biometryType === "passcode" ? passcode : biometryType === "biometric" ? generic : branded;
 
 	// With nothing enrolled there is no biometry-only gate to build, so the passcode is the only
 	// thing that can open the cache. That is not a fallback and not a choice, so the row below is
@@ -109,14 +112,32 @@ export function BiometricSection() {
 	// The off state names the master password, because skipping it is what the setting buys; the
 	// on state drops it, since by then the only useful thing left to say is what opens the vault.
 	const subtitle = !biometricAvailable
-		? t`Set up ${name} on this device to use this.`
+		? say(
+				t`Set up ${brand} on this device to use this.`,
+				t`Set up a passcode on this device to use this.`,
+				t`Set up Face ID or a fingerprint on this device to use this.`,
+			)
 		: biometricEnabled
-			? t`Unlock your vault using ${name}.`
-			: t`Unlock your vault using ${name}, instead of your master password.`;
+			? say(
+					t`Unlock your vault using ${brand}.`,
+					t`Unlock your vault using your passcode.`,
+					t`Unlock your vault using Face ID or a fingerprint.`,
+				)
+			: say(
+					t`Unlock your vault using ${brand}, instead of your master password.`,
+					t`Unlock your vault using your passcode, instead of your master password.`,
+					t`Unlock your vault using Face ID or a fingerprint, instead of your master password.`,
+				);
 
+	// The passcode form is unreachable here (the row only renders with a biometric enrolled), but
+	// `say` needs all three and an honest sentence beats a placeholder that could one day show.
 	const passcodeSubtitle = passcodeFallback
 		? t`Your device passcode can also unlock this vault.`
-		: t`Only ${name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`;
+		: say(
+				t`Only ${brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`,
+				t`Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`,
+				t`Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`,
+			);
 
 	return (
 		<>
@@ -151,7 +172,11 @@ export function BiometricSection() {
 				<Row
 					icon={<Zap className="w-4 h-4 text-primary" />}
 					title={t`Unlock on open`}
-					subtitle={t`Ask for ${name} as soon as the unlock screen appears, with no tap.`}
+					subtitle={say(
+						t`Ask for ${brand} as soon as the unlock screen appears, with no tap.`,
+						t`Ask for your passcode as soon as the unlock screen appears, with no tap.`,
+						t`Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap.`,
+					)}
 				>
 					<Toggle
 						checked={prefs.biometricAutoPrompt}
