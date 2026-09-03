@@ -26,6 +26,14 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "deleteSecret", returnType: CAPPluginReturnPromise),
 	]
 
+	// Keychain work runs HERE, never on the queue Capacitor hands us. The bridge dispatches
+	// EVERY plugin call in the app on one serial queue (CapacitorBridge.dispatchQueue, label
+	// "bridge"), and a SecItem* call blocks whenever it wants an authentication prompt it cannot
+	// present. One such block starves every plugin in the app: a stalled arm-the-gate write is
+	// what made an unrelated exportVek time out in Settings. Our own queue contains the damage.
+	private static let keychainQueue = DispatchQueue(
+		label: "app.bramble.biometric-vault", qos: .userInitiated)
+
 	// service / account / accessGroup live in BrambleVault (shared with the AutoFill
 	// extension and the keychain-access-groups entitlement). See docs/mobile-port.md.
 
@@ -114,23 +122,25 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing vaultId")
 			return
 		}
-		// UIFail (not UISkip): report the auth-gated item as existing via
-		// errSecInteractionNotAllowed instead of silently skipping it (which returns
-		// errSecItemNotFound and made the toggle revert). Neither prompts for Face ID.
-		let query = Self.identity(vaultId).merging([
-			kSecReturnData as String: false,
-			kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
-			kSecMatchLimit as String: kSecMatchLimitOne,
-		]) { _, new in new }
-		var present = false
-		for q in Self.groupVariants(query) {
-			let status = SecItemCopyMatching(q as CFDictionary, nil)
-			if status == errSecSuccess || status == errSecInteractionNotAllowed {
-				present = true
-				break
+		Self.keychainQueue.async {
+			// UIFail (not UISkip): report the auth-gated item as existing via
+			// errSecInteractionNotAllowed instead of silently skipping it (which returns
+			// errSecItemNotFound and made the toggle revert). Neither prompts for Face ID.
+			let query = Self.identity(vaultId).merging([
+				kSecReturnData as String: false,
+				kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
+				kSecMatchLimit as String: kSecMatchLimitOne,
+			]) { _, new in new }
+			var present = false
+			for q in Self.groupVariants(query) {
+				let status = SecItemCopyMatching(q as CFDictionary, nil)
+				if status == errSecSuccess || status == errSecInteractionNotAllowed {
+					present = true
+					break
+				}
 			}
+			call.resolve(["value": present])
 		}
-		call.resolve(["value": present])
 	}
 
 	// Store `data` under `identity`, behind the biometric access control. Replaces any prior copy in
@@ -164,46 +174,48 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		// the settings toggle rewrites the item, and so does every successful unlock while
 		// biometric is enabled (which is what converts installs armed by an older build).
 		let allowPasscode = call.getBool("allowPasscode") ?? true
-		var acError: Unmanaged<CFError>?
-		guard
-			let access = SecAccessControlCreateWithFlags(
-				nil,
-				kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-				// userPresence = Face ID / Touch ID OR the device passcode (the only gate a
-				// passcode-only device can use). biometryCurrentSet = biometry only, and the OS
-				// destroys the item when the enrolled set changes.
-				allowPasscode ? .userPresence : .biometryCurrentSet,
-				&acError
-			)
-		else {
-			// Rarely reached: SecAccessControlCreateWithFlags is lazy, and probing it on the
-			// simulator showed .biometryCurrentSet being created happily with NOTHING enrolled -
-			// the constraint is only evaluated when the item is read. So this is a backstop, not
-			// the thing that stops a biometrics-only gate being armed on a device that can't open
-			// one; `effectiveAllowPasscode` on the JS side is what actually prevents that.
-			if !allowPasscode {
-				call.reject("No biometric is enrolled on this device", "no-biometry")
+		Self.keychainQueue.async {
+			var acError: Unmanaged<CFError>?
+			guard
+				let access = SecAccessControlCreateWithFlags(
+					nil,
+					kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+					// userPresence = Face ID / Touch ID OR the device passcode (the only gate a
+					// passcode-only device can use). biometryCurrentSet = biometry only, and the OS
+					// destroys the item when the enrolled set changes.
+					allowPasscode ? .userPresence : .biometryCurrentSet,
+					&acError
+				)
+			else {
+				// Rarely reached: SecAccessControlCreateWithFlags is lazy, and probing it on the
+				// simulator showed .biometryCurrentSet being created happily with NOTHING enrolled -
+				// the constraint is only evaluated when the item is read. So this is a backstop, not
+				// the thing that stops a biometrics-only gate being armed on a device that can't open
+				// one; `effectiveAllowPasscode` on the JS side is what actually prevents that.
+				if !allowPasscode {
+					call.reject("No biometric is enrolled on this device", "no-biometry")
+					return
+				}
+				call.reject("Couldn't create the biometric access control")
 				return
 			}
-			call.reject("Couldn't create the biometric access control")
-			return
-		}
-		// Per-vault item (the in-app unlock reads this) + the shared un-suffixed mirror the AutoFill
-		// extension reads. The per-vault write is authoritative; the mirror is best-effort.
-		let status = Self.store(Self.identity(vaultId), data: data, access: access)
-		_ = Self.store(Self.autofillIdentity(), data: data, access: access)
-		// Tell the extension which gate the mirror carries, so its unlock button doesn't promise a
-		// passcode the Keychain will refuse. Written here rather than through AutofillBridge so it
-		// can't drift from the access control it describes.
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		defaults?.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
-		// And which vault the mirror now carries, so the extension can tell it apart from one left
-		// behind by another vault or an earlier install.
-		defaults?.set(vaultId, forKey: BrambleVault.biometricVaultKey)
-		if status == errSecSuccess {
-			call.resolve()
-		} else {
-			call.reject("Couldn't store the secret (\(status))")
+			// Per-vault item (the in-app unlock reads this) + the shared un-suffixed mirror the AutoFill
+			// extension reads. The per-vault write is authoritative; the mirror is best-effort.
+			let status = Self.store(Self.identity(vaultId), data: data, access: access)
+			_ = Self.store(Self.autofillIdentity(), data: data, access: access)
+			// Tell the extension which gate the mirror carries, so its unlock button doesn't promise a
+			// passcode the Keychain will refuse. Written here rather than through AutofillBridge so it
+			// can't drift from the access control it describes.
+			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+			defaults?.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
+			// And which vault the mirror now carries, so the extension can tell it apart from one left
+			// behind by another vault or an earlier install.
+			defaults?.set(vaultId, forKey: BrambleVault.biometricVaultKey)
+			if status == errSecSuccess {
+				call.resolve()
+			} else {
+				call.reject("Couldn't store the secret (\(status))")
+			}
 		}
 	}
 
@@ -227,53 +239,55 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		}
 		let policy: LAPolicy =
 			allowPasscode ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
-		context.evaluatePolicy(policy, localizedReason: reason) {
-			success, evalError in
-			guard success else {
-				let code = (evalError as? LAError)?.code
-				if code == .userCancel || code == .appCancel || code == .userFallback {
-					call.reject("Cancelled", "cancelled")
-				} else if code == .systemCancel {
-					// The OS pulled the prompt (app still transitioning, another sheet in the way).
-					// Not an answer from anyone, so the caller may ask again.
-					call.reject("Interrupted", "interrupted")
-				} else if code == .biometryLockout {
-					// Too many failed matches. With passcode fallback off there is no way out
-					// inside this policy: the device itself has to be unlocked by passcode first.
-					call.reject("Biometry is locked out", "lockout")
-				} else {
-					call.reject(evalError?.localizedDescription ?? "Authentication failed", "auth-failed")
-				}
-				return
-			}
-			let query = Self.identity(vaultId).merging([
-				kSecReturnData as String: true,
-				kSecMatchLimit as String: kSecMatchLimitOne,
-				kSecUseAuthenticationContext as String: context,
-				kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
-			]) { _, new in new }
-			var lastStatus: OSStatus = errSecItemNotFound
-			for q in Self.groupVariants(query) {
-				var item: CFTypeRef?
-				let status = SecItemCopyMatching(q as CFDictionary, &item)
-				if status == errSecSuccess, let data = item as? Data,
-					let secret = String(data: data, encoding: .utf8)
-				{
-					call.resolve(["secret": secret])
+		Self.keychainQueue.async {
+			context.evaluatePolicy(policy, localizedReason: reason) {
+				success, evalError in
+				guard success else {
+					let code = (evalError as? LAError)?.code
+					if code == .userCancel || code == .appCancel || code == .userFallback {
+						call.reject("Cancelled", "cancelled")
+					} else if code == .systemCancel {
+						// The OS pulled the prompt (app still transitioning, another sheet in the way).
+						// Not an answer from anyone, so the caller may ask again.
+						call.reject("Interrupted", "interrupted")
+					} else if code == .biometryLockout {
+						// Too many failed matches. With passcode fallback off there is no way out
+						// inside this policy: the device itself has to be unlocked by passcode first.
+						call.reject("Biometry is locked out", "lockout")
+					} else {
+						call.reject(evalError?.localizedDescription ?? "Authentication failed", "auth-failed")
+					}
 					return
 				}
-				lastStatus = status
-			}
-			if lastStatus == errSecItemNotFound {
-				call.reject("No biometric secret stored", "no-secret")
-			} else if lastStatus == errSecAuthFailed {
-				// The gate authenticated but the item won't decrypt: a .biometryCurrentSet item
-				// killed by an enrolment change. It can never open again, so drop it (and the
-				// autofill mirror) rather than leave hasSecret advertising a dead gate.
-				_ = Self.purge(vaultId)
-				call.reject("Biometric enrolment changed; the cached key was discarded", "invalidated")
-			} else {
-				call.reject("Couldn't read the stored secret (\(lastStatus))", "auth-failed")
+				let query = Self.identity(vaultId).merging([
+					kSecReturnData as String: true,
+					kSecMatchLimit as String: kSecMatchLimitOne,
+					kSecUseAuthenticationContext as String: context,
+					kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
+				]) { _, new in new }
+				var lastStatus: OSStatus = errSecItemNotFound
+				for q in Self.groupVariants(query) {
+					var item: CFTypeRef?
+					let status = SecItemCopyMatching(q as CFDictionary, &item)
+					if status == errSecSuccess, let data = item as? Data,
+						let secret = String(data: data, encoding: .utf8)
+					{
+						call.resolve(["secret": secret])
+						return
+					}
+					lastStatus = status
+				}
+				if lastStatus == errSecItemNotFound {
+					call.reject("No biometric secret stored", "no-secret")
+				} else if lastStatus == errSecAuthFailed {
+					// The gate authenticated but the item won't decrypt: a .biometryCurrentSet item
+					// killed by an enrolment change. It can never open again, so drop it (and the
+					// autofill mirror) rather than leave hasSecret advertising a dead gate.
+					_ = Self.purge(vaultId)
+					call.reject("Biometric enrolment changed; the cached key was discarded", "invalidated")
+				} else {
+					call.reject("Couldn't read the stored secret (\(lastStatus))", "auth-failed")
+				}
 			}
 		}
 	}
@@ -304,11 +318,13 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 			call.reject("Missing vaultId")
 			return
 		}
-		let (ok, lastStatus) = Self.purge(vaultId)
-		if ok {
-			call.resolve()
-		} else {
-			call.reject("Couldn't delete the stored secret (\(lastStatus))")
+		Self.keychainQueue.async {
+			let (ok, lastStatus) = Self.purge(vaultId)
+			if ok {
+				call.resolve()
+			} else {
+				call.reject("Couldn't delete the stored secret (\(lastStatus))")
+			}
 		}
 	}
 }

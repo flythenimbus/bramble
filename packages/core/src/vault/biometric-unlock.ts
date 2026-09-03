@@ -36,7 +36,9 @@ export async function enableBiometricUnlock(
 	vaultId: string,
 	allowPasscode: boolean,
 ): Promise<void> {
-	// Labels are user-visible and name the step, so a repeat report says which call stalled.
+	// The label names the step that was WAITING, which is not always the step at fault: iOS
+	// dispatches every Capacitor plugin call on one serial queue, so a stall anywhere upstream
+	// surfaces here. Treat it as "a native call stopped answering", not as an accusation.
 	const vek = await withTimeout(
 		crypto.exportVek(),
 		GATE_WRITE_TIMEOUT_MS,
