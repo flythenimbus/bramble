@@ -75,10 +75,15 @@ export async function reconcileBiometricGate(opts: {
 	crypto: CryptoAdapter;
 	biometric: BiometricUnlock;
 	vaultId: string;
-	enabled: boolean;
 	allowPasscode: boolean;
 }): Promise<void> {
-	if (!opts.enabled) return;
+	// Ask the OS whether THIS vault has a gate, rather than taking a caller's flag for it. That
+	// flag is React state describing whichever vault the last probe finished for, so during a
+	// switch it still says the one you came from - and re-arming on a stale `true` does not
+	// refresh a gate, it CREATES one, on a vault the user never enabled it for. That shipped:
+	// unlocking vault B by password silently gave B a passcode-openable cache from vault A.
+	// The probe is a keychain attribute read, cheap enough to run on every unlock.
+	if (!(await opts.biometric.isEnabled(opts.vaultId))) return;
 	await enableBiometricUnlock(opts.crypto, opts.biometric, opts.vaultId, opts.allowPasscode);
 }
 

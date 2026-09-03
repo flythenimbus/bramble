@@ -102,10 +102,18 @@ device setting stays global.
 | `sync.deviceId` | `sync.deviceId:<id>` | per vault |
 | `sync.lastSyncedAt` | `sync.lastSyncedAt:<id>` | per vault |
 | `backup.targets` / `backup.config` | `...:<id>` | per vault |
+| `pref.biometricPasscodeFallback` | `pref.biometricPasscodeFallback:<id>` | per vault |
+| `pref.biometricAutoPrompt` | `pref.biometricAutoPrompt:<id>` | per vault |
 | `sync.relay` / `sync.iceUrl` | unchanged | device (signaling endpoints) |
 | `pref.autoLockMinutes`, theme, locale | unchanged | device |
 | `pref.securityKeyLabels` | unchanged (keyed by globally-unique slotId) | device |
 | `vault.vek` (session VEK) | unchanged (one active vault) | device |
+
+The two biometric prefs are per vault because they describe ONE vault's unlock gate,
+not the device: the gate itself is a per-vault keychain item. They shipped flat, and a
+second vault then opened already showing passcode fallback and unlock-on-open switched
+on, having never been given either - after which the re-arm wrote that borrowed setting
+into the second vault's gate. See docs/auth-and-unlock.md for the full invariant list.
 
 Giving each vault its own `sync.deviceKeypair` / `sync.signingKey` / `sync.deviceId`
 falls out of namespacing and is also the more private choice: a peer in vault A's

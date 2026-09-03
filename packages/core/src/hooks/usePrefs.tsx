@@ -8,6 +8,8 @@ import {
 	useState,
 } from "react";
 import { usePlatform } from "../context/PlatformContext";
+import { syncKeyFor } from "../sync/sync-keys";
+import { useVaultRegistry } from "./useVaultRegistry";
 
 // Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
 // background.ts for the auto-lock + clipboard TTL values the SW reads itself.
@@ -103,6 +105,15 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
 };
 
+/**
+ * Prefs that describe ONE VAULT's unlock gate rather than the device, stored per vault at
+ * `<key>:<vaultId>` like the sync keys (see sync-keys.ts and docs/multiple-vaults.md).
+ * Both of these were flat, so every vault read the same value: a second vault showed passcode
+ * fallback and unlock-on-open already switched on, having never been given either, and the
+ * re-arm then honoured that borrowed setting when writing the second vault's gate.
+ */
+const PER_VAULT_PREFS = new Set<keyof Prefs>(["biometricAutoPrompt", "biometricPasscodeFallback"]);
+
 const DEFAULT_PREFS: Prefs = {
 	autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
 	breachCheckEnabled: DEFAULT_BREACH_CHECK,
@@ -134,11 +145,31 @@ const PrefsContext = createContext<UsePrefs | null>(null);
  */
 export function PrefsProvider({ children }: { children: ReactNode }) {
 	const { storage } = usePlatform();
+	const { activeId, vaults } = useVaultRegistry();
 	const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 	const [loaded, setLoaded] = useState(false);
+	// Same resolution syncKey uses: the active vault, falling back to the first before one is
+	// selected, and unscoped only when there is no vault at all.
+	const vaultId = activeId ?? vaults[0]?.id;
+	const keyFor = useCallback(
+		(pref: keyof Prefs) => {
+			const base = META_KEYS[pref];
+			return PER_VAULT_PREFS.has(pref) && vaultId ? syncKeyFor(base, vaultId) : base;
+		},
+		[vaultId],
+	);
 
 	useEffect(() => {
 		let cancelled = false;
+		// Drop the previous vault's per-vault values before reading the new one's. Until the read
+		// lands the gate settings would otherwise still describe the vault we just left, and
+		// Auth turns them straight into the access control it arms. Defaults are the closed
+		// position, so the worst a stale window can do now is ask for one tap too many.
+		setPrefs((prev) => ({
+			...prev,
+			biometricAutoPrompt: DEFAULT_BIOMETRIC_AUTO_PROMPT,
+			biometricPasscodeFallback: DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
+		}));
 		void (async () => {
 			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
@@ -147,13 +178,13 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<boolean>(PREF_OFFER_TO_SAVE),
 				storage.getMeta<boolean>(PREF_AUTOFILL_ENABLED),
 				storage.getMeta<string[]>(PREF_NEVER_SAVE_SITES),
-				storage.getMeta<boolean>(PREF_BIOMETRIC_AUTO_PROMPT),
+				storage.getMeta<boolean>(keyFor("biometricAutoPrompt")),
 				storage.getMeta<boolean>(PREF_AUTOFILL_QUICKTYPE),
 				storage.getMeta<boolean>(PREF_PASSKEY_PROVIDER),
 				storage.getMeta<boolean>(PREF_LOCK_ON_SCREEN_LOCK),
 				storage.getMeta<boolean>(PREF_STATS_COLLAPSED),
 				storage.getMeta<boolean>(PREF_AUTOSTART_PROMPT_DISMISSED),
-				storage.getMeta<boolean>(PREF_BIOMETRIC_PASSCODE_FALLBACK),
+				storage.getMeta<boolean>(keyFor("biometricPasscodeFallback")),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -176,14 +207,16 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [storage]);
+		// keyFor changes with the active vault, which is what re-reads the per-vault prefs on a
+		// switch. Without it the second vault kept showing the first one's gate settings.
+	}, [storage, keyFor]);
 
 	const update = useCallback(
 		async <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
 			setPrefs((p) => ({ ...p, [key]: value }));
-			await storage.setMeta(META_KEYS[key], value);
+			await storage.setMeta(keyFor(key), value);
 		},
-		[storage],
+		[storage, keyFor],
 	);
 
 	const value = useMemo<UsePrefs>(() => ({ prefs, loaded, update }), [prefs, loaded, update]);

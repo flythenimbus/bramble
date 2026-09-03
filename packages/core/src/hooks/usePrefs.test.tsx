@@ -4,7 +4,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import { PrefsProvider, usePrefs } from "./usePrefs";
 
-afterEach(cleanup);
+// The active vault drives which keys the per-vault prefs resolve to; mocked so a test can
+// switch vaults without standing up the whole registry.
+const reg = vi.hoisted(() => ({ activeId: undefined as string | undefined }));
+vi.mock("./useVaultRegistry", () => ({
+	useVaultRegistry: () => ({ activeId: reg.activeId, vaults: [] }),
+}));
+
+afterEach(() => {
+	reg.activeId = undefined;
+	cleanup();
+});
 
 // Backing meta store so getMeta returns whatever setMeta wrote; getMeta calls are counted
 // to prove the provider loads once regardless of how many consumers read it.
@@ -112,5 +122,70 @@ describe("usePrefs shared provider", () => {
 		} finally {
 			spy.mockRestore();
 		}
+	});
+});
+
+describe("per-vault prefs", () => {
+	function mount(platform: Platform) {
+		function Reader() {
+			const { prefs, update } = usePrefs();
+			return (
+				<button
+					type="button"
+					onClick={() => void update("biometricPasscodeFallback", true)}
+					aria-label="set"
+				>
+					{String(prefs.biometricPasscodeFallback)}
+				</button>
+			);
+		}
+		return render(
+			<PlatformProvider platform={platform}>
+				<PrefsProvider>
+					<Reader />
+				</PrefsProvider>
+			</PlatformProvider>,
+		);
+	}
+
+	it("writes the gate prefs under the active vault, not a shared key", async () => {
+		const { platform, storage } = makePlatform();
+		reg.activeId = "vault-a";
+		mount(platform);
+		await act(async () => {});
+		await act(async () => {
+			screen.getByLabelText("set").click();
+		});
+		expect(storage.setMeta).toHaveBeenCalledWith("pref.biometricPasscodeFallback:vault-a", true);
+	});
+
+	it("does not let one vault's gate settings show up in another", async () => {
+		// The bug: both keys were flat, so a second vault opened already showing passcode
+		// fallback switched on, having never been given it - and the re-arm honoured that.
+		const { platform, storage } = makePlatform();
+		reg.activeId = "vault-a";
+		const first = mount(platform);
+		await act(async () => {});
+		await act(async () => {
+			screen.getByLabelText("set").click();
+		});
+		expect(screen.getByLabelText("set").textContent).toBe("true");
+		first.unmount();
+
+		reg.activeId = "vault-b";
+		mount(platform);
+		await act(async () => {});
+		expect(screen.getByLabelText("set").textContent).toBe("false");
+		expect(storage.getMeta).toHaveBeenCalledWith("pref.biometricPasscodeFallback:vault-b");
+	});
+
+	it("leaves device-wide prefs unscoped, since they are not about a vault", async () => {
+		const { platform, storage } = makePlatform();
+		reg.activeId = "vault-a";
+		mount(platform);
+		await act(async () => {});
+		const keys = storage.getMeta.mock.calls.map(([k]) => k);
+		expect(keys).toContain("pref.autoLockMinutes");
+		expect(keys).toContain("pref.biometricAutoPrompt:vault-a");
 	});
 });

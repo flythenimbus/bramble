@@ -231,28 +231,30 @@ describe("biometricUnlockFlow", () => {
 describe("reconcileBiometricGate", () => {
 	it("re-caches the VEK under the gate the setting now asks for", async () => {
 		const crypto = fakeCrypto();
-		const biometric = fakeBiometric();
-		await reconcileBiometricGate({
-			crypto,
-			biometric,
-			vaultId: VID,
-			enabled: true,
-			allowPasscode: true,
-		});
+		const biometric = fakeBiometric({ isEnabled: vi.fn(async () => true) });
+		await reconcileBiometricGate({ crypto, biometric, vaultId: VID, allowPasscode: true });
 		expect(biometric.enable).toHaveBeenCalledWith("VEK_B64", VID, true);
 	});
 
 	it("does nothing when the gate isn't set up, so an unlock never arms one by surprise", async () => {
 		const crypto = fakeCrypto();
-		const biometric = fakeBiometric();
-		await reconcileBiometricGate({
-			crypto,
-			biometric,
-			vaultId: VID,
-			enabled: false,
-			allowPasscode: false,
-		});
+		const biometric = fakeBiometric({ isEnabled: vi.fn(async () => false) });
+		await reconcileBiometricGate({ crypto, biometric, vaultId: VID, allowPasscode: false });
 		expect(crypto.exportVek).not.toHaveBeenCalled();
+		expect(biometric.enable).not.toHaveBeenCalled();
+	});
+
+	it("asks about THIS vault, so unlocking another never arms one it was not given", async () => {
+		// The regression: the caller passed React state that still described the vault we had
+		// switched away from, and re-arming on that stale `true` created a gate on a vault the
+		// user never enabled it for - unlocking B by password gave B a passcode-openable cache.
+		const crypto = fakeCrypto();
+		const enabledVaults = new Set(["vault-a"]);
+		const biometric = fakeBiometric({
+			isEnabled: vi.fn(async (id: string) => enabledVaults.has(id)),
+		});
+		await reconcileBiometricGate({ crypto, biometric, vaultId: "vault-b", allowPasscode: true });
+		expect(biometric.isEnabled).toHaveBeenCalledWith("vault-b");
 		expect(biometric.enable).not.toHaveBeenCalled();
 	});
 });

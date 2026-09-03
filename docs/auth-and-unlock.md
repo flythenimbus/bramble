@@ -101,8 +101,9 @@ and the row reads "Device passcode" with no fallback row at all.
 
 ### The invariants this rests on
 
-Five rules, because the first shipped version broke four of them and the result
-read as two settings contradicting each other:
+Seven rules. The first shipped version broke four of them and read as two settings
+contradicting each other; multi-vault testing then found two more, and rules 5 and
+6 are the pair that let one vault's passcode open another's.
 
 1. **One gate, one switch.** With fast unlock off, no sub-row renders. Shown but
    disabled is not the same thing: "Device passcode: off" above "Allow passcode
@@ -119,7 +120,19 @@ read as two settings contradicting each other:
    mere presence is not evidence: it kept offering unlock for a vault that had
    turned it off, and for vaults from previous installs. `vekExists()` therefore
    also requires `autofill.biometricVaultId == autofill.bundleVaultId`.
-5. **A VEK that doesn't open the bundle is a stale cache, not an error to
+5. **Nothing about the gate is device-wide.** The gate is per vault, so the
+   settings describing it are stored per vault too (`<key>:<vaultId>`, the same
+   convention as the sync keys). `pref.biometricAutoPrompt` and
+   `pref.biometricPasscodeFallback` were flat, so a second vault opened already
+   showing both switched on, having never been given either - and the re-arm then
+   wrote the second vault's gate to match the first one's setting.
+6. **Re-arming asks the OS about THIS vault; it never trusts a passed-in flag.**
+   That flag is React state describing whichever vault the last probe finished
+   for, so mid-switch it still names the one you came from. Re-arming on a stale
+   `true` does not refresh a gate, it *creates* one: unlocking vault B with a
+   password gave B a passcode-openable cache it was never enabled for. The guard
+   is now `biometric.isEnabled(vaultId)`, a keychain attribute read.
+7. **A VEK that doesn't open the bundle is a stale cache, not an error to
    read.** The failure is a Rust `aead::Error`, which meant the extension used to
    put "aes decrypt: aead::Error" on screen after a correct passcode. Discard the
    mirror and the session, then ask for the master password in English.

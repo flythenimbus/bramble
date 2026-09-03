@@ -1376,13 +1376,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const rearmBiometric = useCallback(
 		async (allowPasscode: boolean) => {
 			if (!biometric || !activeId) return;
-			await reconcileBiometricGate({
-				crypto,
-				biometric,
-				vaultId: activeId,
-				enabled: latestRef.current.biometricEnabled,
-				allowPasscode,
-			});
+			await reconcileBiometricGate({ crypto, biometric, vaultId: activeId, allowPasscode });
 		},
 		[biometric, crypto, activeId],
 	);
