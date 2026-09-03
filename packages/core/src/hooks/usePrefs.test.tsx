@@ -227,6 +227,40 @@ describe("adopting the pre-scoping flat value", () => {
 		expect(storage.removeMeta).toHaveBeenCalledWith("pref.biometricPasscodeFallback");
 	});
 
+	it("retires the flat value with several vaults, so no later survivor can inherit it", async () => {
+		// The security review's finding: declining to adopt is not the same as being rid of it.
+		// Left in place, the value is adopted by whichever vault the install is reduced to - so a
+		// vault created AFTER the upgrade could be handed a gate setting nobody gave it.
+		const { platform, store } = makePlatform();
+		store.set("pref.biometricPasscodeFallback", true);
+		store.set("pref.biometricAutoPrompt", true);
+		reg.activeId = "vault-a";
+		reg.vaults = [{ id: "vault-a" }, { id: "vault-b" }];
+		const first = mount(platform);
+		await act(async () => {});
+		expect(store.has("pref.biometricPasscodeFallback")).toBe(false);
+		expect(store.has("pref.biometricAutoPrompt")).toBe(false);
+		first.unmount();
+
+		// Now reduce to one vault: with the flat value gone there is nothing left to inherit.
+		reg.activeId = "vault-b";
+		reg.vaults = [{ id: "vault-b" }];
+		mount(platform);
+		await act(async () => {});
+		expect(screen.getByTestId("v").textContent).toBe("false");
+		expect(store.get("pref.biometricPasscodeFallback:vault-b")).toBeUndefined();
+	});
+
+	it("does not retire before the registry is ready, while the value is still attributable", async () => {
+		const { platform, store } = makePlatform();
+		store.set("pref.biometricPasscodeFallback", true);
+		reg.ready = false;
+		reg.vaults = [{ id: "vault-a" }, { id: "vault-b" }];
+		mount(platform);
+		await act(async () => {});
+		expect(store.has("pref.biometricPasscodeFallback")).toBe(true);
+	});
+
 	it("refuses to adopt with several vaults, since it cannot know which one set it", async () => {
 		// Taking it anyway would hand the setting to vaults that never had it - the bug the
 		// scoping fixed. Falling back to the default is the closed position.

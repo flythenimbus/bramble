@@ -138,6 +138,9 @@ const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
 	(k) => PREF_SCOPE[k] === "vault",
 );
 
+/** Their storage keys, for whoever has to clean up after a vault. Pairs with PER_VAULT_SYNC_KEYS. */
+export const PER_VAULT_PREF_KEYS = VAULT_SCOPED.map((k) => META_KEYS[k]);
+
 const DEFAULT_PREFS: Prefs = {
 	autoLockMinutes: DEFAULT_AUTOLOCK_MINUTES,
 	breachCheckEnabled: DEFAULT_BREACH_CHECK,
@@ -178,12 +181,27 @@ const PrefsContext = createContext<UsePrefs | null>(null);
  * The flat key is removed once adopted, so this happens once and a later second vault starts
  * from the default rather than inheriting the first one's answer.
  */
+interface PrefStorage {
+	getMeta<V>(k: string): Promise<V | undefined>;
+	setMeta<V>(k: string, v: V): Promise<void>;
+	removeMeta(k: string): Promise<void>;
+}
+
+/**
+ * Delete the pre-scoping flat values once it is certain they cannot be attributed to a vault.
+ *
+ * Declining to adopt them is not the same as being rid of them. A flat value left in place is
+ * adopted by whichever vault the install is eventually reduced to - delete the others, or delete
+ * every vault and create a new one, and that vault silently inherits a gate setting nobody gave
+ * it. Since with several vaults the value can never become attributable, retiring it here is what
+ * makes non-adoption permanent rather than deferred.
+ */
+async function retireLegacyFlatPrefs(storage: PrefStorage): Promise<void> {
+	await Promise.all(VAULT_SCOPED.map((k) => storage.removeMeta(META_KEYS[k]).catch(() => {})));
+}
+
 async function readVaultPref<T>(
-	storage: {
-		getMeta<V>(k: string): Promise<V | undefined>;
-		setMeta<V>(k: string, v: V): Promise<void>;
-		removeMeta(k: string): Promise<void>;
-	},
+	storage: PrefStorage,
 	base: string,
 	scoped: string,
 	adopt: boolean,
@@ -216,9 +234,14 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		let cancelled = false;
 		// Only a single-vault install can prove the old flat value belongs to the vault in hand.
-		// Waiting for `ready` matters: an empty registry mid-load would read as "one vault" and
-		// adopt on behalf of a vault that has not been resolved yet.
-		const adoptLegacy = ready && vaults.length <= 1;
+		// Waiting for `ready` matters twice over: an empty registry mid-load would otherwise read
+		// as one vault and adopt on behalf of a vault that has not resolved, or read as none and
+		// retire a value that was still attributable.
+		const adoptLegacy = ready && vaults.length === 1;
+		// Several vaults: the value belongs to one of them and we cannot tell which, so it is
+		// deleted now rather than left for the last vault standing to inherit. See
+		// retireLegacyFlatPrefs.
+		const retireLegacy = ready && vaults.length > 1;
 		// Drop the previous vault's per-vault values before reading the new one's. Until the read
 		// lands the gate settings would otherwise still describe the vault we just left, and
 		// Auth turns them straight into the access control it arms. Defaults are the closed
@@ -228,6 +251,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 			...Object.fromEntries(VAULT_SCOPED.map((k) => [k, DEFAULT_PREFS[k]])),
 		}));
 		void (async () => {
+			if (retireLegacy) await retireLegacyFlatPrefs(storage);
 			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),

@@ -231,6 +231,7 @@ import {
 	unlockRpIdOrder,
 	type WebauthnKeyKind,
 } from "../vault/webauthn-ceremony";
+import { PER_VAULT_PREF_KEYS } from "./usePrefs";
 import { useSyncEnrollment } from "./useSyncEnrollment";
 
 export type { WebauthnKeyMeta };
@@ -1597,6 +1598,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await autofill.clearProviderData?.().catch(() => {});
 			await biometric?.disable(activeId).catch(() => {});
 			for (const k of PER_VAULT_SYNC_KEYS) {
+				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
+			}
+			// Its gate settings, alongside its sync keys. Vault ids are UUIDs and never reused, so
+			// these would only ever be dead weight rather than something a later vault could
+			// inherit - but a delete that leaves a vault's settings behind is the kind of gap the
+			// vault-scoping rule exists to close. See CONTEXT.md.
+			for (const k of PER_VAULT_PREF_KEYS) {
 				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
 			}
 			// Its backup targets, and the credentials they name. The list itself is VEK-wrapped

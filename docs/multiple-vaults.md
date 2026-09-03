@@ -522,6 +522,15 @@ later second vault starts from the default instead of inheriting. Multi-vault in
 adopt: we cannot know which vault set it, and guessing hands a setting to vaults that never
 had it. Those users re-enable per vault, once.
 
+Declining to adopt is not the same as being rid of it, which a security review of the change
+caught. A flat value left in place is adopted by whichever vault the install is eventually
+reduced to - delete the others, or delete every vault and create a new one, and that vault
+silently inherits a gate setting nobody gave it, including a vault created after the upgrade.
+Since with several vaults the value can never become attributable, it is deleted at that point
+instead (`retireLegacyFlatPrefs`), which is what makes non-adoption permanent rather than
+deferred. `deleteVault` clears a vault's scoped pref keys alongside its sync keys for the same
+reason.
+
 The native side needs a real migration rather than a default, because nothing would ever read
 the old items again and Keychain items outlive the app that wrote them - an uninstall does not
 clear them. `BiometricVaultPlugin.purgeLegacySharedItems()` runs at `capacitorDidLoad` and
