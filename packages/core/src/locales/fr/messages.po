@@ -2641,8 +2641,8 @@ msgid "Sites you've muted"
 msgstr "Sites mis en sourdine"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Skip your password on this device with {name}."
-msgstr "Ignorer le mot de passe sur cet appareil avec {name}."
+#~ msgid "Skip your password on this device with {name}."
+#~ msgstr "Ignorer le mot de passe sur cet appareil avec {name}."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Smiley"
@@ -2974,8 +2974,8 @@ msgid "This device"
 msgstr "Cet appareil"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "This device can unlock with {name}."
-msgstr "Cet appareil peut être déverrouillé avec {name}."
+#~ msgid "This device can unlock with {name}."
+#~ msgstr "Cet appareil peut être déverrouillé avec {name}."
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "this device only"
@@ -3235,6 +3235,14 @@ msgstr "Déverrouiller avec Touch ID"
 msgid "Unlock your vault to import into it"
 msgstr "Déverrouillez votre coffre pour importer dedans"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {name}, instead of your master password."
+msgstr "Déverrouillez votre coffre à l’aide de {name}, au lieu de votre mot de passe principal."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {name}."
+msgstr "Déverrouillez votre coffre à l’aide de {name}."
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
@@ -3478,8 +3486,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Votre navigateur peut demander l'accès à votre fichier de coffre lors du déverrouillage."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "your device passcode"
-msgstr "le code d’accès de votre appareil"
+#~ msgid "your device passcode"
+#~ msgstr "le code d’accès de votre appareil"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Your device passcode can also unlock this vault."
@@ -3504,6 +3512,10 @@ msgstr "Vos autres appareils ne peuvent plus lire ce coffre. Appairez-les à nou
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your other devices stop being able to read this vault. They all share the key being replaced, so each one has to be paired again from Device sync."
 msgstr "Vos autres appareils ne pourront plus lire ce coffre. Ils partagent tous la clé remplacée, chaque appareil doit donc être appairé à nouveau depuis Synchronisation des appareils."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your passcode"
+msgstr "votre code d’accès"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."

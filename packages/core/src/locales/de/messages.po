@@ -2641,8 +2641,8 @@ msgid "Sites you've muted"
 msgstr "Stummschaltete Websites"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Skip your password on this device with {name}."
-msgstr "Überspringen Sie Ihr Passwort auf diesem Gerät mit {name}."
+#~ msgid "Skip your password on this device with {name}."
+#~ msgstr "Überspringen Sie Ihr Passwort auf diesem Gerät mit {name}."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Smiley"
@@ -2974,8 +2974,8 @@ msgid "This device"
 msgstr "Dieses Gerät"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "This device can unlock with {name}."
-msgstr "Dieses Gerät kann mit {name} entsperrt werden."
+#~ msgid "This device can unlock with {name}."
+#~ msgstr "Dieses Gerät kann mit {name} entsperrt werden."
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "this device only"
@@ -3235,6 +3235,14 @@ msgstr "Mit Master-Passwort entsperren"
 msgid "Unlock your vault to import into it"
 msgstr "Entsperren Sie Ihren Tresor, um zu importieren"
 
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {name}, instead of your master password."
+msgstr "Entsperren Sie Ihren Tresor mit {name} statt Ihres Master-Passworts."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {name}."
+msgstr "Entsperren Sie Ihren Tresor mit {name}."
+
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Mit Sicherheitsschlüssel entsperren"
@@ -3478,8 +3486,8 @@ msgid "Your browser may ask for access to your vault file when you unlock."
 msgstr "Ihr Browser kann beim Entsperren nach Zugriff auf die Tresordatei fragen."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "your device passcode"
-msgstr "Ihr Gerätecode"
+#~ msgid "your device passcode"
+#~ msgstr "Ihr Gerätecode"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Your device passcode can also unlock this vault."
@@ -3504,6 +3512,10 @@ msgstr "Ihre anderen Geräte können diesen Tresor nicht mehr lesen. Koppeln Sie
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your other devices stop being able to read this vault. They all share the key being replaced, so each one has to be paired again from Device sync."
 msgstr "Ihre anderen Geräte können diesen Tresor nicht mehr lesen. Sie alle teilen den zu ersetzenden Schlüssel, daher muss jedes erneut über die Gerätesynchronisierung gekoppelt werden."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "your passcode"
+msgstr "Ihr Passcode"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."

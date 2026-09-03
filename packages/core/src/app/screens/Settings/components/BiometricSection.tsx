@@ -48,7 +48,9 @@ export function BiometricSection() {
 					: biometryType === "passcode"
 						? t`Device passcode`
 						: t`Biometric unlock`;
-	// Noun phrase woven into the subtitle copy below ("...with Face ID").
+	// Noun phrase woven into the subtitle copy below ("...using Face ID"). The passcode case is
+	// "your passcode", not "your device passcode": the row's own title is already "Device
+	// passcode", and the longer form stutters against the "on this device" in the copy below.
 	const name =
 		biometryType === "faceId"
 			? t`Face ID`
@@ -57,7 +59,7 @@ export function BiometricSection() {
 				: biometryType === "touchId"
 					? t`Touch ID`
 					: biometryType === "passcode"
-						? t`your device passcode`
+						? t`your passcode`
 						: t`Face ID or a fingerprint`;
 
 	// With nothing enrolled there is no biometry-only gate to build, so the passcode is the only
@@ -103,11 +105,14 @@ export function BiometricSection() {
 		}
 	};
 
+	// "Vault" rather than "passwords", matching the master-password and recovery-code rows above.
+	// The off state names the master password, because skipping it is what the setting buys; the
+	// on state drops it, since by then the only useful thing left to say is what opens the vault.
 	const subtitle = !biometricAvailable
 		? t`Set up ${name} on this device to use this.`
 		: biometricEnabled
-			? t`This device can unlock with ${name}.`
-			: t`Skip your password on this device with ${name}.`;
+			? t`Unlock your vault using ${name}.`
+			: t`Unlock your vault using ${name}, instead of your master password.`;
 
 	const passcodeSubtitle = passcodeFallback
 		? t`Your device passcode can also unlock this vault.`
