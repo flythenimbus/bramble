@@ -17,7 +17,8 @@
 			"!website/src/components/starwind",
 			"!website/dist",
 			"!icon",
-			"!**/*.lockb"
+			"!**/*.lockb",
+			"!.claude/*"
 		]
 	},
 	"formatter": {
