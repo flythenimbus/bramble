@@ -157,13 +157,17 @@ private struct CredentialListView: View {
 
 	// A search collapses the sections: the point of typing is that the thing you want is not
 	// where the page's own matches are, so scope it to the whole vault and show one flat list.
-	// Same fields Android's matchesQuery uses, so the two behave alike.
+	// Every token must appear somewhere in the entry, matching the main app's search (and
+	// Android's) rather than testing the raw string: "acme staging" found nothing, because no
+	// one field contains that string. The haystack is joined, not searched per field, so the
+	// tokens may land in different ones - which is what makes a name plus a domain work.
 	private var found: [Cred] {
-		let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-		guard !q.isEmpty else { return [] }
-		return all.filter {
-			$0.name.lowercased().contains(q) || $0.username.lowercased().contains(q)
-				|| $0.services.contains { s in s.lowercased().contains(q) }
+		let tokens = query.lowercased().split(whereSeparator: { $0.isWhitespace })
+		guard !tokens.isEmpty else { return [] }
+		return all.filter { cred in
+			let haystack =
+				"\(cred.name) \(cred.username) \(cred.services.joined(separator: " "))".lowercased()
+			return tokens.allSatisfy { haystack.contains($0) }
 		}
 	}
 
@@ -189,7 +193,7 @@ private struct CredentialListView: View {
 				searchField
 				ScrollView {
 					VStack(alignment: .leading, spacing: 10) {
-						if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+						if !query.split(whereSeparator: { $0.isWhitespace }).isEmpty {
 							if found.isEmpty {
 								sectionLabel(loc("No logins matching \(query)"))
 							} else {

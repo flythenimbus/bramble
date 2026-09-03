@@ -3,7 +3,9 @@ package app.bramble.mobile
 import java.util.Base64
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // Host-JVM tests for the pure-Kotlin ports the autofill provider relies on: the VLT1
@@ -11,6 +13,40 @@ import org.junit.Test
 // (validated against the RFC 6238 reference vectors). These cover the logic that can't be
 // exercised on-device without the master password.
 class AutofillLogicTest {
+
+    // --- autofill picker search ---
+
+    private fun login(name: String, username: String, vararg hosts: String) =
+        AutofillLogin("id-$name", name, username, "pw", null, hosts.toList())
+
+    @Test
+    fun `search matches every token, across different fields`() {
+        // The whole point of the fix: one field holds "acme", another holds the domain, and a
+        // query naming both used to find nothing because it was tested as a raw substring.
+        val entry = login("Acme Staging", "ops@acme.io", "staging.acme.io")
+        assertTrue(entry.matchesQuery(searchTokens("acme staging")))
+        assertTrue(entry.matchesQuery(searchTokens("ops staging.acme")))
+        // Order is irrelevant, and so is repeated whitespace.
+        assertTrue(entry.matchesQuery(searchTokens("  staging   acme ")))
+    }
+
+    @Test
+    fun `search narrows rather than widens as tokens are added`() {
+        val entry = login("Acme Staging", "ops@acme.io", "staging.acme.io")
+        // Every token has to land: one miss rejects the entry, so a second word never
+        // broadens the result the way an OR would.
+        assertFalse(entry.matchesQuery(searchTokens("acme production")))
+    }
+
+    @Test
+    fun `search is case insensitive and empty queries match nothing here`() {
+        val entry = login("Acme Staging", "ops@acme.io", "staging.acme.io")
+        assertTrue(entry.matchesQuery(searchTokens("ACME")))
+        // A blank query yields no tokens; the caller shows the sectioned list instead of
+        // filtering, so this only asserts the tokenizer does not invent one.
+        assertEquals(emptyList<String>(), searchTokens("   "))
+    }
+
 
     // A real VLT1 v2 vault blob (a password slot + a recovery slot + an empty entries
     // payload), base64-encoded. Decoded structure is asserted below.

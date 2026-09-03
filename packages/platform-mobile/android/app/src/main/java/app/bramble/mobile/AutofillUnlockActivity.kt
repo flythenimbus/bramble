@@ -132,13 +132,13 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
 
     private fun renderRows(container: LinearLayout, query: String) {
         container.removeAllViews()
-        val q = query.trim().lowercase()
+        val tokens = searchTokens(query)
         if (logins.isEmpty()) {
             container.addView(emptyLabel(getString(R.string.af_empty_no_logins)))
             return
         }
-        if (q.isNotEmpty()) {
-            val filtered = logins.filter { it.matchesQuery(q) }
+        if (tokens.isNotEmpty()) {
+            val filtered = logins.filter { it.matchesQuery(tokens) }
             if (filtered.isEmpty()) container.addView(emptyLabel(getString(R.string.af_empty_no_match, query)))
             else filtered.forEach { container.addView(row(it)) }
             return
@@ -225,10 +225,20 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
     }
 }
 
-private fun AutofillLogin.matchesQuery(q: String): Boolean =
-    name.lowercase().contains(q) ||
-        username.lowercase().contains(q) ||
-        hostnames.any { it.lowercase().contains(q) }
+/** Split a query into lowercased tokens, as the main app's `queryTokens` does. */
+internal fun searchTokens(q: String): List<String> =
+    q.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+
+/**
+ * Every token must appear somewhere in the entry, matching the main app's search rather than
+ * the single-substring test this used to do: "acme staging" found nothing, because no one
+ * field contains that string. One joined haystack (not per-field) so the tokens may land in
+ * different fields, which is what makes a name plus a domain work as a query.
+ */
+internal fun AutofillLogin.matchesQuery(tokens: List<String>): Boolean {
+    val haystack = "$name $username ${hostnames.joinToString(" ")}".lowercase()
+    return tokens.all { haystack.contains(it) }
+}
 
 private fun initials(s: String): String {
     val words = s.split(' ', '.').filter { it.isNotEmpty() }
