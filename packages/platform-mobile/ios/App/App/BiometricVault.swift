@@ -195,8 +195,11 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		// Tell the extension which gate the mirror carries, so its unlock button doesn't promise a
 		// passcode the Keychain will refuse. Written here rather than through AutofillBridge so it
 		// can't drift from the access control it describes.
-		UserDefaults(suiteName: BrambleVault.appGroup)?
-			.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		defaults?.set(allowPasscode, forKey: BrambleVault.biometricPasscodeFallbackKey)
+		// And which vault the mirror now carries, so the extension can tell it apart from one left
+		// behind by another vault or an earlier install.
+		defaults?.set(vaultId, forKey: BrambleVault.biometricVaultKey)
 		if status == errSecSuccess {
 			call.resolve()
 		} else {
@@ -279,6 +282,11 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 	// copy lingers. Clearing the mirror stops autofill until biometric is re-enabled (re-armed).
 	// Returns the last status and whether anything is now definitely gone.
 	private static func purge(_ vaultId: String) -> (ok: Bool, status: OSStatus) {
+		// Clear what described the mirror too. Left behind, they tell the extension a gate is
+		// armed with a passcode route, for a vault, that no longer exists.
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		defaults?.removeObject(forKey: BrambleVault.biometricPasscodeFallbackKey)
+		defaults?.removeObject(forKey: BrambleVault.biometricVaultKey)
 		var lastStatus: OSStatus = errSecItemNotFound
 		var ok = false
 		for identity in [identity(vaultId), autofillIdentity()] {

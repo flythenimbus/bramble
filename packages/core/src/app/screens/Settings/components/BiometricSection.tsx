@@ -60,13 +60,17 @@ export function BiometricSection() {
 						? t`your device passcode`
 						: t`Face ID or a fingerprint`;
 
-	// With nothing enrolled there is no biometry-only gate to build, so the passcode is the
-	// only thing that can open the cache and the choice isn't the user's to make.
-	const passcodeForced = !biometryEnrolled;
+	// With nothing enrolled there is no biometry-only gate to build, so the passcode is the only
+	// thing that can open the cache. That is not a fallback and not a choice, so the row below is
+	// hidden entirely rather than shown forced-on: the top row already says "Device passcode".
 	const passcodeFallback = effectiveAllowPasscode(
 		biometryEnrolled,
 		prefs.biometricPasscodeFallback,
 	);
+	// One gate, one switch. The fallback only means something once a gate is armed AND a biometric
+	// exists to fall back FROM, so it follows the row above rather than sitting inert beside it.
+	const showPasscodeFallback =
+		canChoosePasscodeFallback && biometricAvailable && biometricEnabled && biometryEnrolled;
 
 	const onToggle = async (next: boolean) => {
 		setError(null);
@@ -105,11 +109,9 @@ export function BiometricSection() {
 			? t`This device can unlock with ${name}.`
 			: t`Skip your password on this device with ${name}.`;
 
-	const passcodeSubtitle = passcodeForced
-		? t`Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate.`
-		: passcodeFallback
-			? t`Your device passcode can also unlock this vault.`
-			: t`Only ${name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`;
+	const passcodeSubtitle = passcodeFallback
+		? t`Your device passcode can also unlock this vault.`
+		: t`Only ${name} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password.`;
 
 	return (
 		<>
@@ -122,9 +124,10 @@ export function BiometricSection() {
 				/>
 			</Row>
 			{error && <p className="ml-12 text-xs text-destructive">{error}</p>}
-			{/* Sits under the gate it modifies: with biometric unlock off there is no cached VEK
-			    to re-arm, so the switch is shown but inert. */}
-			{canChoosePasscodeFallback && (
+			{/* Sits under the gate it modifies, and only while that gate is on and a biometric is
+			    enrolled: anywhere else it is a switch over nothing, which read as two settings
+			    contradicting each other. */}
+			{showPasscodeFallback && (
 				<Row
 					icon={<KeyRound className="w-4 h-4 text-primary" />}
 					title={t`Allow passcode fallback`}
@@ -134,7 +137,7 @@ export function BiometricSection() {
 						checked={passcodeFallback}
 						onChange={(next) => void onPasscodeToggle(next)}
 						label={t`Toggle passcode fallback`}
-						disabled={busy || passcodeForced || !biometricAvailable || !biometricEnabled}
+						disabled={busy}
 					/>
 				</Row>
 			)}

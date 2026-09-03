@@ -1,138 +1,18 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Bramble has no passkey for this site.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble has no passkey for this site."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble hat keinen Passkey für diese Seite."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble no tiene una clave de acceso para este sitio."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble ne possède aucune clé de passe pour ce site."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O Bramble não possui chave de acesso para este site."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble non ha una chiave di accesso per questo sito."
-          }
-        }
-      }
-    },
-    "Choose a passkey": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose a passkey"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wählen Sie einen Passkey"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seleccionar una clave de acceso"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisir une clé de passe"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Escolher uma chave de acesso"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Selezionare una chiave di accesso"
-          }
-        }
-      }
-    },
-    "No passkey found": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No passkey found"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kein Passkey gefunden"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clave de acceso no encontrada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune clé de passe trouvée"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nenhuma chave de acesso encontrada"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nessuna chiave di accesso trovata"
-          }
-        }
-      }
-    },
     "All items": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All items"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Alle Elemente"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All items"
           }
         },
         "es": {
@@ -147,72 +27,72 @@
             "value": "Tous les éléments"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Todos os itens"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Tutti gli elementi"
           }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos os itens"
+          }
         }
       }
     },
-    "biometrics or passcode": {
+    "Bramble has no passkey for this site.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "biometrics or passcode"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometrie oder Passcode"
+            "value": "Bramble hat keinen Passkey für diese Seite."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bramble has no passkey for this site."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometría o código de acceso"
+            "value": "Bramble no tiene una clave de acceso para este sitio."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biométrie ou code d'accès"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Biometria ou senha de acesso"
+            "value": "Bramble ne possède aucune clé de passe pour ce site."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometria o codice di accesso"
+            "value": "Bramble non ha una chiave di accesso per questo sito."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Bramble não possui chave de acesso para este site."
           }
         }
       }
     },
     "Cancel": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Abbrechen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
           }
         },
         "es": {
@@ -227,32 +107,72 @@
             "value": "Annuler"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulla"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Cancelar"
           }
+        }
+      }
+    },
+    "Choose a passkey": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wählen Sie einen Passkey"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a passkey"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar una clave de acceso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir une clé de passe"
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Annulla"
+            "value": "Selezionare una chiave di accesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher uma chave de acesso"
           }
         }
       }
     },
     "Couldn't load logins": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't load logins"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Anmeldedaten konnten nicht geladen werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load logins"
           }
         },
         "es": {
@@ -267,32 +187,72 @@
             "value": "Impossible de charger les identifiants"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare i login"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível carregar os logins"
           }
+        }
+      }
+    },
+    "Couldn't read the saved key.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gespeicherte Schlüssel konnte nicht gelesen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read the saved key."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer la clave guardada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de lire la clé enregistrée."
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile caricare i login"
+            "value": "Impossibile leggere la chiave salvata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler a chave salva."
           }
         }
       }
     },
     "Enter your master password to unlock your vault": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter your master password to unlock your vault"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Geben Sie Ihr Master-Passwort ein, um Ihren Tresor zu entsperren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your master password to unlock your vault"
           }
         },
         "es": {
@@ -307,32 +267,32 @@
             "value": "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Insira sua senha mestra para desbloquear o cofre"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Inserisci la password principale per sbloccare il tuo vault"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insira sua senha mestra para desbloquear o cofre"
           }
         }
       }
     },
     "Enter your master password.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter your master password."
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Geben Sie Ihr Master-Passwort ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your master password."
           }
         },
         "es": {
@@ -347,32 +307,72 @@
             "value": "Entrez votre mot de passe maître."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci la password principale."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Insira sua senha mestra."
           }
+        }
+      }
+    },
+    "Face ID": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inserisci la password principale."
+            "value": "Face ID"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
           }
         }
       }
     },
     "Face ID or passcode": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID or passcode"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Face ID oder Passcode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID or passcode"
           }
         },
         "es": {
@@ -387,32 +387,32 @@
             "value": "Face ID ou code d'accès"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID ou código de acesso"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Face ID o codice di accesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID ou código de acesso"
           }
         }
       }
     },
     "For %@": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "For %@"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Für %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For %@"
           }
         },
         "es": {
@@ -427,32 +427,32 @@
             "value": "Pour %@"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para %@"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Per %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para %@"
           }
         }
       }
     },
     "Incorrect master password": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Incorrect master password"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Falsches Master-Passwort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incorrect master password"
           }
         },
         "es": {
@@ -467,32 +467,32 @@
             "value": "Mot de passe maître incorrect"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Senha mestra incorreta"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Password principale errata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senha mestra incorreta"
           }
         }
       }
     },
     "Items (%lld)": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Items (%lld)"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Elemente (%lld)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Items (%lld)"
           }
         },
         "es": {
@@ -507,32 +507,32 @@
             "value": "Éléments (%lld)"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Itens (%lld)"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Elementi (%lld)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Itens (%lld)"
           }
         }
       }
     },
     "Master password": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Master password"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Masterpasswort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Master password"
           }
         },
         "es": {
@@ -547,32 +547,32 @@
             "value": "Mot de passe maître"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Senha Mestra"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Password principale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senha Mestra"
           }
         }
       }
     },
     "Matches": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Matches"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Treffer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matches"
           }
         },
         "es": {
@@ -587,32 +587,32 @@
             "value": "Correspondances"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Correspondências"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Corrispondenze"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correspondências"
           }
         }
       }
     },
     "No logins saved yet.\nAdd one in Bramble.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No logins saved yet.\nAdd one in Bramble."
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Es wurden noch keine Anmeldungen gespeichert.\nFügen Sie eine in Bramble hinzu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No logins saved yet.\nAdd one in Bramble."
           }
         },
         "es": {
@@ -627,32 +627,32 @@
             "value": "Aucun identifiant enregistré pour l'instant.\nAgrégez-en un dans Bramble."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nenhuma credencial salva ainda.\nAdicione uma no Bramble."
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Nessun login salvato ancora.\nAggiungine uno in Bramble."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma credencial salva ainda.\nAdicione uma no Bramble."
           }
         }
       }
     },
     "No matches for %@": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No matches for %@"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Keine Treffer für %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matches for %@"
           }
         },
         "es": {
@@ -667,29 +667,69 @@
             "value": "Aucune correspondance pour %@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna corrispondenza per %@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma correspondência para %@"
           }
+        }
+      }
+    },
+    "No passkey found": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Passkey gefunden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No passkey found"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave de acceso no encontrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune clé de passe trouvée"
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna corrispondenza per %@"
+            "value": "Nessuna chiave di accesso trovata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma chave de acesso encontrada"
           }
         }
       }
     },
     "OK": {
       "localizations": {
-        "en": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "OK"
           }
         },
-        "de": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "OK"
@@ -707,13 +747,13 @@
             "value": "OK"
           }
         },
-        "pt-BR": {
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "OK"
           }
         },
-        "it": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "OK"
@@ -723,16 +763,16 @@
     },
     "Show all items (%lld more)": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show all items (%lld more)"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Alle Elemente anzeigen (%lld weitere)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show all items (%lld more)"
           }
         },
         "es": {
@@ -747,32 +787,67 @@
             "value": "Afficher tous les éléments (%lld de plus)"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra tutti gli elementi (%lld in più)"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar todos os itens (%lld mais)"
           }
+        }
+      }
+    },
+    "This device's saved key is out of date. Enter your master password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der auf diesem Gerät gespeicherte Schlüssel ist veraltet. Geben Sie Ihr Master-Passwort ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave guardada de este dispositivo está desactualizada. Introduzca su contraseña maestra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clé enregistrée sur cet appareil est obsolète. Saisissez votre mot de passe principal."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A chave salva deste dispositivo está desatualizada. Digite sua senha mestra."
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra tutti gli elementi (%lld in più)"
+            "value": "La chiave salvata su questo dispositivo non è aggiornata. Inserisca la sua password principale."
           }
         }
       }
     },
     "This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry."
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Dieses Tresor hat kein Masterpasswort oder er wurde nicht synchronisiert. Öffnen Sie Bramble, entsperren Sie ihn einmal und versuchen Sie es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry."
           }
         },
         "es": {
@@ -787,229 +862,29 @@
             "value": "Ce coffre-fort ne possède pas de mot de passe maître ou il n'a pas été synchronisé. Ouvrez Bramble, déverrouillez-le une fois, puis réessayez."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este cofre não possui senha mestra ou ainda não sincronizou. Abra o Bramble, desbloqueie-o uma vez e tente novamente."
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Questo vault non ha una password principale o non è stato sincronizzato. Apri Bramble, sbloccalo una volta e riprova."
           }
-        }
-      }
-    },
-    "Unlock Bramble": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock Bramble"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bramble entsperren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear Bramble"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déverrouiller Bramble"
-          }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desbloquear Bramble"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sblocca Bramble"
-          }
-        }
-      }
-    },
-    "Unlock Vault": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock Vault"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tresor entsperren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear Bóveda"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déverrouiller le coffre-fort"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear Cofre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sblocca il vault"
-          }
-        }
-      }
-    },
-    "Unlock with %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock with %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit %@ entsperren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear con %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déverrouiller avec %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquear com %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sblocca con %@"
-          }
-        }
-      }
-    },
-    "Couldn't read the saved key.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't read the saved key."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der gespeicherte Schlüssel konnte nicht gelesen werden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo leer la clave guardada."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de lire la clé enregistrée."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível ler a chave salva."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossibile leggere la chiave salvata."
-          }
-        }
-      }
-    },
-    "Face ID": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Face ID"
+            "value": "Este cofre não possui senha mestra ou ainda não sincronizou. Abra o Bramble, desbloqueie-o uma vez e tente novamente."
           }
         }
       }
     },
     "Touch ID": {
       "localizations": {
-        "en": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
           }
         },
-        "de": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
@@ -1027,13 +902,13 @@
             "value": "Touch ID"
           }
         },
-        "pt-BR": {
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
           }
         },
-        "it": {
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
@@ -1043,16 +918,16 @@
     },
     "Touch ID or passcode": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touch ID or passcode"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID oder Passcode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID or passcode"
           }
         },
         "es": {
@@ -1067,72 +942,152 @@
             "value": "Touch ID ou code d'accès"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touch ID ou código de acesso"
-          }
-        },
         "it": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID o codice di accesso"
           }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID ou código de acesso"
+          }
         }
       }
     },
-    "biometrics": {
+    "Unlock Bramble": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "biometrics"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometrie"
+            "value": "Bramble entsperren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock Bramble"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometría"
+            "value": "Desbloquear Bramble"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biométrie"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Biometria"
+            "value": "Déverrouiller Bramble"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Biometria"
+            "value": "Sblocca Bramble"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear Bramble"
+          }
+        }
+      }
+    },
+    "Unlock Vault": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tresor entsperren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock Vault"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear Bóveda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déverrouiller le coffre-fort"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sblocca il vault"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear Cofre"
+          }
+        }
+      }
+    },
+    "Unlock with %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit %@ entsperren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déverrouiller avec %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sblocca con %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear com %@"
           }
         }
       }
     },
     "Your biometric enrolment changed. Open Bramble and turn on biometric unlock again.": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your biometric enrolment changed. Open Bramble and turn on biometric unlock again."
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ihre biometrische Registrierung hat sich geändert. Öffnen Sie Bramble und aktivieren Sie die biometrische Entsperrung erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your biometric enrolment changed. Open Bramble and turn on biometric unlock again."
           }
         },
         "es": {
@@ -1147,16 +1102,131 @@
             "value": "Votre enregistrement biométrique a changé. Ouvrez Bramble et réactivez le déverrouillage biométrique."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua registrazione biometrica è cambiata. Apri Bramble e riattiva lo sblocco biometrico."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Seu cadastro biométrico mudou. Abra o Bramble e ative o desbloqueio biométrico novamente."
           }
+        }
+      }
+    },
+    "biometrics": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometrie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "biometrics"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometría"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biométrie"
+          }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua registrazione biometrica è cambiata. Apri Bramble e riattiva lo sblocco biometrico."
+            "value": "Biometria"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometria"
+          }
+        }
+      }
+    },
+    "biometrics or passcode": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometrie oder Passcode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "biometrics or passcode"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometría o código de acceso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biométrie ou code d'accès"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometria o codice di accesso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometria ou senha de acesso"
+          }
+        }
+      }
+    },
+    "passcode": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passcode"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "código de acceso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "code d’accès"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codice"
           }
         }
       }

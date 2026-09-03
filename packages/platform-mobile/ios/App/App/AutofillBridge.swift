@@ -33,6 +33,11 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		{
 			defaults?.set(data, forKey: BrambleVault.bundleKey)
 		}
+		// Stamp the bundle with the vault it was encrypted for. The extension compares this to the
+		// vault the cached VEK was armed for and only offers the fast unlock when they match.
+		if let vaultId = call.getString("vaultId") {
+			defaults?.set(vaultId, forKey: BrambleVault.bundleVaultKey)
+		}
 		// The password slot lets the extension unlock itself with the master password.
 		// Non-secret (the wrappedVek stays AES-encrypted); store as JSON Data.
 		if let slot = call.getObject("slot"),

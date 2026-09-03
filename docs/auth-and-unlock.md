@@ -97,7 +97,37 @@ Three consequences worth knowing:
 A device with **nothing enrolled** in Face ID / Touch ID can't open a
 biometry-only gate, so `effectiveAllowPasscode` forces the passcode on there
 whatever the preference says (`isAvailable` reports `biometryEnrolled: false`),
-and the row reads "Device passcode" with the toggle on and disabled.
+and the row reads "Device passcode" with no fallback row at all.
+
+### The invariants this rests on
+
+Five rules, because the first shipped version broke four of them and the result
+read as two settings contradicting each other:
+
+1. **One gate, one switch.** With fast unlock off, no sub-row renders. Shown but
+   disabled is not the same thing: "Device passcode: off" above "Allow passcode
+   fallback: on" is a screen nobody can act on.
+2. **The fallback switch exists only where a choice does**, i.e. only when a
+   biometric is enrolled. With nothing enrolled the passcode is not a fallback,
+   it is the gate, and the row above already says so.
+3. **The armed gate and the flags describing it move together.** `setSecret`
+   writes the access control, the passcode flag and the vault id; `purge` clears
+   all three. A flag outliving its item tells the extension a gate is armed that
+   is not.
+4. **The extension only offers a gate it can actually use.** The mirror item is
+   un-suffixed and, like every Keychain item, **survives app deletion**, so its
+   mere presence is not evidence: it kept offering unlock for a vault that had
+   turned it off, and for vaults from previous installs. `vekExists()` therefore
+   also requires `autofill.biometricVaultId == autofill.bundleVaultId`.
+5. **A VEK that doesn't open the bundle is a stale cache, not an error to
+   read.** The failure is a Rust `aead::Error`, which meant the extension used to
+   put "aes decrypt: aead::Error" on screen after a correct passcode. Discard the
+   mirror and the session, then ask for the master password in English.
+
+Labels follow **enrolment, not hardware**: `LAContext.biometryType` answers
+`.faceID` on a Face ID phone with Face ID switched off, so both `isAvailable` and
+the extension's `biometryInfo()` call `canEvaluatePolicy` first (treating
+`biometryLockout` as enrolled) and fall back to "passcode" wording.
 
 **None of this is testable on the simulator, and the reason is worth recording so
 nobody re-derives it.** Probed by running the two `SecAccessControl`s inside the

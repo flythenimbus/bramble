@@ -1885,8 +1885,8 @@ msgid "Nothing is archived. Archived items are kept here, out of autofill."
 msgstr "Nichts ist archiviert. Archivierte Einträge werden hier aufbewahrt und nicht für AutoFill angeboten."
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
-msgid "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
-msgstr "Es sind weder Face ID noch Touch ID eingerichtet, daher ist der Gerätepasscode der einzige Zugang."
+#~ msgid "Nothing is enrolled in Face ID or Touch ID, so the device passcode is the only gate."
+#~ msgstr "Es sind weder Face ID noch Touch ID eingerichtet, daher ist der Gerätepasscode der einzige Zugang."
 
 #: packages/core/src/app/screens/Import/util/count-line.tsx
 msgid "Nothing to import"

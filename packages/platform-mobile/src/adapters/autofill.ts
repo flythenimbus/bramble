@@ -74,6 +74,9 @@ interface AutofillBridgePlugin {
 	sync(o: {
 		iv: string;
 		ciphertext: string;
+		/** The vault this bundle was encrypted for; the extension matches it against the vault
+		 * the cached VEK was armed for before offering its fast unlock. */
+		vaultId?: string;
 		slot?: SlotPayload;
 		identities?: QuickTypeIdentity[];
 		oneTimeCodeIdentities?: OneTimeCodeIdentity[];
@@ -198,6 +201,10 @@ export const mobileAutofill: AutofillAdapter = {
 		await Bridge.sync({
 			iv: enc.iv,
 			ciphertext: enc.ciphertext,
+			// Which vault this bundle was encrypted for. The extension will only offer its cached-VEK
+			// unlock when this matches the vault that VEK was armed for; the mirror is un-suffixed and
+			// outlives both the vault and the install, so without this it opens onto an aead error.
+			vaultId: (await mobileStorage.getMeta<string>(ACTIVE_VAULT_KEY)) ?? "",
 			slot: await readPasswordSlot(),
 			identities,
 			oneTimeCodeIdentities,

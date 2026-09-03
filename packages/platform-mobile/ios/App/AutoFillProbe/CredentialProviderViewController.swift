@@ -778,7 +778,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		return creds
 	}
 
-	private func showUnlock() {
+	private func showUnlock(message: String? = nil) {
 		let biometry = biometryInfo()
 		let m = UnlockModel(
 			hasBiometric: vekExists(),
@@ -787,8 +787,10 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			onBiometric: { [weak self] in self?.unlockWithBiometric() },
 			onPassword: { [weak self] in self?.unlockWithPassword($0) },
 			onCancel: { [weak self] in self?.cancel(.userCanceled) })
+		m.error = message
 		model = m
-		pendingAutoBiometric = m.hasBiometric
+		// Never re-fire the gate for a cache we just retired, and never talk over a message.
+		pendingAutoBiometric = m.hasBiometric && message == nil
 		host(UnlockView(model: m))
 	}
 
@@ -816,12 +818,20 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// The device's biometry name, naming the passcode only when the cached VEK is actually
 	// gated by `.userPresence`. With biometry-only (`.biometryCurrentSet`) the passcode is
 	// refused, so promising it would be a lie. The SF Symbol is derived here from the biometry
-	// type, not from the (localized) label text. Touch ID devices and devices with no enrolled
-	// biometric are covered.
+	// type, not from the (localized) label text.
 	private func biometryInfo() -> (label: String, symbol: String) {
 		let ctx = LAContext()
+		// biometryType reports the HARDWARE, so a Face ID phone with Face ID switched off still
+		// answers .faceID. Ask what can actually be evaluated first, or the button offers a Face ID
+		// that cannot run. Locked out still counts as enrolled: the modality is there, just barred.
+		var bioError: NSError?
+		let enrolled =
+			ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &bioError)
+			|| (bioError as? LAError)?.code == .biometryLockout
 		_ = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
 		let passcode = passcodeFallbackAllowed()
+		// Nothing enrolled: the passcode is not a fallback here, it is the whole gate.
+		guard enrolled else { return (String(localized: "passcode"), "lock") }
 		switch ctx.biometryType {
 		case .faceID:
 			return (
@@ -930,7 +940,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				showList(matches: matches, all: creds, requestedHost: pendingHosts.first)
 			}
 		} catch {
-			showError(String(localized: "Couldn't load logins"), error.localizedDescription)
+			// The gate opened but its VEK does not decrypt this bundle: the cache belongs to another
+			// vault, or to an install before this one. The underlying error is a Rust aead failure
+			// and means nothing to anyone, so retire the cache and ask for the master password.
+			discardMirror()
+			showUnlock(
+				message: String(
+					localized: "This device's saved key is out of date. Enter your master password."))
 		}
 	}
 
@@ -1112,7 +1128,37 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		h.didMove(toParent: self)
 	}
 
+	// The vault the cached VEK was armed for, and the one the published bundle was encrypted for.
+	// Both are stamped into the App Group when they are written.
+	private func mirrorMatchesBundle() -> Bool {
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		let armedFor = defaults?.string(forKey: BrambleVault.biometricVaultKey) ?? ""
+		let bundleFor = defaults?.string(forKey: BrambleVault.bundleVaultKey) ?? ""
+		return !armedFor.isEmpty && armedFor == bundleFor
+	}
+
+	/// Drop the mirror and everything describing it. Called when the cached VEK is shown to be
+	/// unusable, so the button stops being offered instead of failing the same way next time.
+	private func discardMirror() {
+		SecItemDelete(
+			[
+				kSecClass as String: kSecClassGenericPassword,
+				kSecAttrService as String: BrambleVault.biometricService,
+				kSecAttrAccount as String: BrambleVault.vekAccount,
+				kSecAttrAccessGroup as String: BrambleVault.accessGroup,
+			] as CFDictionary)
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		defaults?.removeObject(forKey: BrambleVault.biometricVaultKey)
+		defaults?.removeObject(forKey: BrambleVault.biometricPasscodeFallbackKey)
+		clearSession()
+	}
+
 	private func vekExists() -> Bool {
+		// Keychain items survive app deletion and the mirror carries no vault id in its account, so
+		// presence alone kept offering a fast unlock for a vault that had turned it off, or for one
+		// that no longer exists. Entering the passcode then produced a VEK that could not decrypt
+		// the bundle, surfacing as a raw aead error. Require the two to name the same vault.
+		guard mirrorMatchesBundle() else { return false }
 		let q: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrService as String: BrambleVault.biometricService,

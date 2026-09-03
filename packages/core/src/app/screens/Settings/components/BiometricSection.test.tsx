@@ -97,22 +97,25 @@ describe("BiometricSection passcode fallback", () => {
 		expect(screen.getByText(/only face id can unlock/i)).toBeTruthy();
 	});
 
-	it("is inert while biometric unlock itself is off", () => {
-		// There is no cached VEK to re-arm, so the switch would change nothing.
+	it("is absent while biometric unlock itself is off", () => {
+		// One gate, one switch. Shown-but-disabled read as a second setting contradicting the
+		// first, which is exactly how it looked on device: "Device passcode off" above
+		// "Allow passcode fallback on".
 		h.biometricEnabled = false;
 		mount();
-		expect(passcodeToggle().disabled).toBe(true);
+		expect(screen.queryByLabelText(/toggle passcode fallback/i)).toBeNull();
 	});
 
-	it("is forced on and locked when nothing is enrolled", async () => {
-		// A passcode-only iPhone has no biometry-only access control to hold the VEK. Offering
-		// the choice would let the user arm a gate that can never open.
+	it("is absent when nothing is enrolled, since the passcode is then the gate itself", () => {
+		// A passcode-only iPhone has no biometry to fall back FROM, so there is no choice to
+		// present. The row above already says "Device passcode"; a fallback switch beside it
+		// only invites the reading that the two disagree.
 		h.biometryEnrolled = false;
 		h.biometryType = "passcode";
 		mount();
-		expect(passcodeToggle().getAttribute("aria-pressed")).toBe("true");
-		expect(passcodeToggle().disabled).toBe(true);
-		expect(screen.getByText(/device passcode is the only gate/i)).toBeTruthy();
+		expect(screen.queryByLabelText(/toggle passcode fallback/i)).toBeNull();
+		// The top row carries the whole story on such a device.
+		expect(screen.getByLabelText(/device passcode/i)).toBeTruthy();
 	});
 
 	it("re-arms the cached VEK when flipped, since the gate is fixed at write time", async () => {
