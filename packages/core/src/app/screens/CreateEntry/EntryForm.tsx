@@ -97,24 +97,31 @@ export function EntryForm({
 	const label = submitLabel ?? t`Save ${modeLabel}`;
 
 	return (
-		<main className="max-w-5xl mx-auto px-4 py-3">
+		<main className="max-w-5xl mx-auto w-full flex-1 min-h-0 flex flex-col px-4 pt-3">
 			<FormProvider {...methods}>
 				{/* data-form-type="other" marks this as an entry editor, not a login form, so
 				    browsers/peer managers don't save/autofill. Chrome ignores autoComplete="off"
 				    on bare login forms, hence the hint. */}
-				<form onSubmit={handleSubmit(onSubmit)} autoComplete="off" data-form-type="other">
-					<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-						<div className="px-5 py-2.5 border-b border-border/50">
+				<form
+					onSubmit={handleSubmit(onSubmit)}
+					autoComplete="off"
+					data-form-type="other"
+					className="flex-1 min-h-0 flex flex-col"
+				>
+					{/* The card itself never scrolls: only the fields do, so the action bar below
+					    stays on screen and the card keeps its border and rounded bottom. */}
+					<div className="flex flex-col max-h-full rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+						<div className="shrink-0 px-5 py-2.5 border-b border-border/50">
 							<h2 className="text-xs text-muted-foreground">{heading}</h2>
 						</div>
 
-						<div className="px-5 py-4 space-y-3">
+						<div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
 							<Fields initialBreach={initialBreach} />
 							<TagsEditor suggestions={tagSuggestions} />
 							<CustomFieldsEditor />
 						</div>
 
-						<div className="px-5 py-3 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
+						<div className="shrink-0 px-5 py-3 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-3">
 							<Button
 								variant="secondary"
 								size="none"

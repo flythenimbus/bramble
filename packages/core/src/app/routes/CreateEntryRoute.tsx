@@ -57,8 +57,9 @@ export function CreateEntryRoute() {
 		await addEntry(data);
 	};
 
+	// pb-3 balances EntryForm's pt-3: the card is height-capped here and scrolls internally.
 	return (
-		<div className="flex-1 overflow-y-auto">
+		<div className="flex-1 min-h-0 flex flex-col pb-3">
 			<EntryForm
 				key={entryType}
 				type={entryType}
