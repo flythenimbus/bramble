@@ -158,6 +158,28 @@ if (platform !== "ios") {
 		fail("gh's active account cannot log in; run `gh auth login`");
 }
 
+// Commit signing, when the repo asks for it. Every path ends in commitTagPush, which commits
+// AFTER the store upload, so a key that isn't available surfaced ten minutes in - with the build
+// already on TestFlight or the extension already published, and no commit or tag pointing at the
+// source that produced it. Nothing recovers from there either: the bump revert guards the BUILD
+// failing, not the commit, so the tree is left dirty next to a shipped artifact.
+//
+// Proven with a throwaway commit object rather than by inspecting config: it runs git's own
+// signing path (gpg.format, user.signingkey, the signing program), so it catches an unplugged
+// security key, a locked agent and a misconfigured key alike. It moves no ref and writes an
+// unreferenced object, which gc collects.
+//
+// --ipa is exempt: that dry run returns before it commits or tags anything.
+if (!flags.has("--ipa") && capture("git config --get commit.gpgsign || true") === "true") {
+	// No touch banner here, unlike the age decrypts: this runs before anything slow, while you
+	// are still watching the terminal, and the key may not be hardware-backed at all.
+	if (!ok('git commit-tree HEAD^{tree} -p HEAD -S -m "release signing check"'))
+		fail(
+			"commit signing failed, so the release commit would fail after the upload. Plug in the " +
+				"security key and unlock the agent (or unset commit.gpgsign). See docs/release-signing.md.",
+		);
+}
+
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
 else if (platform === "ios") await releaseIos(version, flags.has("--ipa"));
 else if (platform === "firefox") await releaseFirefox(version);
