@@ -1019,6 +1019,32 @@ function bootstrap(): void {
 		true,
 	);
 
+	// Keyboard exit: tab off the anchor and the picker stayed up, covering whatever the
+	// user moved to. The mousedown listener only ever saw pointer exits, and the rAF
+	// tracker only takes a picker down when its field goes away, not when focus does.
+	//
+	// relatedTarget is the element taking focus, and `null` means focus left the document
+	// altogether (browser chrome, the unlock pop-out). That must NOT dismiss: issue #20
+	// turns on the "Vault locked" row surviving exactly that.
+	document.addEventListener(
+		"focusout",
+		(e) => {
+			// Filling a segmented OTP widget focuses each box in turn; not the user leaving.
+			if (isFilling()) return;
+			const anchor = anchorField();
+			if (!anchor || composedTarget(e) !== anchor) return;
+			const next = (e as FocusEvent).relatedTarget;
+			// Focus inside our own picker (rows preventDefault to keep it on the field, but
+			// don't bet the dismissal on that holding in every engine).
+			if (!next || isPickerInteractionTarget(next)) return;
+			// Leaving is an explicit dismissal, so a re-query can't resurrect it; focusin on
+			// the next candidate field re-arms and re-anchors before anything paints.
+			silenceAutoOpen = true;
+			removePicker();
+		},
+		true,
+	);
+
 	// Surface/dismiss as the user types in an already-focused field (focusin
 	// doesn't fire then).
 	document.addEventListener(

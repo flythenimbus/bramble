@@ -131,6 +131,72 @@ test("keyboard nav drives the iframe: Down highlights, Enter fills, Escape dismi
 	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
 });
 
+test("tabbing off the field re-anchors the picker, then takes it down", async ({
+	context,
+	extensionId,
+}) => {
+	// Only pointer exits dismissed: a mousedown outside, or the anchor going away. Tabbing left
+	// the picker painted where it was, covering whatever the user had moved on to.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, LOGIN);
+	await page.goto("https://example.com/");
+
+	const frame = await openPickerIframe(page, "#user");
+	await expect(frame.locator("[data-entry-id]")).toBeVisible({ timeout: 10_000 });
+
+	// Tab to the password field: still a field worth offering matches on, so the picker moves
+	// with the focus rather than closing. It must end up under the NEW field.
+	await page.keyboard.press("Tab");
+	await expect(page.locator("#pass")).toBeFocused();
+	await expect(frame.locator("[data-entry-id]")).toBeVisible();
+	await expect
+		.poll(async () => {
+			const host = await page.locator('div[id^="tp-"]').boundingBox();
+			const field = await page.locator("#pass").boundingBox();
+			return host && field ? host.y >= field.y + field.height : null;
+		})
+		.toBe(true);
+
+	// Tab again, onto the submit button: nothing here to anchor to, so it goes.
+	await page.keyboard.press("Tab");
+	await expect(page.locator('button[type="submit"]')).toBeFocused();
+	await expect.poll(() => hostDisplay(page)).toBe("none");
+});
+
+test("keeps the picker up when focus leaves the page rather than moving within it", async ({
+	context,
+	extensionId,
+}) => {
+	// The carve-out that keyboard dismissal has to make. Focus landing nowhere in this document
+	// (the toolbar, the unlock pop-out) reports no incoming element, and issue #20 turns on the
+	// picker surviving exactly that - so this is the shape a too-eager dismissal breaks.
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, LOGIN);
+	await page.goto("https://example.com/");
+
+	const frame = await openPickerIframe(page, "#user");
+	await expect(frame.locator("[data-entry-id]")).toBeVisible({ timeout: 10_000 });
+
+	await page.evaluate(() => (document.getElementById("user") as HTMLElement).blur());
+	await page.waitForTimeout(1000);
+	await expect.poll(() => hostDisplay(page)).not.toBe("none");
+
+	// Still the live picker, not a leftover: it fills.
+	await frame.locator("[data-entry-id]").click();
+	await expect(page.locator("#user")).toHaveValue("alice@example.com", { timeout: 10_000 });
+	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
+});
+
 test("dismisses when a route change takes the anchored field away", async ({
 	context,
 	extensionId,

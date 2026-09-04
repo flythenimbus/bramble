@@ -1130,6 +1130,66 @@ describe("content: leaving the document", () => {
 	});
 });
 
+// Tabbing off the anchor field used to leave the picker painted over whatever the user
+// moved to: only pointer exits (mousedown) and a vanished field dismissed it.
+describe("content: leaving the anchor field by keyboard", () => {
+	const MATCH = { id: "a", name: "A", secondary: "a@example.com" };
+
+	beforeEach(() => {
+		showMatches.mockClear();
+		removePicker.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" />
+				<input id="pass" type="password" name="password" autocomplete="current-password" />
+				<button id="reveal" type="button">Show password</button>
+			</form>`;
+		invalidatePageFields();
+	});
+
+	function openOn(field: HTMLInputElement): void {
+		field.focus();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [MATCH] }) });
+		expect(pickerState.host).not.toBeNull();
+	}
+
+	it("dismisses when focus moves to something else on the page", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		openOn(user);
+
+		(document.getElementById("reveal") as HTMLButtonElement).focus();
+
+		expect(removePicker).toHaveBeenCalled();
+		expect(pickerState.host).toBeNull();
+	});
+
+	it("re-anchors rather than staying on the field the user tabbed off", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		openOn(user);
+
+		pass.focus();
+
+		expect(pickerState.anchor).not.toBe(user);
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(pass);
+	});
+
+	it("keeps the picker up when focus leaves the document (issue #20)", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		openOn(user);
+
+		// The unlock pop-out / toolbar takes focus: relatedTarget is null and the row must stay,
+		// since that is the very flow the unlock refresh re-surfaces matches into.
+		user.blur();
+
+		expect(removePicker).not.toHaveBeenCalled();
+		expect(pickerState.anchor).toBe(user);
+	});
+});
+
 // Settings -> General -> "Autofill on web pages". Off means this frame draws nothing at all:
 // not matches, not the "Vault locked" row, not the generated-password suggestion.
 describe("content: the autofill master switch", () => {
