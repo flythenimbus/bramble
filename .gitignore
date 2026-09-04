@@ -57,3 +57,10 @@ playwright-report/
 # at the root at all; this is the backstop.
 *.ipa
 *.dSYM.zip
+
+# macOS credential-provider build output and the profiles it embeds. `macos/build/` holds a
+# compiled appex (binary + code signature) that is rebuilt every time, and the .provisionprofile
+# files are per-machine signing material. Both got committed twice by a `git add -A packages`
+# before this existed.
+packages/platform-desktop/macos/build/
+*.provisionprofile

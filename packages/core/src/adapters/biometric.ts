@@ -29,14 +29,18 @@ export interface BiometricUnlock {
 	/** A VEK is currently cached behind the biometric gate for this vault. */
 	isEnabled(vaultId: string): Promise<boolean>;
 	/**
-	 * Whether `enable` raises an authentication prompt of its own.
+	 * Whether `enable` provably raises NO prompt of its own, so the gate may be re-armed behind
+	 * the user's back to reconcile a setting.
 	 *
-	 * iOS writes its Keychain item with no prompt, so the gate can be re-armed silently to
-	 * reconcile a setting. Android's Keystore key is created `setUserAuthenticationRequired`, so
-	 * encrypting the VEK with it needs a BiometricPrompt - re-arming there is not free, and
-	 * `reconcileBiometricGate` skips it. Absent means free.
+	 * Stated this way round on purpose. iOS writes its Keychain item silently; Android's Keystore
+	 * key is created `setUserAuthenticationRequired`, so encrypting the VEK needs a
+	 * BiometricPrompt. The first cut asked the opposite question ("does enable need auth?"), which
+	 * meant every unknown answered "no" and re-armed - and the platform read behind it falls back
+	 * to "web" whenever the Capacitor bridge has not been injected yet, so an unknown was reachable.
+	 * Absent or false costs at most a skipped reconcile; a wrong `true` costs the user a prompt
+	 * they did not ask for, and a cancelled one can strand the gate. Default to the cheap mistake.
 	 */
-	enableRequiresAuth?: boolean;
+	enableIsSilent?: boolean;
 	/** Cache the vault's VEK (base64) behind the biometric gate. Call once with the vault unlocked.
 	 * Re-arms in place, so it is also how `allowPasscode` is changed after the fact. */
 	enable(vekB64: string, vaultId: string, allowPasscode: boolean): Promise<void>;

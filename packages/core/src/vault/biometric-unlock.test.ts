@@ -26,6 +26,8 @@ function fakeCrypto(over: Partial<CryptoAdapter> = {}): CryptoAdapter {
 function fakeBiometric(over: Partial<BiometricUnlock> = {}): BiometricUnlock {
 	return {
 		isAvailable: vi.fn(async () => true),
+		// iOS-shaped by default: its Keychain write is silent, so reconciles are allowed.
+		enableIsSilent: true,
 		isEnabled: vi.fn(async () => false),
 		enable: vi.fn(async () => {}),
 		unlock: vi.fn(async () => "VEK_B64"),
@@ -250,13 +252,26 @@ describe("reconcileBiometricGate", () => {
 		// PASSWORD unlock, an "Enable biometric unlock" prompt nobody asked for.
 		const crypto = fakeCrypto();
 		const biometric = fakeBiometric({
-			enableRequiresAuth: true,
+			enableIsSilent: false,
 			isEnabled: vi.fn(async () => true),
 		});
 		await reconcileBiometricGate({ crypto, biometric, vaultId: VID, allowPasscode: true });
 		expect(biometric.enable).not.toHaveBeenCalled();
 		// Not even the probe: there is nothing to reconcile on that gate at all.
 		expect(biometric.isEnabled).not.toHaveBeenCalled();
+	});
+
+	it("stays silent when the adapter says nothing about prompting, rather than assuming", async () => {
+		// The flag is an opt-IN. An adapter that cannot answer - or a platform read that fell back
+		// to "web" because the bridge was not injected yet - must cost a skipped reconcile, never
+		// a prompt the user did not ask for.
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric({
+			enableIsSilent: undefined,
+			isEnabled: vi.fn(async () => true),
+		});
+		await reconcileBiometricGate({ crypto, biometric, vaultId: VID, allowPasscode: true });
+		expect(biometric.enable).not.toHaveBeenCalled();
 	});
 
 	it("asks about THIS vault, so unlocking another never arms one it was not given", async () => {

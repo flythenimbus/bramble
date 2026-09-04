@@ -137,8 +137,11 @@ contradicting each other; multi-vault testing then found two more, and rules 5 a
    an unexplained "Enable biometric unlock" prompt after a password one. Cancelling that prompt
    was the real damage - `setSecret` deletes and regenerates the key BEFORE prompting, so a
    cancel left the stored ciphertext encrypted under a key that no longer existed while
-   `hasSecret` still reported the gate armed. `BiometricUnlock.enableRequiresAuth` marks the
-   difference, and there is nothing to reconcile on that gate anyway.
+   `hasSecret` still reported the gate armed. `BiometricUnlock.enableIsSilent` marks the
+   difference, and there is nothing to reconcile on that gate anyway. It is stated as "is this
+   provably silent?" rather than "does this need auth?" so that an unknown answer skips the
+   reconcile: the platform read behind it falls back to `"web"` until the Capacitor bridge is
+   injected, and under the opposite phrasing that unknown meant "go ahead and re-arm".
 7. **Re-arming asks the OS about THIS vault; it never trusts a passed-in flag.**
    That flag is React state describing whichever vault the last probe finished
    for, so mid-switch it still names the one you came from. Re-arming on a stale

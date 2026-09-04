@@ -32,9 +32,13 @@ const Native = registerPlugin<BiometricVaultPlugin>("BiometricVault");
 // enabled probes swallow errors (e.g. the browser dev build, where the native plugin
 // is absent) so the UI simply hides the feature instead of throwing.
 export const mobileBiometric: BiometricUnlock = {
-	// Android's Keystore key is created setUserAuthenticationRequired, so `enable` must
-	// authenticate before it can encrypt; iOS's Keychain write prompts for nothing.
-	enableRequiresAuth: Capacitor.getPlatform() === "android",
+	// A getter, not a value: getPlatform() reads the injected bridge and answers "web" until it
+	// is there, so freezing this at module load could bake in the wrong answer. Read it when it
+	// is asked for instead. Only iOS is silent - its Keychain write raises no prompt, while
+	// Android's Keystore key must be authenticated against before it can encrypt.
+	get enableIsSilent() {
+		return Capacitor.getPlatform() === "ios";
+	},
 	async isAvailable() {
 		try {
 			return (await Native.isAvailable()).available;

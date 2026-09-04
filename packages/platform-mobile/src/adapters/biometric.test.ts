@@ -147,16 +147,22 @@ describe("mobileBiometric actions propagate errors", () => {
 // Re-arming the gate is free on iOS (a Keychain write prompts for nothing) but not on Android,
 // whose Keystore key must be authenticated against before it can encrypt. Getting this backwards
 // cost an Android unlock a second touch, and cancelling that prompt bricked the gate.
-describe("enableRequiresAuth reflects what enable() actually costs", () => {
-	it("is false on iOS, where the gate can be re-armed silently", () => {
-		expect(mobileBiometric.enableRequiresAuth).toBe(false);
+describe("enableIsSilent reflects what enable() actually costs", () => {
+	it("is true on iOS, where the Keychain write raises no prompt", () => {
+		expect(mobileBiometric.enableIsSilent).toBe(true);
 	});
 
-	it("is true on Android, whose Keystore key authenticates before it encrypts", async () => {
+	it("is false on Android, whose Keystore key authenticates before it encrypts", () => {
 		platform.name = "android";
-		vi.resetModules();
-		const { mobileBiometric: android } = await import("./biometric");
-		expect(android.enableRequiresAuth).toBe(true);
+		expect(mobileBiometric.enableIsSilent).toBe(false);
+		platform.name = "ios";
+	});
+
+	it("is false before the bridge is injected, when getPlatform still answers web", () => {
+		// A getter rather than a frozen value for exactly this: read at module load it could bake
+		// in "web", and under the old inverted flag "web" meant "safe to re-arm" - which prompted.
+		platform.name = "web";
+		expect(mobileBiometric.enableIsSilent).toBe(false);
 		platform.name = "ios";
 	});
 });

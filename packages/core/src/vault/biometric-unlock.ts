@@ -77,14 +77,14 @@ export async function reconcileBiometricGate(opts: {
 	vaultId: string;
 	allowPasscode: boolean;
 }): Promise<void> {
-	// Only where re-arming is free. Android's `enable` must authenticate against its Keystore key
+	// Only where re-arming is provably silent. Android's `enable` must authenticate against its Keystore key
 	// before it can encrypt, so running this after every unlock asked for a second touch - or, after
 	// a password unlock, an "Enable biometric unlock" prompt nobody asked for. Cancelling it was
 	// worse than the nuisance: setSecret deletes and regenerates the key BEFORE prompting, so a
 	// cancel leaves the stored ciphertext encrypted under a key that no longer exists, while
 	// hasSecret still reports the gate as armed. Nothing to reconcile there anyway - that gate has
 	// no settable access control and ignores allowPasscode.
-	if (opts.biometric.enableRequiresAuth) return;
+	if (!opts.biometric.enableIsSilent) return;
 	// Ask the OS whether THIS vault has a gate, rather than taking a caller's flag for it. That
 	// flag is React state describing whichever vault the last probe finished for, so during a
 	// switch it still says the one you came from - and re-arming on a stale `true` does not
