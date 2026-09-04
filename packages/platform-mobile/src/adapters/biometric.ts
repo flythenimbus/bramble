@@ -1,4 +1,4 @@
-import { registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import type { BiometricUnlock, BiometryType } from "@core/index";
 
 // The native local plugin (ios/App/App/BiometricVault.swift, android .../BiometricVaultPlugin.java)
@@ -32,6 +32,9 @@ const Native = registerPlugin<BiometricVaultPlugin>("BiometricVault");
 // enabled probes swallow errors (e.g. the browser dev build, where the native plugin
 // is absent) so the UI simply hides the feature instead of throwing.
 export const mobileBiometric: BiometricUnlock = {
+	// Android's Keystore key is created setUserAuthenticationRequired, so `enable` must
+	// authenticate before it can encrypt; iOS's Keychain write prompts for nothing.
+	enableRequiresAuth: Capacitor.getPlatform() === "android",
 	async isAvailable() {
 		try {
 			return (await Native.isAvailable()).available;

@@ -101,7 +101,7 @@ and the row reads "Device passcode" with no fallback row at all.
 
 ### The invariants this rests on
 
-Seven rules. The first shipped version broke four of them and read as two settings
+Eight rules. The first shipped version broke four of them and read as two settings
 contradicting each other; multi-vault testing then found two more, and rules 5 and
 6 are the pair that let one vault's passcode open another's.
 
@@ -130,13 +130,22 @@ contradicting each other; multi-vault testing then found two more, and rules 5 a
    `pref.biometricPasscodeFallback` were flat, so a second vault opened already
    showing both switched on, having never been given either - and the re-arm then
    wrote the second vault's gate to match the first one's setting.
-6. **Re-arming asks the OS about THIS vault; it never trusts a passed-in flag.**
+6. **Re-arming only happens where it is free.** It exists to change an access control that
+   iOS fixes at write time, and a Keychain write raises no prompt. Android's Keystore key is
+   created `setUserAuthenticationRequired`, so `enable` must authenticate before it can
+   encrypt: running the reconcile there asked for a second touch after a biometric unlock, and
+   an unexplained "Enable biometric unlock" prompt after a password one. Cancelling that prompt
+   was the real damage - `setSecret` deletes and regenerates the key BEFORE prompting, so a
+   cancel left the stored ciphertext encrypted under a key that no longer existed while
+   `hasSecret` still reported the gate armed. `BiometricUnlock.enableRequiresAuth` marks the
+   difference, and there is nothing to reconcile on that gate anyway.
+7. **Re-arming asks the OS about THIS vault; it never trusts a passed-in flag.**
    That flag is React state describing whichever vault the last probe finished
    for, so mid-switch it still names the one you came from. Re-arming on a stale
    `true` does not refresh a gate, it *creates* one: unlocking vault B with a
    password gave B a passcode-openable cache it was never enabled for. The guard
    is now `biometric.isEnabled(vaultId)`, a keychain attribute read.
-7. **A VEK that doesn't open the bundle is a stale cache, not an error to
+8. **A VEK that doesn't open the bundle is a stale cache, not an error to
    read.** The failure is a Rust `aead::Error`, which meant the extension used to
    put "aes decrypt: aead::Error" on screen after a correct passcode. Discard the
    mirror and the session, then ask for the master password in English.

@@ -244,6 +244,21 @@ describe("reconcileBiometricGate", () => {
 		expect(biometric.enable).not.toHaveBeenCalled();
 	});
 
+	it("does not re-arm where enable prompts, so an unlock costs one touch and not two", async () => {
+		// Android regression: enable() authenticates against its Keystore key before it can
+		// encrypt, so reconciling after every unlock asked for a second touch - and after a
+		// PASSWORD unlock, an "Enable biometric unlock" prompt nobody asked for.
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric({
+			enableRequiresAuth: true,
+			isEnabled: vi.fn(async () => true),
+		});
+		await reconcileBiometricGate({ crypto, biometric, vaultId: VID, allowPasscode: true });
+		expect(biometric.enable).not.toHaveBeenCalled();
+		// Not even the probe: there is nothing to reconcile on that gate at all.
+		expect(biometric.isEnabled).not.toHaveBeenCalled();
+	});
+
 	it("asks about THIS vault, so unlocking another never arms one it was not given", async () => {
 		// The regression: the caller passed React state that still described the vault we had
 		// switched away from, and re-arming on that stale `true` created a gate on a vault the

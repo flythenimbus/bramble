@@ -9,7 +9,13 @@ const native = vi.hoisted(() => ({
 	deleteSecret: vi.fn(),
 }));
 
-vi.mock("@capacitor/core", () => ({ registerPlugin: () => native }));
+// The adapter reads the platform at module scope to decide whether re-arming the gate is free,
+// so the mock has to answer before the import below.
+const platform = vi.hoisted(() => ({ name: "ios" }));
+vi.mock("@capacitor/core", () => ({
+	registerPlugin: () => native,
+	Capacitor: { getPlatform: () => platform.name },
+}));
 
 const { mobileBiometric } = await import("./biometric");
 
@@ -135,5 +141,22 @@ describe("mobileBiometric actions propagate errors", () => {
 		native.deleteSecret.mockResolvedValue(undefined);
 		await mobileBiometric.disable(VID);
 		expect(native.deleteSecret).toHaveBeenCalledTimes(1);
+	});
+});
+
+// Re-arming the gate is free on iOS (a Keychain write prompts for nothing) but not on Android,
+// whose Keystore key must be authenticated against before it can encrypt. Getting this backwards
+// cost an Android unlock a second touch, and cancelling that prompt bricked the gate.
+describe("enableRequiresAuth reflects what enable() actually costs", () => {
+	it("is false on iOS, where the gate can be re-armed silently", () => {
+		expect(mobileBiometric.enableRequiresAuth).toBe(false);
+	});
+
+	it("is true on Android, whose Keystore key authenticates before it encrypts", async () => {
+		platform.name = "android";
+		vi.resetModules();
+		const { mobileBiometric: android } = await import("./biometric");
+		expect(android.enableRequiresAuth).toBe(true);
+		platform.name = "ios";
 	});
 });
