@@ -163,6 +163,8 @@ still JS-readable, so it raises the bar against casual heap inspection and linge
 GC'd strings, but is not a hard boundary) and the session-cache half trades against
 headless resume (dropping the cache means re-unlocking whenever the offscreen
 restarts). The enrollment-seal half is cheap and self-contained if pursued alone.
+The crossing-by-crossing inventory, the update order and the effort for each live in
+[vek-residency-hardening.md](vek-residency-hardening.md).
 
 ## Tests
 
