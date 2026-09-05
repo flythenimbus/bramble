@@ -20,7 +20,6 @@ import {
 } from "@core/sync";
 import { syncKeyFor } from "@core/sync/sync-keys";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
-import { setSyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
 import {
@@ -453,9 +452,15 @@ on(
 
 // Firefox: no offscreen document, so the roster-sync host runs in this event page
 // and calls these directly instead of round-tripping through runtime messaging.
-setSyncBridge({
-	fetchLocalPayload: syncLocalPayload,
-	pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
-	fetchLocalRoster: syncLocalRoster,
-	pushRemoteRoster: syncApplyRoster,
-});
+// Lazy, like offscreen-client's deliver(): on Chromium this branch never runs, so
+// the SW never parses offscreen-core (WASM loader, Noise/WebRTC sessions).
+if (typeof api.offscreen === "undefined") {
+	void import("../offscreen-core").then(({ setSyncBridge }) =>
+		setSyncBridge({
+			fetchLocalPayload: syncLocalPayload,
+			pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
+			fetchLocalRoster: syncLocalRoster,
+			pushRemoteRoster: syncApplyRoster,
+		}),
+	);
+}

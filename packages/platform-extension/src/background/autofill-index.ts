@@ -62,6 +62,22 @@ let hydrationInFlight: Readonly<{
 	promise: Promise<boolean>;
 }> | null = null;
 const knownHostnames = new Set<string>();
+/**
+ * The locked-state hint registry is best-effort: cap it so a vault with
+ * thousands of distinct hostnames (or a hostile one) can't grow the SW heap
+ * without bound. Set preserves insertion order, so deleting the head evicts
+ * the oldest hint first.
+ */
+const MAX_KNOWN_HOSTNAMES = 1000;
+
+function rememberHostname(hostname: string): void {
+	if (knownHostnames.has(hostname)) return;
+	if (knownHostnames.size >= MAX_KNOWN_HOSTNAMES) {
+		const oldest = knownHostnames.values().next().value;
+		if (oldest !== undefined) knownHostnames.delete(oldest);
+	}
+	knownHostnames.add(hostname);
+}
 
 function sameOwner(left: AutofillSessionOwner, right: AutofillSessionOwner): boolean {
 	return (
@@ -131,7 +147,7 @@ export async function addLoginEntry(entry: LoginIndexEntry): Promise<void> {
 	const index = currentIndex();
 	if (!index) return;
 	index.set(entry.id, entry);
-	for (const h of entry.hostnames) knownHostnames.add(h);
+	for (const h of entry.hostnames) rememberHostname(h);
 	await persistKnownHostnames();
 }
 
@@ -351,19 +367,30 @@ async function hydrateIndexForOwner(
 		// as a bare array threw and left the index null, so every query answered "vault locked".
 		const { entries: encryptedEntries } = decodeEntriesPayload(outerResp.data);
 		const newIndex = new Map<string, IndexEntry>();
-		for (const enc of encryptedEntries) {
-			const dec = await sendToOffscreen({
-				type: "CRYPTO_DECRYPT",
-				vaultId: owner.vaultId,
-				payload: {
+		// One round-trip for the whole vault instead of N: each sendToOffscreen is
+		// an ensureOffscreen + runtime.sendMessage + a WASM withVek section, and N
+		// of them kept N per-entry JSON strings plus the Map alive across N SW
+		// wakeups. The batch decrypts inside a single withVek section offscreen
+		// (see offscreen-core CRYPTO_DECRYPT_BATCH) and returns one array.
+		const batchResp = await sendToOffscreen({
+			type: "CRYPTO_DECRYPT_BATCH",
+			vaultId: owner.vaultId,
+			payload: {
+				entries: encryptedEntries.map((enc) => ({
 					ciphertext: enc.ciphertext,
 					iv: enc.iv,
 					wrappedDek: enc.wrappedDek,
 					dekIv: enc.dekIv,
-				},
-			});
-			if (!dec.ok || typeof dec.data !== "string") continue;
-			const data = normalizeEntryData(JSON.parse(dec.data));
+				})),
+			},
+		});
+		if (!batchResp.ok || !Array.isArray(batchResp.data)) return false;
+		const plaintexts = batchResp.data as unknown[];
+		for (let i = 0; i < encryptedEntries.length; i++) {
+			const enc = encryptedEntries[i]!;
+			const plaintext = plaintexts[i];
+			if (typeof plaintext !== "string") continue;
+			const data = normalizeEntryData(JSON.parse(plaintext));
 			// Archived entries never reach autofill. This repeats the rule in core's
 			// toAutofillIndex rather than sharing it, because this path projects the
 			// decrypted entry itself instead of consuming that index.
@@ -412,7 +439,7 @@ async function hydrateIndexForOwner(
 			// Notes / ssh-keys are not autofillable.
 		}
 		if (!publishIndex(owner, revision, newIndex)) return false;
-		for (const hostname of discoveredHostnames) knownHostnames.add(hostname);
+		for (const hostname of discoveredHostnames) rememberHostname(hostname);
 		await persistKnownHostnames();
 		// A transition while persisting host hints makes this result unavailable to callers; the
 		// next reader will discard the no-longer-owned plaintext index.
@@ -465,7 +492,7 @@ async function autofillSetIndex(
 		index.set(entry.id, entry);
 		// Register every hostname a login covers so the locked-state hint lights up on all of them.
 		if (entry.type === "login") {
-			for (const h of entry.hostnames) knownHostnames.add(h);
+			for (const h of entry.hostnames) rememberHostname(h);
 		}
 	}
 	cacheRevision++;
