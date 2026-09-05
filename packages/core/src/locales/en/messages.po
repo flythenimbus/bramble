@@ -379,6 +379,10 @@ msgstr "Auto-submit after fill"
 msgid "Autofill on web pages"
 msgstr "Autofill on web pages"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Avoid look-alike characters (0 O l 1)"
+msgstr "Avoid look-alike characters (0 O l 1)"
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
 msgstr "Back"
@@ -554,6 +558,7 @@ msgid "Can't save this code"
 msgstr "Can't save this code"
 
 #: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -570,6 +575,10 @@ msgstr "Can't save this code"
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Cancel"
 msgstr "Cancel"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Capitalize each word"
+msgstr "Capitalize each word"
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "card number"
@@ -712,6 +721,10 @@ msgstr "Codes are short-lived on purpose. Generate a new one when your other dev
 msgid "Coming soon"
 msgstr "Coming soon"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Comma (,)"
+msgstr "Comma (,)"
+
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm"
 msgstr "Confirm"
@@ -824,6 +837,7 @@ msgid "Copied {copied}"
 msgstr "Copied {copied}"
 
 #: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -1047,6 +1061,10 @@ msgstr "Device passcode"
 msgid "Device sync"
 msgstr "Device sync"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Digits"
+msgstr "Digits"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
 msgstr "Disable master password"
@@ -1124,6 +1142,10 @@ msgstr "Edit entry"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Elephant"
 msgstr "Elephant"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Empty falls back to the standard set."
+msgstr "Empty falls back to the standard set."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Enable autofill"
@@ -1338,6 +1360,11 @@ msgstr "Generate a new code"
 msgid "Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
 msgstr "Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Generate another"
+msgstr "Generate another"
+
+#: packages/core/src/app/components/PasswordGeneratorModal.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Generate password"
 msgstr "Generate password"
@@ -1452,6 +1479,10 @@ msgstr "Hourglass"
 #~ msgid "How will you unlock on this device?"
 #~ msgstr "How will you unlock on this device?"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Hyphen (-)"
+msgstr "Hyphen (-)"
+
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
 msgstr "I've saved it"
@@ -1508,6 +1539,10 @@ msgstr "Importing…"
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "In the Bramble extension, open Settings → Sync → Desktop app and enter this code."
 msgstr "In the Bramble extension, open Settings → Sync → Desktop app and enter this code."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Include a number"
+msgstr "Include a number"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
@@ -1645,6 +1680,10 @@ msgstr "Later"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
 msgstr "Leave the credential fields blank to keep the ones you saved."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Length"
+msgstr "Length"
 
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Light"
@@ -1862,6 +1901,10 @@ msgstr "No transfer is waiting. Start one from the other app and pick {0}."
 msgid "No vault is selected."
 msgstr "No vault is selected."
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "None"
+msgstr "None"
+
 #: packages/core/src/app/bulk-actions/tags.tsx
 msgid "None of the selected entries have this tag."
 msgstr "None of the selected entries have this tag."
@@ -2073,6 +2116,7 @@ msgstr "Passkey saved as {loginName}"
 msgid "Passkeys"
 msgstr "Passkeys"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Passphrase"
 msgstr "Passphrase"
@@ -2085,6 +2129,7 @@ msgstr "Passphrase (optional)"
 msgid "password"
 msgstr "password"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Password"
@@ -2149,6 +2194,10 @@ msgstr "Pencil"
 msgid "Penguin"
 msgstr "Penguin"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Period (.)"
+msgstr "Period (.)"
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Permission needed"
 msgstr "Permission needed"
@@ -2172,6 +2221,10 @@ msgstr "Pig"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Pin"
 msgstr "Pin"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "PIN"
+msgstr "PIN"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Pizza"
@@ -2565,6 +2618,10 @@ msgstr "Sending…"
 msgid "Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
 msgstr "Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Separator"
+msgstr "Separator"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Server URL"
 msgstr "Server URL"
@@ -2696,6 +2753,10 @@ msgstr "Sort"
 msgid "Source code"
 msgstr "Source code"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Space"
+msgstr "Space"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Spanner"
 msgstr "Spanner"
@@ -2752,6 +2813,10 @@ msgstr "Subdomain match"
 #: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Support"
 msgstr "Support"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Symbols to use"
+msgstr "Symbols to use"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
@@ -3186,6 +3251,10 @@ msgstr "Type"
 msgid "Umbrella"
 msgstr "Umbrella"
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Underscore (_)"
+msgstr "Underscore (_)"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Unicorn"
 msgstr "Unicorn"
@@ -3365,6 +3434,10 @@ msgstr "Use light, dark, or match your system"
 msgid "Use only digits, spaces or dashes."
 msgstr "Use only digits, spaces or dashes."
 
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Use password"
+msgstr "Use password"
+
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"
 msgstr "Use this password anyway"
@@ -3482,6 +3555,10 @@ msgstr "Welcome to {appName}"
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"
 msgstr "Wipe copied passwords after"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Words"
+msgstr "Words"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Working…"

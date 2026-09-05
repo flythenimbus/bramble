@@ -9,6 +9,11 @@ import {
 } from "react";
 import { usePlatform } from "../context/PlatformContext";
 import { syncKeyFor } from "../sync/sync-keys";
+import {
+	DEFAULT_GENERATOR_SETTINGS,
+	type GeneratorSettings,
+	normalizeGeneratorSettings,
+} from "../util/password-gen";
 import { useVaultRegistry } from "./useVaultRegistry";
 
 // Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
@@ -45,6 +50,9 @@ const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
 // a backup. Someone who leaves the machine on has a perfectly good reason to decline, and a
 // suggestion that cannot be silenced is a nag. See BackupSection.
 const PREF_AUTOSTART_PROMPT_DISMISSED = "pref.autostartPromptDismissed";
+// The password generator's last-used settings, so the field's one-tap regenerate produces what
+// the user picked in the panel rather than a fixed house style.
+const PREF_GENERATOR = "pref.generator";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -85,6 +93,8 @@ export interface Prefs {
 	statsCollapsed: boolean;
 	// Desktop: the backup section's "start at login" suggestion has been declined.
 	autostartPromptDismissed: boolean;
+	// Password generator: the settings last used in the generator panel.
+	generator: GeneratorSettings;
 }
 
 /** Each pref's storage key. A map rather than a ternary chain: the type makes it exhaustive, so
@@ -103,6 +113,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: PREF_STATS_COLLAPSED,
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
+	generator: PREF_GENERATOR,
 };
 
 /**
@@ -132,6 +143,7 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	statsCollapsed: "device",
 	autostartPromptDismissed: "device",
 	biometricPasscodeFallback: "vault",
+	generator: "device",
 };
 
 const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
@@ -155,6 +167,7 @@ const DEFAULT_PREFS: Prefs = {
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: DEFAULT_STATS_COLLAPSED,
 	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+	generator: DEFAULT_GENERATOR_SETTINGS,
 };
 
 export interface UsePrefs {
@@ -252,7 +265,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -276,6 +289,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 					keyFor("biometricPasscodeFallback"),
 					adoptLegacy,
 				),
+				storage.getMeta<unknown>(PREF_GENERATOR),
 			]);
 			if (cancelled) return;
 			setPrefs({
@@ -292,6 +306,9 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				statsCollapsed: typeof k === "boolean" ? k : DEFAULT_STATS_COLLAPSED,
 				autostartPromptDismissed: typeof l === "boolean" ? l : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 				biometricPasscodeFallback: typeof m === "boolean" ? m : DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
+				// Field by field: a stored object written by an older or hand-edited build is not
+				// trusted to still match GeneratorSettings.
+				generator: normalizeGeneratorSettings(n),
 			});
 			setLoaded(true);
 		})();

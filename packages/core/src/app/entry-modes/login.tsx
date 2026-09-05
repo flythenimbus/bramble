@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
 import { usePlatform } from "../../context/PlatformContext";
+import { usePrefs } from "../../hooks/usePrefs";
 import type {
 	LoginEntry,
 	LoginEntryData,
@@ -30,7 +31,9 @@ import type {
 	PasswordChange,
 } from "../../hooks/useVault";
 import { formatDate, formatDateTimeExact } from "../../util/format-date";
+import { generate } from "../../util/password-gen";
 import { classifyScannedQr, parseTotp, type QrScanFailure, totpAt } from "../../util/totp";
+import { PasswordGeneratorModal } from "../components/PasswordGeneratorModal";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
@@ -62,28 +65,10 @@ type TotpScanState =
 	| { kind: "scanning" }
 	| { kind: "failed"; failure: QrScanFailure; vendor?: string };
 
-/** Generate a 16-char password by unbiased rejection sampling over the charset. */
-function randomPassword(): string {
-	const charset =
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
-	const n = charset.length;
-	// 88 doesn't divide 256, so byte % n would bias; only accept bytes < floor(256/n)*n.
-	const limit = Math.floor(256 / n) * n;
-	const out: string[] = [];
-	const buf = new Uint8Array(16);
-	while (out.length < 16) {
-		crypto.getRandomValues(buf);
-		for (let i = 0; i < buf.length && out.length < 16; i++) {
-			const b = buf[i]!;
-			if (b < limit) out.push(charset.charAt(b % n));
-		}
-	}
-	return out.join("");
-}
-
 function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const { register, control, watch, setValue, getValues } = useFormContext<LoginFormValues>();
 	const { shell } = usePlatform();
+	const { prefs } = usePrefs();
 	const { t } = useLingui();
 	const [showPassword, setShowPassword] = useState(false);
 	const {
@@ -92,6 +77,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		remove: removeUrl,
 	} = useFieldArray({ control, name: "urls" });
 	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const [generatorOpen, setGeneratorOpen] = useState(false);
 	const [totpScan, setTotpScan] = useState<TotpScanState>({ kind: "idle" });
 	const [showTotp, setShowTotp] = useState(false);
 	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
@@ -112,9 +98,12 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	);
 	const isBreached = initialBreach?.leaked === true && passwordValue === initialPassword;
 
-	const generatePassword = () => {
-		setValue("password", randomPassword(), { shouldDirty: true, shouldValidate: true });
-	};
+	const applyPassword = (password: string) =>
+		setValue("password", password, { shouldDirty: true, shouldValidate: true });
+
+	// The icon skips the panel and generates from the settings it last saved, which is the
+	// common case: the user has already decided what a password of theirs looks like.
+	const regeneratePassword = async () => applyPassword(await generate(prefs.generator));
 
 	// Accept a scanned QR only if it parses as a usable TOTP, so a stray QR can't land a junk key.
 	const scanTotp = async () => {
@@ -233,7 +222,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 									<Button
 										variant="ghost"
 										size="none"
-										onClick={generatePassword}
+										onClick={regeneratePassword}
 										className="p-1.5 rounded-md"
 										aria-label={t`Generate password`}
 									>
@@ -287,12 +276,18 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 						<Button
 							variant="secondary"
 							size="none"
-							onClick={generatePassword}
+							onClick={() => setGeneratorOpen(true)}
 							className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
 						>
 							<Sparkles className="w-3.5 h-3.5" />
 							<Trans>Generate strong password</Trans>
 						</Button>
+
+						<PasswordGeneratorModal
+							open={generatorOpen}
+							onClose={() => setGeneratorOpen(false)}
+							onUse={applyPassword}
+						/>
 					</div>
 
 					<div>
