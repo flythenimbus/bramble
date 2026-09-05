@@ -28,9 +28,14 @@ describe("registrableDomain", () => {
 	});
 
 	it("falls back to the raw input for unparseable hostnames", () => {
-		// tldts returns null for IP literals / IDN edge cases: degrade to exact match.
+		// etld1 returns null for IP literals / IDN edge cases: degrade to exact match.
 		expect(registrableDomain("127.0.0.1")).toBe("127.0.0.1");
 		expect(registrableDomain("localhost")).toBe("localhost");
+	});
+
+	it("handles two-level public suffixes without the PSL table", () => {
+		expect(registrableDomain("mail.example.co.uk")).toBe("example.co.uk");
+		expect(registrableDomain("example.co.uk")).toBe("example.co.uk");
 	});
 });
 

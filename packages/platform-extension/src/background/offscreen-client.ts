@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 
 import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
-import { type HostResponse, handleHostMessage } from "../offscreen-core";
+import type { HostResponse } from "../offscreen-core";
 import { api } from "../platform-api";
 import * as vekStore from "./vek-store";
 
@@ -48,6 +48,12 @@ export async function ensureOffscreen(): Promise<void> {
 
 // Deliver one message to the host: the offscreen document on Chrome (via runtime
 // messaging), in-process on Firefox.
+//
+// offscreen-core (WASM loader, roster-sync, peer sessions) is imported lazily so
+// the Chromium service worker never parses it: on Chrome this function always
+// takes the sendMessage branch. The dynamic import becomes a separate chunk that
+// only the Firefox event-page build loads. Static import here would put ~all of
+// the sync transport into every SW cold wake (each AUTOFILL_QUERY wakes the SW).
 async function deliver(message: Record<string, unknown>): Promise<HostResponse> {
 	if (useOffscreenDoc) {
 		const response = (await api.runtime.sendMessage({ ...message, target: "offscreen" })) as
@@ -55,6 +61,7 @@ async function deliver(message: Record<string, unknown>): Promise<HostResponse> 
 			| undefined;
 		return response ?? { ok: false, error: "no response from offscreen" };
 	}
+	const { handleHostMessage } = await import("../offscreen-core");
 	return handleHostMessage(message.type as string, message.payload);
 }
 

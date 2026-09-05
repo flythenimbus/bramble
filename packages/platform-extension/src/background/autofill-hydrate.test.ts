@@ -58,16 +58,18 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 					tombstones: [],
 				}),
 			};
-		case "CRYPTO_DECRYPT":
+		case "CRYPTO_DECRYPT_BATCH":
 			return {
 				ok: true,
-				data: JSON.stringify({
-					type: "login",
-					name: "Example",
-					urls: ["https://example.com"],
-					username: "alice",
-					password: "pw1",
-				}),
+				data: [
+					JSON.stringify({
+						type: "login",
+						name: "Example",
+						urls: ["https://example.com"],
+						username: "alice",
+						password: "pw1",
+					}),
+				],
 			};
 		default:
 			return defaultOffscreen(msg);
@@ -76,17 +78,19 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 
 /** The same disk, but the one login on it has been archived. */
 function archivedOffscreen(msg: Record<string, any>): OffscreenResponse {
-	if (msg.type !== "CRYPTO_DECRYPT") return diskOffscreen(msg);
+	if (msg.type !== "CRYPTO_DECRYPT_BATCH") return diskOffscreen(msg);
 	return {
 		ok: true,
-		data: JSON.stringify({
-			type: "login",
-			name: "Example",
-			urls: ["https://example.com"],
-			username: "alice",
-			password: "pw1",
-			archivedAt: 5000,
-		}),
+		data: [
+			JSON.stringify({
+				type: "login",
+				name: "Example",
+				urls: ["https://example.com"],
+				username: "alice",
+				password: "pw1",
+				archivedAt: 5000,
+			}),
+		],
 	};
 }
 
@@ -163,16 +167,18 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 						}),
 					};
 				}
-				if (message.type === "CRYPTO_DECRYPT") {
+				if (message.type === "CRYPTO_DECRYPT_BATCH") {
 					const response = {
 						ok: true,
-						data: JSON.stringify({
-							type: "login",
-							name: message.vaultId === "v1" ? "Old vault" : "New vault",
-							urls: ["https://example.com"],
-							username: message.vaultId === "v1" ? "old" : "new",
-							password: message.vaultId === "v1" ? "old-secret" : "new-secret",
-						}),
+						data: [
+							JSON.stringify({
+								type: "login",
+								name: message.vaultId === "v1" ? "Old vault" : "New vault",
+								urls: ["https://example.com"],
+								username: message.vaultId === "v1" ? "old" : "new",
+								password: message.vaultId === "v1" ? "old-secret" : "new-secret",
+							}),
+						],
 					};
 					if (message.vaultId !== "v1") return response;
 					return new Promise((resolve) => {
@@ -196,13 +202,15 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "NEW" } });
 		releaseOldDecrypt?.({
 			ok: true,
-			data: JSON.stringify({
-				type: "login",
-				name: "Old vault",
-				urls: ["https://example.com"],
-				username: "old",
-				password: "old-secret",
-			}),
+			data: [
+				JSON.stringify({
+					type: "login",
+					name: "Old vault",
+					urls: ["https://example.com"],
+					username: "old",
+					password: "old-secret",
+				}),
+			],
 		});
 		expect((await staleQuery).resp).toEqual({ ok: false, error: "unavailable" });
 
