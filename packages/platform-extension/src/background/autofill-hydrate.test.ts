@@ -13,7 +13,8 @@ import {
 // `EncryptedEntry[]`, but that payload is `{entries, tombstones}`, so it threw, left the index null,
 // and every query came back "vault locked" - leaving the page's "Vault locked" row up.
 
-vi.mock("../storage", () => ({
+vi.mock("../storage", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../storage")>()),
 	extensionStorage: {
 		readVaultBlob: async () => new Uint8Array([1, 2, 3]),
 		writeVaultBlob: async () => {},
@@ -58,17 +59,20 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 					tombstones: [],
 				}),
 			};
-		case "CRYPTO_DECRYPT_BATCH":
+		case "CRYPTO_DECRYPT_INDEX":
 			return {
 				ok: true,
 				data: [
-					JSON.stringify({
-						type: "login",
-						name: "Example",
-						urls: ["https://example.com"],
-						username: "alice",
-						password: "pw1",
-					}),
+					{
+						id: "login1",
+						plaintext: JSON.stringify({
+							type: "login",
+							name: "Example",
+							urls: ["https://example.com"],
+							username: "alice",
+							password: "pw1",
+						}),
+					},
 				],
 			};
 		default:
@@ -78,18 +82,21 @@ function diskOffscreen(msg: Record<string, any>): OffscreenResponse {
 
 /** The same disk, but the one login on it has been archived. */
 function archivedOffscreen(msg: Record<string, any>): OffscreenResponse {
-	if (msg.type !== "CRYPTO_DECRYPT_BATCH") return diskOffscreen(msg);
+	if (msg.type !== "CRYPTO_DECRYPT_INDEX") return diskOffscreen(msg);
 	return {
 		ok: true,
 		data: [
-			JSON.stringify({
-				type: "login",
-				name: "Example",
-				urls: ["https://example.com"],
-				username: "alice",
-				password: "pw1",
-				archivedAt: 5000,
-			}),
+			{
+				id: "login1",
+				plaintext: JSON.stringify({
+					type: "login",
+					name: "Example",
+					urls: ["https://example.com"],
+					username: "alice",
+					password: "pw1",
+					archivedAt: 5000,
+				}),
+			},
 		],
 	};
 }
@@ -167,17 +174,20 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 						}),
 					};
 				}
-				if (message.type === "CRYPTO_DECRYPT_BATCH") {
+				if (message.type === "CRYPTO_DECRYPT_INDEX") {
 					const response = {
 						ok: true,
 						data: [
-							JSON.stringify({
-								type: "login",
-								name: message.vaultId === "v1" ? "Old vault" : "New vault",
-								urls: ["https://example.com"],
-								username: message.vaultId === "v1" ? "old" : "new",
-								password: message.vaultId === "v1" ? "old-secret" : "new-secret",
-							}),
+							{
+								id: message.vaultId === "v1" ? "old-login" : "new-login",
+								plaintext: JSON.stringify({
+									type: "login",
+									name: message.vaultId === "v1" ? "Old vault" : "New vault",
+									urls: ["https://example.com"],
+									username: message.vaultId === "v1" ? "old" : "new",
+									password: message.vaultId === "v1" ? "old-secret" : "new-secret",
+								}),
+							},
 						],
 					};
 					if (message.vaultId !== "v1") return response;
@@ -203,13 +213,16 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 		releaseOldDecrypt?.({
 			ok: true,
 			data: [
-				JSON.stringify({
-					type: "login",
-					name: "Old vault",
-					urls: ["https://example.com"],
-					username: "old",
-					password: "old-secret",
-				}),
+				{
+					id: "old-login",
+					plaintext: JSON.stringify({
+						type: "login",
+						name: "Old vault",
+						urls: ["https://example.com"],
+						username: "old",
+						password: "old-secret",
+					}),
+				},
 			],
 		});
 		expect((await staleQuery).resp).toEqual({ ok: false, error: "unavailable" });
@@ -225,5 +238,93 @@ describe("autofill query with no pushed index (rebuild from disk)", () => {
 		expect(current.resp.data.logins.map((entry: { id: string }) => entry.id)).not.toContain(
 			"old-login",
 		);
+	});
+});
+
+describe("keyed best-effort index hydration", () => {
+	const plaintext = (name: string) =>
+		JSON.stringify({
+			type: "login",
+			name,
+			urls: ["https://example.com"],
+			username: name,
+			password: "pw",
+		});
+	async function queryWith(results: unknown) {
+		const bg = await loadBackground({
+			sessionSeed: { [TEST_VEK_KEY]: "SEED" },
+			offscreen: (message) => {
+				if (message.type === "CRYPTO_DECRYPT_OUTER")
+					return {
+						ok: true,
+						data: JSON.stringify({
+							entries: ["a", "bad", "c"].map((id) => ({
+								id,
+								ciphertext: id,
+								iv: "i",
+								wrappedDek: "w",
+								dekIv: "d",
+								hlc: { wall: 1, counter: 0, node: "seed" },
+							})),
+							tombstones: [],
+						}),
+					};
+				if (message.type === "CRYPTO_DECRYPT_INDEX") return { ok: true, data: results };
+				return defaultOffscreen(message);
+			},
+		});
+		const result = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true },
+			pageSender("example.com", 4),
+		);
+		return { bg, resp: result.resp };
+	}
+	it("keeps valid entries with their ids even when replies are reordered and one fails", async () => {
+		const { bg, resp } = await queryWith([
+			{ id: "c", plaintext: plaintext("C") },
+			{ id: "bad", plaintext: null },
+			{ id: "a", plaintext: plaintext("A") },
+		]);
+		expect(resp.data.locked).toBe(false);
+		expect(resp.data.logins).toHaveLength(2);
+		expect(resp.data.logins).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ id: "a", name: "A" }),
+				expect.objectContaining({ id: "c", name: "C" }),
+			]),
+		);
+		const calls = bg.state.offscreenCalls.filter((m) => m.type === "CRYPTO_DECRYPT_INDEX");
+		expect(calls).toHaveLength(1);
+		expect(calls[0]?.payload.vekB64).toBe("SEED");
+		expect(calls[0]?.payload.entries.map((e: { id: string }) => e.id)).toEqual(["a", "bad", "c"]);
+	});
+	it("skips malformed plaintext without discarding other entries", async () => {
+		const { resp } = await queryWith([
+			{ id: "a", plaintext: plaintext("A") },
+			{ id: "bad", plaintext: "not JSON" },
+			{ id: "c", plaintext: plaintext("C") },
+		]);
+		expect(resp.data.locked).toBe(false);
+		expect(resp.data.logins).toHaveLength(2);
+	});
+	it.each(
+		[
+			[],
+			[{ id: "a", plaintext: plaintext("A") }],
+			["wrong", "shape", "reply"],
+			[
+				{ id: "a", plaintext: null },
+				{ id: "a", plaintext: null },
+				{ id: "c", plaintext: null },
+			],
+			[
+				{ id: "a", plaintext: null },
+				{ id: "bad", plaintext: null },
+				{ id: "unknown", plaintext: null },
+			],
+		].map((results) => ({ results })),
+	)("does not publish an incomplete or mismatched response ($results)", async ({ results }) => {
+		const { resp } = await queryWith(results);
+		expect(resp.data?.logins ?? []).toEqual([]);
 	});
 });

@@ -781,14 +781,6 @@ function scheduleQuery(): void {
 /** MutationObserver callback: SPA-submit fallback plus a throttled autofill re-query. */
 function onDomChange(records: MutationRecord[]): void {
 	if (!touchesFields(records)) return;
-	// A background tab still runs its observer (a video in picture-in-picture keeps
-	// the page busy); defer everything until the user is looking at it again. The
-	// visibilitychange handler invalidates + re-queries once on return, so parsing
-	// here would only churn the cache for nobody.
-	if (document.hidden) {
-		missedWhileHidden = true;
-		return;
-	}
 	// The DOM changed under us: drop the cached field model so the next read re-parses.
 	invalidatePageFields();
 	// Commit checkpoint: an armed capture whose password field has now gone, or a
@@ -797,6 +789,12 @@ function onDomChange(records: MutationRecord[]): void {
 	// An SPA route change can take the relayed picker's field with it, and unlike a
 	// scroll nothing else here would notice.
 	if (relayedField && !relayedAnchorIsLive()) dropRelayed();
+	// A background tab still runs its observer (a video in picture-in-picture keeps
+	// the page busy); defer the re-query until the user is looking at it again.
+	if (document.hidden) {
+		missedWhileHidden = true;
+		return;
+	}
 	scheduleQuery();
 }
 

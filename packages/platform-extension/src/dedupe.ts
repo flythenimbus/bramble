@@ -16,9 +16,10 @@ export interface HostnameMatchable {
 export function hostnameMatches(entry: HostnameMatchable, pageHostname: string): boolean {
 	const pageHost = pageHostname.toLowerCase();
 	const policy = entry.subdomainMatch ?? "etld1";
-	// One eTLD+1 computation per query, not per entry: the page side is constant
-	// across the whole index scan (every AUTOFILL_QUERY iterates all entries).
-	const pageDomain = policy === "etld1" ? registrableDomain(pageHost) : pageHost;
+	// Compute the page side once for this entry's hostnames. Unknown stored policies
+	// follow the same eTLD+1 fallback as hostnameMatchesEntry's default branch.
+	const pageDomain =
+		policy === "exact" || policy === "subdomain" ? pageHost : registrableDomain(pageHost);
 	for (const raw of entry.hostnames) {
 		if (hostnameMatchesEntry(raw, policy, pageHost, pageDomain)) return true;
 	}

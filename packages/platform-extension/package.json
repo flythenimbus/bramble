@@ -22,6 +22,7 @@
 		"jsqr": "^1.4.0",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
+		"tldts": "^6.1.86",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {

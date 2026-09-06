@@ -59,11 +59,6 @@ export default defineConfig({
 	build: {
 		outDir,
 		emptyOutDir: true,
-		// Explicit: extension contexts (SW, offscreen, per-tab content script) stay
-		// resident in Chromium RAM, so no source maps ship and dev builds must not
-		// land in the release directory (see package.json dev/devDir note).
-		sourcemap: false,
-		minify: "esbuild",
 		chunkSizeWarningLimit: 600,
 		// Chrome 116+ has native modulepreload; dropping the polyfill keeps autofill-ui flat.
 		modulePreload: { polyfill: false },

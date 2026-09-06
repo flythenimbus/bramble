@@ -11,6 +11,7 @@ import { decodeEntriesPayload } from "@core/sync";
 import { parseTotp, totpAt } from "@core/util/totp";
 import { extractHostname } from "@core/vault/autofill-index";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
+import { CryptoDecryptIndexResultSchema } from "../crypto/messages";
 import {
 	type DedupeOutcome,
 	dedupeCapture as dedupeCaptureFn,
@@ -116,7 +117,10 @@ export const indexHydration = (async () => {
 	try {
 		const r = await api.storage.local.get([HOSTNAMES_KEY]);
 		const hostnames = r[HOSTNAMES_KEY];
-		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
+		if (Array.isArray(hostnames)) {
+			for (const h of hostnames) if (typeof h === "string") rememberHostname(h);
+			if (hostnames.length > MAX_KNOWN_HOSTNAMES) await persistKnownHostnames();
+		}
 	} catch (e) {
 		console.warn("[bramble:bg] hostname hydration failed", e);
 	}
@@ -367,16 +371,13 @@ async function hydrateIndexForOwner(
 		// as a bare array threw and left the index null, so every query answered "vault locked".
 		const { entries: encryptedEntries } = decodeEntriesPayload(outerResp.data);
 		const newIndex = new Map<string, IndexEntry>();
-		// One round-trip for the whole vault instead of N: each sendToOffscreen is
-		// an ensureOffscreen + runtime.sendMessage + a WASM withVek section, and N
-		// of them kept N per-entry JSON strings plus the Map alive across N SW
-		// wakeups. The batch decrypts inside a single withVek section offscreen
-		// (see offscreen-core CRYPTO_DECRYPT_BATCH) and returns one array.
+		// One VEK-scoped round-trip, with per-entry failures and explicit identity.
 		const batchResp = await sendToOffscreen({
-			type: "CRYPTO_DECRYPT_BATCH",
+			type: "CRYPTO_DECRYPT_INDEX",
 			vaultId: owner.vaultId,
 			payload: {
 				entries: encryptedEntries.map((enc) => ({
+					id: enc.id,
 					ciphertext: enc.ciphertext,
 					iv: enc.iv,
 					wrappedDek: enc.wrappedDek,
@@ -384,13 +385,24 @@ async function hydrateIndexForOwner(
 				})),
 			},
 		});
-		if (!batchResp.ok || !Array.isArray(batchResp.data)) return false;
-		const plaintexts = batchResp.data as unknown[];
-		for (let i = 0; i < encryptedEntries.length; i++) {
-			const enc = encryptedEntries[i]!;
-			const plaintext = plaintexts[i];
+		if (!batchResp.ok) return false;
+		const parsed = CryptoDecryptIndexResultSchema.safeParse(batchResp.data);
+		if (!parsed.success || parsed.data.length !== encryptedEntries.length) return false;
+		const plaintexts = new Map(parsed.data.map((result) => [result.id, result.plaintext]));
+		if (
+			plaintexts.size !== encryptedEntries.length ||
+			!encryptedEntries.every((enc) => plaintexts.has(enc.id))
+		)
+			return false;
+		for (const enc of encryptedEntries) {
+			const plaintext = plaintexts.get(enc.id);
 			if (typeof plaintext !== "string") continue;
-			const data = normalizeEntryData(JSON.parse(plaintext));
+			let data: ReturnType<typeof normalizeEntryData>;
+			try {
+				data = normalizeEntryData(JSON.parse(plaintext));
+			} catch {
+				continue;
+			}
 			// Archived entries never reach autofill. This repeats the rule in core's
 			// toAutofillIndex rather than sharing it, because this path projects the
 			// decrypted entry itself instead of consuming that index.

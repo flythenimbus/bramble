@@ -6,7 +6,7 @@
 // error-prone encoding is unit-tested. See docs/passkey-provider.md.
 
 import { base64ToBase64Url, bytesToBase64Url } from "@core/util/bytes";
-import { etld1 } from "../etld1";
+import { getDomain } from "tldts";
 
 // base64 <-> base64url conversions live in @core/util/bytes (the single home for byte
 // encoding). This module is WebAuthn-specific: clientData, response assembly, rpId.
@@ -88,7 +88,7 @@ export function defaultRpId(originHost: string): string {
 /**
  * Whether `rpId` is a "registrable domain suffix of, or equal to" the page host.
  * Blocks a page on evil.com from minting/using a passkey for google.com, and blocks
- * a bare public suffix (`com`, `co.uk`) as rpId via etld1. `localhost` allowed for dev.
+ * a bare public suffix (`com`, `co.uk`) as rpId via tldts. `localhost` allowed for dev.
  */
 export function isRegistrableSuffix(originHost: string, rpId: string): boolean {
 	if (!rpId) return false;
@@ -96,7 +96,7 @@ export function isRegistrableSuffix(originHost: string, rpId: string): boolean {
 	const id = rpId.toLowerCase();
 	if (host !== id && !host.endsWith(`.${id}`)) return false;
 	if (id === "localhost") return true;
-	return etld1(id) !== null;
+	return getDomain(id) !== null;
 }
 
 // ---- clientData + responses ----

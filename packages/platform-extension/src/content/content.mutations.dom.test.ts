@@ -68,6 +68,7 @@ let onMessage: MessageListener | null = null;
 
 await import("./content");
 const { invalidatePageFields } = await import("./field-model");
+const { maybeCommitCapture } = await import("./capture");
 
 const queryCount = (): number =>
 	safeRequest.mock.calls.filter(([message]) => message?.type === "AUTOFILL_QUERY").length;
@@ -140,8 +141,10 @@ describe("content: mutation-driven re-query (issue #59)", () => {
 		const state = vi
 			.spyOn(document, "visibilityState", "get")
 			.mockReturnValue("hidden" as DocumentVisibilityState);
-		document.body.append(document.createElement("input"));
+		vi.mocked(maybeCommitCapture).mockClear();
+		document.getElementById("pass")!.remove();
 		await settle();
+		expect(maybeCommitCapture).toHaveBeenCalled();
 		expect(queryCount()).toBe(0);
 
 		hidden.mockReturnValue(false);

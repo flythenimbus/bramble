@@ -47,7 +47,7 @@ import {
 } from "../sync/sync-config";
 import { closeSyncLink, openSyncLink } from "./desktop-link";
 import { keepEventPageAlive, releaseEventPage } from "./event-page-keepalive";
-import { sendToOffscreen } from "./offscreen-client";
+import { sendToOffscreen, setInProcessSyncBridge, useOffscreenDoc } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
 import { witnessStamps } from "./sync-clock";
 import {
@@ -221,7 +221,7 @@ on(
 // background re-runs and reconnects, catching up on peers' changes. Chrome runs sync in the
 // offscreen document (persistent), so it doesn't need this. See docs/firefox-port.md.
 export const SYNC_KEEPALIVE_ALARM = "sync-keepalive";
-const syncHostSuspends = typeof api.offscreen === "undefined";
+const syncHostSuspends = !useOffscreenDoc;
 // Guards against re-starting an already-running session within one event-page/SW lifetime
 // (top-level resume, unlock, and the keepalive alarm can all fire in one lifetime). A fresh
 // lifetime (after a suspend) resets it, so a woken event page reconnects.
@@ -452,15 +452,9 @@ on(
 
 // Firefox: no offscreen document, so the roster-sync host runs in this event page
 // and calls these directly instead of round-tripping through runtime messaging.
-// Lazy, like offscreen-client's deliver(): on Chromium this branch never runs, so
-// the SW never parses offscreen-core (WASM loader, Noise/WebRTC sessions).
-if (typeof api.offscreen === "undefined") {
-	void import("../offscreen-core").then(({ setSyncBridge }) =>
-		setSyncBridge({
-			fetchLocalPayload: syncLocalPayload,
-			pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
-			fetchLocalRoster: syncLocalRoster,
-			pushRemoteRoster: syncApplyRoster,
-		}),
-	);
-}
+setInProcessSyncBridge({
+	fetchLocalPayload: syncLocalPayload,
+	pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
+	fetchLocalRoster: syncLocalRoster,
+	pushRemoteRoster: syncApplyRoster,
+});

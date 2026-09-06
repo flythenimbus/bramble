@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 
 import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
-import type { HostResponse } from "../offscreen-core";
+import type { HostResponse, SyncBridge } from "../offscreen-core";
 import { api } from "../platform-api";
 import * as vekStore from "./vek-store";
 
@@ -11,7 +11,13 @@ const OFFSCREEN_URL = "offscreen.html";
 // runs in a separate offscreen document reached via runtime messaging. Firefox has
 // no chrome.offscreen; its background is an event page with a DOM, so the same host
 // (./offscreen-core) runs in-process here instead.
-const useOffscreenDoc = typeof api.offscreen !== "undefined";
+export const useOffscreenDoc = typeof api.offscreen !== "undefined";
+
+// Register synchronously, but do not load the host until a message needs it.
+let inProcessSyncBridge: SyncBridge | null = null;
+export function setInProcessSyncBridge(bridge: SyncBridge): void {
+	inProcessSyncBridge = bridge;
+}
 
 // A single in-flight createDocument, so concurrent callers (e.g. the mount probe and
 // the first crypto op) don't both call createDocument and race the "Only a single
@@ -61,7 +67,12 @@ async function deliver(message: Record<string, unknown>): Promise<HostResponse> 
 			| undefined;
 		return response ?? { ok: false, error: "no response from offscreen" };
 	}
-	const { handleHostMessage } = await import("../offscreen-core");
+	const { handleHostMessage, setSyncBridge } = await import("../offscreen-core");
+	// The awaited import must succeed and the bridge must be installed before any
+	// in-process operation runs. Failures propagate to the caller, never to a
+	// detached promise that could leave sync using the no-op fallback bridge.
+	if (!inProcessSyncBridge) throw new Error("sync bridge not registered");
+	setSyncBridge(inProcessSyncBridge);
 	return handleHostMessage(message.type as string, message.payload);
 }
 
@@ -73,6 +84,7 @@ const USE_VEK = new Set([
 	"CRYPTO_ENCRYPT",
 	"CRYPTO_DECRYPT",
 	"CRYPTO_DECRYPT_BATCH",
+	"CRYPTO_DECRYPT_INDEX",
 	"CRYPTO_ENCRYPT_OUTER",
 	"CRYPTO_DECRYPT_OUTER",
 ]);
