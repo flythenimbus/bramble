@@ -56,6 +56,14 @@ export const CryptoDecryptBatchSchema = z.object({
 	),
 	...vekInject,
 });
+// Autofill may skip undecryptable entries, unlike the strict crypto adapter batch.
+export const CryptoDecryptIndexSchema = z.object({
+	entries: z.array(CryptoDecryptSchema.omit({ vekB64: true }).extend({ id: z.string() })),
+	...vekInject,
+});
+export const CryptoDecryptIndexResultSchema = z.array(
+	z.object({ id: z.string(), plaintext: z.string().nullable() }),
+);
 export const CryptoEncryptOuterSchema = z.object({ plaintext: z.string(), ...vekInject });
 export const CryptoDecryptOuterSchema = z.object({
 	iv: z.string(),

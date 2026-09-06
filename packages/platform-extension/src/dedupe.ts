@@ -1,9 +1,9 @@
 import type { IndexEntry, LoginIndexEntry, SubdomainMatchMode } from "@core/adapters/autofill";
-import { getDomain } from "tldts";
+import { etld1 } from "./etld1";
 
 /** eTLD+1 of a hostname; falls back to the raw input for IPs / unknown TLDs. */
 export function registrableDomain(hostname: string): string {
-	return getDomain(hostname) ?? hostname;
+	return etld1(hostname) ?? hostname;
 }
 
 /** Just the fields the hostname policy reads; any LoginIndexEntry satisfies it. */
@@ -16,20 +16,32 @@ export interface HostnameMatchable {
 export function hostnameMatches(entry: HostnameMatchable, pageHostname: string): boolean {
 	const pageHost = pageHostname.toLowerCase();
 	const policy = entry.subdomainMatch ?? "etld1";
+	// Compute the page side once for this entry's hostnames. Unknown stored policies
+	// follow the same eTLD+1 fallback as hostnameMatchesEntry's default branch.
+	const pageDomain =
+		policy === "exact" || policy === "subdomain" ? pageHost : registrableDomain(pageHost);
 	for (const raw of entry.hostnames) {
-		const entryHost = raw.toLowerCase();
-		switch (policy) {
-			case "exact":
-				if (entryHost === pageHost) return true;
-				break;
-			case "subdomain":
-				if (pageHost === entryHost || pageHost.endsWith(`.${entryHost}`)) return true;
-				break;
-			default:
-				if (registrableDomain(entryHost) === registrableDomain(pageHost)) return true;
-		}
+		if (hostnameMatchesEntry(raw, policy, pageHost, pageDomain)) return true;
 	}
 	return false;
+}
+
+/** Single-hostname check with the page side precomputed (see hostnameMatches). */
+function hostnameMatchesEntry(
+	entryHostname: string,
+	policy: SubdomainMatchMode,
+	pageHost: string,
+	pageDomain: string,
+): boolean {
+	const entryHost = entryHostname.toLowerCase();
+	switch (policy) {
+		case "exact":
+			return entryHost === pageHost;
+		case "subdomain":
+			return pageHost === entryHost || pageHost.endsWith(`.${entryHost}`);
+		default:
+			return registrableDomain(entryHost) === pageDomain;
+	}
 }
 
 /** Result of matching a captured credential against the index: identical, new, or update-an-existing. */

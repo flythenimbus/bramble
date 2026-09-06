@@ -9,7 +9,10 @@ const { loads, stub } = vi.hoisted(() => {
 	const stub = {
 		unlock_with_vek: (vek: string) => loads.push(vek),
 		// Echo the ciphertext so the test can assert order and per-entry decryption.
-		decrypt_entry: (ct: string, _iv: string, _wrappedDek: string, _dekIv: string) => `pt:${ct}`,
+		decrypt_entry: (ct: string, _iv: string, _wrappedDek: string, _dekIv: string) => {
+			if (ct === "broken") throw new Error("cannot decrypt");
+			return `pt:${ct}`;
+		},
 	};
 	return { loads, stub };
 });
@@ -36,5 +39,40 @@ describe("offscreen CRYPTO_DECRYPT_BATCH", () => {
 		loads.length = 0;
 		const res = await handleHostMessage("CRYPTO_DECRYPT_BATCH", { entries: [], vekB64: "vek" });
 		expect(res).toEqual({ ok: true, data: [] });
+	});
+});
+
+describe("offscreen CRYPTO_DECRYPT_INDEX", () => {
+	it("keeps ids and skips only the undecryptable entry in one VEK section", async () => {
+		loads.length = 0;
+		const res = await handleHostMessage("CRYPTO_DECRYPT_INDEX", {
+			entries: [
+				{ id: "a", ...entry("a") },
+				{ id: "bad", ...entry("broken") },
+				{ id: "c", ...entry("c") },
+			],
+			vekB64: "vek",
+		});
+		expect(res).toEqual({
+			ok: true,
+			data: [
+				{ id: "a", plaintext: "pt:a" },
+				{ id: "bad", plaintext: null },
+				{ id: "c", plaintext: "pt:c" },
+			],
+		});
+		expect(loads).toEqual(["vek"]);
+	});
+	it("leaves the existing crypto adapter batch strict", async () => {
+		const res = await handleHostMessage("CRYPTO_DECRYPT_BATCH", {
+			entries: [entry("a"), entry("broken")],
+			vekB64: "vek",
+		});
+		expect(res.ok).toBe(false);
+	});
+	it("supports an empty index", async () => {
+		expect(await handleHostMessage("CRYPTO_DECRYPT_INDEX", { entries: [], vekB64: "vek" })).toEqual(
+			{ ok: true, data: [] },
+		);
 	});
 });

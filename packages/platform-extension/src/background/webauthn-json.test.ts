@@ -161,3 +161,17 @@ describe("option parsing", () => {
 		expect(r.userVerification).toBe("preferred");
 	});
 });
+
+describe("RP ID public-suffix regressions", () => {
+	it.each(["com.sg", "com.hk", "co.th", "edu.au", "net.br", "nhs.uk", "org.nz", "b.ck"])(
+		"rejects a passkey scoped to %s",
+		(suffix) => {
+			expect(isRegistrableSuffix(`evil.${suffix}`, suffix)).toBe(false);
+			expect(isRegistrableSuffix(`login.dbs.${suffix}`, `dbs.${suffix}`)).toBe(true);
+		},
+	);
+	it("accepts the PSL exception but rejects a wildcard public suffix", () => {
+		expect(isRegistrableSuffix("www.city.kobe.jp", "city.kobe.jp")).toBe(true);
+		expect(isRegistrableSuffix("x.foo.kobe.jp", "foo.kobe.jp")).toBe(false);
+	});
+});
