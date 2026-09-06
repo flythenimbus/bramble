@@ -78,6 +78,9 @@ vi.mock("./picker", () => ({
 
 const safeSendMessage = vi.fn();
 const safeRequest = vi.fn();
+// What the background answers GENERATE_PASSWORD with. A real promise, not the synchronous
+// thenable below: the suggestion path awaits this one.
+let generateResponse: unknown = { ok: true, data: { password: "from-the-background" } };
 const pendingQueryResponses: Array<(response: unknown) => void> = [];
 const pendingSelectResponses: Array<(response: unknown) => void> = [];
 let submitRevalidationResponder:
@@ -90,6 +93,7 @@ vi.mock("./lifecycle", () => ({
 	// synchronously so existing DOM assertions stay focused on picker policy.
 	safeRequest: (m: { type?: string }) => {
 		safeRequest(m);
+		if (m.type === "GENERATE_PASSWORD") return Promise.resolve(generateResponse);
 		if (m.type === "AUTOFILL_REVALIDATE_SUBMIT") {
 			const message = m as { sessionGeneration: number };
 			return (
@@ -341,6 +345,7 @@ describe("content: strong-password suggestion on signup", () => {
 		safeSendMessage.mockClear();
 		safeRequest.mockClear();
 		fillPasswordFields.mockClear();
+		generateResponse = { ok: true, data: { password: "from-the-background" } };
 		pickerState.host = null;
 		pickerState.anchor = null;
 		pendingQueryResponses.length = 0;
@@ -363,12 +368,38 @@ describe("content: strong-password suggestion on signup", () => {
 	const lastSuggest = () =>
 		(showMatches.mock.calls.at(-1)?.[2] as { suggest?: { password: string } } | undefined)?.suggest;
 
-	it("offers a generated password when a signup password field is focused", () => {
+	/** Let an awaited background reply (and the paint it triggers) land. */
+	const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+	// The password on offer is the one the response carried, not one made up here: the user's
+	// generator settings live in the background, and generating locally would ignore them.
+	it("offers the generated password the query response carried", () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
-		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
-		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(pass);
-		expect(lastSuggest()?.password).toEqual(expect.any(String));
+		// An unlock push re-queries, so the response below lands whatever earlier cases left
+		// cached (a cached result with matches means focus alone asks for nothing).
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [], generated: "correct-horse-battery-staple" }),
+		});
+
+		// Then a field that has been offered nothing yet, since a suggestion is decided once per
+		// field: whichever of the two was still undecided when the response landed is the one
+		// that shows what it carried.
+		document.body.innerHTML = `
+			<form>
+				<input id="user2" type="email" name="email" autocomplete="email" />
+				<input id="pass2" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+		(document.getElementById("pass2") as HTMLInputElement).focus();
+
+		const offered = showMatches.mock.calls.map(
+			(call) => (call[2] as { suggest?: { password: string } } | undefined)?.suggest?.password,
+		);
+		expect(offered).toContain("correct-horse-battery-staple");
 	});
 
 	it("shows only the suggestion, not existing logins, on a signup form", () => {
@@ -496,12 +527,13 @@ describe("content: strong-password suggestion on signup", () => {
 		);
 	});
 
-	it("keeps that decision when the user regenerates", () => {
+	it("keeps that decision when the user regenerates", async () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		pass.setAttribute("autocomplete", "off");
 		regenerateCb?.();
+		await settle();
 
 		onSuggestedCb?.();
 		expect(safeSendMessage).toHaveBeenCalledWith(
@@ -535,16 +567,35 @@ describe("content: strong-password suggestion on signup", () => {
 		);
 	});
 
-	it("swaps in a fresh suggestion on regenerate", () => {
+	it("swaps in a fresh suggestion on regenerate", async () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		const first = lastSuggest()?.password;
 
+		generateResponse = { ok: true, data: { password: "regenerated-in-the-background" } };
 		regenerateCb?.();
+		await settle();
 		const second = lastSuggest()?.password;
 		expect(second).toEqual(expect.any(String));
 		expect(second).not.toBe(first);
+	});
+
+	// The user's generator settings live in the background, so the password its response carries
+	// is the one to offer; generating locally here would ignore everything they chose.
+	it("asks the background for a fresh one when the user regenerates", async () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [], generated: "correct-horse-battery-staple" }),
+		});
+
+		generateResponse = { ok: true, data: { password: "another-passphrase-entirely" } };
+		regenerateCb?.();
+		await settle();
+		expect(safeRequest).toHaveBeenCalledWith({ type: "GENERATE_PASSWORD" });
+		expect(lastSuggest()?.password).toBe("another-passphrase-entirely");
 	});
 
 	it("does not offer on a plain login field (current-password)", () => {

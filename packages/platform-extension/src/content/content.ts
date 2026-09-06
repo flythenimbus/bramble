@@ -31,7 +31,11 @@ import {
 } from "./fill";
 import { installFrameRelay, type RelayRect } from "./frame-relay";
 import { onTeardown, safeRequest, safeSendMessage } from "./lifecycle";
-import { generatePassword } from "./password-gen";
+import {
+	holdGeneratedPassword,
+	requestGeneratedPassword,
+	takeGeneratedPassword,
+} from "./password-gen";
 import { picker } from "./picker";
 import {
 	closeRelayed,
@@ -434,7 +438,10 @@ function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Sugg
 	if (cached) return cached;
 	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
 	// Read the form while it still describes itself; see Suggestion.
-	const suggestion = { password: generatePassword(), newLogin: isAccountCreationForm(field) };
+	const suggestion = {
+		password: takeGeneratedPassword(),
+		newLogin: isAccountCreationForm(field),
+	};
 	suggestionFor.set(field, suggestion);
 	// The same question creationFormFor asks, answered at the one moment it can be.
 	creationFormFor.set(field, suggestion.newLogin);
@@ -445,9 +452,13 @@ function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Sugg
  * Swaps in a fresh password for `field`, keeping the save-vs-update decision the
  * first offer made: by now the picker has rewritten the anchor's autocomplete, so
  * re-classifying would read a form that no longer describes itself.
+ *
+ * Asks the background rather than spending the held password: an explicit click can afford the
+ * round trip, and it means repeated clicks all follow the user's settings instead of the first
+ * one draining the supply and the rest falling back.
  */
-function regenerateInto(field: HTMLInputElement): string {
-	const password = generatePassword();
+async function regenerateInto(field: HTMLInputElement): Promise<string> {
+	const password = await requestGeneratedPassword();
 	suggestionFor.set(field, { password, newLogin: suggestionFor.get(field)?.newLogin ?? false });
 	return password;
 }
@@ -595,6 +606,8 @@ function handleResult(result: QueryResult | undefined): void {
 		return;
 	}
 	cachedResult = result;
+	// Rides on the query so the suggestion below has a settings-shaped password to draw at once.
+	holdGeneratedPassword(result.generated);
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
 	// they re-engage. cachedResult is still updated so the next focus sees fresh data.
@@ -826,9 +839,13 @@ picker.onRegenerate(() => {
 	cancelOperations();
 	const field = anchorField();
 	if (!field) return;
-	const pw = regenerateInto(field);
-	// Suggestion-only prompt (no matches), matching showLoginPicker.
-	showMatchesFor([], field, { suggest: { password: pw } });
+	void regenerateInto(field).then((pw) => {
+		// The anchor can move (or go) while the background answers; a password meant for a field
+		// the user has left must not be painted onto the one they are on now.
+		if (anchorField() !== field) return;
+		// Suggestion-only prompt (no matches), matching showLoginPicker.
+		showMatchesFor([], field, { suggest: { password: pw } });
+	});
 });
 
 // The top frame lends its document to descendants that have no room to draw; every
@@ -862,8 +879,10 @@ if (frameRelay.isTop()) {
 			cancelOperations();
 			const field = relayedField;
 			if (!field) return;
-			const pw = regenerateInto(field);
-			showMatchesFor([], field, { suggest: { password: pw } });
+			void regenerateInto(field).then((pw) => {
+				if (relayedField !== field) return;
+				showMatchesFor([], field, { suggest: { password: pw } });
+			});
 		},
 	});
 }

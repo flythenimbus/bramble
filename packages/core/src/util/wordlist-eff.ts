@@ -5,7 +5,7 @@
 // "yo-yo"): de-hyphenating them would collide "yo-yo" with the list's own "yoyo" and cost a word.
 //
 // Space-joined rather than an array literal: 7776 quoted, comma-separated elements cost about
-// twice the source bytes for the same data. Imported lazily, only when a passphrase is asked for.
+// twice the source bytes for the same data.
 
 const WORDS =
 	"abacus abdomen abdominal abide abiding ability ablaze able abnormal abrasion abrasive abreast " +
@@ -682,5 +682,16 @@ const WORDS =
 	"yummy zap zealous zebra zen zeppelin zero zestfully zesty zigzagged zipfile zipping zippy zips " +
 	"zit zodiac zombie zone zoning zookeeper zoologist zoology zoom";
 
-/** Every word in the list, in the EFF's order. */
-export const EFF_WORDLIST: readonly string[] = WORDS.split(" ");
+let words: readonly string[] | null = null;
+
+/**
+ * Every word in the list, in the EFF's order, split on first use.
+ *
+ * A function rather than a `const` because the extension's service worker imports this module
+ * statically (a restarted MV3 worker cannot rely on `import()`; see background/qr.ts), and a
+ * worker that wakes to answer some unrelated message should not build 7776 strings on the way.
+ */
+export function effWordlist(): readonly string[] {
+	if (!words) words = WORDS.split(" ");
+	return words;
+}

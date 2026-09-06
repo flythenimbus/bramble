@@ -26,6 +26,7 @@ import {
 	reportActiveTab,
 } from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
+import { generateSuggestion } from "./password-gen";
 import { getAutofillEnabled } from "./prefs";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
 import {
@@ -573,6 +574,10 @@ async function autofillQuery(
 		const hasCard = message.hasCard === true;
 		const hasOtp = message.hasOtp === true;
 		const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
+		// Ride along on the query the page already makes: the signup suggestion is drawn the
+		// moment this response lands, so a separate request for it would race the paint and lose.
+		// Offered locked as well as unlocked, since generating needs no vault.
+		if (hasLogin) result.generated = await generateSuggestion();
 		// Sliding session: any autofill activity extends the timer.
 		if (!result.locked) await scheduleAutoLock();
 		if (!autofillSessionIsStable(generation)) return { ok: false, error: "unavailable" };

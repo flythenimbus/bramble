@@ -81,6 +81,10 @@ export interface QueryResult {
 	/** The user switched page autofill off: show nothing at all, not even the locked hint or a
 	 * generated-password suggestion, and stop querying until told otherwise. Extension only. */
 	disabled?: boolean;
+	/** A password shaped by the user's generator settings, for a signup form's suggestion. Sent
+	 * with the query itself so the suggestion has one to draw the moment it paints. Extension
+	 * only; absent when the page has no login field. */
+	generated?: string;
 }
 
 /** What to fill for a chosen entry, discriminated by kind. */

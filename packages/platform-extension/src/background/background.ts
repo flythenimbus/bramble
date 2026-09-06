@@ -10,6 +10,7 @@ import { api } from "../platform-api";
 import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
 import "./backup-connect";
 import "./corner-prompt";
+import "./password-gen";
 import "./popout";
 import "./qr";
 import "./sync";

@@ -170,12 +170,17 @@ export function generatePassphrase(
 	return words.join(settings.separator);
 }
 
-/** Generate for whichever mode is set. Async only because the wordlist is a lazy chunk: it is
- * 65 KB of source that a user who never opens passphrase mode should not pay for. */
+/**
+ * Generate for whichever mode is set. Async only because the wordlist is a lazy chunk: it is
+ * 65 KB of source that a user who never opens passphrase mode should not pay for.
+ *
+ * Anywhere `import()` is not dependable (the extension's service worker) calls
+ * generatePassword/generatePassphrase directly instead.
+ */
 export async function generate(settings: GeneratorSettings): Promise<string> {
 	if (settings.mode !== "passphrase") return generatePassword(settings);
-	const { EFF_WORDLIST } = await import("./wordlist-eff");
-	return generatePassphrase(settings, EFF_WORDLIST);
+	const { effWordlist } = await import("./wordlist-eff");
+	return generatePassphrase(settings, effWordlist());
 }
 
 function bool(value: unknown, fallback: boolean): boolean {

@@ -27,6 +27,9 @@ export interface QueryResult {
 	hasPotentialMatch: boolean;
 	// The user turned page autofill off: show nothing and stop querying.
 	disabled?: boolean;
+	// A password shaped by the user's generator settings, for a signup form's suggestion.
+	// Absent when the page has no login field, or when an older background didn't send one.
+	generated?: string;
 }
 
 /** Fill instruction from the background, discriminated by `kind`. `isAuto` echoes whether the fill was user-initiated. */
