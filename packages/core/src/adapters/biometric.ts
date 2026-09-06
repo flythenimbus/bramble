@@ -53,6 +53,8 @@ export interface BiometricUnlock {
 /** Both native plugins reject a user-dismissed prompt with this code. A prompt the OS pulled
  * instead (still transitioning to the foreground) gets "interrupted", which is worth retrying. */
 const BIOMETRIC_CANCELLED = "cancelled";
+/** The OS pulled the prompt (app still coming to the foreground, another sheet in the way). */
+const BIOMETRIC_INTERRUPTED = "interrupted";
 /** The gate itself is gone: the OS destroyed the cached VEK because the enrolled biometric set
  * changed. Nothing can reopen it, so the cache has to be torn down and re-armed by hand. */
 const BIOMETRIC_INVALIDATED = "invalidated";
@@ -62,6 +64,13 @@ const BIOMETRIC_LOCKOUT = "lockout";
 
 function hasCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
+}
+
+/** The OS pulled the prompt before anyone answered, so the gate never opened. The ONE outcome
+ * worth asking again for: iOS refuses to present for a beat after the app returns to the
+ * foreground. Anything else either got an answer or is broken, and re-asking just repeats it. */
+export function isBiometricInterrupted(error: unknown): boolean {
+	return hasCode(error, BIOMETRIC_INTERRUPTED);
 }
 
 /** The user dismissed the prompt, as opposed to the gate failing or the OS pulling it. */
