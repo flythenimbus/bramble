@@ -381,7 +381,7 @@ msgstr "Autorrelleno en páginas web"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Avoid look-alike characters (0 O l 1)"
-msgstr ""
+msgstr "Evitar caracteres similares (0 O l 1)"
 
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Back"
@@ -578,7 +578,7 @@ msgstr "Cancelar"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Capitalize each word"
-msgstr ""
+msgstr "Poner en mayúscula cada palabra"
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "card number"
@@ -723,7 +723,7 @@ msgstr "Próximamente"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Comma (,)"
-msgstr ""
+msgstr "Coma (,)"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm"
@@ -1063,7 +1063,7 @@ msgstr "Sincronización del dispositivo"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Digits"
-msgstr ""
+msgstr "Dígitos"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Disable master password"
@@ -1145,7 +1145,7 @@ msgstr "Elefante"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Empty falls back to the standard set."
-msgstr ""
+msgstr "Si está vacío, se utiliza el conjunto estándar."
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Enable autofill"
@@ -1362,7 +1362,7 @@ msgstr "Genere un código de emparejamiento único y escuche la conexión de un 
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Generate another"
-msgstr ""
+msgstr "Generar otra"
 
 #: packages/core/src/app/components/PasswordGeneratorModal.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -1481,7 +1481,7 @@ msgstr "Reloj de arena"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Hyphen (-)"
-msgstr ""
+msgstr "Guion (-)"
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "I've saved it"
@@ -1542,7 +1542,7 @@ msgstr "En la extensión Bramble, abra Ajustes → Sincronización → Aplicaci�
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Include a number"
-msgstr ""
+msgstr "Incluir un número"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
@@ -1683,7 +1683,7 @@ msgstr "Deje los campos de credenciales en blanco para conservar los que guardó
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Length"
-msgstr ""
+msgstr "Longitud"
 
 #: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
 msgid "Light"
@@ -1903,7 +1903,7 @@ msgstr "No hay ninguna bóveda seleccionada."
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "None"
-msgstr ""
+msgstr "Ninguno"
 
 #: packages/core/src/app/bulk-actions/tags.tsx
 msgid "None of the selected entries have this tag."
@@ -2196,7 +2196,7 @@ msgstr "Pingüino"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Period (.)"
-msgstr ""
+msgstr "Punto (.)"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Permission needed"
@@ -2224,7 +2224,7 @@ msgstr "Alfiler"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "PIN"
-msgstr ""
+msgstr "PIN"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Pizza"
@@ -2620,7 +2620,7 @@ msgstr "Envía un prefijo SHA-1 de 5 caracteres de cada contraseña guardada a h
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Separator"
-msgstr ""
+msgstr "Separador"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Server URL"
@@ -2755,7 +2755,7 @@ msgstr "Código fuente"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Space"
-msgstr ""
+msgstr "Espacio"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Spanner"
@@ -2816,7 +2816,7 @@ msgstr "Apoyar"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Symbols to use"
-msgstr ""
+msgstr "Símbolos a usar"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/Settings.tsx
@@ -3253,7 +3253,7 @@ msgstr "Paraguas"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Underscore (_)"
-msgstr ""
+msgstr "Guion bajo (_)"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Unicorn"
@@ -3436,7 +3436,7 @@ msgstr "Usar solo dígitos, espacios o guiones."
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Use password"
-msgstr ""
+msgstr "Usar contraseña"
 
 #: packages/core/src/app/components/ui/weak-password-notice.tsx
 msgid "Use this password anyway"
@@ -3558,7 +3558,7 @@ msgstr "Eliminar contraseñas copiadas después de"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Words"
-msgstr ""
+msgstr "Palabras"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Working…"
