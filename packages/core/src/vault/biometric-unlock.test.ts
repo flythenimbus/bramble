@@ -55,11 +55,43 @@ describe("enableBiometricUnlock", () => {
 		}
 	});
 
+	it("does not bound the arming step where it waits on a finger", async () => {
+		// Found on an Android device: `enable` raises a BiometricPrompt there, so a bound is a
+		// bound on how fast the user reaches the sensor. It reported "timed out" after ten
+		// seconds with the prompt still up, waiting.
+		vi.useFakeTimers();
+		try {
+			const crypto = { exportVek: async () => "vek" } as unknown as CryptoAdapter;
+			let settle: (() => void) | undefined;
+			const biometric = {
+				enableIsSilent: false,
+				enable: () =>
+					new Promise<void>((res) => {
+						settle = res;
+					}),
+			} as unknown as BiometricUnlock;
+			let done = false;
+			const p = enableBiometricUnlock(crypto, biometric, VID, true).then(() => {
+				done = true;
+			});
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(done).toBe(false); // still waiting, not timed out
+			settle?.();
+			await p;
+			expect(done).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("names the arming step when it is the gate that stalls, not the key read", async () => {
 		vi.useFakeTimers();
 		try {
 			const crypto = { exportVek: async () => "vek" } as unknown as CryptoAdapter;
-			const biometric = { enable: () => new Promise<void>(() => {}) } as unknown as BiometricUnlock;
+			const biometric = {
+				enableIsSilent: true,
+				enable: () => new Promise<void>(() => {}),
+			} as unknown as BiometricUnlock;
 			const p = enableBiometricUnlock(crypto, biometric, VID, true);
 			const assertion = expect(p).rejects.toThrow(/Saving the key to this device timed out/);
 			await vi.advanceTimersByTimeAsync(11_000);

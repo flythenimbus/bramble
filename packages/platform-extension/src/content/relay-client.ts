@@ -22,6 +22,7 @@
 
 import { isExtensionOrigin } from "./ext-origin";
 import type { FrameRelay, RelayRect } from "./frame-relay";
+import type { AliasRowState } from "./html/dropdown-alias";
 import type { MatchSummary } from "./types";
 
 // The UI announces itself; this frame cannot go looking for it. `window.frames`
@@ -33,7 +34,13 @@ const HERE = "tp-ui-here";
 
 export type SuggestOpt = { password: string };
 export type RelayRender =
-	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean; suggest?: SuggestOpt }
+	| {
+			kind: "matches";
+			matches: MatchSummary[];
+			otpOnly: boolean;
+			suggest?: SuggestOpt;
+			alias?: AliasRowState;
+	  }
 	| { kind: "locked" };
 
 export interface RelayClientHandlers {
@@ -96,6 +103,7 @@ function flush(): void {
 		matches: render.matches,
 		otpOnly: render.otpOnly,
 		suggest: render.suggest,
+		alias: render.alias,
 	});
 }
 

@@ -1,10 +1,19 @@
 import { useLingui } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Archive, Info, Lock, type LucideIcon, SlidersHorizontal, Wifi } from "lucide-react";
+import {
+	Archive,
+	AtSign,
+	Info,
+	Lock,
+	type LucideIcon,
+	SlidersHorizontal,
+	Wifi,
+} from "lucide-react";
 import { useCan } from "../../../context/PlatformContext";
 import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
 import { cn } from "../../components/ui/utils";
 import { AboutSection } from "./components/AboutSection";
+import { AliasSection } from "./components/AliasSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { BackupSection } from "./components/BackupSection";
 import { BrowserPairingSection } from "./components/BrowserPairingSection";
@@ -35,6 +44,7 @@ export function Settings() {
 		{ id: "general", label: t`General`, Icon: SlidersHorizontal },
 		{ id: "security", label: t`Security`, Icon: Lock },
 		{ id: "backups", label: t`Backups`, Icon: Archive },
+		{ id: "aliases", label: t`Aliases`, Icon: AtSign },
 		{ id: "sync", label: t`Sync`, Icon: Wifi },
 		{ id: "about", label: t`About`, Icon: Info },
 	];
@@ -90,6 +100,7 @@ export function Settings() {
 						{canCloudBackup && <BackupSection />}
 					</>
 				)}
+				{tab === "aliases" && <AliasSection />}
 				{tab === "sync" && (
 					<div className="space-y-4">
 						<SyncConnectSection />

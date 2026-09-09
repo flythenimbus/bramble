@@ -26,12 +26,19 @@ import {
 	fillForm,
 	fillOtp,
 	fillPasswordFields,
+	fillTextField,
+	getLastFilledPassword,
 	isFilling,
 	submitFromField,
 } from "./fill";
 import { installFrameRelay, type RelayRect } from "./frame-relay";
+import type { AliasRowState } from "./html/dropdown-alias";
 import { onTeardown, safeRequest, safeSendMessage } from "./lifecycle";
-import { generatePassword } from "./password-gen";
+import {
+	holdGeneratedPassword,
+	requestGeneratedPassword,
+	takeGeneratedPassword,
+} from "./password-gen";
 import { picker } from "./picker";
 import {
 	closeRelayed,
@@ -45,10 +52,12 @@ import { closeRelayHost, showRelayHost } from "./relay-host";
 import {
 	isAccountCreationForm,
 	isOnAccountCreationForm,
+	shouldSuggestAlias,
 	shouldSuggestPassword,
 	signupPasswordFields,
 } from "./signup-detect";
 import type {
+	AliasCreateResponse,
 	AutofillQueryResponse,
 	AutofillSelectResponse,
 	AutofillSubmitRevalidationResponse,
@@ -176,9 +185,9 @@ function removePicker(): void {
 function showMatchesFor(
 	matches: MatchSummary[],
 	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean; suggest?: { password: string } },
+	opts?: { otpOnly?: boolean; suggest?: { password: string }; alias?: AliasRowState },
 ): void {
-	if (matches.length === 0 && !opts?.suggest) return;
+	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
 	if (!shouldRelay(field)) {
 		dropRelayed();
 		picker.showMatches(matches, field, opts);
@@ -191,6 +200,7 @@ function showMatchesFor(
 		matches,
 		otpOnly: opts?.otpOnly === true,
 		suggest: opts?.suggest,
+		alias: opts?.alias,
 	});
 }
 
@@ -404,6 +414,11 @@ interface Suggestion {
 // leave the DOM.
 const suggestionFor = new WeakMap<HTMLInputElement, Suggestion>();
 
+// The alias row's state per field. Unlike the password suggestion this is not a decision cached
+// once, it is where a round trip currently stands, and it is per field so leaving a form mid
+// request does not paint the spinner onto the next one.
+const aliasStateFor = new WeakMap<HTMLInputElement, AliasRowState>();
+
 // Whether a field sits on a form that creates an account, decided once per field. Cached
 // for the reason Suggestion is: by the time the picker has anchored, the form no longer
 // describes itself. It also keeps the scoring off the per-keystroke path.
@@ -434,7 +449,10 @@ function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Sugg
 	if (cached) return cached;
 	if (!shouldSuggestPassword(field, { hasExistingLogins })) return null;
 	// Read the form while it still describes itself; see Suggestion.
-	const suggestion = { password: generatePassword(), newLogin: isAccountCreationForm(field) };
+	const suggestion = {
+		password: takeGeneratedPassword(),
+		newLogin: isAccountCreationForm(field),
+	};
 	suggestionFor.set(field, suggestion);
 	// The same question creationFormFor asks, answered at the one moment it can be.
 	creationFormFor.set(field, suggestion.newLogin);
@@ -445,9 +463,13 @@ function maybeSuggest(field: HTMLInputElement, hasExistingLogins: boolean): Sugg
  * Swaps in a fresh password for `field`, keeping the save-vs-update decision the
  * first offer made: by now the picker has rewritten the anchor's autocomplete, so
  * re-classifying would read a form that no longer describes itself.
+ *
+ * Asks the background rather than spending the held password: an explicit click can afford the
+ * round trip, and it means repeated clicks all follow the user's settings instead of the first
+ * one draining the supply and the rest falling back.
  */
-function regenerateInto(field: HTMLInputElement): string {
-	const password = generatePassword();
+async function regenerateInto(field: HTMLInputElement): Promise<string> {
+	const password = await requestGeneratedPassword();
 	suggestionFor.set(field, { password, newLogin: suggestionFor.get(field)?.newLogin ?? false });
 	return password;
 }
@@ -490,7 +512,15 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 		showMatchesFor([], field, { suggest: { password: suggest.password } });
 		return;
 	}
-	// Same policy, one field over: the signup form's email box gets nothing either.
+	// The signup form's email box: an alias is the one thing that belongs here. Offered only when
+	// the background says a provider is configured, so a page cannot conjure the row, and kept on
+	// screen while a request is in flight or has failed so the state has somewhere to live.
+	const alias = aliasStateFor.get(field);
+	if (alias || (cachedResult?.aliasReady && shouldSuggestAlias(field))) {
+		showMatchesFor([], field, { alias: alias ?? { state: "idle" } });
+		return;
+	}
+	// Otherwise the same policy as before: the rest of an account-creation form gets nothing.
 	if (isCreationField(field)) return;
 	const visible = visibleLoginsForField(field, logins);
 	if (visible.length === 0) {
@@ -511,8 +541,19 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
  */
 function showLockedPicker(field: HTMLInputElement, hasPotentialMatch: boolean): void {
 	const suggest = maybeSuggest(field, hasPotentialMatch);
-	if (suggest) showMatchesFor([], field, { suggest: { password: suggest.password } });
-	else if (!isCreationField(field)) showLockedFor(field);
+	if (suggest) {
+		showMatchesFor([], field, { suggest: { password: suggest.password } });
+		return;
+	}
+	// A signup form's email field, where an alias could be made if the vault were open. The rest
+	// of a creation form still gets nothing, but this field now has something behind the lock, so
+	// suppressing the unlock row would leave the user no way to reach it from here. Unlocking is
+	// what saving the new login is about to ask for anyway.
+	if (cachedResult?.aliasReady && shouldSuggestAlias(field)) {
+		showLockedFor(field);
+		return;
+	}
+	if (!isCreationField(field)) showLockedFor(field);
 }
 
 /** Fills the suggested password into the new-password field(s) and offers to save the login. */
@@ -595,6 +636,8 @@ function handleResult(result: QueryResult | undefined): void {
 		return;
 	}
 	cachedResult = result;
+	// Rides on the query so the suggestion below has a settings-shaped password to draw at once.
+	holdGeneratedPassword(result.generated);
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
 	// they re-engage. cachedResult is still updated so the next focus sees fresh data.
@@ -822,13 +865,74 @@ picker.onUseSuggested(() => {
 	picker.remove();
 	dropRelayed();
 });
+/**
+ * Create an alias and put it in the field.
+ *
+ * The only place in the extension that spends the user's allowance, so it is reached only from
+ * this explicit click. The row carries its own state through the round trip because it is the
+ * one suggestion that can fail, and the failure is the only thing that tells someone whether to
+ * fix a key, a plan or an allowance.
+ */
+picker.onUseAlias(() => {
+	cancelOperations();
+	const field = anchorField();
+	if (!field) return;
+	// A click on the busy row is impossible by construction (it carries no hook), but a stale
+	// keyboard activation could still arrive; one gesture must not buy two aliases.
+	if (aliasStateFor.get(field)?.state === "busy") return;
+
+	aliasStateFor.set(field, { state: "busy" });
+	showMatchesFor([], field, { alias: { state: "busy" } });
+
+	void safeRequest<AliasCreateResponse>({ type: "ALIAS_CREATE" }).then((res) => {
+		// The anchor can move (or go) while the provider answers. An address meant for a field the
+		// user has left must not be painted onto the one they are on now, and the state it was
+		// waiting in must not outlive it either.
+		if (anchorField() !== field || !field.isConnected) {
+			aliasStateFor.delete(field);
+			return;
+		}
+		if (!res?.ok || !res.data.address) {
+			// undefined means the extension went away mid-flight; there is nothing to report but
+			// the row still has to leave the spinner.
+			const message = res && !res.ok ? res.error : undefined;
+			aliasStateFor.set(field, { state: "error", message });
+			showMatchesFor([], field, { alias: { state: "error", message } });
+			return;
+		}
+		aliasStateFor.delete(field);
+		fillTextField(field, res.data.address);
+		// Refresh the pending capture when a password is already in hand.
+		//
+		// An ordinary submit re-captures from the live form, so the address is picked up there
+		// whatever order the two rows were used in. This covers the other order without a submit:
+		// taking the password suggestion first stashes a capture immediately (so an "Unlock &
+		// Save" prompt survives a navigation that never looks like a submit), and at that moment
+		// the identifier did not exist yet. Left alone, that stash saves the login with an empty
+		// username and the alias is lost, which defeats the point of having made one.
+		const filledPassword = getLastFilledPassword();
+		if (filledPassword) {
+			safeSendMessage({
+				type: "CORNER_PROMPT_CAPTURE",
+				payload: { username: res.data.address, password: filledPassword, newLogin: true },
+			});
+		}
+		silenceAutoOpen = true;
+		picker.remove();
+		dropRelayed();
+	});
+});
 picker.onRegenerate(() => {
 	cancelOperations();
 	const field = anchorField();
 	if (!field) return;
-	const pw = regenerateInto(field);
-	// Suggestion-only prompt (no matches), matching showLoginPicker.
-	showMatchesFor([], field, { suggest: { password: pw } });
+	void regenerateInto(field).then((pw) => {
+		// The anchor can move (or go) while the background answers; a password meant for a field
+		// the user has left must not be painted onto the one they are on now.
+		if (anchorField() !== field) return;
+		// Suggestion-only prompt (no matches), matching showLoginPicker.
+		showMatchesFor([], field, { suggest: { password: pw } });
+	});
 });
 
 // The top frame lends its document to descendants that have no room to draw; every
@@ -862,8 +966,10 @@ if (frameRelay.isTop()) {
 			cancelOperations();
 			const field = relayedField;
 			if (!field) return;
-			const pw = regenerateInto(field);
-			showMatchesFor([], field, { suggest: { password: pw } });
+			void regenerateInto(field).then((pw) => {
+				if (relayedField !== field) return;
+				showMatchesFor([], field, { suggest: { password: pw } });
+			});
 		},
 	});
 }

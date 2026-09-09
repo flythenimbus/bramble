@@ -22,6 +22,7 @@ import {
 	deepQueryAll,
 	isRendered,
 	labelText,
+	looksLikeEmail,
 	USERNAME_HINT_RE,
 } from "./detection";
 
@@ -466,6 +467,31 @@ export function shouldSuggestPassword(
 }
 
 /**
+ * Whether to offer an email alias in `field`.
+ *
+ * The hard case is the minimal form, which is what modern signup and login both look like: one
+ * email box, one password box. `isOnAccountCreationForm` already answers exactly that question
+ * for the picker, so this reuses it rather than growing a second idea of what account creation
+ * is. What it adds is the field test: an alias belongs in a box that takes an email, and only
+ * while that box is still empty, because a filled one is the account the user already has here
+ * and replacing it would lock them out of it.
+ *
+ * Worth restating what carries the minimal case, since it is the whole question. A
+ * current-password box in the form settles it outright: a form asking for the password you
+ * already have is not creating an account, and login forms carry that token overwhelmingly.
+ * Failing that, the scorer falls back to evidence about the page, including negative evidence -
+ * `/login` in the path, "remember me" or "forgot password" near the form - so a bare login form
+ * lands far below THRESHOLD without anyone having to recognise it as a login form. It simply
+ * fails to look like a signup. And where there is no password box in reach at all, only a
+ * confirm-email pair is decisive, because a signup's email step and a two-step login's are
+ * otherwise identical.
+ */
+export function shouldSuggestAlias(field: HTMLInputElement): boolean {
+	if (!looksLikeEmail(field) || field.value) return false;
+	return isOnAccountCreationForm(field);
+}
+
+/**
  * True if `field`'s form has a rendered current-password sibling: a password-change
  * (rotation of an existing login), not a signup. Used to decide save-new vs update.
  */
@@ -505,16 +531,6 @@ export function isAccountCreationForm(field: HTMLInputElement): boolean {
  * also carries "account" and "user": pairing an account-number box with an email box is not
  * a signup, and the pair below is load-bearing.
  */
-const EMAIL_HINT_RE =
-	/\be.?mail\b|\bmail\b|courriel|correo|mejl|s(ä|a)hk(ö|o)posti|posta.?elettronica|e.?posta|почта|メール|邮箱|이메일/i;
-
-/** True if the box asks for an email: by type, by token, or by what it says about itself. */
-function looksLikeEmail(el: HTMLInputElement): boolean {
-	if (el.type === "email") return true;
-	if ((el.autocomplete?.toLowerCase() ?? "").split(/\s+/).includes("email")) return true;
-	return EMAIL_HINT_RE.test(`${attrHint(el)} ${labelText(el)}`);
-}
-
 /**
  * True if `scope` asks for the email TWICE. Structural and language-independent, like the
  * confirm-password pair, and decisive for the same reason: a login form asks who you are

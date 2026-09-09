@@ -188,3 +188,22 @@ export async function addTapToUnlockKey(
 	if (label) await page.getByPlaceholder(/Name this key/i).fill(label);
 	await page.getByRole("button", { name: kind, exact: true }).click();
 }
+
+/**
+ * From an unlocked popup, configure an alias provider with a throwaway key.
+ *
+ * Deliberately never presses "Check key": the key field persists on blur, so this saves a
+ * provider without contacting Addy or SimpleLogin. A test that reached a real provider would
+ * need a secret in CI, would spend the user's alias allowance on every run, and would fail
+ * whenever a third party did.
+ */
+export async function configureAliasProvider(page: Page, apiKey = "test-key-not-real") {
+	await page.getByRole("button", { name: "Settings" }).click();
+	await page.getByRole("button", { name: "Aliases", exact: true }).click();
+	const key = page.locator('input[type="password"]').first();
+	await key.fill(apiKey);
+	await key.blur();
+	// The Disconnect button only exists once a provider is stored, so it is the tell that the
+	// write landed rather than a timeout.
+	await expect(page.getByRole("button", { name: "Disconnect" })).toBeVisible();
+}

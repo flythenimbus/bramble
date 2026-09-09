@@ -765,3 +765,65 @@ describe("angular design-system — set a new password (reset / forced rotation)
 		expect(isAccountCreationForm(newPassword())).toBe(false);
 	});
 });
+
+describe("login.gog.com — sign in (register + login forms in one document)", () => {
+	// gog.com serves its whole sign-in UI cross-origin inside an iframe, and that
+	// one document holds both credential forms: register first in DOM order and
+	// hidden by `._modal__box{display:none}`, login second and `.is-active`. Taking
+	// the first password field in the document put every detector in the register
+	// form, so the visible email box classified as nothing at all and no dropdown
+	// ever appeared on it. Every rung now prefers a field that is on screen.
+
+	const loginEmail = () => document.querySelector<HTMLInputElement>("#login_username")!;
+	const loginPassword = () => document.querySelector<HTMLInputElement>("#login_password")!;
+
+	it("detectLoginFields finds the visible login form, not the hidden register one", () => {
+		loadFixture("gog-login-frame");
+		const { username, password } = detectLoginFields();
+		expect(username?.id).toBe("login_username");
+		expect(password?.id).toBe("login_password");
+	});
+
+	it("classifies both visible login fields as login", () => {
+		loadFixture("gog-login-frame");
+		expect(candidateKind(loginEmail())).toBe("login");
+		expect(candidateKind(loginPassword())).toBe("login");
+	});
+
+	it("still finds the register form once it is the one on screen", () => {
+		// The two boxes swap classes in place; nothing is added or removed.
+		loadFixture("gog-login-frame");
+		document
+			.querySelector('[data-content-type="loginForm"]._modal__box')!
+			.classList.remove("is-active");
+		document
+			.querySelector('[data-content-type="registerForm"]._modal__box')!
+			.classList.add("is-active");
+		const { username, password } = detectLoginFields();
+		expect(username?.id).toBe("register_email");
+		expect(password?.id).toBe("register_password");
+	});
+
+	it("falls back to a hidden password field when no form is on screen", () => {
+		// A step-2 password box that a script reveals later must still be found.
+		loadFixture("gog-login-frame");
+		document
+			.querySelector('[data-content-type="loginForm"]._modal__box')!
+			.classList.remove("is-active");
+		expect(detectLoginFields().password?.id).toBe("register_password");
+	});
+
+	it("doesn't detect any card or OTP fields", () => {
+		loadFixture("gog-login-frame");
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+		expect(otpInputs()).toEqual([]);
+	});
+
+	it("doesn't offer a generated password on the login form", () => {
+		// The register form's signup signals (tos links, a password-rules block)
+		// are in the same document; scoring is scoped to the focused field's form.
+		loadFixture("gog-login-frame");
+		expect(shouldSuggestPassword(loginPassword())).toBe(false);
+		expect(isAccountCreationForm(loginPassword())).toBe(false);
+	});
+});

@@ -178,6 +178,7 @@ export type JoinUnlock = { kind: "password"; password: string };
 /** Re-auth for deleting a vault: the master password, or a security-key tap. */
 export type DeleteVaultAuth = { password: string } | { webauthnKey: true };
 
+import { aliasConfigKeyFor, aliasConfiguredHintKeyFor, aliasHintValue } from "../aliases/config";
 import { backupTargetsKeyFor } from "../backup/config";
 import { exportToOs } from "../exchange";
 import { toKdbxEntries } from "../export/kdbx";
@@ -191,6 +192,7 @@ import {
 	type Hlc,
 	type HybridClock,
 	makeClock,
+	type SyncedSettings,
 } from "../sync";
 import { PER_VAULT_SYNC_KEYS, syncKeyFor } from "../sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
@@ -231,7 +233,8 @@ import {
 	unlockRpIdOrder,
 	type WebauthnKeyKind,
 } from "../vault/webauthn-ceremony";
-import { PER_VAULT_PREF_KEYS } from "./usePrefs";
+import { type SyncedSettingsAccess, SyncedSettingsContext } from "./synced-settings";
+import { PER_VAULT_PREF_KEYS, PREF_ALIAS_PROVIDER } from "./usePrefs";
 import { useSyncEnrollment } from "./useSyncEnrollment";
 
 export type { WebauthnKeyMeta };
@@ -453,6 +456,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const clockRef = useRef<{ vaultId: string | null; clock: HybridClock } | null>(null);
 	const stampsRef = useRef<Map<string, Hlc>>(new Map());
 	const tombstonesRef = useRef<Map<string, Hlc>>(new Map());
+	// Vault-scoped settings, held here for the same reason the two above are: every mutation
+	// rebuilds the payload from this value, so anything not threaded through is erased by the
+	// next entry edit. See docs/synced-settings.md.
+	const settingsRef = useRef<SyncedSettings | undefined>(undefined);
+	// Mirrored in state so consumers re-render when a value changes, including when a remote
+	// merge lands one. The ref is what mutations thread; this is what the UI reads.
+	const [syncedSettings, setSyncedSettings] = useState<SyncedSettings | undefined>(undefined);
 
 	/** Lazily load this device's id and build its clock. The device id is per-vault (each vault
 	 * is its own sync group with its own roster membership), so read/write it under the active
@@ -557,6 +567,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		if (blob.entriesCiphertext.length === 0) {
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
+			settingsRef.current = undefined;
+			setSyncedSettings(undefined);
 			setEntries([]);
 			await publishIndex([], indexLease);
 			return;
@@ -586,6 +598,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		}
 		stampsRef.current = new Map(payload.entries.map((e) => [e.id, e.hlc]));
 		tombstonesRef.current = new Map(payload.tombstones.map((t) => [t.id, t.hlc]));
+		settingsRef.current = payload.settings;
+		setSyncedSettings(payload.settings);
 		// Advance this device's clock past every stamp it just read, so the next
 		// local write is causally ordered after them.
 		const clock = await ensureClock();
@@ -698,6 +712,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		return crypto.onExternalLock(() => {
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
+			settingsRef.current = undefined;
+			setSyncedSettings(undefined);
 			setEntries([]);
 			setIsLocked(true);
 		});
@@ -764,6 +780,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		await autofill.clearIndex();
 		stampsRef.current = new Map();
 		tombstonesRef.current = new Map();
+		settingsRef.current = undefined;
+		setSyncedSettings(undefined);
 		setEntries([]);
 		setIsLocked(true);
 		setLockedByUser(true);
@@ -973,6 +991,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await storage.writeVaultBlob(bytes, newId);
 			stampsRef.current = new Map();
 			tombstonesRef.current = new Map();
+			settingsRef.current = undefined;
+			setSyncedSettings(undefined);
 			setHasVault(true);
 			setEntries([]);
 			setIsLocked(false);
@@ -1039,6 +1059,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			entries: latestRef.current.entries,
 			stamps: stampsRef.current,
 			tombstones: tombstonesRef.current,
+			settings: settingsRef.current,
 		}),
 		[],
 	);
@@ -1048,6 +1069,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const commitEntries = useCallback((next: VaultEntries) => {
 		stampsRef.current = next.stamps;
 		tombstonesRef.current = next.tombstones;
+		settingsRef.current = next.settings;
+		setSyncedSettings(next.settings);
 		setEntries(next.entries);
 	}, []);
 
@@ -1620,6 +1643,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				await backupCreds?.remove(activeId, t.id).catch(() => {});
 			}
 			await storage.removeMeta(backupTargetsKeyFor(activeId)).catch(() => {});
+			// Its alias provider, whose API key can spend the user's allowance at a third party and
+			// delete the aliases already made. VEK-wrapped, so it is unreadable the moment the blob
+			// above is gone, but the same rule applies as to the settings above: a delete leaves
+			// nothing of the vault behind.
+			// The configuration itself dies with the blob, since it is a synced setting inside it.
+			// These two are what live outside: the pre-sync key a migration may not have reached,
+			// and the device-local hint that a provider exists here.
+			await storage.removeMeta(aliasConfigKeyFor(activeId)).catch(() => {});
+			await storage.removeMeta(aliasConfiguredHintKeyFor(activeId)).catch(() => {});
 			await dropActiveRecord();
 			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
 			// so after a delete it still named the vault we just erased. Mobile's sync resolves its
@@ -1721,9 +1753,42 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		],
 	);
 
+	// The device-local hint that this vault has an alias provider, which is the only thing that can
+	// answer that while the vault is LOCKED (the configuration itself is a synced setting, so it
+	// lives inside the encrypted payload).
+	//
+	// Maintained here rather than in the settings screen, because a vault can acquire a provider
+	// by SYNC and must record that too. The screen only mounts when someone visits it, so a
+	// browser that received the provider from another device never wrote the hint and never
+	// offered the unlock row. Written only while unlocked, since locking resets every synced pref
+	// to its default and a locked vault cannot know the answer.
+	useEffect(() => {
+		if (!activeId) return;
+		const next = aliasHintValue(syncedSettings, isLocked, PREF_ALIAS_PROVIDER);
+		if (next === null) return;
+		void storage.setMeta(aliasConfiguredHintKeyFor(activeId), next).catch(() => {});
+	}, [storage, activeId, isLocked, syncedSettings]);
+
+	// What usePrefs routes a "synced"-scoped pref through. Writing goes via the same mutation
+	// every entry change uses, so there is one writer onto the blob and the settings map cannot
+	// be lost to a race with an entry edit. See docs/synced-settings.md.
+	const syncedAccess = useMemo<SyncedSettingsAccess>(
+		() => ({
+			settings: syncedSettings,
+			ready: !isLocked,
+			set: async (key, value) =>
+				commitEntries(await mutations.setSetting(snapshotEntries(), key, value)),
+		}),
+		[syncedSettings, isLocked, mutations, snapshotEntries, commitEntries],
+	);
+
 	return (
 		<VaultActionsContext.Provider value={actions}>
-			<VaultStateContext.Provider value={state}>{children}</VaultStateContext.Provider>
+			<VaultStateContext.Provider value={state}>
+				<SyncedSettingsContext.Provider value={syncedAccess}>
+					{children}
+				</SyncedSettingsContext.Provider>
+			</VaultStateContext.Provider>
 		</VaultActionsContext.Provider>
 	);
 }

@@ -1,18 +1,7 @@
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import {
-	Boxes,
-	ChevronDown,
-	ChevronRight,
-	Cloud,
-	CloudUpload,
-	FolderTree,
-	HardDrive,
-	Mail,
-	Plus,
-	X,
-} from "lucide-react";
+import { Boxes, Cloud, CloudUpload, FolderTree, HardDrive, Mail, Plus, X } from "lucide-react";
 import { type ComponentType, useState } from "react";
 import {
 	type BackupFrequency,
@@ -31,6 +20,7 @@ import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
 import { NextCloud } from "../../../components/icons/NextCloud";
 import { Wasabi } from "../../../components/icons/Wasabi";
+import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
 import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -872,76 +862,57 @@ export function BackupSection() {
 								</p>
 							)}
 
-							<div>
-								<Button
-									variant="link"
-									size="none"
-									onClick={() => setAdvancedOpen((o) => !o)}
-									aria-expanded={advancedOpen}
-									className="gap-1.5 text-xs"
+							<AdvancedDisclosure open={advancedOpen} onOpenChange={setAdvancedOpen}>
+								{modalDef.kind === "s3" ? (
+									<>
+										<TextField
+											label={t`Endpoint`}
+											value={endpoint}
+											onChange={(e) => setEndpoint(e.target.value)}
+										/>
+										<TextField
+											label={t`Region`}
+											value={region}
+											onChange={(e) => setRegion(e.target.value)}
+										/>
+										<TextField
+											label={t`Path prefix (optional)`}
+											value={prefix}
+											onChange={(e) => setPrefix(e.target.value)}
+										/>
+									</>
+								) : (
+									<TextField
+										label={t`Backup folder (optional)`}
+										value={davPath}
+										onChange={(e) => setDavPath(e.target.value)}
+									/>
+								)}
+								<SelectField
+									label={t`Backups to keep`}
+									value={String(keep)}
+									onChange={(e) => setKeep(Number(e.target.value))}
 								>
-									{advancedOpen ? (
-										<ChevronDown className="w-3.5 h-3.5" />
-									) : (
-										<ChevronRight className="w-3.5 h-3.5" />
-									)}
-									<Trans>Advanced</Trans>
-								</Button>
-								{advancedOpen && (
-									<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
-										{modalDef.kind === "s3" ? (
-											<>
-												<TextField
-													label={t`Endpoint`}
-													value={endpoint}
-													onChange={(e) => setEndpoint(e.target.value)}
-												/>
-												<TextField
-													label={t`Region`}
-													value={region}
-													onChange={(e) => setRegion(e.target.value)}
-												/>
-												<TextField
-													label={t`Path prefix (optional)`}
-													value={prefix}
-													onChange={(e) => setPrefix(e.target.value)}
-												/>
-											</>
-										) : (
-											<TextField
-												label={t`Backup folder (optional)`}
-												value={davPath}
-												onChange={(e) => setDavPath(e.target.value)}
-											/>
-										)}
-										<SelectField
-											label={t`Backups to keep`}
-											value={String(keep)}
-											onChange={(e) => setKeep(Number(e.target.value))}
-										>
-											<option value="5">{t`Last 5`}</option>
-											<option value="10">{t`Last 10`}</option>
-											<option value="30">{t`Last 30`}</option>
-											<option value="100">{t`Last 100`}</option>
-											{/* 0 is the sentinel selectForPruning reads as "never delete". */}
-											<option value="0">{t`Keep everything`}</option>
-										</SelectField>
-										{/* The security point of the option, and the only reason to pick it over
+									<option value="5">{t`Last 5`}</option>
+									<option value="10">{t`Last 10`}</option>
+									<option value="30">{t`Last 30`}</option>
+									<option value="100">{t`Last 100`}</option>
+									{/* 0 is the sentinel selectForPruning reads as "never delete". */}
+									<option value="0">{t`Keep everything`}</option>
+								</SelectField>
+								{/* The security point of the option, and the only reason to pick it over
 										    a number: deleting is the one thing Bramble asks for that can lose
 										    you something, so not needing it is what lets the credential
 										    give it up. */}
-										{keep === 0 && (
-											<p className="text-xs text-muted-foreground text-pretty">
-												<Trans>
-													Bramble will never delete anything here, so this can use a credential that
-													isn't allowed to. One that's stolen then can't destroy your backup
-													history.
-												</Trans>
-											</p>
-										)}
-									</div>
+								{keep === 0 && (
+									<p className="text-xs text-muted-foreground text-pretty">
+										<Trans>
+											Bramble will never delete anything here, so this can use a credential that
+											isn't allowed to. One that's stolen then can't destroy your backup history.
+										</Trans>
+									</p>
 								)}
-							</div>
+							</AdvancedDisclosure>
 
 							<div className="flex justify-end gap-2 pt-1">
 								<Button variant="secondary" size="sm" onClick={() => setModal(null)}>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const SETTINGS_TABS = ["general", "security", "backups", "sync", "about"] as const;
+const SETTINGS_TABS = ["general", "security", "backups", "aliases", "sync", "about"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 // The active tab lives in the route's search params so it survives navigating away

@@ -1,0 +1,109 @@
+<!-- login.gog.com, the whole of gog.com's sign-in UI, served cross-origin inside
+     <iframe id="GalaxyAccountsFrame"> on www.gog.com. Captured with the inline
+     scripts and the SVG symbol paths dropped; every input is verbatim.
+
+     The point of this one: ONE document holds TWO credential forms. The register
+     form comes first in DOM order and the login form second, and which of them is
+     on screen is decided by a class - `._modal__box{display:none}` /
+     `._modal__box.is-active{display:block}`, copied verbatim from the page's
+     stylesheet into the <style> below, since jsdom loads no external CSS. Take the
+     first password field in the document and you land in the hidden register form,
+     and the visible login email input is then not a candidate at all. -->
+<style>
+	._modal__box {
+		display: none;
+	}
+	._modal__box.is-active {
+		display: block;
+	}
+</style>
+<div class="login-v2-overlay">
+	<div class="login-v2-modal">
+		<div class="login-v2-content">
+			<div data-content-type="registerForm" class="_modal__box   _modal__box--register-promo js-modal-box">
+				<div class="_modal__content-wrapper default-v2-gog">
+					<div class="_modal__content-item">
+						<div class="register-method-selection js-register-method-selection is-active">
+							<h2 class="form__title"><div class="form__title--text">Join GOG</div></h2>
+							<button class="btn btn--email js-signup-email-btn" type="button">Sign up with Email</button>
+							<footer class="footer footer--method-selection"><a class="footer__link js-change-content" data-content-type="loginForm" data-gamepad-selectable="true">Log in to your account</a></footer>
+						</div>
+						<div class="register-email-form js-register-email-form">
+							<form name="register" method="post" action="/register" data-form-type="registerForm" class="form form--register js-register-form">
+								<h2 class="form__title"><div class="form__title--text">Join GOG</div></h2>
+								<ol class="form__fieldset">
+									<li class="form__field field  "><label for="register_username" class="required">Username</label><input type="text" id="register_username" name="register[username]" required="required" placeholder="Username" class="field__input" autocomplete="on" data-error="error_register_username" data-input-type="user" data-gamepad-selectable="true"><span id="error_register_username" class="js-error-msg field__msg is-hidden">Username required</span></li>
+								</ol>
+								<ol class="form__fieldset form__fieldset--two-rows">
+									<li class="form__field field  "><label for="register_email" class="required">Email</label><input type="email" id="register_email" name="register[email]" required="required" class="field__input" autocomplete="on" placeholder="Email" data-error="error_register_email" data-input-type="user" data-gamepad-selectable="true"><span id="error_register_email" class="js-error-msg field__msg is-hidden">Incorrect email</span></li>
+									<li class="form__field field  "><label for="register_password" class="required">Password</label><input type="password" id="register_password" name="register[password]" required="required" placeholder="min. 8 characters" class="field__input" autocomplete="on" data-error="" data-input-type="user" data-gamepad-selectable="true"><span id="" class="js-error-msg field__msg is-hidden">Password required</span></li>
+								</ol>
+								<div class="passwordValidationRequirements">
+									<div class="passwordValidationRequirements__description">Password validation requirements</div>
+									<div class="passwordValidationRequirements__requirements">
+										<p class="passwordValidationRequirements__requirement">Must have min. 8 characters</p>
+										<p class="passwordValidationRequirements__requirement">Must contain at least 1 letter</p>
+										<p class="passwordValidationRequirements__requirement">Cannot match the list of 500 most insecure passwords</p>
+									</div>
+								</div>
+								<div class="form__agreements-wrapper">
+									<div class="form__agreements">
+										<li class="form__field field field--agreement  "><label class="field__label--agreement field__label--visible field__label--no-padding form__description-more-link js-open-agreement-form-description">Information about your personal data</label></li>
+										<ol class="form__fieldset">
+											<li class="form__field field field--agreement "><label class="field__label--agreement field__label--visible field__label--no-padding">This site is protected by reCAPTCHA and the Google <a href="https://policies.google.com/privacy">Privacy Policy</a> and <a href="https://policies.google.com/terms">Terms of Service</a> apply.</label></li>
+										</ol>
+										<p class="form__description">By signing up you acknowledge you are 16 or older and accept <a href="https://www.gog.com/support/policies" target="_top"><strong>GOG User Agreement &amp; Privacy Policy</strong></a>.</p>
+									</div>
+									<div class="g-recaptcha form__recaptcha" data-theme="light" data-sitekey="6LfHsG8cAAAAAIP7V03HJP1h1gZr8RA4X9ZDk_wB">
+										<div style="width: 304px; height: 78px;"><div><iframe title="reCAPTCHA" width="304" height="78" role="presentation" name="a-7cno5zyw1b3c" frameborder="0" scrolling="no" src="https://www.recaptcha.net/recaptcha/api2/anchor?k=6LfHsG8cAAAAAIP7V03HJP1h1gZr8RA4X9ZDk_wB&amp;size=normal"></iframe></div><textarea id="g-recaptcha-response" name="g-recaptcha-response" class="g-recaptcha-response" style="display: none;"></textarea></div>
+									</div>
+								</div>
+								<ol class="form__fieldset">
+									<li class="form__field field btn-slot"><button type="submit" id="register_register" name="register[register]" class="btn btn--main" data-gamepad-selectable="true">Join GOG now</button></li>
+								</ol>
+								<input type="hidden" id="register__token" name="register[_token]" value="_uT7vPJPkahNQjVoljUcZ662XAG-Ym3AtrpvvhjH52c">
+							</form>
+							<footer class="footer"><a class="footer__link js-change-content" data-content-type="loginForm" data-gamepad-selectable="true">Log in to your account</a></footer>
+						</div>
+						<button selenium-id="loginPopupClose" class="_modal__control js-close-modal" data-action="close"><i class="icn icn--close"></i></button>
+					</div>
+				</div>
+			</div>
+			<div data-content-type="loginForm" class="_modal__box   js-modal-box is-active">
+				<div class="_modal__content-wrapper default-v2-gog">
+					<div class="_modal__content-item">
+						<form name="login" method="post" action="/login_check" data-form-type="loginForm" class="form form--login js-login-form">
+							<h2 class="form__title"><div class="form__title--text">Log in</div></h2>
+							<div class="form__buttons-container">
+								<div class="external-login-methods __one-row">
+									<div><a class="btn btn--google ext-acc-google-popup-login" data-url="https://external-accounts.gog.com/login/providers/google/init" target="Login" data-gamepad-id="0"><span class="platform-padding-left">Google</span></a></div>
+									<div><a class="btn btn--steam ext-acc-google-popup-login" data-url="https://external-accounts.gog.com/login/providers/steam/init" target="Login" data-gamepad-id="1"><span class="platform-padding-left">Steam</span></a></div>
+								</div>
+							</div>
+							<div class="form__separator"><span class="form__separator-text">or continue with</span></div>
+							<ol class="form__fieldset form__fieldset--login-fields">
+								<li class="form__field field  "><label for="login_username" class="required">Email</label><input type="email" id="login_username" name="login[username]" required="required" placeholder="Email" class="field__input" autocomplete="on" data-error="error_login_username" data-input-type="user" data-gamepad-selectable="true" data-gamepad-id="4"><span id="error_login_username" class="js-error-msg field__msg is-hidden">Incorrect email</span></li>
+								<li class="form__field field  "><label for="login_password" class="required">Password</label><input type="password" id="login_password" name="login[password]" required="required" placeholder="Password" class="field__input" autocomplete="on" maxlength="4096" data-error="error_login_password" data-input-type="user" data-gamepad-selectable="true" data-gamepad-id="5"><span id="error_login_password" class="js-error-msg field__msg is-hidden">Password required</span></li>
+							</ol>
+							<a class="footer__link js-normal-link password-reset-link" data-content-type="requestPasswordForm" href="/password/request" data-gamepad-selectable="true" data-gamepad-id="6">Password reset</a>
+							<ol class="form__fieldset form__fieldset--login-button">
+								<li class="form__field field btn-slot"><button type="submit" id="login_login" name="login[login]" class="btn btn--main" data-gamepad-selectable="true" data-gamepad-id="7">Log in now</button></li>
+							</ol>
+							<a class="footer__link js-normal-link sign-up-link" data-content-type="registerForm" href="/register" data-gamepad-id="8">Create account</a>
+							<input type="hidden" id="login_login_flow" name="login[login_flow]" value="default">
+							<input type="hidden" id="login__token" name="login[_token]" value="bYG8KviMwwXE-LRMnUVCw9hw6zqW04I6tO-T11yXLw8">
+						</form>
+						<button selenium-id="loginPopupClose" class="_modal__control js-close-modal" data-action="close"><i class="icn icn--close"></i></button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<div>
+	<div class="grecaptcha-badge" data-style="bottomright" style="width: 256px; height: 60px; display: block; position: fixed; bottom: 14px; right: -186px;">
+		<div class="grecaptcha-logo"><iframe title="reCAPTCHA" width="256" height="60" role="presentation" name="a-3awhj2cttf2e" frameborder="0" scrolling="no" src="https://www.recaptcha.net/recaptcha/api2/anchor?k=6LcXnG8cAAAAAMdaeQXuMG01hTwMaFO5V3VlS354&amp;size=invisible"></iframe></div>
+		<div class="grecaptcha-error"></div>
+		<textarea id="g-recaptcha-response-100000" name="g-recaptcha-response" class="g-recaptcha-response" style="display: none;"></textarea>
+	</div>
+</div>

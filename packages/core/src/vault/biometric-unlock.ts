@@ -21,9 +21,9 @@ export function effectiveAllowPasscode(biometryEnrolled: boolean, prefAllows: bo
 	return !biometryEnrolled || prefAllows;
 }
 
-// Neither step here waits on a person: exporting the VEK is a memory read, and arming the gate
-// is a Keychain/Keystore WRITE, which by contract never prompts. So either one taking seconds
-// means it is not coming back. On device that stalled the Settings toggle mid-flight - `busy`
+// Exporting the VEK is a memory read and never waits on anyone, so it is always bounded. Arming
+// the gate only is where the write is silent (iOS): Android prompts and waits for a finger, and
+// bounding that times out a user who is merely slow to reach the sensor. On device that stalled the Settings toggle mid-flight - `busy`
 // never cleared, so the row read as off and disabled with no error - and left the vault with no
 // gate armed. Bounded so a stall becomes a named failure the user (and we) can act on.
 // Deliberately NOT applied to unlock: that one does wait on a person answering Face ID.
@@ -44,11 +44,15 @@ export async function enableBiometricUnlock(
 		GATE_WRITE_TIMEOUT_MS,
 		"Reading this vault's key",
 	);
-	await withTimeout(
-		biometric.enable(vek, vaultId, allowPasscode),
-		GATE_WRITE_TIMEOUT_MS,
-		"Saving the key to this device",
-	);
+	// Only bounded where the write is silent. On Android `enable` raises a BiometricPrompt and
+	// waits for a finger, so a bound here is a bound on how fast the user reaches the sensor:
+	// on device this fired after ten seconds and reported "timed out" while the prompt was still
+	// up, waiting. The same reasoning that keeps `unlock` unbounded applies - never time out a
+	// step that is waiting on a person.
+	const arm = biometric.enable(vek, vaultId, allowPasscode);
+	await (biometric.enableIsSilent
+		? withTimeout(arm, GATE_WRITE_TIMEOUT_MS, "Saving the key to this device")
+		: arm);
 }
 
 /** Biometric-unwrap this vault's cached VEK and load it into the crypto session. The caller

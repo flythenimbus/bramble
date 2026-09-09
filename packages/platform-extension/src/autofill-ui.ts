@@ -9,12 +9,17 @@ interface MatchSummary {
 	secondary: string;
 }
 
+/** Twin of content/html/dropdown-alias.ts's type. Declared here rather than imported, like
+ * MatchSummary above and for the same reason: this entry stays self-contained. */
+type AliasRowState = { state: "idle" } | { state: "busy" } | { state: "error"; message?: string };
+
 type Inbound =
 	| {
 			type: "RENDER_MATCHES";
 			matches: MatchSummary[];
 			otpOnly?: boolean;
 			suggest?: { password: string };
+			alias?: AliasRowState;
 	  }
 	| { type: "RENDER_LOCKED" }
 	| { type: "UI_KEY"; key: string };
@@ -39,7 +44,11 @@ let peer: { win: Window; origin: string } | null = null;
 let otpOnly = false;
 // Navigable rows in render order: an optional leading "suggest a password" row,
 // the login/card matches, or (alone) the locked row. Keyboard + click share this.
-type NavRow = { kind: "suggest" } | { kind: "match"; id: string } | { kind: "locked" };
+type NavRow =
+	| { kind: "alias" }
+	| { kind: "suggest" }
+	| { kind: "match"; id: string }
+	| { kind: "locked" };
 let rows: NavRow[] = [];
 let highlight = -1;
 
@@ -184,6 +193,12 @@ const STYLE = `
 	}
 	.tp-item:hover .tp-launch { color: var(--tp-foreground); }
 	.tp-avatar-suggest { background: var(--tp-primary); color: var(--tp-on-primary); }
+	.tp-avatar-alias { background: var(--tp-primary); color: var(--tp-on-primary); }
+	.tp-avatar-alias svg { width: 20px; height: 20px; }
+	.tp-alias-busy { opacity: 0.75; cursor: default; }
+	.tp-alias-error .tp-user { color: var(--tp-danger, #dc2626); }
+	.tp-spin { animation: tp-spin 0.9s linear infinite; }
+	@keyframes tp-spin { to { transform: rotate(360deg); } }
 	.tp-avatar-suggest svg { width: 20px; height: 20px; }
 	.tp-suggest-pw {
 		font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -228,6 +243,47 @@ type I18n = { getMessage(key: string): string };
 function t(key: string): string {
 	const g = globalThis as { browser?: { i18n: I18n }; chrome?: { i18n: I18n } };
 	return (g.browser ?? g.chrome)?.i18n.getMessage(key) ?? key;
+}
+
+/** Twin of content/html/dropdown-alias.ts. Both must change together; see template-parity. */
+function aliasRow(row: AliasRowState): string {
+	if (row.state === "busy") {
+		return html`
+		<div class="tp-item tp-alias tp-alias-busy">
+			<div class="tp-avatar tp-avatar-alias">
+				<svg class="tp-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+			</div>
+			<div class="tp-text">
+				<span class="tp-name">${t("aliasTitle")}</span>
+				<span class="tp-user">${t("aliasWorking")}</span>
+			</div>
+		</div>
+	`;
+	}
+	if (row.state === "error") {
+		return html`
+		<div class="tp-item tp-alias tp-alias-error" data-tp-alias="1" role="option">
+			<div class="tp-avatar tp-avatar-alias">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+			</div>
+			<div class="tp-text">
+				<span class="tp-name">${t("aliasFailed")}</span>
+				<span class="tp-user">${row.message ?? t("aliasRetry")}</span>
+			</div>
+		</div>
+	`;
+	}
+	return html`
+		<div class="tp-item tp-alias" data-tp-alias="1" role="option">
+			<div class="tp-avatar tp-avatar-alias">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"></path></svg>
+			</div>
+			<div class="tp-text">
+				<span class="tp-name">${t("aliasTitle")}</span>
+				<span class="tp-user">${t("aliasUse")}</span>
+			</div>
+		</div>
+	`;
 }
 
 function suggestRow(password: string): string {
@@ -299,6 +355,7 @@ function activate(i: number): void {
 	if (!row) return;
 	if (row.kind === "match") post({ type: "UI_PICK", entryId: row.id, otpOnly });
 	else if (row.kind === "suggest") post({ type: "UI_USE_SUGGESTED" });
+	else if (row.kind === "alias") post({ type: "UI_USE_ALIAS" });
 	else post({ type: "UI_POPOUT" });
 }
 
@@ -321,6 +378,11 @@ document.addEventListener("mousedown", (e) => {
 	if (target?.closest("[data-tp-suggest]")) {
 		e.preventDefault();
 		post({ type: "UI_USE_SUGGESTED" });
+		return;
+	}
+	if (target?.closest("[data-tp-alias]")) {
+		e.preventDefault();
+		post({ type: "UI_USE_ALIAS" });
 		return;
 	}
 	if (target?.closest("[data-tp-popout]")) {
@@ -350,6 +412,11 @@ window.addEventListener("message", (e) => {
 			highlight = -1;
 			rows = [];
 			const body: string[] = [];
+			if (msg.alias) {
+				// Busy takes no click, so it is not a navigable row either.
+				if (msg.alias.state !== "busy") rows.push({ kind: "alias" });
+				body.push(aliasRow(msg.alias));
+			}
 			if (msg.suggest) {
 				rows.push({ kind: "suggest" });
 				body.push(suggestRow(msg.suggest.password));

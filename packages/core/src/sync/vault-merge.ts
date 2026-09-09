@@ -5,7 +5,8 @@
 // the merge just selects sealed blobs by stamp.
 
 import type { EncryptedEntry } from "../vault-format";
-import type { EntriesPayload } from "./entries-payload";
+import type { EntriesPayload, SyncedSettings } from "./entries-payload";
+import { compareHlc } from "./hlc";
 import { liveRecords, mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
 
 /** View a stored payload as a mergeable replica (max stamp per id for both maps). */
@@ -35,5 +36,30 @@ function replicaToPayload(state: ReplicaState<EncryptedEntry>): EntriesPayload {
  * per write per device.
  */
 export function mergeEntriesPayload(a: EntriesPayload, b: EntriesPayload): EntriesPayload {
-	return replicaToPayload(mergeReplicas(payloadToReplica(a), payloadToReplica(b)));
+	const merged = replicaToPayload(mergeReplicas(payloadToReplica(a), payloadToReplica(b)));
+	const settings = mergeSyncedSettings(a.settings, b.settings);
+	return settings ? { ...merged, settings } : merged;
+}
+
+/**
+ * Merge the vault-scoped settings map: per key, the higher stamp wins.
+ *
+ * Per KEY rather than per map, so two devices that changed two different settings both keep
+ * theirs. And a key present on one side only is kept, never treated as a deletion: a client that
+ * predates this map strips it and writes the payload back without it, so "the other side said
+ * nothing" has to mean exactly that. Clearing is a `value: null` record with its own stamp.
+ * See docs/synced-settings.md.
+ */
+function mergeSyncedSettings(
+	a: SyncedSettings | undefined,
+	b: SyncedSettings | undefined,
+): SyncedSettings | undefined {
+	if (!a) return b;
+	if (!b) return a;
+	const out: SyncedSettings = { ...a };
+	for (const [key, rec] of Object.entries(b)) {
+		const cur = out[key];
+		if (!cur || compareHlc(rec.hlc, cur.hlc) > 0) out[key] = rec;
+	}
+	return out;
 }

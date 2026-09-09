@@ -72,6 +72,25 @@ Exercised by `content/detection.i18n.dom.test.ts`, which tests both directions:
 missing a username costs autofill, but claiming the wrong field types the login
 into a search box, which is worse.
 
+### One document, two credential forms
+
+Every rung prefers a field that is **on screen**, and only falls back to a hidden
+one when no rung finds a visible candidate. Plenty of sites ship the login and
+register forms together and swap between them by class — login.gog.com puts the
+register form first in DOM order, hidden by `._modal__box{display:none}`, and the
+login form second with `.is-active`. First-in-DOM-order lands every detector in
+whichever form is closed: the fill goes into boxes nobody can see, and the visible
+username input, being neither the model's username nor a password, classifies as
+nothing at all, so no dropdown ever appears on it (`gog-login-frame`).
+
+Visibility is CSS only (`display` / `visibility` / `opacity`, ancestors included),
+never geometry, and the fallback matters as much as the preference: a step-2
+password box a script reveals later, or a field parsed before layout, is still the
+field we want when it is the only one there is. `checkVisibility` answers all three
+in one call where it exists; the walk up the ancestors is for engines without it
+(jsdom), because an element inside a `display:none` subtree still reports its own
+declared `display`.
+
 ## Card fields
 
 `detectCardFields` is token-first: it prefers proper `autocomplete="cc-*"` tokens
@@ -312,6 +331,12 @@ others). This locks in behaviour on real-world quirks: honeypots, off-screen
 hidden fields, missing `<form>` wrappers, custom component libraries, GitHub's
 tokenless `name="otp"` 2FA field, BMO's card-number-as-login, and invisible
 Turnstile that must not block autofill.
+
+`gog-login-frame` is the twin-forms case above, captured from the cross-origin
+iframe that is the whole of gog.com's sign-in UI. It carries the class rules that
+hide one of the two forms in a `<style>` block, since jsdom loads no external CSS,
+and it drives the swap in both directions: activate the register box instead and
+the detectors follow it.
 
 `semafone-card-frame` is the unlabelled-card-field case: a cross-origin PCI
 capture iframe whose number box is a bare `name="pan"` with no label, placeholder,

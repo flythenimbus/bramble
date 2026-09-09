@@ -8,7 +8,7 @@ import type { AutofillAdapter } from "../adapters/autofill";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { StorageAdapter } from "../adapters/storage";
 import type { Entry, EntryData } from "../hooks/useVault";
-import type { EntriesPayload, Hlc, HybridClock } from "../sync";
+import type { EntriesPayload, Hlc, HybridClock, SyncedSettings } from "../sync";
 import { encodeEntriesPayload } from "../sync";
 import { base64ToBytes } from "../util/bytes";
 import type { EncryptedEntry, VaultBlob } from "../vault-format";
@@ -31,6 +31,13 @@ export interface VaultEntries {
 	entries: Entry[];
 	stamps: Map<string, Hlc>;
 	tombstones: Map<string, Hlc>;
+	/**
+	 * Vault-scoped settings, carried here for one reason: `buildPayload` reconstructs the whole
+	 * payload from this value on every write, so anything not held here is erased by the next
+	 * entry edit. Absent when the vault has none, so a payload never grows an empty map.
+	 * See docs/synced-settings.md.
+	 */
+	settings?: SyncedSettings;
 }
 
 export interface EntryMutationsDeps {
@@ -67,6 +74,14 @@ export interface EntryMutations {
 	): Promise<VaultEntries>;
 	/** Record a use (copy/fill): bumps only `lastUsedAt`, coalesced within USE_COALESCE_MS. */
 	touch(current: VaultEntries, id: string): Promise<VaultEntries>;
+	/**
+	 * Write one vault-scoped setting, stamped from this device's clock.
+	 *
+	 * `null` clears it, and is recorded as a stamped null rather than by removing the key:
+	 * absence is what a client predating the settings map produces when it strips the payload, so
+	 * it cannot also mean "the user turned this off". See docs/synced-settings.md.
+	 */
+	setSetting(current: VaultEntries, key: string, value: unknown | null): Promise<VaultEntries>;
 	/**
 	 * Re-encrypt everything under whatever key is loaded NOW and hand back the sealed entries
 	 * section, writing nothing.
@@ -116,7 +131,12 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 				};
 			}),
 		);
-		return { entries, tombstones: [...next.tombstones].map(([id, hlc]) => ({ id, hlc })) };
+		const tombstones = [...next.tombstones].map(([id, hlc]) => ({ id, hlc }));
+		// Threaded through rather than rebuilt: this is the seam where a synced setting would
+		// otherwise be dropped by an ordinary entry edit.
+		return next.settings
+			? { entries, tombstones, settings: next.settings }
+			: { entries, tombstones };
 	};
 
 	const sealAll = async (current: VaultEntries) => {
@@ -165,6 +185,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			tombstones.set(id, c.send());
 		}
 		return persist({
+			...current,
 			entries: current.entries.filter((e) => !doomed.has(e.id)),
 			stamps,
 			tombstones,
@@ -199,7 +220,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			const { archivedAt: _archivedAt, ...rest } = e;
 			return rest as Entry;
 		});
-		return persist({ entries, stamps, tombstones: current.tombstones });
+		return persist({ ...current, entries, stamps });
 	};
 
 	// One write for the selection, like setArchived. Tags are not content in the sense
@@ -242,7 +263,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			}
 			return { ...entry, tags: next };
 		});
-		return persist({ entries, stamps, tombstones: current.tombstones });
+		return persist({ ...current, entries, stamps });
 	};
 
 	return {
@@ -268,9 +289,9 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			const stamps = new Map(current.stamps);
 			stamps.set(entry.id, hlc);
 			return persist({
+				...current,
 				entries: [...current.entries, entry],
 				stamps,
-				tombstones: current.tombstones,
 			});
 		},
 
@@ -297,9 +318,9 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 				);
 			});
 			return persist({
+				...current,
 				entries: [...current.entries, ...withIds],
 				stamps,
-				tombstones: current.tombstones,
 			});
 		},
 
@@ -326,7 +347,15 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			);
 			const stamps = new Map(current.stamps);
 			stamps.set(id, hlc);
-			return persist({ entries, stamps, tombstones: current.tombstones });
+			return persist({ ...current, entries, stamps });
+		},
+
+		setSetting: async (current, key, value) => {
+			const c = await clock();
+			const settings: SyncedSettings = { ...current.settings, [key]: { hlc: c.send(), value } };
+			// Entries are untouched, so this rides the same single-write persist as any mutation
+			// rather than opening a second writer onto the blob.
+			return persist({ ...current, settings });
 		},
 
 		touch: async (current, id) => {
@@ -342,7 +371,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			);
 			const stamps = new Map(current.stamps);
 			stamps.set(id, hlc);
-			return persist({ entries, stamps, tombstones: current.tombstones });
+			return persist({ ...current, entries, stamps });
 		},
 
 		// Write a tombstone so the delete survives a merge instead of being re-added

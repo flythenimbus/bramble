@@ -1,0 +1,4 @@
+What's new in this release:
+
+- Device sync now shows whether each of your paired devices has confirmed its identity to the others, and flags any that have not. A device confirms itself the next time you open Bramble on it, so the flag clears on its own.
+- Tighter spacing above the vault list on touch, leaving more of the screen for your entries.

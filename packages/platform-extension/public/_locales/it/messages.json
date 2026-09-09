@@ -142,5 +142,25 @@
 	"suggestPasswordRegenerate": {
 		"message": "Generare una password diversa",
 		"description": "Accessible label for the regenerate button on the suggested-password row."
+	},
+	"aliasUse": {
+		"message": "Usare un nuovo alias email",
+		"description": "Sub-text on the email-alias row in the autofill dropdown; the row creates a fresh forwarding address at the user's alias provider and fills it into a signup form."
+	},
+	"aliasTitle": {
+		"message": "Alias email",
+		"description": "Title of the email-alias row in the autofill dropdown."
+	},
+	"aliasWorking": {
+		"message": "Creazione di un alias...",
+		"description": "Shown on the email-alias row while the request to the alias provider is in flight."
+	},
+	"aliasFailed": {
+		"message": "Non è stato possibile creare un alias",
+		"description": "Shown on the email-alias row when the alias provider rejected the request. The provider's own explanation is shown beneath as plain text."
+	},
+	"aliasRetry": {
+		"message": "Riprovare",
+		"description": "Accessible label for the retry button on a failed email-alias row."
 	}
 }

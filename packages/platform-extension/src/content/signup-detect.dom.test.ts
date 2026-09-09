@@ -7,6 +7,7 @@ import {
 	isOnAccountCreationForm,
 	isPasswordChangeForm,
 	scoreSignupForm,
+	shouldSuggestAlias,
 	shouldSuggestPassword,
 	signupPasswordFields,
 } from "./signup-detect";
@@ -554,5 +555,127 @@ describe("signupPasswordFields", () => {
 		`);
 		const names = signupPasswordFields(pw(1)).map((el) => el.name);
 		expect(names).toEqual(["new", "confirm"]);
+	});
+});
+
+/** The nth email-ish field (0-indexed) in the document. */
+function emailField(n = 0): HTMLInputElement {
+	return document.querySelectorAll<HTMLInputElement>('input:not([type="password"])')[
+		n
+	] as HTMLInputElement;
+}
+
+// The alias suggestion's whole gate. The case that matters is the minimal form, because signup
+// and login now look identical: one email box, one password box. See docs/email-aliases.md.
+describe("shouldSuggestAlias", () => {
+	it("offers on a minimal signup form", () => {
+		path("/signup");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="password" autocomplete="new-password">
+			<button>Create account</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(true);
+	});
+
+	// The strongest separator, and a veto rather than a weight: a form asking for the password
+	// you already have is not creating an account.
+	it("declines a minimal login form that names its password as current", () => {
+		path("/login");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="password" autocomplete="current-password">
+			<button>Sign in</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
+	});
+
+	// The genuinely hard one: identical markup, no autocomplete tokens at all. It is the page's
+	// negative evidence that settles it, not the shape of the form.
+	it("declines a minimal login form with no autocomplete tokens at all", () => {
+		path("/login");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="password" name="password">
+			<button>Log in</button>
+			<a href="/reset">Forgot password?</a>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
+	});
+
+	it("offers on the same markup when the page says signup instead", () => {
+		path("/register");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="password" name="password" minlength="8">
+			<button>Create account</button>
+			<a href="/terms">Terms of Service</a>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(true);
+	});
+
+	// A filled box is the account the user already has here; replacing it locks them out.
+	it("declines an email field that already has a value", () => {
+		path("/signup");
+		loadHTML(`<form>
+			<input type="email" name="email" value="me@example.com">
+			<input type="password" autocomplete="new-password">
+			<button>Create account</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
+	});
+
+	// An alias in a box that wanted a handle is a broken signup.
+	it("declines a username field on a signup form", () => {
+		path("/signup");
+		loadHTML(`<form>
+			<input type="text" name="username" autocomplete="username">
+			<input type="password" autocomplete="new-password">
+			<button>Create account</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
+	});
+
+	it("declines the password field itself", () => {
+		path("/signup");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="password" autocomplete="new-password">
+			<button>Create account</button>
+		</form>`);
+		expect(shouldSuggestAlias(pw())).toBe(false);
+	});
+
+	// No password box in reach: a newsletter box on a marketing page, not an account.
+	it("declines a lone email box with no password anywhere", () => {
+		path("/signup");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<button>Subscribe</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
+	});
+
+	// A signup split across steps invents the password on the next screen, so the confirm-email
+	// pair is the only thing decisive enough to act on.
+	it("offers on a split signup that asks for the email twice", () => {
+		path("/register");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<input type="email" name="email_confirm">
+			<button>Continue</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(true);
+	});
+
+	// A two-step login's email screen looks the same minus the second box, and getting it wrong
+	// would put an alias where the user's actual address belongs.
+	it("declines a two-step login's email screen", () => {
+		path("/login");
+		loadHTML(`<form>
+			<input type="email" name="email">
+			<button>Next</button>
+		</form>`);
+		expect(shouldSuggestAlias(emailField())).toBe(false);
 	});
 });

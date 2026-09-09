@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, lock, openPopup, seedExampleLogin } from "./helpers";
+import { configureAliasProvider, createVault, lock, openPopup, seedExampleLogin } from "./helpers";
 
 // What the picker offers on a form that CREATES a credential rather than fills one. The user is
 // inventing an account there, so the matches are clutter and the "Vault locked" row is worse: it
@@ -114,6 +114,34 @@ test("offers nothing on a signup form's email field while locked", async ({
 	// has classified the page - so the email box below is a decision, not a dead script.
 	await expectPickerOn(page, "#pass");
 	await expectNoPickerOn(page, "#email");
+});
+
+// The exception to everything above, and the reason it is worth stating twice: once an alias
+// provider is configured, the signup form's email box DOES have something behind the lock, so
+// suppressing the row would leave no way to reach it from the field that wants one.
+//
+// This broke twice during development and the unit tests passed through both times: first the
+// hint that survives locking was erased BY locking, then it was written by a screen that a device
+// receiving the provider over sync never opens. Both were only visible in a real browser, which
+// is why the case lives here. See docs/synced-settings.md.
+test("offers the unlock row on a signup form's email field once a provider is configured", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await configureAliasProvider(popup);
+	await lock(popup);
+
+	const page = await context.newPage();
+	await serve(page);
+	await page.goto("https://example.com/signup");
+
+	// Same control as the case above: the password box proves the script is live and has
+	// classified the page, so the email box below is a decision rather than a dead script.
+	await expectPickerOn(page, "#pass");
+	await expectPickerOn(page, "#email");
 });
 
 test("offers nothing on a signup form's email field when a login is saved for the site", async ({

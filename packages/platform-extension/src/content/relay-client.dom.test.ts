@@ -31,6 +31,7 @@ const handlers = {
 	onPopout: vi.fn(),
 	onHighlight: vi.fn(),
 	onUseSuggested: vi.fn(),
+	onUseAlias: vi.fn(),
 	onRegenerate: vi.fn(),
 };
 

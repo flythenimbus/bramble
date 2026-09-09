@@ -528,3 +528,153 @@ describe("createEntryMutations", () => {
 		expect(JSON.stringify(latest)).not.toContain("old");
 	});
 });
+
+// Confidence test 2 from docs/synced-settings.md, and the highest-risk seam in that change.
+// buildPayload rebuilds the whole payload from VaultEntries on every write, so without threading
+// the settings map through it, ANY entry edit silently wipes every synced setting. The failure is
+// invisible locally: the value is still on screen from memory, and only reverts on reload or when
+// a peer merges the emptied payload back.
+describe("createEntryMutations: synced settings survive entry writes", () => {
+	const withSetting = (): VaultEntries => ({
+		...empty(),
+		settings: {
+			"pref.aliasProvider": {
+				hlc: { wall: 500, counter: 0, node: "other" },
+				value: { provider: "addy" },
+			},
+		},
+	});
+
+	/** What actually reached the disk, so this cannot pass on in-memory state alone. */
+	async function onDisk(h: ReturnType<typeof harness>) {
+		return (await h.mutations.readEntriesPayload()).settings;
+	}
+
+	// Every mutation, not a hand-picked few: each one rebuilds the state it hands to persist, so
+	// each is its own chance to drop the map. `touch` is the sharpest of them, since it fires on
+	// every copy and every fill.
+	it.each([
+		[
+			"add",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => h.mutations.add(s, login("x")),
+		],
+		[
+			"importMany",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) =>
+				h.mutations.importMany(s, [login("x")]),
+		],
+		[
+			"update",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.update(a, a.entries[0]!.id, login("y"));
+			},
+		],
+		[
+			"remove",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.remove(a, a.entries[0]!.id);
+			},
+		],
+		[
+			"removeMany",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.removeMany(a, [a.entries[0]!.id]);
+			},
+		],
+		[
+			"setArchived",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.setArchived(a, [a.entries[0]!.id], true);
+			},
+		],
+		[
+			"setTags",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.setTags(a, [a.entries[0]!.id], { add: ["work"] });
+			},
+		],
+		[
+			"touch",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+				const a = await h.mutations.add(s, login("x"));
+				return h.mutations.touch(a, a.entries[0]!.id);
+			},
+		],
+	])("%s preserves the map, in memory and on disk", async (_name, run) => {
+		const h = harness();
+		const next = await run(h, withSetting());
+		expect(next.settings).toEqual(withSetting().settings);
+		expect(await onDisk(h)).toEqual(withSetting().settings);
+	});
+
+	it("add preserves the map", async () => {
+		const h = harness();
+		const next = await h.mutations.add(withSetting(), login("a"));
+		expect(next.settings?.["pref.aliasProvider"]?.value).toEqual({ provider: "addy" });
+		expect(await onDisk(h)).toEqual(withSetting().settings);
+	});
+
+	it("update preserves the map", async () => {
+		const h = harness();
+		const added = await h.mutations.add(withSetting(), login("a"));
+		const id = added.entries[0]!.id;
+		const next = await h.mutations.update(added, id, login("renamed"));
+		expect(await onDisk(h)).toEqual(withSetting().settings);
+		expect(next.settings).toEqual(withSetting().settings);
+	});
+
+	it("delete preserves the map", async () => {
+		const h = harness();
+		const added = await h.mutations.add(withSetting(), login("a"));
+		await h.mutations.remove(added, added.entries[0]!.id);
+		expect(await onDisk(h)).toEqual(withSetting().settings);
+	});
+
+	it("import preserves the map", async () => {
+		const h = harness();
+		await h.mutations.importMany(withSetting(), [login("a"), login("b")]);
+		expect(await onDisk(h)).toEqual(withSetting().settings);
+	});
+
+	// A vault with no settings must not grow an empty map, or every payload gains a key that
+	// means nothing and older clients see a change where there was none.
+	it("leaves the map absent when there is none", async () => {
+		const h = harness();
+		await h.mutations.add(empty(), login("a"));
+		expect(await onDisk(h)).toBeUndefined();
+	});
+
+	// The write path for a setting: stamped from this device's clock, and persisted.
+	it("setSetting stamps and writes the value", async () => {
+		const h = harness();
+		const next = await h.mutations.setSetting(empty(), "pref.aliasProvider", { provider: "addy" });
+		const rec = next.settings?.["pref.aliasProvider"];
+		expect(rec?.value).toEqual({ provider: "addy" });
+		expect(rec?.hlc.node).toBe("device-a");
+		expect(await onDisk(h)).toEqual(next.settings);
+	});
+
+	// Clearing is an explicit null carrying a stamp, never removal of the key: absence is what a
+	// client predating the map produces, so it cannot also mean "the user turned this off".
+	it("setSetting records a clear as a stamped null", async () => {
+		const h = harness();
+		const set = await h.mutations.setSetting(empty(), "pref.aliasProvider", { provider: "addy" });
+		const cleared = await h.mutations.setSetting(set, "pref.aliasProvider", null);
+		const rec = cleared.settings?.["pref.aliasProvider"];
+		expect(rec?.value).toBeNull();
+		expect(compareHlc(rec!.hlc, set.settings!["pref.aliasProvider"]!.hlc)).toBeGreaterThan(0);
+	});
+
+	it("setSetting leaves entries untouched", async () => {
+		const h = harness();
+		const added = await h.mutations.add(empty(), login("a"));
+		const next = await h.mutations.setSetting(added, "pref.aliasProvider", { provider: "addy" });
+		expect(next.entries).toEqual(added.entries);
+		expect(next.stamps).toEqual(added.stamps);
+	});
+});

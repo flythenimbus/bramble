@@ -40,6 +40,7 @@ const removePicker = vi.fn(() => {
 // Captured content-side callbacks for the suggested-password row and the unlock request.
 let onSuggestedCb: (() => void) | null = null;
 let regenerateCb: (() => void) | null = null;
+let aliasRowCb: (() => void) | null = null;
 let unlockCb: ((field: HTMLInputElement | null) => void) | null = null;
 let pickCb: ((entryId: string, otpOnly: boolean) => void) | null = null;
 // Models picker.removeDropdown()'s real behavior: on a normal (iframe-mode) site it is a
@@ -73,11 +74,20 @@ vi.mock("./picker", () => ({
 		onRegenerate: (cb: () => void) => {
 			regenerateCb = cb;
 		},
+		onUseAlias: (cb: () => void) => {
+			aliasRowCb = cb;
+		},
 	},
 }));
 
 const safeSendMessage = vi.fn();
 const safeRequest = vi.fn();
+// What the background answers GENERATE_PASSWORD with. A real promise, not the synchronous
+// thenable below: the suggestion path awaits this one.
+let generateResponse: unknown = { ok: true, data: { password: "from-the-background" } };
+// What the background answers ALIAS_CREATE with. A real promise like the generator's: the alias
+// path awaits it and drives the row's state off the result.
+let aliasResponse: unknown = { ok: true, data: { address: "w40myp02@anonaddy.com" } };
 const pendingQueryResponses: Array<(response: unknown) => void> = [];
 const pendingSelectResponses: Array<(response: unknown) => void> = [];
 let submitRevalidationResponder:
@@ -90,6 +100,8 @@ vi.mock("./lifecycle", () => ({
 	// synchronously so existing DOM assertions stay focused on picker policy.
 	safeRequest: (m: { type?: string }) => {
 		safeRequest(m);
+		if (m.type === "GENERATE_PASSWORD") return Promise.resolve(generateResponse);
+		if (m.type === "ALIAS_CREATE") return Promise.resolve(aliasResponse);
 		if (m.type === "AUTOFILL_REVALIDATE_SUBMIT") {
 			const message = m as { sessionGeneration: number };
 			return (
@@ -112,6 +124,10 @@ vi.mock("./lifecycle", () => ({
 }));
 vi.mock("./corner-prompt", () => ({ handleCornerPromptShow: vi.fn(), queryCornerPrompt: vi.fn() }));
 vi.mock("./capture", () => ({ maybeCommitCapture: vi.fn(), onPasswordEnter: vi.fn() }));
+const fillTextField = vi.fn(() => true);
+// What fill.ts would report as the password most recently put into the page. Drives the
+// alias path's decision to refresh a capture the suggestion already stashed.
+let lastFilledPassword: string | null = null;
 const fillPasswordFields = vi.fn(() => true);
 const fillForm = vi.fn((): { filled: boolean; passwordField: HTMLInputElement | null } => ({
 	filled: true,
@@ -124,6 +140,8 @@ vi.mock("./fill", () => ({
 	fillForm,
 	fillOtp: vi.fn(),
 	fillPasswordFields,
+	fillTextField,
+	getLastFilledPassword: () => lastFilledPassword,
 	isFilling: () => false,
 	submitFromField,
 }));
@@ -341,6 +359,7 @@ describe("content: strong-password suggestion on signup", () => {
 		safeSendMessage.mockClear();
 		safeRequest.mockClear();
 		fillPasswordFields.mockClear();
+		generateResponse = { ok: true, data: { password: "from-the-background" } };
 		pickerState.host = null;
 		pickerState.anchor = null;
 		pendingQueryResponses.length = 0;
@@ -363,12 +382,38 @@ describe("content: strong-password suggestion on signup", () => {
 	const lastSuggest = () =>
 		(showMatches.mock.calls.at(-1)?.[2] as { suggest?: { password: string } } | undefined)?.suggest;
 
-	it("offers a generated password when a signup password field is focused", () => {
+	/** Let an awaited background reply (and the paint it triggers) land. */
+	const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+	// The password on offer is the one the response carried, not one made up here: the user's
+	// generator settings live in the background, and generating locally would ignore them.
+	it("offers the generated password the query response carried", () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
-		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
-		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(pass);
-		expect(lastSuggest()?.password).toEqual(expect.any(String));
+		// An unlock push re-queries, so the response below lands whatever earlier cases left
+		// cached (a cached result with matches means focus alone asks for nothing).
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [], generated: "correct-horse-battery-staple" }),
+		});
+
+		// Then a field that has been offered nothing yet, since a suggestion is decided once per
+		// field: whichever of the two was still undecided when the response landed is the one
+		// that shows what it carried.
+		document.body.innerHTML = `
+			<form>
+				<input id="user2" type="email" name="email" autocomplete="email" />
+				<input id="pass2" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+		(document.getElementById("pass2") as HTMLInputElement).focus();
+
+		const offered = showMatches.mock.calls.map(
+			(call) => (call[2] as { suggest?: { password: string } } | undefined)?.suggest?.password,
+		);
+		expect(offered).toContain("correct-horse-battery-staple");
 	});
 
 	it("shows only the suggestion, not existing logins, on a signup form", () => {
@@ -496,12 +541,13 @@ describe("content: strong-password suggestion on signup", () => {
 		);
 	});
 
-	it("keeps that decision when the user regenerates", () => {
+	it("keeps that decision when the user regenerates", async () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		pass.setAttribute("autocomplete", "off");
 		regenerateCb?.();
+		await settle();
 
 		onSuggestedCb?.();
 		expect(safeSendMessage).toHaveBeenCalledWith(
@@ -535,16 +581,35 @@ describe("content: strong-password suggestion on signup", () => {
 		);
 	});
 
-	it("swaps in a fresh suggestion on regenerate", () => {
+	it("swaps in a fresh suggestion on regenerate", async () => {
 		const pass = document.getElementById("pass") as HTMLInputElement;
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		const first = lastSuggest()?.password;
 
+		generateResponse = { ok: true, data: { password: "regenerated-in-the-background" } };
 		regenerateCb?.();
+		await settle();
 		const second = lastSuggest()?.password;
 		expect(second).toEqual(expect.any(String));
 		expect(second).not.toBe(first);
+	});
+
+	// The user's generator settings live in the background, so the password its response carries
+	// is the one to offer; generating locally here would ignore everything they chose.
+	it("asks the background for a fresh one when the user regenerates", async () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [], generated: "correct-horse-battery-staple" }),
+		});
+
+		generateResponse = { ok: true, data: { password: "another-passphrase-entirely" } };
+		regenerateCb?.();
+		await settle();
+		expect(safeRequest).toHaveBeenCalledWith({ type: "GENERATE_PASSWORD" });
+		expect(lastSuggest()?.password).toBe("another-passphrase-entirely");
 	});
 
 	it("does not offer on a plain login field (current-password)", () => {
@@ -1289,5 +1354,243 @@ describe("content: the autofill master switch", () => {
 		showMatches.mockClear();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [MATCH] }) });
 		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
+	});
+});
+
+// The alias row is the only suggestion that spends something real and can fail, so what matters
+// is the round trip: it must not fire twice, must not paint a late answer onto a field the user
+// has left, and must surface the provider's own words. See docs/email-aliases.md.
+describe("content: email alias row on signup", () => {
+	beforeEach(() => {
+		// An earlier describe installs fake timers and this one awaits a real reply.
+		vi.useRealTimers();
+		// jsdom has no layout; without a box the email field reads as unrendered and the form
+		// looks like one whose account is already identified.
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		showMatches.mockClear();
+		safeRequest.mockClear();
+		fillTextField.mockClear();
+		aliasResponse = { ok: true, data: { address: "w40myp02@anonaddy.com" } };
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		window.history.replaceState({}, "", "/signup");
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="email" />
+				<input id="pass" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+	});
+
+	afterEach(() => vi.restoreAllMocks());
+
+	const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+	const lastAlias = () =>
+		(showMatches.mock.calls.at(-1)?.[2] as { alias?: { state: string; message?: string } })?.alias;
+	const email = () => document.getElementById("user") as HTMLInputElement;
+
+	function offerRow(): void {
+		email().focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [], aliasReady: true }) });
+	}
+
+	it("offers the row on the email field once the background says a provider exists", () => {
+		offerRow();
+		expect(lastAlias()).toEqual({ state: "idle" });
+	});
+
+	// Availability is the background's to assert. Without it the row must not appear, so a page
+	// cannot conjure one and no request is ever made.
+	it("offers nothing when no provider is configured", () => {
+		email().focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
+		expect(lastAlias()).toBeUndefined();
+	});
+
+	it("shows the spinner while the provider is asked, then fills the address", async () => {
+		offerRow();
+		aliasRowCb?.();
+		expect(lastAlias()).toEqual({ state: "busy" });
+		await settle();
+		expect(fillTextField).toHaveBeenCalledWith(email(), "w40myp02@anonaddy.com");
+	});
+
+	// One gesture must not buy two aliases.
+	it("ignores a second activation while one is in flight", async () => {
+		offerRow();
+		aliasRowCb?.();
+		aliasRowCb?.();
+		await settle();
+		const creates = safeRequest.mock.calls.filter(
+			(c) => (c[0] as { type?: string })?.type === "ALIAS_CREATE",
+		);
+		expect(creates).toHaveLength(1);
+	});
+
+	// The provider's words are the only thing that says whether to fix a key, a plan or a quota.
+	it("keeps the row and shows why when the provider refuses", async () => {
+		aliasResponse = { ok: false, error: "This provider's plan does not include alias creation." };
+		offerRow();
+		aliasRowCb?.();
+		await settle();
+		expect(lastAlias()).toEqual({
+			state: "error",
+			message: "This provider's plan does not include alias creation.",
+		});
+		expect(fillTextField).not.toHaveBeenCalled();
+	});
+
+	// An address meant for a field the user has left must not be painted onto the one they are on.
+	it("drops an answer that arrives after the anchor moved", async () => {
+		offerRow();
+		aliasRowCb?.();
+		pickerState.anchor = document.getElementById("pass") as HTMLInputElement;
+		await settle();
+		expect(fillTextField).not.toHaveBeenCalled();
+	});
+});
+
+// Taking the password suggestion stashes a capture immediately, before any identifier exists.
+// Making an alias afterwards has to refresh it, or the login saves with an empty username and
+// the alias is lost. An ordinary submit re-captures from the live form, so this covers the case
+// where the page navigates without ever looking like one.
+describe("content: alias refreshes a capture the password suggestion already stashed", () => {
+	beforeEach(() => {
+		vi.useRealTimers();
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		showMatches.mockClear();
+		safeSendMessage.mockClear();
+		safeRequest.mockClear();
+		lastFilledPassword = null;
+		aliasResponse = { ok: true, data: { address: "w40myp02@anonaddy.com" } };
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		window.history.replaceState({}, "", "/signup");
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="email" />
+				<input id="pass" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+	});
+
+	afterEach(() => vi.restoreAllMocks());
+
+	const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+	const captures = () =>
+		safeSendMessage.mock.calls
+			.map((c) => c[0] as { type?: string; payload?: { username?: string; password?: string } })
+			.filter((m) => m?.type === "CORNER_PROMPT_CAPTURE");
+
+	function offerAndUse(): Promise<void> {
+		const email = document.getElementById("user") as HTMLInputElement;
+		email.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [], aliasReady: true }) });
+		aliasRowCb?.();
+		return settle();
+	}
+
+	it("re-stashes with the alias as the username once a password is in the page", async () => {
+		lastFilledPassword = "correct-horse-battery-staple";
+		await offerAndUse();
+		expect(captures().at(-1)?.payload).toEqual({
+			username: "w40myp02@anonaddy.com",
+			password: "correct-horse-battery-staple",
+			newLogin: true,
+		});
+	});
+
+	// Nothing to save yet: an address on its own is not a credential, and stashing one would
+	// offer to save a login with no password in it.
+	it("stashes nothing when no password has been filled", async () => {
+		await offerAndUse();
+		expect(captures()).toHaveLength(0);
+	});
+});
+
+// Reported from a real browser: on a signup form with a locked vault the email field offered
+// nothing at all, so there was no way to reach the alias from the field that wants one. The rest
+// of a creation form still gets nothing; this field has something behind the lock now.
+describe("content: locked vault on a signup form's email field", () => {
+	beforeEach(() => {
+		vi.useRealTimers();
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		showMatches.mockClear();
+		showLocked.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		window.history.replaceState({}, "", "/signup");
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="email" />
+				<input id="pass" type="password" name="password" autocomplete="new-password" />
+				<button type="submit">Create account</button>
+			</form>`;
+		invalidatePageFields();
+	});
+
+	afterEach(() => vi.restoreAllMocks());
+
+	/** Focus the email field, then answer its query with a locked result. The lock-state push is
+	 * what provokes the query; the reply is resolved directly, as the sibling locked tests do. */
+	function focusEmailLocked(aliasReady: boolean): void {
+		const email = document.getElementById("user") as HTMLInputElement;
+		email.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		showLocked.mockClear();
+		pendingQueryResponses.pop()?.({
+			ok: true,
+			data: result({ logins: [], locked: true, aliasReady }),
+		});
+	}
+
+	it("offers the unlock row when a provider is configured", () => {
+		focusEmailLocked(true);
+		expect(showLocked).toHaveBeenCalled();
+	});
+
+	// Someone with no alias provider keeps the old behaviour: an account-creation form is where
+	// you invent a credential, not fill one, so it gets nothing.
+	it("still offers nothing when no provider is configured", () => {
+		focusEmailLocked(false);
+		expect(showLocked).not.toHaveBeenCalled();
 	});
 });

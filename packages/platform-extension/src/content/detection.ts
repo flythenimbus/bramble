@@ -119,6 +119,73 @@ export const USERNAME_HINT_RE = alternation([
 	"로그인",
 ]);
 
+/**
+ * Email-only hints, for the alias suggestion.
+ *
+ * Deliberately NOT a subset of USERNAME_HINT_RE reused: that regex conflates the two on purpose,
+ * matching "user", "login" and "account" because for FILLING they are the same field. An email
+ * alias is only useful in a field that takes an email, so this list is the email half alone, and
+ * a term that could mean either ("account", "конто", "compte") is left out rather than guessed at.
+ */
+const EMAIL_HINT_RE = alternation([
+	// en
+	"email",
+	"e-mail",
+	"\\bmail\\b",
+	// de, nl
+	"e.?mail.?adresse",
+	"mailadres",
+	// sv, da, no, fi
+	"\\be.?post\\b",
+	"mejl",
+	"s(ä|a)hk(ö|o)posti",
+	// fr
+	"courriel",
+	"adresse.?(é|e)lectronique",
+	// es, pt
+	"correo",
+	"correio",
+	"e.?mail",
+	// it
+	"posta.?elettronica",
+	// tr
+	"\\be.?posta\\b",
+	// ru
+	"почта",
+	"эл.?адрес",
+	// ja, zh, ko
+	"メール",
+	"邮箱",
+	"郵箱",
+	"電子郵件",
+	"이메일",
+]);
+
+/**
+ * Whether `el` takes an email address specifically, as opposed to any identifier.
+ *
+ * The alias suggestion uses this and nothing looser. A generated alias typed into a field that
+ * wanted a handle is a broken signup, and one offered on a password field is nonsense, so the
+ * bar here is "this field is for an email" rather than detection's usual "this field identifies
+ * the account". `looksLikeUsername` answers the second question and is wrong for this one.
+ *
+ * Ordered strongest first. `type="email"` is the page telling us outright; `autocomplete="email"`
+ * is the page telling us in the other vocabulary. `autocomplete="username"` is deliberately NOT
+ * accepted on its own, since that is exactly the token a handle field carries, but it does not
+ * veto either: plenty of signup forms put it on a field labelled "Email", and the hint decides.
+ */
+export function looksLikeEmail(el: HTMLInputElement, doc: Document = document): boolean {
+	if (el.type === "password" || el.type === "hidden") return false;
+	if (el.type === "email") return true;
+	const autocomplete = el.autocomplete?.toLowerCase() ?? "";
+	if (autocomplete.split(/\s+/).includes("email")) return true;
+	// A search box called "mail" is still a search box.
+	const hint = `${attrHint(el)} ${labelText(el, doc)}`;
+	if (NEGATIVE_HINT_RE.test(hint)) return false;
+	if (el.getAttribute("inputmode")?.toLowerCase() === "email") return true;
+	return EMAIL_HINT_RE.test(hint);
+}
+
 // Localized search terms matter more than they look: rung 1 picks the password's
 // nearest preceding text input, so an untranslated search box in the header wins
 // and the username gets typed into it.
@@ -298,6 +365,8 @@ export interface PageScan {
 	editable: HTMLInputElement[];
 	/** labelText(el), computed at most once per element per scan. */
 	label(el: HTMLInputElement): string;
+	/** Whether `el` is on screen (CSS only), computed at most once per element per scan. */
+	shown(el: HTMLInputElement): boolean;
 }
 
 /** Inputs from `list` matching `selector`, order preserved. */
@@ -310,12 +379,39 @@ function pickOne(list: HTMLInputElement[], selector: string): HTMLInputElement |
 	return list.find((el) => el.matches(selector)) ?? null;
 }
 
+// --- Hidden twin forms -----------------------------------------------------
+// A document often carries more than one credential form, only one of them on
+// screen: login.gog.com ships the register form first and the login form second,
+// switching between them by class. Taking the first match in DOM order lands in
+// whichever is hidden. So every rung prefers a field the user can actually see,
+// and falls back to the hidden ones when none is - a password box revealed only
+// after the username step is still the field we want. See docs/field-detection.md.
+
+/** First input in `list` matching `selector`, preferring one that is on screen. */
+function pickOneShown(
+	scan: PageScan,
+	list: HTMLInputElement[],
+	selector: string,
+): HTMLInputElement | null {
+	const matches = pick(list, selector);
+	return matches.find((el) => scan.shown(el)) ?? matches[0] ?? null;
+}
+
+/** `list` with the on-screen entries first, each group in its original order. */
+function shownFirst(scan: PageScan, list: HTMLInputElement[]): HTMLInputElement[] {
+	const shown: HTMLInputElement[] = [];
+	const hidden: HTMLInputElement[] = [];
+	for (const el of list) (scan.shown(el) ? shown : hidden).push(el);
+	return hidden.length === 0 ? list : [...shown, ...hidden];
+}
+
 /** Collect the tree's inputs once, for the detectors to filter. Internal: the detectors build their
  * own, so nothing outside this module holds a scan that could go stale or belong to another doc. */
 function createScan(root: ParentNode = document): PageScan {
 	const doc = ((root as Node).ownerDocument ?? (root as Document)) as Document;
 	const inputs = deepQueryAll<HTMLInputElement>("input", root);
 	const labels = new Map<HTMLInputElement, string>();
+	const visible = new Map<HTMLInputElement, boolean>();
 	return {
 		doc,
 		inputs,
@@ -328,15 +424,23 @@ function createScan(root: ParentNode = document): PageScan {
 			}
 			return text;
 		},
+		shown(el) {
+			let value = visible.get(el);
+			if (value === undefined) {
+				value = isVisibleCss(el);
+				visible.set(el, value);
+			}
+			return value;
+		},
 	};
 }
 
-/** First non-readonly, non-disabled `type=password` input, or null. */
+/** First non-readonly, non-disabled `type=password` input, on-screen ones first, or null. */
 export function findPasswordField(
 	doc: Document = document,
 	scan: PageScan = createScan(doc),
 ): HTMLInputElement | null {
-	return pickOne(scan.inputs, PASSWORD_INPUT);
+	return pickOneShown(scan, scan.inputs, PASSWORD_INPUT);
 }
 
 /** Concatenated attribute hint (name, id, placeholder, autocomplete, aria-label) for regex matching. */
@@ -400,13 +504,16 @@ function findUsernameNearPassword(
 		? deepQueryAll<HTMLInputElement>(selector, form)
 		: pick(scan.inputs, selector);
 	let best: HTMLInputElement | null = null;
+	let bestShown: HTMLInputElement | null = null;
 	for (const c of ordered) {
-		if (c === password) return best;
+		if (c === password) return bestShown ?? best;
 		if (c.type === "password") continue;
 		if (NEGATIVE_HINT_RE.test(attrHint(c))) continue;
-		best = c; // c precedes password; keep the latest such candidate
+		// c precedes password; keep the latest such candidate, the latest visible one apart.
+		best = c;
+		if (scan.shown(c)) bestShown = c;
 	}
-	return best;
+	return bestShown ?? best;
 }
 
 export interface CardFields {
@@ -817,21 +924,36 @@ const CAPTCHA_SELECTORS = [
 	'iframe[title*="captcha" i]',
 ];
 
+/** `el`'s parent, stepping out of a shadow root through its host. */
+function parentAcrossShadow(el: Element): Element | null {
+	if (el.parentElement) return el.parentElement;
+	const root = el.getRootNode();
+	return root instanceof ShadowRoot ? root.host : null;
+}
+
 /**
  * True if `el` is not hidden via display / visibility / opacity, ANCESTORS INCLUDED.
  *
  * checkVisibility answers all three in one call and without allocating a style declaration,
- * which matters in the loops over every input. It also catches an opacity:0 ancestor, which
- * reading the element's own computed opacity cannot. Absent (jsdom, older engines): fall back.
+ * which matters in the loops over every input. Absent (jsdom, older engines): walk up instead,
+ * because the ancestors are where the answer usually is - a closed modal or an inactive tab
+ * panel hides the box, never the field - and an element's own computed display stays whatever
+ * it was declared as inside a display:none subtree.
  */
 function isVisibleCss(el: Element): boolean {
 	if (typeof el.checkVisibility === "function") {
 		return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
 	}
 	const view = el.ownerDocument?.defaultView;
-	const style = view?.getComputedStyle?.(el);
-	if (!style) return true;
-	return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+	if (!view?.getComputedStyle) return true;
+	for (let node: Element | null = el; node; node = parentAcrossShadow(node)) {
+		const style = view.getComputedStyle(node);
+		if (!style) return true;
+		if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+			return false;
+		}
+	}
+	return true;
 }
 
 /** True if `el` is large enough and not hidden via display/visibility/opacity. */
@@ -1029,18 +1151,19 @@ export function detectLoginFields(
 	}
 
 	// 2. Explicit autocomplete tokens.
-	const explicit = pickOne(
+	const explicit = pickOneShown(
+		scan,
 		scan.editable,
 		'input[autocomplete~="username"], input[autocomplete="email"]',
 	);
 	if (explicit) return { username: explicit, password };
 
 	// 3. A single visible email input.
-	const email = pickOne(scan.editable, 'input[type="email"]');
+	const email = pickOneShown(scan, scan.editable, 'input[type="email"]');
 	if (email) return { username: email, password };
 
 	// 4. Attribute heuristics on text inputs.
-	const candidates = pick(scan.inputs, USERNAME_TEXT_SELECTOR);
+	const candidates = shownFirst(scan, pick(scan.inputs, USERNAME_TEXT_SELECTOR));
 	for (const c of candidates) {
 		if (looksLikeUsername(c)) return { username: c, password };
 	}

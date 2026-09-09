@@ -54,6 +54,49 @@ async function addLogin(page: Page, name: string): Promise<void> {
 	await expect(page.getByText(name)).toBeVisible();
 }
 
+/** Open Settings -> Aliases from wherever the page currently is. */
+async function gotoAliases(page: Page): Promise<void> {
+	const tab = page.getByRole("button", { name: "Aliases", exact: true });
+	if (!(await tab.isVisible().catch(() => false))) {
+		await page.getByRole("button", { name: "Settings" }).click();
+	}
+	await tab.click();
+}
+
+/** Back to the vault list, so a later action can reach the entry UI. */
+async function leaveSettings(page: Page): Promise<void> {
+	await page
+		.getByRole("button", { name: /^(Back|Go back)/i })
+		.first()
+		.click();
+	await expect(page.getByRole("button", { name: /Add New/i })).toBeVisible();
+}
+
+/**
+ * Configure an alias provider through the UI, with a throwaway key.
+ *
+ * Never presses "Check key": the key field persists on blur, so this stores a provider without
+ * contacting Addy or SimpleLogin. Reaching a real provider here would need a secret in CI, would
+ * spend the user's alias allowance on every run, and would fail whenever a third party did.
+ */
+async function configureAliasProvider(page: Page, apiKey: string): Promise<void> {
+	await gotoAliases(page);
+	const key = page.locator('input[type="password"]').first();
+	await key.fill(apiKey);
+	await key.blur();
+	await expect(page.getByRole("button", { name: "Disconnect" })).toBeVisible();
+	await leaveSettings(page);
+}
+
+/** Whether this device has an alias provider stored, read the way a user would see it. */
+async function expectAliasProvider(page: Page, present: boolean): Promise<void> {
+	await gotoAliases(page);
+	const disconnect = page.getByRole("button", { name: "Disconnect" });
+	if (present) await expect(disconnect).toBeVisible({ timeout: 90_000 });
+	else await expect(disconnect).toBeHidden();
+	await leaveSettings(page);
+}
+
 test("the extension and the mobile app pair over a real relay and share a vault", async ({
 	ext,
 	mobile,
@@ -69,6 +112,9 @@ test("the extension and the mobile app pair over a real relay and share a vault"
 	// pins the end-to-end outcome (the joiner can READ the inviter's data), NOT the bundle path.
 	const NAME = `Synced ${Date.now().toString(36)}`;
 	await addLogin(ext.page, NAME);
+	// Stored before the invite, like the entry above, so what is asserted at the end is that the
+	// setting travelled rather than that it was typed twice.
+	await configureAliasProvider(ext.page, "e2e-key-not-real");
 	await gotoSync(ext.page);
 	await useLocalRelay(ext.page);
 	const code = await invite(ext.page);
@@ -122,4 +168,20 @@ test("the extension and the mobile app pair over a real relay and share a vault"
 	// entries under different keys. Shipping a wrong VEK fails even earlier than this — the join
 	// never completes — so the pairing assertions above cover that case.
 	await expect(mobile.page.getByText(NAME)).toBeVisible({ timeout: 90_000 });
+
+	// --- and the vault's SETTINGS cross with it ---
+	// The alias provider is a synced pref, so it rides in the same encrypted payload as the
+	// entries and reaches the joiner without anyone re-typing an API key. That promise is the
+	// whole reason the mechanism exists, and nothing below the transport can prove it: the merge
+	// rules are unit-tested, but only this exercises them over a real pairing.
+	// See docs/synced-settings.md.
+	await expectAliasProvider(mobile.page, true);
+
+	// The seam that fails silently. buildPayload rebuilds the whole payload from VaultEntries on
+	// every write, so an ordinary entry edit on either device is a chance to drop the settings
+	// map, and nothing local looks wrong when it does: the value stays on screen from memory and
+	// only reverts on reload or when the emptied payload merges back.
+	await addLogin(mobile.page, `From the joiner ${Date.now().toString(36)}`);
+	await expectAliasProvider(mobile.page, true);
+	await expectAliasProvider(ext.page, true);
 });

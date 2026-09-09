@@ -2,6 +2,7 @@
 
 import { api } from "./content-api";
 import { anchorIsLive } from "./detection";
+import { type AliasRowState, dropdownAlias } from "./html/dropdown-alias";
 import { dropdownItem } from "./html/dropdown-item";
 import { dropdownLocked } from "./html/dropdown-locked";
 import { dropdownStyles } from "./html/dropdown-styles";
@@ -25,13 +26,30 @@ let dismissCb: (() => void) | null = null;
 // content policy owns generation and the fill (this module never touches secrets).
 let onSuggestedCb: (() => void) | null = null;
 let regenerateCb: (() => void) | null = null;
+// The alias row reports the same way, so this module never learns what an alias is or who makes
+// one; the content policy owns the round trip and the fill.
+let aliasCb: (() => void) | null = null;
 
 // A suggest option threads a generated password to whichever renderer is active.
 type SuggestOpt = { password: string };
 
-/** Cache key for a rendered match set plus its optional suggest row. */
-function renderKey(matches: MatchSummary[], suggest?: SuggestOpt): string {
-	return (suggest ? `s:${suggest.password}\0` : "") + matchesKey(matches);
+/** Row options threaded to whichever renderer is active. */
+type RowOpts = { otpOnly?: boolean; suggest?: SuggestOpt; alias?: AliasRowState };
+
+/**
+ * Cache key for a rendered match set plus its optional extra rows.
+ *
+ * The alias row's STATE is part of the key, and has to be: the cache exists so a re-query on
+ * every DOM mutation does not reflicker an identical dropdown, and it compares content. The
+ * suggested-password row is static content, so its password sufficed. An alias row changes from
+ * invitation to spinner to error without the matches moving, and keyed on content alone the
+ * dropdown would render once and then sit frozen on whichever state it was first drawn in.
+ */
+function renderKey(matches: MatchSummary[], suggest?: SuggestOpt, alias?: AliasRowState): string {
+	const a = alias
+		? `a:${alias.state}:${alias.state === "error" ? (alias.message ?? "") : ""}\0`
+		: "";
+	return a + (suggest ? `s:${suggest.password}\0` : "") + matchesKey(matches);
 }
 
 // Anchor field shared by both renderers (the page input the picker sits under).
@@ -280,14 +298,10 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 }
 
 /** Renders the match picker anchored to `field`; no-op when content is unchanged to avoid flicker. */
-function buildDropdown(
-	matches: MatchSummary[],
-	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean; suggest?: SuggestOpt },
-): void {
-	if (matches.length === 0 && !opts?.suggest) return;
+function buildDropdown(matches: MatchSummary[], field: HTMLInputElement, opts?: RowOpts): void {
+	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
 
-	const key = renderKey(matches, opts?.suggest);
+	const key = renderKey(matches, opts?.suggest, opts?.alias);
 	// Same content/field already showing: keep the existing dropdown to avoid
 	// flicker from re-queries on every DOM mutation.
 	if (
@@ -303,6 +317,7 @@ function buildDropdown(
 	// Suggest row (if any) leads, then the matches. Join verbatim (each piece is
 	// already escaped html) rather than interpolating strings, which would re-escape.
 	const parts: string[] = [];
+	if (opts?.alias) parts.push(dropdownAlias(opts.alias));
 	if (opts?.suggest) parts.push(dropdownSuggest(opts.suggest.password));
 	for (const m of matches) parts.push(dropdownItem({ ...m }));
 	const root = mountDropdown(field, parts.join(""));
@@ -330,6 +345,11 @@ function buildDropdown(
 		if (target?.closest("[data-tp-suggest]")) {
 			e.preventDefault();
 			onSuggestedCb?.();
+			return;
+		}
+		if (target?.closest("[data-tp-alias]")) {
+			e.preventDefault();
+			aliasCb?.();
 		}
 	});
 }
@@ -371,7 +391,13 @@ const EXT_SCHEME = new URL(AUTOFILL_UI_URL).protocol;
 let uiOrigin: string | null = null;
 
 type IframeRender =
-	| { kind: "matches"; matches: MatchSummary[]; otpOnly: boolean; suggest?: SuggestOpt }
+	| {
+			kind: "matches";
+			matches: MatchSummary[];
+			otpOnly: boolean;
+			suggest?: SuggestOpt;
+			alias?: AliasRowState;
+	  }
 	| { kind: "locked" };
 
 // "probe" until the first mount resolves to iframe (READY) or shadow (timeout).
@@ -460,6 +486,7 @@ function flushPendingRender(): void {
 			matches: render.matches,
 			otpOnly: render.otpOnly,
 			suggest: render.suggest,
+			alias: render.alias,
 		});
 	} else {
 		postToUi({ type: "RENDER_LOCKED" });
@@ -478,7 +505,13 @@ function armReadinessTimeout(): void {
 		destroyIframeHost();
 		if (field && render) {
 			if (render.kind === "matches")
-				buildDropdown(render.matches, field, { otpOnly: render.otpOnly });
+				buildDropdown(render.matches, field, {
+					otpOnly: render.otpOnly,
+					// Carried over, or falling back to the shadow renderer silently drops whichever
+					// extra row was on offer: the suggestion as well as the alias.
+					suggest: render.suggest,
+					alias: render.alias,
+				});
 			else buildLockedDropdown(field);
 		}
 	}, 700);
@@ -491,7 +524,13 @@ function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 	positionHostElement(iframeHostEl, field);
 	startPositionTracking();
 	// Skip a redundant re-post when the same content is already showing here.
-	const key = render.kind === "matches" ? renderKey(render.matches, render.suggest) : "\0locked";
+	// The alias state belongs in this key exactly as it does in the shadow renderer's: without it
+	// idle and busy hash the same, the re-post is skipped as redundant, and the row never leaves
+	// the state it was first drawn in. This is the primary renderer, so that is the whole spinner.
+	const key =
+		render.kind === "matches"
+			? renderKey(render.matches, render.suggest, render.alias)
+			: "\0locked";
 	if (iframeReady && key === iframeMatchesKey) return;
 	iframeMatchesKey = key;
 	pendingRender = render;
@@ -544,12 +583,8 @@ function removeActiveUi(): void {
 
 // --- Renderer routing: iframe is primary, shadow is the COEP fallback. ---
 
-function showMatchesUi(
-	matches: MatchSummary[],
-	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean; suggest?: SuggestOpt },
-): void {
-	if (matches.length === 0 && !opts?.suggest) return;
+function showMatchesUi(matches: MatchSummary[], field: HTMLInputElement, opts?: RowOpts): void {
+	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
 	if (uiMode === "shadow") {
 		buildDropdown(matches, field, opts);
 		return;
@@ -559,6 +594,7 @@ function showMatchesUi(
 		matches,
 		otpOnly: opts?.otpOnly === true,
 		suggest: opts?.suggest,
+		alias: opts?.alias,
 	});
 }
 
@@ -590,6 +626,7 @@ window.addEventListener("message", (e) => {
 		| { type: "UI_HIGHLIGHT"; active?: boolean }
 		| { type: "UI_USE_SUGGESTED" }
 		| { type: "UI_REGENERATE" }
+		| { type: "UI_USE_ALIAS" }
 		| undefined;
 	switch (msg?.type) {
 		case "AUTOFILL_UI_READY":
@@ -628,6 +665,11 @@ window.addEventListener("message", (e) => {
 			break;
 		case "UI_REGENERATE":
 			regenerateCb?.();
+			break;
+		case "UI_USE_ALIAS":
+			// Creating an alias spends the user's allowance and fills the page field, so it takes
+			// the same anti-clickjacking gate as a secret pick.
+			if (pickIsTrustworthy()) aliasCb?.();
 			break;
 	}
 });
@@ -698,5 +740,9 @@ export const picker = {
 	/** Fired when the user clicks the regenerate button on the suggestion row. */
 	onRegenerate(cb: () => void): void {
 		regenerateCb = cb;
+	},
+	/** Fired when the user chooses the email-alias row, in any state it accepts a click in. */
+	onUseAlias(cb: () => void): void {
+		aliasCb = cb;
 	},
 };

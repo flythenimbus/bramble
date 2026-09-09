@@ -137,3 +137,80 @@ describe("picker: losing the anchor field", () => {
 		expect(hostEl()!.style.visibility).toBe("");
 	});
 });
+
+// The iframe renderer keeps its own render cache, separate from the shadow one's, and it decides
+// what to re-post. A row whose STATE changes without its content changing is the case that cache
+// gets wrong: idle and busy hash the same unless the state is part of the key, the re-post is
+// dropped as redundant, and the alias row never leaves the state it was first drawn in. This is
+// the primary renderer, so that is the entire spinner. See docs/email-aliases.md.
+describe("picker: the iframe renderer re-posts when a row's state changes", () => {
+	const EXT_ORIGIN = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+
+	/** Mount the picker, then complete the iframe's readiness handshake so posts go out live
+	 * rather than being held as a pending render. Returns the posts seen from then on. */
+	function readyIframe(field: HTMLInputElement): unknown[] {
+		// The host parks the iframe in a CLOSED shadow root, so it cannot be queried for. Catch it
+		// as it is made instead, which is also the only moment its contentWindow can be stubbed.
+		const posts: unknown[] = [];
+		let iframe: HTMLIFrameElement | null = null;
+		const createElement = document.createElement.bind(document);
+		const spy = vi.spyOn(document, "createElement").mockImplementation(((
+			tag: string,
+			...rest: unknown[]
+		) => {
+			const el = createElement(tag, ...(rest as []));
+			if (tag === "iframe") {
+				iframe = el as HTMLIFrameElement;
+				Object.defineProperty(el, "contentWindow", {
+					configurable: true,
+					value: { postMessage: (m: unknown) => posts.push(m) },
+				});
+			}
+			return el;
+		}) as typeof document.createElement);
+		picker.showMatches([MATCH], field, {});
+		spy.mockRestore();
+		if (!iframe) throw new Error("no iframe mounted");
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: { type: "AUTOFILL_UI_READY" },
+				origin: EXT_ORIGIN,
+				source: (iframe as HTMLIFrameElement).contentWindow as unknown as Window,
+			}),
+		);
+		posts.length = 0;
+		return posts;
+	}
+
+	it("posts each alias state, rather than treating the second as redundant", () => {
+		const field = document.createElement("input");
+		document.body.append(field);
+		stubRect(field, BOX);
+		const posts = readyIframe(field);
+
+		picker.showMatches([], field, { alias: { state: "idle" } });
+		picker.showMatches([], field, { alias: { state: "busy" } });
+		picker.showMatches([], field, { alias: { state: "error", message: "nope" } });
+
+		const states = posts
+			.filter((m): m is { type: string; alias?: { state: string } } => {
+				return (m as { type?: string })?.type === "RENDER_MATCHES";
+			})
+			.map((m) => m.alias?.state);
+		expect(states).toEqual(["idle", "busy", "error"]);
+	});
+
+	// The dedupe still has to work, or every DOM mutation reflickers the dropdown.
+	it("still skips a genuinely identical re-render", () => {
+		const field = document.createElement("input");
+		document.body.append(field);
+		stubRect(field, BOX);
+		const posts = readyIframe(field);
+
+		picker.showMatches([], field, { alias: { state: "idle" } });
+		picker.showMatches([], field, { alias: { state: "idle" } });
+
+		const renders = posts.filter((m) => (m as { type?: string })?.type === "RENDER_MATCHES");
+		expect(renders).toHaveLength(1);
+	});
+});

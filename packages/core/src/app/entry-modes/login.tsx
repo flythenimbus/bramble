@@ -3,6 +3,7 @@ import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { passwordStrength } from "check-password-strength";
 import {
+	AtSign,
 	Camera,
 	Check,
 	ChevronDown,
@@ -22,7 +23,10 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
+import { AliasError } from "../../aliases";
 import { usePlatform } from "../../context/PlatformContext";
+import { useAliasProvider } from "../../hooks/useAliasProvider";
+import { usePrefs } from "../../hooks/usePrefs";
 import type {
 	LoginEntry,
 	LoginEntryData,
@@ -30,7 +34,10 @@ import type {
 	PasswordChange,
 } from "../../hooks/useVault";
 import { formatDate, formatDateTimeExact } from "../../util/format-date";
+import { generate } from "../../util/password-gen";
 import { classifyScannedQr, parseTotp, type QrScanFailure, totpAt } from "../../util/totp";
+import { PasswordGeneratorModal } from "../components/PasswordGeneratorModal";
+import { AdvancedDisclosure } from "../components/ui/advanced-disclosure";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
@@ -56,34 +63,20 @@ interface LoginFormValues {
 	passkeys: PasskeyCredential[];
 }
 
+/** Alias-generation state. Unlike the password generator this can fail, and the reason is the
+ * only thing that tells a user whether to fix a key, a plan or an allowance. */
+type AliasFieldState = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
+
 /** QR-scan state. `failed` carries why, so the hint can say what actually happened. */
 type TotpScanState =
 	| { kind: "idle" }
 	| { kind: "scanning" }
 	| { kind: "failed"; failure: QrScanFailure; vendor?: string };
 
-/** Generate a 16-char password by unbiased rejection sampling over the charset. */
-function randomPassword(): string {
-	const charset =
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
-	const n = charset.length;
-	// 88 doesn't divide 256, so byte % n would bias; only accept bytes < floor(256/n)*n.
-	const limit = Math.floor(256 / n) * n;
-	const out: string[] = [];
-	const buf = new Uint8Array(16);
-	while (out.length < 16) {
-		crypto.getRandomValues(buf);
-		for (let i = 0; i < buf.length && out.length < 16; i++) {
-			const b = buf[i]!;
-			if (b < limit) out.push(charset.charAt(b % n));
-		}
-	}
-	return out.join("");
-}
-
 function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const { register, control, watch, setValue, getValues } = useFormContext<LoginFormValues>();
 	const { shell } = usePlatform();
+	const { prefs } = usePrefs();
 	const { t } = useLingui();
 	const [showPassword, setShowPassword] = useState(false);
 	const {
@@ -91,7 +84,9 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		append: appendUrl,
 		remove: removeUrl,
 	} = useFieldArray({ control, name: "urls" });
-	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const [generatorOpen, setGeneratorOpen] = useState(false);
+	const aliases = useAliasProvider();
+	const [aliasState, setAliasState] = useState<AliasFieldState>({ kind: "idle" });
 	const [totpScan, setTotpScan] = useState<TotpScanState>({ kind: "idle" });
 	const [showTotp, setShowTotp] = useState(false);
 	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
@@ -112,8 +107,49 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	);
 	const isBreached = initialBreach?.leaked === true && passwordValue === initialPassword;
 
-	const generatePassword = () => {
-		setValue("password", randomPassword(), { shouldDirty: true, shouldValidate: true });
+	const applyPassword = (password: string) =>
+		setValue("password", password, { shouldDirty: true, shouldValidate: true });
+
+	// The icon skips the panel and generates from the settings it last saved, which is the
+	// common case: the user has already decided what a password of theirs looks like.
+	const regeneratePassword = async () => applyPassword(await generate(prefs.generator));
+
+	// Generating an alias is not like generating a password: it creates a real record on the
+	// user's provider account and spends their allowance, so it is click-only, it reports its
+	// own failures, and there is no idle regenerate. See docs/email-aliases.md.
+	const generateAlias = async () => {
+		setAliasState({ kind: "busy" });
+		try {
+			// The site the alias is for, so it is identifiable in the provider's dashboard later and,
+			// on SimpleLogin, legible in the address itself. The first URL is the entry's own idea of
+			// where it is used; a name that is not a URL tells us nothing a provider can use.
+			const first = getValues("urls")?.[0]?.value?.trim();
+			let site: string | undefined;
+			try {
+				site = first
+					? new URL(/^https?:/i.test(first) ? first : `https://${first}`).hostname
+					: undefined;
+			} catch {
+				site = undefined;
+			}
+			setValue("username", await aliases.generate(site), {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
+			setAliasState({ kind: "idle" });
+		} catch (e) {
+			setAliasState({
+				kind: "error",
+				// The provider's own words, when it gave any, are what say whether this is a bad key,
+				// a spent allowance or a plan that does not include aliases. Rendered as plain text.
+				message:
+					e instanceof AliasError && e.providerMessage
+						? `${e.message} ${e.providerMessage}`
+						: e instanceof Error
+							? e.message
+							: String(e),
+			});
+		}
 	};
 
 	// Accept a scanned QR only if it parses as a usable TOTP, so a stray QR can't land a junk key.
@@ -216,12 +252,36 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 					<Trans>Details</Trans>
 				</span>
 				<div className="space-y-3">
-					<TextField
-						label={t`Username or email`}
-						type="text"
-						autoComplete="off"
-						{...register("username")}
-					/>
+					<div>
+						<TextField
+							label={t`Username or email`}
+							type="text"
+							autoComplete="off"
+							endAdornment={
+								aliases.enabled ? (
+									<Button
+										variant="ghost"
+										size="none"
+										onClick={generateAlias}
+										disabled={aliasState.kind === "busy"}
+										className="p-1.5 rounded-md"
+										aria-label={t`Generate email alias`}
+									>
+										{aliasState.kind === "busy" ? (
+											<Loader2 className="w-3.5 h-3.5 animate-spin" />
+										) : (
+											<AtSign className="w-3.5 h-3.5" />
+										)}
+									</Button>
+								) : undefined
+							}
+							{...register("username")}
+						/>
+						{aliasState.kind === "error" && (
+							// Plain text: part of this can be the provider's own message.
+							<p className="mt-1.5 text-xs text-destructive">{aliasState.message}</p>
+						)}
+					</div>
 
 					<div>
 						<TextField
@@ -233,7 +293,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 									<Button
 										variant="ghost"
 										size="none"
-										onClick={generatePassword}
+										onClick={regeneratePassword}
 										className="p-1.5 rounded-md"
 										aria-label={t`Generate password`}
 									>
@@ -287,12 +347,18 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 						<Button
 							variant="secondary"
 							size="none"
-							onClick={generatePassword}
+							onClick={() => setGeneratorOpen(true)}
 							className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
 						>
 							<Sparkles className="w-3.5 h-3.5" />
 							<Trans>Generate strong password</Trans>
 						</Button>
+
+						<PasswordGeneratorModal
+							open={generatorOpen}
+							onClose={() => setGeneratorOpen(false)}
+							onUse={applyPassword}
+						/>
 					</div>
 
 					<div>
@@ -386,48 +452,30 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 
 			<TextArea label={t`Notes (optional)`} rows={3} {...register("notes")} />
 
-			<div>
-				<Button
-					variant="link"
-					size="none"
-					onClick={() => setAdvancedOpen((o) => !o)}
-					className="flex items-center gap-1.5 text-xs active:scale-[0.98]"
-					aria-expanded={advancedOpen}
-				>
-					{advancedOpen ? (
-						<ChevronDown className="w-3.5 h-3.5" />
-					) : (
-						<ChevronRight className="w-3.5 h-3.5" />
-					)}
-					<Trans>Advanced</Trans>
-				</Button>
-				{advancedOpen && (
-					<div className="mt-3 space-y-4 pl-4 border-l border-border/40">
-						<ToggleRow
-							title={t`Enable autofill`}
-							subtitle={t`Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault.`}
-							checked={watch("autofillEnabled")}
-							onChange={(v) => setValue("autofillEnabled", v, { shouldDirty: true })}
-						/>
-						<ToggleRow
-							title={t`Auto-submit after fill`}
-							subtitle={t`Press Enter / submit the form right after the credentials are filled in.`}
-							checked={watch("autoSubmit")}
-							onChange={(v) => setValue("autoSubmit", v, { shouldDirty: true })}
-						/>
-						<div>
-							<SelectField label={t`Subdomain match`} {...register("subdomainMatch")}>
-								<option value="etld1">{t`eTLD+1 (default, matches all subdomains)`}</option>
-								<option value="exact">{t`Exact hostname only`}</option>
-								<option value="subdomain">{t`This domain and its subdomains`}</option>
-							</SelectField>
-							<p className="text-xs text-muted-foreground mt-1.5">
-								<Trans>Controls which URLs this entry will offer credentials for.</Trans>
-							</p>
-						</div>
-					</div>
-				)}
-			</div>
+			<AdvancedDisclosure>
+				<ToggleRow
+					title={t`Enable autofill`}
+					subtitle={t`Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault.`}
+					checked={watch("autofillEnabled")}
+					onChange={(v) => setValue("autofillEnabled", v, { shouldDirty: true })}
+				/>
+				<ToggleRow
+					title={t`Auto-submit after fill`}
+					subtitle={t`Press Enter / submit the form right after the credentials are filled in.`}
+					checked={watch("autoSubmit")}
+					onChange={(v) => setValue("autoSubmit", v, { shouldDirty: true })}
+				/>
+				<div>
+					<SelectField label={t`Subdomain match`} {...register("subdomainMatch")}>
+						<option value="etld1">{t`eTLD+1 (default, matches all subdomains)`}</option>
+						<option value="exact">{t`Exact hostname only`}</option>
+						<option value="subdomain">{t`This domain and its subdomains`}</option>
+					</SelectField>
+					<p className="text-xs text-muted-foreground mt-1.5">
+						<Trans>Controls which URLs this entry will offer credentials for.</Trans>
+					</p>
+				</div>
+			</AdvancedDisclosure>
 		</>
 	);
 }

@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { ChevronDown, ChevronRight, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
+import { Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
@@ -17,6 +17,7 @@ import {
 import { deriveIceUrl } from "../../../../sync/transport/ice";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
+import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
 import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -72,7 +73,6 @@ export function SyncConnectSection() {
 	// Hosted relay by default; overridable under Advanced. Loaded from storage below.
 	const [relayUrl, setRelayUrl] = useState(DEFAULT_RELAY);
 	const [iceUrl, setIceUrl] = useState(() => deriveIceUrl(DEFAULT_RELAY));
-	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const [pairingCode, setPairingCode] = useState<string | null>(null);
 	// Seconds left on the open invite. Cosmetic: the host enforces the window with its own timer.
 	const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -707,51 +707,33 @@ export function SyncConnectSection() {
 				)}
 			</Modal>
 
-			<div>
-				<Button
-					variant="link"
-					size="none"
-					onClick={() => setAdvancedOpen((o) => !o)}
-					className="gap-1.5 text-xs active:scale-[0.98]"
-					aria-expanded={advancedOpen}
-				>
-					{advancedOpen ? (
-						<ChevronDown className="w-3.5 h-3.5" />
-					) : (
-						<ChevronRight className="w-3.5 h-3.5" />
-					)}
-					<Trans>Advanced</Trans>
-				</Button>
-				{advancedOpen && (
-					<div className="mt-3 space-y-5 pl-4 border-l border-border/40">
-						<div className="space-y-1.5">
-							<TextField
-								label={t`Nostr relay URL`}
-								value={relayUrl}
-								onChange={(e) => onRelayChange(e.target.value)}
-							/>
-							<p className="text-xs text-muted-foreground">
-								<Trans>
-									The signaling relay that introduces devices. Defaults to the hosted relay; point
-									it at your own or any public Nostr relay.
-								</Trans>
-							</p>
-						</div>
-						<div className="space-y-1.5">
-							<TextField
-								label={t`TURN / ICE servers URL`}
-								value={iceUrl}
-								onChange={(e) => onIceChange(e.target.value)}
-							/>
-							<p className="text-xs text-muted-foreground">
-								<Trans>
-									An endpoint that returns your own ICE servers as JSON. Defaults to the relay's.
-								</Trans>
-							</p>
-						</div>
-					</div>
-				)}
-			</div>
+			<AdvancedDisclosure className="space-y-5">
+				<div className="space-y-1.5">
+					<TextField
+						label={t`Nostr relay URL`}
+						value={relayUrl}
+						onChange={(e) => onRelayChange(e.target.value)}
+					/>
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							The signaling relay that introduces devices. Defaults to the hosted relay; point it at
+							your own or any public Nostr relay.
+						</Trans>
+					</p>
+				</div>
+				<div className="space-y-1.5">
+					<TextField
+						label={t`TURN / ICE servers URL`}
+						value={iceUrl}
+						onChange={(e) => onIceChange(e.target.value)}
+					/>
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							An endpoint that returns your own ICE servers as JSON. Defaults to the relay's.
+						</Trans>
+					</p>
+				</div>
+			</AdvancedDisclosure>
 		</Section>
 	);
 }

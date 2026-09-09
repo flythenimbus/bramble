@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+import { type GeneratorSettings, normalizeGeneratorSettings } from "@core/util/password-gen";
 import { api } from "../platform-api";
 
 // User preferences, read on demand from chrome.storage.local with defaults.
@@ -10,6 +11,7 @@ const PREF_AUTOFILL_ENABLED = "pref.autofillEnabled";
 const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
+const PREF_GENERATOR = "pref.generator";
 
 const DEFAULT_AUTOLOCK_MINUTES = 15;
 const DEFAULT_CLIPBOARD_SECONDS = 30;
@@ -78,6 +80,17 @@ export async function getPasskeyProviderEnabled(): Promise<boolean> {
 		if (typeof v === "boolean") return v;
 	} catch {}
 	return DEFAULT_PASSKEY_PROVIDER;
+}
+
+/** The generator settings the app saved. Normalized here as everywhere else: this reads a stored
+ * object, not a scalar, so a value written by another build cannot be trusted to still fit. */
+export async function getGeneratorSettings(): Promise<GeneratorSettings> {
+	try {
+		const r = await api.storage.local.get(PREF_GENERATOR);
+		return normalizeGeneratorSettings(r[PREF_GENERATOR]);
+	} catch {
+		return normalizeGeneratorSettings(undefined);
+	}
 }
 
 export async function getNeverSaveSites(): Promise<Set<string>> {

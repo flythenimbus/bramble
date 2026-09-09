@@ -119,6 +119,19 @@ export function fillPasswordFields(fields: HTMLInputElement[], value: string): b
 }
 
 /**
+ * Fills one non-secret field, for the email alias the user asked us to make.
+ *
+ * Deliberately not fillPasswordFields with a single element: that records the value as the
+ * last-filled PASSWORD, which the save prompt reads to decide whether a submit is worth
+ * offering to save. An address is not a password and must not stand in for one there.
+ */
+export function fillTextField(el: HTMLInputElement, value: string): boolean {
+	fillField(el, value);
+	autoFilledFields.add(el);
+	return true;
+}
+
+/**
  * Submits the form after autofill: prefers requestSubmit() on the enclosing
  * <form>, falling back to a synthesised Enter keypress for key-handler forms.
  */

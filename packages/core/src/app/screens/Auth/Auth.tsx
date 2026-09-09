@@ -11,7 +11,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-	isBiometricCancel,
+	isBiometricInterrupted,
 	isBiometricInvalidated,
 	isBiometricLockout,
 } from "../../../adapters/biometric";
@@ -204,11 +204,16 @@ export function Auth() {
 					// A user cancel surfaces here too; the password form stays available below.
 				} else if (!auto || e instanceof StaleBiometricCacheError) {
 					setError("masterPassword", { message: cryptoError(e) });
-				} else if (!isBiometricCancel(e)) {
+				} else if (isBiometricInterrupted(e)) {
 					// Nothing the user asked for should leave an error on screen; they still have
 					// the button, which reports properly. A cancel is an answer, but a gate that
 					// never opened is not: iOS pulls the prompt for a beat after the app returns
 					// to the foreground. Stay busy so the retry does not flicker the label.
+					//
+					// ONLY that one code. This used to retry on anything that was not a cancel,
+					// which meant a broken gate was asked four times in a row: on Android a cache
+					// that cannot be decrypted still passes the fingerprint check, so each attempt
+					// put the prompt up, took a touch, and failed the same way.
 					return "retry";
 				}
 			}

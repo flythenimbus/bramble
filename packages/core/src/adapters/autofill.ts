@@ -81,6 +81,15 @@ export interface QueryResult {
 	/** The user switched page autofill off: show nothing at all, not even the locked hint or a
 	 * generated-password suggestion, and stop querying until told otherwise. Extension only. */
 	disabled?: boolean;
+	/** A password shaped by the user's generator settings, for a signup form's suggestion. Sent
+	 * with the query itself so the suggestion has one to draw the moment it paints. Extension
+	 * only; absent when the page has no login field. */
+	generated?: string;
+	/** An alias provider is configured for the active vault, so the in-page alias row may be
+	 * offered on a signup form's email field. Extension only; absent when there is none, when the
+	 * vault is locked, or from a background that predates the feature. Says only that the row may
+	 * appear: no provider is contacted to answer it. */
+	aliasReady?: boolean;
 }
 
 /** What to fill for a chosen entry, discriminated by kind. */

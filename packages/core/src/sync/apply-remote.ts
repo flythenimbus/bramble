@@ -44,11 +44,23 @@ function stampMapsEqual(a: Map<string, Hlc>, b: Map<string, Hlc>): boolean {
 	return true;
 }
 
-/** True if both payloads hold the same entries (by id+stamp) and tombstones. */
+/** Settings as an id->stamp map, so the same comparison covers them. */
+function settingsStamps(settings: EntriesPayload["settings"]): Map<string, Hlc> {
+	return new Map(Object.entries(settings ?? {}).map(([key, rec]) => [key, rec.hlc]));
+}
+
+/**
+ * True if both payloads hold the same entries (by id+stamp), tombstones and settings.
+ *
+ * Settings are part of this or they never propagate: the caller writes and re-broadcasts only
+ * when a merge changed something, so a settings-only change judged equivalent would be dropped
+ * on the floor and appear to sync only when it rode along with an entry edit.
+ */
 export function payloadsEquivalent(a: EntriesPayload, b: EntriesPayload): boolean {
 	return (
 		stampMapsEqual(stampMap(a.entries), stampMap(b.entries)) &&
-		stampMapsEqual(stampMap(a.tombstones), stampMap(b.tombstones))
+		stampMapsEqual(stampMap(a.tombstones), stampMap(b.tombstones)) &&
+		stampMapsEqual(settingsStamps(a.settings), settingsStamps(b.settings))
 	);
 }
 

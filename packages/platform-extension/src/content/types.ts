@@ -27,6 +27,12 @@ export interface QueryResult {
 	hasPotentialMatch: boolean;
 	// The user turned page autofill off: show nothing and stop querying.
 	disabled?: boolean;
+	// A password shaped by the user's generator settings, for a signup form's suggestion.
+	// Absent when the page has no login field, or when an older background didn't send one.
+	generated?: string;
+	// An alias provider is configured for the active vault, so the alias row may be offered.
+	// Absent when there is none, when the vault is locked, or from an older background.
+	aliasReady?: boolean;
 }
 
 /** Fill instruction from the background, discriminated by `kind`. `isAuto` echoes whether the fill was user-initiated. */
@@ -56,6 +62,13 @@ export type FillPayload =
 	  };
 
 export type AutofillQueryResponse = { ok: true; data: QueryResult } | { ok: false; error: string };
+
+/** Reply to ALIAS_CREATE. `error` carries the provider's own words when it gave any, which the
+ * row renders as plain text; it is the only thing that says whether to fix a key, a plan or an
+ * allowance. */
+export type AliasCreateResponse =
+	| { ok: true; data: { address: string } }
+	| { ok: false; error: string };
 
 export type AutofillSelectResponse =
 	| {

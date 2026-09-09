@@ -19,6 +19,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.concurrent.Executor;
 
@@ -87,6 +88,12 @@ public class BiometricVaultPlugin extends Plugin {
             return;
         }
         try {
+            // Drop the stored ciphertext BEFORE the key it belongs to. The prompt below can be
+            // cancelled or fail, and it is the only thing that writes the replacement: leaving the
+            // old ciphertext next to a key that no longer exists reads as "enabled" to hasSecret
+            // and then fails every unlock with a null-message AEAD error. Nothing is worse to lose
+            // here than the cache itself, which the master password rebuilds.
+            clearSecret(vaultId);
             // Fresh key each enable, so this vault's cache binds to the current biometric set.
             deleteKey(aliasFor(vaultId));
             SecretKey key = generateKey(aliasFor(vaultId));
@@ -136,7 +143,20 @@ public class BiometricVaultPlugin extends Plugin {
             authenticate(call, cipher, "Unlock your vault", new AuthAction() {
                 @Override
                 public void run(Cipher authed) throws Exception {
-                    byte[] pt = authed.doFinal(ct);
+                    byte[] pt;
+                    try {
+                        pt = authed.doFinal(ct);
+                    } catch (GeneralSecurityException e) {
+                        // The gate opened and the key loaded, but the stored ciphertext will not
+                        // decrypt under it: an enable that replaced the key without writing its
+                        // ciphertext. The cache can never open again, so drop it rather than fail
+                        // this way forever - the same treatment KeyPermanentlyInvalidated gets.
+                        // AEADBadTagException usually carries no message, which is where the
+                        // "Biometric crypto failed: null" on screen came from.
+                        clearSecret(vaultId);
+                        call.reject("Biometric cache could not be opened; it has been cleared", "invalidated");
+                        return;
+                    }
                     JSObject ret = new JSObject();
                     ret.put("secret", new String(pt, StandardCharsets.UTF_8));
                     call.resolve(ret);

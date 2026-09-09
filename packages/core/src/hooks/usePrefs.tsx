@@ -7,8 +7,15 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { type AliasConfig, isAliasConfig } from "../aliases";
 import { usePlatform } from "../context/PlatformContext";
 import { syncKeyFor } from "../sync/sync-keys";
+import {
+	DEFAULT_GENERATOR_SETTINGS,
+	type GeneratorSettings,
+	normalizeGeneratorSettings,
+} from "../util/password-gen";
+import { useSyncedSettings } from "./synced-settings";
 import { useVaultRegistry } from "./useVaultRegistry";
 
 // Preference keys persisted via StorageAdapter.getMeta/setMeta. Mirrored in
@@ -45,6 +52,12 @@ const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
 // a backup. Someone who leaves the machine on has a perfectly good reason to decline, and a
 // suggestion that cannot be silenced is a nag. See BackupSection.
 const PREF_AUTOSTART_PROMPT_DISMISSED = "pref.autostartPromptDismissed";
+// The password generator's last-used settings, so the field's one-tap regenerate produces what
+// the user picked in the panel rather than a fixed house style.
+const PREF_GENERATOR = "pref.generator";
+// The email alias provider: which service, its settings, and the API key. Synced, so configuring
+// it on one device reaches the others; see docs/synced-settings.md and docs/email-aliases.md.
+export const PREF_ALIAS_PROVIDER = "pref.aliasProvider";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -85,6 +98,10 @@ export interface Prefs {
 	statsCollapsed: boolean;
 	// Desktop: the backup section's "start at login" suggestion has been declined.
 	autostartPromptDismissed: boolean;
+	// Password generator: the settings last used in the generator panel.
+	generator: GeneratorSettings;
+	// The email alias provider for this vault, or null when none is set up.
+	aliasProvider: AliasConfig | null;
 }
 
 /** Each pref's storage key. A map rather than a ternary chain: the type makes it exhaustive, so
@@ -103,6 +120,8 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: PREF_STATS_COLLAPSED,
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
+	generator: PREF_GENERATOR,
+	aliasProvider: PREF_ALIAS_PROVIDER,
 };
 
 /**
@@ -114,10 +133,20 @@ const META_KEYS: Record<keyof Prefs, string> = {
  * data is "vault": the two biometric prefs shipped flat, and a second vault then opened with
  * passcode fallback already on, having never been given it.
  *
+ * "synced" describes the vault itself, wherever it is opened, and rides in the vault's encrypted
+ * payload so it reaches the user's other devices (docs/synced-settings.md). One rule decides
+ * eligibility, and it is a constraint rather than a preference:
+ *
+ *   If anything needs the value while the vault is LOCKED, it cannot be synced.
+ *
+ * A synced value lives behind the vault key, so it cannot be read before unlock. The extension
+ * background reads autoLockMinutes, lockOnScreenLock and autofillEnabled from storage precisely
+ * because it must answer while locked, which is why those are device-scoped and must stay so.
+ *
  * Exhaustive over `Prefs`, so a new pref cannot be added without deciding - a compile error
  * rather than a silent device-wide default, which is the direction that leaks a permission.
  */
-type PrefScope = "device" | "vault";
+type PrefScope = "device" | "vault" | "synced";
 const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	autoLockMinutes: "device",
 	breachCheckEnabled: "device",
@@ -132,11 +161,45 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	statsCollapsed: "device",
 	autostartPromptDismissed: "device",
 	biometricPasscodeFallback: "vault",
+	generator: "device",
+	// Not device-local: an alias provider is an account-level fact about the person, not about
+	// this browser, and only ever used behind an unlock. See docs/synced-settings.md.
+	aliasProvider: "synced",
 };
 
 const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
 	(k) => PREF_SCOPE[k] === "vault",
 );
+
+const SYNCED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
+	(k) => PREF_SCOPE[k] === "synced",
+);
+
+/**
+ * How a synced pref's stored value is made safe to use.
+ *
+ * Every pref read already distrusts what it finds (`generator` is normalized field by field for
+ * exactly this reason), and a synced one is worse off: the writer may be another device on a
+ * different build. A pref without an entry here falls back to a type check against its default,
+ * which is enough for the scalars and arrays but not for an object with a shape.
+ */
+const SYNCED_NORMALIZE: Partial<Record<keyof Prefs, (raw: unknown) => unknown>> = {
+	// A shaped object with a secret in it, written by a peer that may be on another build: only
+	// something that still parses as a config is taken, and anything else reads as "none".
+	aliasProvider: (raw) => (isAliasConfig(raw) ? raw : null),
+};
+
+/** Coerce a synced value, falling back to the default when it is unusable. */
+function normalizeSynced<K extends keyof Prefs>(key: K, raw: unknown): Prefs[K] {
+	const fallback = DEFAULT_PREFS[key];
+	if (raw === null || raw === undefined) return fallback;
+	const custom = SYNCED_NORMALIZE[key];
+	if (custom) return custom(raw) as Prefs[K];
+	// No declared shape: accept only a value of the same primitive kind as the default, so a
+	// peer cannot turn a boolean into an object and surprise a consumer.
+	if (Array.isArray(fallback)) return (Array.isArray(raw) ? raw : fallback) as Prefs[K];
+	return (typeof raw === typeof fallback ? raw : fallback) as Prefs[K];
+}
 
 /** Their storage keys, for whoever has to clean up after a vault. Pairs with PER_VAULT_SYNC_KEYS. */
 export const PER_VAULT_PREF_KEYS = VAULT_SCOPED.map((k) => META_KEYS[k]);
@@ -155,6 +218,8 @@ const DEFAULT_PREFS: Prefs = {
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: DEFAULT_STATS_COLLAPSED,
 	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+	generator: DEFAULT_GENERATOR_SETTINGS,
+	aliasProvider: null,
 };
 
 export interface UsePrefs {
@@ -217,6 +282,7 @@ async function readVaultPref<T>(
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
 	const { storage } = usePlatform();
+	const syncedSettings = useSyncedSettings();
 	const { activeId, vaults, ready } = useVaultRegistry();
 	const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 	const [loaded, setLoaded] = useState(false);
@@ -252,7 +318,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -276,9 +342,14 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 					keyFor("biometricPasscodeFallback"),
 					adoptLegacy,
 				),
+				storage.getMeta<unknown>(PREF_GENERATOR),
 			]);
 			if (cancelled) return;
-			setPrefs({
+			// Preserved, not rebuilt: this read covers the storage-backed scopes only, and a synced
+			// pref comes from the vault on its own schedule. Replacing the whole object would drop
+			// whatever the synced overlay had already resolved.
+			setPrefs((prev) => ({
+				...prev,
 				autoLockMinutes: typeof a === "number" ? a : DEFAULT_AUTOLOCK_MINUTES,
 				breachCheckEnabled: typeof b === "boolean" ? b : DEFAULT_BREACH_CHECK,
 				clipboardClearSeconds: typeof c === "number" ? c : DEFAULT_CLIPBOARD_SECONDS,
@@ -292,7 +363,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				statsCollapsed: typeof k === "boolean" ? k : DEFAULT_STATS_COLLAPSED,
 				autostartPromptDismissed: typeof l === "boolean" ? l : DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 				biometricPasscodeFallback: typeof m === "boolean" ? m : DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
-			});
+				// Field by field: a stored object written by an older or hand-edited build is not
+				// trusted to still match GeneratorSettings.
+				generator: normalizeGeneratorSettings(n),
+			}));
 			setLoaded(true);
 		})();
 		return () => {
@@ -302,12 +376,36 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		// switch. Without it the second vault kept showing the first one's gate settings.
 	}, [storage, keyFor, ready, vaults.length]);
 
+	// Synced prefs are not read with the others: they come from the vault's payload, arrive only
+	// once it is unlocked, and change again when a peer's merge lands one. Overlaid on top of
+	// whatever the storage read produced, and reset to defaults while there is nothing to read,
+	// so a locked vault shows the default rather than the last vault's answer.
+	useEffect(() => {
+		if (SYNCED.length === 0) return;
+		setPrefs((p) => {
+			const overlay: Partial<Prefs> = {};
+			for (const key of SYNCED) {
+				const rec = syncedSettings.settings?.[META_KEYS[key]];
+				// Written through a Partial rather than assigned per key: `key` is a union here, and
+				// an indexed write with a union key narrows the target to `never`.
+				Object.assign(overlay, { [key]: normalizeSynced(key, rec?.value) });
+			}
+			return { ...p, ...overlay };
+		});
+	}, [syncedSettings.settings]);
+
 	const update = useCallback(
 		async <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
 			setPrefs((p) => ({ ...p, [key]: value }));
+			if (PREF_SCOPE[key] === "synced") {
+				// Straight to the vault, which stamps it and persists through the same write every
+				// entry change uses. Not also to storage: two homes for one value is how they drift.
+				await syncedSettings.set(META_KEYS[key], value);
+				return;
+			}
 			await storage.setMeta(keyFor(key), value);
 		},
-		[storage, keyFor],
+		[storage, keyFor, syncedSettings],
 	);
 
 	const value = useMemo<UsePrefs>(() => ({ prefs, loaded, update }), [prefs, loaded, update]);

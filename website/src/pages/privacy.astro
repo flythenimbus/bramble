@@ -5,9 +5,9 @@ import { SITE } from "@/consts";
 
 <LegalLayout
 	title="Privacy Policy"
-	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control: a password breach check, peer-to-peer sync between your own devices, and encrypted backups to a storage provider you choose."
+	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control: a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use."
 	path="/privacy"
-	meta="Effective date: 21 July 2026"
+	meta="Effective date: 7 September 2026"
 >
 	<p class="lead">
 		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
@@ -15,7 +15,8 @@ import { SITE } from "@/consts";
 		There is no account and no Bramble server that holds your vault. Everything stays on your
 		device, encrypted. Bramble makes network connections only for a few optional features that are
 		off by default and that you turn on yourself: a password breach check, peer-to-peer sync between
-		your own devices, and encrypted backups to a storage provider you choose. None of them ever
+		your own devices, encrypted backups to a storage provider you choose, and email aliases from a
+		provider you already use. None of them ever
 		exposes your passwords or your vault in a form that Bramble, a provider, or anyone else could
 		read. Details below.
 	</p>
@@ -62,9 +63,10 @@ import { SITE } from "@/consts";
 
 	<h2>Network connections, in full</h2>
 	<p>
-		Bramble works entirely offline by default. There are three features that make network
+		Bramble works entirely offline by default. There are four features that make network
 		connections, all optional and all off until you turn them on: the password breach check, device
-		sync, and cloud backups. They are described next. Bramble makes no other network requests.
+		sync, cloud backups, and email aliases. They are described next. Bramble makes no other network
+		requests.
 	</p>
 
 	<h2>Password breach check (optional)</h2>
@@ -143,6 +145,47 @@ import { SITE } from "@/consts";
 			choose receives the encrypted file and the account or connection details needed to store it,
 			and handles them under its own privacy policy. Because the file is encrypted, that is all it
 			can see.
+		</li>
+	</ul>
+
+	<h2>Email aliases (optional)</h2>
+	<p>
+		Bramble can create a different email address for each site you sign up to, using an alias
+		provider you already have an account with. This is optional and off until you set it up, and
+		setting it up is what turns it on: until you enter an API key in Settings, Bramble never
+		contacts any alias provider and the feature does not appear anywhere in the app.
+	</p>
+	<p>What this does and does not expose:</p>
+	<ul>
+		<li>
+			<strong>Nothing happens without a deliberate click.</strong> An address is only ever created
+			when you ask for one, by pressing the alias button in an entry, or the alias row that appears
+			on a sign-up form. Bramble never creates one in the background, never on page load, and never
+			to see whether it could.
+		</li>
+		<li>
+			<strong>Bramble is not the alias service and never sees your mail.</strong> Your provider is
+			the one that creates the address and forwards the mail; Bramble asks it for an address on your
+			behalf and puts the answer in the field. Mail never passes through Bramble, and Bramble runs
+			no alias service of its own.
+		</li>
+		<li>
+			<strong>What is sent, and to whom.</strong> The request goes to your provider and nowhere
+			else: to Addy.io, to SimpleLogin, or to your own server if you self-host either of them. It
+			carries your API key, the site the address is for, and a short note naming Bramble, so the
+			alias is recognisable in your provider's own dashboard. Nothing from your vault is included.
+		</li>
+		<li>
+			<strong>Your API key stays encrypted on your device.</strong> It is stored under your vault's
+			encryption key, like the rest of your vault, and is used only to authenticate these requests.
+			Because it is encrypted with the vault, an alias can be created only while the vault is
+			unlocked. Removing the provider in Settings deletes the key, and deleting the vault deletes
+			it too.
+		</li>
+		<li>
+			<strong>The provider is a third party under its own terms.</strong> Addy.io and SimpleLogin
+			receive the requests above and handle them under their own privacy policies, and the aliases
+			you create live in your account with them, where you can disable or delete them.
 		</li>
 	</ul>
 
