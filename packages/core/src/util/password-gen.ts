@@ -73,7 +73,7 @@ function clamp(value: number, min: number, max: number): number {
  * `getRandomValues() % bound` is biased whenever bound doesn't divide 2^32: the low residues
  * come up more often. Discarding the short tail above the last whole multiple removes it.
  */
-function randomInt(bound: number): number {
+export function randomInt(bound: number): number {
 	if (bound <= 1) return 0;
 	const limit = Math.floor(0x100000000 / bound) * bound;
 	const buf = new Uint32Array(1);

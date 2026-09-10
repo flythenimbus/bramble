@@ -231,6 +231,71 @@ Two caveats carried forward:
   cost this repo a day once (1255ab7b, WebDAV uploads authenticating as the
   wrong thing). The token goes in a header, deliberately and only.
 
+## A catch-all domain, with no provider at all
+
+Built. It inverts most of the constraints above, which is what makes it cheap.
+
+Plenty of mail hosts let you point a whole domain at one inbox: Migadu, Fastmail,
+Cloudflare Email Routing, and any host with a catch-all rule. Once that is set up,
+`anything@yourdomain` already arrives, and an alias is just a string nobody has
+used before. Bramble would generate one locally and fill it. That is the entire
+feature: no account, no API key, no quota, no network call, and nothing to fail.
+
+**Everything that makes the API providers awkward disappears.** No key to store,
+so the config holds no secret at all. No request, so `http.ts` is unused and there
+is no CORS question, no rate limit, no `402`, no provider message to render, and
+no spinner, because generation is instant. The in-page row would have exactly one
+state. And it is the only provider that works with no network whatsoever.
+
+**Bramble's involvement stops at the string.** No listing, no disabling, no
+forwarding rules. The other providers are scoped that way for v1; this one is
+scoped that way permanently, because there is no API to grow into. Turning an
+alias off means a rule at the user's own host.
+
+### What it cost
+
+Three structural changes, each of which the existing shapes almost anticipated:
+
+- `AliasField` gained a **text** kind. It only described a select before (fixed
+  options, or fetched from the account), and this needs a domain typed by hand.
+- `AliasConfig.apiKey` became **optional**, and `isAliasConfig` asks for one per
+  provider rather than of every config.
+- Descriptors gained `needsApiKey`, so the settings screen hides the key field,
+  the link to create one and the check button without switching on a provider id.
+
+The generator is `aliases/catchall.ts`, reusing the EFF wordlist and the one
+unbiased `randomInt` the password generator already had. Two styles: words
+(`quiet-fox-42`) and characters (`k3f9x2ab7q`), the latter over a charset with
+`l`, `o`, `0` and `1` removed so a hand-copied address is not misread.
+
+### A wrong domain fails silently, so the UI says so
+
+Every other provider answers a create, so a typo surfaces at once. Here a mistyped
+domain produces a plausible address that quietly black-holes, and the user finds
+out when a password reset never arrives.
+
+Bramble cannot verify a catch-all without sending mail, and an MX lookup over
+DNS-over-HTTPS would reintroduce exactly the egress this provider otherwise
+avoids. So it does not pretend: `looksLikeDomain` catches only the slips someone
+actually makes in that box (an empty field, a whole address pasted in, a URL), and
+the hint under it asks the user to check for themselves.
+
+### Collisions are ours to avoid
+
+No server rejects a duplicate, so `AliasRequest.taken` carries what the vault
+already holds, which is free because every alias it ever made is a username on a
+login. Twelve draws, then a refusal: at that point the inputs are wrong rather than
+luck, and quietly returning an address that already belongs to another login would
+be the worse failure.
+
+### The style not offered
+
+A site prefix (`github-k3f9@example.com`) is the obvious third style and is
+deliberately absent. It carries the tradeoff measured earlier in this document for
+SimpleLogin's `word` mode: an address holding the site's name is easy to recognise
+in your own inbox and tells anyone who sees it where you used it. Worth adding
+only with the same warning the SimpleLogin setting carries.
+
 ## The rest of the field, and why CORS decides it
 
 Bitwarden's generator names six services, and they are effectively the whole

@@ -1,7 +1,6 @@
 import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { passwordStrength } from "check-password-strength";
 import {
 	AtSign,
 	Camera,
@@ -39,6 +38,7 @@ import { classifyScannedQr, parseTotp, type QrScanFailure, totpAt } from "../../
 import { PasswordGeneratorModal } from "../components/PasswordGeneratorModal";
 import { AdvancedDisclosure } from "../components/ui/advanced-disclosure";
 import { Button } from "../components/ui/button";
+import { PasswordStrengthMeter } from "../components/ui/password-strength-meter";
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
@@ -101,10 +101,6 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 		);
 
 	const passwordValue = watch("password");
-	const strength = useMemo(
-		() => (passwordValue ? passwordStrength(passwordValue) : null),
-		[passwordValue],
-	);
 	const isBreached = initialBreach?.leaked === true && passwordValue === initialPassword;
 
 	const applyPassword = (password: string) =>
@@ -185,11 +181,6 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 				return t`No QR code found on the page. Make sure it's visible, then retry, or paste the setup key.`;
 		}
 	};
-
-	const strengthBar = (id: number) =>
-		id >= 3 ? "bg-primary" : id === 2 ? "bg-yellow-500" : "bg-destructive";
-	const strengthTextColor = (id: number) =>
-		id >= 3 ? "text-primary" : id === 2 ? "text-yellow-500" : "text-destructive";
 
 	return (
 		<>
@@ -317,32 +308,12 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 							{...register("password")}
 						/>
 
-						{strength && (
-							<div className="mt-2.5">
-								<div className="flex items-center justify-between mb-1.5">
-									<span className="text-xs text-muted-foreground">
-										<Trans>Password strength</Trans>
-									</span>
-									<span
-										className={`text-xs ${
-											isBreached ? "text-destructive" : strengthTextColor(strength.id)
-										}`}
-									>
-										{isBreached ? t`Breached` : strength.value}
-									</span>
-								</div>
-								<div className="h-1.5 bg-muted rounded-full overflow-hidden">
-									<div
-										className={`h-full transition-all duration-300 ${
-											isBreached ? "bg-destructive" : strengthBar(strength.id)
-										}`}
-										style={{
-											width: isBreached ? "5%" : `${((strength.id + 1) / 4) * 100}%`,
-										}}
-									/>
-								</div>
-							</div>
-						)}
+						<PasswordStrengthMeter
+							value={passwordValue}
+							label={t`Password strength`}
+							breached={isBreached}
+							className="mt-2.5"
+						/>
 
 						<Button
 							variant="secondary"

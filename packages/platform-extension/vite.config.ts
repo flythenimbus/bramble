@@ -5,18 +5,21 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { linguiMacroPlugin } from "../../scripts/vite-lingui.mjs";
 
-const root = resolve(__dirname, "src");
+const root = resolve(import.meta.dirname, "src");
 
 // TARGET=firefox builds the Gecko variant into dist-firefox with the Firefox
 // manifest (event-page background, no offscreen/webAuthenticationProxy). Default is
 // the Chromium build into dist. The two outputs never clobber each other.
 const target = process.env.TARGET === "firefox" ? "firefox" : "chromium";
-const outDir = resolve(__dirname, target === "firefox" ? "dist-firefox" : "dist-chromium");
-const manifestSrc = resolve(__dirname, `../manifests/${target}/manifest.json`);
+const outDir = resolve(
+	import.meta.dirname,
+	target === "firefox" ? "dist-firefox" : "dist-chromium",
+);
+const manifestSrc = resolve(import.meta.dirname, `../manifests/${target}/manifest.json`);
 
 export default defineConfig({
 	root,
-	publicDir: resolve(__dirname, "public"),
+	publicDir: resolve(import.meta.dirname, "public"),
 	plugins: [
 		// Rewrites <Trans>/t`` macros (English stays inline; i18n:extract pulls it
 		// into catalogs). Must run before react(): see scripts/vite-lingui.mjs.
@@ -53,7 +56,7 @@ export default defineConfig({
 	],
 	resolve: {
 		alias: {
-			"@core": resolve(__dirname, "../core/src"),
+			"@core": resolve(import.meta.dirname, "../core/src"),
 		},
 	},
 	build: {

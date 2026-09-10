@@ -63,14 +63,15 @@ export interface AliasConfig {
 	/** The provider's own settings, keyed by `AliasField.key` (domain, format, mode). */
 	options: Record<string, string>;
 	/**
-	 * The provider's API key, in the clear.
+	 * The provider's API key, in the clear. Absent for a provider that has no account to hold one:
+	 * the catch-all domain contacts nobody.
 	 *
 	 * Not wrapped by hand any more: this config is a synced pref, so it rides inside the vault's
 	 * VEK-encrypted payload and is protected by the vault key exactly as every entry is. Wrapping
 	 * it again would be a second encryption under the same key, which buys nothing and was only
 	 * ever there because the config used to sit in plaintext meta storage.
 	 */
-	apiKey: string;
+	apiKey?: string;
 }
 
 /** Whether a stored value is still shaped like a config. Storage is not a trusted input: this
@@ -78,8 +79,13 @@ export interface AliasConfig {
 export function isAliasConfig(v: unknown): v is AliasConfig {
 	if (!v || typeof v !== "object") return false;
 	const c = v as Partial<AliasConfig>;
-	if (c.provider !== "addy" && c.provider !== "simplelogin") return false;
+	if (c.provider !== "addy" && c.provider !== "simplelogin" && c.provider !== "catchall") {
+		return false;
+	}
 	if (c.baseUrl !== undefined && typeof c.baseUrl !== "string") return false;
 	if (!c.options || typeof c.options !== "object") return false;
+	// A key is required by the providers that authenticate one and meaningless to the one that
+	// does not, so this is asked per provider rather than of every config.
+	if (c.provider === "catchall") return c.apiKey === undefined || typeof c.apiKey === "string";
 	return typeof c.apiKey === "string" && c.apiKey.length > 0;
 }

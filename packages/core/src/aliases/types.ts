@@ -1,7 +1,7 @@
 // Per-site email aliases from a provider the user already has an account with.
 // See docs/email-aliases.md.
 
-export type AliasProviderId = "addy" | "simplelogin";
+export type AliasProviderId = "addy" | "simplelogin" | "catchall";
 
 /** What a create needs from the caller. Everything is optional: a provider can always mint an
  * address with no context, and the context only makes it identifiable later. */
@@ -17,6 +17,14 @@ export interface AliasRequest {
 	site?: string;
 	/** Free text stored alongside the alias at the provider, so it is identifiable in their UI. */
 	description?: string;
+	/**
+	 * Addresses already in use, so a locally generated one cannot repeat.
+	 *
+	 * Only the catch-all provider reads it: the hosted providers have a server that rejects a
+	 * duplicate, and this one has nobody to ask. Optional because a caller that cannot cheaply
+	 * enumerate them is still better off generating than not.
+	 */
+	taken?: readonly string[];
 }
 
 export interface AliasResult {

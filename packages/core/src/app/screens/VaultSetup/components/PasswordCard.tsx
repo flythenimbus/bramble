@@ -2,13 +2,11 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Shield } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import {
-	masterPasswordHardError,
-	masterPasswordWarning,
-} from "../../../../util/master-password-strength";
+import { useMasterPasswordWarning } from "../../../../hooks/usePasswordStrength";
+import { masterPasswordHardError } from "../../../../util/password-strength";
 import { Button } from "../../../components/ui/button";
-import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { PasswordField } from "../../../components/ui/password-field";
+import { PasswordStrengthMeter } from "../../../components/ui/password-strength-meter";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
 import type { VaultSetupFormValues } from "../types";
 
@@ -42,7 +40,7 @@ export function PasswordCard({
 	} = form;
 	const pw = watch("masterPassword");
 	// Weak (but allowed) passwords warn + require an explicit opt-in before creation.
-	const weakWarning = masterPasswordWarning(pw ?? "");
+	const weakWarning = useMasterPasswordWarning(pw ?? "");
 	const [acceptedWeak, setAcceptedWeak] = useState(false);
 	const blockedByWeak = !!weakWarning && !acceptedWeak;
 
@@ -81,7 +79,7 @@ export function PasswordCard({
 								validate: masterPasswordHardError,
 							})}
 						/>
-						<MasterPasswordMeter value={pw ?? ""} />
+						<PasswordStrengthMeter value={pw ?? ""} />
 					</div>
 					<PasswordField
 						label={t`Confirm master password`}

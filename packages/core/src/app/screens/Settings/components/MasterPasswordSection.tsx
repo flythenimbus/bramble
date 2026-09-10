@@ -3,15 +3,13 @@ import { AlertTriangle, Asterisk } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useCryptoErrorMessage } from "../../../../hooks/useCryptoErrorMessage";
+import { useMasterPasswordWarning } from "../../../../hooks/usePasswordStrength";
 import { useVault } from "../../../../hooks/useVault";
-import {
-	masterPasswordHardError,
-	masterPasswordWarning,
-} from "../../../../util/master-password-strength";
+import { masterPasswordHardError } from "../../../../util/password-strength";
 import { Button } from "../../../components/ui/button";
-import { MasterPasswordMeter } from "../../../components/ui/master-password-meter";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
+import { PasswordStrengthMeter } from "../../../components/ui/password-strength-meter";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
 import { Row, Toggle } from "./primitives";
 
@@ -56,7 +54,7 @@ export function MasterPasswordSection() {
 		defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
 	});
 	const newPasswordValue = watch("newPassword");
-	const weakWarning = masterPasswordWarning(newPasswordValue ?? "");
+	const weakWarning = useMasterPasswordWarning(newPasswordValue ?? "");
 	const blockedByWeak = !!weakWarning && !acceptedWeak;
 
 	useEffect(() => {
@@ -209,7 +207,7 @@ export function MasterPasswordSection() {
 								validate: masterPasswordHardError,
 							})}
 						/>
-						<MasterPasswordMeter value={newPasswordValue ?? ""} />
+						<PasswordStrengthMeter value={newPasswordValue ?? ""} />
 					</div>
 					<PasswordField
 						label={t`Confirm new password`}

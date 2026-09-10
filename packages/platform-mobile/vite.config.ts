@@ -10,7 +10,7 @@ export default defineConfig({
 	plugins: [linguiMacroPlugin(), react(), tailwindcss()],
 	resolve: {
 		alias: {
-			"@core": resolve(__dirname, "../core/src"),
+			"@core": resolve(import.meta.dirname, "../core/src"),
 		},
 	},
 	build: {

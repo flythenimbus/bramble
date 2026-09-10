@@ -1,4 +1,5 @@
 import { type AddyFormat, createAddyClient } from "./addy";
+import { type CatchAllStyle, createCatchAllClient } from "./catchall";
 import type { AliasConfig } from "./config";
 import { createSimpleLoginClient, type SimpleLoginMode } from "./simplelogin";
 import type { AliasClient, AliasProviderId } from "./types";
@@ -10,6 +11,13 @@ export {
 	type AddyFormat,
 	createAddyClient,
 } from "./addy";
+export {
+	CATCHALL_STYLES,
+	type CatchAllConfig,
+	type CatchAllStyle,
+	createCatchAllClient,
+	looksLikeDomain,
+} from "./catchall";
 export {
 	ALIAS_CONFIG_KEY,
 	ALIAS_CONFIGURED_HINT_KEY,
@@ -63,6 +71,12 @@ export function createAliasClient(
 				{ baseUrl, domain: options.domain, format: options.format as AddyFormat | undefined },
 				apiKey,
 			);
+		case "catchall":
+			// No key: the address is generated locally and delivered by the user's own mail host.
+			return createCatchAllClient({
+				domain: options.domain,
+				style: options.style as CatchAllStyle | undefined,
+			});
 		case "simplelogin":
 			return createSimpleLoginClient(
 				{ baseUrl, mode: options.mode as SimpleLoginMode | undefined, domain: options.domain },

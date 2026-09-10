@@ -85,7 +85,8 @@ export async function createAlias(site?: string): Promise<string> {
 		// one is what saving a new item already asks for.
 		throw new AliasError("auth", "Unlock Bramble to create an alias.");
 	}
-	const client = clientForConfig(config, config.apiKey);
+	// Empty for a provider with no account to authenticate against; its client ignores it.
+	const client = clientForConfig(config, config.apiKey ?? "");
 	const { address } = await client.create({
 		site,
 		description: site ? `Bramble (${site})` : "Bramble",

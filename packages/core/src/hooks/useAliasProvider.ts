@@ -7,12 +7,14 @@ import {
 	AliasError,
 	type AliasProviderId,
 	createAliasClient,
+	describeProvider,
 	isAliasConfig,
 	missingRequiredFields,
 } from "../aliases";
 import { usePlatform } from "../context/PlatformContext";
 import { syncKeyFor } from "../sync/sync-keys";
 import { usePrefs } from "./usePrefs";
+import { useVaultState } from "./useVault";
 import { useVaultRegistry } from "./useVaultRegistry";
 
 /** What the settings screen saves. */
@@ -56,6 +58,16 @@ export function useAliasProvider() {
 	const { activeId, vaults } = useVaultRegistry();
 	const vaultId = activeId ?? vaults[0]?.id;
 	const config = prefs.aliasProvider;
+	const { entries } = useVaultState();
+
+	/** Every address this vault already holds, so a locally generated one cannot repeat one. */
+	const takenAddresses = useCallback(
+		() =>
+			entries
+				.map((e) => (e.type === "login" ? e.username : ""))
+				.filter((u): u is string => u.length > 0),
+		[entries],
+	);
 
 	// Migrate a value written before the config was synced, once. Only when there is nothing
 	// synced yet, so a device that never had one cannot overwrite what another device set.
@@ -83,32 +95,41 @@ export function useAliasProvider() {
 		})();
 	}, [storage, crypto, vaultId, loaded, config, update]);
 
-	/** The key to authenticate with: the one being typed, else the one already stored. */
+	/** The key to authenticate with: the one being typed, else the one already stored. Empty for
+	 * a provider that authenticates to nobody. */
 	const resolveKey = useCallback(
-		(typed: string | undefined): string => {
-			if (typed) return typed;
-			if (config) return config.apiKey;
-			throw new AliasError("config", "Enter your API key.");
+		(input: SaveAliasInput): string => {
+			if (!describeProvider(input.provider).needsApiKey) return "";
+			const stored = config?.provider === input.provider ? config.apiKey : undefined;
+			const key = input.apiKey || stored;
+			if (!key) throw new AliasError("config", "Enter your API key.");
+			return key;
 		},
 		[config],
 	);
 
 	const clientFrom = useCallback(
 		(input: SaveAliasInput) =>
-			createAliasClient(input.provider, input.options, input.baseUrl, resolveKey(input.apiKey)),
+			createAliasClient(input.provider, input.options, input.baseUrl, resolveKey(input)),
 		[resolveKey],
 	);
 
 	const save = useCallback(
 		async (input: SaveAliasInput): Promise<void> => {
 			// An edit that does not restate the key keeps the stored one; the screen never holds it.
-			const apiKey = input.apiKey || config?.apiKey;
-			if (!apiKey) throw new AliasError("config", "Enter your API key.");
+			// A provider with no account to authenticate against carries no key at all.
+			const needsKey = describeProvider(input.provider).needsApiKey;
+			// The stored key is only a fallback for the provider it belongs to. Reusing it across a
+			// switch would authenticate to Addy with a SimpleLogin key, which fails in a way that
+			// reads as "your key is wrong" rather than "that key is for something else".
+			const storedKey = config?.provider === input.provider ? config.apiKey : undefined;
+			const apiKey = needsKey ? input.apiKey || storedKey : undefined;
+			if (needsKey && !apiKey) throw new AliasError("config", "Enter your API key.");
 			const next: AliasConfig = {
 				provider: input.provider,
 				baseUrl: input.baseUrl || undefined,
 				options: input.options,
-				apiKey,
+				...(apiKey ? { apiKey } : {}),
 			};
 			await update("aliasProvider", next);
 		},
@@ -148,15 +169,18 @@ export function useAliasProvider() {
 				config.provider,
 				config.options,
 				config.baseUrl,
-				config.apiKey,
+				config.apiKey ?? "",
 			);
 			const { address } = await client.create({
 				site,
 				description: site ? `Bramble (${site})` : "Bramble",
+				// Only the catch-all provider reads this: it has no server to reject a duplicate, so
+				// the vault's own addresses are the only thing standing between two logins sharing one.
+				taken: takenAddresses(),
 			});
 			return address;
 		},
-		[config],
+		[config, takenAddresses],
 	);
 
 	return {

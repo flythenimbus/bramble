@@ -10,7 +10,7 @@ export default defineConfig({
 	plugins: [linguiMacroPlugin(), react(), tailwindcss()],
 	resolve: {
 		alias: {
-			"@core": resolve(__dirname, "../core/src"),
+			"@core": resolve(import.meta.dirname, "../core/src"),
 		},
 	},
 	// Tauri owns the console; letting Vite clear it hides Rust panics and build errors.
@@ -34,8 +34,8 @@ export default defineConfig({
 			// They are separate entries rather than routes because they are separate OS
 			// windows, and the panel must not carry the whole app's boot cost to open.
 			input: {
-				main: resolve(__dirname, "index.html"),
-				spotlight: resolve(__dirname, "spotlight.html"),
+				main: resolve(import.meta.dirname, "index.html"),
+				spotlight: resolve(import.meta.dirname, "spotlight.html"),
 			},
 		},
 	},

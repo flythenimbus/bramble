@@ -29,7 +29,7 @@ importers:
         version: 2.5.10
       '@lingui/babel-plugin-lingui-macro':
         specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
       '@lingui/cli':
         specifier: ^6.6.0
         version: 6.6.0(esbuild@0.28.2)(rolldown@1.2.6)
@@ -47,7 +47,7 @@ importers:
         version: 2.0.0
       vite-plugin-babel:
         specifier: ^1.7.3
-        version: 1.7.3(@babel/core@7.29.7)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+        version: 1.7.3(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
       web-ext:
         specifier: ^10.6.0
         version: 10.6.0(jiti@2.7.0)
@@ -68,10 +68,10 @@ importers:
     dependencies:
       '@lingui/core':
         specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
       '@lingui/react':
         specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)(react@19.2.8)
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)(react@19.2.8)
       '@tanstack/react-router':
         specifier: ^1.170.32
         version: 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -81,9 +81,6 @@ importers:
       '@vault/theme':
         specifier: workspace:*
         version: link:../theme
-      check-password-strength:
-        specifier: ^3.0.0
-        version: 3.0.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -120,6 +117,9 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+      zxcvbn:
+        specifier: ^4.4.2
+        version: 4.4.2
     devDependencies:
       '@babel/plugin-syntax-jsx':
         specifier: ^8.0.1
@@ -129,7 +129,7 @@ importers:
         version: 8.0.1(@babel/core@7.29.7)
       '@lingui/babel-plugin-lingui-macro':
         specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
       '@lingui/cli':
         specifier: ^6.6.0
         version: 6.6.0(esbuild@0.28.2)(rolldown@1.2.6)
@@ -138,7 +138,7 @@ importers:
         version: 6.6.0
       '@lingui/vite-plugin':
         specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4))(esbuild@0.28.2)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.6.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8))(esbuild@0.28.2)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -151,6 +151,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.5
         version: 19.2.5(@types/react@19.2.18)
+      '@types/zxcvbn':
+        specifier: ^4.4.5
+        version: 4.4.5
       '@vitejs/plugin-react':
         specifier: ^6.1.0
         version: 6.1.0(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -2356,6 +2359,9 @@ packages:
   '@types/yargs@17.0.35':
     resolution: {integrity: sha512-qUHkeCyQFxMXg79wQfTtfndEC+N9ZZg76HJftDJp+qH2tV7Gj4OJi7l+PiWwJ+pWtW8GwSmqsDj/oymhrTWXjg==}
 
+  '@types/zxcvbn@4.4.5':
+    resolution: {integrity: sha512-FZJgC5Bxuqg7Rhsm/bx6gAruHHhDQ55r+s0JhDh8CQ16fD7NsJJ+p8YMMQDhSQoIrSmjpqqYWA96oQVMNkjRyA==}
+
   '@ungap/structured-clone@1.4.0':
     resolution: {integrity: sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ==}
 
@@ -2712,9 +2718,6 @@ packages:
 
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
-
-  check-password-strength@3.0.0:
-    resolution: {integrity: sha512-XIBvWpb7/RI2DO05tMixE4WbFFvEC7ls/jr1VSrWgXvlCmdiH2fsdkixG0cNGs1uIXwoSqJ75T3s9H/TlJV6Cw==}
 
   cheerio-select@2.1.0:
     resolution: {integrity: sha512-9v9kG0LvzrlcungtnJtpGNxY+fzECQKhK4EGJX2vByejiMX84MFNQw4UxPJl3bFbTMw+Dfs37XaIkCwTZfLh4g==}
@@ -5570,6 +5573,9 @@ packages:
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
+  zxcvbn@4.4.2:
+    resolution: {integrity: sha512-Bq0B+ixT/DMyG8kgX2xWcI5jUvCwqrMxSFam7m0lAf78nf04hv6lNCsyLYdyYTrCVMqNDY/206K7eExYCeSyUQ==}
+
 snapshots:
 
   '@anthropic-ai/sdk@0.106.0(zod@4.4.3)':
@@ -6796,14 +6802,6 @@ snapshots:
       - '@babel/core'
       - '@babel/types'
 
-  '@lingui/core@6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)':
-    dependencies:
-      '@lingui/babel-plugin-lingui-macro': 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
-      '@lingui/message-utils': 6.6.0
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@babel/types'
-
   '@lingui/format-po@6.6.0':
     dependencies:
       '@lingui/conf': 6.6.0
@@ -6816,24 +6814,24 @@ snapshots:
       '@messageformat/parser': 5.1.1
       js-sha256: 0.10.1
 
-  '@lingui/react@6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)(react@19.2.8)':
+  '@lingui/react@6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)(react@19.2.8)':
     dependencies:
-      '@lingui/babel-plugin-lingui-macro': 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
-      '@lingui/core': 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+      '@lingui/babel-plugin-lingui-macro': 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
+      '@lingui/core': 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
       react: 19.2.8
       use-sync-external-store: 1.6.0(react@19.2.8)
     transitivePeerDependencies:
       - '@babel/core'
       - '@babel/types'
 
-  '@lingui/vite-plugin@6.6.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4))(esbuild@0.28.2)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))':
+  '@lingui/vite-plugin@6.6.0(@babel/core@7.29.7)(@lingui/babel-plugin-lingui-macro@6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8))(esbuild@0.28.2)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@lingui/cli': 6.6.0(esbuild@0.28.2)(rolldown@1.2.6)
       '@lingui/conf': 6.6.0
       vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
     optionalDependencies:
       '@babel/core': 7.29.7
-      '@lingui/babel-plugin-lingui-macro': 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+      '@lingui/babel-plugin-lingui-macro': 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
       rolldown: 1.2.6
     transitivePeerDependencies:
       - babel-plugin-macros
@@ -7346,6 +7344,8 @@ snapshots:
     dependencies:
       '@types/yargs-parser': 21.0.3
 
+  '@types/zxcvbn@4.4.5': {}
+
   '@ungap/structured-clone@1.4.0': {}
 
   '@vitejs/plugin-react@6.1.0(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))':
@@ -7781,10 +7781,6 @@ snapshots:
   character-entities@2.0.2: {}
 
   character-reference-invalid@2.0.1: {}
-
-  check-password-strength@3.0.0:
-    dependencies:
-      escape-string-regexp: 5.0.0
 
   cheerio-select@2.1.0:
     dependencies:
@@ -10637,15 +10633,14 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plugin-babel@1.7.3(@babel/core@7.29.7)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)):
-    dependencies:
-      '@babel/core': 7.29.7
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
-
   vite-plugin-babel@1.7.3(@babel/core@7.29.7)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       '@babel/core': 7.29.7
       vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
+
+  vite-plugin-babel@1.7.3(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)):
+    dependencies:
+      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
 
   vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
@@ -11080,3 +11075,5 @@ snapshots:
   zod@4.4.3: {}
 
   zwitch@2.0.4: {}
+
+  zxcvbn@4.4.2: {}

@@ -556,7 +556,7 @@ msgid "Bramble will never delete anything here, so this can use a credential tha
 msgstr "O Bramble nunca excluirá nada aqui, então é possível usar uma credencial que não tenha permissão para isso. Uma credencial roubada, nesse caso, não pode destruir seu histórico de backup."
 
 #: packages/core/src/app/components/EntryRow.tsx
-#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
 msgid "Breached"
 msgstr "Comprometido"
 
@@ -1167,6 +1167,10 @@ msgstr "Concluir seleção"
 msgid "Done. Your old recovery code no longer works. Save this one now: it is shown only here, and it is the only way back in if you forget your master password."
 msgstr "Concluído. Seu código de recuperação antigo não funciona mais. Guarde este agora: ele é mostrado somente aqui, e é o único meio de acesso caso se esqueça da sua senha mestra."
 
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Double-check this. Bramble cannot test it, and a wrong domain gives you addresses that quietly go nowhere."
+msgstr "Confira isto com atenção. O Bramble não pode testá-lo, e um domínio incorreto gera endereços que silenciosamente não levam a lugar algum."
+
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Download"
 msgstr "Baixar"
@@ -1365,6 +1369,10 @@ msgstr "Face ID"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Failed"
 msgstr "Falhou"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Fair"
+msgstr "Razoável"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Field name"
@@ -2899,10 +2907,11 @@ msgstr "Armazenar texto sensível"
 msgid "Strawberry"
 msgstr "Morango"
 
-#: packages/core/src/app/components/ui/master-password-meter.tsx
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
 msgid "Strength"
 msgstr "Força"
 
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Strong"
 msgstr "Forte"
@@ -2994,6 +3003,10 @@ msgstr "Telefone"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Test"
 #~ msgstr "Testar"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "That does not look like a domain. Enter it on its own, like example.com, with no @ and no https://"
+msgstr "Isso não parece um domínio. Digite-o isoladamente, como example.com, sem @ e sem https://"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "That doesn't look like a Bramble backup (.bramble) file."
@@ -3612,6 +3625,14 @@ msgstr "Versão"
 msgid "Version {0} is available"
 msgstr "Versão {0} está disponível"
 
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Very strong"
+msgstr "Muito forte"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Very weak"
+msgstr "Muito fraca"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Visible"
 msgstr "Visível"
@@ -3628,6 +3649,10 @@ msgstr "Aguardando o aplicativo de desktop…"
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Waiting for your key…"
 msgstr "Aguardando sua chave…"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Weak"
+msgstr "Fraca"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "WebDAV URL"
@@ -3664,6 +3689,10 @@ msgstr "Os aliases de palavra incluem o nome do site, o que é mais fácil de re
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Words"
 msgstr "Palavras"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Words are easier to read aloud; characters are shorter."
+msgstr "Palavras são mais fáceis de ler em voz alta; caracteres são mais curtos."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Working…"
@@ -3734,6 +3763,10 @@ msgstr "Seu navegador pode solicitar acesso ao arquivo do cofre ao desbloquear."
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Your device passcode can also unlock this vault."
 msgstr "O código do dispositivo também pode desbloquear este cofre."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Your domain"
+msgstr "Seu domínio"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Your new recovery code"

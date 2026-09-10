@@ -2,9 +2,9 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Loader2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Button } from "./button";
-import { MasterPasswordMeter } from "./master-password-meter";
 import { Modal } from "./modal";
 import { PasswordField } from "./password-field";
+import { PasswordStrengthMeter } from "./password-strength-meter";
 
 interface FilePasswordDialogProps {
 	open: boolean;
@@ -84,7 +84,7 @@ export function FilePasswordDialog({
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 				/>
-				<MasterPasswordMeter value={password} />
+				<PasswordStrengthMeter value={password} />
 				<PasswordField
 					label={t`Confirm password`}
 					value={confirm}
