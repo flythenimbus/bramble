@@ -75,7 +75,8 @@ const knownHostnames = new Set<string>();
 const MAX_KNOWN_HOSTNAMES = 1000;
 
 function rememberHostname(hostname: string): void {
-	if (knownHostnames.has(hostname)) return;
+	// Refresh insertion order so the Set is an LRU queue, not FIFO.
+	knownHostnames.delete(hostname);
 	if (knownHostnames.size >= MAX_KNOWN_HOSTNAMES) {
 		const oldest = knownHostnames.values().next().value;
 		if (oldest !== undefined) knownHostnames.delete(oldest);
@@ -392,11 +393,7 @@ async function hydrateIndexForOwner(
 		const parsed = CryptoDecryptIndexResultSchema.safeParse(batchResp.data);
 		if (!parsed.success || parsed.data.length !== encryptedEntries.length) return false;
 		const plaintexts = new Map(parsed.data.map((result) => [result.id, result.plaintext]));
-		if (
-			plaintexts.size !== encryptedEntries.length ||
-			!encryptedEntries.every((enc) => plaintexts.has(enc.id))
-		)
-			return false;
+		if (!encryptedEntries.every((enc) => plaintexts.has(enc.id))) return false;
 		for (const enc of encryptedEntries) {
 			const plaintext = plaintexts.get(enc.id);
 			if (typeof plaintext !== "string") continue;

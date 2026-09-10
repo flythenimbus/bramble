@@ -52,6 +52,21 @@ export async function ensureOffscreen(): Promise<void> {
 	await creating;
 }
 
+// Firefox's background module graph currently evaluates synchronously before any event can
+// reach deliver (there is no top-level await under src). Keep that invariant: it guarantees
+// sync.ts registers the bridge before this lazy import's first continuation runs.
+let loadingInProcessHost: Promise<typeof import("../offscreen-core")> | null = null;
+function loadInProcessHost(): Promise<typeof import("../offscreen-core")> {
+	if (!loadingInProcessHost) {
+		loadingInProcessHost = import("../offscreen-core").then((host) => {
+			if (!inProcessSyncBridge) throw new Error("sync bridge not registered");
+			host.setSyncBridge(inProcessSyncBridge);
+			return host;
+		});
+	}
+	return loadingInProcessHost;
+}
+
 // Deliver one message to the host: the offscreen document on Chrome (via runtime
 // messaging), in-process on Firefox.
 //
@@ -67,12 +82,7 @@ async function deliver(message: Record<string, unknown>): Promise<HostResponse> 
 			| undefined;
 		return response ?? { ok: false, error: "no response from offscreen" };
 	}
-	const { handleHostMessage, setSyncBridge } = await import("../offscreen-core");
-	// The awaited import must succeed and the bridge must be installed before any
-	// in-process operation runs. Failures propagate to the caller, never to a
-	// detached promise that could leave sync using the no-op fallback bridge.
-	if (!inProcessSyncBridge) throw new Error("sync bridge not registered");
-	setSyncBridge(inProcessSyncBridge);
+	const { handleHostMessage } = await loadInProcessHost();
 	return handleHostMessage(message.type as string, message.payload);
 }
 
