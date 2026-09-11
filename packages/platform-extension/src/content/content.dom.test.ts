@@ -167,6 +167,25 @@ let onMessage: MessageListener | null = null;
 	},
 };
 
+let observedMutationTarget: Node | null = null;
+let observedMutationOptions: MutationObserverInit | null = null;
+let mutationObserverDisconnects = 0;
+const nativeMutationObserver = globalThis.MutationObserver;
+class CapturingMutationObserver extends nativeMutationObserver {
+	override observe(target: Node, options?: MutationObserverInit): void {
+		observedMutationTarget = target;
+		observedMutationOptions = options ?? null;
+		super.observe(target, options);
+	}
+
+	override disconnect(): void {
+		mutationObserverDisconnects += 1;
+		super.disconnect();
+	}
+}
+(globalThis as unknown as { MutationObserver: typeof MutationObserver }).MutationObserver =
+	CapturingMutationObserver;
+
 const trustedInteractionListeners = new Map<string, EventListener>();
 const nativeAddEventListener = document.addEventListener.bind(document);
 document.addEventListener = ((
@@ -184,6 +203,8 @@ document.addEventListener = ((
 }) as typeof document.addEventListener;
 await import("./content");
 document.addEventListener = nativeAddEventListener;
+(globalThis as unknown as { MutationObserver: typeof MutationObserver }).MutationObserver =
+	nativeMutationObserver;
 
 function dispatchTrustedInteraction(
 	type: "pointerdown" | "mousedown" | "input",
@@ -335,6 +356,72 @@ describe("content: refresh the picker on unlock (issue #20)", () => {
 			payload: result({ logins: [{ id: "1", name: "Example", secondary: "user@example.com" }] }),
 		});
 		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
+	});
+});
+
+describe("content: MutationObserver survives document tree replacement", () => {
+	const queryCount = (): number =>
+		safeRequest.mock.calls.filter(([message]) => message?.type === "AUTOFILL_QUERY").length;
+
+	const settle = async (): Promise<void> => {
+		await vi.advanceTimersByTimeAsync(700);
+	};
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		document.body.innerHTML = `<div id="initial"></div>`;
+		invalidatePageFields();
+		// Drain the setup mutation before measuring the replacement mutations.
+		await settle();
+		vi.clearAllTimers();
+		pendingQueryResponses.length = 0;
+		safeRequest.mockClear();
+	});
+
+	afterEach(() => {
+		vi.clearAllTimers();
+		vi.useRealTimers();
+	});
+
+	it("observes fields after body and document-root replacement, then disconnects on teardown", async () => {
+		expect(observedMutationTarget).toBe(document);
+		expect(observedMutationOptions).toEqual({ childList: true, subtree: true });
+
+		const replacementBody = document.createElement("body");
+		document.body.replaceWith(replacementBody);
+		await settle();
+		vi.clearAllTimers();
+		safeRequest.mockClear();
+
+		const bodyField = document.createElement("input");
+		bodyField.type = "password";
+		bodyField.name = "password";
+		replacementBody.append(bodyField);
+		await settle();
+		expect(queryCount()).toBe(1);
+
+		const replacementRoot = document.createElement("html");
+		const rootBody = document.createElement("body");
+		replacementRoot.append(rootBody);
+		document.documentElement.replaceWith(replacementRoot);
+		await settle();
+		vi.clearAllTimers();
+		safeRequest.mockClear();
+
+		const rootField = document.createElement("input");
+		rootField.type = "password";
+		rootField.name = "password";
+		rootBody.append(rootField);
+		await settle();
+		expect(queryCount()).toBe(1);
+
+		const disconnectsBeforeTeardown = mutationObserverDisconnects;
+		teardownCallback?.();
+		expect(mutationObserverDisconnects).toBe(disconnectsBeforeTeardown + 1);
+		safeRequest.mockClear();
+		rootBody.append(document.createElement("input"));
+		await settle();
+		expect(queryCount()).toBe(0);
 	});
 });
 
