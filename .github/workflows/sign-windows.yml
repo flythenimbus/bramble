@@ -1,0 +1,144 @@
+name: Sign Windows installer
+
+# Builds the Windows installer and has SignPath Authenticode-sign it.
+#
+# This exists because SignPath's free tier for open source projects verifies where a binary came
+# from: the repository, the branch and the build agent, with the origin metadata supplied by
+# GitHub rather than by anything this file says. Their terms require every job leading up to the
+# signing request to run on a GitHub-hosted runner, so the Windows installer cannot be the
+# cross-compiled one from a maintainer's Mac. It is the only artifact Bramble ships that is not
+# built locally, and see docs/desktop-port.md for why that trade is acceptable here and would not
+# be on macOS.
+#
+# What this job deliberately does NOT do is produce the updater signature. That key is the root of
+# trust for every update the app will ever accept and it never leaves the maintainer's machine, so
+# the .sig is generated locally afterwards, over the Authenticode-signed bytes. See
+# scripts/build-windows.ts.
+#
+# Driven by `pnpm run build:windows --ci-start`, which dispatches this, and `--ci-collect`, which
+# waits for it and signs what comes back.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version this run is expected to build, as a guard against a stale ref
+        required: true
+        type: string
+
+# Least privilege. `id-token` is what SignPath's origin verification reads.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-sign:
+    name: Build and sign
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/platform-desktop/src-tauri -> target
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # The whole point of the version input. A workflow_dispatch resolves `main` at the moment it
+      # is dispatched, so a race against the push of the release commit would silently build the
+      # PREVIOUS version, Authenticode-sign it, and hand back an installer that looks correct and
+      # carries the wrong version compiled into it.
+      - name: Assert the checkout is the version being released
+        shell: bash
+        run: |
+          set -euo pipefail
+          conf="$(node -p "require('./packages/platform-desktop/src-tauri/tauri.conf.json').version")"
+          if [ "$conf" != "${{ inputs.version }}" ]; then
+            echo "::error::checked out $conf but this run is for ${{ inputs.version }}; the release commit is probably not pushed yet"
+            exit 1
+          fi
+
+      # A throwaway updater key, exactly as the CI build does. The bundler refuses to emit updater
+      # artifacts without one, and the .sig it produces here is discarded: it is over the
+      # PRE-Authenticode bytes and signed with a key no installed app trusts. build-windows.ts
+      # deletes it before writing the real one, and refuses to publish if it is still there.
+      - name: Generate a throwaway signing key
+        shell: bash
+        run: |
+          pnpm --filter @vault/platform-desktop exec tauri signer generate -w /tmp/ci.key -p ""
+          echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/ci.key)" >> "$GITHUB_ENV"
+          echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> "$GITHUB_ENV"
+
+      # NSIS only, matching what the cross-compiled build produces, so the artifact a release
+      # ships is the same shape whichever route built it.
+      - name: Build the installer
+        run: pnpm --filter @vault/platform-desktop exec tauri build --bundles nsis
+
+      # Isolated so the signing request submits exactly one file and the signed artifact comes
+      # back as exactly one file. The throwaway .sig is left behind on purpose.
+      - name: Stage the unsigned installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p unsigned
+          cp packages/platform-desktop/src-tauri/target/release/bundle/nsis/*-setup.exe unsigned/
+          ls -la unsigned/
+
+      - name: Upload the unsigned installer
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: bramble-windows-unsigned
+          path: unsigned/
+          if-no-files-found: error
+
+      # Submits to SignPath, waits for a maintainer to approve the signing request in their UI,
+      # and downloads the signed artifact back into this run. The approval is manual by design:
+      # their terms require a human to decide that a given release may be signed.
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+          # Signing waits on a person, so the default is far too short for a release cut outside
+          # office hours.
+          wait-for-completion-timeout-in-seconds: 3600
+
+      - name: Assert the installer came back signed
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(ls signed/*-setup.exe)"
+          # A silently unsigned artifact is the failure worth catching here: it looks exactly like
+          # a signed one until a user downloads it and SmartScreen says otherwise.
+          if ! grep -qa "SignPath\|Sectigo" "$exe"; then
+            echo "::error::$exe carries no recognizable certificate; did signing actually run?"
+            exit 1
+          fi
+          ls -la signed/
+
+      - name: Upload the signed installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: bramble-windows-signed
+          path: signed/
+          if-no-files-found: error

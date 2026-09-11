@@ -841,6 +841,32 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 		process.env.TAURI_SIGNING_PRIVATE_KEY = key;
 	}
 
+	// The release commit goes out BEFORE the builds, which is the one place this platform differs
+	// from the other four, and it is the Windows installer that forces it: that one is built on a
+	// GitHub runner (see scripts/build-windows.ts for why it has to be), and a runner can only
+	// build a commit it can fetch. A bump still sitting in the working tree would have CI produce,
+	// and SignPath happily sign, an installer for the PREVIOUS version.
+	//
+	// The cost is that a build failure now leaves a `chore(release)` commit on main with no
+	// release behind it. That is recoverable and already handled: re-running finds the version
+	// already bumped, skips the commit, and carries on. The tag is what is still withheld until
+	// every artifact exists, so nothing ever points at a release that was not built.
+	if (!resume) commitAndPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, branch);
+
+	// Kicked off first and collected last, because it is the only step that waits on a person:
+	// SignPath requires a maintainer to approve each signing request. Started here, the approval
+	// and the notarization upload happen at the same time instead of one after the other.
+	if (!resume && process.platform === "darwin") {
+		try {
+			run("pnpm run build:windows -- --ci-start");
+		} catch {
+			fail(
+				"could not start the Windows build on GitHub.\n" +
+					`The release commit is pushed; fix and re-run, or \`git checkout ${DESKTOP_CONF}\`.`,
+			);
+		}
+	}
+
 	if (!resume)
 		try {
 			// Prompts for the YubiKey PIN and a touch, then notarizes (an upload to Apple and a wait).
@@ -859,6 +885,20 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 			fail(
 				`Linux build failed; the macOS build is fine.\nFix it and re-run, or ` +
 					`\`git checkout ${DESKTOP_CONF}\` to undo the bump.`,
+			);
+		}
+	}
+
+	// Now wait for GitHub and SignPath, and sign what comes back with the updater key, which never
+	// went anywhere near CI. Windows is where most people who install the extension are, so a
+	// desktop release that skips it skips the majority.
+	if (!resume && process.platform === "darwin") {
+		try {
+			run("pnpm run build:windows -- --ci-collect");
+		} catch {
+			fail(
+				`Windows signing did not complete; the macOS and Linux builds are fine.\n` +
+					`Re-run to wait on it again. See docs/desktop-port.md, "Windows".`,
 			);
 		}
 	}
@@ -921,6 +961,28 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 			}
 		}
 	}
+	// Windows, where the installer is both the download and the updater artifact, so unlike the
+	// other two platforms there is one file and its signature rather than a pair to keep in step.
+	// Same rule about the .sig: unsigned means every installed app refuses the update.
+	for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"] as const) {
+		const dir = `packages/platform-desktop/src-tauri/target/${triple}/release/bundle/nsis`;
+		if (!existsSync(dir)) continue;
+		const built = readdirSync(dir).filter((f) => f.endsWith("-setup.exe") && ofThisVersion(f));
+		for (const f of built) {
+			if (!existsSync(join(dir, `${f}.sig`)))
+				fail(`${f} has no .sig; the Windows build must not be --unsigned for a release`);
+			assets.push(join(dir, f), join(dir, `${f}.sig`));
+		}
+	}
+	// Checked after the loop rather than inside it, because the arm64 directory legitimately does
+	// not exist: only x64 is built for a release. Nothing at all means the Windows build did not
+	// run, and silence there would publish a release that claims to carry Windows and does not.
+	if (!assets.some((a) => a.endsWith("-setup.exe")))
+		fail(
+			`no ${version} -setup.exe; the GitHub build did not produce one.\n` +
+				"Re-run to wait on it again, or check the run linked by --ci-start.",
+		);
+
 	for (const a of archives) {
 		if (!existsSync(join(macos, `${a}.sig`)))
 			// Every installed app rejects an unsigned archive, so publishing one leaves a release
@@ -942,10 +1004,11 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	);
 	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
 
-	// Already committed, tagged and pushed by the run being resumed; doing it again would only
-	// fail on the tag that the resume exists to reuse.
-	if (!resume)
-		commitTagPush(bumped, DESKTOP_CONF, `chore(release): desktop ${version}`, tag, branch);
+	// Already tagged and pushed by the run being resumed; doing it again would only fail on the
+	// tag that the resume exists to reuse. The release COMMIT went out before the builds; this is
+	// the tag alone, withheld until every artifact exists so it can never name a release that was
+	// not fully built.
+	if (!resume) tagAndPush(tag, branch);
 
 	try {
 		await publish(tag, `Desktop ${version}`, [...assets, sumsAsset]);
@@ -1139,6 +1202,35 @@ function updateCask(version: string, sha256: string) {
 	writeFileSync(DESKTOP_CASK, after);
 }
 
+/**
+ * Commit the version bump and push the branch, without tagging.
+ *
+ * Split out of `commitTagPush` for the desktop release, where the Windows installer is built on
+ * a GitHub runner and therefore has to be able to SEE the bumped version: CI builds a pushed
+ * commit, so a bump that is still sitting in the working tree produces an installer for the
+ * previous release. Every other platform builds locally and keeps the two together.
+ *
+ * Re-running after a failure is already handled: the bump is then a no-op, `bumped` is false,
+ * and this says so rather than trying to commit nothing.
+ */
+function commitAndPush(bumped: boolean, files: string | string[], message: string, branch: string) {
+	const list = Array.isArray(files) ? files : [files];
+	if (bumped) {
+		for (const f of list) run(`git add ${f}`);
+		run(`git commit -m ${JSON.stringify(message)}`);
+	} else {
+		console.log(`${list[0]} already at this version; no release commit needed`);
+	}
+	run(`git push origin ${branch}`);
+}
+
+/** The other half. Separate so the desktop release can tag only once the build has succeeded. */
+function tagAndPush(tag: string, branch: string) {
+	run(`git tag ${tag}`);
+	run(`git push origin ${branch}`);
+	run(`git push origin ${tag}`);
+}
+
 function commitTagPush(
 	bumped: boolean,
 	files: string | string[],
@@ -1146,18 +1238,8 @@ function commitTagPush(
 	tag: string,
 	branch: string,
 ) {
-	const list = Array.isArray(files) ? files : [files];
-	if (bumped) {
-		for (const f of list) run(`git add ${f}`);
-		run(`git commit -m ${JSON.stringify(message)}`);
-	} else {
-		console.log(
-			`${list[0]} already at this version; tagging current commit without a release commit`,
-		);
-	}
-	run(`git tag ${tag}`);
-	run(`git push origin ${branch}`);
-	run(`git push origin ${tag}`);
+	commitAndPush(bumped, files, message, branch);
+	tagAndPush(tag, branch);
 }
 
 // Build release notes from the conventional-commit log between the previous tag of

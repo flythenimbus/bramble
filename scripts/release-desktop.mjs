@@ -203,6 +203,37 @@ if (MAC) {
   }
 }
 
+// The Windows half, on the same principle as the Linux one, and cross-compiled rather than
+// containerised (scripts/build-windows.ts explains why there is no container to use).
+//
+// Here the download and the updater artifact are the SAME file. macOS has a `.dmg` to click and a
+// separate `.app.tar.gz` for the updater, and Linux has a `.deb` and an AppImage; NSIS has one
+// `-setup.exe`, which Tauri signs in place and the updater downloads and runs. So unlike the
+// other two platforms there is nothing to keep apart, and the .sig sits beside the installer
+// rather than beside an archive of it.
+if (MAC) {
+  for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]) {
+    const dir = join(TARGET, triple, "release/bundle/nsis");
+    if (!existsSync(dir)) continue;
+    const files = await readdir(dir);
+    for (const installer of files.filter((f) => f.endsWith("-setup.exe"))) {
+      const sig = `${installer}.sig`;
+      if (!files.includes(sig)) {
+        console.error(
+          `${installer} has no ${sig}. The Windows build must be signed for a release:\n` +
+            "  pnpm run build:windows        (not --unsigned)",
+        );
+        process.exit(1);
+      }
+      const key = triple.startsWith("aarch64") ? "windows-aarch64" : "windows-x86_64";
+      platforms[key] = {
+        signature: readFileSync(join(dir, sig), "utf8").trim(),
+        url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${installer}`,
+      };
+    }
+  }
+}
+
 const manifest = {
   version,
   // Release notes come from the GitHub release body; the updater shows this instead, so keep it
@@ -228,12 +259,14 @@ for (const [dir, ext] of LAYOUT.downloads) {
   if (!existsSync(at)) continue;
   for (const f of (await readdir(at)).filter((f) => f.endsWith(ext))) downloads.push(join(at, f));
 }
-// Cut from a Mac, the Linux artifacts sit outside the bundle tree entirely.
+// Cut from a Mac, the Linux and Windows artifacts sit outside the bundle tree entirely.
 if (MAC) {
   for (const [dir, ext] of [
     ["dist-linux/deb", ".deb"],
     ["dist-linux/rpm", ".rpm"],
     ["dist-linux/appimage", ".AppImage"],
+    [join(TARGET, "x86_64-pc-windows-msvc/release/bundle/nsis"), "-setup.exe"],
+    [join(TARGET, "aarch64-pc-windows-msvc/release/bundle/nsis"), "-setup.exe"],
   ]) {
     if (!existsSync(dir)) continue;
     for (const f of (await readdir(dir)).filter((f) => f.endsWith(ext))) downloads.push(join(dir, f));
