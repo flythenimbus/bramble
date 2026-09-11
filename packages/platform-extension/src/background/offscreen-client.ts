@@ -58,11 +58,19 @@ export async function ensureOffscreen(): Promise<void> {
 let loadingInProcessHost: Promise<typeof import("../offscreen-core")> | null = null;
 function loadInProcessHost(): Promise<typeof import("../offscreen-core")> {
 	if (!loadingInProcessHost) {
-		loadingInProcessHost = import("../offscreen-core").then((host) => {
-			if (!inProcessSyncBridge) throw new Error("sync bridge not registered");
-			host.setSyncBridge(inProcessSyncBridge);
-			return host;
-		});
+		loadingInProcessHost = import("../offscreen-core")
+			.then((host) => {
+				if (!inProcessSyncBridge) throw new Error("sync bridge not registered");
+				host.setSyncBridge(inProcessSyncBridge);
+				return host;
+			})
+			.catch((e) => {
+				// Don't cache the failure. A transient chunk-load error, or an op that reached
+				// here before sync.ts registered the bridge, must stay retryable rather than
+				// reject every later CRYPTO_*/SYNC_* op for the life of the event page.
+				loadingInProcessHost = null;
+				throw e;
+			});
 	}
 	return loadingInProcessHost;
 }
