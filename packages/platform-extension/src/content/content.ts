@@ -780,9 +780,29 @@ function touchesFields(records: MutationRecord[]): boolean {
 	// A shadow tree's own churn produces no records here, so on a page that uses
 	// them any batch is the only hint we get that something was re-rendered.
 	if (pageUsesShadowDom()) return true;
-	for (const record of records) {
-		for (const node of record.addedNodes) if (mayBearFields(node)) return true;
-		for (const node of record.removedNodes) if (mayBearFields(node)) return true;
+	const isNodeCollection = (value: unknown): value is Iterable<unknown> =>
+		value !== null &&
+		typeof value === "object" &&
+		typeof (value as { length?: unknown }).length === "number" &&
+		typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function";
+	try {
+		if (!isNodeCollection(records)) return true;
+		for (const record of records) {
+			if (record === null || typeof record !== "object") return true;
+			const { addedNodes, removedNodes } = record as Partial<MutationRecord>;
+			if (!isNodeCollection(addedNodes) || !isNodeCollection(removedNodes)) return true;
+			for (const node of addedNodes) {
+				if (node === null || typeof node !== "object") return true;
+				if (mayBearFields(node as Node)) return true;
+			}
+			for (const node of removedNodes) {
+				if (node === null || typeof node !== "object") return true;
+				if (mayBearFields(node as Node)) return true;
+			}
+		}
+	} catch {
+		// An uninspectable record is relevant: fail closed without retaining it.
+		return true;
 	}
 	return false;
 }
