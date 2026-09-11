@@ -547,6 +547,39 @@ describe("invite lifecycle — single use + bounded waits", () => {
 		expect(stop).toHaveBeenCalled();
 	});
 
+	it("retires the claim deadline the moment the code is claimed, before the approval gate", async () => {
+		// The countdown that bounds how long a code may be CLAIMED used to keep running while a
+		// user stood at the SAS prompt, and firing it settles that prompt as a refusal. The joiner
+		// reports that as "the other device rejected this pairing", so a pairing nobody rejected
+		// looks like one somebody did.
+		//
+		// Once `consumed` is set the code can never be claimed again, so the claim deadline has
+		// nothing left to guard. What matters is the ORDER: it has to be retired before the gate
+		// is awaited, or the race it causes is still there in a smaller window.
+		let settle: (ok: boolean) => void = () => {};
+		const approve = vi.fn(
+			() =>
+				new Promise<boolean>((resolve) => {
+					settle = resolve;
+				}),
+		);
+		const onConsumed = vi.fn();
+		const handle = makeEnrollHandler("inviter", hostOpts({ approve }), vi.fn(), onConsumed);
+		const peer = invitePeer("aaaaaaaa");
+		peer.push(JSON.stringify(ownEntry));
+		peer.push(RECEIPT);
+
+		const done = handle(peer.peer);
+		await vi.waitFor(() => expect(approve).toHaveBeenCalled());
+
+		// Retired already, with the gate still parked on a human who has not answered yet.
+		expect(onConsumed).toHaveBeenCalledTimes(1);
+		settle(true);
+		await done;
+		// And the approval still means what it meant: a confirmed pairing gets the vault.
+		expect(peer.sent).not.toEqual([ENROLL_REJECTED]);
+	});
+
 	it("refuses to invite at all without an approval gate or this device's key", async () => {
 		// Fail closed. An "approved by default" fallback for a host that forgot to wire the
 		// callback would silently restore exactly the behaviour this whole change removes.
