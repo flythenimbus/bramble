@@ -69,13 +69,20 @@ const knownHostnames = new Set<string>();
 /**
  * The locked-state hint registry is best-effort: cap it so a vault with
  * thousands of distinct hostnames (or a hostile one) can't grow the SW heap
- * without bound. Set preserves insertion order, so deleting the head evicts
- * the oldest hint first.
+ * without bound. Set preserves insertion order, so the oldest-written entry
+ * evicts first.
+ *
+ * Eviction is by write order, not visits: queryResult (the only reader) never
+ * records use, and the bulk writers (disk restore, hydration, SET_INDEX)
+ * rewrite the whole Set in index order, so past the cap the survivors are the
+ * last MAX_KNOWN_HOSTNAMES written in index order. It is not a visit-based LRU.
  */
 const MAX_KNOWN_HOSTNAMES = 1000;
 
 function rememberHostname(hostname: string): void {
-	// Refresh insertion order so the Set is an LRU queue, not FIFO.
+	// Delete-then-add de-dupes and moves this hostname to the tail, so among writes it is the
+	// most-recently-written that survives longest. Not a visit-based LRU: readers never call
+	// this, and hydration rewrites the Set in index order (see MAX_KNOWN_HOSTNAMES).
 	knownHostnames.delete(hostname);
 	if (knownHostnames.size >= MAX_KNOWN_HOSTNAMES) {
 		const oldest = knownHostnames.values().next().value;
