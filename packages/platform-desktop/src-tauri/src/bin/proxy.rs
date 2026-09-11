@@ -17,13 +17,20 @@
 
 use std::{
     io::{self, Read, Write},
-    os::unix::net::UnixStream,
     process::ExitCode,
     thread,
 };
 
+// SOCKET_NAME is the unix half's; on Windows the endpoint is a pipe name and nothing here
+// reads it.
+#[allow(dead_code)]
 #[path = "../socket_addr.rs"]
 mod socket_addr;
+// The client half. The listener half is the app's, and compiling it here is the price of the
+// two ends being one file.
+#[allow(dead_code)]
+#[path = "../ipc.rs"]
+mod ipc;
 
 /// Matches the app's cap. A frame larger than this is a bug or an attempt to exhaust memory,
 /// and refusing it here keeps it off the socket entirely.
@@ -69,19 +76,19 @@ fn pump(mut src: impl Read, mut dst: impl Write) -> io::Result<()> {
 }
 
 fn main() -> ExitCode {
-    let Some(path) = socket_addr::default_socket_path() else {
+    let Some(root) = ipc::client_root() else {
         eprintln!("bramble-proxy: unsupported platform");
         report_unavailable();
         return ExitCode::FAILURE;
     };
 
-    let Ok(socket) = UnixStream::connect(&path) else {
+    let Ok(socket) = ipc::connect(&root) else {
         // The ordinary case when Bramble is not running, not an error worth shouting about.
-        eprintln!("bramble-proxy: no app listening at {}", path.display());
+        eprintln!("bramble-proxy: no app listening for {}", root.display());
         report_unavailable();
         return ExitCode::FAILURE;
     };
-    let Ok(socket_out) = socket.try_clone() else {
+    let Ok(socket_out) = ipc::try_clone(&socket) else {
         eprintln!("bramble-proxy: could not split the socket");
         return ExitCode::FAILURE;
     };

@@ -9,12 +9,17 @@ mod backup;
 mod crypto;
 mod i18n;
 mod index_store;
+// Shared with the proxy binary through `#[path]`, like socket_addr: both ends have to agree on
+// what the endpoint is and how it is opened. Each side uses one half of it, so neither sees
+// the whole module used.
+#[allow(dead_code)]
+mod ipc;
 mod lifetime;
 mod manifest;
 mod menu;
 mod pairing;
-mod socket;
 mod secure_store;
+mod socket;
 // Shared with the proxy binary through `#[path]` rather than linked, so the app only uses
 // SOCKET_NAME from it and the rest is live over there.
 #[allow(dead_code)]
@@ -78,6 +83,15 @@ fn core_version() -> String {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Delete every credential this app owns. The uninstaller's `--purge-secrets` path.
+///
+/// Re-exported rather than making `secure_store` public: this is the one thing outside the app
+/// that has any business reaching into it, and a whole module would be a wider door than needed.
+#[cfg(windows)]
+pub fn purge_secrets() -> usize {
+    secure_store::purge_all()
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(autostart::plugin())

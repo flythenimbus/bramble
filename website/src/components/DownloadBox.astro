@@ -12,6 +12,7 @@ import BrandApple from "@tabler/icons/outline/brand-apple.svg";
 import BrandChrome from "@tabler/icons/outline/brand-chrome.svg";
 import BrandDebian from "@tabler/icons/outline/brand-debian.svg";
 import BrandFirefox from "@tabler/icons/outline/brand-firefox.svg";
+import BrandWindows from "@tabler/icons/outline/brand-windows.svg";
 import ChevronRight from "@tabler/icons/outline/chevron-right.svg";
 import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
 import DeviceMobile from "@tabler/icons/outline/device-mobile.svg";
@@ -60,17 +61,21 @@ interface Category {
 	options: Option[];
 }
 
-// No AppImage until a release is cut from Linux, and the release page is a better answer than a
-// link that 404s.
+// No AppImage until a release is cut from Linux, and no installer until one is cut for Windows.
+// The release page is a better answer than a link that 404s.
 const appImage = DOWNLOADS.appimage
 	? { href: DOWNLOADS.appimage, label: "Download the AppImage" }
+	: { href: DESKTOP_RELEASE, label: "Open the release page", external: true };
+
+const windowsInstaller = DOWNLOADS.windows
+	? { href: DOWNLOADS.windows, label: "Download the installer" }
 	: { href: DESKTOP_RELEASE, label: "Open the release page", external: true };
 
 const categories: Category[] = [
 	{
 		id: "desktop",
 		label: "Desktop",
-		hint: "macOS and Linux",
+		hint: "macOS, Windows and Linux",
 		icon: DeviceDesktop,
 		options: [
 			{
@@ -82,6 +87,16 @@ const categories: Category[] = [
 				action: { href: DOWNLOADS.macos, label: "Download the .dmg" },
 				meta: `Version ${DESKTOP_VERSION}`,
 				alt: { shell: BREW_INSTALL },
+			},
+			{
+				id: "windows",
+				label: "Windows",
+				icon: BrandWindows,
+				title: "Windows",
+				body: "A per-user installer for Windows 10 and 11, so it needs no administrator rights. It checks for updates and installs them itself.",
+				action: windowsInstaller,
+				meta: `Version ${DESKTOP_VERSION}`,
+				note: "Not yet signed with a Windows certificate, so SmartScreen will ask you to confirm. Choose More info, then Run anyway.",
 			},
 			{
 				id: "debian",
@@ -389,6 +404,16 @@ const tab =
 				"appimage",
 				"nix",
 				"macos",
+				"windows",
+			]);
+		}
+		if (os === "windows") {
+			order(root.querySelector('[data-options="desktop"]'), "option", [
+				"windows",
+				"macos",
+				"debian",
+				"appimage",
+				"nix",
 			]);
 		}
 		if (family === "gecko") {

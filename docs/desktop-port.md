@@ -329,7 +329,9 @@ The proxy is a small Rust binary shipped with the app. It needs a native-messagi
 browser (file paths on macOS and Linux, registry keys on Windows) listing the allowed extension IDs.
 Firefox supports the same mechanism with `allowed_extensions` keyed on the addon ID rather than
 Chrome's `chrome-extension://` origins, so both existing targets are covered `[unverified: exact
-paths and key names]`.
+paths and key names]`. Firefox is not in fact wired up on any platform: it reads a different
+schema from a different place, and the Firefox build of the extension asks for `nativeMessaging`
+in neither permission array, so a manifest for it would be a file nothing acts on.
 
 If the browser-spawned host did the work itself, **no handshake would be needed at all**: the
 browser only spawns hosts whose manifest allowlists the extension ID, and stdio is a private
@@ -894,6 +896,92 @@ instead. The `.dmg` is the one URL built by hand, because the manifest names the
 never the disk image; `scripts/release.ts` fails the release if the build produced a different
 filename. See `website/src/downloads.ts`.
 
+### Windows
+
+Windows is built **twice, by two different routes**, and which one you get depends on what the
+build is for.
+
+**Iterating** cross-compiles from the Mac (`pnpm run build:windows --unsigned`), because the loop
+should be short and the result is only ever going into a VM. Tauri supports cross-compiling and
+calls it a last resort. It cannot be Authenticode-signed, so it must not be released, and the
+script refuses to produce one without `--unsigned` for exactly that reason.
+
+**Releasing** builds on a GitHub runner instead, and the reason is provenance rather than build
+quality. Authenticode signing comes from [SignPath Foundation](https://signpath.org/), which is
+free for open source projects and issues a real Sectigo certificate; in exchange it verifies where
+a binary came from, and requires every job leading up to the signing request to have run on a
+GitHub-hosted agent, with the origin metadata supplied by GitHub rather than by the build script.
+A cross-compiled installer from a laptop cannot satisfy that, so Windows is the one artifact
+Bramble ships that is not built on the maintainer's machine.
+
+That trade is acceptable here and would not be on macOS, for one reason: **the updater key does
+not go with it.** SignPath signs for *Windows*; the minisign key signs for *the updater*, and only
+the second is the root of trust for every update the app will ever accept. So CI hands back an
+Authenticode-signed installer and `build-windows.ts --ci-collect` signs it locally, over the
+signed bytes. The order is not negotiable: Authenticode first, updater signature second. Reversed,
+the `.sig` describes a file that no longer exists and every Windows update fails.
+
+### How a release actually runs
+
+The Windows step is also the only one that waits on a human, since SignPath requires a maintainer
+to approve each signing request. So it is started first and collected last:
+
+1. `release.ts` pushes the `chore(release)` commit **before** the builds. This is the one place
+   the desktop release differs from the other four platforms, and the Windows build forces it: a
+   runner can only build a commit it can fetch, so a bump still sitting in the working tree would
+   have CI produce, and SignPath sign, an installer for the previous version. The workflow
+   re-reads the version out of `tauri.conf.json` and fails loudly if it does not match, so losing
+   that race is noisy rather than silent.
+2. `--ci-start` dispatches `sign-windows.yml` and records the run id.
+3. macOS builds and notarizes locally; Linux builds in its container. The SignPath approval and
+   the notarization upload are waiting at the same time rather than one after the other.
+4. `--ci-collect` waits for the run, downloads the signed installer, and signs it with the
+   YubiKey-held updater key.
+5. Only then is the tag pushed. A failed build leaves a `chore(release)` commit on main with no
+   release behind it, which is recoverable and handled: re-running finds the version already
+   bumped and skips the commit. The tag is what is withheld, so nothing ever points at a release
+   that was not fully built.
+
+### The cross-compiled route
+
+Four things follow from cross-compiling, and each one is a way to get a build that looks fine and
+is not:
+
+- **cargo-xwin is the runner.** It fetches the MSVC CRT and Windows SDK headers and puts them on
+  clang's include path. Without it `ring` fails on a missing `assert.h` before anything in this
+  repo is compiled. Needs `llvm` and `lld` as well, which Homebrew splits into two formulae, so
+  installing `llvm` alone leaves `lld-link` absent and the failure names the linker rather than
+  the missing formula. `build-windows.ts` checks all four up front for that reason.
+- **NSIS only.** The MSI bundler is WiX, which does not cross-compile. `targets: "all"` would ask
+  for both and fail at the end of a long build, so the bundle list is pinned in the script rather
+  than the config, where it would also constrain a build run *on* Windows. The CI job builds
+  natively and therefore does cover WiX.
+- **The sidecar is cross-compiled too.** Tauri *copies* `externalBin` rather than building it, so
+  `BRAMBLE_TARGET` tells `stage-proxy.mjs` which proxy to produce. Without it the host's proxy is
+  staged under a Windows name, and what ships is a Mach-O binary called `bramble-proxy.exe`. The
+  bundler is perfectly happy with that; the browser link is not.
+- **`installMode: currentUser`.** A per-user install into `%LOCALAPPDATA%\Programs`, no elevation
+  prompt. It has to be per-user to match the rest: the host manifest is registered under HKCU and
+  the pipe's DACL names one SID, so a machine-wide install would put the binary somewhere every
+  account can see while the link only works for one of them.
+
+| Artifact | Where | What it is for |
+|---|---|---|
+| `-setup.exe` | `bundle/nsis/` | Both the download and what the updater fetches, keyed in `latest.json` as `windows-x86_64` |
+| `-setup.exe.sig` | `bundle/nsis/` | The updater signature, over the installer itself |
+
+Windows is the only platform where those are one file. macOS has a `.dmg` to click and a separate
+`.app.tar.gz` for the updater; Linux has a `.deb` that cannot self-update and an AppImage that
+can. NSIS has one installer, which Tauri signs in place and the updater downloads and runs.
+
+Azure Artifact Signing was the other candidate and was rejected on cost: $9.99/month forever, for
+a dozen signatures a year, when SignPath costs nothing for a GPL project. Its advantage was that
+it can be driven from the Mac (via `jsign`) and so would not have forced the build into CI; that
+turned out to be the cheaper thing to give up. A traditional OV certificate is the fallback if
+SignPath ever declines, and it would mean signing on the Windows VM, since the CA/Browser Forum
+has required the key to live on hardware since 2023 and a smartcard cannot be driven from a
+cross-compile.
+
 ### Homebrew
 
 A **cask**, not a formula: it is a GUI app shipped as a disk image. The canonical copy is
@@ -1259,7 +1347,8 @@ Each phase retires a risk.
 - **Phase 0, walking skeleton. DONE**: `packages/platform-desktop` (Vite + React, mirroring
   platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux now builds
   and packages as well, and has now been run: the UI renders under WebKitGTK, retiring risk 1.
-  Windows is still unbuilt.
+  **Windows now builds too**, cross-compiled from the Mac a release is cut on (see
+  [Windows](#windows) below). `[unverified: the cross-built installer has not yet been run]`
 - **Phase 1, vault MVP. MOSTLY DONE.** `storage`, `crypto`, `clipboard`, `shell` adapters, VEK
   held in Rust, create/unlock/CRUD. `Target` and `CAPABILITIES` widened. KDBX and passkey import
   now go through the core (the re-exports landed). Outstanding: biometric unlock, and KDBX
@@ -1286,11 +1375,13 @@ Each phase retires a risk.
   and a user-scoped credential is readable by any process running as its owner anyway. The
   reasoning is in [cloud-storage-backups.md](cloud-storage-backups.md), and it is why Linux
   autostart stays an XDG entry. See [cloud-storage-backups.md](cloud-storage-backups.md).
-- **Phase 4, browser integration. DONE for fill, macOS only.** Proxy binary, host manifests, Noise
-  pairing, and Enter in the panel fills the page in the browser. See "Filling from the panel"
-  below. **Not implemented on Linux**: `manifest.rs` knows only the macOS paths, so the `.deb`
-  installs a proxy that no browser is ever told about, and the app says as much on every start.
-  The largest thing still missing from the Linux build.
+- **Phase 4, browser integration. DONE for fill on macOS; built but unverified on Windows.**
+  Proxy binary, host manifests, Noise pairing, and Enter in the panel fills the page in the
+  browser. See "Filling from the panel" below. **Not implemented on Linux**: `manifest.rs` knows
+  only the macOS paths, so the `.deb` installs a proxy that no browser is ever told about, and the
+  app says as much on every start. The largest thing still missing from the Linux build. Windows
+  has both halves (`ipc.rs` for the pipe, `manifest.rs` for the registry) and is the next thing to
+  put in front of a real browser. `[unverified]`
 - **Phase 5, auto-type.** Per-OS input synthesis, `appIdFromUri` matching, permissions onboarding.
   Enter becomes a real fill in native apps.
 - **Phase 6, SSH agent.**
@@ -1308,7 +1399,9 @@ explains why the answer is what it is.
   Linux, native packages and an AppImage, published through an APT repository at
   `apt.bramble.sh`, plus a Nix flake. Flatpak was ruled out for the reason predicted: it is hostile
   to native messaging, whose manifest has to reach the browser's own sandbox, and to global input
-  capture. Windows is still unbuilt and still the MSI-or-winget question. See
+  capture. **Windows is an NSIS installer**, per-user and needing no elevation; winget is still
+  open and MSI is answered in the negative, because WiX does not cross-compile and Windows is the
+  one target with no container to build it in. See [Windows](#windows),
   [Linux artifacts](#linux-artifacts), [Homebrew](#homebrew), [NixOS](#nixos) and
   [apt-releases.md](apt-releases.md).
 - ~~**Auto-update.**~~ **Answered.** Tauri's updater has its own Ed25519 key, held encrypted at
