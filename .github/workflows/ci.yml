@@ -379,10 +379,16 @@ jobs:
           echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/ci.key)" >> "$GITHUB_ENV"
           echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> "$GITHUB_ENV"
 
-      # Natively, so this also covers the WiX/MSI bundler that the cross-compiled release build
-      # cannot produce: if `targets: "all"` ever stops working on Windows, it fails here.
+      # NSIS only, which is what a release ships and therefore the only Windows bundle worth
+      # gating main on. `targets: "all"` has to stay as it is for the .dmg and the Linux
+      # packages, so it is pinned per invocation here exactly as the release build pins it.
+      #
+      # Left unpinned this job built the MSI too, and Tauri builds that one FIRST: WiX's
+      # light.exe failed, and the run ended before the NSIS bundler was reached at all. So the
+      # job was red over an artifact nothing publishes, while never once exercising the
+      # installer that people actually download.
       - name: Build the installer
-        run: pnpm --filter @vault/platform-desktop exec tauri build
+        run: pnpm --filter @vault/platform-desktop exec tauri build --bundles nsis
 
       - name: Show what was produced
         shell: bash
