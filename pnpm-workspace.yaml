@@ -18,7 +18,7 @@ onlyBuiltDependencies:
 # Drop one when `pnpm why` shows the parent has moved on and `pnpm audit` stays
 # clean.
 overrides:
-  adm-zip: ^0.6.0 # web-ext > firefox-profile
+  adm-zip: ^0.6.1 # web-ext > firefox-profile; 0.6.1 fixes GHSA-vwc7-r8mq-g2x9
   shell-quote: ^1.9.0 # web-ext > fx-runner, concurrently
   sharp: ^0.35.0 # wrangler > miniflare, astro
   minimatch@3>brace-expansion: ^2.1.4
