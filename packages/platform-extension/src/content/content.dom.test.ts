@@ -167,6 +167,17 @@ let onMessage: MessageListener | null = null;
 	},
 };
 
+let deliverMutationRecords: ((records: unknown[]) => void) | null = null;
+const nativeMutationObserver = globalThis.MutationObserver;
+class CapturingMutationObserver extends nativeMutationObserver {
+	constructor(callback: MutationCallback) {
+		super(callback);
+		deliverMutationRecords = (records) => callback(records as MutationRecord[], this);
+	}
+}
+(globalThis as unknown as { MutationObserver: typeof MutationObserver }).MutationObserver =
+	CapturingMutationObserver;
+
 const trustedInteractionListeners = new Map<string, EventListener>();
 const nativeAddEventListener = document.addEventListener.bind(document);
 document.addEventListener = ((
@@ -184,6 +195,8 @@ document.addEventListener = ((
 }) as typeof document.addEventListener;
 await import("./content");
 document.addEventListener = nativeAddEventListener;
+(globalThis as unknown as { MutationObserver: typeof MutationObserver }).MutationObserver =
+	nativeMutationObserver;
 
 function dispatchTrustedInteraction(
 	type: "pointerdown" | "mousedown" | "input",
@@ -335,6 +348,102 @@ describe("content: refresh the picker on unlock (issue #20)", () => {
 			payload: result({ logins: [{ id: "1", name: "Example", secondary: "user@example.com" }] }),
 		});
 		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
+	});
+});
+
+describe("content: MutationRecord classifier", () => {
+	type RecordFixture = {
+		addedNodes?: unknown;
+		removedNodes?: unknown;
+	};
+
+	const record = (overrides: RecordFixture = {}): RecordFixture => ({
+		addedNodes: [],
+		removedNodes: [],
+		...overrides,
+	});
+	const deliver = (...records: unknown[]): void => {
+		if (!deliverMutationRecords) throw new Error("content observer was not captured");
+		deliverMutationRecords(records);
+	};
+	const queryCount = (): number =>
+		safeRequest.mock.calls.filter(([message]) => message?.type === "AUTOFILL_QUERY").length;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		teardownCallback?.();
+		document.body.innerHTML = `<form><input id="user" type="email" name="email" /></form>`;
+		invalidatePageFields();
+		// Keep this fixture block independent of the master-switch cases above it.
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: true } });
+		pendingQueryResponses.length = 0;
+		safeRequest.mockClear();
+	});
+
+	afterEach(() => {
+		teardownCallback?.();
+		vi.clearAllTimers();
+		vi.useRealTimers();
+	});
+
+	it.each([
+		["missing addedNodes", { removedNodes: [] }],
+		["missing removedNodes", { addedNodes: [] }],
+		["null addedNodes", { addedNodes: null, removedNodes: [] }],
+		["null removedNodes", { addedNodes: [], removedNodes: null }],
+	])("treats %s as relevant without throwing", async (_name, malformed) => {
+		expect(() => deliver(malformed)).not.toThrow();
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(1);
+	});
+
+	it("keeps valid irrelevant records irrelevant", async () => {
+		const churn = document.createElement("div");
+		churn.append(document.createElement("span"));
+		deliver(record({ addedNodes: [churn], removedNodes: [document.createTextNode("churn")] }));
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(0);
+	});
+
+	it("finds a relevant node after an irrelevant record, including removed nodes", async () => {
+		const churn = document.createElement("div");
+		const form = document.createElement("form");
+		deliver(record({ addedNodes: [churn] }), record({ removedNodes: [form] }));
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(1);
+	});
+
+	it("coalesces relevant records into one pending timer", async () => {
+		const input = document.createElement("input");
+		deliver(record({ addedNodes: [input] }));
+		deliver(record({ removedNodes: [input] }));
+		expect(queryCount()).toBe(0);
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(1);
+	});
+
+	it("defers a relevant malformed record while hidden and catches up when visible", async () => {
+		const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+		const state = vi
+			.spyOn(document, "visibilityState", "get")
+			.mockReturnValue("hidden" as DocumentVisibilityState);
+		deliver(record({ addedNodes: null }));
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(0);
+
+		hidden.mockReturnValue(false);
+		state.mockReturnValue("visible" as DocumentVisibilityState);
+		document.dispatchEvent(new Event("visibilitychange"));
+		expect(queryCount()).toBe(1);
+		hidden.mockRestore();
+		state.mockRestore();
+	});
+
+	it("clears the pending classifier-triggered timer during teardown", async () => {
+		deliver(record({ addedNodes: [document.createElement("input")] }));
+		teardownCallback?.();
+		await vi.advanceTimersByTimeAsync(700);
+		expect(queryCount()).toBe(0);
 	});
 });
 
