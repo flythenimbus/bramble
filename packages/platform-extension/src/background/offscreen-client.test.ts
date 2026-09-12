@@ -59,6 +59,40 @@ describe("lazy in-process sync host", () => {
 		);
 		expect(host.handleHostMessage).not.toHaveBeenCalled();
 	});
+	// The memo must not cache a rejection: one failure would otherwise reject every later
+	// CRYPTO_*/SYNC_* op for the life of the event page, not just the caller that hit it.
+	it("retries the host load after a transient chunk-load failure", async () => {
+		host.fail = true;
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await expect(client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" })).rejects.toThrow();
+		host.fail = false;
+		await expect(client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" })).resolves.toEqual({
+			ok: true,
+			data: "done",
+		});
+	});
+	it("recovers once the bridge is registered after a failed op", async () => {
+		const client = await import("./offscreen-client");
+		await expect(client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" })).rejects.toThrow(
+			"sync bridge not registered",
+		);
+		client.setInProcessSyncBridge(bridge);
+		await expect(client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" })).resolves.toEqual({
+			ok: true,
+			data: "done",
+		});
+	});
+	// The other half of the memo: retrying on failure must not turn into re-importing per message.
+	it("loads the host once across repeated ops on the happy path", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" });
+		await client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" });
+		await client.sendToOffscreen({ type: "SYNC_ROSTER_SYNC" });
+		expect(host.loads).toBe(1);
+		expect(host.setSyncBridge).toHaveBeenCalledTimes(1);
+	});
 	it("uses messaging on Chromium without importing the in-process host", async () => {
 		const sendMessage = vi.fn(async () => ({ ok: true }));
 		vi.stubGlobal("chrome", {
