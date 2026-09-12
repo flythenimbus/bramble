@@ -4,6 +4,7 @@ import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import type { OptionsScreen, ShellAdapter, Target } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
+import { requestStoreReview } from "../app-review";
 import { armFilePickGrace } from "../auto-lock";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
 import { scanQr } from "../qr-scanner";
@@ -79,6 +80,9 @@ export const mobileShell: ShellAdapter = {
 	async flushPendingCornerCapture() {
 		return false;
 	},
+	// iOS only. Android ships as a GitHub APK with no store listing to review, so the method is
+	// absent there and the nudge, which keys off that same fact, never goes looking for it.
+	...(mobileTarget === "ios" ? { requestStoreReview } : {}),
 	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
 	// would fire and drop the in-progress import. See ./auto-lock.ts.
 	notifyFilePickerOpening: armFilePickGrace,

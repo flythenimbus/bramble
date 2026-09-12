@@ -40,6 +40,7 @@ comments point here instead of repeating it.
 | [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
 | [apt-releases.md](apt-releases.md) | The Debian/Ubuntu channel end to end: R2 behind apt.bramble.sh, the container build, signing the index with a YubiKey-held key, and every failure hit getting there |
 | [i18n.md](i18n.md) | Localization across core/iOS/Android/fastlane: Lingui macros, the LLM translation pipeline, commands, and CI/release gates |
+| [store-reviews.md](store-reviews.md) | The review ask: the one object holding every threshold, why iOS gets the OS prompt and no card while the browser gets a card and no API, and what to check before shipping a change |
 
 ## Vocabulary
 

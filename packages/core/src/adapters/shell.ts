@@ -186,6 +186,16 @@ export interface ShellAdapter {
 		onProgress(callback: (fraction: number | null | undefined) => void): () => void;
 	};
 	/**
+	 * Ask the OS to present its own rating prompt.
+	 *
+	 * iOS only, and it is why the review nudge has no card there. Apple's HIG forbids putting this
+	 * prompt behind a button, so it must be fired from a moment the app judges good rather than
+	 * from a tap; the OS then decides whether to show anything at all, capped at three times per
+	 * year. Resolving says the request was made, never that a prompt appeared. Absent on the
+	 * extension and desktop, where there is no such API and the nudge is a link instead.
+	 */
+	requestStoreReview?(): Promise<void>;
+	/**
 	 * Start the app when the user signs in.
 	 *
 	 * Desktop only, and the reason it exists is scheduled backups: the tick runs in the app's own
