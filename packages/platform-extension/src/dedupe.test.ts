@@ -28,9 +28,14 @@ describe("registrableDomain", () => {
 	});
 
 	it("falls back to the raw input for unparseable hostnames", () => {
-		// tldts returns null for IP literals / IDN edge cases: degrade to exact match.
+		// IP literals and localhost fall back to exact match.
 		expect(registrableDomain("127.0.0.1")).toBe("127.0.0.1");
 		expect(registrableDomain("localhost")).toBe("localhost");
+	});
+
+	it("handles two-level public suffixes", () => {
+		expect(registrableDomain("mail.example.co.uk")).toBe("example.co.uk");
+		expect(registrableDomain("example.co.uk")).toBe("example.co.uk");
 	});
 });
 
@@ -200,5 +205,22 @@ describe("dedupeCapture", () => {
 		);
 		const result = dedupeCapture(index, "accounts.google.com", "alice", "x");
 		expect(result.kind).toBe("save");
+	});
+});
+
+describe("hostname policy regressions", () => {
+	it.each(["com.sg", "com.hk", "co.th", "edu.au", "net.br", "nhs.uk", "org.nz", "b.ck"])(
+		"never offers a sibling site's credentials under %s",
+		(suffix) => {
+			expect(hostnameMatches({ hostnames: [`dbs.${suffix}`] }, `evil.${suffix}`)).toBe(false);
+		},
+	);
+	it("keeps underscore subdomains within their registrable domain", () => {
+		expect(hostnameMatches({ hostnames: ["example.com"] }, "my_host.example.com")).toBe(true);
+	});
+	it("uses the default eTLD+1 policy for an unknown stored policy", () => {
+		const entry = { hostnames: ["accounts.example.com"], subdomainMatch: "legacy" };
+		expect(hostnameMatches(entry as unknown as LoginIndexEntry, "mail.example.com")).toBe(true);
+		expect(hostnameMatches(entry as unknown as LoginIndexEntry, "evil.com")).toBe(false);
 	});
 });

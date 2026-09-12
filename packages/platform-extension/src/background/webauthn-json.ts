@@ -6,7 +6,7 @@
 // error-prone encoding is unit-tested. See docs/passkey-provider.md.
 
 import { base64ToBase64Url, bytesToBase64Url } from "@core/util/bytes";
-import { getDomain } from "tldts";
+import { etld1 } from "../etld1";
 
 // base64 <-> base64url conversions live in @core/util/bytes (the single home for byte
 // encoding). This module is WebAuthn-specific: clientData, response assembly, rpId.
@@ -96,7 +96,7 @@ export function isRegistrableSuffix(originHost: string, rpId: string): boolean {
 	const id = rpId.toLowerCase();
 	if (host !== id && !host.endsWith(`.${id}`)) return false;
 	if (id === "localhost") return true;
-	return getDomain(id) !== null;
+	return etld1(id) !== null;
 }
 
 // ---- clientData + responses ----

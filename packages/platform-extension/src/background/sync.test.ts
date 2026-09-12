@@ -18,6 +18,8 @@ const { sendToOffscreen } = vi.hoisted(() => ({
 }));
 vi.mock("./offscreen-client", () => ({
 	sendToOffscreen,
+	setInProcessSyncBridge: vi.fn(),
+	useOffscreenDoc: false,
 	ensureOffscreen: vi.fn(async () => {}),
 	markOffscreenKey: vi.fn(),
 }));

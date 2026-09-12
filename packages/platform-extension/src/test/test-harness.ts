@@ -175,6 +175,12 @@ export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 			return { ok: true, data: "{}" };
 		case "CRYPTO_DECRYPT_BATCH":
 			return { ok: true, data: [] };
+		// Batch index hydration: id-keyed results. Empty by default (CRYPTO_DECRYPT_OUTER above
+		// yields no entries), matching the CRYPTO_DECRYPT_BATCH default. Without this case the
+		// hydration path falls through to "unhandled offscreen type" and a background test that
+		// hydrates with no explicit override silently gets locked:true.
+		case "CRYPTO_DECRYPT_INDEX":
+			return { ok: true, data: [] };
 		case "CLIPBOARD_CLEAR":
 			return { ok: true, data: null };
 		default:

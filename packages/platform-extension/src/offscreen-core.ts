@@ -22,6 +22,7 @@ import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
 import {
 	CryptoDecryptBatchSchema,
+	CryptoDecryptIndexSchema,
 	CryptoDecryptOuterSchema,
 	CryptoDecryptSchema,
 	CryptoEncryptOuterSchema,
@@ -364,6 +365,22 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const w = (await getWasm()) as unknown as SyncVek;
 			return withVek(w, p.vekB64, (w) =>
 				p.entries.map((e) => w.decrypt_entry(e.ciphertext, e.iv, e.wrappedDek, e.dekIv)),
+			);
+		}
+		case "CRYPTO_DECRYPT_INDEX": {
+			const p = CryptoDecryptIndexSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				p.entries.map((e) => {
+					try {
+						return {
+							id: e.id,
+							plaintext: w.decrypt_entry(e.ciphertext, e.iv, e.wrappedDek, e.dekIv),
+						};
+					} catch {
+						return { id: e.id, plaintext: null };
+					}
+				}),
 			);
 		}
 		case "CRYPTO_ENCRYPT_OUTER": {
