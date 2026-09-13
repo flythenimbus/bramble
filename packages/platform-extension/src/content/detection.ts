@@ -542,9 +542,14 @@ const CC_EXP_RE = /expir(y|ation)/i;
 const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
 const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
 // "verification code/number" alone is far more often a 2FA/OTP label than a CVV
-// (e.g. GitHub's 2FA field: label "Enter the verification code"), so the CVV
-// match requires card context (card verification value/code/number, or cvn).
-export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|security.?code|card.?code|card.?verif/i;
+// (e.g. GitHub's 2FA field: label "Enter the verification code"), so the words
+// here name the card themselves (card verification value/code/number, or cvn).
+export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|card.?code|card.?verif/i;
+// "Security code" names the CVV on every checkout and the one-time code on
+// plenty of login pages (Symantec VIP, and the English half of the five
+// translations OTP_HINT_RE already carries). Same two-tier treatment as
+// CC_NUMBER_WEAK_RE: consulted only once the page is recognisably a card form.
+const CC_CSC_WEAK_RE = /security.?code/i;
 
 /** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
 function ccByToken(scan: PageScan, token: string): HTMLInputElement | null {
@@ -608,14 +613,21 @@ export function detectCardFields(
 		!expMonth && !expYear
 			? (ccByToken(scan, "cc-exp") ?? findByHint(scan, CC_EXP_RE, /month|year/i))
 			: null;
-	const cvv = ccByToken(scan, "cc-csc") ?? findByHint(scan, CC_CSC_RE, undefined, true);
-	const rest = { name, expCombined, expMonth, expYear, cvv };
+	const strongCvv = ccByToken(scan, "cc-csc") ?? findByHint(scan, CC_CSC_RE, undefined, true);
+	const strongNumber = ccByToken(scan, "cc-number") ?? findByHint(scan, CC_NUMBER_RE);
+	// A detected number is card context in its own right; CC_CONTEXT_RE covers the
+	// rest, so a "Security code" box beside one is the CVV and beside none is 2FA.
+	const partial = { name, expCombined, expMonth, expYear, cvv: null };
+	const cvv =
+		strongCvv ??
+		(strongNumber || cardContextPresent(partial, scan)
+			? findByHint(scan, CC_CSC_WEAK_RE, undefined, true)
+			: null);
+	const rest = { ...partial, cvv };
 	// The weak pass runs last and only in card context, so an unlabelled `name="pan"`
 	// resolves on a PCI capture page without claiming a tax-ID field anywhere else.
 	const number =
-		ccByToken(scan, "cc-number") ??
-		findByHint(scan, CC_NUMBER_RE) ??
-		(cardContextPresent(rest, scan) ? findByHint(scan, CC_NUMBER_WEAK_RE) : null);
+		strongNumber ?? (cardContextPresent(rest, scan) ? findByHint(scan, CC_NUMBER_WEAK_RE) : null);
 	return { number, ...rest };
 }
 
@@ -648,10 +660,16 @@ export const OTP_HINT_RE = alternation([
 	"mfa",
 	"two.?factor",
 	"authenticator",
+	// Symantec VIP Access: sites name the field for its 6-digit code vip_pin or
+	// vipCode. "VIP" alone is a loyalty tier, so it counts only glued to the code.
+	"vip.?(pin|code|token|access)",
 	"auth.?code",
 	"login.?code",
 	"verif(y|ication).?code",
 	"confirmation.?code",
+	// The CVV claims this one first wherever the page is a card form (CC_CSC_WEAK_RE),
+	// so what reaches here is the 2FA sense the five translations below already cover.
+	"security.?code",
 	"passcode",
 	"6.?digit",
 	// de
@@ -696,6 +714,8 @@ export const OTP_NEGATIVE_RE = alternation([
 	"card",
 	"coupon",
 	"promo",
+	// Ticketing sells "VIP presale codes", the one other thing a vip* field is.
+	"presale",
 	"postal",
 	"\\bzip\\b",
 	"country",

@@ -296,6 +296,49 @@ describe("detectCardFields — `pan`, the ambiguous number name", () => {
 	});
 });
 
+describe("detectCardFields — `security code`, the ambiguous CVV label", () => {
+	it("claims a Security code field beside a card number", () => {
+		loadHTML(`
+			<form>
+				<label for="num">Card number</label><input id="num" name="card_number" />
+				<label for="csc">Security code</label><input id="csc" name="security_code" maxlength="4" />
+			</form>
+		`);
+		expect(detectCardFields().cvv?.id).toBe("csc");
+		expect(otpInputs()).toEqual([]);
+	});
+
+	it("takes card context from hidden transport fields alone", () => {
+		loadHTML(`
+			<input type="hidden" name="cardScheme" />
+			<input type="text" name="securityCode" maxlength="4" />
+		`);
+		expect(detectCardFields().cvv?.getAttribute("name")).toBe("securityCode");
+	});
+
+	it("leaves a lone Security code field to the OTP detector (2FA page)", () => {
+		// Symantec VIP and plenty of banks label the one-time code this way. With no
+		// card anywhere, claiming it as a CVV cost the code fill and offered a card.
+		loadHTML(`
+			<form action="/login/verify">
+				<label for="a">Security code</label>
+				<input id="a" name="security_code" type="text" maxlength="6" inputmode="numeric" />
+			</form>
+		`);
+		const c = detectCardFields();
+		expect(c.cvv).toBeNull();
+		expect(cardFieldsPresent(c)).toBe(false);
+		expect(otpInputs().map((f) => f.id)).toEqual(["a"]);
+		expect(candidateKind(document.getElementById("a") as HTMLInputElement)).toBe("otp");
+	});
+
+	it("still claims an unambiguously named CVV with no card context", () => {
+		// cvv/cvc/csc say card on their own, so the gate applies to the label only.
+		loadHTML(`<input id="a" name="cvc" type="text" maxlength="4" />`);
+		expect(detectCardFields().cvv?.id).toBe("a");
+	});
+});
+
 describe("cardFieldsPresent / isCardField", () => {
 	it("returns false when only a cardholder-name field exists", () => {
 		// Name alone false-positives on checkout shipping forms.

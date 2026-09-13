@@ -92,6 +92,7 @@ describe("otp: attribute and label hints", () => {
 	});
 
 	it.each([
+		["en Security code", "Security code"],
 		["de Bestätigungscode", "Bestätigungscode"],
 		["de Sicherheitscode", "Sicherheitscode"],
 		["de Einmalcode", "Einmalcode"],
@@ -104,6 +105,35 @@ describe("otp: attribute and label hints", () => {
 		["sv Engångskod", "Engångskod"],
 	])("finds a field labelled %s", (_name, label) => {
 		expect(ids(`<label for="a">${label}</label><input id="a" type="text">`)).toEqual(["a"]);
+	});
+
+	// Verbatim from a Symantec VIP Access login: type=text, no maxlength, no
+	// inputmode, no autocomplete token, and a class the hint ladder never reads.
+	// The name/id is the only thing on it that says one-time code at all.
+	it("finds a Symantec VIP code field", () => {
+		const html =
+			'<input class="input-vip-pin form-control" id="vip_pin" name="vip_pin" type="text"' +
+			' autofocus="autofocus" autocomplete="off">';
+		expect(ids(html)).toEqual(["vip_pin"]);
+	});
+
+	it("fills a VIP field whole, not as one box of a widget", () => {
+		document.body.innerHTML = '<input id="vip_pin" name="vip_pin" type="text">';
+		const { boxes: b, whole } = splitOtpFields(otpInputs());
+		expect(b).toEqual([]);
+		expect(whole?.id).toBe("vip_pin");
+	});
+
+	it.each(["vipCode", "vip-access-code", "vipAccessToken", "vip_security_code"])(
+		"finds the VIP field named %s",
+		(name) => {
+			expect(ids(`<input id="a" name="${name}" type="text">`)).toEqual(["a"]);
+		},
+	);
+
+	it("rejects a ticketing VIP presale code", () => {
+		// Same vip* shape, and the one thing on the web that isn't a one-time code.
+		expect(ids('<input id="a" name="vip_presale_code" type="text" maxlength="8">')).toEqual([]);
 	});
 
 	it("finds an authenticator-app label", () => {
