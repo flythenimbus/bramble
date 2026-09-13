@@ -185,7 +185,12 @@ function removePicker(): void {
 function showMatchesFor(
 	matches: MatchSummary[],
 	field: HTMLInputElement,
-	opts?: { otpOnly?: boolean; suggest?: { password: string }; alias?: AliasRowState },
+	opts?: {
+		otpOnly?: boolean;
+		suggest?: { password: string };
+		alias?: AliasRowState;
+		carriedId?: string;
+	},
 ): void {
 	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
 	if (!shouldRelay(field)) {
@@ -201,7 +206,30 @@ function showMatchesFor(
 		otpOnly: opts?.otpOnly === true,
 		suggest: opts?.suggest,
 		alias: opts?.alias,
+		carriedId: opts?.carriedId,
 	});
+}
+
+/**
+ * Card rows with the tab's last-filled card first and named as such.
+ *
+ * On a hosted-fields checkout each box is its own frame filling only its own inputs, so the
+ * expiry and CVV frames ask again from scratch. Leading with the card already used on this page
+ * makes the obvious pick the consistent one. Deliberately only order and a badge: taking the
+ * keyboard highlight too would turn Enter into a fill on a form where Enter submits.
+ */
+function cardRows(result: QueryResult): {
+	matches: MatchSummary[];
+	opts?: { carriedId: string };
+} {
+	const carriedId = result.carriedCardId;
+	if (!carriedId) return { matches: result.cards };
+	const carried = result.cards.find((c) => c.id === carriedId);
+	if (!carried) return { matches: result.cards };
+	return {
+		matches: [carried, ...result.cards.filter((c) => c !== carried)],
+		opts: { carriedId },
+	};
 }
 
 /** Arrow/Enter/Escape for a relayed picker; the field is here, the rows are upstairs. */
@@ -659,7 +687,8 @@ function handleResult(result: QueryResult | undefined): void {
 
 	const kind = kindOf(getPageFields(), target);
 	if (kind === "card") {
-		if (result.cards.length > 0) showMatchesFor(result.cards, target);
+		const cards = cardRows(result);
+		if (cards.matches.length > 0) showMatchesFor(cards.matches, target, cards.opts);
 		return;
 	}
 	if (kind === "otp") {
@@ -723,8 +752,15 @@ function showFor(field: HTMLInputElement): void {
 	}
 	const kind = kindOf(getPageFields(), field);
 	if (kind === "card") {
-		if (cachedResult.cards.length > 0) showMatchesFor(cachedResult.cards, field);
-		else queryAutofill();
+		const cards = cardRows(cachedResult);
+		if (cards.matches.length > 0) showMatchesFor(cards.matches, field, cards.opts);
+		// Then re-ask, always. A card field is the one place this frame's cached answer can go
+		// out of date without anything happening HERE: on a hosted-fields checkout the number is
+		// filled in a different frame entirely, and the carry that names it (`carriedCardId`)
+		// lands on the next query. Paint from cache so the dropdown is instant, refresh behind
+		// it; handleResult re-renders on this same field, and an unchanged render key makes that
+		// a no-op.
+		queryAutofill();
 		return;
 	}
 	if (kind === "otp") {

@@ -40,6 +40,7 @@ export type RelayRender =
 			otpOnly: boolean;
 			suggest?: SuggestOpt;
 			alias?: AliasRowState;
+			carriedId?: string;
 	  }
 	| { kind: "locked" };
 
@@ -104,6 +105,7 @@ function flush(): void {
 		otpOnly: render.otpOnly,
 		suggest: render.suggest,
 		alias: render.alias,
+		carriedId: render.carriedId,
 	});
 }
 

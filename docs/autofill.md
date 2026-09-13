@@ -565,6 +565,40 @@ open, the content script forwards only Up/Down/Enter/Escape to it as `UI_KEY`
 is selected (`UI_HIGHLIGHT`), which gates Enter - with a highlight, Enter picks
 that row; without one, Enter falls through so the form submits normally.
 
+### The card the tab already used
+
+Because each frame fills only its own inputs, a per-field hosted-fields checkout
+asks once per box: the number frame, then the expiry frame, then the CVV frame,
+each offering every stored card with nothing marking the one just used. Picking a
+different card in the second frame is how a Visa number ends up beside another
+card's CVV.
+
+So a successful card fill leaves a **carry** in the background: `{owner, tabId,
+entryId, expiresAt}`, in memory, good for five minutes. The next query from that
+tab gets it back as `carriedCardId`, and the content script moves that card to the
+head of the list and marks it ("Used here"). The pick that lands in the next frame
+is then the same card by default rather than whatever sorts first.
+
+Focusing a card field therefore **always re-asks**, where every other kind paints
+from the cache alone. Nothing happens in the CVV frame while the number is filled
+next door, so its cached answer is the one it took at load, and the carry would
+never reach the frame that needs it most. The dropdown paints from cache
+immediately and the refresh repaints it; `renderKey` carries the carried id, so an
+unchanged answer is a no-op rather than a flicker. `card-carry.spec.ts` fails on
+the stale list without it.
+
+What it deliberately is not: a fill. Nothing is pushed to a frame, and the carry
+is an id the same response already carries in `cards`, so a frame that never asked
+learns nothing and the rule that query results are never tab-addressed still
+holds. The badge is ordering and a label only, never the keyboard highlight:
+taking that would make Enter fill a card on a form where Enter submits (see the
+`UI_HIGHLIGHT` gate above).
+
+The carry is bound to the session that created it (`autofillSessionOwner`), so a
+lock, a vault switch or a lock/unlock ABA drops it; `tabs.onUpdated` with a url
+and `tabs.onRemoved` drop it when the page leaves under it; and it is scoped to
+one tab, so a checkout in another tab never sees it.
+
 The **corner prompt** (save/update) still renders in a **closed shadow root**
 (`attachShadow({ mode: "closed" })`): `host.shadowRoot` is `null`, page CSS can't
 reach in, and the captured username/password in its inputs aren't page-readable.

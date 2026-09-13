@@ -21,6 +21,9 @@ export interface QueryResult {
 	logins: MatchSummary[];
 	// Every stored card (offered on any payment form).
 	cards: MatchSummary[];
+	// The card last filled in this tab, shown first and marked so the other frames of a
+	// hosted-fields checkout default to it. Absent from an older background.
+	carriedCardId?: string;
 	// Hostname-matched logins with a TOTP key (offered on a one-time-code field).
 	otps: MatchSummary[];
 	locked: boolean;

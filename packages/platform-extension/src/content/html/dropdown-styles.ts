@@ -104,6 +104,17 @@ export const dropdownStyles = html`
 				margin-top: 2px;
 				line-height: 1.3;
 			}
+			.tp-badge {
+				margin-left: auto;
+				flex-shrink: 0;
+				font-size: 11px;
+				font-weight: 600;
+				letter-spacing: 0.2px;
+				padding: 3px 8px;
+				border-radius: 999px;
+				color: var(--tp-muted);
+				background: color-mix(in oklab, var(--tp-foreground) 10%, transparent);
+			}
 			.tp-launch {
 				margin-left: auto;
 				flex-shrink: 0;

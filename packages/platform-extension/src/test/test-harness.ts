@@ -60,6 +60,9 @@ export interface BackgroundHarness {
 	fireCommand: (command: string) => void;
 	fireIdle: (state: string) => void;
 	fireStorageChanged: (changes: Record<string, unknown>, area: string) => void;
+	/** A tab navigating (`{ url }`) or closing: what ends a card carry. */
+	fireTabUpdated: (tabId: number, change: Record<string, unknown>) => void;
+	fireTabRemoved: (tabId: number) => void;
 	fireInstalled: () => void;
 	fireStartup: () => void;
 	/** Simulate a view (popup/options/pop-out) opening a runtime port; returns a handle whose
@@ -116,6 +119,12 @@ interface HarnessState {
 	listeners: Record<string, ((...args: any[]) => any) | undefined>;
 	/** storage.onChanged also permits multiple listeners (vek/session plus background policy). */
 	storageChangedListeners: Array<(changes: Record<string, unknown>, area: string) => void>;
+	/** tabs.onUpdated / onRemoved take several listeners too: the desktop link watches the active
+	 * tab while the card carry watches for the page leaving under it. */
+	tabListeners: {
+		updated: Array<(...args: any[]) => any>;
+		removed: Array<(...args: any[]) => any>;
+	};
 	/** All runtime.onMessage listeners, in registration order. Chrome dispatches a message to
 	 * every listener (not just the last), so the background legitimately registers more than one
 	 * (the router dispatcher + the SYNC_STATUS console mirror); the harness must model that. */
@@ -207,6 +216,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		windowsRemoved: [],
 		listeners: {},
 		storageChangedListeners: [],
+		tabListeners: { updated: [], removed: [] },
 		messageListeners: [],
 		pendingSessionStorageChanges: [],
 	};
@@ -329,6 +339,16 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 				state.tabMessages.push({ tabId, message, options });
 			}),
 			captureVisibleTab: vi.fn(async () => "data:image/png;base64,AAAA"),
+			onUpdated: {
+				addListener: (fn: any) => {
+					state.tabListeners.updated.push(fn);
+				},
+			},
+			onRemoved: {
+				addListener: (fn: any) => {
+					state.tabListeners.removed.push(fn);
+				},
+			},
 		},
 		windows: {
 			create: vi.fn(async (createOpts: AnyMsg) => {
@@ -401,6 +421,12 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 		fireIdle: (s) => state.listeners.idle?.(s),
 		fireStorageChanged: (changes, area2) => {
 			for (const listener of state.storageChangedListeners) listener(changes, area2);
+		},
+		fireTabUpdated: (tabId, change) => {
+			for (const listener of state.tabListeners.updated) listener(tabId, change, { id: tabId });
+		},
+		fireTabRemoved: (tabId) => {
+			for (const listener of state.tabListeners.removed) listener(tabId, {});
 		},
 		fireInstalled: () => state.listeners.installed?.(),
 		fireStartup: () => state.listeners.startup?.(),

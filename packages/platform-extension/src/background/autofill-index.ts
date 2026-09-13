@@ -79,6 +79,59 @@ const knownHostnames = new Set<string>();
  */
 const MAX_KNOWN_HOSTNAMES = 1000;
 
+/**
+ * The card last filled in a tab, so the rest of that page's card boxes default to it.
+ *
+ * A hosted-fields checkout (Shopify, Braintree, Adyen) puts each box in its own cross-origin
+ * frame, and each frame fills only its own inputs: one pick fills the number and the expiry and
+ * CVV frames still come up listing every stored card, top of the list first. That is how a Visa
+ * number can end up beside another card's CVV.
+ *
+ * An ID only, in memory, tab-scoped, and never pushed: it rides the frame's own query response
+ * (the same one already carrying that id in `cards`), so no frame learns anything by not asking
+ * and the "results are never tab-addressed" rule stands. Bound to the unlocked session that
+ * created it, so a lock, a vault switch, or a navigation ends it.
+ */
+const CARD_CARRY_TTL_MS = 5 * 60_000;
+type CardCarry = Readonly<{
+	owner: AutofillSessionOwner;
+	tabId: number;
+	entryId: string;
+	expiresAt: number;
+}>;
+let cardCarry: CardCarry | null = null;
+
+/** Remember a card fill so the tab's other frames can default to it. */
+function rememberCardCarry(kind: FillPayload["kind"], entryId: string, tabId?: number): void {
+	if (kind !== "card" || tabId === undefined) return;
+	const owner = autofillSessionOwner();
+	if (!owner) return;
+	cardCarry = { owner, tabId, entryId, expiresAt: Date.now() + CARD_CARRY_TTL_MS };
+}
+
+/** The carried card for `tabId`, dropping a carry that has expired or outlived its session. */
+function carriedCardId(tabId?: number): string | null {
+	if (!cardCarry) return null;
+	if (Date.now() > cardCarry.expiresAt || !autofillSessionOwnerIsCurrent(cardCarry.owner)) {
+		cardCarry = null;
+		return null;
+	}
+	return tabId !== undefined && cardCarry.tabId === tabId ? cardCarry.entryId : null;
+}
+
+/** A carry belongs to one page in one tab: a navigation or a closed tab ends it. */
+function watchCardCarry(): void {
+	// Optional, like watchActiveTab's listeners: a host without tab events loses the default,
+	// which the TTL and the session check already bound anyway.
+	api.tabs.onUpdated?.addListener((tabId, change) => {
+		if (change.url && cardCarry?.tabId === tabId) cardCarry = null;
+	});
+	api.tabs.onRemoved?.addListener((tabId) => {
+		if (cardCarry?.tabId === tabId) cardCarry = null;
+	});
+}
+watchCardCarry();
+
 function rememberHostname(hostname: string): void {
 	// Delete-then-add de-dupes and moves this hostname to the tail, so among writes it is the
 	// most-recently-written that survives longest. Not a visit-based LRU: readers never call
@@ -150,6 +203,7 @@ async function persistKnownHostnames(): Promise<void> {
 export function clearIndex(): void {
 	autofillIndex = null;
 	cacheRevision++;
+	cardCarry = null;
 }
 
 /** The index entry for `id`, or undefined when the index is absent/missing it. */
@@ -619,6 +673,12 @@ async function autofillQuery(
 		const hasCard = message.hasCard === true;
 		const hasOtp = message.hasOtp === true;
 		const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
+		if (hasCard && !result.locked) {
+			// Only ever an id this very response already carries, so the page learns nothing it
+			// could not read off `cards` itself.
+			const carried = carriedCardId(sender.tab?.id);
+			if (carried && result.cards.some((c) => c.id === carried)) result.carriedCardId = carried;
+		}
 		// Ride along on the query the page already makes: the signup suggestion is drawn the
 		// moment this response lands, so a separate request for it would race the paint and lose.
 		// Offered locked as well as unlocked, since generating needs no vault.
@@ -667,6 +727,7 @@ async function autofillSelect(
 		if (!autofillSessionIsCurrent(generation)) return { ok: false, error: "unavailable" };
 		authorizeFill(message.payload.entryId, hostname);
 		const payload = fetchFill(message.payload.entryId);
+		rememberCardCarry(payload.kind, message.payload.entryId, sender.tab?.id);
 		return {
 			ok: true,
 			data: {

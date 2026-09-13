@@ -218,6 +218,67 @@ const result = (over: Partial<Record<string, unknown>>) => ({
 	...over,
 });
 
+describe("content: the tab's last-filled card leads the card list", () => {
+	const VISA = { id: "visa", name: "My Visa", secondary: "•••• 1234" };
+	const MC = { id: "mc", name: "My Mastercard", secondary: "•••• 4444" };
+
+	beforeEach(() => {
+		showMatches.mockClear();
+		pendingQueryResponses.length = 0;
+		// One box, as a hosted-fields frame has it: the CVV frame of a checkout whose number
+		// was filled in a sibling frame.
+		document.body.innerHTML = `<form><input id="csc" autocomplete="cc-csc" name="cvv" /></form>`;
+		invalidatePageFields();
+	});
+
+	function query(over: Record<string, unknown>): void {
+		(document.getElementById("csc") as HTMLInputElement).focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		pendingQueryResponses.pop()?.({ ok: true, data: result(over) });
+	}
+
+	it("puts the carried card first and names it to the renderer", () => {
+		query({ cards: [VISA, MC], carriedCardId: "mc" });
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([MC, VISA]);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toEqual({ carriedId: "mc" });
+	});
+
+	it("leaves the list alone when nothing was carried", () => {
+		query({ cards: [VISA, MC] });
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([VISA, MC]);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toBeUndefined();
+	});
+
+	it("re-asks on focus, so a pick made in another frame reaches this one", () => {
+		// Nothing happens in the CVV frame while the number is filled next door, so its cached
+		// answer is the one it took at load. Painting from that cache alone, the badge never
+		// reaches the frame that needs it most.
+		query({ cards: [VISA, MC] });
+		const csc = document.getElementById("csc") as HTMLInputElement;
+		csc.blur();
+		const pending = pendingQueryResponses.length;
+		csc.focus();
+
+		// Painted from cache at once, and asked again behind it.
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([VISA, MC]);
+		expect(pendingQueryResponses.length).toBe(pending + 1);
+
+		pendingQueryResponses.pop()?.({
+			ok: true,
+			data: result({ cards: [VISA, MC], carriedCardId: "mc" }),
+		});
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([MC, VISA]);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toEqual({ carriedId: "mc" });
+	});
+
+	it("ignores a carried card that is no longer in the list", () => {
+		// Deleted between the pick and this frame's query.
+		query({ cards: [VISA], carriedCardId: "mc" });
+		expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([VISA]);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toBeUndefined();
+	});
+});
+
 describe("content: refresh the picker on unlock (issue #20)", () => {
 	beforeEach(() => {
 		showMatches.mockClear();

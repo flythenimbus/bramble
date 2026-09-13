@@ -398,6 +398,103 @@ describe("AUTOFILL_QUERY direct response transport", () => {
 	});
 });
 
+describe("the tab's last-filled card (hosted-fields carry)", () => {
+	const CARDS = [
+		...ENTRIES,
+		{
+			type: "card",
+			id: "card2",
+			name: "My Mastercard",
+			brand: "Mastercard",
+			cardholderName: "A B",
+			number: "5555555555554444",
+			expMonth: "9",
+			expYear: "2031",
+			cvv: "456",
+		},
+	];
+
+	async function withTwoCards(): Promise<BackgroundHarness> {
+		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
+		await setAutofillIndex(bg, CARDS);
+		return bg;
+	}
+
+	const cardQuery = (bg: BackgroundHarness, tabId: number, frameId = 0) =>
+		bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: false, hasCard: true },
+			pageSender("shop.example", tabId, frameId),
+		);
+
+	const pickCard = (bg: BackgroundHarness, entryId: string, tabId: number, frameId = 0) =>
+		bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId } },
+			pageSender("shop.example", tabId, frameId),
+		);
+
+	it("names the picked card to the tab's other frames", async () => {
+		// The shape this exists for: one frame per box, each filling only its own inputs.
+		const bg = await withTwoCards();
+		expect((await cardQuery(bg, 11, 1)).resp.data.carriedCardId).toBeUndefined();
+		await pickCard(bg, "card2", 11, 1);
+		const { resp } = await cardQuery(bg, 11, 2);
+		expect(resp.data.carriedCardId).toBe("card2");
+		// Never a value the response did not already carry.
+		expect(resp.data.cards.map((c: { id: string }) => c.id)).toContain("card2");
+	});
+
+	it("stays in its own tab", async () => {
+		const bg = await withTwoCards();
+		await pickCard(bg, "card1", 11);
+		expect((await cardQuery(bg, 12)).resp.data.carriedCardId).toBeUndefined();
+	});
+
+	it("is not set by a login pick", async () => {
+		const bg = await withTwoCards();
+		await bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId: "login1" } },
+			pageSender("example.com", 11),
+		);
+		expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBeUndefined();
+	});
+
+	it("ends when the tab navigates or closes", async () => {
+		const bg = await withTwoCards();
+		await pickCard(bg, "card1", 11);
+		bg.fireTabUpdated(11, { title: "Checkout" });
+		expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBe("card1");
+		bg.fireTabUpdated(11, { url: "https://shop.example/thanks" });
+		expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBeUndefined();
+
+		await pickCard(bg, "card1", 11);
+		bg.fireTabRemoved(11);
+		expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBeUndefined();
+	});
+
+	it("does not survive a lock", async () => {
+		const bg = await withTwoCards();
+		await pickCard(bg, "card1", 11);
+		await bg.send({ type: "CRYPTO_LOCK" });
+		await bg.chrome.storage.session.set({ "vault.activeId": "v1" });
+		await bg.send({ type: "CRYPTO_UNLOCK_WITH_VEK", payload: { vekB64: "NEW" } });
+		await setAutofillIndex(bg, CARDS);
+		expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBeUndefined();
+	});
+
+	it("expires", async () => {
+		const bg = await withTwoCards();
+		const realNow = Date.now();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(realNow);
+		try {
+			await pickCard(bg, "card1", 11);
+			clock.mockReturnValue(realNow + 5 * 60_000 + 1);
+			expect((await cardQuery(bg, 11)).resp.data.carriedCardId).toBeUndefined();
+		} finally {
+			clock.mockRestore();
+		}
+	});
+});
+
 describe("autofill master switch", () => {
 	async function disabled(): Promise<BackgroundHarness> {
 		const bg = await loadBackground({

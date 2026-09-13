@@ -34,7 +34,12 @@ let aliasCb: (() => void) | null = null;
 type SuggestOpt = { password: string };
 
 /** Row options threaded to whichever renderer is active. */
-type RowOpts = { otpOnly?: boolean; suggest?: SuggestOpt; alias?: AliasRowState };
+type RowOpts = {
+	otpOnly?: boolean;
+	suggest?: SuggestOpt;
+	alias?: AliasRowState;
+	carriedId?: string;
+};
 
 /**
  * Cache key for a rendered match set plus its optional extra rows.
@@ -45,11 +50,15 @@ type RowOpts = { otpOnly?: boolean; suggest?: SuggestOpt; alias?: AliasRowState 
  * invitation to spinner to error without the matches moving, and keyed on content alone the
  * dropdown would render once and then sit frozen on whichever state it was first drawn in.
  */
-function renderKey(matches: MatchSummary[], suggest?: SuggestOpt, alias?: AliasRowState): string {
+function renderKey(matches: MatchSummary[], opts?: RowOpts): string {
+	const alias = opts?.alias;
 	const a = alias
 		? `a:${alias.state}:${alias.state === "error" ? (alias.message ?? "") : ""}\0`
 		: "";
-	return a + (suggest ? `s:${suggest.password}\0` : "") + matchesKey(matches);
+	// The carried id is part of the content: the same rows with a different card marked is a
+	// different dropdown, and keyed on ids alone the badge would stay where it was first drawn.
+	const c = opts?.carriedId ? `c:${opts.carriedId}\0` : "";
+	return a + c + (opts?.suggest ? `s:${opts.suggest.password}\0` : "") + matchesKey(matches);
 }
 
 // Anchor field shared by both renderers (the page input the picker sits under).
@@ -301,7 +310,7 @@ function mountDropdown(field: HTMLInputElement, bodyHtml: string): ShadowRoot {
 function buildDropdown(matches: MatchSummary[], field: HTMLInputElement, opts?: RowOpts): void {
 	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
 
-	const key = renderKey(matches, opts?.suggest, opts?.alias);
+	const key = renderKey(matches, opts);
 	// Same content/field already showing: keep the existing dropdown to avoid
 	// flicker from re-queries on every DOM mutation.
 	if (
@@ -319,7 +328,7 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement, opts?: 
 	const parts: string[] = [];
 	if (opts?.alias) parts.push(dropdownAlias(opts.alias));
 	if (opts?.suggest) parts.push(dropdownSuggest(opts.suggest.password));
-	for (const m of matches) parts.push(dropdownItem({ ...m }));
+	for (const m of matches) parts.push(dropdownItem({ ...m, carried: m.id === opts?.carriedId }));
 	const root = mountDropdown(field, parts.join(""));
 	openMatchesKey = key;
 	openDropdownKind = "matches";
@@ -397,6 +406,7 @@ type IframeRender =
 			otpOnly: boolean;
 			suggest?: SuggestOpt;
 			alias?: AliasRowState;
+			carriedId?: string;
 	  }
 	| { kind: "locked" };
 
@@ -487,6 +497,7 @@ function flushPendingRender(): void {
 			otpOnly: render.otpOnly,
 			suggest: render.suggest,
 			alias: render.alias,
+			carriedId: render.carriedId,
 		});
 	} else {
 		postToUi({ type: "RENDER_LOCKED" });
@@ -529,7 +540,11 @@ function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 	// the state it was first drawn in. This is the primary renderer, so that is the whole spinner.
 	const key =
 		render.kind === "matches"
-			? renderKey(render.matches, render.suggest, render.alias)
+			? renderKey(render.matches, {
+					suggest: render.suggest,
+					alias: render.alias,
+					carriedId: render.carriedId,
+				})
 			: "\0locked";
 	if (iframeReady && key === iframeMatchesKey) return;
 	iframeMatchesKey = key;
@@ -595,6 +610,7 @@ function showMatchesUi(matches: MatchSummary[], field: HTMLInputElement, opts?: 
 		otpOnly: opts?.otpOnly === true,
 		suggest: opts?.suggest,
 		alias: opts?.alias,
+		carriedId: opts?.carriedId,
 	});
 }
 

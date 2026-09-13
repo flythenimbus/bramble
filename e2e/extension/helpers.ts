@@ -111,6 +111,20 @@ export async function seedExampleCard(popup: Page) {
 	await expect(popup.getByText("Personal Visa")).toBeVisible();
 }
 
+/** A second card, so a pick has something to be switched away from (and an order to change). */
+export async function seedSecondCard(popup: Page) {
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByLabel("Name", { exact: true }).fill("Travel Mastercard");
+	await popup.getByLabel("Cardholder name", { exact: true }).fill("Alice Example");
+	await popup.getByLabel("Card number", { exact: true }).fill("5555555555554444");
+	await popup.getByLabel("Month (MM)", { exact: true }).fill("11");
+	await popup.getByLabel("Year (YY)", { exact: true }).fill("2032");
+	await popup.getByLabel("CVV", { exact: true }).fill("987");
+	await popup.getByRole("button", { name: /^Save/i }).click();
+	await expect(popup.getByText("Travel Mastercard")).toBeVisible();
+}
+
 /** From an unlocked popup, open Settings and select the Device sync panel. */
 export async function gotoSync(page: Page) {
 	await page.getByRole("button", { name: "Settings" }).click();

@@ -162,5 +162,9 @@
 	"aliasRetry": {
 		"message": "Try again",
 		"description": "Accessible label for the retry button on a failed email-alias row."
+	},
+	"cardUsedHere": {
+		"message": "Used here",
+		"description": "Badge on the autofill dropdown row for the card already filled elsewhere on this page (a hosted-fields checkout asks once per frame)."
 	}
 }

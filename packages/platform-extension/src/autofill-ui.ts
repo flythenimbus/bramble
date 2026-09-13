@@ -20,6 +20,9 @@ type Inbound =
 			otpOnly?: boolean;
 			suggest?: { password: string };
 			alias?: AliasRowState;
+			// The card already filled elsewhere on this page: rendered with a badge, never
+			// highlighted (Enter belongs to the page's form).
+			carriedId?: string;
 	  }
 	| { type: "RENDER_LOCKED" }
 	| { type: "UI_KEY"; key: string };
@@ -183,6 +186,17 @@ const STYLE = `
 		margin-top: 2px;
 		line-height: 1.3;
 	}
+	.tp-badge {
+		margin-left: auto;
+		flex-shrink: 0;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.2px;
+		padding: 3px 8px;
+		border-radius: 999px;
+		color: var(--tp-muted);
+		background: color-mix(in oklab, var(--tp-foreground) 10%, transparent);
+	}
 	.tp-launch {
 		margin-left: auto;
 		flex-shrink: 0;
@@ -224,7 +238,8 @@ const STYLE = `
 	.tp-regenerate:hover { background: color-mix(in oklab, var(--tp-foreground) 12%, transparent); color: var(--tp-foreground); }
 `;
 
-function matchRow(m: MatchSummary): string {
+function matchRow(m: MatchSummary, carried: boolean): string {
+	const badge = carried ? html`<span class="tp-badge">${t("cardUsedHere")}</span>` : "";
 	return html`
 		<div class="tp-item" data-entry-id="${m.id}" role="option">
 			<div class="tp-avatar" style="background: ${colorForName(m.name)};">${initials(m.name)}</div>
@@ -232,6 +247,7 @@ function matchRow(m: MatchSummary): string {
 				<span class="tp-name">${m.name}</span>
 				<span class="tp-user">${m.secondary}</span>
 			</div>
+			${[badge]}
 		</div>
 	`;
 }
@@ -423,7 +439,7 @@ window.addEventListener("message", (e) => {
 			}
 			for (const m of msg.matches) {
 				rows.push({ kind: "match", id: m.id });
-				body.push(matchRow(m));
+				body.push(matchRow(m, m.id === msg.carriedId));
 			}
 			render(body.join(""));
 			post({ type: "UI_HIGHLIGHT", active: false });
