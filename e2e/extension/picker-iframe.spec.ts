@@ -29,6 +29,24 @@ const SIGNUP = `<!doctype html><html><head><title>Sign up</title></head><body>
 	</form>
 </body></html>`;
 
+// A LOGIN form that claims autocomplete="new-password" on its password box, verbatim in shape
+// from a utility-billing site (JSP, Bootstrap). Sites do this to stop browsers offering the saved
+// password, and it worked on us too: the token scored as account creation, so the picker replaced
+// every saved login with a generated-password row on the one field the user came to fill.
+const LYING_LOGIN = `<!doctype html><html><head><title>Account Login</title></head><body>
+	<form id="login-form" name="login" method="post" action="/app/capricorn?para=index">
+		<input type="hidden" name="jspCSRFToken" value="659a14aa" />
+		<label for="accessCode">Email Address</label>
+		<input type="text" id="accessCode" name="accessCode" placeholder="Email Address" />
+		<label for="password">Password</label>
+		<input type="password" id="password" name="password" maxlength="60"
+			placeholder="Password" autocomplete="new-password" />
+		<button type="submit" id="login_btn">Login</button>
+		<label><input type="checkbox" name="rememberMyAccountNumber" value="Y" /> Remember me</label>
+		<a href="/app/forgotPassword.jsp">Reset your password?</a>
+	</form>
+</body></html>`;
+
 const STRONG_CHARS = /^[A-Za-z0-9!@#$%^&*()_+\-=[\]{}|;:,.<>?]{20}$/;
 
 async function serve(page: Page, html: string): Promise<void> {
@@ -94,6 +112,33 @@ test("renders the match inside the iframe, and fills from it", async ({ context,
 	await row.click();
 	await expect(page.locator("#user")).toHaveValue("alice@example.com", { timeout: 10_000 });
 	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
+});
+
+test("offers the saved login on a login form that claims new-password", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	const page = await context.newPage();
+	await serve(page, LYING_LOGIN);
+	await page.goto("https://example.com/app/capricorn?para=index");
+
+	const frame = await openPickerIframe(page, "#password");
+
+	// The saved login, not a generated password: the token no longer outvotes "Remember me" and
+	// the fact that this site already has a login saved.
+	const row = frame.locator("[data-entry-id]");
+	await expect(row).toBeVisible({ timeout: 10_000 });
+	await expect(row).toContainText("alice@example.com");
+	await expect(frame.locator("[data-tp-suggest]")).toHaveCount(0);
+
+	await row.click();
+	await expect(page.locator("#password")).toHaveValue("s3cr3t-pw-01", { timeout: 10_000 });
+	await expect(page.locator("#accessCode")).toHaveValue("alice@example.com");
 });
 
 test("keyboard nav drives the iframe: Down highlights, Enter fills, Escape dismisses", async ({

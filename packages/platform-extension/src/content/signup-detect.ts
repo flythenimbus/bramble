@@ -217,6 +217,19 @@ function fieldHint(el: HTMLInputElement): string {
 	return `${attrHint(el)} ${el.title} ${labelText(el)}`;
 }
 
+/**
+ * The same hint with the `autocomplete` token left out: what the field says in prose.
+ *
+ * CREATE_HINT_RE reads this rather than fieldHint because `autocomplete="new-password"` matches
+ * its own `new.?password` pattern, so a field carrying that token scored the 100 for the token
+ * AND 35 for "the label says new password", 135 from a single attribute. A `name="new_password"`
+ * or a "New password" label still counts: only the token it was already paid for is removed.
+ */
+function proseHint(el: HTMLInputElement): string {
+	const aria = el.getAttribute("aria-label") ?? "";
+	return `${el.name} ${el.id} ${el.placeholder} ${aria} ${el.title} ${labelText(el)}`;
+}
+
 /** True if the field's autocomplete token / hints mark it as the *current* password. */
 function isCurrentPassword(el: HTMLInputElement): boolean {
 	const ac = el.autocomplete?.toLowerCase() ?? "";
@@ -264,6 +277,27 @@ function collectSignupText(scope: ParentNode, doc: Document): string {
 	for (const el of deepQueryAll<HTMLElement>(BUTTON_SELECTOR, scope)) parts.push(controlText(el));
 	for (const h of doc.querySelectorAll("h1, h2, legend")) parts.push(h.textContent ?? "");
 	parts.push(doc.title);
+	return parts.join(" ").toLowerCase();
+}
+
+/**
+ * Text arguing this form is a LOGIN, from the two places collectSignupText deliberately skips:
+ * in-form links and checkbox labels. "Remember me" is a checkbox label and "Forgot password?" is
+ * a link on essentially every login form ever built, so LOGIN_TERMS could not fire without them
+ * and the negative side of the score was close to dead.
+ *
+ * Read for the negatives only, never for SIGNUP_TERMS. A link is a way OUT of the form rather
+ * than a description of it, and login pages carry "Create an account" links constantly, so
+ * scoring link text as signup evidence would push every login form up by 40.
+ */
+function collectLoginText(scope: ParentNode, signupHay: string): string {
+	const parts = [signupHay];
+	for (const a of deepQueryAll<HTMLAnchorElement>("a[href]", scope)) {
+		parts.push(a.textContent ?? "");
+	}
+	for (const cb of deepQueryAll<HTMLInputElement>('input[type="checkbox"]', scope)) {
+		parts.push(labelText(cb));
+	}
 	return parts.join(" ").toLowerCase();
 }
 
@@ -429,7 +463,7 @@ export function scoreSignupForm(
 	if (SIGNUP_TERMS.some((t) => hay.includes(t))) add(WEIGHTS.signupText, "signup-text");
 	if (form && hasSetPasswordAction(form)) add(WEIGHTS.setPasswordAction, "set-password-action");
 
-	if (CREATE_HINT_RE.test(fieldHint(field))) add(WEIGHTS.createHint, "create-hint");
+	if (CREATE_HINT_RE.test(proseHint(field))) add(WEIGHTS.createHint, "create-hint");
 	if (form && hasIdentifiedAccount(form)) add(WEIGHTS.identifiedAccount, "identified-account");
 	if (hasPasswordPolicy(field)) add(WEIGHTS.pwRules, "pw-rules");
 	if (hasStrengthMeter(field, scope)) add(WEIGHTS.strengthMeter, "strength-meter");
@@ -441,10 +475,20 @@ export function scoreSignupForm(
 	// they still apply, which is what keeps us off an ordinary /login page. Same carve-out
 	// as the returning-user damper below, and for the same reason: a reset link commonly
 	// lands on /auth/... under a heading that says "forgot password".
-	const structural = strongToken || confirmPair || changeForm;
+	//
+	// The new-password TOKEN is deliberately not in here, though it scores the same 100. The
+	// other two are facts about the DOM that no login form can present; the token is a claim
+	// the page writes, and pages lie: sites put `autocomplete="new-password"` on a login field
+	// precisely to stop a browser offering the saved password there. Given immunity, one such
+	// attribute outvoted a "Remember me" checkbox, a "Reset your password?" link and the user's
+	// own saved login for the site, and the picker offered a freshly generated password instead
+	// of the credential they came to use. It still reaches THRESHOLD on its own where the page
+	// says nothing to the contrary.
+	const structural = confirmPair || changeForm;
 	if (!structural) {
 		if (LOGIN_URL_RE.test(path)) add(WEIGHTS.loginUrl, "login-url");
-		if (LOGIN_TERMS.some((t) => hay.includes(t))) add(WEIGHTS.loginText, "login-text");
+		const loginHay = collectLoginText(scope, hay);
+		if (LOGIN_TERMS.some((t) => loginHay.includes(t))) add(WEIGHTS.loginText, "login-text");
 	}
 
 	// Returning-user damper: don't nag when the site already has saved logins,

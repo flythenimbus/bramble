@@ -203,6 +203,80 @@ describe("shouldSuggestPassword — declines on login and edge cases", () => {
 	});
 });
 
+// Verbatim from a utility-billing login (JSP, Bootstrap), which sets
+// autocomplete="new-password" on its LOGIN password box: a widespread hack to stop browsers
+// offering the saved password. Reported as "this form isn't offering autofill", and it was not:
+// the token scored 100, matched CREATE_HINT_RE's own `new.?password` for another 35, and counted
+// as structural, which skipped the -35 for "Remember me" and the -40 for the saved login. 135
+// against a threshold of 100, so the picker showed a generated password and hid the credential.
+const LYING_LOGIN_FORM = `
+	<form id="login-form" name="login" method="post" action="/app/capricorn?para=index">
+		<input type="hidden" name="jspCSRFToken" value="659a14aa" />
+		<label for="accessCode">Email Address</label>
+		<input type="text" class="form-control" id="accessCode" name="accessCode"
+			autocorrect="off" autocapitalize="none" placeholder="Email Address" />
+		<label for="password">Password</label>
+		<input type="password" class="form-control" id="password" name="password" maxlength="60"
+			placeholder="Password" autocomplete="new-password" />
+		<button type="submit" id="login_btn">Login</button>
+		<label><input type="checkbox" name="rememberMyAccountNumber" value="Y" /> Remember me</label>
+		<a href="/app/forgotPassword.jsp">Reset your password?</a>
+		<a href="/app/forgotAccessCode.jsp">Reset your User Name?</a>
+		<input type="hidden" name="nextPara" value="" />
+	</form>`;
+
+describe("a login form that claims autocomplete=new-password", () => {
+	it("does not hide the saved login behind a generated one", () => {
+		loadHTML(LYING_LOGIN_FORM);
+		expect(shouldSuggestPassword(pw(), { hasExistingLogins: true })).toBe(false);
+	});
+
+	it("is not a signup even for a first-time visitor", () => {
+		// "Remember me" alone has to carry this one, since there is no saved login to damp with.
+		loadHTML(LYING_LOGIN_FORM);
+		expect(shouldSuggestPassword(pw(), { hasExistingLogins: false })).toBe(false);
+	});
+
+	it("reads 'Remember me' out of the checkbox label that holds it", () => {
+		// The login evidence on this form is a checkbox label and two links, none of which
+		// collectSignupText looks at. Without them the token alone still clears THRESHOLD.
+		loadHTML(LYING_LOGIN_FORM);
+		expect(scoreSignupForm(pw()).signals).toContain("login-text");
+	});
+
+	it("does not read a login form's 'Create an account' link as signup evidence", () => {
+		// The other direction of the same asymmetry: links are read for the negatives only.
+		loadHTML(`
+			<form>
+				<input type="email" />
+				<input type="password" name="password" />
+				<a href="/register">Create an account</a>
+				<button type="submit">Sign in</button>
+			</form>
+		`);
+		expect(scoreSignupForm(pw()).signals).not.toContain("signup-text");
+		expect(shouldSuggestPassword(pw())).toBe(false);
+	});
+
+	it("counts the token once, not twice", () => {
+		loadHTML(LYING_LOGIN_FORM);
+		const { signals } = scoreSignupForm(pw());
+		expect(signals).toContain("new-password-token");
+		expect(signals).not.toContain("create-hint");
+	});
+
+	it("still reads a create hint the field writes in prose", () => {
+		// Only the token is discounted. A name or a label that says it is a new password counts.
+		loadHTML(`
+			<form>
+				<label for="p">Choose a password</label>
+				<input type="password" id="p" name="p" autocomplete="new-password" />
+			</form>
+		`);
+		expect(scoreSignupForm(pw()).signals).toContain("create-hint");
+	});
+});
+
 describe("shouldSuggestPassword — set-password forms (reset / rotation)", () => {
 	it("offers on a confirm pair even under a login route", () => {
 		// A reset link commonly lands under /auth or /login. Two rendered non-current
@@ -337,14 +411,32 @@ describe("returning-user damper", () => {
 		expect(shouldSuggestPassword(pw(), { hasExistingLogins: true })).toBe(false);
 	});
 
-	it("still offers to returning users when a strong signal is present", () => {
+	it("still offers to returning users on a confirm pair", () => {
+		// Two rendered password boxes to set is a fact about the DOM that no login form can
+		// present, so it outranks the damper the way the token no longer does.
+		loadHTML(`
+			<form>
+				<input type="email" />
+				<input type="password" name="p1" />
+				<input type="password" name="p2" />
+			</form>
+		`);
+		expect(shouldSuggestPassword(pw(), { hasExistingLogins: true })).toBe(true);
+	});
+
+	it("does not take a lone new-password token over the user's own saved login", () => {
+		// The token is a claim the page writes, and sites put it on LOGIN fields precisely to
+		// stop a browser offering the saved password there. Where the site already holds a
+		// login for this user, that claim alone is not enough to hide it.
 		loadHTML(`
 			<form>
 				<input type="email" />
 				<input type="password" autocomplete="new-password" />
 			</form>
 		`);
-		expect(shouldSuggestPassword(pw(), { hasExistingLogins: true })).toBe(true);
+		expect(shouldSuggestPassword(pw(), { hasExistingLogins: true })).toBe(false);
+		// Nothing said to the contrary, though, and it still reaches THRESHOLD on its own.
+		expect(shouldSuggestPassword(pw(), { hasExistingLogins: false })).toBe(true);
 	});
 });
 
