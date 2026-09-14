@@ -114,6 +114,23 @@ precisely because no targeting pass will look at them: `findByHint` skips
 `type=hidden`, so a hidden `expiryDate` names the room without ever becoming a
 fill target.
 
+Two rules keep the card detector out of the wrong copy of a form. Every card rung prefers a
+field that is **on screen**, exactly as the login rungs do: a payment modal ships a complete set
+of `cc-*` fields per tab (Paymentus: Credit and Debit) with only the active one displayed, so
+first-in-DOM-order lands in whichever tab is closed and the fill writes into boxes nobody can
+see. And the picker must never rewrite a `cc-*` token when it anchors to a field
+(`LOAD_BEARING_TOKEN_RE` in `picker.ts`): stripping it off the visible card-number box left the
+hidden tab's copy as the only `cc-number` on the page, which took the anchored field out of the
+model entirely, so the pick was refused as landing on nothing and the field was never offered
+again.
+
+The **expiry** is the one card field that is commonly a `<select>` rather than an input, so
+`ccSelect` looks for `<select autocomplete="cc-exp-month">` (and the same hint regex the input
+pass uses) when the inputs did not already answer. Selects are collected lazily by
+`PageScan.selects()` and only once the inputs have shown the page to be a card form, because
+every other rung works on inputs and a page with no card fields must not pay a second
+document-wide query. How the option is chosen is in [autofill.md](autofill.md).
+
 The CVV has the same two tiers, for the same reason pointing the other way.
 `CC_CSC_RE` holds only names that say card by themselves (`cvv`, `cvc`, `csc`,
 `cvn`, card verification/code), because "verification code" alone is far more

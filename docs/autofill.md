@@ -314,6 +314,16 @@ Filling a segmented widget means focusing each box in turn, and `focus()` fires 
 doesn't read our own focus moves as the user's and reopen the dropdown on the box
 it just filled.
 
+### Choosing, not typing: the expiry dropdowns
+
+`fillCard` writes the expiry through one writer that handles a text box and a `<select>` alike.
+For a select it tries the card's month and year against each option's `value` first and its
+visible text second, widest form first: month "04" then "4", year "2030" then "30", so
+`<option value="04">04 - April</option>` and `<option value="7">7</option>` both resolve. If no
+option matches, **nothing is written**. A select holding a value it never offered reads as the
+placeholder to the form and shows the user no error, which is worse than leaving it alone.
+`input` and `change` are both dispatched, since a form's own validation listens for the latter.
+
 ### Card and custom fills never write into a hidden field
 
 `fillCard` and `fillCustomFields` skip any field `isRendered` rejects. A form that

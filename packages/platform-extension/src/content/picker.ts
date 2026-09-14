@@ -69,12 +69,24 @@ let anchorField: HTMLInputElement | null = null;
 let suppressedField: HTMLInputElement | null = null;
 let suppressedAutocomplete: string | null = null;
 
-// A token we would blind ourselves by overwriting: `one-time-code` is the strongest rung of
-// OTP detection, and on a segmented widget it is often the ONLY thing marking the boxes (see
-// docs/field-detection.md). Writing over it on the anchor field takes that field out of the
-// model at the next re-parse, and the user's pick is then refused as landing on nothing:
-// which is what a real 2FA form did, with the dropdown opening and clicking it doing nothing.
-const LOAD_BEARING_TOKEN_RE = /\bone-time-code\b/i;
+// Tokens we would blind ourselves by overwriting. `one-time-code` is the strongest rung of OTP
+// detection, and on a segmented widget it is often the ONLY thing marking the boxes; `cc-*` is
+// the first rung of card detection and on a hosted-fields frame the field's name is frequently
+// just "number" (see docs/field-detection.md). Writing over either takes the field out of the
+// model at the next re-parse, and the user's pick is then refused as landing on nothing: the
+// dropdown opens, clicking it does nothing, and the field is never offered again.
+//
+// A payment modal makes it worse than a no-op. Paymentus ships a Credit tab and a Debit tab,
+// each with a full set of cc-* fields and only one displayed; strip the token off the visible
+// card-number box and `ccByToken` resolves to the hidden tab's copy, so the model now points at
+// a field nobody can see. That was reported as "it proposed autofill, I clicked my card, it
+// didn't fill at all, and then it stopped offering".
+//
+// The cost is that a browser's own card / code dropdown may render over ours on these fields.
+// That is the right way round: an overlapping suggestion is a nuisance, a fill that silently
+// does nothing is a broken feature. Password tokens are still suppressed, because no rung of
+// login detection depends on them (the password's nearest preceding text input carries it).
+const LOAD_BEARING_TOKEN_RE = /\bone-time-code\b|\bcc-[a-z]+(-[a-z]+)*\b/i;
 
 // Route every anchorField change through here so the browser's native autofill is
 // suppressed on exactly the field Bramble is handling and restored the moment we release

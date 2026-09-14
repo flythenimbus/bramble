@@ -1,4 +1,5 @@
 import {
+	type CardChoiceField,
 	closestAcrossShadow,
 	deriveMatcher,
 	getFillableInputs,
@@ -39,6 +40,45 @@ function fillField(el: HTMLInputElement, value: string): void {
 	el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+/** Sets a `<select>` via the native setter, so frameworks observe it as they do an input. */
+function setNativeSelectValue(el: HTMLSelectElement, value: string): void {
+	const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+	desc?.set?.call(el, value);
+}
+
+/**
+ * Picks the option matching one of `candidates`, by `value` first and visible text second, and
+ * reports whether anything matched.
+ *
+ * Both are needed. A month dropdown's values are "01".."12" on one site and "1".."12" on the
+ * next, and its text is "04 - April"; a year's are "2030" or "30". Nothing is written unless an
+ * option genuinely matches, because a select that holds a value it never offered is worse than
+ * one left alone: the form reads it as the placeholder and the user sees no error.
+ */
+function chooseOption(el: HTMLSelectElement, candidates: string[]): boolean {
+	const options = Array.from(el.options);
+	const find = (test: (opt: HTMLOptionElement, want: string) => boolean) => {
+		for (const candidate of candidates) {
+			const want = candidate.trim().toLowerCase();
+			if (!want) continue;
+			const hit = options.find((opt) => test(opt, want));
+			if (hit) return hit;
+		}
+		return null;
+	};
+	const option =
+		find((opt, want) => opt.value.trim().toLowerCase() === want) ??
+		find((opt, want) => {
+			const text = (opt.textContent ?? "").trim().toLowerCase();
+			return text === want || text.startsWith(`${want} `) || text.startsWith(`${want}-`);
+		});
+	if (!option) return false;
+	setNativeSelectValue(el, option.value);
+	el.dispatchEvent(new Event("input", BUBBLES));
+	el.dispatchEvent(new Event("change", { bubbles: true }));
+	return true;
+}
+
 // Segmented widgets route keystrokes through whichever box has focus, so filling
 // one means focusing each box in turn, and focus() fires a *trusted* focusin,
 // which the dropdown would answer by reopening on the box we just filled.
@@ -52,7 +92,7 @@ export function isFilling(): boolean {
 
 // Auto-fill skips these so clearing a field isn't re-clobbered by the next
 // query. Explicit dropdown selection ignores this set and always fills.
-const autoFilledFields = new WeakSet<HTMLInputElement>();
+const autoFilledFields = new WeakSet<Element>();
 
 /**
  * True if `el` must be left alone. A value WE wrote is fair game for an explicit
@@ -171,7 +211,9 @@ function reservedInputs(): Set<HTMLInputElement> {
 		card.expYear,
 		card.cvv,
 	]) {
-		if (el) reserved.add(el);
+		// Selects are never custom-field targets (CUSTOM_FILLABLE_TYPES is inputs only), so the
+		// expiry dropdowns have nothing to be reserved from.
+		if (el instanceof HTMLInputElement) reserved.add(el);
 	}
 	for (const el of otp) reserved.add(el);
 	return reserved;
@@ -233,12 +275,35 @@ export function fillCard(card: Extract<FillPayload, { kind: "card" }>, isAuto: b
 		autoFilledFields.add(el);
 		filled = true;
 	};
+	// The expiry pair is typed on some forms and chosen from a dropdown on others, so it goes
+	// through one writer that knows both. Candidates are ordered widest-first; chooseOption takes
+	// the first an option actually offers, and a text field takes the leading one.
+	const putExpiry = (el: CardChoiceField | null, candidates: string[]): void => {
+		const value = candidates[0];
+		if (!el || !value || !isRendered(el)) return;
+		if (isAuto && autoFilledFields.has(el)) return;
+		if (el instanceof HTMLSelectElement) {
+			if (!chooseOption(el, candidates)) return;
+		} else {
+			fillField(el, value);
+		}
+		autoFilledFields.add(el);
+		filled = true;
+	};
 	const mm = card.expMonth.padStart(2, "0");
+	const yyyy = card.expYear.length <= 2 ? `20${card.expYear.slice(-2)}` : card.expYear;
 	put(c.number, digits(card.number));
 	put(c.name, card.cardholderName);
 	if (c.expCombined) put(c.expCombined, `${mm}/${card.expYear.slice(-2)}`);
-	put(c.expMonth, mm);
-	if (c.expYear) put(c.expYear, expYearFor(c.expYear, card.expYear));
+	putExpiry(c.expMonth, [mm, String(Number(mm))]);
+	if (c.expYear) {
+		putExpiry(
+			c.expYear,
+			c.expYear instanceof HTMLSelectElement
+				? [yyyy, yyyy.slice(-2)]
+				: [expYearFor(c.expYear, card.expYear)],
+		);
+	}
 	put(c.cvv, card.cvv);
 	return filled;
 }

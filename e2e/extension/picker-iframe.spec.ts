@@ -1,6 +1,13 @@
 import type { Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, lock, openPopup, STRONG_PW, seedExampleLogin } from "./helpers";
+import {
+	createVault,
+	lock,
+	openPopup,
+	STRONG_PW,
+	seedExampleCard,
+	seedExampleLogin,
+} from "./helpers";
 
 // The picker's PRIMARY renderer: an extension-origin iframe that keeps the UI out of the page's
 // reach. Every other picker spec serves its page under COEP, which blocks the iframe on purpose and
@@ -44,6 +51,44 @@ const LYING_LOGIN = `<!doctype html><html><head><title>Account Login</title></he
 		<button type="submit" id="login_btn">Login</button>
 		<label><input type="checkbox" name="rememberMyAccountNumber" value="Y" /> Remember me</label>
 		<a href="/app/forgotPassword.jsp">Reset your password?</a>
+	</form>
+</body></html>`;
+
+// The Paymentus "Add Payment Method" modal a utility biller embeds: a Credit tab and a Debit
+// tab, each with a COMPLETE set of cc-* fields, only one displayed. Reported as "it proposed
+// autofill, I clicked my card, it didn't fill at all, and then it stopped offering": the picker
+// rewrote the anchored field's autocomplete to "off" to suppress the browser's own dropdown,
+// which left the hidden Debit copy as the only cc-number on the page, so the model pointed at a
+// field nobody could see and the pick was refused as landing on nothing.
+const PAYMENT_MODAL = `<!doctype html><html><head><title>Add Payment Method</title></head><body>
+	<form name="modalAddPm">
+		<input class="chrome-fix fix-user" type="text" aria-hidden="true" title="chrome-user-fix" maxlength="1" />
+		<input class="chrome-fix fix-pw" type="password" aria-hidden="true" title="chrome-pw-fix" maxlength="1" />
+		<div class="tab-content tab-CC active">
+			<label for="numCC">Card Number</label>
+			<input type="text" id="numCC" name="cardNumber" maxlength="16" autocomplete="cc-number" />
+			<label for="cvvCC">CVV</label>
+			<input type="password" id="cvvCC" name="cvv" maxlength="3" autocomplete="cc-csc" />
+			<label for="nameCC">Card Holder Name</label>
+			<input type="text" id="nameCC" name="cardHolderName" autocomplete="cc-name" />
+			<label for="monthCC">Expiry Month</label>
+			<select id="monthCC" name="expiryDateMonth" autocomplete="cc-exp-month">
+				<option value="">MM</option>
+				<option value="04">04 - April</option>
+				<option value="05">05 - May</option>
+			</select>
+			<label for="yearCC">Expiry Year</label>
+			<select id="yearCC" name="expiryDateYear" autocomplete="cc-exp-year">
+				<option value="">YYYY</option>
+				<option value="2029">2029</option>
+				<option value="2030">2030</option>
+			</select>
+		</div>
+		<div class="tab-content tab-DC" style="display:none">
+			<input type="text" id="numDC" name="cardNumber" maxlength="16" autocomplete="cc-number" />
+			<input type="password" id="cvvDC" name="cvv" maxlength="3" autocomplete="cc-csc" />
+			<input type="text" id="nameDC" name="cardHolderName" autocomplete="cc-name" />
+		</div>
 	</form>
 </body></html>`;
 
@@ -139,6 +184,45 @@ test("offers the saved login on a login form that claims new-password", async ({
 	await row.click();
 	await expect(page.locator("#password")).toHaveValue("s3cr3t-pw-01", { timeout: 10_000 });
 	await expect(page.locator("#accessCode")).toHaveValue("alice@example.com");
+});
+
+test("fills the displayed tab of a payment modal, not its hidden twin", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedExampleCard(popup);
+	await popup.close();
+
+	const page = await context.newPage();
+	await serve(page, PAYMENT_MODAL);
+	await page.goto("https://example.com/pay");
+
+	const frame = await openPickerIframe(page, "#numCC");
+
+	// The token the model is built on survives being anchored to. Without this the visible box
+	// stops being a card field the moment the dropdown opens.
+	await expect(page.locator("#numCC")).toHaveAttribute("autocomplete", "cc-number");
+
+	const row = frame.locator("[data-entry-id]");
+	await expect(row).toBeVisible({ timeout: 10_000 });
+	await row.click();
+
+	await expect(page.locator("#numCC")).toHaveValue("4242424242424242", { timeout: 10_000 });
+	await expect(page.locator("#cvvCC")).toHaveValue("123");
+	await expect(page.locator("#nameCC")).toHaveValue("Alice Example");
+	// The expiry is two dropdowns here, which is the shape enterprise checkouts use.
+	await expect(page.locator("#monthCC")).toHaveValue("04");
+	await expect(page.locator("#yearCC")).toHaveValue("2030");
+	// The closed tab is submitted with the form too, so a write there is a real defect.
+	await expect(page.locator("#numDC")).toHaveValue("");
+	await expect(page.locator("#cvvDC")).toHaveValue("");
+
+	// And the field is still a card field afterwards, so the picker comes back.
+	await page.locator("#nameCC").click();
+	await openPickerIframe(page, "#numCC");
 });
 
 test("keyboard nav drives the iframe: Down highlights, Enter fills, Escape dismisses", async ({

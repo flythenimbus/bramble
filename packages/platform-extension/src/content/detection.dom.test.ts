@@ -296,6 +296,91 @@ describe("detectCardFields — `pan`, the ambiguous number name", () => {
 	});
 });
 
+// Verbatim in shape from the Paymentus "Add Payment Method" modal a utility biller embeds: a
+// Credit tab and a Debit tab, each carrying a COMPLETE set of cc-* fields, only one displayed.
+// Taking the first token match in DOM order puts the model in whichever tab is closed, and the
+// fill then writes into boxes nobody can see.
+function paymentModal(creditFirst = true): string {
+	const tab = (suffix: string, hidden: boolean) => `
+		<div class="tab-content tab-${suffix}"${hidden ? ' style="display:none"' : ""}>
+			<label for="num${suffix}">Card Number</label>
+			<input type="text" id="num${suffix}" name="cardNumber" maxlength="16" autocomplete="cc-number" />
+			<label for="cvv${suffix}">CVV</label>
+			<input type="password" id="cvv${suffix}" name="cvv" maxlength="3" autocomplete="cc-csc" />
+			<label for="name${suffix}">Card Holder Name</label>
+			<input type="text" id="name${suffix}" name="cardHolderName" autocomplete="cc-name" />
+			<label for="month${suffix}">Expiry Month</label>
+			<select id="month${suffix}" name="expiryDateMonth" autocomplete="cc-exp-month">
+				<option value="">MM</option><option value="04">04 - April</option>
+			</select>
+			<label for="year${suffix}">Expiry Year</label>
+			<select id="year${suffix}" name="expiryDateYear" autocomplete="cc-exp-year">
+				<option value="">YYYY</option><option value="2030">2030</option>
+			</select>
+		</div>`;
+	// Credit is the displayed tab either way; the argument moves it in DOM order only.
+	const credit = tab("CC", false);
+	const debit = tab("DC", true);
+	return `<form name="modalAddPm">
+		<input class="chrome-fix fix-user" type="text" aria-hidden="true" title="chrome-user-fix" maxlength="1" />
+		<input class="chrome-fix fix-pw" type="password" aria-hidden="true" title="chrome-pw-fix" maxlength="1" />
+		${creditFirst ? credit + debit : debit + credit}
+	</form>`;
+}
+
+describe("detectCardFields — a payment modal's hidden second tab", () => {
+	it("resolves to the tab the user can see", () => {
+		loadHTML(paymentModal());
+		const c = detectCardFields();
+		expect([c.number?.id, c.cvv?.id, c.name?.id]).toEqual(["numCC", "cvvCC", "nameCC"]);
+	});
+
+	it("still resolves to it when the hidden tab comes first in DOM order", () => {
+		// The rule has to be visibility, not position: first-in-DOM-order is exactly what put the
+		// model in the closed tab.
+		loadHTML(paymentModal(false));
+		const c = detectCardFields();
+		expect([c.number?.id, c.cvv?.id, c.name?.id]).toEqual(["numCC", "cvvCC", "nameCC"]);
+	});
+
+	it("classifies the visible card number as a card field", () => {
+		loadHTML(paymentModal(false));
+		const el = document.getElementById("numCC") as HTMLInputElement;
+		expect(candidateKind(el)).toBe("card");
+		expect(isCardField(detectCardFields(), el)).toBe(true);
+	});
+
+	it("finds the expiry dropdowns, from the displayed tab", () => {
+		// The expiry here is two <select>s. Nothing else in the module reads selects, so before
+		// this the card filled with no expiry and the form rejected it as incomplete.
+		loadHTML(paymentModal(false));
+		const c = detectCardFields();
+		expect([c.expMonth?.id, c.expYear?.id]).toEqual(["monthCC", "yearCC"]);
+		expect(c.expCombined).toBeNull();
+	});
+
+	it("ignores an expiry dropdown with no card form around it", () => {
+		// A bare pair of date dropdowns (a booking form, a search filter) is not a card form, and
+		// the selects are not even collected without other card evidence.
+		loadHTML(`
+			<form>
+				<select name="expiryDateMonth"><option value="04">04</option></select>
+				<select name="expiryDateYear"><option value="2030">2030</option></select>
+			</form>
+		`);
+		const c = detectCardFields();
+		expect(c.expMonth).toBeNull();
+		expect(c.expYear).toBeNull();
+		expect(cardFieldsPresent(c)).toBe(false);
+	});
+
+	it("falls back to a hidden field when no copy is on screen", () => {
+		// A modal parsed before it opens is still the form we want; visibility is a preference.
+		loadHTML(`<div style="display:none">${paymentModal()}</div>`);
+		expect(detectCardFields().number?.id).toBe("numCC");
+	});
+});
+
 describe("detectCardFields — `security code`, the ambiguous CVV label", () => {
 	it("claims a Security code field beside a card number", () => {
 		loadHTML(`
