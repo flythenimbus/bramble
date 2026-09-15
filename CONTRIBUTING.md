@@ -38,6 +38,51 @@ Individual dev targets: `pnpm run dev:chrome`, `pnpm run dev:firefox`,
 `pnpm run dev:website`, `pnpm run mobile:dev`. The iOS and Android apps
 additionally need Xcode or Android Studio; the browser extension does not.
 
+### The desktop app on Windows
+
+The root `wasm:build` and `dev` scripts assume a POSIX shell (`export
+RUSTFLAGS=...`), so on Windows run those through WSL or Git Bash. They only
+matter for the extension and the website: the desktop app links the same Rust
+crypto core natively instead of loading it as wasm, so the whole desktop loop
+runs with a Windows-native toolchain from PowerShell.
+
+Needs [Rust](https://rustup.rs) with the MSVC host target (rustup's default on
+Windows) plus the Visual Studio Build Tools with the C++ workload, which
+supplies `link.exe`. WebView2 ships with current Windows 10 and 11.
+
+```powershell
+pnpm install
+pnpm run dev:desktop      # vite + tauri dev; opens the app
+pnpm run test:desktop     # the desktop shell's cargo tests
+```
+
+`test:desktop` on Windows is not the suite you get on Linux: the named-pipe
+transport, the native-messaging registry install, and the Credential Manager
+store have Windows-gated tests that exist nowhere else, which is most of why
+CI keeps a `windows-latest` job. A green cross-compile from another platform
+exercises none of them.
+
+An installer is one command more, but the updater makes it need a key first:
+`createUpdaterArtifacts` is on, so the bundler refuses to produce an unsigned
+one. Use a throwaway key, never a release key. Note the password must be
+non-empty here: PowerShell drops an env var set to `''`, and the bundler then
+prompts for a password that nothing can answer.
+
+```powershell
+pnpm --filter @vault/platform-desktop exec tauri signer generate -w $env:TEMP\bramble-dev.key -p "dev"
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $env:TEMP\bramble-dev.key -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "dev"
+pnpm --filter @vault/platform-desktop exec tauri build --bundles nsis
+```
+
+The installer lands in `src-tauri/target/release/bundle/nsis/`, unsigned: for a
+VM, not for anyone else. Release installers are built by CI and
+Authenticode-signed through SignPath; see
+[docs/desktop-port.md](docs/desktop-port.md) and
+[docs/release-signing.md](docs/release-signing.md). While iterating, the app's
+local data (vault, logs, the browser-link manifest) lives under
+`%APPDATA%\app.bramble.desktop`.
+
 ## Coding standard
 
 **Formatting and linting is [Biome](https://biomejs.dev), configured in
@@ -83,6 +128,8 @@ extra scrutiny, and a change there without tests will be sent back.
 ```sh
 pnpm test              # cargo test (Rust core) + Vitest across every workspace package
 pnpm run wasm:test     # just the Rust core
+pnpm run test:desktop  # the desktop shell (src-tauri); on Windows this also runs
+                       # the named-pipe, registry, and Credential Manager tests
 pnpm run test:e2e      # Playwright, against a real Chromium with the extension loaded
 ```
 
