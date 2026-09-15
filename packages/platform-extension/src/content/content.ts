@@ -1095,7 +1095,9 @@ function bootstrap(): void {
 	queryCornerPrompt();
 
 	mutationObserver = new MutationObserver((records) => onDomChange(records));
-	mutationObserver.observe(document.body, { childList: true, subtree: true });
+	// Observe the stable document node so a page replacing body or documentElement
+	// does not strand the observer on the old subtree.
+	mutationObserver.observe(document, { childList: true, subtree: true });
 
 	// Show on focus; this makes the email-only first step (e.g. ikea.com) work.
 	document.addEventListener(
