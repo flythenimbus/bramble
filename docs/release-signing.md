@@ -5,6 +5,9 @@ Four independent signing setups, all reusing the same age + YubiKey at-rest sche
 ([listed on addons.mozilla.org](#firefox-listed-on-addonsmozillaorg)), the **Android app**
 ([GitHub-released APK](#android-github-released-apk)), and the **desktop app**
 ([GitHub-released and self-updating](#desktop-app-github-released-and-self-updating)) at the end.
+The desktop app carries a second, platform-specific signature as well: its Windows installer is
+Authenticode-signed through SignPath
+([Windows: Authenticode through SignPath](#windows-authenticode-through-signpath)).
 
 ## Chrome Web Store verified uploads
 
@@ -438,6 +441,50 @@ The alternative is `APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID`, where `APPLE
 **app-specific password** from appleid.apple.com → Sign-In and Security → App-Specific Passwords.
 Never your Apple ID password: it is not scoped, and revoking it means changing the password you
 sign in with everywhere.
+
+### Windows: Authenticode through SignPath
+
+The Windows installer is Authenticode-signed by the [SignPath Foundation](https://signpath.org/),
+free for open source projects and issuing a real Sectigo certificate. It plays the role the Apple
+Developer ID plays above: without it, Windows warns every person who downloads the installer, which
+is not a first impression a password manager should make.
+
+What SignPath demands in exchange is **provenance**. Their terms require every job leading up to
+the signing request to have run on a GitHub-hosted agent, with the repository, branch and build
+agent attested by GitHub itself, so a cross-compiled installer from a maintainer's machine cannot
+be signed at all. Windows is therefore the one artifact Bramble ships that is not built locally:
+`.github/workflows/sign-windows.yml` builds it on a `windows-latest` runner and submits the single
+`*-setup.exe` to SignPath, a maintainer approves the request in the SignPath UI (manual by
+design), and the signed installer comes back as the `bramble-windows-signed` artifact. The job
+asserts the binary carries a recognizable certificate on the way out, because a silently unsigned
+one looks identical until a user hits SmartScreen.
+
+The flow, driven by `scripts/build-windows.ts`:
+
+```sh
+pnpm run build:windows --unsigned      # cross-compiled here with cargo-xwin, throwaway updater key:
+                                      # for a VM, cannot be signed, must never be released
+pnpm run build:windows --ci-start      # dispatch the GitHub build + SignPath signing, record the run
+pnpm run build:windows --ci-collect    # wait, download the signed installer, updater-sign it here
+```
+
+**Authenticode first, updater signature second.** The `.sig` is generated locally by
+`--ci-collect`, over the Authenticode-signed bytes. SignPath signing rewrites the file, so the
+reverse order ships a signature over a file that no longer exists and every Windows update fails.
+For the same reason the workflow builds with a throwaway key (the bundler refuses to emit updater
+artifacts without one) and `--ci-collect` deletes that throwaway `.sig` on arrival: it describes
+the pre-signing bytes and no installed app trusts the key that made it.
+
+The updater key never goes to CI at all. SignPath signs for *Windows*; the minisign key signs
+for *the updater*, and only the second is the root of trust for updates. Same age + YubiKey scheme
+as above, same permanence rules.
+
+One-time setup is in the SignPath dashboard: register the GitHub organization, create a project
+pointed at this repository and the `sign-windows.yml` workflow, and pick a signing policy. The
+repository then needs `SIGNPATH_API_TOKEN` in **secrets** and `SIGNPATH_ORGANIZATION_ID`,
+`SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` in **variables**; the workflow reads
+exactly those names. If `gh workflow list` does not show the workflow yet, push `.github/` to the
+default branch first: a workflow cannot be dispatched before it exists there.
 
 ### If the YubiKey is lost
 
