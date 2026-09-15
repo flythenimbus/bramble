@@ -41,7 +41,8 @@ fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
     AboutMetadata {
         name: Some(APP_NAME.into()),
         version: Some(version),
-        copyright: Some(format!("© 2026 {AUTHOR}")),
+        // The company holds the copyright; AUTHOR below is who wrote it.
+        copyright: Some("© 2026 Webvana Inc.".into()),
         // The panel shows this verbatim under the version. Kept to four short lines: it is a
         // credits box, not a README. The URL is not a sentence and stays as it is.
         credits: Some(format!(

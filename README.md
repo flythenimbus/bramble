@@ -204,4 +204,6 @@ bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t
 
 ## License
 
+Copyright (C) 2026 Webvana Inc.
+
 Bramble is free software, released under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for the full text. In short: use it, study it, fork it, and share it. If you distribute a modified version, pass the same freedoms along and make your source available under the GPLv3 too.
