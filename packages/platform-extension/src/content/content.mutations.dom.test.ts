@@ -153,6 +153,36 @@ describe("content: mutation-driven re-query (issue #59)", () => {
 		hidden.mockRestore();
 		state.mockRestore();
 	});
+
+	it("observes fields after body and document-root replacement", async () => {
+		const replacementBody = document.createElement("body");
+		document.body.replaceWith(replacementBody);
+		await settle();
+		vi.clearAllTimers();
+		safeRequest.mockClear();
+
+		const bodyField = document.createElement("input");
+		bodyField.type = "password";
+		bodyField.name = "password";
+		replacementBody.append(bodyField);
+		await settle();
+		expect(queryCount()).toBe(1);
+
+		const replacementRoot = document.createElement("html");
+		const rootBody = document.createElement("body");
+		replacementRoot.append(rootBody);
+		document.documentElement.replaceWith(replacementRoot);
+		await settle();
+		vi.clearAllTimers();
+		safeRequest.mockClear();
+
+		const rootField = document.createElement("input");
+		rootField.type = "password";
+		rootField.name = "password";
+		rootBody.append(rootField);
+		await settle();
+		expect(queryCount()).toBe(1);
+	});
 });
 
 // The desktop app fills through this frame (docs/desktop-port.md): the user picks an entry over
