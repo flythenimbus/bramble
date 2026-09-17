@@ -27,18 +27,39 @@ jobs:
           # cache, which fails here because this job installs nothing and never sets pnpm up. The
           # verifier is node builtins only, so there is no cache worth priming.
           package-manager-cache: false
-      - name: Assert the updater archive verifies against the app's public key
+      - name: Assert every updater artifact verifies against the app's public key
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          # An archive signed with the wrong key, or not signed at all, produces a release that
+          # An artifact signed with the wrong key, or not signed at all, produces a release that
           # looks complete and updates nobody: installed apps check the key compiled into THEM.
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.app.tar.gz*' --dir dl
-          archive="$(ls dl/*.app.tar.gz)"
-          [ -f "$archive.sig" ] || { echo "::error::no .sig for $(basename "$archive")"; exit 1; }
-          node scripts/verify-updater-signature.mjs "$archive" "$archive.sig"
+          #
+          # Every platform the updater can apply, not just macOS. This used to fetch
+          # `*.app.tar.gz*` alone, so a Windows installer could ship unsigned or signed with the
+          # wrong key and the job would still go green off the back of the macOS archive sitting
+          # beside it, for the platform most people download.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dl
+
+          # One entry per thing an installed app can APPLY. On Windows the download and the
+          # updater artifact are the same `-setup.exe`, where macOS and Linux keep the two apart.
+          shopt -s nullglob
+          verified=0
+          for artifact in dl/*.app.tar.gz dl/*.AppImage dl/*-setup.exe; do
+            # Checked separately from the loop over `.sig` files, because a missing signature
+            # leaves nothing to iterate and would otherwise pass by being invisible.
+            if [ ! -f "$artifact.sig" ]; then
+              echo "::error::$(basename "$artifact") has no .sig; every installed app would refuse this update"
+              exit 1
+            fi
+            node scripts/verify-updater-signature.mjs "$artifact" "$artifact.sig"
+            verified=$((verified + 1))
+          done
+
+          # A desktop release with nothing the updater can apply is a release nobody receives.
+          [ "$verified" -gt 0 ] || { echo "::error::no updater artifact on release $TAG"; exit 1; }
+          echo "ok: $verified updater artifact(s) verified"
 
   verify-signed-crx:
     if: endsWith(github.event.release.tag_name, '-chromium')
