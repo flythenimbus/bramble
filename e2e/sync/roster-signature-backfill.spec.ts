@@ -55,7 +55,19 @@ async function readExtGroup(sw: Worker): Promise<{ key: string; group: StoredGro
 	});
 }
 
-/** Drop `sigKey`/`sig` from every device in the extension's stored roster. */
+/**
+ * Drop `sigKey`/`sig` from every device in the extension's stored roster.
+ *
+ * Each stripped entry is stamped 1ms newer, and that is what makes the strip stick. The peers are
+ * paired and live while this runs, so the two stores are stripped one after the other; a sync
+ * round trip landing in that window would otherwise merge the other peer's still-signed roster
+ * back over this one and undo it. Entries compare on (wall, counter, node), so a newer wall wins
+ * that merge.
+ *
+ * 1ms rather than a jump to now, deliberately: it only has to beat the copy the peer holds, and
+ * the backfill's own stamp lands at present time seconds later, so it still wins the comparison
+ * the assertions below depend on.
+ */
 async function stripExtSignatures(sw: Worker): Promise<void> {
 	await sw.evaluate(async () => {
 		const all = await chrome.storage.local.get(null);
@@ -65,6 +77,8 @@ async function stripExtSignatures(sw: Worker): Promise<void> {
 		for (const d of group.roster.devices) {
 			delete d.sigKey;
 			delete d.sig;
+			const hlc = d.hlc as { wall: number } | undefined;
+			if (hlc) hlc.wall += 1;
 		}
 		await chrome.storage.local.set({ [key]: group });
 	});
@@ -84,6 +98,9 @@ async function stripMobileSignatures(page: Page): Promise<void> {
 		for (const d of group.roster.devices) {
 			delete d.sigKey;
 			delete d.sig;
+			// Stamped newer for the same reason as the extension's side.
+			const hlc = d.hlc as { wall: number } | undefined;
+			if (hlc) hlc.wall += 1;
 		}
 		localStorage.setItem(key, JSON.stringify(group));
 		return true;
@@ -140,6 +157,14 @@ test("an unsigned device signs itself on unlock, and its peer converges on the s
 	// Rewind both stores to the pre-2026-07-09 world: entries with no signature at all.
 	await stripExtSignatures(sw);
 	await stripMobileSignatures(mobile.page);
+
+	// The precondition everything below rests on, asserted rather than assumed. If a merge ever
+	// does put signatures back, this fails here naming the cause, instead of surfacing thirty
+	// seconds later as a backfill that looks like it signed the peer's entry as well as its own.
+	expect(
+		(await readExtGroup(sw)).group.roster.devices.filter((d) => typeof d.sigKey === "string"),
+		"the strip did not stick: signatures were merged back before the backfill ran",
+	).toHaveLength(0);
 
 	// The mobile peer now sees two unsigned devices, and says so. Its own entry is only fixed by
 	// ITS next unlock, which this spec never triggers, so it stays unsigned throughout and is the
