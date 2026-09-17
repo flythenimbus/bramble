@@ -89,6 +89,18 @@ rustPlatform.buildRustPackage (finalAttrs: {
     xdotool # the global shortcut
   ];
 
+  preFixup = ''
+    # libappindicator-sys loads AppIndicator dynamically with dlopen(),
+    # so the library must be discoverable at runtime.
+    gappsWrapperArgs+=(
+      --prefix LD_LIBRARY_PATH : "${
+        lib.makeLibraryPath [
+          libayatana-appindicator
+        ]
+      }"
+    )
+  '';
+
   # The crate's own tests need no display and are worth running here, but they are the shell's,
   # not the workspace's: `pnpm test` belongs to CI.
   doCheck = true;
