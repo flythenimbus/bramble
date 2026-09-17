@@ -858,10 +858,18 @@ version, so it should point at a release that already exists.
 Built in a container (`pnpm run build:linux`), because a Debian package has to be built on Debian
 and the maintainer's machine is a Mac. Three things about that setup are load-bearing:
 
-- **`ubuntu:22.04`, not something current.** A binary cannot run on an older glibc than the one it
-  was linked against, so the build distribution sets the floor for every user: building on trixie
-  would produce a `.deb` that refuses to install on Ubuntu 22.04 or Debian 12. 22.04 is the oldest
-  release carrying webkit2gtk-4.1, which Tauri v2 requires.
+- **`debian:12` (bookworm), not something current.** A binary cannot run on an older glibc than the
+  one it was linked against, so the build distribution sets the floor for every user: building on
+  trixie would produce a `.deb` that refuses to run on Debian 12 or Ubuntu 22.04. bookworm is the
+  oldest Debian carrying webkit2gtk-4.1, which Tauri v2 requires. Its `libc6` is 2.36, but the floor
+  is whatever symbol versions are actually referenced, and our binaries reach only `GLIBC_2.34`, so
+  the `.deb` and `.rpm` floor did not move when the base did. `pnpm run test:apt` installs on Debian
+  12 and Ubuntu 22.04 and would catch it if it had. The AppImage is the artifact that notices a base
+  change, because it carries the base's libraries with it: see the bundling rules below.
+  The base also fixes which webkit2gtk the AppImage bundles, and so which WebKit those users run
+  until the next release. bookworm's is one stable series behind trixie (2.50.6 against 2.52.6),
+  actively updated by Debian, and that gap is the price of the low floor. The `.deb` and `.rpm` are
+  unaffected either way: they link the WebKit the user's own distribution ships and patches.
 - **The repository is copied into the container, not bind-mounted for the build.** A shared mount
   would have the container's `pnpm install` overwrite `node_modules` with Linux binaries and break
   the host's dev environment. It is mounted read-only and rsynced into a named volume, which also
@@ -883,6 +891,33 @@ the only answer. On Linux `tauri build` produces three things, and the differenc
 | `.deb` | `bundle/deb/` | What most people install. **Cannot self-update**: Tauri's updater replaces an AppImage in place and has no way to re-run a package manager |
 | `.rpm` | `bundle/rpm/` | Same, for Fedora and friends; falls out of `targets: "all"` |
 | `.AppImage` + `.sig` | `bundle/appimage/` | Both the self-updating download and what the updater fetches, keyed in `latest.json` as `linux-x86_64` |
+
+#### What the AppImage may and may not bundle
+
+Unlike the `.deb` and `.rpm`, which link what the user's distribution ships, the AppImage carries
+the build image's libraries, so every one of them is a compatibility claim about hosts older and
+newer than bookworm. linuxdeploy gets three of those wrong, and Tauri has no option to change what
+it bundles (tauri-apps/tauri#15665, #15976). So `build-macos.ts` edits the AppDir after
+`tauri build`, repacks with the same `linuxdeploy-plugin-appimage` out of Tauri's tool cache, and
+re-signs the result, because the bundler's signature covers the bytes before the edit
+(`scripts/appimage-portability.ts`).
+
+| Rule | Why |
+|---|---|
+| Drop `libwayland-client.so.0` | Bundled 1.21 shadows the user's. Mesa 24.1+ wants symbols from 1.23+ (`wl_display_create_queue_with_name`, `wl_display_dispatch_queue_timeout`, `wl_fixes_interface`), so libglvnd cannot load the Mesa EGL vendor at all, WebKitWebProcess aborts with `Could not create default EGL display: EGL_BAD_PARAMETER`, and the window stays blank (issue #100) |
+| Drop `libcups.so.2` and the cups print backend | The only bundled library needing `GLIBC_2.36`, which is above the floor everything else holds. The app has no print feature, so it buys nothing and costs the oldest distribution |
+| Add `libharfbuzz.so.0` | linuxdeploy's excludelist keeps harfbuzz out but bundles pango, and bookworm's pango calls harfbuzz 4.0+. On Ubuntu 22.04 (harfbuzz 2.7.4) that is `undefined symbol: hb_ot_layout_get_horizontal_baseline_tag_for_script` at startup, before any window |
+
+The blank window is not Wayland-specific: it reproduces under X11 too, and on Arch, Fedora 44 and
+Ubuntu 26.04. The other Wayland libraries (`-cursor`, `-egl`, `-server`) stay bundled, because
+Mesa asks them for nothing the bundled versions lack.
+
+Checked under Xvfb on Ubuntu 26.04 (Mesa 26, wayland 1.24) and Ubuntu 22.04 (glibc 2.35, harfbuzz
+2.7.4), which is the floor `test:apt` claims: the stock AppImage aborts on the first and fails to
+start on the second, and the repacked one renders on both.
+
+Debian's WebKit links 30 optional libraries Ubuntu's did not (AV1 codecs, abseil, flite), and
+linuxdeploy follows them all in, which is most of the AppImage's jump from 85 MB to 100 MB.
 
 The `.deb` is also published to an APT repository, which is how most Linux users will install and
 update: see [apt-releases.md](apt-releases.md).

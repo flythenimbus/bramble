@@ -21,6 +21,7 @@
 //   signed and published from the host. See docs/release-signing.md.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -113,13 +114,24 @@ const uid = process.getuid?.() ?? 0;
 const gid = process.getgid?.() ?? 0;
 
 // One shell rather than several `docker exec`s: a single layer of quoting, and `set -e` stops the
-// rest the moment anything fails.
+// rest the moment anything fails. Run with `bash -c`, NOT `-lc`: Debian's /etc/profile rewrites
+// PATH for non-root users, and the container runs as the invoking user, so a login shell would
+// throw away the image's own PATH and take cargo (/opt/cargo/bin) with it.
 const script = [
 	"set -euo pipefail",
 	// Into a subdirectory we create, not into /work itself: the volume root is owned by root, and
 	// `rsync -a` sets times on the destination root, which a non-owner cannot do however writable
 	// the directory is.
 	"mkdir -p /work/repo",
+	// A cached target/ from a different base image is compiled against a different distribution's
+	// glibc and webkit, and cargo cannot see that it changed: it would silently link a release out
+	// of objects from the image we just moved off. The marker is a hash of the image's layers, so
+	// any change to the image invalidates it and nothing else does.
+	'if [ "$(cat /work/.base-image 2>/dev/null)" != "$BRAMBLE_BASE_IMAGE" ]; then' +
+		" echo 'base image changed: rebuilding from scratch';" +
+		" rm -rf /work/repo/packages/platform-desktop/src-tauri/target;" +
+		" fi",
+	'printf %s "$BRAMBLE_BASE_IMAGE" > /work/.base-image',
 	// --delete so a file removed on the host does not linger in the volume and get built anyway.
 	"rsync -a --delete" +
 		" --exclude .git --exclude node_modules --exclude target --exclude dist" +
@@ -170,6 +182,15 @@ for (const arch of arches) {
 		"packages/platform-desktop/docker",
 	]);
 
+	// The image's layers, not its id: `docker build` stamps a fresh id on every run even when every
+	// layer was cached, so keying on the id would wipe the build cache each time and recompile the
+	// world. Layer digests are the filesystem the build actually runs on, and only move when it does.
+	const layers = execFileSync(
+		"docker",
+		["image", "inspect", "--format", "{{json .RootFS.Layers}}", `${IMAGE}:${arch}`],
+		{ encoding: "utf8" },
+	).trim();
+
 	console.log(`building the ${arch} bundles…`);
 	run(
 		"docker",
@@ -193,13 +214,16 @@ for (const arch of arches) {
 			"TAURI_SIGNING_PRIVATE_KEY",
 			"-e",
 			"TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+			"-e",
+			"BRAMBLE_BASE_IMAGE",
 			`${IMAGE}:${arch}`,
 			"bash",
-			"-lc",
+			"-c",
 			script,
 		],
 		{
 			...process.env,
+			BRAMBLE_BASE_IMAGE: createHash("sha256").update(layers).digest("hex"),
 			TAURI_SIGNING_PRIVATE_KEY: key.trim(),
 			TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 		},

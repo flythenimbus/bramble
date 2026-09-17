@@ -6,18 +6,25 @@
 # shells out to dpkg-deb, and the binary links against a specific glibc and webkit2gtk. So this
 # image is the Linux half of the release, driven by scripts/build-linux.ts.
 #
-# **Ubuntu 22.04 on purpose, not something current.** A binary cannot run on an older glibc than
-# the one it was linked against, so the build distribution sets the floor for every user: building
-# on trixie (glibc 2.41) would produce a .deb that refuses to install on Ubuntu 22.04 or Debian 12,
-# which is most of the people who would install it. 22.04 is the oldest release carrying
-# webkit2gtk-4.1, which Tauri v2 requires, so it is the floor available to us.
+# **bookworm on purpose, not something current.** A binary cannot run on an older glibc than the
+# one it was linked against, so the build distribution sets the floor for every user: building on
+# trixie would produce a .deb that refuses to run on Debian 12 or Ubuntu 22.04, which is most of
+# the people who would install it. bookworm is the oldest Debian carrying webkit2gtk-4.1, which
+# Tauri v2 requires. libc6 is 2.36 there, but the floor is set by the symbols actually referenced,
+# and our binaries ask for no more than GLIBC_2.34, so the .deb and .rpm still install and run on
+# Ubuntu 22.04. `pnpm run test:apt` installs on both and proves it.
+#
+# The AppImage is the artifact that feels a base change, because it carries this image's libraries:
+# it bundles webkit2gtk from here (bookworm's is a stable series behind trixie, and the price of
+# the low floor), and scripts/appimage-portability.ts fixes the three libraries linuxdeploy gets
+# wrong for hosts older or newer than this one. See docs/desktop-port.md.
 #
 # What is deliberately NOT here: signing. The updater key arrives through the environment for the
 # one build that needs it, and the APT repository's GPG key never comes near a container at all —
 # it lives on a YubiKey, and Docker Desktop on macOS cannot pass a USB device through. Signing and
 # publishing stay on the host. See docs/release-signing.md.
 
-FROM ubuntu:22.04
+FROM debian:12
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -43,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Node from the official tarball rather than a distro package: 22.04 ships far too old a version,
+# Node from the official tarball rather than a distro package: bookworm ships far too old a version,
 # and this keeps the runtime the same one CI and the Mac use.
 ARG NODE_VERSION=24.19.0
 ARG TARGETARCH

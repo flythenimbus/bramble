@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeAppImagePortable } from "./appimage-portability.ts";
 import { KEY_AGE, signingKey } from "./desktop-signing-key.ts";
 
 const fail = (message: string): never => {
@@ -120,17 +121,23 @@ const args = [
 	...forwarded,
 	...(universal ? ["--target", "universal-apple-darwin"] : []),
 ];
-execFileSync("pnpm", args, {
-	stdio: "inherit",
-	env: {
-		...process.env,
-		// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
-		// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
-		// proxy and the browser link is dead on Intel.
-		...(universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
-			? { BRAMBLE_UNIVERSAL: "1" }
-			: {}),
-		TAURI_SIGNING_PRIVATE_KEY: key,
-		TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
-	},
-});
+const env = {
+	...process.env,
+	// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
+	// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
+	// proxy and the browser link is dead on Intel.
+	...(universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
+		? { BRAMBLE_UNIVERSAL: "1" }
+		: {}),
+	TAURI_SIGNING_PRIVATE_KEY: key,
+	TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
+};
+execFileSync("pnpm", args, { stdio: "inherit", env });
+
+if (process.platform === "linux") {
+	const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+	makeAppImagePortable(
+		join(root, "packages/platform-desktop/src-tauri/target/release/bundle"),
+		env,
+	);
+}

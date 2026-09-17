@@ -13,9 +13,10 @@
 // - **The signature, as apt validates it.** Our own checks verify the chain by hand; apt has its
 //   own opinion about what a valid `InRelease` is, and only apt's opinion decides whether anyone
 //   can install.
-// - **The glibc floor.** The package is built on Ubuntu 22.04 so it installs on distributions
-//   older than the builder. That claim is only worth anything if something checks it, so the
-//   default images are the oldest we say we support.
+// - **The glibc floor.** The package is built on Debian 12 so it installs on distributions older
+//   than the builder. That claim is only worth anything if something checks it, so the default
+//   images are the oldest we say we support, Ubuntu 22.04 among them: its glibc is older than the
+//   builder's, which is exactly the case a floor claim can get wrong.
 // - **Where the sidecar lands.** `manifest.rs` resolves the browser proxy as a sibling of the
 //   running executable, and where Tauri's externalBin ends up in a .deb was an open question.
 //
@@ -30,7 +31,7 @@ import { dockerProblem } from "./docker-available.ts";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = "e2e/apt/install-test.sh";
 
-// The oldest we claim to support, which is the point: building on 22.04 sets the floor, and a
+// The oldest we claim to support, which is the point: the build distribution sets the floor, and a
 // package that only installs on the builder's own distribution is not a package.
 const DEFAULT_IMAGES = ["debian:12", "ubuntu:22.04"];
 
