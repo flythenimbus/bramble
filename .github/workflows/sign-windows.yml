@@ -50,10 +50,13 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Cache Rust deps
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/platform-desktop/src-tauri -> target
+      # Deliberately NOT cached, unlike ci.yml. A Rust cache restores a compiled target/
+      # directory, so the signed binary could contain objects that did not come from this run's
+      # checkout, and "built solely from the source code in the public repository" is the exact
+      # property SignPath verifies before it will sign anything. ci.yml writes that cache key on
+      # every push to main, so restoring it here would quietly widen the trust boundary of the
+      # one artifact that carries a third party's certificate to every workflow that touches it.
+      # The cost is a cold build, roughly ten minutes, on a job that already waits on a human.
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
@@ -123,18 +126,37 @@ jobs:
           # office hours.
           wait-for-completion-timeout-in-seconds: 3600
 
+      # The failure worth catching is a silently UNSIGNED artifact: it looks identical to a signed
+      # one until a user downloads it and SmartScreen says otherwise.
+      #
+      # Asks Windows whether a signer is present rather than grepping the binary for an issuer
+      # name. The grep this replaces would have failed against SignPath's TEST certificate, which
+      # is what a new subscription gets before the production one is issued, reporting "not
+      # signed" for a run where signing had worked perfectly.
+      #
+      # Presence is the hard failure; trust is only reported. A test certificate need not chain to
+      # a root the runner trusts, so `Status` is expected to be something other than Valid until
+      # the production certificate is in place, and failing on that would block the very phase
+      # this is meant to survive.
       - name: Assert the installer came back signed
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          exe="$(ls signed/*-setup.exe)"
-          # A silently unsigned artifact is the failure worth catching here: it looks exactly like
-          # a signed one until a user downloads it and SmartScreen says otherwise.
-          if ! grep -qa "SignPath\|Sectigo" "$exe"; then
-            echo "::error::$exe carries no recognizable certificate; did signing actually run?"
+          $exe = Get-ChildItem signed\*-setup.exe | Select-Object -First 1
+          if ($null -eq $exe) { Write-Output "::error::no -setup.exe came back from signing"; exit 1 }
+
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          if ($null -eq $sig.SignerCertificate) {
+            Write-Output "::error::$($exe.Name) carries no signature; did signing actually run?"
             exit 1
-          fi
-          ls -la signed/
+          }
+
+          Write-Output "signer: $($sig.SignerCertificate.Subject)"
+          Write-Output "issuer: $($sig.SignerCertificate.Issuer)"
+          Write-Output "status: $($sig.Status)"
+          if ($sig.Status -ne 'Valid') {
+            Write-Output "::warning::signature is present but does not validate on this runner ($($sig.Status)). Expected while signing with a test certificate."
+          }
+          Get-ChildItem signed
 
       - name: Upload the signed installer
         uses: actions/upload-artifact@v4
