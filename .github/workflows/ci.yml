@@ -278,12 +278,17 @@ jobs:
             test-results
           retention-days: 7
 
-  # The desktop shell, built the way a Linux user would get it. Nothing else in CI compiles this
-  # crate: the extension and mobile builds do not touch it, and the macOS release is produced on a
-  # maintainer's machine, so without this job a Linux-only break (a keyring backend that does not
+  # The desktop shell, compiled on Linux to prove it still compiles on Linux. Nothing else in CI
+  # touches this crate: the extension and mobile builds do not, and the macOS release is produced on
+  # a maintainer's machine, so without this job a Linux-only break (a keyring backend that does not
   # exist there, a system dep that was never declared) is invisible until someone tries to build a
   # .deb. It also runs the crate's own tests, which cover the credential store and the backup
   # signing that the desktop alone uses.
+  #
+  # NOTHING HERE IS RELEASED. The artifacts a user installs are built in a Debian container on the
+  # maintainer's machine (scripts/build-linux.ts), which is what sets the glibc floor and which
+  # webkit2gtk the AppImage carries. This runner is Ubuntu and its bundles are thrown away, so
+  # treat a green job as "it builds", never as "this is what ships".
   desktop-linux:
     name: Desktop (Linux .deb)
     runs-on: ubuntu-latest
@@ -338,6 +343,30 @@ jobs:
 
       - name: Show what was produced
         run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/
+
+      # The AppImage carries the build host's libraries, and three of them decide whether it starts
+      # on a machine that is not the builder: a bundled libwayland-client is a blank window on any
+      # current Mesa (issue #100), and a missing libharfbuzz is a dead process on an older host.
+      # scripts/appimage-portability.ts fixes all three after `tauri build`; this asserts it ran, so
+      # that a Tauri upgrade quietly changing the bundle is a red job rather than a broken release.
+      - name: Assert the AppImage bundles what it should
+        run: |
+          set -euo pipefail
+          appdir="$(echo packages/platform-desktop/src-tauri/target/release/bundle/appimage/*.AppDir)"
+          # Named separately: an unbuilt AppImage leaves nothing to search, and every check below
+          # would pass by finding nothing rather than by the bundle being right.
+          [ -d "$appdir" ] || { echo "::error::no AppDir at $appdir"; exit 1; }
+          for banned in libwayland-client.so.0 libcups.so.2; do
+            if find "$appdir" -name "$banned" | grep -q .; then
+              echo "::error::$appdir still bundles $banned"
+              exit 1
+            fi
+          done
+          if ! find "$appdir" -name libharfbuzz.so.0 | grep -q .; then
+            echo "::error::$appdir does not bundle libharfbuzz.so.0"
+            exit 1
+          fi
+          echo "ok: libwayland-client and libcups are out, libharfbuzz is in"
 
   desktop-windows:
     name: Desktop (Windows installer)
