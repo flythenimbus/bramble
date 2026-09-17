@@ -495,6 +495,33 @@ mod tests_common {
         );
     }
 
+    /// hooks.nsh mirrors this table by hand.
+    #[test]
+    #[cfg(windows)]
+    fn the_uninstaller_knows_every_key_we_write() {
+        let hooks = include_str!("../windows/hooks.nsh");
+        for (name, _, key) in BROWSERS {
+            let expected = format!(r#"{key}\NativeMessagingHosts\{HOST_NAME}"#);
+            assert!(
+                hooks.contains(&expected),
+                "hooks.nsh has no cleanup for {name}'s registry key ({expected})"
+            );
+        }
+    }
+
+    /// The purge line names an NSIS path that fails silently on a missing file, so pin it
+    /// against the crate name.
+    #[test]
+    fn the_purge_command_names_the_binary_the_installer_installs() {
+        let hooks = include_str!("../windows/hooks.nsh");
+        let expected =
+            format!(r#"nsExec::Exec '"$INSTDIR\{}.exe" --purge-secrets'"#, env!("CARGO_PKG_NAME"));
+        assert!(
+            hooks.contains(&expected),
+            "hooks.nsh purges through `{expected}`, which is not what the installer installs"
+        );
+    }
+
     #[test]
     fn every_browser_directory_is_a_relative_path() {
         // A leading slash would make `root.join(..)` discard the root, which in a test writes

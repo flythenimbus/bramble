@@ -371,3 +371,80 @@ mod tests {
         );
     }
 }
+
+/// The real Credential Manager and `purge_all`, which the cache-stubbed tests never touch.
+#[cfg(all(test, windows))]
+mod tests_windows {
+    use super::*;
+
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        crate::pairing::test_lock()
+    }
+
+    fn our_targets() -> Vec<String> {
+        use windows_sys::Win32::Security::Credentials::{CredEnumerateW, CredFree, CREDENTIALW};
+
+        let filter: Vec<u16> = format!("*.{SERVICE}\0").encode_utf16().collect();
+        let mut count: u32 = 0;
+        let mut creds: *mut *mut CREDENTIALW = std::ptr::null_mut();
+        // SAFETY: as in `purge_all`.
+        if unsafe { CredEnumerateW(filter.as_ptr(), 0, &mut count, &mut creds) } == 0 {
+            return Vec::new();
+        }
+        let mut names = Vec::with_capacity(count as usize);
+        for i in 0..count as isize {
+            // SAFETY: `count` valid pointers, NUL-terminated strings owned by the buffer.
+            let target = unsafe { (**creds.offset(i)).TargetName };
+            if !target.is_null() {
+                let wide = unsafe { widestring::U16CString::from_ptr_str(target) };
+                names.push(wide.to_string_lossy());
+            }
+        }
+        // SAFETY: the enumerated buffer, freed once.
+        unsafe { CredFree(creds.cast()) };
+        names
+    }
+
+    const TEST_PREFIX: &str = "purge-test-";
+
+    #[test]
+    fn the_real_store_round_trips_and_purge_takes_everything() {
+        let _g = lock();
+
+        // Never purge a store holding real credentials; our own leftover litter is excepted.
+        let foreign: Vec<_> = our_targets()
+            .into_iter()
+            .filter(|t| !t.starts_with(TEST_PREFIX))
+            .collect();
+        if !foreign.is_empty() {
+            eprintln!(
+                "secure_store: {} real credential(s) present; skipping the purge test",
+                foreign.len()
+            );
+            return;
+        }
+
+        let tag = format!("{TEST_PREFIX}{}", std::process::id());
+        let accounts = [format!("{tag}-1"), format!("{tag}-2"), format!("{tag}-3")];
+        for account in &accounts {
+            let entry = entry_for(Tier::Os, account).expect("the store builds an entry");
+            entry
+                .set_password("bramble-test-secret")
+                .expect("the store takes a write");
+        }
+
+        let entry = entry_for(Tier::Os, &accounts[0]).unwrap();
+        assert_eq!(
+            entry.get_password().expect("the store reads back"),
+            "bramble-test-secret"
+        );
+
+        let deleted = purge_all();
+        assert!(deleted >= accounts.len() as usize, "purge deleted {deleted}");
+        assert!(
+            our_targets().is_empty(),
+            "leftover credentials after purge: {:?}",
+            our_targets()
+        );
+    }
+}

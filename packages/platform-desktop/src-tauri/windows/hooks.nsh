@@ -37,7 +37,8 @@ Var BramblePurgeData
     ; The app deletes its own credentials: their names include vault and target ids that only it
     ; can enumerate. Windowless, and its exit code is ignored on purpose, since a credential that
     ; will not delete is not a reason to fail an uninstall.
-    nsExec::Exec '"$INSTDIR\Bramble.exe" --purge-secrets'
+    ; Binary name is the crate's (CARGO_PKG_NAME), not productName; manifest.rs pins the two.
+    nsExec::Exec '"$INSTDIR\bramble-desktop.exe" --purge-secrets'
 
   keep_data:
 !macroend
