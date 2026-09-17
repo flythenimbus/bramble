@@ -6,6 +6,8 @@ import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { isLogin, useVault } from "../../hooks/useVault";
 import { allTags } from "../../vault/tags";
+import { ReviewNudgeCard } from "../components/ReviewNudgeCard";
+import { useReviewNudge } from "../hooks/useReviewNudge";
 import { toListItem } from "../screens/VaultHome/list-item";
 import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
 import { DEFAULT_SEARCH, type VaultSearch } from "../screens/VaultHome/vault-search";
@@ -52,6 +54,11 @@ export function VaultHomeRoute() {
 		};
 	}, [shell, entries]);
 
+	// The store-review ask. Called unconditionally (it counts sessions whether or not it ever
+	// asks) and usually null. Entries are the whole vault, archived included: an archived entry
+	// is still one this person put there, which is all the signal is measuring.
+	const reviewNudge = useReviewNudge(entries.length);
+
 	// The vault's tag vocabulary, for the search bar's `#` suggestions. Taken from ALL
 	// entries, archived included: an archived entry is still tagged, and the archive view
 	// shares the same search box.
@@ -95,6 +102,7 @@ export function VaultHomeRoute() {
 			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
+			reviewNudge={reviewNudge ? <ReviewNudgeCard nudge={reviewNudge} /> : undefined}
 		/>
 	);
 }

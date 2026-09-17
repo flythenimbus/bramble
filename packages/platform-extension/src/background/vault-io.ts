@@ -57,8 +57,11 @@ export async function reencryptOuterWithEntryChange(
 	for (const e of payload.entries) await witnessStamp(e.hlc);
 	for (const t of payload.tombstones) await witnessStamp(t.hlc);
 	const mutated = await mutate(payload.entries);
-	// Tombstones pass through untouched; the mutate callbacks only add/replace entries.
-	const json = encodeEntriesPayload({ entries: mutated, tombstones: payload.tombstones });
+	// Spread the payload rather than naming its fields: the mutate callbacks only add and
+	// replace entries, so everything else has to survive verbatim. Naming them dropped
+	// `settings` on every background write, so a corner-prompt save or a passkey create erased
+	// the vault's synced settings, and the next field added here would have gone the same way.
+	const json = encodeEntriesPayload({ ...payload, entries: mutated });
 	const encrypted = await sendToOffscreen({
 		type: "CRYPTO_ENCRYPT_OUTER",
 		vaultId,

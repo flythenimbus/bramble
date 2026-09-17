@@ -338,3 +338,58 @@ jobs:
 
       - name: Show what was produced
         run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/
+
+  desktop-windows:
+    name: Desktop (Windows installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/platform-desktop/src-tauri -> target
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # The reason this job exists. Windows is the only target whose release build is
+      # cross-compiled (scripts/build-windows.ts), so nothing else ever compiles the named-pipe
+      # transport or the registry host-registration on a real MSVC toolchain, and nothing else
+      # runs their tests at all. A green cross-build is not evidence either of them is right.
+      - name: Test the shell
+        run: cd packages/platform-desktop/src-tauri && cargo test
+
+      - name: Generate a throwaway signing key
+        shell: bash
+        run: |
+          pnpm --filter @vault/platform-desktop exec tauri signer generate -w /tmp/ci.key -p ""
+          echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/ci.key)" >> "$GITHUB_ENV"
+          echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> "$GITHUB_ENV"
+
+      # NSIS only, which is what a release ships and therefore the only Windows bundle worth
+      # gating main on. `targets: "all"` has to stay as it is for the .dmg and the Linux
+      # packages, so it is pinned per invocation here exactly as the release build pins it.
+      #
+      # Left unpinned this job built the MSI too, and Tauri builds that one FIRST: WiX's
+      # light.exe failed, and the run ended before the NSIS bundler was reached at all. So the
+      # job was red over an artifact nothing publishes, while never once exercising the
+      # installer that people actually download.
+      - name: Build the installer
+        run: pnpm --filter @vault/platform-desktop exec tauri build --bundles nsis
+
+      - name: Show what was produced
+        shell: bash
+        run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/

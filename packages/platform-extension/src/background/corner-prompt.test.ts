@@ -213,3 +213,23 @@ describe("CORNER_FLUSH_HANDOFF", () => {
 		expect(bg.state.session["cornerPrompt.handoff"]).toBeDefined();
 	});
 });
+
+describe("capture public-suffix isolation", () => {
+	it.each(["com.sg", "com.hk", "b.ck"])(
+		"does not expose a capture to a sibling under %s",
+		async (suffix) => {
+			const bg = await unlocked();
+			await bg.send(
+				{
+					type: "CORNER_PROMPT_CAPTURE",
+					payload: { username: "alice", password: "private-capture" },
+				},
+				pageSender(`dbs.${suffix}`, 5),
+			);
+			const own = await bg.send({ type: "CORNER_PROMPT_QUERY" }, pageSender(`dbs.${suffix}`, 6));
+			expect(own.resp.data).toMatchObject({ password: "private-capture" });
+			const other = await bg.send({ type: "CORNER_PROMPT_QUERY" }, pageSender(`evil.${suffix}`, 7));
+			expect(other.resp).toEqual({ ok: true, data: null });
+		},
+	);
+});

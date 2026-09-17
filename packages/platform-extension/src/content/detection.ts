@@ -367,16 +367,20 @@ export interface PageScan {
 	label(el: HTMLInputElement): string;
 	/** Whether `el` is on screen (CSS only), computed at most once per element per scan. */
 	shown(el: HTMLInputElement): boolean;
+	/**
+	 * Every `<select>` in the tree, collected on first ask and not before.
+	 *
+	 * Selects are read by exactly one rung: the card expiry, which sites ship as a dropdown far
+	 * more often than as a text box. Collecting them with the inputs would put a second
+	 * document-wide query on every parse of every page, and the whole point of the single scan is
+	 * that selector work tracks the number of fields rather than the size of the page.
+	 */
+	selects(): HTMLSelectElement[];
 }
 
 /** Inputs from `list` matching `selector`, order preserved. */
 function pick(list: HTMLInputElement[], selector: string): HTMLInputElement[] {
 	return list.filter((el) => el.matches(selector));
-}
-
-/** First input in `list` matching `selector`, or null. */
-function pickOne(list: HTMLInputElement[], selector: string): HTMLInputElement | null {
-	return list.find((el) => el.matches(selector)) ?? null;
 }
 
 // --- Hidden twin forms -----------------------------------------------------
@@ -412,10 +416,17 @@ function createScan(root: ParentNode = document): PageScan {
 	const inputs = deepQueryAll<HTMLInputElement>("input", root);
 	const labels = new Map<HTMLInputElement, string>();
 	const visible = new Map<HTMLInputElement, boolean>();
+	let selects: HTMLSelectElement[] | null = null;
 	return {
 		doc,
 		inputs,
 		editable: pick(inputs, EDITABLE_INPUT),
+		selects() {
+			if (selects === null) {
+				selects = deepQueryAll<HTMLSelectElement>("select:not([disabled]):not([readonly])", root);
+			}
+			return selects;
+		},
 		label(el) {
 			let text = labels.get(el);
 			if (text === undefined) {
@@ -454,7 +465,10 @@ export function attrHint(el: HTMLInputElement): string {
  * ID/label lookups resolve within the element's own tree (`getRootNode()`), so
  * they work inside a shadow root.
  */
-export function labelText(el: HTMLInputElement, doc: Document = document): string {
+export function labelText(
+	el: HTMLInputElement | HTMLSelectElement,
+	doc: Document = document,
+): string {
 	const parts: string[] = [];
 	const root = el.getRootNode() as Document | ShadowRoot;
 	if (el.id) {
@@ -516,13 +530,16 @@ function findUsernameNearPassword(
 	return bestShown ?? best;
 }
 
+/** A card field that may be typed or chosen: only the expiry is ever a `<select>` in practice. */
+export type CardChoiceField = HTMLInputElement | HTMLSelectElement;
+
 export interface CardFields {
 	number: HTMLInputElement | null;
 	name: HTMLInputElement | null;
 	// Combined MM/YY field; set only when no split month/year pair is present.
 	expCombined: HTMLInputElement | null;
-	expMonth: HTMLInputElement | null;
-	expYear: HTMLInputElement | null;
+	expMonth: CardChoiceField | null;
+	expYear: CardChoiceField | null;
 	cvv: HTMLInputElement | null;
 }
 
@@ -542,13 +559,24 @@ const CC_EXP_RE = /expir(y|ation)/i;
 const CC_EXP_MONTH_RE = /exp.*month|cc.?month|card.*month/i;
 const CC_EXP_YEAR_RE = /exp.*year|cc.?year|card.*year/i;
 // "verification code/number" alone is far more often a 2FA/OTP label than a CVV
-// (e.g. GitHub's 2FA field: label "Enter the verification code"), so the CVV
-// match requires card context (card verification value/code/number, or cvn).
-export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|security.?code|card.?code|card.?verif/i;
+// (e.g. GitHub's 2FA field: label "Enter the verification code"), so the words
+// here name the card themselves (card verification value/code/number, or cvn).
+export const CC_CSC_RE = /\bcvv\b|\bcvc\b|\bcvn\b|\bcsc\b|card.?code|card.?verif/i;
+// "Security code" names the CVV on every checkout and the one-time code on
+// plenty of login pages (Symantec VIP, and the English half of the five
+// translations OTP_HINT_RE already carries). Same two-tier treatment as
+// CC_NUMBER_WEAK_RE: consulted only once the page is recognisably a card form.
+const CC_CSC_WEAK_RE = /security.?code/i;
 
-/** First non-readonly input whose `autocomplete` carries the given `cc-*` token. */
+/**
+ * First non-readonly input whose `autocomplete` carries the given `cc-*` token, preferring one
+ * the user can see. A payment modal ships a full set of cc-* fields per tab (Paymentus: Credit
+ * and Debit) with only the active tab displayed, so first-in-DOM-order lands in whichever tab is
+ * closed: the fill writes into boxes nobody can see. Same rule, and the same reason, as the
+ * hidden-twin handling in detectLoginFields.
+ */
 function ccByToken(scan: PageScan, token: string): HTMLInputElement | null {
-	return pickOne(scan.editable, `input[autocomplete~="${token}"]`);
+	return pickOneShown(scan, scan.editable, `input[autocomplete~="${token}"]`);
 }
 
 /**
@@ -562,7 +590,9 @@ function findByHint(
 	allowPassword = false,
 ): HTMLInputElement | null {
 	const inputs: HTMLInputElement[] = [];
-	for (const el of scan.editable) {
+	// On-screen candidates first, for the same reason ccByToken prefers them: a closed tab of a
+	// payment modal holds a complete second copy of every field.
+	for (const el of shownFirst(scan, scan.editable)) {
 		if (el.type === "hidden" || el.type === "checkbox" || el.type === "radio") continue;
 		if (el.type === "password" && !allowPassword) continue;
 		inputs.push(el);
@@ -595,27 +625,61 @@ function cardContextPresent(partial: Omit<CardFields, "number">, scan: PageScan)
 	return scan.inputs.some((el) => CC_CONTEXT_RE.test(attrHint(el)));
 }
 
+/** Everything a `<select>` says about itself. The input twin is attrHint, which reads a
+ * `placeholder` a select cannot have. */
+function selectHint(el: HTMLSelectElement): string {
+	const aria = el.getAttribute("aria-label") ?? "";
+	return `${el.name} ${el.id} ${el.autocomplete} ${aria} ${labelText(el)}`;
+}
+
+/**
+ * The expiry as a dropdown: `<select autocomplete="cc-exp-month">`, or failing that the same hint
+ * regex the input pass uses. Prefers an on-screen match, for the reason ccByToken does.
+ */
+function ccSelect(scan: PageScan, token: string, re: RegExp): HTMLSelectElement | null {
+	const selects = scan.selects();
+	const tokened = selects.filter((el) => el.matches(`select[autocomplete~="${token}"]`));
+	const found = tokened.length > 0 ? tokened : selects.filter((el) => re.test(selectHint(el)));
+	return found.find((el) => isVisibleCss(el)) ?? found[0] ?? null;
+}
+
 /** Detect credit-card fields, preferring `cc-*` autocomplete tokens over hint regexes. */
 export function detectCardFields(
 	doc: Document = document,
 	scan: PageScan = createScan(doc),
 ): CardFields {
 	const name = ccByToken(scan, "cc-name") ?? findByHint(scan, CC_NAME_RE);
-	const expMonth = ccByToken(scan, "cc-exp-month") ?? findByHint(scan, CC_EXP_MONTH_RE);
-	const expYear = ccByToken(scan, "cc-exp-year") ?? findByHint(scan, CC_EXP_YEAR_RE);
+	const typedMonth = ccByToken(scan, "cc-exp-month") ?? findByHint(scan, CC_EXP_MONTH_RE);
+	const typedYear = ccByToken(scan, "cc-exp-year") ?? findByHint(scan, CC_EXP_YEAR_RE);
+	const strongCvv = ccByToken(scan, "cc-csc") ?? findByHint(scan, CC_CSC_RE, undefined, true);
+	const strongNumber = ccByToken(scan, "cc-number") ?? findByHint(scan, CC_NUMBER_RE);
+	// The expiry is the one card field sites commonly ship as a dropdown (Paymentus:
+	// `<select name="expiryDateMonth">`), and before this it was simply never filled there. Asked
+	// only once the inputs have shown this to be a card form, so a page with no card fields never
+	// collects its selects at all.
+	const cardEvidence = !!(strongNumber || strongCvv || name || typedMonth || typedYear);
+	const expMonth =
+		typedMonth ?? (cardEvidence ? ccSelect(scan, "cc-exp-month", CC_EXP_MONTH_RE) : null);
+	const expYear =
+		typedYear ?? (cardEvidence ? ccSelect(scan, "cc-exp-year", CC_EXP_YEAR_RE) : null);
 	// Combined MM/YY only when there's no split month/year pair.
 	const expCombined =
 		!expMonth && !expYear
 			? (ccByToken(scan, "cc-exp") ?? findByHint(scan, CC_EXP_RE, /month|year/i))
 			: null;
-	const cvv = ccByToken(scan, "cc-csc") ?? findByHint(scan, CC_CSC_RE, undefined, true);
-	const rest = { name, expCombined, expMonth, expYear, cvv };
+	// A detected number is card context in its own right; CC_CONTEXT_RE covers the
+	// rest, so a "Security code" box beside one is the CVV and beside none is 2FA.
+	const partial = { name, expCombined, expMonth, expYear, cvv: null };
+	const cvv =
+		strongCvv ??
+		(strongNumber || cardContextPresent(partial, scan)
+			? findByHint(scan, CC_CSC_WEAK_RE, undefined, true)
+			: null);
+	const rest = { ...partial, cvv };
 	// The weak pass runs last and only in card context, so an unlabelled `name="pan"`
 	// resolves on a PCI capture page without claiming a tax-ID field anywhere else.
 	const number =
-		ccByToken(scan, "cc-number") ??
-		findByHint(scan, CC_NUMBER_RE) ??
-		(cardContextPresent(rest, scan) ? findByHint(scan, CC_NUMBER_WEAK_RE) : null);
+		strongNumber ?? (cardContextPresent(rest, scan) ? findByHint(scan, CC_NUMBER_WEAK_RE) : null);
 	return { number, ...rest };
 }
 
@@ -625,7 +689,7 @@ export function cardFieldsPresent(c: CardFields): boolean {
 }
 
 /** True if `el` is one of the detected card fields. */
-export function isCardField(c: CardFields, el: HTMLInputElement): boolean {
+export function isCardField(c: CardFields, el: CardChoiceField): boolean {
 	return (
 		el === c.number ||
 		el === c.name ||
@@ -648,10 +712,16 @@ export const OTP_HINT_RE = alternation([
 	"mfa",
 	"two.?factor",
 	"authenticator",
+	// Symantec VIP Access: sites name the field for its 6-digit code vip_pin or
+	// vipCode. "VIP" alone is a loyalty tier, so it counts only glued to the code.
+	"vip.?(pin|code|token|access)",
 	"auth.?code",
 	"login.?code",
 	"verif(y|ication).?code",
 	"confirmation.?code",
+	// The CVV claims this one first wherever the page is a card form (CC_CSC_WEAK_RE),
+	// so what reaches here is the 2FA sense the five translations below already cover.
+	"security.?code",
 	"passcode",
 	"6.?digit",
 	// de
@@ -696,6 +766,8 @@ export const OTP_NEGATIVE_RE = alternation([
 	"card",
 	"coupon",
 	"promo",
+	// Ticketing sells "VIP presale codes", the one other thing a vip* field is.
+	"presale",
 	"postal",
 	"\\bzip\\b",
 	"country",

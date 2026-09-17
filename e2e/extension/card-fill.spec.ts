@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, seedExampleCard } from "./helpers";
+import { createVault, openPopup, seedExampleCard, seedSecondCard } from "./helpers";
 
 // Card fill on an ordinary same-document checkout, as opposed to the hosted-fields iframe case
 // in picker-relay.spec.ts. What is driven here needs a real browser: switching cards depends on
@@ -42,20 +42,6 @@ async function serve(page: Page, html: string): Promise<void> {
 				? route.fulfill({ body: html, headers: COEP })
 				: route.fulfill({ status: 200, body: "" }),
 		);
-}
-
-/** A second card, so a pick has something to be switched away from. */
-async function seedSecondCard(popup: Page): Promise<void> {
-	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Payment card/i }).click();
-	await popup.getByLabel("Name", { exact: true }).fill("Travel Mastercard");
-	await popup.getByLabel("Cardholder name", { exact: true }).fill("Alice Example");
-	await popup.getByLabel("Card number", { exact: true }).fill("5555555555554444");
-	await popup.getByLabel("Month (MM)", { exact: true }).fill("11");
-	await popup.getByLabel("Year (YY)", { exact: true }).fill("2032");
-	await popup.getByLabel("CVV", { exact: true }).fill("987");
-	await popup.getByRole("button", { name: /^Save/i }).click();
-	await expect(popup.getByText("Travel Mastercard")).toBeVisible();
 }
 
 /** Open the picker on `selector` and return the host's on-screen box. */

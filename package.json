@@ -3,6 +3,8 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"license": "GPL-3.0-only",
+	"author": "Webvana Inc.",
 	"packageManager": "pnpm@10.33.0",
 	"scripts": {
 		"prepare": "git config core.hooksPath .githooks || true",
@@ -12,6 +14,7 @@
 		"build:macos:aarch64": "node --env-file-if-exists=.env.local scripts/build-macos.ts --aarch64",
 		"build:macos:local-update": "node --env-file-if-exists=.env.local scripts/build-macos.ts --config src-tauri/tauri.local-update.conf.json",
 		"build:linux": "node --env-file-if-exists=.env.local scripts/build-linux.ts",
+		"build:windows": "node --env-file-if-exists=.env.local scripts/build-windows.ts",
 		"publish:apt": "node --env-file-if-exists=.env.local scripts/publish-apt.ts",
 		"updater:smoke": "node scripts/updater-smoke.ts",
 		"spike:aliases": "node --env-file-if-exists=.env.local scripts/alias-spike.ts",

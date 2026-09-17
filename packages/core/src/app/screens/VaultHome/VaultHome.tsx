@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ListChecks, type LucideIcon, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Entry, EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
@@ -63,6 +63,9 @@ interface VaultHomeProps {
 	/** Home stats row: collapsed state + toggle, both persisted in prefs. */
 	statsCollapsed: boolean;
 	onToggleStats: () => void;
+	/** The store-review ask, on the rare turn there is one. A slot rather than a component so the
+	 * list screen keeps knowing nothing about stores; see app/review-nudge.ts. */
+	reviewNudge?: ReactNode;
 }
 
 /** Vault list screen with search, password-health stats, and the entry rows. */
@@ -80,6 +83,7 @@ export function VaultHome({
 	tags,
 	statsCollapsed,
 	onToggleStats,
+	reviewNudge,
 }: VaultHomeProps) {
 	const { t } = useLingui();
 	const filtered = filterAndSortEntries(items, search, matchedIds);
@@ -289,6 +293,10 @@ export function VaultHome({
 					)}
 				</div>
 			</div>
+
+			{/* Below the list, and never during a bulk selection: mid-cleanup is not the moment, and
+			    the card would push the selection bar's targets around under the cursor. */}
+			{!selectMode && reviewNudge}
 		</main>
 	);
 }

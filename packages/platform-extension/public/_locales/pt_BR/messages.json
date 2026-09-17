@@ -162,5 +162,8 @@
 	"aliasRetry": {
 		"message": "Tentar novamente",
 		"description": "Accessible label for the retry button on a failed email-alias row."
+	},
+	"cardUsedHere": {
+		"message": "Usado aqui"
 	}
 }

@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 import uiSource from "../autofill-ui.ts?raw";
 import { html as uiHtml } from "../autofill-ui-template";
 import aliasSource from "./html/dropdown-alias.ts?raw";
+import itemSource from "./html/dropdown-item.ts?raw";
+import stylesSource from "./html/dropdown-styles.ts?raw";
 import { html as contentHtml } from "./template";
 
 const HOSTILE = [
@@ -86,5 +88,22 @@ describe("the email-alias row is identical in both renderers", () => {
 			expect(src).toContain("tp-alias-busy");
 			expect(src).toContain("tp-alias-error");
 		}
+	});
+});
+
+// The carried-card badge is a third thing living in both renderers. Added to one only it is
+// invisible until a user on a COEP page (or not on one) meets the half that was not updated,
+// and the symptom is subtle: the row order still changes, with nothing saying why.
+describe("the carried-card badge is in both renderers", () => {
+	it("is drawn by the iframe renderer", () => {
+		expect(uiSource).toContain('class="tp-badge"');
+		expect(uiSource).toContain('t("cardUsedHere")');
+		expect(uiSource).toContain(".tp-badge {");
+	});
+
+	it("is drawn by the shadow renderer", () => {
+		expect(itemSource).toContain('class="tp-badge"');
+		expect(itemSource).toContain('t("cardUsedHere")');
+		expect(stylesSource).toContain(".tp-badge {");
 	});
 });

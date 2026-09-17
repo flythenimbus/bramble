@@ -112,8 +112,36 @@ capture frame carries its transport schema in them (`sf.req.card.expiryMonth`,
 `cardScheme`), which is exactly the evidence wanted, and reading them is safe
 precisely because no targeting pass will look at them: `findByHint` skips
 `type=hidden`, so a hidden `expiryDate` names the room without ever becoming a
-fill target. Same two-tier reasoning as `CC_CSC_RE`, which requires card context
-for the opposite reason — "verification code" alone is far more often 2FA.
+fill target.
+
+Two rules keep the card detector out of the wrong copy of a form. Every card rung prefers a
+field that is **on screen**, exactly as the login rungs do: a payment modal ships a complete set
+of `cc-*` fields per tab (Paymentus: Credit and Debit) with only the active one displayed, so
+first-in-DOM-order lands in whichever tab is closed and the fill writes into boxes nobody can
+see. And the picker must never rewrite a `cc-*` token when it anchors to a field
+(`LOAD_BEARING_TOKEN_RE` in `picker.ts`): stripping it off the visible card-number box left the
+hidden tab's copy as the only `cc-number` on the page, which took the anchored field out of the
+model entirely, so the pick was refused as landing on nothing and the field was never offered
+again.
+
+The **expiry** is the one card field that is commonly a `<select>` rather than an input, so
+`ccSelect` looks for `<select autocomplete="cc-exp-month">` (and the same hint regex the input
+pass uses) when the inputs did not already answer. Selects are collected lazily by
+`PageScan.selects()` and only once the inputs have shown the page to be a card form, because
+every other rung works on inputs and a page with no card fields must not pay a second
+document-wide query. How the option is chosen is in [autofill.md](autofill.md).
+
+The CVV has the same two tiers, for the same reason pointing the other way.
+`CC_CSC_RE` holds only names that say card by themselves (`cvv`, `cvc`, `csc`,
+`cvn`, card verification/code), because "verification code" alone is far more
+often 2FA — GitHub's 2FA field is labelled "Enter the verification code". The
+label that actually appears on checkouts, **"Security code"**, is exactly as
+common on a login page: Symantec VIP, banks, and anything else that calls its
+one-time code that. So it lives in `CC_CSC_WEAK_RE` and is consulted only with
+card context behind it — a detected number, another card field, or
+`CC_CONTEXT_RE` — and otherwise falls through to the OTP ladder, which carries
+the same phrase (see below). Before the gate, a lone "Security code" box on a
+2FA page was detected as a CVV: no code fill, and a card offered instead.
 
 ## OTP fields
 
@@ -162,9 +190,17 @@ written is in [autofill.md](autofill.md).
 
 `OTP_HINT_RE` also carries localized terms, and bounds `otp`/`otc`/`totp` on
 letters rather than `\b` so they match inside `idTxtBx_SAOTCC_OTC`, where the
-underscore is a word character and `\b` fails. Android's `StructureParser.kt`
-holds its own copy of these heuristics and is **not** kept in sync
-automatically.
+underscore is a word character and `\b` fails. English "security code" sits there
+alongside its German, French, Spanish, Italian and Swedish equivalents, the card
+detector having had first refusal on the phrase. Product names earn a place when
+they are unambiguous: a Symantec VIP Access field (`vip_pin`, `vipCode`)
+carries no token, no `maxlength` and no `inputmode`, so every structural rung
+misses it and its name is the only thing on it that says one-time code. "VIP"
+alone is a loyalty tier, so the term only counts glued to the code, and
+`presale` joins the negatives for ticketing's "VIP presale code".
+
+Android's `StructureParser.kt` holds its own copy of these heuristics and is
+**not** kept in sync automatically.
 
 Rung 1 is the strongest and also the most brittle, because it rests on a single
 attribute: anything that removes `one-time-code` from a box removes that box from

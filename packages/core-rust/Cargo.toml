@@ -1,6 +1,8 @@
 [package]
 name = "vault-crypto"
 version = "0.0.0"
+authors = ["Webvana Inc."]
+license = "GPL-3.0-only"
 edition = "2021"
 publish = false
 

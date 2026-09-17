@@ -162,7 +162,33 @@ export async function startEnroll(role: EnrollRole, opts: EnrollOptions): Promis
 	let session: MeshSession | null = null;
 	let expiry: ReturnType<typeof setTimeout> | undefined;
 	// The inviter serves one device then stops itself; the joiner is stopped by the host.
-	const handlePeer = makeEnrollHandler(role, opts, () => session?.stop());
+	// Swapping one deadline for the other the moment the code is claimed. Until then the timer
+	// bounds how long the code is CLAIMABLE, which is what it is for. After, it cannot: the
+	// invite is single-use and `consumed` already refuses everyone else, so all the original
+	// timer could still do was shoot down the pairing the user is in the middle of completing.
+	//
+	// Which is exactly what it did. The countdown starts when the code is generated, but the
+	// user then has to carry it to the other device, paste it, and on the browser link type
+	// their master password into a modal before the joiner even dials. Reaching the SAS prompt
+	// with seconds left on a three-minute clock is ordinary, and the expiry fired between the
+	// emoji appearing and the user getting back to this window, which reads as the other device
+	// rejecting them. Re-arming gives the comparison its own full human-scale window, measured
+	// from when there is finally something to compare.
+	const restartAsApprovalDeadline = () => {
+		clearTimeout(expiry);
+		if (role !== "inviter") return;
+		expiry = setTimeout(() => {
+			opts.report("nobody confirmed the code in time: generate a new one to add a device");
+			opts.onInviteExpired?.();
+			session?.stop();
+		}, APPROVAL_WAIT_MS);
+	};
+	const handlePeer = makeEnrollHandler(
+		role,
+		opts,
+		() => session?.stop(),
+		restartAsApprovalDeadline,
+	);
 	session = await startMeshSession({
 		relayUrl: opts.relayUrl,
 		iceUrl: opts.iceUrl,
@@ -222,6 +248,9 @@ export function makeEnrollHandler(
 	role: EnrollRole,
 	opts: EnrollOptions,
 	stop: () => void,
+	/** Inviter: the code has just been claimed and can never be claimed again. See `startEnroll`
+	 * for why that is the moment the deadline has to change rather than keep running. */
+	onConsumed: () => void = () => {},
 ): (peer: PeerSession) => Promise<void> {
 	// Single use, never released: a failure downstream burns the code rather than re-arming it.
 	let consumed = false;
@@ -293,6 +322,7 @@ export function makeEnrollHandler(
 			return;
 		}
 		consumed = true;
+		onConsumed();
 		opts.report("authenticated ✅, identifying the device…");
 		try {
 			await serveJoiner(opts, channel, sess);

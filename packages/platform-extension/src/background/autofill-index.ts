@@ -12,6 +12,7 @@ import { decodeEntriesPayload } from "@core/sync";
 import { parseTotp, totpAt } from "@core/util/totp";
 import { extractHostname } from "@core/vault/autofill-index";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
+import { CryptoDecryptIndexResultSchema } from "../crypto/messages";
 import {
 	type DedupeOutcome,
 	dedupeCapture as dedupeCaptureFn,
@@ -65,6 +66,83 @@ let hydrationInFlight: Readonly<{
 	promise: Promise<boolean>;
 }> | null = null;
 const knownHostnames = new Set<string>();
+/**
+ * The locked-state hint registry is best-effort: cap it so a vault with
+ * thousands of distinct hostnames (or a hostile one) can't grow the SW heap
+ * without bound. Set preserves insertion order, so the oldest-written entry
+ * evicts first.
+ *
+ * Eviction is by write order, not visits: queryResult (the only reader) never
+ * records use, and the bulk writers (disk restore, hydration, SET_INDEX)
+ * rewrite the whole Set in index order, so past the cap the survivors are the
+ * last MAX_KNOWN_HOSTNAMES written in index order. It is not a visit-based LRU.
+ */
+const MAX_KNOWN_HOSTNAMES = 1000;
+
+/**
+ * The card last filled in a tab, so the rest of that page's card boxes default to it.
+ *
+ * A hosted-fields checkout (Shopify, Braintree, Adyen) puts each box in its own cross-origin
+ * frame, and each frame fills only its own inputs: one pick fills the number and the expiry and
+ * CVV frames still come up listing every stored card, top of the list first. That is how a Visa
+ * number can end up beside another card's CVV.
+ *
+ * An ID only, in memory, tab-scoped, and never pushed: it rides the frame's own query response
+ * (the same one already carrying that id in `cards`), so no frame learns anything by not asking
+ * and the "results are never tab-addressed" rule stands. Bound to the unlocked session that
+ * created it, so a lock, a vault switch, or a navigation ends it.
+ */
+const CARD_CARRY_TTL_MS = 5 * 60_000;
+type CardCarry = Readonly<{
+	owner: AutofillSessionOwner;
+	tabId: number;
+	entryId: string;
+	expiresAt: number;
+}>;
+let cardCarry: CardCarry | null = null;
+
+/** Remember a card fill so the tab's other frames can default to it. */
+function rememberCardCarry(kind: FillPayload["kind"], entryId: string, tabId?: number): void {
+	if (kind !== "card" || tabId === undefined) return;
+	const owner = autofillSessionOwner();
+	if (!owner) return;
+	cardCarry = { owner, tabId, entryId, expiresAt: Date.now() + CARD_CARRY_TTL_MS };
+}
+
+/** The carried card for `tabId`, dropping a carry that has expired or outlived its session. */
+function carriedCardId(tabId?: number): string | null {
+	if (!cardCarry) return null;
+	if (Date.now() > cardCarry.expiresAt || !autofillSessionOwnerIsCurrent(cardCarry.owner)) {
+		cardCarry = null;
+		return null;
+	}
+	return tabId !== undefined && cardCarry.tabId === tabId ? cardCarry.entryId : null;
+}
+
+/** A carry belongs to one page in one tab: a navigation or a closed tab ends it. */
+function watchCardCarry(): void {
+	// Optional, like watchActiveTab's listeners: a host without tab events loses the default,
+	// which the TTL and the session check already bound anyway.
+	api.tabs.onUpdated?.addListener((tabId, change) => {
+		if (change.url && cardCarry?.tabId === tabId) cardCarry = null;
+	});
+	api.tabs.onRemoved?.addListener((tabId) => {
+		if (cardCarry?.tabId === tabId) cardCarry = null;
+	});
+}
+watchCardCarry();
+
+function rememberHostname(hostname: string): void {
+	// Delete-then-add de-dupes and moves this hostname to the tail, so among writes it is the
+	// most-recently-written that survives longest. Not a visit-based LRU: readers never call
+	// this, and hydration rewrites the Set in index order (see MAX_KNOWN_HOSTNAMES).
+	knownHostnames.delete(hostname);
+	if (knownHostnames.size >= MAX_KNOWN_HOSTNAMES) {
+		const oldest = knownHostnames.values().next().value;
+		if (oldest !== undefined) knownHostnames.delete(oldest);
+	}
+	knownHostnames.add(hostname);
+}
 
 function sameOwner(left: AutofillSessionOwner, right: AutofillSessionOwner): boolean {
 	return (
@@ -103,7 +181,10 @@ export const indexHydration = (async () => {
 	try {
 		const r = await api.storage.local.get([HOSTNAMES_KEY]);
 		const hostnames = r[HOSTNAMES_KEY];
-		if (Array.isArray(hostnames)) for (const h of hostnames) knownHostnames.add(h);
+		if (Array.isArray(hostnames)) {
+			for (const h of hostnames) if (typeof h === "string") rememberHostname(h);
+			if (hostnames.length > MAX_KNOWN_HOSTNAMES) await persistKnownHostnames();
+		}
 	} catch (e) {
 		console.warn("[bramble:bg] hostname hydration failed", e);
 	}
@@ -122,6 +203,7 @@ async function persistKnownHostnames(): Promise<void> {
 export function clearIndex(): void {
 	autofillIndex = null;
 	cacheRevision++;
+	cardCarry = null;
 }
 
 /** The index entry for `id`, or undefined when the index is absent/missing it. */
@@ -134,7 +216,7 @@ export async function addLoginEntry(entry: LoginIndexEntry): Promise<void> {
 	const index = currentIndex();
 	if (!index) return;
 	index.set(entry.id, entry);
-	for (const h of entry.hostnames) knownHostnames.add(h);
+	for (const h of entry.hostnames) rememberHostname(h);
 	await persistKnownHostnames();
 }
 
@@ -354,19 +436,34 @@ async function hydrateIndexForOwner(
 		// as a bare array threw and left the index null, so every query answered "vault locked".
 		const { entries: encryptedEntries } = decodeEntriesPayload(outerResp.data);
 		const newIndex = new Map<string, IndexEntry>();
-		for (const enc of encryptedEntries) {
-			const dec = await sendToOffscreen({
-				type: "CRYPTO_DECRYPT",
-				vaultId: owner.vaultId,
-				payload: {
+		// One VEK-scoped round-trip, with per-entry failures and explicit identity.
+		const batchResp = await sendToOffscreen({
+			type: "CRYPTO_DECRYPT_INDEX",
+			vaultId: owner.vaultId,
+			payload: {
+				entries: encryptedEntries.map((enc) => ({
+					id: enc.id,
 					ciphertext: enc.ciphertext,
 					iv: enc.iv,
 					wrappedDek: enc.wrappedDek,
 					dekIv: enc.dekIv,
-				},
-			});
-			if (!dec.ok || typeof dec.data !== "string") continue;
-			const data = normalizeEntryData(JSON.parse(dec.data));
+				})),
+			},
+		});
+		if (!batchResp.ok) return false;
+		const parsed = CryptoDecryptIndexResultSchema.safeParse(batchResp.data);
+		if (!parsed.success || parsed.data.length !== encryptedEntries.length) return false;
+		const plaintexts = new Map(parsed.data.map((result) => [result.id, result.plaintext]));
+		if (!encryptedEntries.every((enc) => plaintexts.has(enc.id))) return false;
+		for (const enc of encryptedEntries) {
+			const plaintext = plaintexts.get(enc.id);
+			if (typeof plaintext !== "string") continue;
+			let data: ReturnType<typeof normalizeEntryData>;
+			try {
+				data = normalizeEntryData(JSON.parse(plaintext));
+			} catch {
+				continue;
+			}
 			// Archived entries never reach autofill. This repeats the rule in core's
 			// toAutofillIndex rather than sharing it, because this path projects the
 			// decrypted entry itself instead of consuming that index.
@@ -415,7 +512,7 @@ async function hydrateIndexForOwner(
 			// Notes / ssh-keys are not autofillable.
 		}
 		if (!publishIndex(owner, revision, newIndex)) return false;
-		for (const hostname of discoveredHostnames) knownHostnames.add(hostname);
+		for (const hostname of discoveredHostnames) rememberHostname(hostname);
 		await persistKnownHostnames();
 		// A transition while persisting host hints makes this result unavailable to callers; the
 		// next reader will discard the no-longer-owned plaintext index.
@@ -468,7 +565,7 @@ async function autofillSetIndex(
 		index.set(entry.id, entry);
 		// Register every hostname a login covers so the locked-state hint lights up on all of them.
 		if (entry.type === "login") {
-			for (const h of entry.hostnames) knownHostnames.add(h);
+			for (const h of entry.hostnames) rememberHostname(h);
 		}
 	}
 	cacheRevision++;
@@ -576,6 +673,12 @@ async function autofillQuery(
 		const hasCard = message.hasCard === true;
 		const hasOtp = message.hasOtp === true;
 		const result = queryResult(hostname, hasLogin, hasCard, hasOtp);
+		if (hasCard && !result.locked) {
+			// Only ever an id this very response already carries, so the page learns nothing it
+			// could not read off `cards` itself.
+			const carried = carriedCardId(sender.tab?.id);
+			if (carried && result.cards.some((c) => c.id === carried)) result.carriedCardId = carried;
+		}
 		// Ride along on the query the page already makes: the signup suggestion is drawn the
 		// moment this response lands, so a separate request for it would race the paint and lose.
 		// Offered locked as well as unlocked, since generating needs no vault.
@@ -624,6 +727,7 @@ async function autofillSelect(
 		if (!autofillSessionIsCurrent(generation)) return { ok: false, error: "unavailable" };
 		authorizeFill(message.payload.entryId, hostname);
 		const payload = fetchFill(message.payload.entryId);
+		rememberCardCarry(payload.kind, message.payload.entryId, sender.tab?.id);
 		return {
 			ok: true,
 			data: {

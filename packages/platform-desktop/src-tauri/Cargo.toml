@@ -6,6 +6,7 @@ description = "Bramble password manager"
 # when this is absent, and Debian policy wants a name AND an address). Kept here rather than in
 # publisher so the Windows installer's Manufacturer stays a plain name.
 authors = ["Bramble <flythenimbus@pm.me>"]
+license = "GPL-3.0-only"
 edition = "2021"
 publish = false
 rust-version = "1.77.2"
@@ -85,6 +86,32 @@ keyring = { version = "3.6.3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }
+# The browser link's transport. Windows has no unix sockets, so it is a named pipe, and a pipe
+# handle opened without FILE_FLAG_OVERLAPPED serializes its I/O: a parked read would block the
+# concurrent write that both `socket::serve_session` and the proxy depend on. interprocess is
+# here for that overlapped plumbing and for the pipe's security descriptor, not for its
+# cross-platform surface, which is unused: unix keeps UnixStream. See src/ipc.rs.
+interprocess = "2.4"
+# The native-messaging host registration. Windows browsers are told where the manifest is by a
+# registry value rather than finding the file themselves; see src/manifest.rs.
+winreg = "0.55"
+# Building the pipe's DACL. `SecurityDescriptor::deserialize` takes the SDDL string form, and
+# widestring is how interprocess spells the UTF-16 it wants; the version tracks its own.
+widestring = "1"
+# One SID lookup: the DACL has to name the current user, and the answer has to come from the
+# process token rather than from %USERNAME%, which the parent process chooses.
+#
+# `Win32_Security_Credentials` is for a second, unrelated job: ENUMERATING the credential store,
+# which keyring cannot do. It addresses one credential at a time by name, and an uninstall has to
+# find names it was never told, since a backup secret is keyed by vault and target id. See
+# `secure_store::purge_all`.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Credentials",
+    "Win32_System_Threading",
+] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Both Linux backends, chosen at RUNTIME (see secure_store::tier): Secret Service where a

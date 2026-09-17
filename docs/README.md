@@ -30,6 +30,7 @@ comments point here instead of repeating it.
 | [multiple-vaults.md](multiple-vaults.md) | Plan: parallel vaults on one device (local-id registry, one active vault at a time, active-vault-only sync, a primary vault for autofill/biometric) |
 | [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
 | [p2p-sync-testing.md](p2p-sync-testing.md) | Exercising device sync locally with two browser profiles + the relay |
+| [file-attachments.md](file-attachments.md) | Plan: files in a vault (entry attachments + standalone Files items); why the bytes cannot ride the entries payload, the immutable content-addressed blob store, per-file FEK + STREAM chunked AEAD, and the direct-only transfer that structurally cannot use TURN |
 | [cloud-storage-backups.md](cloud-storage-backups.md) | Planned scheduled encrypted backups: why the provider need not be zero-knowledge, and targeting S3 + WebDAV to cover Nextcloud/self-host and the privacy providers |
 | [synced-settings.md](synced-settings.md) | Plan: a third `PrefScope` (`"synced"`) so a setting crosses devices by one word in the scope table; the stamped map it rides in, why absent must mean "no opinion", and why a locked-readable pref can never be synced |
 | [email-aliases.md](email-aliases.md) | Plan: per-site email aliases from Addy.io and SimpleLogin (Fastmail and Forward Email deferred, both paid-only), why plain `fetch` reaches them from every platform while Firefox Relay and DuckDuckGo cannot be, and why an alias suggestion cannot be pre-generated the way a password is , and a catch-all-domain provider that needs no account and makes the address locally |
@@ -40,6 +41,7 @@ comments point here instead of repeating it.
 | [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
 | [apt-releases.md](apt-releases.md) | The Debian/Ubuntu channel end to end: R2 behind apt.bramble.sh, the container build, signing the index with a YubiKey-held key, and every failure hit getting there |
 | [i18n.md](i18n.md) | Localization across core/iOS/Android/fastlane: Lingui macros, the LLM translation pipeline, commands, and CI/release gates |
+| [store-reviews.md](store-reviews.md) | The review ask: the one object holding every threshold, why iOS gets the OS prompt and no card while the browser gets a card and no API, and what to check before shipping a change |
 
 ## Vocabulary
 

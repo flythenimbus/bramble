@@ -8,6 +8,11 @@ import {
 	useState,
 } from "react";
 import { type AliasConfig, isAliasConfig } from "../aliases";
+import {
+	freshReviewNudgeState,
+	normalizeReviewNudgeState,
+	type ReviewNudgeState,
+} from "../app/review-nudge";
 import { usePlatform } from "../context/PlatformContext";
 import { syncKeyFor } from "../sync/sync-keys";
 import {
@@ -58,6 +63,10 @@ const PREF_GENERATOR = "pref.generator";
 // The email alias provider: which service, its settings, and the API key. Synced, so configuring
 // it on one device reaches the others; see docs/synced-settings.md and docs/email-aliases.md.
 export const PREF_ALIAS_PROVIDER = "pref.aliasProvider";
+// Counters behind the "would you leave a review" ask, and the record of having asked. Device-scoped
+// and deliberately not synced: it describes this install's relationship with its store listing, and
+// a phone and a browser are listed in different stores. See app/review-nudge.ts.
+export const PREF_REVIEW_NUDGE = "pref.reviewNudge";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -102,6 +111,8 @@ export interface Prefs {
 	generator: GeneratorSettings;
 	// The email alias provider for this vault, or null when none is set up.
 	aliasProvider: AliasConfig | null;
+	// Usage counters and ask history behind the store-review nudge.
+	reviewNudge: ReviewNudgeState;
 }
 
 /** Each pref's storage key. A map rather than a ternary chain: the type makes it exhaustive, so
@@ -122,6 +133,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
 	generator: PREF_GENERATOR,
 	aliasProvider: PREF_ALIAS_PROVIDER,
+	reviewNudge: PREF_REVIEW_NUDGE,
 };
 
 /**
@@ -165,6 +177,9 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	// Not device-local: an alias provider is an account-level fact about the person, not about
 	// this browser, and only ever used behind an unlock. See docs/synced-settings.md.
 	aliasProvider: "synced",
+	// Device: which store this install came from is a fact about the app on this machine, and the
+	// counters are of sessions on it. Syncing it would have a phone's usage spend a browser's asks.
+	reviewNudge: "device",
 };
 
 const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
@@ -220,6 +235,10 @@ const DEFAULT_PREFS: Prefs = {
 	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
 	generator: DEFAULT_GENERATOR_SETTINGS,
 	aliasProvider: null,
+	// Evaluated at module load, so the placeholder shown for the few ms before the read lands
+	// describes an install with no history rather than one dating from the epoch, which would
+	// read as old enough to ask immediately.
+	reviewNudge: freshReviewNudgeState(Date.now()),
 };
 
 export interface UsePrefs {
@@ -318,7 +337,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -343,8 +362,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 					adoptLegacy,
 				),
 				storage.getMeta<unknown>(PREF_GENERATOR),
+				storage.getMeta<unknown>(PREF_REVIEW_NUDGE),
 			]);
 			if (cancelled) return;
+			// One `now` for the read: a fresh install's clock starts here rather than at whichever
+			// millisecond each consumer happens to ask.
+			const now = Date.now();
 			// Preserved, not rebuilt: this read covers the storage-backed scopes only, and a synced
 			// pref comes from the vault on its own schedule. Replacing the whole object would drop
 			// whatever the synced overlay had already resolved.
@@ -366,6 +389,9 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				// Field by field: a stored object written by an older or hand-edited build is not
 				// trusted to still match GeneratorSettings.
 				generator: normalizeGeneratorSettings(n),
+				// Same treatment, and for a sharper reason: a junk `installedAt` here is the
+				// difference between asking after a fortnight and asking on day one.
+				reviewNudge: normalizeReviewNudgeState(o, now),
 			}));
 			setLoaded(true);
 		})();

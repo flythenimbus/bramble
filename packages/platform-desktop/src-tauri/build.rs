@@ -13,7 +13,14 @@ use std::{env, fs, path::PathBuf};
 /// the proxy is exactly the step that has to run before its own sidecar can exist.
 fn ensure_proxy_placeholder() {
     let triple = env::var("TARGET").unwrap_or_else(|_| "aarch64-apple-darwin".into());
-    let path = PathBuf::from(format!("binaries/bramble-proxy-{triple}"));
+    // Tauri looks for the sidecar under the name the target would give an executable, so a
+    // Windows build wants the `.exe` and will not accept the bare name.
+    let suffix = if triple.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let path = PathBuf::from(format!("binaries/bramble-proxy-{triple}{suffix}"));
     if path.exists() {
         return;
     }

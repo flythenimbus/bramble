@@ -102,6 +102,88 @@ describe("fillCard — switching cards in the dropdown", () => {
 	});
 });
 
+// Paymentus, and most enterprise checkouts: the expiry is two dropdowns, not two text boxes.
+// Before this the pair was invisible to detection, so the card filled with no expiry at all and
+// the form came back "Expiration Date is missing".
+const MONTHS = `<option value="">MM</option>${Array.from(
+	{ length: 12 },
+	(_, i) =>
+		`<option value="${String(i + 1).padStart(2, "0")}">${String(i + 1).padStart(2, "0")} - Month</option>`,
+).join("")}`;
+
+function loadSelectExpiry(monthOptions = MONTHS, yearOptions?: string): void {
+	const years =
+		yearOptions ??
+		`<option value="">YYYY</option>${[2026, 2029, 2030, 2031].map((y) => `<option value="${y}">${y}</option>`).join("")}`;
+	document.body.innerHTML = `
+		<form>
+			<input name="cardNumber" autocomplete="cc-number" />
+			<input name="cardHolderName" autocomplete="cc-name" />
+			<select name="expiryDateMonth" autocomplete="cc-exp-month">${monthOptions}</select>
+			<select name="expiryDateYear" autocomplete="cc-exp-year">${years}</select>
+			<input name="cvv" type="password" autocomplete="cc-csc" />
+		</form>`;
+	invalidatePageFields();
+}
+
+const chosen = (name: string): string =>
+	document.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!.value;
+
+describe("fillCard — an expiry the form asks you to choose", () => {
+	it("selects the month and year options", () => {
+		loadSelectExpiry();
+		expect(fillCard(MASTERCARD, false)).toBe(true);
+		expect(chosen("expiryDateMonth")).toBe("01");
+		expect(chosen("expiryDateYear")).toBe("2030");
+		expect(field("cardNumber").value).toBe("5555555555554444");
+	});
+
+	it("fires change, which is what the form's own validation listens for", () => {
+		loadSelectExpiry();
+		const month = document.querySelector<HTMLSelectElement>('[name="expiryDateMonth"]')!;
+		const events: string[] = [];
+		for (const type of ["input", "change"]) {
+			month.addEventListener(type, () => events.push(type));
+		}
+		fillCard(MASTERCARD, false);
+		expect(events).toEqual(["input", "change"]);
+	});
+
+	it("takes an unpadded month when that is what the options offer", () => {
+		loadSelectExpiry(
+			`<option value="">MM</option>${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("")}`,
+		);
+		fillCard(VISA, false);
+		expect(chosen("expiryDateMonth")).toBe("7");
+	});
+
+	it("takes a two-digit year when that is what the options offer", () => {
+		loadSelectExpiry(
+			MONTHS,
+			`<option value="">YY</option>${[29, 30, 31].map((y) => `<option value="${y}">${y}</option>`).join("")}`,
+		);
+		fillCard(VISA, false);
+		expect(chosen("expiryDateYear")).toBe("29");
+	});
+
+	it("matches on the option's text when its value is a code of the site's own", () => {
+		loadSelectExpiry(
+			`<option value="">MM</option><option value="m7">07 - July</option><option value="m1">01 - January</option>`,
+		);
+		fillCard(VISA, false);
+		expect(chosen("expiryDateMonth")).toBe("m7");
+	});
+
+	it("leaves a select alone when it offers nothing that matches", () => {
+		// A select holding a value it never offered reads as the placeholder to the form, and the
+		// user is shown no error: worse than not filling it.
+		loadSelectExpiry(MONTHS, `<option value="">YYYY</option><option value="2040">2040</option>`);
+		expect(fillCard(VISA, false)).toBe(true);
+		expect(chosen("expiryDateYear")).toBe("");
+		expect(chosen("expiryDateMonth")).toBe("07");
+	});
+});
+
 describe("fillCustomFields — switching entries", () => {
 	beforeEach(() => {
 		document.body.innerHTML = `

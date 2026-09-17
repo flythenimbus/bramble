@@ -3,6 +3,8 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"license": "GPL-3.0-only",
+	"author": "Webvana Inc.",
 	"scripts": {
 		"dev": "vite",
 		"dev:app": "tauri dev",
@@ -11,7 +13,8 @@
 		"tauri": "tauri",
 		"icons:macos": "node scripts/make-macos-icon.mjs",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run --passWithNoTests"
+		"test": "vitest run --passWithNoTests",
+		"icons:windows": "node scripts/make-windows-icon.mjs"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.11.1",

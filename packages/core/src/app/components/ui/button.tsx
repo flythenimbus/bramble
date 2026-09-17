@@ -2,7 +2,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { forwardRef } from "react";
 import { cn } from "./utils";
 
-const button = cva(
+/** Exported so an anchor can wear the same clothes. An external link has to be a real `<a>` (new
+ * tab, middle-click, copy link address), which rules out the `<button>` below, and hand-rolling
+ * the classes next to it is how two button styles start to drift apart. */
+export const buttonClasses = cva(
 	"inline-flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none",
 	{
 		variants: {
@@ -34,7 +37,7 @@ const button = cva(
 
 export interface ButtonProps
 	extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-		VariantProps<typeof button> {}
+		VariantProps<typeof buttonClasses> {}
 
 /** Shared button. Variant + size cover the common cases; className overrides anything specific. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -45,7 +48,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 		<button
 			ref={ref}
 			type={type}
-			className={cn(button({ variant, size, fullWidth }), className)}
+			className={cn(buttonClasses({ variant, size, fullWidth }), className)}
 			{...props}
 		/>
 	);

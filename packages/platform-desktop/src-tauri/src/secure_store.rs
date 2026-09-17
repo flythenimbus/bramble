@@ -151,10 +151,14 @@ fn cached(account: &str) -> Option<Option<String>> {
 }
 
 fn remember(account: &str, value: Option<String>) {
-    CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(
-        account.to_string(),
-        (value.map(Zeroizing::new), Instant::now()),
-    );
+    CACHE
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(
+            account.to_string(),
+            (value.map(Zeroizing::new), Instant::now()),
+        );
 }
 
 pub fn read(account: &str) -> Res<Option<String>> {
@@ -190,6 +194,64 @@ pub fn erase(account: &str) -> Res<()> {
     }
     remember(account, None);
     Ok(())
+}
+
+// ---- uninstall ----
+
+/// Delete every credential this app owns, for `--purge-secrets` at uninstall time.
+///
+/// Uninstalling a password manager should not leave its secrets behind, and the ones here are
+/// the sharp end of that: this device's sync PRIVATE key, its roster signing key, and one
+/// plaintext S3 or WebDAV credential per configured backup target. Nothing else removes them.
+/// Windows has no "delete the app's data" concept, so the uninstaller has to ask for this by
+/// name.
+///
+/// Enumerated rather than deleted from a list, because a list cannot be right: backup accounts
+/// are keyed by vault and target id, so their names are only known to the store itself. Matching
+/// is on keyring's `{account}.{service}` convention with OUR service as the suffix, which is why
+/// this lives here next to `SERVICE` rather than in the installer, where a rename would silently
+/// stop matching and quietly start leaving secrets behind.
+///
+/// Best effort by design: it runs while an uninstaller waits, and a credential that will not
+/// delete is not a reason to fail an uninstall. Returns how many went.
+#[cfg(windows)]
+pub fn purge_all() -> usize {
+    use windows_sys::Win32::Security::Credentials::{
+        CredDeleteW, CredEnumerateW, CredFree, CREDENTIALW, CRED_TYPE_GENERIC,
+    };
+
+    // `*.app.bramble.desktop`: every credential keyring wrote for us and nothing else. The
+    // filter is applied by the store, so this never walks other applications' secrets.
+    let filter: Vec<u16> = format!("*.{SERVICE}\0").encode_utf16().collect();
+    let mut count: u32 = 0;
+    let mut creds: *mut *mut CREDENTIALW = std::ptr::null_mut();
+
+    // SAFETY: `filter` is a NUL-terminated UTF-16 buffer that outlives the call, and both
+    // out-params are owned here. A failed call leaves them untouched, hence the early return
+    // before anything reads them.
+    let ok = unsafe { CredEnumerateW(filter.as_ptr(), 0, &mut count, &mut creds) };
+    if ok == 0 || creds.is_null() {
+        return 0;
+    }
+
+    let mut deleted = 0usize;
+    for i in 0..count as isize {
+        // SAFETY: CredEnumerateW filled `creds` with `count` valid pointers, and `TargetName`
+        // is a NUL-terminated string owned by that buffer, which is freed once below.
+        let target = unsafe { (**creds.offset(i)).TargetName };
+        if target.is_null() {
+            continue;
+        }
+        if unsafe { CredDeleteW(target, CRED_TYPE_GENERIC, 0) } != 0 {
+            deleted += 1;
+        }
+    }
+
+    // SAFETY: the buffer CredEnumerateW allocated, freed exactly once, after the last read of it.
+    unsafe { CredFree(creds as *mut _) };
+    // The in-process cache would otherwise still hand out what was just deleted.
+    *CACHE.lock().unwrap() = None;
+    deleted
 }
 
 // ---- commands ----

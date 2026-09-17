@@ -15,10 +15,8 @@
 
 use std::{
     collections::HashMap,
-    fs,
     io::{Read, Write},
-    os::unix::net::{UnixListener, UnixStream},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc, Mutex, OnceLock,
@@ -32,7 +30,7 @@ use tauri::{AppHandle, Emitter};
 
 use vault_crypto::handshake;
 
-use crate::{index_store, pairing};
+use crate::{index_store, ipc, pairing};
 
 /// Chrome caps a native-messaging frame at 1 MB. Nothing this protocol carries comes near it,
 /// so a larger frame is a bug or an attempt to exhaust memory, not a big credential.
@@ -41,10 +39,6 @@ const MAX_FRAME: u32 = 1024 * 1024;
 /// Wire protocol version. Present so a future extension talking to an older app fails with
 /// something legible rather than a parse error deep in a handshake.
 const PROTOCOL_VERSION: u32 = 1;
-
-pub fn socket_path(root: &Path) -> PathBuf {
-    root.join(crate::socket_addr::SOCKET_NAME)
-}
 
 /// What a fresh connection wants.
 // `rename_all` on an enum renames the VARIANTS; the fields inside them need
@@ -411,15 +405,13 @@ pub fn link_sync_peers() -> Vec<ConnectedPeer> {
 /// Every answer is gated on the vault being unlocked. That is the single biggest bound on
 /// what a stolen pairing key is worth: it turns permanent silent access into access during
 /// the windows the user was already working in. See docs/desktop-port.md.
-fn serve_session(session_id: u32, stream: &mut UnixStream) -> Result<(), String> {
+fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String> {
     // The browser's static key: stable across reconnects and distinct per install, so it is what
     // the webview addresses a peer by. Two profiles of one browser share an extension id but not
     // this, which is why nothing keys on the id.
     let peer_id = handshake::handshake_remote_static(session_id)
         .map_err(|e| format!("remote static: {e:?}"))?;
-    let mut writer = stream
-        .try_clone()
-        .map_err(|e| format!("clone stream: {e}"))?;
+    let mut writer = ipc::try_clone(stream).map_err(|e| format!("clone stream: {e}"))?;
 
     let (tx, rx) = mpsc::channel::<String>();
     let link = NEXT_LINK.fetch_add(1, Ordering::Relaxed);
@@ -475,7 +467,7 @@ fn read_loop(
     session_id: u32,
     peer_id: &str,
     link: u64,
-    stream: &mut UnixStream,
+    stream: &mut ipc::Stream,
     out: &mpsc::Sender<String>,
 ) -> Result<(), String> {
     loop {
@@ -586,7 +578,7 @@ fn answer_for(request: Request) -> Answer {
     }
 }
 
-fn read_frame(stream: &mut UnixStream) -> std::io::Result<Option<Vec<u8>>> {
+fn read_frame(stream: &mut ipc::Stream) -> std::io::Result<Option<Vec<u8>>> {
     let mut len = [0u8; 4];
     match stream.read_exact(&mut len) {
         Ok(()) => {}
@@ -606,13 +598,13 @@ fn read_frame(stream: &mut UnixStream) -> std::io::Result<Option<Vec<u8>>> {
     Ok(Some(body))
 }
 
-fn write_frame(stream: &mut UnixStream, body: &[u8]) -> std::io::Result<()> {
+fn write_frame(stream: &mut ipc::Stream, body: &[u8]) -> std::io::Result<()> {
     stream.write_all(&(body.len() as u32).to_le_bytes())?;
     stream.write_all(body)?;
     stream.flush()
 }
 
-fn reply(stream: &mut UnixStream, reply: &Reply) -> std::io::Result<()> {
+fn reply(stream: &mut ipc::Stream, reply: &Reply) -> std::io::Result<()> {
     let body = serde_json::to_vec(reply).unwrap_or_else(|_| b"{\"ok\":false}".to_vec());
     write_frame(stream, &body)
 }
@@ -622,7 +614,7 @@ fn reply(stream: &mut UnixStream, reply: &Reply) -> std::io::Result<()> {
 /// Every failure closes the connection rather than explaining itself in detail. A caller that
 /// cannot complete the handshake has no business learning whether it failed because no
 /// pairing was open, because the code was wrong, or because its key is not allowlisted.
-fn serve(root: &Path, stream: &mut UnixStream) -> Result<(), String> {
+fn serve(root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
     let Some(first) = read_frame(stream).map_err(|e| format!("read hello: {e}"))? else {
         return Ok(());
     };
@@ -661,7 +653,7 @@ fn check_version(v: u32) -> Result<(), String> {
 fn drive(
     root: &Path,
     handshake: &pairing::Handshake,
-    stream: &mut UnixStream,
+    stream: &mut ipc::Stream,
 ) -> Result<(), String> {
     loop {
         let Some(frame) = read_frame(stream).map_err(|e| format!("read: {e}"))? else {
@@ -687,23 +679,26 @@ fn drive(
     }
 }
 
-/// Bind the socket and serve connections until the process exits.
+/// Bind the endpoint and serve connections until the process exits.
 ///
-/// Removes a stale socket first: a crash leaves the file behind and bind would otherwise fail
-/// forever. That is safe here because the containing directory is the app's own data dir, so
-/// nothing else has standing to have put a socket there.
+/// What "bind" means, and what keeps other accounts off it, is `ipc`'s business: a socket file
+/// in this directory on unix, a named pipe with a one-SID DACL on Windows.
 pub fn listen(root: &Path) -> std::io::Result<()> {
-    let path = socket_path(root);
-    if path.exists() {
-        fs::remove_file(&path)?;
-    }
-    let listener = UnixListener::bind(&path)?;
-    restrict(&path)?;
+    let listener = ipc::Listener::bind(root)?;
 
     let root = root.to_path_buf();
     thread::spawn(move || {
         for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
+            let mut stream = match stream {
+                Ok(stream) => stream,
+                // Logged rather than swallowed: on Windows this is the only signal that the
+                // pipe is refusing connections, and the symptom on the other side is a browser
+                // link that silently never works.
+                Err(e) => {
+                    log::warn!("browser socket accept: {e}");
+                    continue;
+                }
+            };
             let root = root.clone();
             // One thread per connection. There is at most a browser or two, and a handshake
             // is a handful of round trips, so a runtime would be more machinery than this
@@ -721,28 +716,22 @@ pub fn listen(root: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn restrict(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::net::UnixStream as ClientStream;
     use tempfile::TempDir;
     use vault_crypto::handshake;
 
     /// Drives the extension's half over a real socket. The shipped one runs this same
     /// handshake in WASM through the proxy, so the protocol exercised here is the real one.
     struct Client {
-        stream: ClientStream,
+        stream: ipc::Stream,
     }
 
     impl Client {
         fn connect(root: &Path) -> Self {
             Self {
-                stream: ClientStream::connect(socket_path(root)).expect("connect"),
+                stream: ipc::connect(root).expect("connect"),
             }
         }
 
@@ -909,8 +898,7 @@ mod tests {
         }
 
         fn send(&mut self, body: serde_json::Value) {
-            let sealed =
-                handshake::handshake_encrypt(self.session_id, body.to_string()).unwrap();
+            let sealed = handshake::handshake_encrypt(self.session_id, body.to_string()).unwrap();
             self.client.send(serde_json::json!({ "sealed": sealed }));
         }
 
@@ -928,7 +916,9 @@ mod tests {
         /// connection's own thread, so it is not ordered against the test's next statement.
         fn await_registered(&self, want: bool) {
             for _ in 0..200 {
-                let listed = link_sync_peers().iter().any(|p| p.peer_id == self.public_key);
+                let listed = link_sync_peers()
+                    .iter()
+                    .any(|p| p.peer_id == self.public_key);
                 if listed == want {
                     return;
                 }
@@ -1270,12 +1260,15 @@ mod tests {
         assert!(client.stream.read_exact(&mut len).is_err());
     }
 
+    /// Both of these are about the socket FILE, which only unix has. Windows binds a named
+    /// pipe instead, and what stands in for them there is asserted in `ipc`.
+    #[cfg(unix)]
     #[test]
     fn the_socket_is_owner_only() {
         use std::os::unix::fs::PermissionsExt;
         let _g = pairing::test_lock();
         let dir = started();
-        let mode = fs::metadata(socket_path(dir.path()))
+        let mode = std::fs::metadata(ipc::unix_endpoint(dir.path()))
             .unwrap()
             .permissions()
             .mode();
@@ -1284,12 +1277,13 @@ mod tests {
         assert_eq!(mode & 0o777, 0o600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_stale_socket_file_does_not_block_startup() {
         let _g = pairing::test_lock();
         let dir = tempfile::tempdir().unwrap();
         // What a crash leaves behind.
-        fs::write(socket_path(dir.path()), b"stale").unwrap();
+        std::fs::write(ipc::unix_endpoint(dir.path()), b"stale").unwrap();
         listen(dir.path()).expect("should replace the stale socket");
     }
 }

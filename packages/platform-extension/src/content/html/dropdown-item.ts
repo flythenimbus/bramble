@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { html } from "../template";
 
 /** Uppercase avatar initials: first letter of the first two words, else first two letters. */
@@ -34,11 +35,15 @@ export function dropdownItem({
 	id,
 	name,
 	secondary,
+	carried,
 }: {
 	id: string;
 	name: string;
 	secondary: string;
+	// The card already filled elsewhere on this page. See content.ts `cardRows`.
+	carried?: boolean;
 }) {
+	const badge = carried ? html`<span class="tp-badge">${t("cardUsedHere")}</span>` : "";
 	return html`
     <div class="tp-item" data-entry-id="${id}">
   		<div class="tp-avatar" style="background: ${colorForName(name)};">
@@ -48,6 +53,7 @@ export function dropdownItem({
         <span class="tp-name">${name}</span>
         <span class="tp-user">${secondary}</span>
   		</div>
+      ${[badge]}
    	</div>
   `;
 }

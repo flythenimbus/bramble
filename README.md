@@ -76,7 +76,7 @@ A native app for macOS and Linux, not a browser tab in a costume. It is built wi
 
 Install it the way you install everything else: a signed and notarized `.dmg` or `brew install --cask bramble` on macOS, and an APT repository, an AppImage, `.deb` and `.rpm` packages, or a Nix flake on Linux. The disk image and the AppImage update themselves; the package-manager routes update along with the rest of your system.
 
-What it cannot do yet, and says so rather than failing quietly: Touch ID unlock, passkeys, KeePass import and export, auto-type into native apps, and the SSH agent for the SSH keys the vault already stores. There is no Windows build either, and the browser extension is the answer there for now.
+What it cannot do yet, and says so rather than failing quietly: Touch ID unlock, creating and using passkeys, exporting to KeePass, auto-type into native apps, and the SSH agent for the SSH keys the vault already stores. Importing is a different story and already works: bring in passkeys, or a whole KeePass database, and they land in the vault like anything else.
 
 ## Features
 
@@ -90,6 +90,7 @@ What it cannot do yet, and says so rather than failing quietly: Touch ID unlock,
 - **Export to KeePass** (browser extension). Save your vault as a standard `.kdbx` (KDBX4) under a password you choose for the file, and open it in KeePassXC or any other KeePass app. No lock-in: the door out is as easy as the door in.
 - **Scheduled cloud backups.** Set-and-forget encrypted backups to Dropbox (one-click, extension only), any S3-compatible bucket, or self-hosted WebDAV, each on the cadence you choose. Ciphertext only, so the provider can't read a thing. The browser extension and the desktop app both do this, and the desktop app keeps its schedules even while the vault is locked.
 - **Built-in password generator.** Strong passwords on tap.
+- **Email aliases.** Sign up for things without handing over your real address. Bramble makes a unique forwarding address for each site through [Addy.io](https://addy.io) or [SimpleLogin](https://simplelogin.io), or from a domain you own with no account and no API key at all. If a site later leaks or starts selling your address, you turn off that one alias instead of changing the address you use everywhere. In the browser the suggestion appears in the signup form itself, so it takes one click.
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF, in the browser extension), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
 - **TOTP / 2FA codes.** Paste an `otpauth://` URI or bare secret and Bramble generates the six-digit codes.
@@ -162,7 +163,7 @@ Parts of Bramble were written with AI assistance (Claude Opus), but every line w
 ## What's coming next
 
 - **Cloud backups on mobile.** The browser extension and the desktop app back up to cloud storage on a schedule today; bringing those scheduled uploads to the iOS and Android apps is next (mobile can already restore from a backup file).
-- **Windows.** The desktop app ships for macOS and Linux. Windows is the platform it has not been built for yet.
+- **Windows.** The desktop app ships for macOS and Linux. A Windows build now exists and is in testing, waiting on code signing before release: an unsigned installer makes Windows warn every person who downloads it, which is not the first impression a password manager should make.
 - **Filling in more places from the desktop app.** Auto-type into native apps, so the quick-access panel reaches windows that are not a browser, and an SSH agent that serves the SSH keys your vault already holds.
 
 ## Contributing
@@ -202,5 +203,7 @@ bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t
 ```
 
 ## License
+
+Copyright (C) 2026 Webvana Inc.
 
 Bramble is free software, released under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for the full text. In short: use it, study it, fork it, and share it. If you distribute a modified version, pass the same freedoms along and make your source available under the GPLv3 too.

@@ -67,6 +67,12 @@
 				"section": "utils",
 				"priority": "optional"
 			}
+		},
+		"windows": {
+			"nsis": {
+				"installMode": "currentUser",
+				"installerHooks": "./windows/hooks.nsh"
+			}
 		}
 	},
 	"plugins": {

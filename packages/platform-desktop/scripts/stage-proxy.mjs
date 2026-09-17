@@ -33,16 +33,42 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const tauri = join(here, "..", "src-tauri");
 
-const triple = execFileSync("rustc", ["-vV"], { encoding: "utf8" })
+const host = execFileSync("rustc", ["-vV"], { encoding: "utf8" })
 	.split("\n")
 	.find((line) => line.startsWith("host: "))
 	?.slice("host: ".length)
 	.trim();
 
-if (!triple) {
+if (!host) {
 	console.error("stage-proxy: could not read the host target triple from rustc -vV");
 	process.exit(1);
 }
+
+// The triple being STAGED FOR, which is the host unless something is cross-compiling.
+//
+// From BRAMBLE_TARGET when this runs as Tauri's beforeBuildCommand, which gets no arguments, and
+// from --target when it is run by hand. Set on our own side rather than read out of Tauri's own
+// TAURI_ENV_TARGET_TRIPLE, for the same reason BRAMBLE_UNIVERSAL is: it cannot silently stop
+// being true. Without it a Windows build cut on a Mac stages the Mac proxy under a Windows name,
+// and the bundler is perfectly happy to ship that.
+const flag = process.argv.indexOf("--target");
+const triple = flag === -1 ? (process.env.BRAMBLE_TARGET ?? host) : process.argv[flag + 1];
+
+if (!triple) {
+	console.error("stage-proxy: --target was given with no triple after it");
+	process.exit(1);
+}
+
+const windows = triple.includes("windows");
+// Tauri looks for a sidecar under the name an executable would have on the target, so the
+// staged file keeps the extension even though the bundled one loses the triple.
+const exe = windows ? ".exe" : "";
+
+/**
+ * Cross-compiling to MSVC needs the Windows SDK, which cargo-xwin downloads and puts on the
+ * compiler's include path. On Windows itself the ordinary toolchain is already right.
+ */
+const cargo = windows && host.includes("windows") === false ? ["xwin"] : [];
 
 const staged = join(tauri, "binaries");
 mkdirSync(staged, { recursive: true });
@@ -57,7 +83,7 @@ mkdirSync(staged, { recursive: true });
  * bundle would work but ship a much larger binary with debug info in it.
  */
 function build(forTriple) {
-	const args = ["build", "--release", "--bin", "bramble-proxy"];
+	const args = [...cargo, "build", "--release", "--bin", "bramble-proxy"];
 	if (forTriple) args.push("--target", forTriple);
 	execFileSync("cargo", args, { cwd: tauri, stdio: "inherit" });
 	// cargo writes under target/<triple>/ whenever a target is in play, whether it came from our
@@ -65,7 +91,7 @@ function build(forTriple) {
 	// assuming target/release/ here looked for a binary that was one directory away.
 	const dir = forTriple ?? process.env.CARGO_BUILD_TARGET ?? "";
 	const root = process.env.CARGO_TARGET_DIR ?? join(tauri, "target");
-	return join(root, ...(dir ? [dir] : []), "release", "bramble-proxy");
+	return join(root, ...(dir ? [dir] : []), "release", `bramble-proxy${exe}`);
 }
 
 // Set by build-macos.ts when it passes --target universal-apple-darwin. Read from our own
@@ -101,6 +127,8 @@ if (process.env.BRAMBLE_UNIVERSAL) {
 
 	console.log("stage-proxy: staged bramble-proxy for arm64, x86_64 and universal");
 } else {
-	copyFileSync(build(null), join(staged, `bramble-proxy-${triple}`));
-	console.log(`stage-proxy: staged bramble-proxy-${triple}`);
+	// Only pass --target when it is not the host: a bare `cargo build` keeps Nix's
+	// CARGO_BUILD_TARGET working, and `build()` already reads it back out.
+	copyFileSync(build(triple === host ? null : triple), join(staged, `bramble-proxy-${triple}${exe}`));
+	console.log(`stage-proxy: staged bramble-proxy-${triple}${exe}`);
 }

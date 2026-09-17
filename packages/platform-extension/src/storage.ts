@@ -200,12 +200,16 @@ async function deleteFlatVaultKeys(): Promise<void> {
 /** Snapshot the current bytes at `key` into `backupKey` before an overwrite; clear the backup when there is nothing to snapshot, so we can't later restore over a freshly created vault. */
 async function snapshotBlob(key: string, backupKey: string): Promise<void> {
 	try {
-		const existing = await blobAt(key);
-		if (existing === null) {
+		// Copy the raw base64 string without decoding: blobAt() would inflate it
+		// into bytes (whole vault) only for us to re-encode it here, holding the
+		// string + bytes + re-encoded string at once on every write.
+		const r = await api.storage.local.get(key);
+		const b64 = r[key];
+		if (typeof b64 !== "string" || b64.length === 0) {
 			await api.storage.local.remove(backupKey);
 			return;
 		}
-		await api.storage.local.set({ [backupKey]: bytesToBase64(existing) });
+		await api.storage.local.set({ [backupKey]: b64 });
 	} catch {
 		// Best-effort: failing the write because the backup failed would block all saves.
 	}

@@ -515,6 +515,10 @@ msgstr "Bramble konnte den Schlüsselspeicher dieses Geräts nicht sicher aktual
 msgid "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
 msgstr "Bramble ist auf einen unerwarteten Fehler gestoßen. Ihr Tresor ist sicher – er bleibt auf diesem Gerät verschlüsselt. Versuchen Sie, die Seite neu zu laden; sollte dies weiterhin passieren, öffnen Sie die Anwendung erneut."
 
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#~ msgid "Bramble is built by one person"
+#~ msgstr ""
+
 #: packages/core/src/app/screens/Settings/components/SupportSection.tsx
 msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
 msgstr "Bramble ist kostenlos und Open Source. Falls es für Sie nützlich ist, hilft ein Trinkgeld, es am Laufen zu halten. Scannen Sie einen Code mit Ihrer Wallet oder kopieren Sie die Adresse. Vielen Dank."
@@ -1149,6 +1153,10 @@ msgstr "Verbindung trennen"
 msgid "Disconnect this browser"
 msgstr "Diesen Browser trennen"
 
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Dismiss"
+msgstr "Schließen"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Dog"
 msgstr "Hund"
@@ -1456,6 +1464,10 @@ msgstr "Passwort generieren"
 msgid "Generate strong password"
 msgstr "Starkes Passwort generieren"
 
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#~ msgid "Getting on with Bramble?"
+#~ msgstr "Kommen Sie mit Bramble zurecht?"
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Gift"
 msgstr "Geschenk"
@@ -1656,6 +1668,10 @@ msgstr "Ist dies Ihr Gerät?"
 msgid "It calls itself \"{0}\". Only the symbols above prove who it is."
 msgstr "Es nennt sich \\"
 
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#~ msgid "It's free and open source, and a review is how most people find it. If something is wrong instead, the issue tracker is the place that gets it fixed."
+#~ msgstr "Es ist kostenlos und Open Source, und die meisten Menschen finden es über Bewertungen. Wenn stattdessen etwas nicht stimmt, ist der Issue-Tracker der Ort, an dem es behoben wird."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "item"
 msgstr "Element"
@@ -1759,6 +1775,11 @@ msgstr "Zuletzt synchronisiert {0}"
 #: packages/core/src/app/update-prompt-copy.tsx
 msgid "Later"
 msgstr "Später"
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Leave a review"
+msgstr "Bewertung hinterlassen"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
@@ -1942,6 +1963,10 @@ msgstr "Keine archivierten Einträge gefunden, die Ihrer Suche entsprechen."
 #: packages/core/src/app/entry-modes/login.tsx
 #~ msgid "No authenticator QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
 #~ msgstr "Kein Authentifikator-QR-Code auf der Seite gefunden. Stellen Sie sicher, dass er sichtbar ist, und versuchen Sie es erneut oder fügen Sie den Einrichtungsschlüssel ein."
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#~ msgid "No company and no marketing budget, so reviews are most of how anyone hears about it. If something is broken instead, the issue tracker is faster than a star rating."
+#~ msgstr ""
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "No importable items were found in this database."
@@ -2161,6 +2186,10 @@ msgstr "Optional (z. B. Arbeit)"
 msgid "Or add it to an existing login"
 msgstr "Oder zu einem vorhandenen Login hinzufügen"
 
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Or something honest, either works. Reviews are how people find Bramble."
+msgstr "Oder etwas Ehrliches, beides ist in Ordnung. Über Bewertungen finden Menschen zu Bramble."
+
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Other vendors"
 msgstr "Andere Anbieter"
@@ -2374,6 +2403,10 @@ msgstr "Öffentlicher Schlüssel"
 msgid "Rabbit"
 msgstr "Hase"
 
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Rate Bramble"
+msgstr "Bramble bewerten"
+
 #: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
 msgid "Re-enter the password"
 msgstr "Geben Sie das Passwort erneut ein"
@@ -2489,6 +2522,10 @@ msgstr "Ersetzt den Code"
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Replaces the key everything in this vault is encrypted with. Worth doing if you believe a copy of the vault file has been exposed, since anything taken before cannot be opened with the new key."
 msgstr "Ersetzt den Schlüssel, mit dem alles in diesem Tresor verschlüsselt ist. Es lohnt sich, wenn Sie glauben, dass eine Kopie der Tresordatei offengelegt wurde, da alles, was zuvor entwendet wurde, mit dem neuen Schlüssel nicht geöffnet werden kann."
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Report an issue"
+msgstr "Problem melden"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Require master password to unlock"
@@ -2620,6 +2657,10 @@ msgstr "Speichern Sie Ihren Wiederherstellungscode"
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Saving…"
 msgstr "Speicheren…"
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Say something nice?"
+msgstr "Etwas Nettes sagen?"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Scan authenticator QR code from current webpage"

@@ -73,6 +73,12 @@ export interface QueryResult {
 	logins: MatchSummary[];
 	/** Every stored card (a card isn't tied to a site). */
 	cards: MatchSummary[];
+	/** The card most recently filled in this tab, when it is still one of `cards`. A
+	 * hosted-fields checkout puts each box in its own frame and each frame fills only its
+	 * own inputs, so the frames after the first show this card first and marked: the pick
+	 * that lands there is then the same card rather than whatever heads the list. Extension
+	 * only; always an id the same response already carries. */
+	carriedCardId?: string;
 	/** Hostname-matched logins carrying a TOTP key, offered when the page has a one-time-code field. */
 	otps: MatchSummary[];
 	locked: boolean;

@@ -207,6 +207,20 @@ Settings reverting is annoying. A wrong `buildPayload` is data loss. The plan pu
 that work in its own step for this reason, and the tests below exist to make it
 fail loudly rather than quietly.
 
+**Correction: `buildPayload` was never the single write path.** The extension
+background has a second one, `reencryptOuterWithEntryChange` in
+`background/vault-io.ts`, which decrypts the outer list, hands the entries to a
+mutate callback, and re-encrypts. It named the fields it kept (`entries` and
+`tombstones`), so it dropped `settings` on every background write: a
+corner-prompt save or a passkey create silently erased them. The sentence above
+is why nobody looked there.
+
+It now spreads the payload instead of naming fields, which fixes it and makes
+the site immune to the next field added to the payload. The lesson generalises
+past settings: **"one write path" is a claim to verify with a grep, not to
+assert**, and a writer that reconstructs a payload should carry the parts it does
+not understand rather than enumerate the ones it does.
+
 ### Known rough edges, accepted
 
 - **Old devices silently never receive synced settings**, with no signal to the
