@@ -40,6 +40,7 @@ comments point here instead of repeating it.
 | [windows-release-checklist.md](windows-release-checklist.md) | What CI and a scripted install already cover on Windows, and the human checklist for a release: SmartScreen, tray, autostart, browser pairing, updater, both uninstall answers |
 | [macos-credential-provider.md](macos-credential-provider.md) | Plan: an AutoFill credential provider extension in the macOS app, for Safari and native-app fill; what carries over from iOS, and the packaging and App Group unknowns |
 | [release-signing.md](release-signing.md) | Chrome Web Store packaging + signing |
+| [ci-releases.md](ci-releases.md) | Plan: move every build and signature to GitHub Actions, what it costs in trust, and the phases to get there |
 | [apt-releases.md](apt-releases.md) | The Debian/Ubuntu channel end to end: R2 behind apt.bramble.sh, the container build, signing the index with a YubiKey-held key, and every failure hit getting there |
 | [i18n.md](i18n.md) | Localization across core/iOS/Android/fastlane: Lingui macros, the LLM translation pipeline, commands, and CI/release gates |
 | [store-reviews.md](store-reviews.md) | The review ask: the one object holding every threshold, why iOS gets the OS prompt and no card while the browser gets a card and no API, and what to check before shipping a change |
