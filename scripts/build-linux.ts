@@ -22,7 +22,16 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,6 +76,18 @@ const fail = (message: string): never => {
 const run = (bin: string, argv: string[], env?: NodeJS.ProcessEnv): void => {
 	execFileSync(bin, argv, { stdio: "inherit", cwd: ROOT, env: env ?? process.env });
 };
+
+/** Every file one level under `dir`, sorted: the bundles, not the AppDir tree beside them. */
+const artifacts = (dir: string): string[] =>
+	readdirSync(dir)
+		.flatMap((kind) => {
+			const at = join(dir, kind);
+			if (!statSync(at).isDirectory()) return [at];
+			return readdirSync(at)
+				.map((file) => join(at, file))
+				.filter((file) => statSync(file).isFile());
+		})
+		.sort();
 
 const dockerIssue = dockerProblem();
 if (dockerIssue) fail(`${dockerIssue}\nSee docs/release-signing.md.`);
@@ -232,17 +253,22 @@ for (const arch of arches) {
 	// Into the flat layout the release script and the updater manifest both read: dist-linux/deb,
 	// dist-linux/rpm, dist-linux/appimage, with every architecture's packages side by side. Tauri
 	// puts the architecture in each filename, so nothing collides.
+	//
+	// Copied in-process rather than by shelling out to `cp -a`: these paths come from a directory
+	// listing and from where the repository happens to sit, and interpolating either into a shell
+	// string is a quoting bug waiting for the first filename with something clever in it.
 	for (const kind of readdirSync(stage)) {
 		mkdirSync(join(OUT, kind), { recursive: true });
-		run("bash", [
-			"-lc",
-			`cp -a ${JSON.stringify(join(stage, kind))}/. ${JSON.stringify(join(OUT, kind))}/`,
-		]);
+		cpSync(join(stage, kind), join(OUT, kind), {
+			recursive: true,
+			force: true,
+			preserveTimestamps: true,
+		});
 	}
 }
 
 console.log(`\nartifacts in ${OUT}:`);
-run("bash", ["-lc", `find ${JSON.stringify(OUT)} -maxdepth 2 -type f | sort`]);
+for (const file of artifacts(OUT)) console.log(`  ${file}`);
 if (unsigned) {
 	console.log(
 		"\nsigned with a throwaway key: fine for testing an install, NOT publishable — the updater\n" +
