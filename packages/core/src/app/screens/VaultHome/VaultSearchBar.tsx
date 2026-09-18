@@ -8,7 +8,15 @@ import {
 	Search,
 	Tag,
 } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	type ReactNode,
+	useEffect,
+	useId,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { tagKey } from "../../../vault/tags";
 import { Button } from "../../components/ui/button";
 import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
@@ -104,21 +112,27 @@ export function VaultSearchBar({
 	// Dismissal is per-query: typing again is a new intent, so the menu comes back.
 	const [dismissed, setDismissed] = useState(false);
 
-	const typeOptions: { value: TypeFilter; label: string }[] = [
-		{ value: "all", label: t`All` },
-		{ value: "login", label: t`Logins` },
-		{ value: "card", label: t`Cards` },
-		{ value: "note", label: t`Notes` },
-		{ value: "ssh-key", label: t`Keys` },
-	];
+	const typeOptions = useMemo<{ value: TypeFilter; label: string }[]>(
+		() => [
+			{ value: "all", label: t`All` },
+			{ value: "login", label: t`Logins` },
+			{ value: "card", label: t`Cards` },
+			{ value: "note", label: t`Notes` },
+			{ value: "ssh-key", label: t`Keys` },
+		],
+		[t],
+	);
 
-	const sortOptions: { value: SortKey; label: string }[] = [
-		{ value: "name-asc", label: t`Name A-Z` },
-		{ value: "name-desc", label: t`Name Z-A` },
-		{ value: "recent-used", label: t`Recently used` },
-		{ value: "recent-added", label: t`Recently added` },
-		{ value: "recent-updated", label: t`Recently updated` },
-	];
+	const sortOptions = useMemo<{ value: SortKey; label: string }[]>(
+		() => [
+			{ value: "name-asc", label: t`Name A-Z` },
+			{ value: "name-desc", label: t`Name Z-A` },
+			{ value: "recent-used", label: t`Recently used` },
+			{ value: "recent-added", label: t`Recently added` },
+			{ value: "recent-updated", label: t`Recently updated` },
+		],
+		[t],
+	);
 
 	// The chips only ever scroll on a narrow desktop window or a long-worded
 	// locale, and a chip scrolled out of sight reads as no filter at all.
@@ -132,8 +146,11 @@ export function VaultSearchBar({
 	// Only while the caret is inside a `#` token, and only tags that extend it. A trailing
 	// space ends the token, so the list clears once the tag is committed.
 	const fragment = trailingTagFragment(search.q);
-	const tagSuggestions =
-		fragment === null ? [] : tags.filter((tag) => tagKey(tag).startsWith(fragment)).slice(0, 8);
+	const tagSuggestions = useMemo(
+		() =>
+			fragment === null ? [] : tags.filter((tag) => tagKey(tag).startsWith(fragment)).slice(0, 8),
+		[fragment, tags],
+	);
 	const menuOpen = tagSuggestions.length > 0 && !dismissed;
 
 	// Escape and an outside click put the menu away without touching the query, so a user

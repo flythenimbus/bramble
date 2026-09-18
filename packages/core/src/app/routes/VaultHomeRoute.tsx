@@ -43,13 +43,16 @@ export function VaultHomeRoute() {
 			.filter((e) => e.archivedAt === undefined)
 			.map((e) => ({ id: e.id, urls: e.urls, subdomainMatch: e.subdomainMatch }));
 		if (logins.length === 0) {
-			setMatchedIds(new Set());
+			setMatchedIds((prev) => (prev.size === 0 ? prev : new Set()));
 			return;
 		}
 		shell
 			.matchCurrentTab(logins)
 			.then((ids) => {
-				if (!cancelled) setMatchedIds(new Set(ids));
+				if (!cancelled)
+					setMatchedIds((prev) =>
+						prev.size === ids.length && ids.every((id) => prev.has(id)) ? prev : new Set(ids),
+					);
 			})
 			.catch(() => {});
 		return () => {
