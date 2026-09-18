@@ -304,8 +304,10 @@ and adds `NativeCrypto.swift` + `AutofillBridge.swift` to the App). Re-run it af
 distribution IPA to `~/Desktop` with no credentials. Both run the Capacitor pre-chain first
 (`core:build` + `ffi:build:ios` + `cap sync`). The lanes live in the **repo-root** `fastlane/` (shared
 with the Android store metadata, which fastlane's supply layout puts there), so run them from the repo
-root. Secrets live in `<repo root>/fastlane/.env` + `AuthKey.p8`
-(gitignored; see `.env.example`). **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
+root. The App Store Connect key is age-encrypted at
+`~/.config/bramble/asc-api-key.age` and unwrapped per run with a YubiKey PIN + touch (see
+`docs/release-signing.md`); `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_CONTENT` in the environment
+override it, which is the seam CI would use. **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
 (`packages/platform-mobile/ios/DerivedData`, gitignored) because Xcode's default DerivedData here is the
 external Transcend volume, which EPERMs the SPM checkout cache and fails `build_app` with "Could not
 resolve package dependencies" (quirks 3-6). That pin used to be `/tmp`, but macOS prunes `/tmp` after

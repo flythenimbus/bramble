@@ -1283,9 +1283,10 @@ Lingui throws rather than falling back, and a thrown error there means no dialog
 **Notarization** reuses the App Store Connect API key the iOS release already has. Apple takes
 either that or an Apple ID with an app-specific password; the key is the better credential, since
 it is scoped, separately revocable, and not one that also opens the account. `build-macos.ts`
-reads `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_PATH` from `fastlane/.env` and maps them to the
-`APPLE_API_*` names Tauri expects, rather than having the issuer ID written down twice; explicit
-`APPLE_*` in the environment still wins, for CI. Without them the build succeeds and produces
+unwraps the same age + YubiKey blob the iOS lanes use (`scripts/asc-api-key.ts`) and maps it to the
+`APPLE_API_*` names Tauri expects, rather than a second copy of the credential per tool; explicit
+`APPLE_*` in the environment still wins, for CI. notarytool takes a path rather than a value, so
+this one credential does reach a file: 0600 in a scratch dir, removed when the build ends. Without them the build succeeds and produces
 something Gatekeeper blocks everywhere but the machine that built it, so the script says so.
 
 ### Testing an update without publishing one

@@ -6,7 +6,10 @@
 # Both run the Capacitor pre-chain first (web bundle + native FFI libs + cap sync) so
 # the archive is always current. Signing is automatic + -allowProvisioningUpdates, which
 # already registers the app + AutoFillProbe extension entitlements (app group + the
-# shared keychain group). Secrets live in fastlane/.env (gitignored); see .env.example.
+# shared keychain group). The App Store Connect key is age-encrypted and unwrapped per run by
+# scripts/asc-api-key.ts (YubiKey PIN + touch); see docs/release-signing.md.
+
+require "json"
 
 default_platform(:ios)
 
@@ -53,13 +56,23 @@ def stable_export_options
   { manageAppVersionAndBuildNumber: false }
 end
 
-# App Store Connect API key, shared by the TestFlight + metadata lanes. Reads the key id /
-# issuer / .p8 path from fastlane/.env (gitignored; see .env.example).
+# App Store Connect API key, shared by the TestFlight + metadata lanes.
+#
+# scripts/asc-api-key.ts unwraps it from the age + YubiKey blob (PIN + touch), or hands back
+# ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_CONTENT when those are already set, which is how CI passes
+# it. Backticks rather than fastlane's `sh`, which echoes what it runs and what it prints: this
+# output IS the private key. `key_content` rather than `key_filepath` for the same reason, so a
+# decrypted .p8 never has to exist on disk.
 def asc_api_key
+  raw = `node #{REPO}/scripts/asc-api-key.ts`
+  unless $?.success?
+    UI.user_error!("no App Store Connect API key; see docs/release-signing.md (iOS section)")
+  end
+  creds = JSON.parse(raw)
   app_store_connect_api_key(
-    key_id: ENV.fetch("ASC_KEY_ID"),
-    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
-    key_filepath: ENV.fetch("ASC_KEY_PATH", "./fastlane/AuthKey.p8"),
+    key_id: creds.fetch("keyId"),
+    issuer_id: creds.fetch("issuerId"),
+    key_content: creds.fetch("key"),
   )
 end
 

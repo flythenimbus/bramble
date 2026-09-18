@@ -46,6 +46,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { ASC_KEY_AGE } from "./asc-api-key.ts";
 import { signingKey } from "./desktop-signing-key.ts";
 import { composeNotes } from "./release-notes.mjs";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
@@ -646,15 +647,19 @@ async function releaseIos(version: string, ipaOnly: boolean) {
 
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 
-	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane reads from
-	// fastlane/.env. The lanes live in the REPO-ROOT fastlane/ (shared with the Android store
-	// metadata, which fastlane's supply layout puts there). The actual signing is Xcode-automatic
+	// Prereqs (fail fast): fastlane + the App Store Connect API key the `beta` lane uploads with.
+	// The lanes live in the REPO-ROOT fastlane/ (shared with the Android store metadata, which
+	// fastlane's supply layout puts there). The actual signing is Xcode-automatic
 	// (-allowProvisioningUpdates), so unlike Android there's no keystore to decrypt here.
+	//
+	// Presence only, not a decrypt: this runs before the gate, and asking for a touch here would
+	// ask for a second one later when fastlane actually unwraps it.
 	if (!has("fastlane"))
 		fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");
-	if (!existsSync("fastlane/.env"))
+	if (!existsSync(ASC_KEY_AGE) && !process.env.ASC_KEY_CONTENT)
 		fail(
-			"missing fastlane/.env (ASC_KEY_ID/ASC_ISSUER_ID + AuthKey.p8); copy fastlane/.env.example",
+			`no App Store Connect key at ${ASC_KEY_AGE}. First time? node scripts/asc-api-key.ts --wrap\n` +
+				"See docs/release-signing.md (iOS).",
 		);
 
 	if (!ipaOnly) gate(); // a dry run only tests build + signing, so skip the slow CI gate
@@ -794,12 +799,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	// A desktop release ships Linux too, built in a container so one machine can cut the whole
 	// thing. Checked here rather than an hour later, after the gate and a notarized macOS build.
 	if (!resume && process.platform === "darwin") requireBins(["docker"], "docs/desktop-port.md");
-	if (
-		!resume &&
-		!existsSync("fastlane/AuthKey.p8") &&
-		!process.env.APPLE_API_KEY &&
-		!process.env.APPLE_ID
-	)
+	if (!resume && !existsSync(ASC_KEY_AGE) && !process.env.APPLE_API_KEY && !process.env.APPLE_ID)
 		fail(
 			"no notarization credentials; a released build must be notarized or Gatekeeper blocks it. See docs/release-signing.md.",
 		);

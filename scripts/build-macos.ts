@@ -18,10 +18,12 @@
 // a copy left in a temp file is a copy someone could ship a malicious update with.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeAppImagePortable } from "./appimage-portability.ts";
+import { type AscApiKey, ascApiKey } from "./asc-api-key.ts";
 import { KEY_AGE, signingKey } from "./desktop-signing-key.ts";
 
 const fail = (message: string): never => {
@@ -34,13 +36,21 @@ const fail = (message: string): never => {
  *
  * Apple takes either an API key or an Apple ID with an app-specific password, and the key is the
  * better one: it is scoped, revocable on its own, and not a credential that also opens the account.
- * Read from fastlane/.env rather than copied into .env.local so there is one issuer ID in the
- * repo; an explicit APPLE_* in the environment still wins, for CI.
+ * It comes from the same age + YubiKey wrapper fastlane reads (scripts/asc-api-key.ts), so there
+ * is one iOS credential on this machine rather than one per tool; an explicit APPLE_* in the
+ * environment still wins, for CI.
+ *
+ * Returns a cleanup for the decrypted key, because unlike the updater key this one cannot stay in
+ * the environment: notarytool takes a path, so it has to reach a file. 0600 inside a 0700 scratch
+ * dir, removed the moment the build is done with it.
  *
  * Absent, the build still succeeds and produces something Gatekeeper blocks on every machine that
  * did not build it, so it says so rather than leaving that to be discovered by a user.
  */
-function loadNotarization(): void {
+function loadNotarization(): (() => void) | undefined {
+	// Notarization is an Apple step; the same script bundles the Linux three on a Debian container
+	// where there is no YubiKey to prompt and nothing to notarize.
+	if (process.platform !== "darwin") return;
 	// The local-update test build never leaves this machine, so notarizing it buys nothing and
 	// costs an upload to Apple, a wait, and a submission record for a build nobody will run.
 	if (process.argv.slice(2).some((a) => a.includes("local-update"))) {
@@ -57,13 +67,17 @@ function loadNotarization(): void {
 		(process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID);
 	if (already) return;
 
-	const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-	const vars = readEnvFile(join(root, "fastlane/.env"));
-	const keyId = vars.ASC_KEY_ID;
-	const issuer = vars.ASC_ISSUER_ID;
-	const keyPath = resolve(root, vars.ASC_KEY_PATH ?? "./fastlane/AuthKey.p8");
-
-	if (!keyId || !issuer || !existsSync(keyPath)) {
+	// Warn rather than fail, as an absent key always has: an unplugged YubiKey should not end a
+	// build that is otherwise fine, it should say what the build will be missing.
+	let key: AscApiKey | undefined;
+	try {
+		key = ascApiKey((message) => {
+			throw new Error(message);
+		});
+	} catch (e) {
+		console.error(`warning: could not read the App Store Connect key: ${(e as Error).message}`);
+	}
+	if (!key) {
 		console.error(
 			"warning: no notarization credentials; the build will be signed but NOT notarized,\n" +
 				"         and Gatekeeper will block it on every machine that did not build it.\n" +
@@ -71,24 +85,17 @@ function loadNotarization(): void {
 		);
 		return;
 	}
-	process.env.APPLE_API_KEY = keyId;
-	process.env.APPLE_API_ISSUER = issuer;
+
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-notarize-"));
+	const keyPath = join(tmp, `AuthKey_${key.keyId}.p8`);
+	writeFileSync(keyPath, key.key, { mode: 0o600 });
+	process.env.APPLE_API_KEY = key.keyId;
+	process.env.APPLE_API_ISSUER = key.issuerId;
 	process.env.APPLE_API_KEY_PATH = keyPath;
+	return () => rmSync(tmp, { recursive: true, force: true });
 }
 
-/** Enough dotenv for fastlane's file: KEY=VALUE, # comments, optional surrounding quotes. */
-function readEnvFile(path: string): Record<string, string> {
-	if (!existsSync(path)) return {};
-	const out: Record<string, string> = {};
-	for (const line of readFileSync(path, "utf8").split("\n")) {
-		const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-		if (!match || line.trimStart().startsWith("#")) continue;
-		out[match[1] as string] = (match[2] as string).trim().replace(/^["']|["']$/g, "");
-	}
-	return out;
-}
-
-loadNotarization();
+const cleanupNotarization = loadNotarization();
 
 const key = signingKey(fail);
 if (!key) {
@@ -132,7 +139,12 @@ const env = {
 	TAURI_SIGNING_PRIVATE_KEY: key,
 	TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 };
-execFileSync("pnpm", args, { stdio: "inherit", env });
+try {
+	execFileSync("pnpm", args, { stdio: "inherit", env });
+} finally {
+	// Whatever the build did, the decrypted key must not outlive it.
+	cleanupNotarization?.();
+}
 
 if (process.platform === "linux") {
 	const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");

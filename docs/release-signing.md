@@ -1,9 +1,10 @@
 # Release signing
 
-Four independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
+Five independent signing setups, all reusing the same age + YubiKey at-rest scheme: the
 **Chrome extension** (Chrome Web Store verified uploads) below, the **Firefox extension**
 ([listed on addons.mozilla.org](#firefox-listed-on-addonsmozillaorg)), the **Android app**
-([GitHub-released APK](#android-github-released-apk)), and the **desktop app**
+([GitHub-released APK](#android-github-released-apk)), the **iOS app**
+([TestFlight and the App Store](#ios-testflight-and-the-app-store)), and the **desktop app**
 ([GitHub-released and self-updating](#desktop-app-github-released-and-self-updating)) at the end.
 The desktop app carries a second, platform-specific signature as well: its Windows installer is
 Authenticode-signed through SignPath
@@ -348,6 +349,72 @@ age -r age1yubikey1NEW -o ~/.config/bramble/android-release-keystore.age /tmp/ks
 rm -P /tmp/ks.jks
 ```
 
+## iOS (TestFlight and the App Store)
+
+Apple holds the signing identity here, unlike everywhere else in this document: the distribution
+certificate lives in the login keychain and Xcode renews it, and what a release actually needs from
+us is an **App Store Connect API key**, which is what authorizes uploading a build to TestFlight and
+editing the listing. So the key is the secret worth protecting, and it rides the same age + YubiKey
+scheme as the other four.
+
+One wrapper holds all three parts, because the key id and issuer id are useless apart and this way
+nothing about an iOS release sits loose in the repo:
+
+```json
+{ "keyId": "...", "issuerId": "...", "key": "-----BEGIN PRIVATE KEY-----\n..." }
+```
+
+`scripts/asc-api-key.ts` is the one unlock, shared by the fastlane lanes and by macOS notarization
+in `build-macos.ts`, which uses the same Apple key. It prints the JSON on stdout for the Fastfile to
+read through backticks rather than fastlane's `sh`, which echoes both what it runs and what it
+prints: that output is a private key.
+
+**It was not always wrapped.** Until this change the key sat at `fastlane/AuthKey.p8` as plaintext
+PEM, mode 0644, with its ids in `fastlane/.env`. Both were gitignored but neither was encrypted, and
+because the container build rsyncs the working tree, every Linux build copied the key into a Docker
+volume as well. iOS was the one release path with a bare private key on disk.
+
+### One-time setup
+
+Needs the YubiKey plugged in. Reuse your existing `age1yubikey1…` recipient; encrypting needs
+neither PIN nor touch, because a recipient is a public key.
+
+```sh
+# 1. Wrap the existing plaintext key (reads fastlane/.env + fastlane/AuthKey.p8).
+node scripts/asc-api-key.ts --wrap
+
+# 2. Check it decrypts. Prompts for the PIN, then a touch.
+node scripts/asc-api-key.ts | head -c 40
+
+# 3. Only then, remove the plaintext.
+rm -P fastlane/AuthKey.p8 fastlane/.env
+```
+
+Losing it is low-stakes: App Store Connect keys are revoked and reissued in Users and Access ->
+Integrations, and nothing users have installed depends on this key. That is the opposite of the
+desktop updater key, and worth remembering before treating them alike.
+
+### Each release
+
+```sh
+pnpm run release ios 1.2.0     # prompts for a touch to decrypt the key, then uploads to TestFlight
+```
+
+`fastlane beta` and `fastlane metadata` both go through the same unlock, so each is one touch.
+
+### Handing it to CI
+
+`ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_CONTENT` in the environment take precedence over the
+wrapper, and no YubiKey is consulted. `ASC_KEY_CONTENT` is the PEM text rather than a path, so a
+runner never has to write the key to disk on our account. That is the seam a GitHub Actions release
+would use, and the trade it makes is explicit: a key in GitHub's secret store is held by GitHub,
+where a key on the YubiKey is held by nobody else at all.
+
+**Least privilege, if you do it.** The `beta` lane passes `skip_waiting_for_build_processing: true`,
+and that is exactly the case where a **Developer**-role key is enough to upload a build. Updating
+build information, managing testers and pushing metadata need **App Manager**. So CI can hold a
+weaker key than this one, and `fastlane metadata` can stay here.
+
 ## Desktop app (GitHub-released and self-updating)
 
 Two different signings, and they protect different things.
@@ -376,7 +443,8 @@ grouped list is kept underneath the summary in a collapsed block, so anything it
 still one click away. No model reachable, or no terminal, falls back to that list unedited.
 
 `pnpm release desktop <version>` requires notarization credentials as well as the signing key; it
-reuses the App Store Connect API key from `fastlane/.env` (see the iOS section). On publish, CI
+reuses the App Store Connect API key the iOS release uses
+([iOS](#ios-testflight-and-the-app-store)). On publish, CI
 re-verifies the archive against the public key compiled into the app
 (`scripts/verify-updater-signature.mjs`), because an archive signed with the wrong key produces a
 release that looks complete and updates nobody.

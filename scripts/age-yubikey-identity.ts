@@ -14,7 +14,8 @@ import { execFileSync } from "node:child_process";
 const SERIAL = process.env.AGE_YUBIKEY_SERIAL;
 const SLOT = process.env.AGE_YUBIKEY_SLOT;
 
-export function yubiKeyIdentity(): string {
+/** The slot these release keys live in, named explicitly when the YubiKey has more than one. */
+function chooseSlot(): { serial: string; slot: string; recipient: string } {
 	const slots = listSlots();
 	if (slots.length === 0)
 		throw new Error(
@@ -36,6 +37,22 @@ export function yubiKeyIdentity(): string {
 			`note: ${slots.length} age slots on this YubiKey; using serial ${chosen.serial}, slot ${chosen.slot}.\n` +
 				"      Set AGE_YUBIKEY_SERIAL / AGE_YUBIKEY_SLOT to choose another.",
 		);
+	return chosen;
+}
+
+/**
+ * The `age1yubikey1…` recipient to encrypt a new secret to, for the same slot that decrypts.
+ * Encrypting needs neither PIN nor touch: it is a public key.
+ */
+export function yubiKeyRecipient(): string {
+	const { serial, slot, recipient } = chooseSlot();
+	if (!recipient)
+		throw new Error(`age-plugin-yubikey listed no recipient for serial ${serial}, slot ${slot}`);
+	return recipient;
+}
+
+export function yubiKeyIdentity(): string {
+	const chosen = chooseSlot();
 
 	const identity = execFileSync(
 		"age-plugin-yubikey",
@@ -48,13 +65,24 @@ export function yubiKeyIdentity(): string {
 	return identity;
 }
 
-function listSlots(): { serial: string; slot: string }[] {
+function listSlots(): { serial: string; slot: string; recipient: string }[] {
 	const listed = execFileSync("age-plugin-yubikey", ["--list"], {
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "ignore"],
 	});
-	return [...listed.matchAll(/Serial:\s*(\d+),\s*Slot:\s*(\d+)/g)].map((m) => ({
+	// Split on the slot headers first, then look inside each block, rather than matching both in
+	// one pass: a slot whose recipient line is missing would drop out of the list entirely, and the
+	// identity lookup would report a YubiKey with no age identity on it.
+	//
+	// The recipient is an unlabelled line of its own under the `#` comments (0.5.1), so it is
+	// matched by shape. The identity stub in the same block is uppercase AGE-PLUGIN-YUBIKEY-, so
+	// there is nothing else here an `age1…` pattern can hit.
+	const blocks = listed.matchAll(
+		/Serial:\s*(\d+),\s*Slot:\s*(\d+)([\s\S]*?)(?=Serial:\s*\d+,\s*Slot:|$)/g,
+	);
+	return [...blocks].map((m) => ({
 		serial: m[1] as string,
 		slot: m[2] as string,
+		recipient: /^\s*(age1\S+)\s*$/m.exec(m[3] as string)?.[1] ?? "",
 	}));
 }
