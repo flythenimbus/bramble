@@ -221,13 +221,19 @@ platform :ios do
     end
 
     next_build = next_build_number
+    # App Store Connect closes a marketing version for new builds once it has shipped, so a one-off
+    # build off a branch sitting at a released version is rejected on upload ("Invalid Pre-Release
+    # Train"). BRAMBLE_IOS_VERSION overrides it for this archive only; a release leaves it unset
+    # and uses what `release ios` committed to the pbxproj.
+    override = ENV["BRAMBLE_IOS_VERSION"].to_s.strip
+    marketing = override.empty? ? "" : " MARKETING_VERSION=#{override}"
     build_app(
       project: PROJECT,
       scheme: "App",
       export_method: "app-store",
       derived_data_path: DERIVED,
       output_directory: BUILD_OUT,
-      xcargs: "CURRENT_PROJECT_VERSION=#{next_build}",
+      xcargs: "CURRENT_PROJECT_VERSION=#{next_build}#{marketing}",
       # gym merges match's mapping into export_options on its own; passed explicitly so the
       # signing inputs are all visible in one place rather than arriving by convention.
       export_options: stable_export_options.merge(
@@ -236,7 +242,7 @@ platform :ios do
       ),
     )
     upload_to_testflight(api_key: key, skip_waiting_for_build_processing: true)
-    UI.success("Uploaded build #{next_build} to TestFlight")
+    UI.success("Uploaded build #{next_build}#{override.empty? ? '' : " (version #{override})"} to TestFlight")
   end
 
   desc "Upload App Store metadata (en-US text only; no binary, no screenshots)"

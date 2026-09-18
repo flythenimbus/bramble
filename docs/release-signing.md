@@ -499,7 +499,14 @@ works the same way in both places. Build numbers are seconds since 2020, so they
 and never collide, and TestFlight happily carries many builds under one marketing version.
 
 - **On a runner:** Actions -> iOS TestFlight -> Run workflow, pick any branch, leave *Build number*
-  blank. It builds whatever `MARKETING_VERSION` that branch already has.
+  blank.
+
+  **Mind the train.** App Store Connect closes a marketing version to new builds once it has
+  shipped, so a build off a branch still sitting at the released version is rejected on upload
+  with `Invalid Pre-Release Train ... is closed for new build submissions`, after the whole build.
+  Put an unreleased version in the *Marketing version* input (the next one, say) and the archive
+  carries it without the repository changing. Leave it blank only while that version is still open
+  on TestFlight.
 - **Here:** `pnpm ios:beta`, which is the same lane the release drives, minus the bump and the tag.
   `pnpm ios:ipa` builds the signed IPA to the Desktop and uploads nothing, which needs no key at
   all.

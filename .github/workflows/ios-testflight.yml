@@ -27,6 +27,11 @@ name: iOS TestFlight
 # `check_only` is the cheap first run: the approval gate, all five secrets, the certificates repo
 # and one live App Store Connect call, in a few minutes and with no build. Worth doing after any
 # credential rotation, rather than discovering it during a release.
+#
+# `version` exists because App Store Connect closes a marketing version once it ships: uploading
+# another build to it is rejected with "Invalid Pre-Release Train ... is closed for new build
+# submissions". A one-off build off a branch whose version has already been released has nowhere
+# to land, so name an unreleased one here and the archive carries it without the repo changing.
 
 on:
   workflow_dispatch:
@@ -39,6 +44,10 @@ on:
         description: "Xcode version to build with"
         required: false
         default: "26.4"
+        type: string
+      version:
+        description: "Marketing version, e.g. 1.17.0 (blank = whatever the ref carries)"
+        required: false
         type: string
       check_only:
         description: "Only check the credentials and signing identities; build nothing"
@@ -153,6 +162,7 @@ jobs:
         if: ${{ !inputs.check_only }}
         env:
           BRAMBLE_IOS_BUILD: ${{ inputs.build }}
+          BRAMBLE_IOS_VERSION: ${{ inputs.version }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
