@@ -43,9 +43,10 @@ export function appIdFromUri(url: string): string | null {
  * scheme. Empty for app URIs, so they stay out of the web match index.
  */
 export function extractHostname(url: string): string {
-	if (isAppUri(url)) return "";
 	try {
-		return new URL(url).hostname;
+		const parsed = new URL(url);
+		if (APP_URI_SCHEMES.has(parsed.protocol.toLowerCase())) return "";
+		return parsed.hostname;
 	} catch {
 		return url;
 	}
