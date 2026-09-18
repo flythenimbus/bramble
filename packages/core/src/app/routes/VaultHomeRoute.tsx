@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { isLogin, useVault } from "../../hooks/useVault";
@@ -17,12 +17,15 @@ export function VaultHomeRoute() {
 	const navigate = useNavigate();
 	// Per-field `??` (not spread): a `.catch`ed param can be present-but-undefined.
 	const raw = useSearch({ from: "/_app/vault" });
-	const search: VaultSearch = {
-		q: raw.q ?? DEFAULT_SEARCH.q,
-		type: raw.type ?? DEFAULT_SEARCH.type,
-		sort: raw.sort ?? DEFAULT_SEARCH.sort,
-		archived: raw.archived ?? DEFAULT_SEARCH.archived,
-	};
+	const search = useMemo<VaultSearch>(
+		() => ({
+			q: raw.q ?? DEFAULT_SEARCH.q,
+			type: raw.type ?? DEFAULT_SEARCH.type,
+			sort: raw.sort ?? DEFAULT_SEARCH.sort,
+			archived: raw.archived ?? DEFAULT_SEARCH.archived,
+		}),
+		[raw.q, raw.type, raw.sort, raw.archived],
+	);
 	const { entries, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
 	const { prefs, update } = usePrefs();
@@ -74,6 +77,16 @@ export function VaultHomeRoute() {
 	const onSearchChange = (patch: Partial<VaultSearch>) =>
 		navigate({ to: "/vault", search: (prev) => ({ ...prev, ...patch }), replace: true });
 
+	const onSelectEntry = useCallback(
+		(entryId: string) => navigate({ to: "/vault/$entryId", params: { entryId } }),
+		[navigate],
+	);
+	const onEditEntry = useCallback(
+		(entryId: string) => navigate({ to: "/vault/$entryId/edit", params: { entryId } }),
+		[navigate],
+	);
+	const onUseEntry = useCallback((entryId: string) => void touchEntry(entryId), [touchEntry]);
+
 	// Until the vault has finished decrypting, `entries` is []; showing VaultHome
 	// here would flash "Your vault is empty" on a large vault. Show a loader instead.
 	if (!ready) {
@@ -94,11 +107,11 @@ export function VaultHomeRoute() {
 			onSearchChange={onSearchChange}
 			matchedIds={matchedIds}
 			onCreate={(type) => navigate({ to: "/vault/new/$type", params: { type } })}
-			onSelectEntry={(entryId) => navigate({ to: "/vault/$entryId", params: { entryId } })}
-			onEditEntry={(entryId) => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
+			onSelectEntry={onSelectEntry}
+			onEditEntry={onEditEntry}
 			onDeleteEntry={deleteEntry}
 			entries={entries}
-			onUseEntry={(entryId) => void touchEntry(entryId)}
+			onUseEntry={onUseEntry}
 			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
