@@ -57,7 +57,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     inherit (finalAttrs) pname version src;
     pnpm = pnpm_10;
     fetcherVersion = 3;
-    hash = "sha256-N09AJYkab+fnGYhLHI0BtCUSNWfdb2NUvACfcCoT0bA=";
+    hash = "sha256-DGpZCPhSMdxljSJwUcqNODBM9s/LiOwLrLbLK2L3cVM=";
   };
 
   postPatch = ''
@@ -88,6 +88,18 @@ rustPlatform.buildRustPackage (finalAttrs: {
     librsvg
     xdotool # the global shortcut
   ];
+
+  preFixup = ''
+    # libappindicator-sys loads AppIndicator dynamically with dlopen(),
+    # so the library must be discoverable at runtime.
+    gappsWrapperArgs+=(
+      --prefix LD_LIBRARY_PATH : "${
+        lib.makeLibraryPath [
+          libayatana-appindicator
+        ]
+      }"
+    )
+  '';
 
   # The crate's own tests need no display and are worth running here, but they are the shell's,
   # not the workspace's: `pnpm test` belongs to CI.
