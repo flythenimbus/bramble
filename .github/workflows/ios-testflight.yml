@@ -23,6 +23,10 @@ name: iOS TestFlight
 # `pnpm run release ios <version> --ci` drives this: it bumps, commits, tags, pushes, then
 # dispatches with the build number it committed. Run it from the Actions tab instead, with the
 # build number left blank, for a one-off TestFlight build off any branch with no version bump.
+#
+# `check_only` is the cheap first run: the approval gate, all five secrets, the certificates repo
+# and one live App Store Connect call, in a few minutes and with no build. Worth doing after any
+# credential rotation, rather than discovering it during a release.
 
 on:
   workflow_dispatch:
@@ -35,6 +39,11 @@ on:
         description: "Xcode version, e.g. 26.4 (blank = the runner's default)"
         required: false
         type: string
+      check_only:
+        description: "Only check the credentials and signing identities; build nothing"
+        required: false
+        default: false
+        type: boolean
 
 # The job needs to read this repository and nothing else. The match repository is reached with its
 # own credential, not with this token.
@@ -72,26 +81,31 @@ jobs:
       # Reads rust-toolchain.toml, the same single source of truth the other jobs use. The iOS
       # targets themselves are added by scripts/build-crypto-ffi.sh.
       - name: Setup Rust
+        if: ${{ !inputs.check_only }}
         uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
 
       - name: Cache Rust deps
+        if: ${{ !inputs.check_only }}
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: packages/core-rust
 
       # The webview half of the shared core still builds through wasm-pack, pinned as in ci.yml.
       - name: Install wasm-pack
+        if: ${{ !inputs.check_only }}
         uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
         with:
           tool: wasm-pack@0.13.1
 
       - name: Install JS deps
+        if: ${{ !inputs.check_only }}
         run: pnpm install --frozen-lockfile
 
       # Named explicitly or not at all. Taking whatever the image happens to default to is how a
       # release quietly changes toolchain between two runs of the same commit; failing with the
       # list is better than drifting.
       - name: Select Xcode
+        if: ${{ !inputs.check_only }}
         env:
           WANT: ${{ inputs.xcode }}
         run: |
@@ -112,10 +126,26 @@ jobs:
           command -v fastlane >/dev/null || brew install fastlane
           fastlane --version | tail -1
 
+      # Everything the job needs that is not this repository: the upload key, and the identities in
+      # the private certificates repo. Shared by the two lanes below, which differ only in whether
+      # they go on to build anything.
+      - name: Check the credentials and identities
+        if: ${{ inputs.check_only }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+        run: fastlane identities
+
       # The lane does the rest: match (readonly) for the identity, the Capacitor pre-chain, the
       # archive, and the upload. BRAMBLE_IOS_BUILD empty means the lane computes a timestamp, which
       # is what a one-off build wants.
       - name: Build and upload to TestFlight
+        if: ${{ !inputs.check_only }}
         env:
           BRAMBLE_IOS_BUILD: ${{ inputs.build }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -132,7 +162,7 @@ jobs:
       # What landed, without opening App Store Connect. Also the one artifact worth keeping: a
       # crash report from TestFlight is unreadable without the dSYMs for that exact build.
       - name: Keep the dSYMs
-        if: success()
+        if: ${{ success() && !inputs.check_only }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dsyms-${{ github.run_id }}

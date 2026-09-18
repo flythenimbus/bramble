@@ -3,6 +3,7 @@
 #   fastlane beta     -> build + upload to TestFlight, auto-bumping the build number
 #   fastlane beta_ci  -> the same, on a runner: match identities, no Xcode login session
 #   fastlane certs    -> create/renew those identities into the private certificates repo
+#   fastlane identities -> CI preflight: check the credentials and profiles, build nothing
 #   fastlane metadata -> upload App Store text metadata (en-US); no binary, no screenshots
 #
 # Both run the Capacitor pre-chain first (web bundle + native FFI libs + cap sync) so
@@ -145,6 +146,40 @@ platform :ios do
     UI.success("Uploaded build #{next_build} to TestFlight")
   end
 
+  # readonly: a runner may USE the certificate and profiles, never create or renew them. Renewal is
+  # a deliberate `fastlane certs` from the maintainer's machine, so an expiring profile surfaces as
+  # a failed release rather than as a runner silently minting an identity against the team's
+  # limited certificate slots.
+  private_lane :fetch_identities do |options|
+    # A throwaway keychain for the imported identity, unlocked for this job only. Without it the
+    # runner's login keychain is locked and codesign fails with a prompt nobody can answer.
+    setup_ci
+    sync_code_signing(
+      type: "appstore",
+      readonly: true,
+      api_key: options[:api_key],
+      storage_mode: "git",
+      git_url: ENV.fetch("MATCH_GIT_URL"),
+      app_identifier: [BUNDLE_ID, PROBE_ID],
+    )
+  end
+
+  desc "CI: check the credentials and signing identities, build nothing"
+  lane :identities do
+    key = asc_api_key
+    fetch_identities(api_key: key)
+    mapping = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING] || {}
+    [BUNDLE_ID, PROBE_ID].each do |bundle|
+      UI.user_error!("no App Store profile for #{bundle}; run `fastlane certs`") unless mapping[bundle]
+      UI.success("#{bundle} -> #{mapping[bundle]}")
+    end
+
+    # One real API call, because everything above this line is a git clone and a decrypt: they
+    # prove the match secrets and say nothing about whether Apple accepts the key.
+    latest = latest_testflight_build_number(api_key: key, app_identifier: BUNDLE_ID, initial_build_number: 0)
+    UI.success("App Store Connect answered: latest TestFlight build is #{latest}")
+  end
+
   desc "Create or renew the signing identities in the private certificates repo"
   lane :certs do
     # The writing half of what beta_ci consumes readonly, and deliberately a local command: this is
@@ -164,23 +199,11 @@ platform :ios do
   desc "CI: build + upload to TestFlight, signing with the match identities"
   lane :beta_ci do
     key = asc_api_key
-    # A throwaway keychain for the imported identity, unlocked for this job only. Without it the
-    # runner's login keychain is locked and codesign fails with a prompt nobody can answer.
-    setup_ci
+    # Credentials first, THEN the twenty-minute pre-chain. Every way this job fails for a reason
+    # that is not the code - an expired profile, a rotated token, a mistyped secret - fails here,
+    # and waiting for a build first only makes the same error cost half an hour.
+    fetch_identities(api_key: key)
     prepare
-
-    # readonly: a runner may USE the certificate and profiles, never create or renew them. Renewal
-    # is a deliberate `fastlane match appstore` from the maintainer's machine, so an expiring
-    # profile surfaces as a failed release rather than as a runner silently minting an identity
-    # against the team's limited certificate slots.
-    sync_code_signing(
-      type: "appstore",
-      readonly: true,
-      api_key: key,
-      storage_mode: "git",
-      git_url: ENV.fetch("MATCH_GIT_URL"),
-      app_identifier: [BUNDLE_ID, PROBE_ID],
-    )
 
     # The project is set to automatic signing, which needs an Xcode account this runner does not
     # have. Both targets are flipped to the profiles match just fetched. This edits the pbxproj of
