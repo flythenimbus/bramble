@@ -397,23 +397,101 @@ desktop updater key, and worth remembering before treating them alike.
 ### Each release
 
 ```sh
-pnpm run release ios 1.2.0     # prompts for a touch to decrypt the key, then uploads to TestFlight
+pnpm run release ios 1.2.0           # builds here: one touch to decrypt the key, then TestFlight
+pnpm run release ios 1.2.0 --ci      # builds on a runner instead; see below
 ```
 
 `fastlane beta` and `fastlane metadata` both go through the same unlock, so each is one touch.
+App Store submission stays manual in App Store Connect either way.
 
-### Handing it to CI
+### Releasing from a runner
 
-`ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_CONTENT` in the environment take precedence over the
-wrapper, and no YubiKey is consulted. `ASC_KEY_CONTENT` is the PEM text rather than a path, so a
-runner never has to write the key to disk on our account. That is the seam a GitHub Actions release
-would use, and the trade it makes is explicit: a key in GitHub's secret store is held by GitHub,
-where a key on the YubiKey is held by nobody else at all.
+`pnpm run release ios 1.2.0 --ci` bumps, commits, tags and pushes here, then dispatches
+`.github/workflows/ios-testflight.yml` with the build number it just committed. The runner builds
+and uploads; this machine does not have to be awake for any of it.
 
-**Least privilege, if you do it.** The `beta` lane passes `skip_waiting_for_build_processing: true`,
-and that is exactly the case where a **Developer**-role key is enough to upload a build. Updating
-build information, managing testers and pushing metadata need **App Manager**. So CI can hold a
-weaker key than this one, and `fastlane metadata` can stay here.
+**The order flips, and it matters.** A local release uploads first and tags after, so a tag always
+names a build TestFlight received. A CI release must push the bump before a runner can build it, so
+a failed build leaves a tag naming a build that does not exist. Re-dispatch the same tag once it is
+fixed rather than cutting a second version:
+
+```sh
+gh workflow run ios-testflight.yml --ref 1.2.0-build214000000-ios -f build=214000000
+```
+
+**What approving actually approves.** The job targets the `ios-release` environment, so it parks
+until a required reviewer approves it, and environment secrets are injected only afterwards:
+nothing is decrypted while it waits. That approval is what replaces the YubiKey touch, and it is a
+weaker claim. A touch authorizes specific bytes; an approval authorizes a job whose behaviour is
+whatever the workflow file says at the ref being built. Read the ref before approving, and keep
+that workflow's actions pinned by commit, which is why it alone in this repo does not use tags.
+
+**Credentials live in two different places on purpose.** The App Store Connect key is a GitHub
+environment secret. The signing identity is not: it lives in a private *certificates* repository
+managed by fastlane match, and CI is `readonly`, so a runner may use the certificate and profiles
+but never create or renew them. Renewal is a local `fastlane certs`, so an expiring profile shows
+up as a failed release rather than as a runner minting identities against the team's limited
+certificate slots.
+
+**Give CI the weaker key.** The lanes pass `skip_waiting_for_build_processing: true`, which is
+exactly the case where a **Developer**-role key can upload a build. Updating build information,
+managing testers and pushing metadata need **App Manager**, and those stay here. So generate a
+second, Developer-role key for the runner rather than handing it this one.
+
+### One-time setup for CI
+
+1. **A private repository for the identities**, e.g. `bramble-certificates`. Empty, private. It
+   holds the distribution certificate and both provisioning profiles, encrypted with a passphrase
+   that is not stored in it.
+
+2. **Populate it**, from here, with the YubiKey plugged in. This is the step that mints the
+   certificate, so it uses the App Manager key and prompts for a passphrase to encrypt with. That
+   passphrase becomes `MATCH_PASSWORD`; it is not recoverable, so put it in the vault.
+
+   ```sh
+   MATCH_GIT_URL=git@github.com:<you>/bramble-certificates.git fastlane certs
+   ```
+
+   It provisions `app.bramble.mobile` and `app.bramble.mobile.AutoFillProbe` together. The autofill
+   extension is signed separately from the app, so a release needs both profiles or App Store
+   validation rejects the upload.
+
+3. **A read-only credential for the runner.** A fine-grained personal access token with
+   *Contents: Read* on the certificates repository only, base64'd with the username:
+
+   ```sh
+   printf '<you>:github_pat_...' | base64 | tr -d '\n'
+   ```
+
+4. **The environment.** Repository settings -> Environments -> `ios-release`, add yourself as a
+   required reviewer, then add these as *environment* secrets (not repository secrets, so no other
+   workflow can read them):
+
+   | Secret | What |
+   |---|---|
+   | `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_CONTENT` | The Developer-role key, the .p8 as PEM text |
+   | `MATCH_GIT_URL` | `https://github.com/<you>/bramble-certificates.git`, the HTTPS form, since the runner authenticates with a token |
+   | `MATCH_PASSWORD` | The passphrase from step 2 |
+   | `MATCH_GIT_BASIC_AUTHORIZATION` | The base64 from step 3 |
+
+5. **Check it end to end** before trusting it with a release: run the workflow from the Actions tab
+   against `main` with the build number left blank. That uploads a one-off build and touches no
+   version, no commit and no tag.
+
+### A build that is not a release
+
+Uploading a build without bumping the marketing version is the normal case for testing, and it
+works the same way in both places. Build numbers are seconds since 2020, so they always increase
+and never collide, and TestFlight happily carries many builds under one marketing version.
+
+- **On a runner:** Actions -> iOS TestFlight -> Run workflow, pick any branch, leave *Build number*
+  blank. It builds whatever `MARKETING_VERSION` that branch already has.
+- **Here:** `pnpm ios:beta`, which is the same lane the release drives, minus the bump and the tag.
+  `pnpm ios:ipa` builds the signed IPA to the Desktop and uploads nothing, which needs no key at
+  all.
+
+Neither writes to the repository, so a build handed to a tester is not a release and leaves no
+trace claiming it was.
 
 ## Desktop app (GitHub-released and self-updating)
 

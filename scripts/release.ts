@@ -6,7 +6,9 @@
 //   pnpm run release firefox  <version|patch|minor|major>
 //   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
 //                                                                      last run already built)
-//   pnpm run release ios      <version|patch|minor|major> [--ipa]   (--ipa = dry-run IPA, no upload/tag)
+//   pnpm run release ios      <version|patch|minor|major> [--ipa] [--ci]
+//                                       (--ipa = dry-run IPA, no upload/tag; --ci = build and
+//                                        upload on a runner instead of this machine)
 //   pnpm run release desktop  <version|patch|minor|major> [--aarch64] [--resume]
 //                                       (--aarch64 = skip the Intel slice; --resume = publish the
 //                                        build the last run already made and signed)
@@ -26,6 +28,8 @@
 // never builds or signs). chromium packs a locally-signed .crx; firefox uploads to AMO and
 // attaches the Mozilla-signed .xpi it returns. ios has no GitHub release: the binary goes to
 // TestFlight via fastlane, and you submit for App Store review manually in App Store Connect.
+// `ios --ci` moves the build and upload to .github/workflows/ios-testflight.yml, which waits for
+// an approval in the `ios-release` environment before it can reach any credential.
 // android builds here on macOS (web bundle + Rust FFI + gradle assembleRelease) and signs the
 // unsigned APK gradle emits with the YubiKey-held keystore. Signing setup lives in
 // docs/release-signing.md.
@@ -150,7 +154,8 @@ const version = bumpKind
 
 // Every path but ios ends in `gh release create`, and finding gh missing or logged out there
 // means the store publish and the tag already happened. An installed gh is not enough.
-if (platform !== "ios") {
+// `ios --ci` dispatches a workflow, so it needs gh as much as the publishing paths do.
+if (platform !== "ios" || flags.has("--ci")) {
 	requireBins(["gh"], "docs/release-signing.md");
 	// --active, because a bare `gh auth status` exits non-zero when ANY stored account is broken,
 	// including one for a different login that this repo never uses. What a release needs is the
@@ -182,7 +187,7 @@ if (!flags.has("--ipa") && capture("git config --get commit.gpgsign || true") ==
 }
 
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
-else if (platform === "ios") await releaseIos(version, flags.has("--ipa"));
+else if (platform === "ios") await releaseIos(version, flags.has("--ipa"), flags.has("--ci"));
 else if (platform === "firefox") await releaseFirefox(version);
 // Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
 // failure is silent from here: the dmg simply does not open on an Intel Mac.
@@ -637,7 +642,10 @@ function snapshotAndroidChangelogs(versionCode: string): string[] {
 
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
 
-async function releaseIos(version: string, ipaOnly: boolean) {
+async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
+	// A dry run builds here and uploads nothing; a CI run builds nowhere near here. Asking for
+	// both is asking for two different machines to do the same job.
+	if (ipaOnly && ci) fail("--ipa and --ci are mutually exclusive");
 	const IOS = "packages/platform-mobile/ios/App";
 	const PBXPROJ = `${IOS}/App.xcodeproj/project.pbxproj`;
 
@@ -654,13 +662,15 @@ async function releaseIos(version: string, ipaOnly: boolean) {
 	//
 	// Presence only, not a decrypt: this runs before the gate, and asking for a touch here would
 	// ask for a second one later when fastlane actually unwraps it.
-	if (!has("fastlane"))
-		fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");
-	if (!existsSync(ASC_KEY_AGE) && !process.env.ASC_KEY_CONTENT)
-		fail(
-			`no App Store Connect key at ${ASC_KEY_AGE}. First time? node scripts/asc-api-key.ts --wrap\n` +
-				"See docs/release-signing.md (iOS).",
-		);
+	if (!ci) {
+		if (!has("fastlane"))
+			fail("fastlane not found; `brew install fastlane` (see docs/release-signing.md)");
+		if (!existsSync(ASC_KEY_AGE) && !process.env.ASC_KEY_CONTENT)
+			fail(
+				`no App Store Connect key at ${ASC_KEY_AGE}. First time? node scripts/asc-api-key.ts --wrap\n` +
+					"See docs/release-signing.md (iOS).",
+			);
+	}
 
 	if (!ipaOnly) gate(); // a dry run only tests build + signing, so skip the slow CI gate
 
@@ -706,6 +716,31 @@ async function releaseIos(version: string, ipaOnly: boolean) {
 		} finally {
 			if (bumped) run(`git checkout ${PBXPROJ}`);
 		}
+		return;
+	}
+
+	// --ci: the runner builds and uploads, so the bump has to be pushed before it can be built,
+	// and the order flips. Locally the upload comes first and the tag records a build that already
+	// exists; here the tag IS the request, and a build that then fails leaves a tag naming a build
+	// TestFlight never received. That is the trade for not needing this machine: re-dispatch
+	// against the same tag once it is fixed rather than cutting a second version.
+	if (ci) {
+		commitTagPush(bumped, PBXPROJ, `chore(release): ios ${version} (build ${build})`, tag, branch);
+		try {
+			run(`gh workflow run ios-testflight.yml --ref ${tag} -f build=${build}`);
+		} catch {
+			// The tag is already pushed, so this is recoverable by hand and worth saying how.
+			fail(
+				`dispatch failed. The tag ${tag} is pushed, so run the workflow from the Actions tab\n` +
+					`against ${tag} with build=${build}, or retry:\n` +
+					`  gh workflow run ios-testflight.yml --ref ${tag} -f build=${build}`,
+			);
+		}
+		console.log(
+			`\ndispatched iOS ${version} (build ${build}) from ${tag}.` +
+				"\nIt waits for your approval before it can read any credential:" +
+				"\n  gh run watch  (or the Actions tab, iOS TestFlight)",
+		);
 		return;
 	}
 

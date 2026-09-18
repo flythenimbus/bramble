@@ -1,0 +1,141 @@
+name: iOS TestFlight
+
+# Builds the iOS app on a runner and uploads it to TestFlight, so cutting a release does not
+# depend on one Mac being awake, plugged in, and holding an Xcode login session.
+#
+# This is the only workflow in the repo that holds release credentials, and it is built around
+# that:
+#
+# - **Manual trigger only.** No push, no tag, no pull_request. A branch cannot reach TestFlight by
+#   being merged.
+# - **The `ios-release` environment gates the whole job.** Its secrets are injected only after a
+#   required reviewer approves the run, so nothing is decrypted while it waits. Approving is the
+#   moment that replaces the YubiKey touch a local release asks for, and it is worth understanding
+#   what it is NOT: a touch authorizes a specific artifact, an approval authorizes a job whose code
+#   is whatever this file says at the ref being built. Read the ref before approving.
+# - **Actions are pinned by commit.** Elsewhere in the repo a tag is fine, because nothing there
+#   can sign anything. A moved tag here is a supply chain compromise with an upload key attached.
+#
+# The signing identity comes from a private match repository rather than from this repository's
+# secrets, and CI is `readonly`: it can use the certificate and profiles, never create or renew
+# them. That stays a deliberate local `fastlane match appstore`. See docs/release-signing.md.
+#
+# `pnpm run release ios <version> --ci` drives this: it bumps, commits, tags, pushes, then
+# dispatches with the build number it committed. Run it from the Actions tab instead, with the
+# build number left blank, for a one-off TestFlight build off any branch with no version bump.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build number (blank = seconds since 2020, for a one-off build)"
+        required: false
+        type: string
+      xcode:
+        description: "Xcode version, e.g. 26.4 (blank = the runner's default)"
+        required: false
+        type: string
+
+# The job needs to read this repository and nothing else. The match repository is reached with its
+# own credential, not with this token.
+permissions:
+  contents: read
+
+# Build numbers must strictly increase per marketing version, and two runs racing can upload out of
+# order. Queue instead of cancelling: a half-finished upload is worse than a wait.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: Build and upload
+    runs-on: macos-15
+    environment: ios-release
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Nothing here pushes, and a checkout that leaves a usable token in .git/config is a
+          # token every later step (and every tool they run) can use.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Reads rust-toolchain.toml, the same single source of truth the other jobs use. The iOS
+      # targets themselves are added by scripts/build-crypto-ffi.sh.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: packages/core-rust
+
+      # The webview half of the shared core still builds through wasm-pack, pinned as in ci.yml.
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
+        with:
+          tool: wasm-pack@0.13.1
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # Named explicitly or not at all. Taking whatever the image happens to default to is how a
+      # release quietly changes toolchain between two runs of the same commit; failing with the
+      # list is better than drifting.
+      - name: Select Xcode
+        env:
+          WANT: ${{ inputs.xcode }}
+        run: |
+          set -euo pipefail
+          if [ -n "$WANT" ]; then
+            app="/Applications/Xcode_${WANT}.app"
+            if [ ! -d "$app" ]; then
+              echo "::error::Xcode $WANT is not on this runner. Present: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+              exit 1
+            fi
+            sudo xcode-select -s "$app/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Install fastlane
+        run: |
+          set -euo pipefail
+          command -v fastlane >/dev/null || brew install fastlane
+          fastlane --version | tail -1
+
+      # The lane does the rest: match (readonly) for the identity, the Capacitor pre-chain, the
+      # archive, and the upload. BRAMBLE_IOS_BUILD empty means the lane computes a timestamp, which
+      # is what a one-off build wants.
+      - name: Build and upload to TestFlight
+        env:
+          BRAMBLE_IOS_BUILD: ${{ inputs.build }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # Quiets fastlane's analytics prompt and keeps its output parseable in a log.
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+        run: fastlane beta_ci
+
+      # What landed, without opening App Store Connect. Also the one artifact worth keeping: a
+      # crash report from TestFlight is unreadable without the dSYMs for that exact build.
+      - name: Keep the dSYMs
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dsyms-${{ github.run_id }}
+          path: packages/platform-mobile/ios/App/output/*.dSYM.zip
+          if-no-files-found: warn
+          retention-days: 90
