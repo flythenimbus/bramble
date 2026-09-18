@@ -474,9 +474,23 @@ second, Developer-role key for the runner rather than handing it this one.
    | `MATCH_PASSWORD` | The passphrase from step 2 |
    | `MATCH_GIT_BASIC_AUTHORIZATION` | The base64 from step 3 |
 
-5. **Check it end to end** before trusting it with a release: run the workflow from the Actions tab
-   against `main` with the build number left blank. That uploads a one-off build and touches no
-   version, no commit and no tag.
+5. **Check it end to end** before trusting it with a release. `check_only` first, which verifies
+   the five secrets, the certificates repo and one live App Store Connect call in a few minutes:
+
+   ```sh
+   gh workflow run ios-testflight.yml --ref main -f check_only=true
+   ```
+
+   Then the same dispatch without it, which uploads a one-off build and touches no version, no
+   commit and no tag.
+
+**The Xcode version is pinned in the workflow, and has to be.** The app calls
+AuthenticationServices APIs that exist only in the 26.4 SDK, so an image whose default is older
+cannot compile it: the first run of this workflow died on
+`ASCredentialExportManager has no member requestExport` twenty minutes in, on macos-15's default
+Xcode 16.4. Bump the `xcode` input's default together with the Xcode releases are cut with here,
+and keep the runner image new enough to carry it (`macos-26` has 26.0 through 26.6; `macos-15`
+stops at 26.3).
 
 ### A build that is not a release
 

@@ -36,8 +36,9 @@ on:
         required: false
         type: string
       xcode:
-        description: "Xcode version, e.g. 26.4 (blank = the runner's default)"
+        description: "Xcode version to build with"
         required: false
+        default: "26.4"
         type: string
       check_only:
         description: "Only check the credentials and signing identities; build nothing"
@@ -59,7 +60,10 @@ concurrency:
 jobs:
   testflight:
     name: Build and upload
-    runs-on: macos-15
+    # macos-26, not macos-15, whose newest Xcode is 26.3 and whose default is 16.4. The app calls
+    # AuthenticationServices APIs that only exist in the 26.4 SDK, so an older image cannot compile
+    # it at all.
+    runs-on: macos-26
     environment: ios-release
     timeout-minutes: 90
     steps:
@@ -101,23 +105,24 @@ jobs:
         if: ${{ !inputs.check_only }}
         run: pnpm install --frozen-lockfile
 
-      # Named explicitly or not at all. Taking whatever the image happens to default to is how a
-      # release quietly changes toolchain between two runs of the same commit; failing with the
-      # list is better than drifting.
+      # Always named, never inherited. The image's default is not ours to choose and moves without
+      # us: the first run of this workflow took macos-15's default Xcode 16.4 and failed compiling
+      # an AuthenticationServices call that needs the 26.4 SDK, twenty minutes in. A version that
+      # is not on the runner fails here instead, in seconds, with the list of what is.
+      #
+      # Bump this deliberately, together with the Xcode a release is cut with locally.
       - name: Select Xcode
         if: ${{ !inputs.check_only }}
         env:
           WANT: ${{ inputs.xcode }}
         run: |
           set -euo pipefail
-          if [ -n "$WANT" ]; then
-            app="/Applications/Xcode_${WANT}.app"
-            if [ ! -d "$app" ]; then
-              echo "::error::Xcode $WANT is not on this runner. Present: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
-              exit 1
-            fi
-            sudo xcode-select -s "$app/Contents/Developer"
+          app="/Applications/Xcode_${WANT}.app"
+          if [ ! -d "$app" ]; then
+            echo "::error::Xcode $WANT is not on this runner. Present: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+            exit 1
           fi
+          sudo xcode-select -s "$app/Contents/Developer"
           xcodebuild -version
 
       - name: Install fastlane
