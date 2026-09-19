@@ -28,7 +28,7 @@ import { LINKS } from "@/consts";
 import {
 	APT_INSTALL,
 	BREW_INSTALL,
-	DESKTOP_RELEASE,
+	DESKTOP_RELEASES,
 	DESKTOP_VERSION,
 	DOWNLOADS,
 	NIX_INSTALL,
@@ -61,12 +61,13 @@ interface Category {
 	options: Option[];
 }
 
-// No AppImage until a release is cut from Linux, and the release page is a better answer than a
-// link that 404s. Linux is listed either way because the .deb and the Nix flake are there
-// regardless, so the category is never empty.
+// No AppImage until a release is cut from Linux, or when the latest one skipped it, and the
+// releases page is a better answer than a link that 404s: the newest release is the one that has
+// no AppImage, so it is the wrong page to send anyone to. Linux is listed either way because the
+// .deb and the Nix flake are there regardless, so the category is never empty.
 const appImage = DOWNLOADS.appimage
 	? { href: DOWNLOADS.appimage, label: "Download the AppImage" }
-	: { href: DESKTOP_RELEASE, label: "Open the release page", external: true };
+	: { href: DESKTOP_RELEASES, label: "Open the releases page", external: true };
 
 // Windows is different: it is listed only once a release actually carries an installer, rather
 // than shown with the release page as a fallback. There is nothing for Windows on that page yet,
@@ -90,8 +91,12 @@ const categories: Category[] = [
 				icon: BrandApple,
 				title: "macOS",
 				body: "A universal build for Apple silicon and Intel, signed and notarized. It checks for updates and installs them itself.",
-				action: { href: DOWNLOADS.macos, label: "Download the .dmg" },
-				meta: `Version ${DESKTOP_VERSION}`,
+				// The latest release can skip macOS (`--skip=macos`), leaving no disk image at this
+				// version. The releases list holds the newest one that has one.
+				action: DOWNLOADS.macos
+					? { href: DOWNLOADS.macos, label: "Download the .dmg" }
+					: { href: DESKTOP_RELEASES, label: "Open the releases page", external: true },
+				meta: DOWNLOADS.macos ? `Version ${DESKTOP_VERSION}` : undefined,
 				alt: { shell: BREW_INSTALL },
 			},
 			...(windowsInstaller

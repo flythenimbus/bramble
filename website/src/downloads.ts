@@ -14,7 +14,12 @@ export const DESKTOP_VERSION: string = manifest.version;
 
 const TAG = `${DESKTOP_VERSION}-desktop`;
 
-export const DESKTOP_RELEASE = `${REPO}/releases/tag/${TAG}`;
+/**
+ * Every desktop release, for when the latest one does not carry the platform being asked for: a
+ * release can be cut without a platform (`--skip=`), so the newest one is exactly the wrong page
+ * to send someone looking for the file it left out.
+ */
+export const DESKTOP_RELEASES = `${REPO}/releases?q=desktop&expanded=true`;
 
 /** The updater's own artifacts, by target. Linux appears once a release is cut from Linux. */
 const platforms = manifest.platforms as Record<string, { url: string } | undefined>;
@@ -24,8 +29,13 @@ export const DOWNLOADS = {
 	 * Built by hand from the version, because the updater fetches the `.app.tar.gz` and never the
 	 * disk image, so the manifest does not name it. `scripts/release.ts` asserts the build produced
 	 * exactly this filename — a mismatch here is a 404 on the main macOS download.
+	 *
+	 * Only when the manifest has a macOS entry, though. A release cut with `--skip=macos` has no
+	 * disk image, and the manifest's version would then name one that was never built.
 	 */
-	macos: `${REPO}/releases/download/${TAG}/Bramble_${DESKTOP_VERSION}_universal.dmg`,
+	macos: platforms["darwin-aarch64"]
+		? `${REPO}/releases/download/${TAG}/Bramble_${DESKTOP_VERSION}_universal.dmg`
+		: undefined,
 
 	/**
 	 * Straight out of the manifest: it is the exact file the updater fetches, so it is known to

@@ -24,6 +24,9 @@ name: Desktop release
 #
 # `pnpm run release desktop <version>` dispatches this and watches it. A dry run commits nothing and
 # builds no Windows, but does everything else up to publishing, including a real notarization.
+# `--skip=windows` (or macos, linux, any mix) leaves platforms out; the dispatcher warns what that
+# costs the users of a platform that has already shipped, since the update manifest carries one
+# version for all of them.
 
 on:
   workflow_dispatch:
@@ -37,6 +40,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip:
+        description: "Platforms to leave out, comma-separated: macos, linux, windows (blank = none)"
+        required: false
+        default: ""
+        type: string
       xcode:
         description: "Xcode version to build macOS with"
         required: false
@@ -95,16 +103,22 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
+          SKIP: ${{ inputs.skip }}
           GH_TOKEN: ${{ github.token }}
+          # Whether sign-windows.yml could sign anything, without handing this job the token: the
+          # comparison happens in the expression, and only its answer reaches the step.
+          SIGNPATH_READY: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' && vars.SIGNPATH_PROJECT_SLUG != '' && vars.SIGNPATH_SIGNING_POLICY_SLUG != '' }}
         run: |
           set -euo pipefail
           flags=(--runner-bump)
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          if [ -n "$SKIP" ]; then flags+=("--skip=$SKIP"); fi
           node scripts/release.ts desktop "$VERSION" "${flags[@]}"
 
   linux:
     name: Linux (${{ matrix.arch }})
     needs: bump
+    if: ${{ !contains(inputs.skip, 'linux') }}
     strategy:
       matrix:
         include:
@@ -162,6 +176,9 @@ jobs:
   publish:
     name: macOS, sign and publish
     needs: [bump, linux]
+    # Runs when Linux was skipped on purpose, not only when it succeeded: a needs-job that is skipped
+    # otherwise skips everything after it too.
+    if: ${{ !cancelled() && needs.bump.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') }}
     runs-on: macos-26
     # The approval gate, and the only job holding the updater key.
     environment: desktop-release
@@ -226,6 +243,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
           WINDOWS_RUN: ${{ needs.bump.outputs.windows_run }}
+          SKIP: ${{ inputs.skip }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -238,4 +256,5 @@ jobs:
           set -euo pipefail
           flags=(--runner-publish)
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          if [ -n "$SKIP" ]; then flags+=("--skip=$SKIP"); fi
           node scripts/release.ts desktop "$VERSION" "${flags[@]}"

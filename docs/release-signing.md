@@ -639,9 +639,10 @@ build will keep using it and never ask for the YubiKey.
 ### Each release
 
 ```sh
-pnpm run release desktop 0.9.0             # from GitHub: dispatch, approve twice, done
-pnpm run release desktop 0.9.0 --dry-run   # everything short of publishing, Windows excepted
-pnpm run release desktop 0.9.0 --local     # from this Mac: every build here, a touch for the key
+pnpm run release desktop 0.9.0                  # from GitHub: dispatch, approve twice, done
+pnpm run release desktop 0.9.0 --dry-run       # everything short of publishing, Windows excepted
+pnpm run release desktop 0.9.0 --skip=windows  # cut the release without a platform (or several)
+pnpm run release desktop 0.9.0 --local         # from this Mac: every build here, a touch for the key
 pnpm run publish:apt --release 0.9.0-desktop   # the APT repository, still from a Mac (below)
 ```
 
@@ -667,6 +668,20 @@ covers three operating systems, so it has more parts than the others:
 A dry run commits nothing and builds no Windows (`sign-windows.yml` asserts it is building a
 committed version, and SignPath signs whatever it is sent), but does everything else, including a
 real notarization, and stops before the tag.
+
+**Leaving a platform out.** `--skip=windows`, or `--skip=macos,linux` for more than one, cuts the
+release without those platforms. It is not free, because the update manifest carries **one** version
+for every platform: a platform left out of the release is left out of the manifest, not left at the
+version it is on. Anyone using it who checks for updates by hand gets an error until a release
+carries that platform again, and the website's download for it falls back to the releases page. The
+dispatcher prints exactly that warning for each skipped platform that has already shipped, then goes
+ahead: it is a trade to make knowingly, not a mistake to block.
+
+What it does block is a Windows build that cannot be signed. If SignPath is not configured
+(`SIGNPATH_API_TOKEN` and its three variables, below), the release stops in seconds naming what is
+missing and the `--skip=windows` command to run instead, rather than an hour later when
+`sign-windows.yml` has nothing to sign with. The bump job checks the same thing on the runner, for a
+release dispatched from the Actions tab rather than from here.
 
 **The APT repository is the one step still on a Mac.** Its signing key was generated on the
 YubiKey's OpenPGP applet and cannot leave it, so after a GitHub release,
@@ -735,7 +750,8 @@ One-time setup is in the SignPath dashboard: register the GitHub organization, c
 pointed at this repository and the `sign-windows.yml` workflow, and pick a signing policy. The
 repository then needs `SIGNPATH_API_TOKEN` in **secrets** and `SIGNPATH_ORGANIZATION_ID`,
 `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` in **variables**; the workflow reads
-exactly those names. If `gh workflow list` does not show the workflow yet, push `.github/` to the
+exactly those names, and so does the desktop release's preflight, which is why a release stops early
+while they are absent. Until that setup is done, desktop releases go out with `--skip=windows`. If `gh workflow list` does not show the workflow yet, push `.github/` to the
 default branch first: a workflow cannot be dispatched before it exists there.
 
 ### If the YubiKey is lost

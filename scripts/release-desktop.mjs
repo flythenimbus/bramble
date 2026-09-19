@@ -39,7 +39,14 @@ const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 
 const args = process.argv.slice(2);
 const resume = args.includes("--resume");
+// A desktop release cut from GitHub with `--skip=macos` (and friends) has no macOS bundle to read.
+// On the Mac that assembles the manifest, the local platform is macOS, so that is the one that
+// needs telling; Linux and Windows simply have no artifacts on disk to add.
+const skip = new Set(
+  (args.find((a) => a.startsWith("--skip="))?.slice("--skip=".length) ?? "").split(",").filter(Boolean),
+);
 const MAC = process.platform === "darwin";
+const skipLocal = MAC && skip.has("macos");
 // Universal unless told otherwise, matching the build, and macOS-only for the same reason it is
 // there (see build-macos.ts). cargo puts a --target build under target/<triple>/, so the two
 // land in different places, and reading the wrong one is not an empty directory and an error: it
@@ -109,7 +116,7 @@ function platformKeys(file) {
 }
 
 const updaterDir = LAYOUT.updater;
-if (!existsSync(updaterDir)) {
+if (!skipLocal && !existsSync(updaterDir)) {
   console.error(
     `no bundle at ${updaterDir}. Drop --resume to build it` +
       (universal || !MAC ? "." : ", or drop --aarch64 if that is not what you built."),
@@ -143,9 +150,9 @@ if (localEndpoint) {
   }
 }
 
-const files = await readdir(updaterDir);
+const files = skipLocal ? [] : await readdir(updaterDir);
 const archives = files.filter((f) => f.endsWith(LAYOUT.suffix));
-if (archives.length === 0) {
+if (!skipLocal && archives.length === 0) {
   console.error(
     `no ${LAYOUT.suffix} in ${updaterDir}. createUpdaterArtifacts must be true in tauri.conf.json,\n` +
       "and TAURI_SIGNING_PRIVATE_KEY* must be set so the archive gets signed.",

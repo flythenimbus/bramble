@@ -131,6 +131,17 @@ from a laptop. Desktop is last because it is the biggest, and the one where the 
 invariants have to move intact: bump before build, tag after artifacts, release before manifest,
 APT last.
 
+Shipping all three together is also why desktop is the one target that can be told to leave a
+platform out: `release desktop <version> --skip=windows`, or several, comma-separated. It exists
+because SignPath approval is outside this repository, so Windows can be unavailable for reasons
+macOS and Linux are not, and a release should not have to wait on it. The cost is that `latest.json`
+holds one version for every platform, so a skipped platform drops out of the manifest rather than
+staying where it was, and its users' manual update checks fail until it is back. The dispatcher
+warns for each skipped platform that has already shipped and then proceeds; it refuses only the case
+where nothing could work, a Windows build with SignPath unconfigured. The long-term fix is
+per-platform manifests through Tauri's `{{target}}` endpoint templating, which needs a release with
+the new endpoint in it before it helps anyone.
+
 Linux still gets the most out of this, just inside phase 4 rather than ahead of it: both
 architectures build natively and in parallel, where today one is emulated on a Mac, and the
 `container: debian:12` job keeps the glibc floor exactly while deleting the rsync-into-a-volume

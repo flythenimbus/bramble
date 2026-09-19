@@ -170,12 +170,33 @@ const capture = (cmd: string) => execSync(cmd, { encoding: "utf8" }).trim();
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")));
 const [platform, rawVersion] = argv.filter((a) => !a.startsWith("--"));
+
+// Desktop only: `--skip=windows` or `--skip=macos,linux` releases without those platforms. See
+// docs/ci-releases.md for what skipping a platform that has already shipped costs its users.
+const DESKTOP_PLATFORMS = ["macos", "linux", "windows"];
+const skipArg = argv.find((a) => a.startsWith("--skip="));
+const skip = new Set(
+	(skipArg?.slice("--skip=".length) ?? "")
+		.split(",")
+		.map((p) => p.trim())
+		.filter(Boolean),
+);
 if (!platform)
 	fail(
 		"usage: pnpm run release <chromium|firefox|android|ios|desktop> <version|patch|minor|major>",
 	);
 if (!rawVersion)
 	fail(`missing version. usage: pnpm run release ${platform} <version|patch|minor|major>`);
+if (skipArg) {
+	if (platform !== "desktop") fail("--skip is for desktop releases");
+	const unknown = [...skip].filter((p) => !DESKTOP_PLATFORMS.includes(p));
+	if (unknown.length)
+		fail(`--skip takes ${DESKTOP_PLATFORMS.join(", ")}; not ${unknown.join(", ")}`);
+	if (DESKTOP_PLATFORMS.every((p) => skip.has(p))) fail("--skip leaves nothing to release");
+	// --resume implies the local route, like --local and --aarch64 do.
+	if (flags.has("--local") || flags.has("--aarch64") || flags.has("--resume"))
+		fail("--skip is for a release from GitHub; the local route builds every platform");
+}
 
 // The version arg is either an explicit version (0.1.0 or v0.1.0, stored bare) or a semver bump
 // keyword (patch/minor/major) that increments THIS target's current version. Each target versions
@@ -765,7 +786,12 @@ function verifyDraft(tag: string, pattern: string, check?: (file: string) => voi
  * the run to the end so this command still reports how the release went. `--dry-run` dispatches a
  * dry run instead; `--no-watch` returns as soon as the run exists.
  */
-function dispatchRelease(workflow: string, version: string, tag: string): void {
+function dispatchRelease(
+	workflow: string,
+	version: string,
+	tag: string,
+	inputs: Record<string, string> = {},
+): void {
 	const dryRun = flags.has("--dry-run");
 	// Checked on GitHub rather than locally: runners tag through the API, so a clone can lag.
 	if (ok(`gh api repos/${REPO}/git/ref/tags/${tag}`)) fail(`tag ${tag} already exists on GitHub`);
@@ -774,7 +800,10 @@ function dispatchRelease(workflow: string, version: string, tag: string): void {
 	const since = new Date(Date.now() - 5_000).toISOString();
 	try {
 		run(
-			`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}`,
+			`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}` +
+				Object.entries(inputs)
+					.map(([k, v]) => ` -f ${k}=${JSON.stringify(v)}`)
+					.join(""),
 		);
 	} catch {
 		fail(`could not dispatch ${workflow} (above). It has to exist on main to be dispatched.`);
@@ -1316,6 +1345,61 @@ function windowsRunFile(): string {
 	return "packages/platform-desktop/src-tauri/target/.windows-signing-run";
 }
 
+/**
+ * The GitHub route for desktop. Two checks before anything is dispatched, both in seconds rather
+ * than an hour into a run: that Windows can actually be signed, and what skipping a platform that
+ * has already shipped will do to the people using it.
+ */
+function dispatchDesktop(version: string, tag: string): void {
+	if (!skip.has("windows")) {
+		// What sign-windows.yml reads. Names only: their values are not ours to read, just to check.
+		// Inside the function, not beside it: the dispatch at the top of this file calls in here
+		// while the module is still evaluating, and a module-level const below it would not exist.
+		const SIGNPATH_SECRETS = ["SIGNPATH_API_TOKEN"];
+		const SIGNPATH_VARIABLES = [
+			"SIGNPATH_ORGANIZATION_ID",
+			"SIGNPATH_PROJECT_SLUG",
+			"SIGNPATH_SIGNING_POLICY_SLUG",
+		];
+		const names = (cmd: string) =>
+			new Set(capture(`${cmd} --repo ${REPO} --json name --jq '.[].name'`).split("\n"));
+		const secrets = names("gh secret list");
+		const variables = names("gh variable list");
+		const missing = [
+			...SIGNPATH_SECRETS.filter((n) => !secrets.has(n)),
+			...SIGNPATH_VARIABLES.filter((n) => !variables.has(n)),
+		];
+		if (missing.length)
+			fail(
+				`Windows cannot be signed: SignPath is not set up (missing ${missing.join(", ")}).\n` +
+					"Release without it, or finish SignPath first:\n" +
+					`  pnpm run release desktop ${rawVersion} --skip=${[...skip, "windows"].join(",")}`,
+			);
+	}
+
+	// The update manifest carries ONE version for every platform, so a platform left out of this
+	// release is left out of the manifest too, not left at its old version.
+	const live = Object.keys(JSON.parse(readFromMain(DESKTOP_MANIFEST)).platforms ?? {});
+	const consequences: Record<string, string> = {
+		macos:
+			"macOS users who check for updates by hand get an error until a release includes macOS " +
+			"again, the website's macOS download falls back to the releases page, and Homebrew stays " +
+			"on the current version",
+		linux:
+			"AppImage users who check for updates by hand get an error until a release includes Linux " +
+			"again, the website's AppImage link falls back to the releases page, and APT gets nothing",
+		windows:
+			"Windows users who check for updates by hand get an error until a release includes Windows " +
+			"again, and the website stops offering the installer",
+	};
+	const prefix: Record<string, string> = { macos: "darwin-", linux: "linux-", windows: "windows-" };
+	for (const p of skip)
+		if (live.some((k) => k.startsWith(prefix[p] as string)))
+			console.warn(`\nwarning: ${p} is live and this release skips it: ${consequences[p]}.`);
+
+	dispatchRelease("desktop-release.yml", version, tag, { skip: [...skip].join(",") });
+}
+
 /** Outputs for the jobs after this one: `key=value` lines appended to the step's output file. */
 function stepOutputs(values: Record<string, string>): void {
 	const file = process.env.GITHUB_OUTPUT || fail("no GITHUB_OUTPUT: this runs in a workflow step");
@@ -1335,6 +1419,10 @@ function stepOutputs(values: Record<string, string>): void {
 function runnerBumpDesktop(version: string, tag: string): void {
 	const base = runnerBuildStart("desktop-release.yml", tag, "--runner-bump");
 	const dryRun = flags.has("--dry-run");
+	// The workflow computes this from the secret and variables without handing the job the token.
+	// Checked before the gate and the commit, so a run that could never finish does not start.
+	if (!skip.has("windows") && process.env.SIGNPATH_READY !== "true")
+		fail("SignPath is not set up, so Windows cannot be signed; dispatch with skip=windows");
 	gate();
 	const files = bumpManifestVersion(DESKTOP_CONF, version);
 	let sha = base;
@@ -1351,14 +1439,18 @@ function runnerBumpDesktop(version: string, tag: string): void {
 		run(`git reset --quiet --hard ${sha}`);
 	}
 	let windowsRun = "";
-	if (!dryRun) {
+	if (!dryRun && !skip.has("windows")) {
 		run("node scripts/build-windows.ts --ci-start");
 		windowsRun = readFileSync(windowsRunFile(), "utf8").trim();
 	}
 	stepOutputs({ sha, windows_run: windowsRun });
 	console.log(
 		`\n${version} at ${sha.slice(0, 9)}` +
-			(dryRun ? " (dry run: nothing committed, no Windows)" : `; Windows is run ${windowsRun}`),
+			(dryRun
+				? " (dry run: nothing committed, no Windows)"
+				: windowsRun
+					? `; Windows is run ${windowsRun}`
+					: "; Windows skipped"),
 	);
 }
 
@@ -1390,20 +1482,22 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	const bundle = "packages/platform-desktop/src-tauri/target/universal-apple-darwin/release/bundle";
 	runnerPrepareDesktop(version);
 	const sha = capture("git rev-parse HEAD");
-	for (const name of [
-		"TAURI_SIGNING_PRIVATE_KEY",
+	// The updater key signs whatever this release carries; the Apple ones are only wanted when
+	// there is a macOS build to sign and notarize.
+	const apple = [
 		"APPLE_CERTIFICATE",
 		"APPLE_CERTIFICATE_PASSWORD",
 		"APPLE_SIGNING_IDENTITY",
 		"ASC_KEY_ID",
 		"ASC_ISSUER_ID",
 		"ASC_KEY_CONTENT",
-	])
+	];
+	for (const name of ["TAURI_SIGNING_PRIVATE_KEY", ...(skip.has("macos") ? [] : apple)])
 		if (!process.env[name]) fail(`no ${name} in desktop-release`);
 
 	// Universal: build-macos.ts builds both slices, and on a runner Tauri imports APPLE_CERTIFICATE
 	// into a throwaway keychain of its own. Notarization reads the ASC key from the environment.
-	run("pnpm run build:macos");
+	if (!skip.has("macos")) run("pnpm run build:macos");
 
 	const signUpdater = (file: string) =>
 		execFileSync(
@@ -1415,12 +1509,13 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	// The Linux jobs signed their AppImages with a throwaway key, because the bundler will not emit
 	// updater artifacts unsigned. Same bytes, real signature.
 	const linux = "dist-linux/appimage";
-	const images = existsSync(linux)
-		? readdirSync(linux)
-				.filter((f) => f.endsWith(".AppImage") && f.includes(`_${version}_`))
-				.map((f) => join(linux, f))
-		: [];
-	if (images.length === 0)
+	const images =
+		!skip.has("linux") && existsSync(linux)
+			? readdirSync(linux)
+					.filter((f) => f.endsWith(".AppImage") && f.includes(`_${version}_`))
+					.map((f) => join(linux, f))
+			: [];
+	if (!skip.has("linux") && images.length === 0)
 		fail(`no ${version} AppImage in ${linux}; the Linux builds did not hand one over`);
 	for (const image of images) {
 		rmSync(`${image}.sig`, { force: true });
@@ -1430,7 +1525,7 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	// Waits on SignPath's approval, downloads the Authenticode-signed installer, and signs it for the
 	// updater with the key in this job's environment.
 	const windows: string[] = [];
-	if (!dryRun) {
+	if (!dryRun && !skip.has("windows")) {
 		const runId = process.env.WINDOWS_RUN || fail("no Windows run id handed over by the bump job");
 		mkdirSync(dirname(windowsRunFile()), { recursive: true });
 		writeFileSync(windowsRunFile(), `${runId}\n`);
@@ -1444,9 +1539,11 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	// Every updater artifact, against the public key compiled into the app, before anything is
 	// public. An artifact that fails this is one every installed app would refuse.
 	const macos = join(bundle, "macos");
-	const archives = readdirSync(macos)
-		.filter((f) => f.endsWith(".app.tar.gz"))
-		.map((f) => join(macos, f));
+	const archives = skip.has("macos")
+		? []
+		: readdirSync(macos)
+				.filter((f) => f.endsWith(".app.tar.gz"))
+				.map((f) => join(macos, f));
 	for (const artifact of [...archives, ...images, ...windows]) {
 		try {
 			run(`node scripts/verify-updater-signature.mjs ${artifact} ${artifact}.sig`);
@@ -1459,14 +1556,14 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 
 	if (dryRun) {
 		console.log(
-			`\ndry run: ${version} built for macOS (signed and notarized) and Linux, every updater` +
-				" signature verified against the key in the app. Windows is not part of a dry run." +
+			`\ndry run: ${version} built for ${["macos", "linux"].filter((p) => !skip.has(p)).join(" and ")},` +
+				" every updater signature verified against the key in the app. Windows is not part of a dry run." +
 				`\nNothing was committed, tagged or published; ${tag} is still free.`,
 		);
 		return;
 	}
 
-	const { assets, sums, expectedDmg } = collectDesktopAssets(version, true, bundle);
+	const { assets, sums, expectedDmg } = collectDesktopAssets(version, true, bundle, skip);
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const sumsAsset = join(stage, "SHA256SUMS");
 	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
@@ -1482,24 +1579,32 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	// Only now: the manifest IS the update channel, so it goes live after the artifacts it names
 	// exist. Committed onto main as it is NOW, an hour after the build started: these two files
 	// are the release's alone, and nothing else on main has to have stood still for them.
-	run("node scripts/release-desktop.mjs --resume --quiet");
-	updateCask(version, sums.get(expectedDmg) ?? fail(`${expectedDmg} is not in SHA256SUMS`));
+	run(`node scripts/release-desktop.mjs --resume --quiet${skipArg ? ` ${skipArg}` : ""}`);
+	// The cask names the .dmg, so it moves only with a release that has one.
+	const channels = [DESKTOP_MANIFEST];
+	if (!skip.has("macos")) {
+		updateCask(version, sums.get(expectedDmg) ?? fail(`${expectedDmg} is not in SHA256SUMS`));
+		channels.push(DESKTOP_CASK);
+	}
 	const head = capture(`gh api repos/${REPO}/git/ref/heads/${WEBSITE_BRANCH} --jq .object.sha`);
 	commitFiles({
 		repo: REPO,
 		branch: WEBSITE_BRANCH,
 		expectedHeadOid: head,
-		headline: `chore(release): desktop ${version} update manifest and cask`,
-		files: [DESKTOP_MANIFEST, DESKTOP_CASK],
+		headline: `chore(release): desktop ${version} update manifest${channels.length > 1 ? " and cask" : ""}`,
+		files: channels,
 	});
 	// A commit made with this workflow's token fires no push workflow, so deploy-website.yml would
 	// never hear about it. Dispatching it by hand is the one event that token can trigger.
 	run(`gh workflow run deploy-website.yml --repo ${REPO} --ref ${WEBSITE_BRANCH}`);
 
 	console.log(
-		`\nreleased ${tag}; the update manifest is committed and the website is deploying.` +
-			"\nThe APT repository is still signed from a Mac, until its key moves off the YubiKey:" +
-			`\n  pnpm run publish:apt --release ${tag}`,
+		`\nreleased ${tag}${skip.size ? ` without ${[...skip].join(", ")}` : ""}; the update manifest` +
+			" is committed and the website is deploying." +
+			(skip.has("linux")
+				? ""
+				: "\nThe APT repository is still signed from a Mac, until its key moves off the YubiKey:" +
+					`\n  pnpm run publish:apt --release ${tag}`),
 	);
 }
 
@@ -1513,22 +1618,28 @@ function collectDesktopAssets(
 	version: string,
 	universal: boolean,
 	bundle: string,
+	skipped: Set<string> = new Set(),
 ): { assets: string[]; sums: Map<string, string>; dmgs: string[]; expectedDmg: string } {
 	const macos = join(bundle, "macos");
-	const archives = existsSync(macos)
-		? readdirSync(macos).filter((f) => f.endsWith(".app.tar.gz"))
-		: [];
-	if (archives.length === 0)
+	// A skipped platform is neither required nor collected, so nothing from an older build lying
+	// around can ride along into this release. Only the GitHub route skips; locally nothing is.
+	const withMacos = !skipped.has("macos");
+	const archives =
+		withMacos && existsSync(macos)
+			? readdirSync(macos).filter((f) => f.endsWith(".app.tar.gz"))
+			: [];
+	if (withMacos && archives.length === 0)
 		fail(`no .app.tar.gz in ${macos}; the build produced no updater archive`);
-	const dmgs = existsSync(join(bundle, "dmg"))
-		? readdirSync(join(bundle, "dmg")).filter((f) => f.endsWith(".dmg"))
-		: [];
-	if (dmgs.length === 0) fail(`no .dmg in ${join(bundle, "dmg")}`);
+	const dmgs =
+		withMacos && existsSync(join(bundle, "dmg"))
+			? readdirSync(join(bundle, "dmg")).filter((f) => f.endsWith(".dmg"))
+			: [];
+	if (withMacos && dmgs.length === 0) fail(`no .dmg in ${join(bundle, "dmg")}`);
 	// The website's download box builds this URL from the version rather than reading it from
 	// anywhere, because the updater manifest names the .app.tar.gz and never the disk image. A
 	// rename here would leave the front page's main macOS download pointing at a 404.
 	const expectedDmg = `Bramble_${version}_universal.dmg`;
-	if (universal && !dmgs.includes(expectedDmg))
+	if (withMacos && universal && !dmgs.includes(expectedDmg))
 		fail(
 			`expected ${expectedDmg}, built ${dmgs.join(", ")}.\n` +
 				"website/src/downloads.ts links to that exact name; update both together.",
@@ -1558,7 +1669,7 @@ function collectDesktopAssets(
 		["dist-linux/rpm", ".rpm"],
 		["dist-linux/appimage", ".AppImage"],
 	] as const) {
-		if (!existsSync(dir)) continue;
+		if (skipped.has("linux") || !existsSync(dir)) continue;
 		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion(f));
 		// Nothing for this version means the Linux build did not run or wrote elsewhere. Silence
 		// here would publish a macOS-only release that claims to carry Linux.
@@ -1577,7 +1688,7 @@ function collectDesktopAssets(
 	// Same rule about the .sig: unsigned means every installed app refuses the update.
 	for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"] as const) {
 		const dir = `packages/platform-desktop/src-tauri/target/${triple}/release/bundle/nsis`;
-		if (!existsSync(dir)) continue;
+		if (skipped.has("windows") || !existsSync(dir)) continue;
 		const built = readdirSync(dir).filter((f) => f.endsWith("-setup.exe") && ofThisVersion(f));
 		for (const f of built) {
 			if (!existsSync(join(dir, `${f}.sig`)))
@@ -1588,7 +1699,7 @@ function collectDesktopAssets(
 	// Checked after the loop rather than inside it, because the arm64 directory legitimately does
 	// not exist: only x64 is built for a release. Nothing at all means the Windows build did not
 	// run, and silence there would publish a release that claims to carry Windows and does not.
-	if (!assets.some((a) => a.endsWith("-setup.exe")))
+	if (!skipped.has("windows") && !assets.some((a) => a.endsWith("-setup.exe")))
 		fail(
 			`no ${version} -setup.exe; the GitHub build did not produce one.\n` +
 				"Re-run to wait on it again, or check the run linked by --ci-start.",
@@ -1763,7 +1874,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	const tag = `${version}-desktop`;
 
 	// The CI route: dispatched from here, built, signed and published on runners. docs/ci-releases.md.
-	if (viaCi) return dispatchRelease("desktop-release.yml", version, tag);
+	if (viaCi) return dispatchDesktop(version, tag);
 	if (flags.has("--runner-bump")) return runnerBumpDesktop(version, tag);
 	if (flags.has("--runner-prepare")) return runnerPrepareDesktop(version);
 	if (flags.has("--runner-publish")) return runnerPublishDesktop(version, tag);
