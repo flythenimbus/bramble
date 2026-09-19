@@ -54,6 +54,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { AMO_API, amoJwt } from "./amo-auth.ts";
 import { ASC_KEY_AGE } from "./asc-api-key.ts";
+import { CWS_ITEM_ID } from "./cws-ids.ts";
 import { signingKey } from "./desktop-signing-key.ts";
 import { commitFiles, createTag } from "./github-commit.ts";
 import { composeNotes } from "./release-notes.mjs";
@@ -79,6 +80,12 @@ const FIREFOX_MANIFEST = "packages/manifests/firefox/manifest.json";
 const FIREFOX_DIST = "packages/platform-extension/dist-firefox";
 /** The same build zipped, which the GitHub release carries beside its checksum. */
 const FIREFOX_ZIP = "packages/platform-extension/bramble-firefox.zip";
+
+const CHROME_MANIFEST = "packages/manifests/chromium/manifest.json";
+/** What crx3 packs, with the dev `key` already stripped from its manifest. */
+const CHROME_DIST = "packages/platform-extension/dist-chromium";
+const CHROME_ZIP = "packages/platform-extension/bramble.zip";
+const CHROME_CRX = "packages/platform-extension/bramble.crx";
 
 /** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
 const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
@@ -241,6 +248,12 @@ async function releaseExtension(target: string, version: string) {
 		fail(`invalid version "${version}". want 1-4 ints, each 0-65535 (e.g. 0.1.0)`);
 
 	const tag = `${version}-${target}`;
+
+	// The CI route: dispatched from here, built and submitted on runners. docs/ci-releases.md.
+	if (flags.has("--ci")) return dispatchRelease("chrome-release.yml", version, tag);
+	if (flags.has("--runner-build")) return runnerBuildChrome(version, tag);
+	if (flags.has("--runner-publish")) return runnerPublishChrome(version, tag);
+
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
@@ -263,18 +276,8 @@ async function releaseExtension(target: string, version: string) {
 
 	gate();
 
-	const before = readFileSync(manifest, "utf8");
-	let replaced = 0;
-	const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
-		replaced++;
-		return `${p1}${version}${p2}`;
-	});
-	if (replaced !== 1)
-		fail(`expected exactly one "version" field in ${manifest}, found ${replaced}`);
-
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
-	const bumped = after !== before;
-	if (bumped) writeFileSync(manifest, after);
+	const bumped = bumpManifestVersion(manifest, version).length > 0;
 
 	try {
 		run("pnpm --filter @vault/platform-extension run bundle:chromium");
@@ -367,7 +370,7 @@ async function releaseFirefox(version: string) {
 	gate();
 
 	const branch = capture("git rev-parse --abbrev-ref HEAD");
-	const bumped = bumpFirefox(version).length > 0;
+	const bumped = bumpManifestVersion(FIREFOX_MANIFEST, version).length > 0;
 
 	try {
 		buildFirefox();
@@ -861,30 +864,33 @@ async function runnerPublishAndroid(version: string, tag: string): Promise<void>
 	);
 }
 
-// ----- firefox: the CI route -----
+// ----- browser extensions: the CI route -----
+//
+// Firefox and Chrome share a shape. A build job with no secrets gates, bumps the manifest and
+// builds; a publish job holding the store credentials runs a preflight against the store, commits
+// the bump through GitHub's API, submits, tags and publishes.
+//
+// The release commit comes BEFORE the store submission, the reverse of Android. A submission cannot
+// be taken back and the commit can fail (main moved since the build), so the other order risks a
+// version live in a store that the repository never recorded. Committing first makes the failure
+// case a bump commit with nothing submitted, which a re-dispatch of the same version finishes: the
+// manifest already matches, so the build changes nothing and the publish job tags what is there.
 
-/** Set the manifest version. Returns the files it changed, which is none when it already matches. */
-function bumpFirefox(version: string): string[] {
-	const before = readFileSync(FIREFOX_MANIFEST, "utf8");
+type Handoff = { version: string; base: string; files: string[] };
+
+/** Set a manifest's version. Returns the files it changed, which is none when it already matches. */
+function bumpManifestVersion(manifest: string, version: string): string[] {
+	const before = readFileSync(manifest, "utf8");
 	let replaced = 0;
 	const after = before.replace(/("version"\s*:\s*")[^"]*(")/, (_m, p1, p2) => {
 		replaced++;
 		return `${p1}${version}${p2}`;
 	});
 	if (replaced !== 1)
-		fail(`expected exactly one "version" field in ${FIREFOX_MANIFEST}, found ${replaced}`);
+		fail(`expected exactly one "version" field in ${manifest}, found ${replaced}`);
 	if (after === before) return [];
-	writeFileSync(FIREFOX_MANIFEST, after);
-	return [FIREFOX_MANIFEST];
-}
-
-/** Bundle and lint. Throws, so each caller decides what to undo. */
-function buildFirefox(): void {
-	run("pnpm --filter @vault/platform-extension run bundle:firefox");
-	// AMO's addons-linter, run BEFORE signing. Signing uploads to AMO and consumes the version (AMO
-	// won't re-sign it), so catching a validation error here costs nothing: nothing was uploaded,
-	// so it is fixed and the SAME version retried.
-	run("pnpm --filter @vault/platform-extension run lint:firefox");
+	writeFileSync(manifest, after);
+	return [manifest];
 }
 
 /** Dotted versions compared numerically, part by part: 1.10 is above 1.9. */
@@ -898,6 +904,90 @@ function compareVersions(a: string, b: string): number {
 	return 0;
 }
 
+/** What every build job checks before building. Returns the commit it builds from. */
+function runnerBuildStart(workflow: string, tag: string): string {
+	if (!process.env.GITHUB_ACTIONS) fail(`--runner-build runs in ${workflow}`);
+	// Releases come from main: the publish job commits onto it, and only onto what this built.
+	if (process.env.GITHUB_REF_NAME !== "main")
+		fail(`releases are cut from main, not ${process.env.GITHUB_REF_NAME}`);
+	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+	return capture("git rev-parse HEAD");
+}
+
+/**
+ * Hand a build to its publish job. `outputs` maps a name in the handoff to where the build left it,
+ * file or directory; `meta.files` are the ones the release commit will carry.
+ */
+function handOff(meta: Handoff, outputs: Record<string, string>): void {
+	rmSync(HANDOFF, { recursive: true, force: true });
+	mkdirSync(HANDOFF, { recursive: true });
+	for (const [name, path] of Object.entries(outputs))
+		cpSync(path, join(HANDOFF, name), { recursive: true });
+	for (const f of meta.files) {
+		mkdirSync(dirname(join(HANDOFF, "files", f)), { recursive: true });
+		copyFileSync(f, join(HANDOFF, "files", f));
+	}
+	writeFileSync(join(HANDOFF, "meta.json"), JSON.stringify(meta, null, 2));
+	console.log(
+		`handed off ${HANDOFF}/: ${Object.keys(outputs).join(", ")} and ${meta.files.length} file(s)`,
+	);
+}
+
+/** The publish side: prove the handoff is this run's, and put every output back where it was. */
+function receiveHandoff(
+	workflow: string,
+	version: string,
+	outputs: Record<string, string>,
+): Handoff {
+	if (!process.env.GITHUB_ACTIONS) fail(`--runner-publish runs in ${workflow}`);
+	const meta = JSON.parse(readFileSync(join(HANDOFF, "meta.json"), "utf8")) as Handoff;
+	if (meta.version !== version) fail(`the handoff is for ${meta.version}, not ${version}`);
+	const head = capture("git rev-parse HEAD");
+	if (head !== meta.base)
+		fail(`checked out ${head.slice(0, 9)}, but this was built from ${meta.base.slice(0, 9)}`);
+	for (const [name, path] of Object.entries(outputs)) {
+		rmSync(path, { recursive: true, force: true });
+		cpSync(join(HANDOFF, name), path, { recursive: true });
+	}
+	for (const f of meta.files) copyFileSync(join(HANDOFF, "files", f), f);
+	return meta;
+}
+
+/** The release commit, through GitHub's API; the base itself when the manifest already matched. */
+function commitRelease(meta: Handoff, headline: string): string {
+	return meta.files.length
+		? commitFiles({
+				repo: REPO,
+				branch: "main",
+				expectedHeadOid: meta.base,
+				headline,
+				files: meta.files,
+			})
+		: meta.base;
+}
+
+/** SHA256SUMS over the given release assets, written beside them. */
+function writeSums(assets: string[]): string {
+	const sums = join(dirname(assets[0] as string), "SHA256SUMS");
+	writeFileSync(
+		sums,
+		assets
+			.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")}  ${basename(f)}\n`)
+			.join(""),
+	);
+	return sums;
+}
+
+// firefox
+
+/** Bundle and lint. Throws, so each caller decides what to undo. */
+function buildFirefox(): void {
+	run("pnpm --filter @vault/platform-extension run bundle:firefox");
+	// AMO's addons-linter, run BEFORE signing. Signing uploads to AMO and consumes the version (AMO
+	// won't re-sign it), so catching a validation error here costs nothing: nothing was uploaded,
+	// so it is fixed and the SAME version retried.
+	run("pnpm --filter @vault/platform-extension run lint:firefox");
+}
 /**
  * Before anything is committed or uploaded: prove the credentials, prove they belong to an author of
  * this add-on (the listing is only visible with unlisted versions to one), and prove `version` is
@@ -929,66 +1019,34 @@ async function amoPreflight(version: string, apiKey: string, apiSecret: string):
 	return latest;
 }
 
-/**
- * `--runner-build`, the first job of firefox-release.yml. No secret reaches it: it runs the gate,
- * bumps the manifest, bundles and lints, and hands the build over with the files the release commit
- * will carry and the commit they were built from.
- */
+/** `--runner-build` for firefox-release.yml: gate, bump, bundle and lint, then hand off. */
 function runnerBuildFirefox(version: string, tag: string): void {
-	if (!process.env.GITHUB_ACTIONS) fail("--runner-build runs in firefox-release.yml");
-	if (process.env.GITHUB_REF_NAME !== "main")
-		fail(`releases are cut from main, not ${process.env.GITHUB_REF_NAME}`);
-	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
-	const base = capture("git rev-parse HEAD");
-
+	const base = runnerBuildStart("firefox-release.yml", tag);
 	gate();
-	const files = bumpFirefox(version);
+	const files = bumpManifestVersion(FIREFOX_MANIFEST, version);
 	try {
 		buildFirefox();
 	} catch (e) {
 		fail(`build or addons-linter validation failed: ${(e as Error).message}`);
 	}
-
-	rmSync(HANDOFF, { recursive: true, force: true });
-	mkdirSync(HANDOFF, { recursive: true });
-	cpSync(FIREFOX_DIST, join(HANDOFF, "dist-firefox"), { recursive: true });
-	copyFileSync(FIREFOX_ZIP, join(HANDOFF, "bramble-firefox.zip"));
-	for (const f of files) {
-		mkdirSync(dirname(join(HANDOFF, "files", f)), { recursive: true });
-		copyFileSync(f, join(HANDOFF, "files", f));
-	}
-	writeFileSync(join(HANDOFF, "meta.json"), JSON.stringify({ version, base, files }, null, 2));
-	console.log(`handed off ${HANDOFF}/: the build, its zip and ${files.length} file(s)`);
+	handOff(
+		{ version, base, files },
+		{ "dist-firefox": FIREFOX_DIST, "bramble-firefox.zip": FIREFOX_ZIP },
+	);
 }
 
 /**
- * `--runner-publish`, the second job and the only one holding the AMO credentials. Mozilla does the
- * signing, so what is guarded here is the version, which an upload consumes for good.
- *
- * Unlike Android, the release commit comes BEFORE the store upload. The upload cannot be undone and
- * the commit can fail (main moved since the build), so the other order risks a version live on AMO
- * that the repository never recorded. This order's failure is a bump commit with nothing uploaded,
- * which a re-dispatch of the same version finishes: the manifest already matches, so the build
- * changes nothing and this job tags what is there.
+ * `--runner-publish` for firefox-release.yml, and the only job holding the AMO credentials. Mozilla
+ * does the signing, so what is guarded here is the version, which an upload consumes for good.
  */
 async function runnerPublishFirefox(version: string, tag: string): Promise<void> {
-	if (!process.env.GITHUB_ACTIONS) fail("--runner-publish runs in firefox-release.yml");
-	const meta = JSON.parse(readFileSync(join(HANDOFF, "meta.json"), "utf8"));
-	if (meta.version !== version) fail(`the handoff is for ${meta.version}, not ${version}`);
-	const head = capture("git rev-parse HEAD");
-	if (head !== meta.base)
-		fail(`checked out ${head.slice(0, 9)}, but this was built from ${meta.base.slice(0, 9)}`);
-
+	const meta = receiveHandoff("firefox-release.yml", version, {
+		"dist-firefox": FIREFOX_DIST,
+		"bramble-firefox.zip": FIREFOX_ZIP,
+	});
 	// `||`, not `??`: a secret the environment does not have arrives as an empty string.
 	const apiKey = process.env.AMO_API_KEY || fail("no AMO_API_KEY in firefox-release");
 	const apiSecret = process.env.AMO_API_SECRET || fail("no AMO_API_SECRET in firefox-release");
-
-	// The build back where sign-firefox.ts and the release read it.
-	rmSync(FIREFOX_DIST, { recursive: true, force: true });
-	cpSync(join(HANDOFF, "dist-firefox"), FIREFOX_DIST, { recursive: true });
-	copyFileSync(join(HANDOFF, "bramble-firefox.zip"), FIREFOX_ZIP);
-	const files = meta.files as string[];
-	for (const f of files) copyFileSync(join(HANDOFF, "files", f), f);
 
 	const latest = await amoPreflight(version, apiKey, apiSecret);
 	console.log(`AMO: the credentials work, and ${version} is above the latest it holds, ${latest}`);
@@ -1011,15 +1069,7 @@ async function runnerPublishFirefox(version: string, tag: string): Promise<void>
 		return;
 	}
 
-	const commit = files.length
-		? commitFiles({
-				repo: REPO,
-				branch: "main",
-				expectedHeadOid: meta.base,
-				headline: `chore(release): firefox ${version}`,
-				files,
-			})
-		: meta.base;
+	const commit = commitRelease(meta, `chore(release): firefox ${version}`);
 	try {
 		// Env credentials, so sign-firefox.ts never reaches for the YubiKey.
 		run("pnpm run sign:firefox");
@@ -1035,11 +1085,7 @@ async function runnerPublishFirefox(version: string, tag: string): Promise<void>
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const zipAsset = join(stage, `bramble_firefox_${version}.zip`);
 	copyFileSync(FIREFOX_ZIP, zipAsset);
-	const sumsAsset = join(stage, "SHA256SUMS");
-	writeFileSync(
-		sumsAsset,
-		`${createHash("sha256").update(readFileSync(zipAsset)).digest("hex")}  ${basename(zipAsset)}\n`,
-	);
+	const sumsAsset = writeSums([zipAsset]);
 	try {
 		await publish(tag, `Firefox Extension ${version}`, [zipAsset, sumsAsset], () =>
 			verifyDraft(tag, "*.zip"),
@@ -1049,6 +1095,136 @@ async function runnerPublishFirefox(version: string, tag: string): Promise<void>
 	}
 	console.log(
 		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): submitted to AMO for listed review; source zip + SHA256SUMS on the GitHub release.`,
+	);
+}
+
+// chrome
+
+/** The version live on the Chrome Web Store, from the same update service Chrome itself polls. */
+async function chromeLiveVersion(): Promise<string> {
+	// A far-future prodversion, so a rising minimum_chrome_version can never hide the answer.
+	const url =
+		"https://clients2.google.com/service/update2/crx?response=updatecheck&acceptformat=crx3" +
+		`&prodversion=999.0&x=${encodeURIComponent(`id=${CWS_ITEM_ID}&uc`)}`;
+	const res = await fetch(url);
+	if (!res.ok) fail(`the Chrome update service answered ${res.status}`);
+	// Inside <updatecheck>: the response's first version="" is the XML declaration's own.
+	const version = (await res.text()).match(/<updatecheck\b[^>]*\bversion="([^"]+)"/)?.[1];
+	return version ?? fail(`the Chrome update service reported no version for ${CWS_ITEM_ID}`);
+}
+
+/** A CRX3 package starts with "Cr24"; anything else is not one, and the store would refuse it. */
+function assertCrx(file: string): void {
+	const magic = readFileSync(file).subarray(0, 4).toString("latin1");
+	if (magic !== "Cr24")
+		fail(`${basename(file)} is not a CRX3 package (it starts with ${JSON.stringify(magic)})`);
+}
+
+/** `--runner-build` for chrome-release.yml: gate, bump and bundle, then hand off. */
+function runnerBuildChrome(version: string, tag: string): void {
+	const base = runnerBuildStart("chrome-release.yml", tag);
+	gate();
+	const files = bumpManifestVersion(CHROME_MANIFEST, version);
+	try {
+		run("pnpm --filter @vault/platform-extension run bundle:chromium");
+	} catch (e) {
+		fail(`build failed: ${(e as Error).message}`);
+	}
+	handOff({ version, base, files }, { "dist-chromium": CHROME_DIST, "bramble.zip": CHROME_ZIP });
+}
+
+/**
+ * `--runner-publish` for chrome-release.yml. Packs the .crx with the CWS signing key, submits it
+ * with the service account, and publishes.
+ *
+ * crx3 takes the key as a file, so both secrets are written to 0600 files in a 0700 directory for
+ * the seconds packing and submission take, then removed: what the local route already does in
+ * primeCwsSecrets, and the one place a runner here holds a credential on disk rather than in memory.
+ */
+async function runnerPublishChrome(version: string, tag: string): Promise<void> {
+	const meta = receiveHandoff("chrome-release.yml", version, {
+		"dist-chromium": CHROME_DIST,
+		"bramble.zip": CHROME_ZIP,
+	});
+	const keyPem =
+		process.env.CWS_KEY_PEM_CONTENT || fail("no CWS_KEY_PEM_CONTENT in chrome-release");
+	const account =
+		process.env.CWS_SERVICE_ACCOUNT_CONTENT ||
+		fail("no CWS_SERVICE_ACCOUNT_CONTENT in chrome-release");
+
+	// Before anything is packed or committed: the store would refuse a version that is not above
+	// the live one, and after a release commit that is a stranded bump.
+	const live = await chromeLiveVersion();
+	if (compareVersions(version, live) <= 0)
+		fail(`${version} is not above ${live}, the version live on the Chrome Web Store`);
+
+	const secrets = mkdtempSync(join(tmpdir(), "bramble-cws-"));
+	// On any exit, fail() included: finally does not run past process.exit.
+	const clear = () => rmSync(secrets, { recursive: true, force: true });
+	process.once("exit", clear);
+	let commit = meta.base;
+	try {
+		writeFileSync(join(secrets, "key.pem"), keyPem, { mode: 0o600 });
+		writeFileSync(join(secrets, "sa.json"), account, { mode: 0o600 });
+		process.env.CWS_KEY_PEM = join(secrets, "key.pem");
+		process.env.CWS_SERVICE_ACCOUNT_JSON = join(secrets, "sa.json");
+
+		try {
+			run("node scripts/sign-cws.ts --check");
+		} catch {
+			fail(
+				"the Chrome Web Store refused the service account (above); nothing was packed or committed",
+			);
+		}
+		console.log(
+			`preflight: ${version} is above the live ${live}, and the store accepts the account`,
+		);
+
+		run("pnpm run sign");
+		assertCrx(CHROME_CRX);
+
+		if (flags.has("--dry-run")) {
+			console.log(
+				`\ndry run: ${version} built and packed as a CRX3 with the CWS key, and cleared the store's preflight.` +
+					`\nNothing was committed, submitted, tagged or published; ${tag} is still free.`,
+			);
+			return;
+		}
+
+		commit = commitRelease(meta, `chore(release): chromium ${version}`);
+		try {
+			run("pnpm run sign:cws");
+		} catch {
+			fail(
+				`Chrome Web Store submission failed after the release commit ${commit.slice(0, 9)}. Re-dispatch` +
+					` ${version} once fixed: the manifest already matches, so it tags this commit and submits again.`,
+			);
+		}
+	} finally {
+		clear();
+		delete process.env.CWS_KEY_PEM;
+		delete process.env.CWS_SERVICE_ACCOUNT_JSON;
+	}
+	createTag(REPO, tag, commit);
+	run(`git fetch --quiet origin refs/tags/${tag}:refs/tags/${tag}`);
+
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+	const crxAsset = join(stage, `bramble_chromium_${version}.crx`);
+	const zipAsset = join(stage, `bramble_chromium_${version}.zip`);
+	copyFileSync(CHROME_CRX, crxAsset);
+	copyFileSync(CHROME_ZIP, zipAsset);
+	const sumsAsset = writeSums([crxAsset, zipAsset]);
+	try {
+		await publish(tag, `Chromium Extension ${version}`, [crxAsset, zipAsset, sumsAsset], () =>
+			verifyDraft(tag, "bramble_chromium_*", (file) => {
+				if (file.endsWith(".crx")) assertCrx(file);
+			}),
+		);
+	} finally {
+		rmSync(stage, { recursive: true, force: true });
+	}
+	console.log(
+		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): submitted to the Chrome Web Store for review; .crx + .zip + SHA256SUMS on the GitHub release.`,
 	);
 }
 

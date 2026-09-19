@@ -82,22 +82,38 @@ offline backup; keep nothing plaintext.
 
 ## Each release
 
-One command, run from your machine (it will prompt for a YubiKey touch):
-
 ```sh
-pnpm run release chromium 1.0.0
+pnpm run release chromium 1.0.0 --ci   # from GitHub: no Mac, no YubiKey, one approval
+pnpm run release chromium 1.0.0        # from this Mac: one YubiKey touch for both CWS secrets
 ```
 
-It runs lint + tests, bumps the manifest, builds WASM, bundles, signs
-`bramble.crx` locally, tags, pushes, and publishes a GitHub release with the
-signed `.crx` (and `.zip`) attached. The signing key never leaves your machine. Publishing fires
-`.github/workflows/release.yml`, which only **verifies** the signed `.crx` is
-attached; CI never builds or signs.
+**From GitHub** (`--ci`), the normal route, through `.github/workflows/chrome-release.yml`. A build
+job with no secrets runs the gate, bumps the manifest and bundles; a publish job, approved in the
+`chrome-release` environment, packs and signs the `.crx`, submits it to the store and publishes the
+GitHub release. It follows the Firefox route:
 
-Then upload the release's `bramble_<platform>_<version>.crx` to the Chrome Web
-Store via **Upload New Package**, or the Update API with
-`X-Goog-Upload-Protocol: raw` and `X-Goog-Upload-File-Name: <name>.crx`. (The
-store upload stays manual, so CWS publish credentials never live in CI either.)
+- **A preflight runs first.** The version must be above the one live on the store, read from the
+  update service Chrome itself polls, and the service account must be authorized for this item
+  (`sign-cws.ts --check`). Both before anything is packed or committed.
+- **The release commit comes before the submission**, which cannot be taken back, while the commit
+  can fail if main moved since the build. A failed submission leaves a bump commit and nothing on the
+  store, and re-dispatching the same version finishes it.
+
+`crx3` takes its key as a file, so the publish job writes both secrets to 0600 files in a 0700
+directory for the seconds packing and submission take, then removes them, as the local route does.
+`-f dry_run=true` runs the preflight and packs the `.crx` with the real key, then stops before the
+commit:
+
+```sh
+gh workflow run chrome-release.yml --ref main -f version=1.0.0 -f dry_run=true
+```
+
+**From this Mac**, the fallback: it runs lint + tests, bumps the manifest, builds WASM, bundles,
+packs and signs `bramble.crx` locally, uploads it and publishes it to the store with the service
+account (below), then tags, pushes, and publishes a GitHub release with the signed `.crx` and `.zip`
+attached. Both secrets decrypt on one touch. Publishing fires `.github/workflows/release.yml`, which
+verifies the signed `.crx` is attached; the GitHub route, whose own token cannot trigger that
+workflow, checks its draft itself before publishing it.
 
 ### Building without releasing
 

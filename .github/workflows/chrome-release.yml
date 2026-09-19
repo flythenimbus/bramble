@@ -1,0 +1,143 @@
+name: Chrome release
+
+# Builds the Chromium extension, packs and signs the .crx, submits it to the Chrome Web Store, and
+# publishes the GitHub release, so a release needs neither a Mac nor a YubiKey. docs/ci-releases.md
+# has the trade; this follows the Firefox workflow's shape, for the same reasons.
+#
+# - **A preflight runs first**: the version must be above the one live on the store (read from the
+#   update service Chrome itself polls), and the service account must be authorized for this item.
+#   Both before anything is packed or committed.
+# - **The release commit comes before the submission**, because a submission cannot be taken back
+#   and the commit can fail if main moved since the build. The failure case is then a bump commit
+#   with nothing submitted, which a re-dispatch of the same version finishes.
+#
+# Two credentials live in the chrome-release environment. The CWS signing key proves "the uploader
+# is us" (the store checks it, then repackages under Google's key) and takes a support ticket to
+# rotate; the service account is what uploads and publishes, and is revoked in minutes. The publish
+# job installs the workspace's npm packages, since crx3 packs the .crx, so third-party code runs
+# beside both. Accepted because neither key is one users verify or one that cannot be replaced; it
+# would not be for Android.
+#
+# `pnpm run release chromium <version> --ci` dispatches this. `dry_run` builds, runs the preflight
+# and packs the .crx with the real key, then stops before the commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Extension version to release, e.g. 1.30.0"
+        required: true
+        type: string
+      dry_run:
+        description: "Build, preflight and pack, but commit, submit and publish nothing"
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: chrome-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Tags too, so a version that has already shipped is refused before the build.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # No cache: the WASM in this bundle ships inside a package signed with the CWS key.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          cache: false
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
+        with:
+          tool: wasm-pack@0.13.1
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate, bump and build
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/release.ts chromium "$VERSION" --runner-build
+
+      - name: Hand off the build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: chrome-release
+          path: release-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Pack, submit and publish
+    needs: build
+    runs-on: ubuntu-24.04
+    # The approval gate. Its secrets reach this job only after a required reviewer approves it.
+    environment: chrome-release
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # The commit the build job built, which the release commit must sit directly on top of.
+          ref: ${{ github.sha }}
+          # The previous chromium tag and the range after it, which the release notes are drawn from.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          # pnpm arrives through corepack below, after this step, so setup-node must not go
+          # looking for it to prime a cache.
+          package-manager-cache: false
+
+      # crx3, for packing. Corepack rather than a third-party setup action: it ships with Node.
+      - name: Install JS deps
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Receive the build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: chrome-release
+          path: release-out/
+
+      - name: Preflight, pack, commit, submit and publish
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+          CWS_KEY_PEM_CONTENT: ${{ secrets.CWS_KEY_PEM_CONTENT }}
+          CWS_SERVICE_ACCOUNT_CONTENT: ${{ secrets.CWS_SERVICE_ACCOUNT_CONTENT }}
+        run: |
+          set -euo pipefail
+          flags=(--runner-publish)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts chromium "$VERSION" "${flags[@]}"

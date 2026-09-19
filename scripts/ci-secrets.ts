@@ -155,8 +155,8 @@ const PLANS: Plan[] = [
 	{
 		env: "chrome-release",
 		secrets: {
-			// Content, not the paths sign.ts and sign-cws.ts take today; the Chrome phase teaches them
-			// to read these, so a runner never writes either to disk.
+			// Content, not paths. crx3 takes its key as a file, so the publish job writes both to 0600
+			// files in a 0700 dir for the seconds packing and submission take, as the local route does.
 			CWS_KEY_PEM_CONTENT: wrapper("cws-signing-key.age"),
 			CWS_SERVICE_ACCOUNT_CONTENT: wrapper("cws-service-account.age"),
 		},
