@@ -59,7 +59,7 @@ concurrency:
 
 jobs:
   bump:
-    name: Gate, bump, start Windows
+    name: ${{ (inputs.dry_run || contains(inputs.skip, 'windows')) && 'Gate and bump' || 'Gate, bump, start Windows' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the bump commit
@@ -178,7 +178,7 @@ jobs:
           retention-days: 7
 
   publish:
-    name: macOS, sign and publish
+    name: ${{ contains(inputs.skip, 'macos') && 'Sign and publish' || 'macOS, sign and publish' }}
     needs: [bump, linux]
     # Runs when Linux was skipped on purpose, not only when it succeeded: a needs-job that is skipped
     # otherwise skips everything after it too.
