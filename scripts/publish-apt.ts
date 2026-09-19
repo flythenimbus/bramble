@@ -22,7 +22,15 @@
 // See docs/release-signing.md, "Linux APT repository".
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
@@ -188,10 +196,26 @@ writeFileSync(
 	join(publishedDir, "keys.asc"),
 	execFileSync("gpg", ["--armor", "--export", gpgKey], { encoding: "utf8" }),
 );
-copyFileSync(
-	join(ROOT, "packages/platform-desktop/apt/bramble.sources"),
-	join(publishedDir, "bramble.sources"),
-);
+// The snippet users install, and the one thing here that is not derived from the repository, so
+// it is checked against it. apt skips a repository whose Architectures do not claim the machine's
+// own, silently: the arm64 packages were published and indexed for two releases while every arm64
+// user saw an empty repository, because this line said amd64.
+const sources = join(ROOT, "packages/platform-desktop/apt/bramble.sources");
+const arches = (text: string, label: string) =>
+	text
+		.match(/^Architectures: (.+)$/m)?.[1]
+		.trim()
+		.split(/\s+/)
+		.sort() ?? fail(`no Architectures line in ${label}`);
+const claimed = arches(readFileSync(sources, "utf8"), sources);
+const publishedRelease = join(publishedDir, "dists", SUITE, "Release");
+const actual = arches(readFileSync(publishedRelease, "utf8"), publishedRelease);
+if (claimed.join(" ") !== actual.join(" "))
+	fail(
+		`bramble.sources claims "${claimed.join(" ")}" but the index publishes "${actual.join(" ")}".\n` +
+			"Nothing was uploaded. Fix Architectures in packages/platform-desktop/apt/bramble.sources.",
+	);
+copyFileSync(sources, join(publishedDir, "bramble.sources"));
 
 console.log(`\npublished tree: ${publishedDir}`);
 if (dryRun) {

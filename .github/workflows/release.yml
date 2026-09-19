@@ -142,12 +142,22 @@ jobs:
 
       # The index names packages by path and checksum; a pool file that is missing (or was
       # overwritten by a later sync) makes `apt install` fail on a package apt was just told about.
+      #
+      # Every architecture the repository claims, not just amd64: checking one of them is how the
+      # arm64 packages stayed unreachable for two releases. The architectures come from the sources
+      # snippet users actually install, so this fails if it stops matching the index as well.
       - name: Assert every package the index names is actually there
         run: |
           set -euo pipefail
-          curl -fsSL https://apt.bramble.sh/dists/stable/main/binary-amd64/Packages > /tmp/Packages
-          grep '^Filename:' /tmp/Packages | awk '{print $2}' | while read -r path; do
-            code="$(curl -s -o /dev/null -w '%{http_code}' -I "https://apt.bramble.sh/$path")"
-            [ "$code" = "200" ] || { echo "::error::$path is $code"; exit 1; }
-            echo "ok: $path"
+          arches="$(curl -fsSL https://apt.bramble.sh/bramble.sources | sed -n 's/^Architectures: //p')"
+          [ -n "$arches" ] || { echo "::error::bramble.sources names no architectures"; exit 1; }
+          for arch in $arches; do
+            echo "-- $arch"
+            curl -fsSL "https://apt.bramble.sh/dists/stable/main/binary-$arch/Packages" > /tmp/Packages
+            grep -q '^Filename:' /tmp/Packages || { echo "::error::binary-$arch names no packages"; exit 1; }
+            grep '^Filename:' /tmp/Packages | awk '{print $2}' | while read -r path; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' -I "https://apt.bramble.sh/$path")"
+              [ "$code" = "200" ] || { echo "::error::$path is $code"; exit 1; }
+              echo "ok: $path"
+            done
           done

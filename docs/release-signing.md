@@ -864,7 +864,7 @@ Types: deb
 URIs: https://apt.bramble.sh
 Suites: stable
 Components: main
-Architectures: amd64
+Architectures: amd64 arm64
 Signed-By: /usr/share/keyrings/bramble-keyring.asc
 ```
 

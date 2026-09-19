@@ -3,9 +3,13 @@
 #
 # Signed-By is the line that matters: it scopes this key to THIS repository, so a key installed
 # for Bramble cannot be used to authenticate a package from anywhere else on the system.
+#
+# Architectures has to list every one the repository publishes. apt skips a repository that does
+# not claim the machine's architecture, so a missing entry is not a warning, it is arm64 users
+# seeing no packages at all. publish-apt.ts fails if this line and the published index disagree.
 Types: deb
 URIs: https://apt.bramble.sh
 Suites: stable
 Components: main
-Architectures: amd64
+Architectures: amd64 arm64
 Signed-By: /usr/share/keyrings/bramble-keyring.asc

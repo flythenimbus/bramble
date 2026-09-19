@@ -156,8 +156,8 @@ What publish does, in order:
 keys.asc
 bramble.sources
 dists/stable/{InRelease,Release,Release.gpg}
-dists/stable/main/binary-amd64/{Packages,Packages.gz,Packages.bz2,Release}
-pool/main/b/bramble/bramble_<version>_amd64.deb
+dists/stable/main/binary-{amd64,arm64}/{Packages,Packages.gz,Packages.bz2,Release}
+pool/main/b/bramble/bramble_<version>_{amd64,arm64}.deb
 ```
 
 `stable` is the suite named in `bramble.sources`. Changing it orphans every installed client.
@@ -221,7 +221,11 @@ real one.
 ## Not done yet
 
 - ~~**arm64.**~~ Done: `build:linux` builds both, `--platform` per architecture, emulated for
-  whichever one the host is not. The repository serves `binary-amd64` and `binary-arm64`.
+  whichever one the host is not. The repository serves `binary-amd64` and `binary-arm64`. It was
+  only half done until 2026-09-19: the index carried arm64 from the start, but `bramble.sources`
+  claimed `Architectures: amd64`, and apt skips a repository that does not claim the machine's
+  architecture without saying so, so arm64 users saw an empty repository for two releases.
+  `publish-apt.ts` now refuses to upload when the snippet and the index disagree.
 - **A `.deb` built in CI.** Tempting, since apt trusts the signed index rather than the package,
   so no key would be needed to build one. It would mean signing an artifact this machine did not
   produce, which is a different trust story than every other target here.
