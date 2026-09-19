@@ -78,4 +78,31 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 # /etc/passwd, so give the tools somewhere writable to call home.
 RUN mkdir -p /work /out /home/builder && chmod -R a+rwX /work /out /home/builder
 ENV HOME=/home/builder
+
+# The AppImage packer, pre-placed in Tauri's tool cache so the build never fetches it.
+#
+# `tauri build` downloads this from the linuxdeploy project's `continuous` tag, and when that
+# download fails it does not stop: it falls back to an older built-in packer and leaves the cache
+# empty, which is a release failing on a GitHub blip (it did, on amd64, while arm64 downloaded the
+# same file fine). scripts/appimage-portability.ts then has no packer to repack with, and
+# repacking is what keeps issue #100 fixed.
+#
+# So: a dated tag rather than `continuous`, checked against its digest, fetched once when the image
+# is built. A bad download fails here, loudly, instead of in the middle of a release.
+ARG LINUXDEPLOY_APPIMAGE_VERSION=1-alpha-20250213-1
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) arch=x86_64; sha=992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3 ;; \
+      arm64) arch=aarch64; sha=83c292149274965a865dcd44c135cfca8ba28c6b7de3eb628d4b8b5f248af17c ;; \
+      *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p "$HOME/.cache/tauri"; \
+    packer="$HOME/.cache/tauri/linuxdeploy-plugin-appimage.AppImage"; \
+    curl -fsSL --retry 5 --retry-all-errors \
+      "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/${LINUXDEPLOY_APPIMAGE_VERSION}/linuxdeploy-plugin-appimage-${arch}.AppImage" \
+      -o "$packer"; \
+    echo "${sha}  $packer" | sha256sum -c -; \
+    chmod -R a+rwX "$HOME/.cache"; \
+    chmod a+rx "$packer"
+
 WORKDIR /work
