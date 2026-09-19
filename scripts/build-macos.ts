@@ -16,6 +16,13 @@
 // The plaintext is passed through the environment and never written to disk. That matters more
 // here than elsewhere: this key is the root of trust for every update the app will ever accept, so
 // a copy left in a temp file is a copy someone could ship a malicious update with.
+//
+// Two phases, compile then bundle, and both unless told otherwise. Compiling runs every crate's
+// build script and proc macro, so it gets an environment with no signing material in it; only
+// bundling, which is where macOS codesigns and notarizes and where the updater artifacts are
+// signed, runs beside the keys. desktop-release.yml runs them on different runners, `--compile-only`
+// in a job that holds nothing and `--bundle-only` in the approved one, from the binaries the first
+// handed over. Locally they run back to back, so a local build exercises the same two steps.
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -96,40 +103,41 @@ function loadNotarization(): (() => void) | undefined {
 	return () => rmSync(tmp, { recursive: true, force: true });
 }
 
-const cleanupNotarization = loadNotarization();
-
-const key = signingKey(fail);
-if (!key) {
-	// Refused rather than built unsigned: an unsigned archive is rejected by every installed app,
-	// so a release built without the key looks complete and silently breaks updating.
-	fail(
-		`no updater signing key: expected ${KEY_AGE} (override DESKTOP_UPDATER_KEY_AGE) or\n` +
-			"TAURI_SIGNING_PRIVATE_KEY in the environment. See docs/release-signing.md",
-	);
-}
-
 // Universal unless asked otherwise, and only on macOS: `universal-apple-darwin` is a lipo of two
 // Apple slices, which is meaningless anywhere else and would fail the build outright. Elsewhere
 // the host target is the right and only answer, so Linux produces a .deb and an AppImage for the
 // architecture it is running on. A host-arch build IS wrong to hand anyone on macOS, though: it
 // looks identical and simply does not open on an Intel Mac, so `--aarch64` (iterating only) is
 // what opts out there.
+const PHASES = ["--compile-only", "--bundle-only"];
 const passed = process.argv.slice(2);
+const compileOnly = passed.includes("--compile-only");
+const bundleOnly = passed.includes("--bundle-only");
+if (compileOnly && bundleOnly)
+	fail("--compile-only and --bundle-only are the two halves; pass neither for both");
 const hostOnly = passed.includes("--aarch64");
-const forwarded = passed.filter((a) => a !== "--aarch64");
+const forwarded = passed.filter((a) => a !== "--aarch64" && !PHASES.includes(a));
 const universal =
 	process.platform === "darwin" && !hostOnly && !forwarded.some((a) => a.startsWith("--target"));
 
-const args = [
-	"--filter",
-	"@vault/platform-desktop",
-	"exec",
-	"tauri",
-	"build",
-	...forwarded,
-	...(universal ? ["--target", "universal-apple-darwin"] : []),
-];
-const env = {
+/** Same target and --config for both halves: `tauri bundle` reads the build `tauri build` left. */
+const tauri = (command: "build" | "bundle", extra: string[], env: NodeJS.ProcessEnv) =>
+	execFileSync(
+		"pnpm",
+		[
+			"--filter",
+			"@vault/platform-desktop",
+			"exec",
+			"tauri",
+			command,
+			...extra,
+			...forwarded,
+			...(universal ? ["--target", "universal-apple-darwin"] : []),
+		],
+		{ stdio: "inherit", env },
+	);
+
+const shared = {
 	...process.env,
 	// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
 	// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
@@ -137,24 +145,56 @@ const env = {
 	...(universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
 		? { BRAMBLE_UNIVERSAL: "1" }
 		: {}),
-	TAURI_SIGNING_PRIVATE_KEY: key,
-	TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 };
-// Before the bundler, not after it fails: on Linux the AppImage step fetches its packer from the
-// network, and a failed fetch is a silent fallback rather than an error. See appimage-packer.ts.
-if (process.platform === "linux") await ensurePacker();
 
-try {
-	execFileSync("pnpm", args, { stdio: "inherit", env });
-} finally {
-	// Whatever the build did, the decrypted key must not outlive it.
-	cleanupNotarization?.();
+/** Signing material the compile step never sees, wherever it came from (.env.local, CI). */
+const SIGNING_ENV = [
+	"TAURI_SIGNING_PRIVATE_KEY",
+	"TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+	"APPLE_CERTIFICATE",
+	"APPLE_CERTIFICATE_PASSWORD",
+	"APPLE_PASSWORD",
+	"APPLE_API_KEY_PATH",
+	"ASC_KEY_CONTENT",
+];
+
+if (!bundleOnly) {
+	const env = { ...shared };
+	for (const name of SIGNING_ENV) delete env[name];
+	tauri("build", ["--no-bundle"], env);
 }
 
-if (process.platform === "linux") {
-	const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-	makeAppImagePortable(
-		join(root, "packages/platform-desktop/src-tauri/target/release/bundle"),
-		env,
-	);
+if (!compileOnly) {
+	const cleanupNotarization = loadNotarization();
+	try {
+		const key = signingKey(fail);
+		if (!key) {
+			// Refused rather than built unsigned: an unsigned archive is rejected by every installed
+			// app, so a release built without the key looks complete and silently breaks updating.
+			fail(
+				`no updater signing key: expected ${KEY_AGE} (override DESKTOP_UPDATER_KEY_AGE) or\n` +
+					"TAURI_SIGNING_PRIVATE_KEY in the environment. See docs/release-signing.md",
+			);
+		}
+		const env = {
+			...shared,
+			TAURI_SIGNING_PRIVATE_KEY: key,
+			TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
+		};
+		// Before the bundler, not after it fails: on Linux the AppImage step fetches its packer from
+		// the network, and a failed fetch is a silent fallback rather than an error.
+		if (process.platform === "linux") await ensurePacker();
+		tauri("bundle", [], env);
+
+		if (process.platform === "linux") {
+			const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+			makeAppImagePortable(
+				join(root, "packages/platform-desktop/src-tauri/target/release/bundle"),
+				env,
+			);
+		}
+	} finally {
+		// Whatever the bundler did, the decrypted key must not outlive it.
+		cleanupNotarization?.();
+	}
 }

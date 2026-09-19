@@ -3,7 +3,7 @@ name: Desktop release
 # Builds, signs and publishes the desktop app for macOS, Linux and Windows as one release, so it
 # needs neither a Mac nor a YubiKey. docs/ci-releases.md has the trade.
 #
-# Three kinds of job, and only the last one holds anything that matters:
+# Four kinds of job, and only the last one holds anything that matters:
 #
 # - **bump** runs the gate, commits the version through GitHub's API, and dispatches
 #   sign-windows.yml. The commit comes first, as on the local route, because that workflow builds
@@ -11,11 +11,14 @@ name: Desktop release
 # - **linux**, on native amd64 and arm64 runners, builds in the same Debian container as the local
 #   route. Neither holds a secret: the bundler will not emit updater artifacts unsigned, so their
 #   AppImages carry a throwaway signature that the publish job replaces.
+# - **macos** compiles both Apple slices and hands over the binaries, holding nothing. Compiling is
+#   where every crate's build script and proc macro runs, so it happens away from the keys; on
+#   macOS signing happens while bundling, not while compiling, which is what lets the two split.
 # - **publish**, on macOS, is the one approval and the only job the updater key ever reaches, so it
 #   runs first-party actions only (Rust comes from the image's rustup, pnpm from corepack). It
-#   builds and notarizes macOS, re-signs the AppImages, waits for SignPath and re-signs the
-#   installer, verifies every updater signature against the public key compiled into the app, and
-#   publishes. The update manifest is committed after the release exists, and the website deploy
+#   bundles, codesigns and notarizes macOS from the handed-over binaries, re-signs the AppImages,
+#   waits for SignPath and re-signs the installer, verifies every updater signature against the
+#   public key compiled into the app, and publishes. The update manifest is committed after the release exists, and the website deploy
 #   is dispatched by hand, because a commit made with this workflow's token fires no push workflow.
 #
 # Windows keeps its own approval, in SignPath, which signs the installer with a certificate this
@@ -180,22 +183,92 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  macos:
+    name: macOS (universal)
+    needs: bump
+    if: ${{ !contains(inputs.skip, 'macos') }}
+    runs-on: macos-26
+    # Holds nothing. Every crate's build script and proc macro runs in this job, which is why it is
+    # not the one with the keys: the publish job only packages and signs what this hands over.
+    permissions:
+      contents: read
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
+          persist-credentials: false
+
+      # The same Xcode the publish job bundles with, so compile and codesign see one SDK.
+      - name: Select Xcode
+        env:
+          WANT: ${{ inputs.xcode }}
+        run: |
+          set -euo pipefail
+          app="/Applications/Xcode_${WANT}.app"
+          if [ ! -d "$app" ]; then
+            echo "::error::Xcode $WANT is not on this runner. Present: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+            exit 1
+          fi
+          sudo xcode-select -s "$app/Contents/Developer"
+          xcodebuild -version
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          # No dependency cache in a release build, the same rule Rust follows here: a cache entry
+          # is mutable state any run on this repository can write, and these bytes get signed.
+          package-manager-cache: false
+
+      # The image's own rustup: the toolchain rust-toolchain.toml pins, and both Apple slices.
+      - name: Rust
+        run: |
+          set -euo pipefail
+          rustup toolchain install
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install JS deps
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Compile both slices
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          flags=(--runner-compile)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts desktop "$VERSION" "${flags[@]}"
+
+      - name: Hand off the build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-universal
+          # A tarball, packed by release.ts: an artifact drops the executable bit, and a binary
+          # copied into the .app without it is a notarized app that does not launch.
+          path: release-out/macos-universal.tar
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     # Static, unlike the bump job's: a skipped job never evaluates its name, so an expression here
-    # shows up in the UI as its own source whenever this job does not run. Names macOS because this
-    # is where it is built; with --skip=macos it runs here anyway, just without that build.
-    name: Build macOS, sign and publish
-    needs: [bump, linux]
-    # Runs when Linux was skipped on purpose, not only when it succeeded: a needs-job that is skipped
-    # otherwise skips everything after it too.
-    if: ${{ !cancelled() && needs.bump.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') }}
+    # shows up in the UI as its own source whenever this job does not run.
+    name: Sign and publish
+    needs: [bump, linux, macos]
+    # Runs when a platform was skipped on purpose, not only when every build succeeded: a needs-job
+    # that is skipped otherwise skips everything after it too.
+    if: ${{ !cancelled() && needs.bump.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
     runs-on: macos-26
     # The approval gate, and the only job holding the updater key.
     environment: desktop-release
     permissions:
       contents: write # the tag, the release and the manifest commit
       actions: write # dispatching the website deploy
-    # A universal build and notarization, then as long as SignPath's approval takes.
+    # Bundling, codesigning and notarization, then as long as SignPath's approval takes.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -226,8 +299,8 @@ jobs:
           # pnpm arrives through corepack below, so setup-node must not go looking for it.
           package-manager-cache: false
 
-      # The image's own rustup rather than a setup action: the toolchain rust-toolchain.toml pins,
-      # and both Apple slices for the universal build.
+      # Nothing is compiled here any more, but the bundler still resolves the build through cargo,
+      # so the pinned toolchain and both Apple targets have to be present to read it.
       - name: Rust
         run: |
           set -euo pipefail
@@ -240,6 +313,13 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
 
+      - name: Receive the macOS build
+        if: ${{ !contains(inputs.skip, 'macos') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: macos-universal
+          path: release-out/
+
       - name: Receive the Linux packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -247,7 +327,7 @@ jobs:
           merge-multiple: true
           path: dist-linux/
 
-      - name: Build macOS, sign everything, publish
+      - name: Bundle macOS, sign everything, publish
         env:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}

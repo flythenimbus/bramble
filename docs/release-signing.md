@@ -655,11 +655,15 @@ covers three operating systems, so it has more parts than the others:
 2. **Linux**, in the same Debian container as the local route, natively on amd64 and arm64 runners.
    No secrets: their AppImages carry a throwaway updater signature, since the bundler will not emit
    updater artifacts unsigned.
-3. **Windows**, in `sign-windows.yml`, waits for your approval **in SignPath**, which holds the
+3. **macOS** compiles both slices with no secrets and hands over the binaries. Compiling runs every
+   crate's build script, so it stays away from the keys; on macOS the signing happens while
+   bundling, which is what makes the split possible (`build-macos.ts --compile-only`).
+4. **Windows**, in `sign-windows.yml`, waits for your approval **in SignPath**, which holds the
    Authenticode certificate. That approval stays by design.
-4. **Publish**, on macOS, waits for your approval **in the `desktop-release` environment**. It is the
-   only job the updater key ever reaches, and it runs first-party actions only. It builds and
-   notarizes macOS, re-signs the AppImages and the SignPath-signed installer with the real key,
+5. **Publish**, on macOS, waits for your approval **in the `desktop-release` environment**. It is the
+   only job the updater key ever reaches, and it runs first-party actions only. It bundles,
+   codesigns and notarizes macOS from the handed-over binaries (`--bundle-only`), re-signs the
+   AppImages and the SignPath-signed installer with the real key,
    verifies every updater signature against the public key compiled into the app, and publishes.
    The update manifest is committed only after the release exists, then the website deploy is
    dispatched explicitly, because a commit made with the workflow's own token triggers no push

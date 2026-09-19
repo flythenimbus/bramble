@@ -122,7 +122,7 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android` | keystore + password |
 | **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome**. Built: `chrome-release.yml`, `release chromium`, with a store preflight | CWS key + service account |
-| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that notarizes, signs every updater artifact and publishes. APT stays on a Mac (`publish:apt --release`) | updater key, Developer ID `.p12`, ASC key |
+| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, macOS compiled in a job holding no secrets, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that bundles, codesigns, notarizes, signs every updater artifact and publishes. APT stays on a Mac (`publish:apt --release`) | updater key, Developer ID `.p12`, ASC key |
 | **later** | APT key rotation, then OIDC custody | Users install a new key once |
 
 Android leads because it is self-contained and proves every part of the pattern in one place: a

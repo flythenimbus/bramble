@@ -44,7 +44,9 @@
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+	accessSync,
 	appendFileSync,
+	constants,
 	copyFileSync,
 	cpSync,
 	existsSync,
@@ -206,9 +208,13 @@ if (skipArg) {
 // YubiKey. --resume re-signs a build this machine made, so it is local by definition. iOS still
 // opts in with --ci: its route commits and pushes from this clone, which is its own story.
 const CI_TARGETS = new Set(["android", "firefox", "chromium", "desktop"]);
-const onRunner = ["--runner-build", "--runner-publish", "--runner-bump", "--runner-prepare"].some(
-	(f) => flags.has(f),
-);
+const onRunner = [
+	"--runner-build",
+	"--runner-publish",
+	"--runner-bump",
+	"--runner-prepare",
+	"--runner-compile",
+].some((f) => flags.has(f));
 // --aarch64 is an Apple-Silicon-only build for iterating, which a release never is: local.
 const viaCi =
 	CI_TARGETS.has(platform) &&
@@ -1469,6 +1475,61 @@ function runnerPrepareDesktop(version: string): void {
 }
 
 /**
+ * What the macOS job hands the publish job: the lipo'd app binary, and the proxy in both places a
+ * universal build needs it (stage-proxy.mjs explains why there are two). Relative to src-tauri.
+ * A function rather than a module constant, because the dispatch at the top of this file runs
+ * before anything declared down here exists.
+ */
+function macosHandoff(): { root: string; tarball: string; files: string[] } {
+	return {
+		root: "packages/platform-desktop/src-tauri",
+		tarball: join(HANDOFF, "macos-universal.tar"),
+		files: [
+			"target/universal-apple-darwin/release/bramble-desktop",
+			"target/universal-apple-darwin/release/bramble-proxy",
+			"binaries/bramble-proxy-universal-apple-darwin",
+		],
+	};
+}
+
+/**
+ * `--runner-compile`, the macOS job. Compiles both slices with no secret in the job at all, which
+ * is the point: every crate's build script and proc macro runs here, and only packaging and
+ * signing run beside the keys. Packed as a tarball because artifacts drop the executable bit.
+ */
+function runnerCompileMacos(version: string): void {
+	if (!process.env.GITHUB_ACTIONS) fail("--runner-compile runs in desktop-release.yml");
+	runnerPrepareDesktop(version);
+	run("node scripts/build-macos.ts --compile-only");
+	const { root, tarball, files } = macosHandoff();
+	mkdirSync(dirname(tarball), { recursive: true });
+	execFileSync("tar", ["-cf", tarball, "-C", root, ...files], { stdio: "inherit" });
+	console.log(`\n${version} compiled for both Apple slices; handed over as ${tarball}`);
+}
+
+/**
+ * Unpacks the macOS job's build and refuses it unless every file is executable and carries both
+ * slices. Either failure is invisible until someone opens the app: one missing slice is an app
+ * that does not start on half of all Macs, and a missing x bit is one that starts on none.
+ */
+function receiveMacosBuild(): void {
+	const { root, tarball, files } = macosHandoff();
+	if (!existsSync(tarball)) fail(`no ${tarball}; the macOS job did not hand one over`);
+	execFileSync("tar", ["-xf", tarball, "-C", root], { stdio: "inherit" });
+	for (const file of files) {
+		const path = join(root, file);
+		try {
+			accessSync(path, constants.X_OK);
+		} catch {
+			fail(`${file} arrived without its executable bit`);
+		}
+		const archs = capture(`lipo -archs ${path}`).split(/\s+/).sort().join(" ");
+		if (archs !== "arm64 x86_64") fail(`${file} is ${archs || "not a Mach-O"}, not universal`);
+	}
+	console.log(`received the macOS build: ${files.length} universal binaries`);
+}
+
+/**
  * `--runner-publish`, the approved job on macOS and the only place the updater key exists. Builds
  * macOS (Developer ID signed, notarized, its updater archive signed as it is made), re-signs the
  * Linux AppImages over the throwaway signatures their builds carry, collects and re-signs the
@@ -1495,9 +1556,13 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 	for (const name of ["TAURI_SIGNING_PRIVATE_KEY", ...(skip.has("macos") ? [] : apple)])
 		if (!process.env[name]) fail(`no ${name} in desktop-release`);
 
-	// Universal: build-macos.ts builds both slices, and on a runner Tauri imports APPLE_CERTIFICATE
-	// into a throwaway keychain of its own. Notarization reads the ASC key from the environment.
-	if (!skip.has("macos")) run("pnpm run build:macos");
+	// Compiled by the macOS job, which holds nothing; bundled here, which is where Tauri imports
+	// APPLE_CERTIFICATE into a throwaway keychain, codesigns, notarizes with the ASC key from the
+	// environment, and signs the updater archive.
+	if (!skip.has("macos")) {
+		receiveMacosBuild();
+		run("node scripts/build-macos.ts --bundle-only");
+	}
 
 	const signUpdater = (file: string) =>
 		execFileSync(
@@ -1877,6 +1942,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	if (viaCi) return dispatchDesktop(version, tag);
 	if (flags.has("--runner-bump")) return runnerBumpDesktop(version, tag);
 	if (flags.has("--runner-prepare")) return runnerPrepareDesktop(version);
+	if (flags.has("--runner-compile")) return runnerCompileMacos(version);
 	if (flags.has("--runner-publish")) return runnerPublishDesktop(version, tag);
 
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");

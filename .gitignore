@@ -4,6 +4,8 @@ dist-chromium/
 dist-firefox/
 # Linux bundles from the container build (scripts/build-linux.ts).
 dist-linux/
+# Handoffs between release jobs (scripts/release.ts), written on a runner or by a local test.
+release-out/
 
 # Astro build cache
 .astro/
