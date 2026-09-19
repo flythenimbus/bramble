@@ -2,8 +2,12 @@
 // Add a built .deb to the APT repository, sign the index, and publish it to R2.
 //
 // Usage:
-//   pnpm run publish:apt              add dist-linux/deb/*.deb, sign, upload
-//   pnpm run publish:apt --dry-run    do everything except the upload
+//   pnpm run publish:apt                          add dist-linux/deb/*.deb, sign, upload
+//   pnpm run publish:apt --release 0.9.0-desktop  the same, with that GitHub release's .debs
+//   pnpm run publish:apt --dry-run                do everything except the upload
+//
+// --release is for a desktop release cut from GitHub (docs/ci-releases.md), which builds the
+// packages on runners: this machine then has none, and the release is where they are.
 //
 // This runs on the HOST, not in the Linux build container, and that split is not arbitrary: the
 // repository's GPG key lives on a YubiKey, and Docker Desktop on macOS cannot pass a USB device
@@ -18,7 +22,7 @@
 // See docs/release-signing.md, "Linux APT repository".
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
@@ -31,7 +35,9 @@ const REPO = "bramble";
 const SUITE = "stable";
 const BUCKET = "bramble-apt";
 
-const dryRun = process.argv.slice(2).includes("--dry-run");
+const argv = process.argv.slice(2);
+const dryRun = argv.includes("--dry-run");
+const release = argv.includes("--release") ? argv[argv.indexOf("--release") + 1] : undefined;
 
 const fail = (message: string): never => {
 	console.error(message);
@@ -67,6 +73,29 @@ if (!gpgKey) {
 	fail(
 		"BRAMBLE_APT_GPG_KEY is not set: the fingerprint or uid of the repository signing key.\n" +
 			"Put it in .env.local. See docs/release-signing.md.",
+	);
+}
+
+// Exactly that release's packages: the directory is cleared first, so a .deb left over from a
+// local build of some other version cannot ride along into the index.
+if (release) {
+	if (!release.endsWith("-desktop")) fail(`--release takes a desktop tag, e.g. 0.9.0-desktop`);
+	rmSync(DEBS, { recursive: true, force: true });
+	mkdirSync(DEBS, { recursive: true });
+	execFileSync(
+		"gh",
+		[
+			"release",
+			"download",
+			release,
+			"--repo",
+			"flythenimbus/bramble",
+			"--pattern",
+			"*.deb",
+			"--dir",
+			DEBS,
+		],
+		{ stdio: "inherit" },
 	);
 }
 
