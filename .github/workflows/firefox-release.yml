@@ -17,7 +17,8 @@ name: Firefox release
 # so third-party code runs beside the AMO credentials. That is accepted here and would not be for
 # Android: AMO keys are regenerated at will and nothing installed depends on them.
 #
-# `pnpm run release firefox <version> --ci` dispatches this. `dry_run` builds, lints, runs the AMO
+# `pnpm run release firefox <version>` dispatches this and watches it (`--dry-run` for a dry run,
+# `--local` for the old route on a Mac). `dry_run` builds, lints, runs the AMO
 # preflight and makes the source archive, then stops: AMO has no dry run of its own, and a real
 # submission always spends the version.
 

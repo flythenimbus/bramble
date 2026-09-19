@@ -20,7 +20,8 @@ name: Android release
 # check lives here rather than in release.yml because a release created with this workflow's own
 # token does not fire other workflows.
 #
-# `pnpm run release android <version> --ci` dispatches this. `dry_run` does everything up to and
+# `pnpm run release android <version>` dispatches this and watches it (`--dry-run` for a dry run,
+# `--local` for the old route on a Mac). `dry_run` does everything up to and
 # including the signature and the cert check, then stops before anything is public: the way to
 # test the pipeline, or a rotated secret, without spending a version.
 

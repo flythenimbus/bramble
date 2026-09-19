@@ -18,7 +18,8 @@ name: Chrome release
 # beside both. Accepted because neither key is one users verify or one that cannot be replaced; it
 # would not be for Android.
 #
-# `pnpm run release chromium <version> --ci` dispatches this. `dry_run` builds, runs the preflight
+# `pnpm run release chromium <version>` dispatches this and watches it (`--dry-run` for a dry run,
+# `--local` for the old route on a Mac). `dry_run` builds, runs the preflight
 # and packs the .crx with the real key, then stops before the commit.
 
 on:

@@ -83,11 +83,12 @@ offline backup; keep nothing plaintext.
 ## Each release
 
 ```sh
-pnpm run release chromium 1.0.0 --ci   # from GitHub: no Mac, no YubiKey, one approval
-pnpm run release chromium 1.0.0        # from this Mac: one YubiKey touch for both CWS secrets
+pnpm run release chromium 1.0.0             # from GitHub: dispatch, approve, done
+pnpm run release chromium 1.0.0 --dry-run   # the same, stopping before anything is public
+pnpm run release chromium 1.0.0 --local     # from this Mac: one YubiKey touch for both CWS secrets
 ```
 
-**From GitHub** (`--ci`), the normal route, through `.github/workflows/chrome-release.yml`. A build
+**From GitHub**, the default route, through `.github/workflows/chrome-release.yml`. A build
 job with no secrets runs the gate, bumps the manifest and bundles; a publish job, approved in the
 `chrome-release` environment, packs and signs the `.crx`, submits it to the store and publishes the
 GitHub release. It follows the Firefox route:
@@ -104,9 +105,6 @@ directory for the seconds packing and submission take, then removes them, as the
 `-f dry_run=true` runs the preflight and packs the `.crx` with the real key, then stops before the
 commit:
 
-```sh
-gh workflow run chrome-release.yml --ref main -f version=1.0.0 -f dry_run=true
-```
 
 **From this Mac**, the fallback: it runs lint + tests, bumps the manifest, builds WASM, bundles,
 packs and signs `bramble.crx` locally, uploads it and publishes it to the store with the service
@@ -226,11 +224,12 @@ screenshots + category are set once in the AMO Developer Hub.
 ### Each release
 
 ```sh
-pnpm run release firefox 1.0.0 --ci   # from GitHub: no Mac, no YubiKey, one approval
-pnpm run release firefox 1.0.0        # from this Mac: a YubiKey touch to decrypt the AMO secret
+pnpm run release firefox 1.0.0             # from GitHub: dispatch, approve, done
+pnpm run release firefox 1.0.0 --dry-run   # the same, stopping before anything is public
+pnpm run release firefox 1.0.0 --local     # from this Mac: a YubiKey touch to decrypt the AMO secret
 ```
 
-**From GitHub** (`--ci`), the normal route, through `.github/workflows/firefox-release.yml`. A
+**From GitHub**, the default route, through `.github/workflows/firefox-release.yml`. A
 build job with no secrets runs the gate, bumps the version, bundles and lints; a publish job,
 approved in the `firefox-release` environment, submits and publishes. It follows the Android
 workflow with two differences, both because Mozilla holds the signing key and what needs guarding is
@@ -247,9 +246,6 @@ the version, which an upload consumes for good:
 `-f dry_run=true` builds, lints, runs the preflight and makes the source archive, then stops. AMO
 has no dry run of its own, so this is the only way to test the route without spending a version.
 
-```sh
-gh workflow run firefox-release.yml --ref main -f version=1.0.0 -f dry_run=true
-```
 
 **From this Mac**, the fallback. It runs lint + tests, bumps the firefox `manifest.json` version, builds WASM, bundles
 `dist-firefox`, validates it with the addons-linter (the same check AMO runs) **before**
@@ -347,11 +343,12 @@ Move `android-release-keystore.backup.age` to offline storage (not the repo, not
 ### Each release
 
 ```sh
-pnpm run release android 1.1.0 --ci      # from GitHub: no Mac, no YubiKey, one approval
-pnpm run release android 1.1.0           # from this Mac: a YubiKey touch to decrypt the keystore
+pnpm run release android 1.1.0             # from GitHub: dispatch, approve, done
+pnpm run release android 1.1.0 --dry-run   # the same, stopping before anything is public
+pnpm run release android 1.1.0 --local     # from this Mac: a YubiKey touch to decrypt the keystore
 ```
 
-**From GitHub** (`--ci`), which is the normal route. It dispatches
+**From GitHub**, which is the default route. It dispatches
 `.github/workflows/android-release.yml` and returns. A *build* job with no secrets runs the gate,
 bumps the version and builds an unsigned APK; a *publish* job, which waits for your approval in the
 `android-release` environment, signs it with the keystore held there, commits the bump through
@@ -364,9 +361,6 @@ release. The draft is then downloaded and checked again before it goes live. `-f
 dispatch runs all of that and stops before the commit: the way to test the pipeline or a rotated
 secret without spending a version.
 
-```sh
-gh workflow run android-release.yml --ref main -f version=1.1.0 -f dry_run=true
-```
 
 The keystore and its password reached that environment through `pnpm run ci:secrets`; see
 [docs/ci-releases.md](ci-releases.md). The wrappers below remain the recovery path.

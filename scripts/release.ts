@@ -4,8 +4,12 @@
 // Usage:
 //   pnpm run release chromium <version|patch|minor|major>   e.g. 1.0.0, or `patch` to bump
 //   pnpm run release firefox  <version|patch|minor|major>
-//   pnpm run release android  <version|patch|minor|major> [--resume]  (--resume = sign the apk the
-//                                                                      last run already built)
+//   pnpm run release android  <version|patch|minor|major>
+//        These three release from GitHub (docs/ci-releases.md): dispatch, then watch the run.
+//        --dry-run   everything short of publishing: nothing committed, tagged or uploaded
+//        --no-watch  return once the run exists
+//        --local     the fallback: build, sign and publish on this machine, with the YubiKey
+//        --resume    (android, local) sign the apk the last local run already built
 //   pnpm run release ios      <version|patch|minor|major> [--ipa] [--ci]
 //                                       (--ipa = dry-run IPA, no upload/tag; --ci = build and
 //                                        upload on a runner instead of this machine)
@@ -175,19 +179,15 @@ if (!rawVersion)
 // The version arg is either an explicit version (0.1.0 or v0.1.0, stored bare) or a semver bump
 // keyword (patch/minor/major) that increments THIS target's current version. Each target versions
 // independently, so a bump reads that target's own manifest/gradle/pbxproj.
-const bumpKind = ["patch", "minor", "major"].includes(rawVersion)
-	? (rawVersion as "patch" | "minor" | "major")
-	: null;
-const version = bumpKind
-	? nextVersion(currentVersion(platform), bumpKind)
-	: rawVersion.replace(/^v/, "");
-
-// Every path but ios ends in `gh release create`, and finding gh missing or logged out there
-// means the store publish and the tag already happened. An installed gh is not enough.
-// `ios --ci` dispatches a workflow, so it needs gh as much as the publishing paths do.
-// The runner modes skip it: a workflow token has no user behind it, and `gh auth status` reports
-// that as a failure even though every API call the job makes will succeed.
+// Which route this run takes. GitHub builds, signs and publishes wherever it can
+// (docs/ci-releases.md); --local is the fallback that does it all on this machine with the
+// YubiKey. --resume re-signs a build this machine made, so it is local by definition. iOS still
+// opts in with --ci: its route commits and pushes from this clone, which is its own story.
+const CI_TARGETS = new Set(["android", "firefox", "chromium"]);
 const onRunner = flags.has("--runner-build") || flags.has("--runner-publish");
+const viaCi =
+	CI_TARGETS.has(platform) && !onRunner && !flags.has("--local") && !flags.has("--resume");
+
 if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
 	requireBins(["gh"], "docs/release-signing.md");
 	// --active, because a bare `gh auth status` exits non-zero when ANY stored account is broken,
@@ -196,6 +196,20 @@ if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
 	if (!ok("gh auth status --active"))
 		fail("gh's active account cannot log in; run `gh auth login`");
 }
+
+const bumpKind = ["patch", "minor", "major"].includes(rawVersion)
+	? (rawVersion as "patch" | "minor" | "major")
+	: null;
+// From GitHub's main when GitHub is doing the release. It commits the bump there, so this clone
+// falls a release behind after every one, and `minor` read from it would name a version that
+// already shipped.
+const version = bumpKind
+	? nextVersion(currentVersion(platform, viaCi ? readFromMain : undefined), bumpKind)
+	: rawVersion.replace(/^v/, "");
+
+// Every path but ios ends in `gh release create`, and finding gh missing or logged out there
+// means the store publish and the tag already happened. An installed gh is not enough.
+// `ios --ci` dispatches a workflow, so it needs gh as much as the publishing paths do.
 
 // Commit signing, when the repo asks for it. Every path ends in commitTagPush, which commits
 // AFTER the store upload, so a key that isn't available surfaced ten minutes in - with the build
@@ -209,7 +223,12 @@ if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
 // unreferenced object, which gc collects.
 //
 // --ipa is exempt: that dry run returns before it commits or tags anything.
-if (!flags.has("--ipa") && capture("git config --get commit.gpgsign || true") === "true") {
+if (
+	!flags.has("--ipa") &&
+	!viaCi &&
+	!onRunner &&
+	capture("git config --get commit.gpgsign || true") === "true"
+) {
 	// No touch banner here, unlike the age decrypts: this runs before anything slow, while you
 	// are still watching the terminal, and the key may not be hardware-backed at all.
 	if (!ok('git commit-tree HEAD^{tree} -p HEAD -S -m "release signing check"'))
@@ -250,7 +269,7 @@ async function releaseExtension(target: string, version: string) {
 	const tag = `${version}-${target}`;
 
 	// The CI route: dispatched from here, built and submitted on runners. docs/ci-releases.md.
-	if (flags.has("--ci")) return dispatchRelease("chrome-release.yml", version, tag);
+	if (viaCi) return dispatchRelease("chrome-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildChrome(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishChrome(version, tag);
 
@@ -345,7 +364,7 @@ async function releaseFirefox(version: string) {
 	const tag = `${version}-firefox`;
 
 	// The CI route: dispatched from here, built and submitted on runners. docs/ci-releases.md.
-	if (flags.has("--ci")) return dispatchRelease("firefox-release.yml", version, tag);
+	if (viaCi) return dispatchRelease("firefox-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildFirefox(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishFirefox(version, tag);
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
@@ -422,7 +441,7 @@ async function releaseAndroid(version: string, resume: boolean) {
 	const tag = `${version}-android`;
 
 	// The CI route: dispatched from here, built and published on runners. docs/ci-releases.md.
-	if (flags.has("--ci")) return dispatchRelease("android-release.yml", version, tag);
+	if (viaCi) return dispatchRelease("android-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildAndroid(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishAndroid(version, tag);
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
@@ -733,16 +752,59 @@ function verifyDraft(tag: string, pattern: string, check?: (file: string) => voi
 	}
 }
 
-/** `--ci`: nothing is built or signed here. The build and publish jobs run on GitHub. */
+/**
+ * The GitHub route: nothing is built or signed here. Dispatches the target's workflow, then watches
+ * the run to the end so this command still reports how the release went. `--dry-run` dispatches a
+ * dry run instead; `--no-watch` returns as soon as the run exists.
+ */
 function dispatchRelease(workflow: string, version: string, tag: string): void {
+	const dryRun = flags.has("--dry-run");
 	// Checked on GitHub rather than locally: runners tag through the API, so a clone can lag.
 	if (ok(`gh api repos/${REPO}/git/ref/tags/${tag}`)) fail(`tag ${tag} already exists on GitHub`);
-	run(`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version}`);
+
+	// A run created before this instant is somebody else's. gh returns before the run exists.
+	const since = new Date(Date.now() - 5_000).toISOString();
+	run(
+		`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}`,
+	);
+	const id = findRun(workflow, since);
+	const url = `https://github.com/${REPO}/actions/runs/${id}`;
 	const environment = workflow.replace(/\.yml$/, "");
 	console.log(
-		`\ndispatched ${tag}. The build runs now; publishing waits for your approval in the` +
-			` ${environment} environment once it finishes:\n  gh run watch`,
+		`\ndispatched ${dryRun ? "a dry run of " : ""}${tag}: ${url}` +
+			`\nThe build runs now; the rest waits for your approval in ${environment} once it is done.`,
 	);
+	if (flags.has("--no-watch")) return;
+
+	console.log("watching it (Ctrl-C stops watching, not the release)…");
+	try {
+		run(`gh run watch ${id} --repo ${REPO} --exit-status`);
+	} catch {
+		fail(`the run failed: ${url}`);
+	}
+	console.log(
+		dryRun
+			? `\ndry run of ${tag} passed. Nothing was committed or published.`
+			: `\nreleased ${tag}.`,
+	);
+}
+
+/** The run a dispatch just created: the newest one of that workflow created after `since`. */
+function findRun(workflow: string, since: string): string {
+	for (let i = 0; i < 30; i++) {
+		const runs = JSON.parse(
+			capture(
+				`gh run list --repo ${REPO} --workflow ${workflow} --event workflow_dispatch --limit 5 --json databaseId,createdAt`,
+			),
+		) as { databaseId: number; createdAt: string }[];
+		const mine = runs
+			.filter((r) => r.createdAt >= since)
+			.sort((a, b) => b.databaseId - a.databaseId);
+		if (mine[0]) return String(mine[0].databaseId);
+		// Synchronous on purpose, like build-windows.ts: everything here is sequential.
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_000);
+	}
+	return fail(`dispatched ${workflow}, but no run appeared in a minute; check the Actions tab`);
 }
 
 /**
@@ -1691,22 +1753,25 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 
 // A target's current version, read from its own source of truth (each versions independently):
 // the manifest `version` for chromium/firefox, `versionName` for android, MARKETING_VERSION for ios.
-function currentVersion(platform: string): string {
+function currentVersion(
+	platform: string,
+	read: (path: string) => string = (path) => readFileSync(path, "utf8"),
+): string {
 	if (platform === "android")
 		return matchVersion(
-			readFileSync("packages/platform-mobile/android/app/build.gradle", "utf8"),
+			read("packages/platform-mobile/android/app/build.gradle"),
 			/versionName "([^"]+)"/,
 			"versionName in build.gradle",
 		);
 	if (platform === "ios")
 		return matchVersion(
-			readFileSync("packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj", "utf8"),
+			read("packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj"),
 			/MARKETING_VERSION = ([^;]+);/,
 			"MARKETING_VERSION in project.pbxproj",
 		);
 	if (platform === "desktop")
 		return matchVersion(
-			readFileSync(DESKTOP_CONF, "utf8"),
+			read(DESKTOP_CONF),
 			/"version"\s*:\s*"([^"]+)"/,
 			`version in ${DESKTOP_CONF}`,
 		);
@@ -1714,11 +1779,13 @@ function currentVersion(platform: string): string {
 		platform === "firefox"
 			? "packages/manifests/firefox/manifest.json"
 			: "packages/manifests/chromium/manifest.json";
-	return matchVersion(
-		readFileSync(manifest, "utf8"),
-		/"version"\s*:\s*"([^"]+)"/,
-		`version in ${manifest}`,
-	);
+	return matchVersion(read(manifest), /"version"\s*:\s*"([^"]+)"/, `version in ${manifest}`);
+}
+
+/** A file as it is on GitHub's main: what a release from GitHub builds from and bumps. */
+function readFromMain(path: string): string {
+	const b64 = capture(`gh api repos/${REPO}/contents/${path}?ref=main --jq .content`);
+	return Buffer.from(b64, "base64").toString("utf8");
 }
 
 function matchVersion(content: string, re: RegExp, what: string): string {
