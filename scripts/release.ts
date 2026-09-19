@@ -61,6 +61,17 @@ const HOME = process.env.HOME ?? "";
 // On a runner GitHub says which repository this is; here it is the one this script ships.
 const REPO = process.env.GITHUB_REPOSITORY ?? "flythenimbus/bramble";
 
+// Up here rather than in the android section below, which is where they belong but not where they
+// can live: the dispatch near the top of this file calls releaseAndroid while the module is still
+// evaluating, and a `const` declared after that line does not exist yet when it runs.
+const ANDROID = "packages/platform-mobile/android";
+const ANDROID_GRADLE = `${ANDROID}/app/build.gradle`;
+// gradle has no release signingConfig, so assembleRelease lands here UNSIGNED; apksigner signs it
+// afterwards, once, from a keystore that only exists on disk for those few seconds.
+const ANDROID_UNSIGNED = `${ANDROID}/app/build/outputs/apk/release/app-release-unsigned.apk`;
+/** What the CI build job hands the publish job; see .github/workflows/android-release.yml. */
+const ANDROID_HANDOFF = "release-out";
+
 /** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
 const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
@@ -404,14 +415,6 @@ async function releaseFirefox(version: string) {
 }
 
 // ----- android: GitHub-released, signed .apk + SHA256SUMS -----
-
-const ANDROID = "packages/platform-mobile/android";
-const ANDROID_GRADLE = `${ANDROID}/app/build.gradle`;
-// gradle has no release signingConfig, so assembleRelease lands here ANDROID_UNSIGNED; apksigner signs it
-// afterwards, once, from a keystore that only exists on disk for those few seconds.
-const ANDROID_UNSIGNED = `${ANDROID}/app/build/outputs/apk/release/app-release-unsigned.apk`;
-/** What the CI build job hands the publish job; see .github/workflows/android-release.yml. */
-const ANDROID_HANDOFF = "release-out";
 
 async function releaseAndroid(version: string, resume: boolean) {
 	// versionName is the marketing version; 1-3 dot-separated ints (matches bump:mobile).
