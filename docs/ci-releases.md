@@ -99,20 +99,28 @@ key cannot follow it, being Ed25519, which the major KMS offerings do not sign w
 
 ## Phases
 
+Each phase ends with something that can be released from CI end to end, which rules out doing one
+desktop OS at a time: macOS, Linux and Windows ship as **one** release, under one `<version>-desktop`
+tag with one `latest.json`, so none of them can leave the Mac until all three can.
+
 | Phase | Delivers | Needs |
 |---|---|---|
-| **0** | `scripts/ci-secrets.ts`, the environments, the dispatcher shape in `release.ts` | The migration touch |
-| **1** | **Linux** on native `ubuntu-24.04` + `ubuntu-24.04-arm`, job `container: debian:12` | updater key |
-| **2** | **Android** | keystore + passwords |
-| **3** | **macOS** on `macos-26` | Developer ID `.p12`, updater key |
-| **4** | **Windows**, absorbing `--ci-collect` | updater key |
-| **5** | **Firefox** | AMO credentials |
-| **6** | **Chrome** | CWS key + service account |
+| **0** | `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them | One YubiKey session, the last |
+| **1** | **Android**, fully from CI | keystore + password |
+| **2** | **Firefox** | AMO credentials |
+| **3** | **Chrome** | CWS key + service account |
+| **4** | **Desktop**: Linux on native `ubuntu-24.04` + `ubuntu-24.04-arm` in `container: debian:12`, macOS on `macos-26`, Windows absorbing `--ci-collect`, then one publish job | updater key, Developer ID `.p12` |
 | **later** | APT key rotation, then OIDC custody | Users install a new key once |
 
-Linux is first because it is the only one that gets faster rather than merely relocated: both
-architectures build natively and in parallel, where today one of them is emulated on a Mac. The
-`container: debian:12` job preserves the glibc floor exactly and deletes the rsync-into-a-volume
+Android leads because it is self-contained and proves every part of the pattern in one place: a
+build, a signature with a permanent key, and a GitHub release published from a runner rather than
+from a laptop. Desktop is last because it is the biggest, and the one where the most ordering
+invariants have to move intact: bump before build, tag after artifacts, release before manifest,
+APT last.
+
+Linux still gets the most out of this, just inside phase 4 rather than ahead of it: both
+architectures build natively and in parallel, where today one is emulated on a Mac, and the
+`container: debian:12` job keeps the glibc floor exactly while deleting the rsync-into-a-volume
 dance that exists only because the build host is not Linux.
 
 ## What this never buys
