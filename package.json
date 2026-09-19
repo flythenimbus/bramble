@@ -14,6 +14,7 @@
 		"build:macos:aarch64": "node --env-file-if-exists=.env.local scripts/build-macos.ts --aarch64",
 		"build:macos:local-update": "node --env-file-if-exists=.env.local scripts/build-macos.ts --config src-tauri/tauri.local-update.conf.json",
 		"build:linux": "node --env-file-if-exists=.env.local scripts/build-linux.ts",
+		"ci:secrets": "node --env-file-if-exists=.env.local scripts/ci-secrets.ts",
 		"build:windows": "node --env-file-if-exists=.env.local scripts/build-windows.ts",
 		"publish:apt": "node --env-file-if-exists=.env.local scripts/publish-apt.ts",
 		"updater:smoke": "node scripts/updater-smoke.ts",
