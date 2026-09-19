@@ -25,7 +25,7 @@
 // handed over. Locally they run back to back, so a local build exercises the same two steps.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,25 +55,25 @@ const fail = (message: string): never => {
  * Absent, the build still succeeds and produces something Gatekeeper blocks on every machine that
  * did not build it, so it says so rather than leaving that to be discovered by a user.
  */
-function loadNotarization(): (() => void) | undefined {
+function loadNotarization(): { expected: boolean; cleanup?: () => void } {
 	// Notarization is an Apple step; the same script bundles the Linux three on a Debian container
 	// where there is no YubiKey to prompt and nothing to notarize.
-	if (process.platform !== "darwin") return;
+	if (process.platform !== "darwin") return { expected: false };
 	// The local-update test build never leaves this machine, so notarizing it buys nothing and
 	// costs an upload to Apple, a wait, and a submission record for a build nobody will run.
 	if (process.argv.slice(2).some((a) => a.includes("local-update"))) {
 		console.error("note: local-update build, skipping notarization.");
-		return;
+		return { expected: false };
 	}
 	if (process.env.BRAMBLE_SKIP_NOTARIZE) {
 		console.error("note: BRAMBLE_SKIP_NOTARIZE set, skipping notarization.");
-		return;
+		return { expected: false };
 	}
 
 	const already =
 		(process.env.APPLE_API_KEY && process.env.APPLE_API_ISSUER && process.env.APPLE_API_KEY_PATH) ||
 		(process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID);
-	if (already) return;
+	if (already) return { expected: true };
 
 	// Warn rather than fail, as an absent key always has: an unplugged YubiKey should not end a
 	// build that is otherwise fine, it should say what the build will be missing.
@@ -91,7 +91,7 @@ function loadNotarization(): (() => void) | undefined {
 				"         and Gatekeeper will block it on every machine that did not build it.\n" +
 				"         See docs/release-signing.md.",
 		);
-		return;
+		return { expected: false };
 	}
 
 	const tmp = mkdtempSync(join(tmpdir(), "bramble-notarize-"));
@@ -100,7 +100,7 @@ function loadNotarization(): (() => void) | undefined {
 	process.env.APPLE_API_KEY = key.keyId;
 	process.env.APPLE_API_ISSUER = key.issuerId;
 	process.env.APPLE_API_KEY_PATH = keyPath;
-	return () => rmSync(tmp, { recursive: true, force: true });
+	return { expected: true, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 // Universal unless asked otherwise, and only on macOS: `universal-apple-darwin` is a lipo of two
@@ -109,6 +109,38 @@ function loadNotarization(): (() => void) | undefined {
 // architecture it is running on. A host-arch build IS wrong to hand anyone on macOS, though: it
 // looks identical and simply does not open on an Intel Mac, so `--aarch64` (iterating only) is
 // what opts out there.
+/**
+ * That the app Apple was asked to notarize came back notarized and stapled.
+ *
+ * Tauri warns and carries on when it cannot notarize, so the difference between a release and one
+ * Gatekeeper blocks on every machine but the builder is a line in a log nobody reads. It went
+ * unnoticed exactly once, when a refactor handed the bundler an environment copied before the
+ * credentials were in it: the build was signed, every updater signature verified, and the job was
+ * green. `stapler validate` reads the ticket out of the bundle, so it answers for the artifact
+ * rather than for the intent.
+ */
+function assertNotarized(): void {
+	const bundle = join(
+		resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+		"packages/platform-desktop/src-tauri/target",
+		universal ? "universal-apple-darwin/release/bundle" : "release/bundle",
+		"macos",
+	);
+	const app = readdirSync(bundle)
+		.filter((f) => f.endsWith(".app"))
+		.map((f) => join(bundle, f));
+	if (app.length !== 1) fail(`expected one .app in ${bundle}, found ${app.length}`);
+	try {
+		execFileSync("xcrun", ["stapler", "validate", app[0] as string], { stdio: "pipe" });
+	} catch {
+		fail(
+			`${app[0]} is not notarized, though the credentials to notarize it were present.\n` +
+				"Gatekeeper blocks it on every machine that did not build it, so this is not shippable.",
+		);
+	}
+	console.log(`notarized and stapled: ${app[0]}`);
+}
+
 const PHASES = ["--compile-only", "--bundle-only"];
 const passed = process.argv.slice(2);
 const compileOnly = passed.includes("--compile-only");
@@ -137,15 +169,20 @@ const tauri = (command: "build" | "bundle", extra: string[], env: NodeJS.Process
 		{ stdio: "inherit", env },
 	);
 
-const shared = {
-	...process.env,
-	// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather
-	// than built by the bundler, so without it a universal app ships an Apple-Silicon-only
-	// proxy and the browser link is dead on Intel.
-	...(universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
+// stage-proxy builds and lipos both slices when this is set. A sidecar is copied rather than
+// built by the bundler, so without it a universal app ships an Apple-Silicon-only proxy and the
+// browser link is dead on Intel.
+const universalEnv =
+	universal || forwarded.some((a) => a.includes("universal-apple-darwin"))
 		? { BRAMBLE_UNIVERSAL: "1" }
-		: {}),
-};
+		: {};
+
+/**
+ * Read at the moment a phase runs, never captured earlier: loadNotarization puts the App Store
+ * Connect credentials on `process.env`, and a copy taken before that produced a build that was
+ * signed, passed every check, and was silently not notarized.
+ */
+const envNow = () => ({ ...process.env, ...universalEnv });
 
 /** Signing material the compile step never sees, wherever it came from (.env.local, CI). */
 const SIGNING_ENV = [
@@ -159,13 +196,13 @@ const SIGNING_ENV = [
 ];
 
 if (!bundleOnly) {
-	const env = { ...shared };
+	const env = envNow();
 	for (const name of SIGNING_ENV) delete env[name];
 	tauri("build", ["--no-bundle"], env);
 }
 
 if (!compileOnly) {
-	const cleanupNotarization = loadNotarization();
+	const notarization = loadNotarization();
 	try {
 		const key = signingKey(fail);
 		if (!key) {
@@ -177,7 +214,7 @@ if (!compileOnly) {
 			);
 		}
 		const env = {
-			...shared,
+			...envNow(),
 			TAURI_SIGNING_PRIVATE_KEY: key,
 			TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 		};
@@ -185,6 +222,7 @@ if (!compileOnly) {
 		// the network, and a failed fetch is a silent fallback rather than an error.
 		if (process.platform === "linux") await ensurePacker();
 		tauri("bundle", [], env);
+		if (notarization.expected) assertNotarized();
 
 		if (process.platform === "linux") {
 			const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -195,6 +233,6 @@ if (!compileOnly) {
 		}
 	} finally {
 		// Whatever the bundler did, the decrypted key must not outlive it.
-		cleanupNotarization?.();
+		notarization.cleanup?.();
 	}
 }
