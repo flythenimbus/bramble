@@ -182,8 +182,9 @@ jobs:
 
   publish:
     # Static, unlike the bump job's: a skipped job never evaluates its name, so an expression here
-    # shows up in the UI as its own source whenever this job does not run.
-    name: Sign and publish
+    # shows up in the UI as its own source whenever this job does not run. Names macOS because this
+    # is where it is built; with --skip=macos it runs here anyway, just without that build.
+    name: Build macOS, sign and publish
     needs: [bump, linux]
     # Runs when Linux was skipped on purpose, not only when it succeeded: a needs-job that is skipped
     # otherwise skips everything after it too.
