@@ -99,14 +99,18 @@ through a normal package upgrade rather than only at install time. dpkg takes ov
 snippet left there and owns it from then on.
 
 That is the only mechanism this repository has for replacing a key, and the reason it exists is
-that apt trusts the signature on the index and nothing else. Without it, a new key only reaches a
+that apt trusts the signature on the index and nothing else. Note what it does not do: it only
+helps for a key distributed *before* it is needed. A token that dies while it is the only trusted
+key leaves no path in, because the package carrying a replacement would arrive through an index
+those machines can no longer verify. Without it, a new key only reaches a
 machine at the moment it is already signing, which means every installed machine breaks at once
 with "the following signatures were invalid" and the only fix is each user re-running the curl. A
 rotation therefore goes in this order, and the gap between the steps is the whole point:
 
-1. Add the new public key to `bramble-keyring.asc` (`gpg --armor --export <new> >> …`). Keep
-   signing with the old one. Ship a release. Users now trust both keys, most of them without
-   knowing it.
+1. Add the new public key to `bramble-keyring.asc`. Generating it is in
+   [release-signing.md](release-signing.md#generating-the-standby--ci-signing-key); it has to be
+   exportable, so it is not an on-card key like the current one. Keep signing with the old key.
+   Ship a release. Users now trust both, most of them without knowing it.
 2. Leave it a release or two, so upgrades propagate.
 3. Switch `BRAMBLE_APT_GPG_KEY` to the new key. Nothing visible happens to anyone who upgraded.
 4. Once the old key is unused, remove it from the keyring on the next release.

@@ -821,8 +821,8 @@ ykman openpgp keys set-touch sig on
 gpg --list-secret-keys --keyid-format=long
 ```
 
-`publish-apt.ts` exports the public half itself at publish time, so there is no `keys.asc` to
-keep in sync by hand.
+`publish-apt.ts` serves `packages/platform-desktop/apt/bramble-keyring.asc` as `keys.asc` and
+refuses to upload unless the key that signed the index is in it, so the two cannot drift.
 
 Two things to check once, because both fail in ways that read as something else:
 
@@ -840,8 +840,53 @@ HTTPS from a host we control and then pinned, so a later compromise of the repos
 substitute a different signer.
 
 There is no offline backup of this key, deliberately: an on-card key that cannot be exported is
-the property being bought. Losing the token means generating a new key and asking users to install
-it once, which is recoverable, unlike an updater-key loss.
+the property being bought.
+
+That property has a cost, and it is worth being exact about it. Shipping the keyring in the `.deb`
+makes a *planned* rotation invisible, but it does nothing for a sudden loss: if the token dies
+today, the only key installed machines trust is the one that can no longer sign, and a package
+carrying a replacement cannot reach them through an index they can no longer verify. Every user
+would have to re-run the curl.
+
+The fix is a **standby key, generated and shipped before it is needed**, below. Once users' keyrings
+carry it, losing the token means changing one variable.
+
+### Generating the standby / CI signing key
+
+Exportable, unlike the key above, which is the whole point: it is what a runner can hold, and what
+is switched to if the card is lost. It signs nothing until `BRAMBLE_APT_GPG_KEY` names it.
+
+```sh
+# 1. Ed25519, no expiry. An expiry on a repository key breaks apt for anyone who has not
+#    upgraded recently, and revocation is the real mechanism. Prompts for a passphrase: use a
+#    long random one and save it in the password manager, it is a second secret in CI.
+gpg --quick-generate-key "Bramble APT (standby) <flythenimbus@pm.me>" ed25519 sign never
+FPR=$(gpg --list-keys --with-colons "Bramble APT (standby)" | awk -F: '/^fpr/{print $10; exit}')
+
+# 2. The public half into the keyring the package ships. THIS is the step that has to happen a
+#    release or two before the key ever signs.
+gpg --armor --export "$FPR" >> packages/platform-desktop/apt/bramble-keyring.asc
+
+# 3. Day-to-day copy, encrypted to the YubiKey age recipient like every other key here.
+gpg --armor --export-secret-keys "$FPR" | age -r age1yubikey1... -o ~/.config/bramble/apt-signing-key.age
+
+# 4. Recovery copy, passphrase-encrypted, stored OFFLINE. Unlike the on-card key, this one has a
+#    backup on purpose: it is the thing that survives the card.
+gpg --armor --export-secret-keys "$FPR" | age -p > apt-signing-key.backup.age
+
+# 5. A revocation certificate, offline. Generating one after a leak needs the key you no longer
+#    trust, which is too late.
+gpg --output apt-signing-key.rev --gen-revoke "$FPR"
+
+# 6. Out of the local keyring: the private half belongs in those two wrappers and eventually in
+#    the apt-release environment, not in ~/.gnupg.
+gpg --delete-secret-keys "$FPR"
+```
+
+Then commit the keyring and ship a release. Switching to it later is one variable and no user
+action: the ordered procedure is in
+[apt-releases.md](apt-releases.md#the-keyring-and-how-a-key-is-rotated). aptly takes the passphrase
+with `-passphrase-file`, which is what the CI publisher will use.
 
 ### Hosting
 
