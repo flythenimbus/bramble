@@ -1,8 +1,9 @@
 // Publish the built Chromium extension to the Chrome Web Store via the Publish API V2
 // (service-account auth). Uploads the signed packages/platform-extension/bramble.crx to the item,
 // then publishes it (it goes to CWS review, then live). The Chrome analog of sign-firefox.ts (AMO).
-//   node scripts/sign-cws.ts [path/to/bramble.crx] [--upload-only]
+//   node scripts/sign-cws.ts [path/to/bramble.crx] [--upload-only | --check]
 //   --upload-only  upload the new package but don't publish (dry run for the auth + upload)
+//   --check        authenticate and read the item's status, then stop: nothing is uploaded
 //
 // The item has "Verified CRX Uploads" enabled, so the store requires a signed .crx. Uploads use the
 // CWS REST API v2 (chromewebstore.googleapis.com), where the X-Goog-Upload-File-Name: *.crx header
@@ -24,17 +25,20 @@ import { createSign } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { CWS_ITEM_ID, CWS_PUBLISHER_ID } from "./cws-ids.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const argv = process.argv.slice(2);
 const uploadOnly = argv.includes("--upload-only");
+// A release's preflight: the credentials and the item, before anything is packed or committed.
+const checkOnly = argv.includes("--check");
 const CRX = resolve(
 	argv.find((a) => !a.startsWith("--")) ?? "packages/platform-extension/bramble.crx",
 );
-const ITEM_ID = process.env.CWS_ITEM_ID ?? "kmokhdhoggbdcgoepifeckhgbfakaknm";
+const ITEM_ID = CWS_ITEM_ID;
 // The v2 API is publisher-scoped: publishers/{PUBLISHER_ID}/items/{ITEM_ID}. The publisher id is
 // your developer-account id (Chrome Web Store Developer Dashboard -> Account, or in the dashboard URL).
-const PUBLISHER_ID = process.env.CWS_PUBLISHER_ID ?? "38b433bd-8538-4d67-aedf-a1297d133309";
+const PUBLISHER_ID = CWS_PUBLISHER_ID;
 const HOME = process.env.HOME ?? "";
 const SA_AGE =
 	process.env.CWS_SERVICE_ACCOUNT_AGE ?? join(HOME, ".config/bramble/cws-service-account.age");
@@ -53,7 +57,8 @@ const has = (bin: string) => {
 };
 const b64url = (s: string | Buffer) => Buffer.from(s).toString("base64url");
 
-if (!existsSync(CRX)) fail(`no ${CRX}; run 'pnpm run sign' (or 'pnpm run bundle') first`);
+if (!checkOnly && !existsSync(CRX))
+	fail(`no ${CRX}; run 'pnpm run sign' (or 'pnpm run bundle') first`);
 if (!PUBLISHER_ID)
 	fail(
 		"set CWS_PUBLISHER_ID to your Chrome Web Store publisher id (the developer-account id in the Developer Dashboard URL / Account page). See docs/release-signing.md",
@@ -61,6 +66,9 @@ if (!PUBLISHER_ID)
 
 // 0700 scratch dir; the plaintext service-account key never leaves it and is wiped in finally.
 const tmp = mkdtempSync(join(tmpdir(), "bramble-cws-"));
+// And on exit: fail() is process.exit, which skips finally, so every refused token or upload used
+// to leave the decrypted service account behind in the temp dir.
+process.once("exit", () => rmSync(tmp, { recursive: true, force: true }));
 try {
 	// Resolve the service-account JSON: env path first (CI), else decrypt the age file (YubiKey).
 	let saJson: string;
@@ -122,6 +130,22 @@ try {
 	if (!accessToken) fail("no access_token in the OAuth response");
 	const bearer = `Bearer ${accessToken}`;
 	const itemPath = `publishers/${PUBLISHER_ID}/items/${ITEM_ID}`;
+
+	// --check: the token proves the service account, and reading the item proves it is authorized
+	// for this one, which a valid key for some other publisher would not be. Nothing is uploaded.
+	if (checkOnly) {
+		const stRes = await fetch(`https://chromewebstore.googleapis.com/v2/${itemPath}:fetchStatus`, {
+			headers: { authorization: bearer },
+		});
+		if (!stRes.ok)
+			fail(
+				`the service account cannot read ${ITEM_ID} (HTTP ${stRes.status}): ${(await stRes.text()).slice(0, 200)}`,
+			);
+		console.log(`CWS: the service account is authorized for ${ITEM_ID}`);
+		// finally does not run past process.exit, and tmp may hold the decrypted account.
+		rmSync(tmp, { recursive: true, force: true });
+		process.exit(0);
+	}
 
 	// Upload the signed .crx via the CWS API v2. The X-Goog-Upload-File-Name ending in ".crx" marks
 	// the raw body as a signed CRX package; the store verifies its signature against the item's

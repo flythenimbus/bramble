@@ -77,6 +77,9 @@ let apiSecret = process.env.AMO_API_SECRET;
 
 // 0700 scratch dir: the plaintext credentials + signing artifacts live here and are wiped in finally.
 const tmp = mkdtempSync(join(tmpdir(), "bramble-sign-ff-"));
+// And on exit: fail() is process.exit, which skips finally, so a failed submission used to leave
+// the decrypted AMO credentials behind in the temp dir.
+process.once("exit", () => rmSync(tmp, { recursive: true, force: true }));
 try {
 	if (!apiKey || !apiSecret) {
 		if (!existsSync(CREDS_AGE))
