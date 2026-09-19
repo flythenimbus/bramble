@@ -22,16 +22,8 @@
 // See docs/release-signing.md, "Linux APT repository".
 
 import { execFileSync } from "node:child_process";
-import {
-	copyFileSync,
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
@@ -189,13 +181,30 @@ const rootDir = config.rootDir;
 if (!rootDir) fail("could not read aptly's rootDir from `aptly config show`.");
 const publishedDir = join(rootDir.replace("~", process.env.HOME ?? "~"), "public");
 
-// The public key, exported from whatever actually signed above rather than from a committed copy:
-// the two drifting apart is a repository nobody can verify, and the failure reads as a network
-// problem ("the following signatures were invalid") rather than as a mismatch.
-writeFileSync(
-	join(publishedDir, "keys.asc"),
-	execFileSync("gpg", ["--armor", "--export", gpgKey], { encoding: "utf8" }),
-);
+// The keyring users verify against, committed rather than exported from whatever signed, because
+// it has to be able to hold MORE than the current key: a key that only ever reaches users at the
+// moment it starts signing cannot be rotated without breaking every installation. The same file
+// ships inside the .deb (bundle.linux.deb.files), so a new key added here reaches existing users
+// through a normal upgrade, ahead of ever being used. See docs/apt-releases.md.
+//
+// Checked, not trusted: the key that just signed the index must be in it, or this publishes a
+// repository nobody can verify, and the failure reads to a user as a network problem ("the
+// following signatures were invalid") rather than as a mismatch here.
+const keyring = join(ROOT, "packages/platform-desktop/apt/bramble-keyring.asc");
+const fingerprints = execFileSync("gpg", ["--show-keys", "--with-colons", keyring], {
+	encoding: "utf8",
+})
+	.split("\n")
+	.filter((line) => line.startsWith("fpr:"))
+	.map((line) => line.split(":")[9] ?? "");
+const signer = gpgKey.replace(/\s/g, "").toUpperCase();
+if (!fingerprints.some((fpr) => fpr.endsWith(signer)))
+	fail(
+		`${basename(keyring)} does not contain the key that signed the index (${gpgKey}).\n` +
+			"Nothing was uploaded. Add it:\n" +
+			`  gpg --armor --export ${gpgKey} >> packages/platform-desktop/apt/bramble-keyring.asc`,
+	);
+copyFileSync(keyring, join(publishedDir, "keys.asc"));
 // The snippet users install, and the one thing here that is not derived from the repository, so
 // it is checked against it. apt skips a repository whose Architectures do not claim the machine's
 // own, silently: the arm64 packages were published and indexed for two releases while every arm64

@@ -65,7 +65,10 @@
 		"linux": {
 			"deb": {
 				"section": "utils",
-				"priority": "optional"
+				"priority": "optional",
+				"files": {
+					"/usr/share/keyrings/bramble-keyring.asc": "../apt/bramble-keyring.asc"
+				}
 			}
 		},
 		"windows": {

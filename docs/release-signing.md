@@ -783,6 +783,17 @@ compromise means being able to serve arbitrary packages, installed as root, to e
 the install snippet. Treat it as the second most consequential key in this file, after the
 updater key.
 
+It is also the only key here with no second signature underneath it. apt verifies the index and
+takes the packages on its word, where a desktop update carries minisign under Authenticode or a
+Developer ID, so whoever holds this key needs no other.
+
+**Replacing it is a delivery problem, not a key problem.** The public keyring is committed at
+`packages/platform-desktop/apt/bramble-keyring.asc`, served as `keys.asc`, and shipped inside the
+`.deb`, which is how a new key reaches installed machines *before* it signs anything. Without
+that, any rotation breaks every installation at once. The ordered procedure is in
+[apt-releases.md](apt-releases.md#the-keyring-and-how-a-key-is-rotated); the short version is add
+the key, ship a release, wait, then switch signing to it.
+
 ### One-time setup
 
 The OpenPGP applet, which is a different applet from the PIV one `age-plugin-yubikey` uses: the

@@ -20,6 +20,10 @@ system.
 Those same three commands are what the download box on the front page hands a Linux visitor, from
 `website/src/downloads.ts`. Change them here and change them there.
 
+The first command only matters for the first install: the `bramble` package ships that same
+keyring and owns the file afterwards, which is what makes a signing key replaceable at all. See
+[The keyring, and how a key is rotated](#the-keyring-and-how-a-key-is-rotated).
+
 ## Why a repository rather than a `.deb` on the release page
 
 A downloaded `.deb` installs once and then rots. Bramble is distributed outside any store, so
@@ -85,6 +89,35 @@ On the YubiKey's OpenPGP applet, which is a different applet from the PIV one `a
 uses; the same token carries both. Full rationale and the generation steps are in
 [release-signing.md](release-signing.md#linux-apt-repository-aptbramblesh). In short: Ed25519,
 generated on-card with no off-card backup, `ykman openpgp keys set-touch sig on`.
+
+### The keyring, and how a key is rotated
+
+`packages/platform-desktop/apt/bramble-keyring.asc` is the committed public keyring. It is served
+as `keys.asc` for new installs **and shipped inside the `.deb`** at the same path the install
+snippet writes (`bundle.linux.deb.files` in `tauri.conf.json`), so it reaches existing users
+through a normal package upgrade rather than only at install time. dpkg takes over the file the
+snippet left there and owns it from then on.
+
+That is the only mechanism this repository has for replacing a key, and the reason it exists is
+that apt trusts the signature on the index and nothing else. Without it, a new key only reaches a
+machine at the moment it is already signing, which means every installed machine breaks at once
+with "the following signatures were invalid" and the only fix is each user re-running the curl. A
+rotation therefore goes in this order, and the gap between the steps is the whole point:
+
+1. Add the new public key to `bramble-keyring.asc` (`gpg --armor --export <new> >> …`). Keep
+   signing with the old one. Ship a release. Users now trust both keys, most of them without
+   knowing it.
+2. Leave it a release or two, so upgrades propagate.
+3. Switch `BRAMBLE_APT_GPG_KEY` to the new key. Nothing visible happens to anyone who upgraded.
+4. Once the old key is unused, remove it from the keyring on the next release.
+
+`publish-apt.ts` refuses to upload if the key that signed the index is not in this file, and CI
+asserts the `.deb` ships exactly these bytes, because a keyring that quietly stops being delivered
+is invisible right up until the rotation that needed it.
+
+One consequence worth knowing: `apt remove bramble` takes the keyring with it, since the package
+owns the file. `apt update` then reports the repository as unsigned until the user also removes
+`/etc/apt/sources.list.d/bramble.sources`.
 
 ### Tools
 

@@ -368,6 +368,22 @@ jobs:
           fi
           echo "ok: libwayland-client and libcups are out, libharfbuzz is in"
 
+      # The .deb carries the APT keyring, which is how a new signing key reaches installed machines
+      # before it ever signs anything (docs/apt-releases.md). A wrong relative path in
+      # bundle.linux.deb.files would leave it out, and nothing would notice until a rotation
+      # stranded every user, so the bytes are compared against the committed file.
+      - name: Assert the .deb ships the APT keyring
+        run: |
+          set -euo pipefail
+          deb="$(echo packages/platform-desktop/src-tauri/target/release/bundle/deb/*.deb)"
+          [ -f "$deb" ] || { echo "::error::no .deb at $deb"; exit 1; }
+          out="$(mktemp -d)"
+          dpkg-deb -x "$deb" "$out"
+          shipped="$out/usr/share/keyrings/bramble-keyring.asc"
+          [ -f "$shipped" ] || { echo "::error::$deb does not ship /usr/share/keyrings/bramble-keyring.asc"; exit 1; }
+          cmp "$shipped" packages/platform-desktop/apt/bramble-keyring.asc
+          echo "ok: the .deb ships the committed keyring"
+
   desktop-windows:
     name: Desktop (Windows installer)
     runs-on: windows-latest
