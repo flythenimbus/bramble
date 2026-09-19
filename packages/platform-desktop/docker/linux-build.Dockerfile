@@ -88,12 +88,17 @@ ENV HOME=/home/builder
 # repacking is what keeps issue #100 fixed.
 #
 # So: a dated tag rather than `continuous`, checked against its digest, fetched once when the image
-# is built. A bad download fails here, loudly, instead of in the middle of a release.
-ARG LINUXDEPLOY_APPIMAGE_VERSION=1-alpha-20250213-1
+# is built. A bad download fails here, loudly, instead of in the middle of a release. The version
+# and digest come from scripts/appimage-packer.ts through build args, so they are written down
+# once: builds that do not run in this image get the same file from `ensurePacker`.
+ARG LINUXDEPLOY_APPIMAGE_VERSION
+ARG LINUXDEPLOY_APPIMAGE_SHA256
 RUN set -eux; \
+    : "${LINUXDEPLOY_APPIMAGE_VERSION:?build this image with scripts/build-linux.ts, which passes the pin}"; \
+    : "${LINUXDEPLOY_APPIMAGE_SHA256:?build this image with scripts/build-linux.ts, which passes the pin}"; \
     case "${TARGETARCH}" in \
-      amd64) arch=x86_64; sha=992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3 ;; \
-      arm64) arch=aarch64; sha=83c292149274965a865dcd44c135cfca8ba28c6b7de3eb628d4b8b5f248af17c ;; \
+      amd64) arch=x86_64 ;; \
+      arm64) arch=aarch64 ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     mkdir -p "$HOME/.cache/tauri"; \
@@ -101,7 +106,7 @@ RUN set -eux; \
     curl -fsSL --retry 5 --retry-all-errors \
       "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/${LINUXDEPLOY_APPIMAGE_VERSION}/linuxdeploy-plugin-appimage-${arch}.AppImage" \
       -o "$packer"; \
-    echo "${sha}  $packer" | sha256sum -c -; \
+    echo "${LINUXDEPLOY_APPIMAGE_SHA256}  $packer" | sha256sum -c -; \
     chmod -R a+rwX "$HOME/.cache"; \
     chmod a+rx "$packer"
 

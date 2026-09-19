@@ -22,6 +22,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ensurePacker } from "./appimage-packer.ts";
 import { makeAppImagePortable } from "./appimage-portability.ts";
 import { type AscApiKey, ascApiKey } from "./asc-api-key.ts";
 import { KEY_AGE, signingKey } from "./desktop-signing-key.ts";
@@ -139,6 +140,10 @@ const env = {
 	TAURI_SIGNING_PRIVATE_KEY: key,
 	TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 };
+// Before the bundler, not after it fails: on Linux the AppImage step fetches its packer from the
+// network, and a failed fetch is a silent fallback rather than an error. See appimage-packer.ts.
+if (process.platform === "linux") await ensurePacker();
+
 try {
 	execFileSync("pnpm", args, { stdio: "inherit", env });
 } finally {

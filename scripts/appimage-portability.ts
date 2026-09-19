@@ -3,8 +3,8 @@
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, lstatSync, readdirSync, realpathSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { packerMatchesPin, packerPath } from "./appimage-packer.ts";
 
 /** Bundled copies that break the app on hosts newer or older than the builder. */
 const DROP = [
@@ -64,10 +64,14 @@ export function makeAppImagePortable(bundleDir: string, env: NodeJS.ProcessEnv):
 		return;
 	}
 
-	// The packer tauri build just used, from Tauri's tool cache (`dirs::cache_dir()/tauri`).
-	const cache = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
-	const packer = join(cache, "tauri", "linuxdeploy-plugin-appimage.AppImage");
+	// The pinned packer, put there by ensurePacker before the bundler ran (appimage-packer.ts).
+	// Warned about rather than refused if it has changed underneath: tauri fetches into the same
+	// cache, so this says the bundle was packed by something other than the pin, which is worth
+	// knowing without failing a build over a packer that still works.
+	const packer = packerPath();
 	if (!existsSync(packer)) throw new Error(`no AppImage packer at ${packer}`);
+	if (!packerMatchesPin())
+		console.warn(`warning: ${packer} is not the pinned build; tauri replaced it`);
 
 	console.log(`repacking ${image}: ${[...changes].join(" ")}`);
 	execFileSync(packer, ["--appdir", appDir], {
