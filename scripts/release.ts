@@ -44,6 +44,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+	appendFileSync,
 	copyFileSync,
 	cpSync,
 	existsSync,
@@ -55,7 +56,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { AMO_API, amoJwt } from "./amo-auth.ts";
 import { ASC_KEY_AGE } from "./asc-api-key.ts";
 import { CWS_ITEM_ID } from "./cws-ids.ts";
@@ -183,10 +184,17 @@ if (!rawVersion)
 // (docs/ci-releases.md); --local is the fallback that does it all on this machine with the
 // YubiKey. --resume re-signs a build this machine made, so it is local by definition. iOS still
 // opts in with --ci: its route commits and pushes from this clone, which is its own story.
-const CI_TARGETS = new Set(["android", "firefox", "chromium"]);
-const onRunner = flags.has("--runner-build") || flags.has("--runner-publish");
+const CI_TARGETS = new Set(["android", "firefox", "chromium", "desktop"]);
+const onRunner = ["--runner-build", "--runner-publish", "--runner-bump", "--runner-prepare"].some(
+	(f) => flags.has(f),
+);
+// --aarch64 is an Apple-Silicon-only build for iterating, which a release never is: local.
 const viaCi =
-	CI_TARGETS.has(platform) && !onRunner && !flags.has("--local") && !flags.has("--resume");
+	CI_TARGETS.has(platform) &&
+	!onRunner &&
+	!flags.has("--local") &&
+	!flags.has("--resume") &&
+	!flags.has("--aarch64");
 
 if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
 	requireBins(["gh"], "docs/release-signing.md");
@@ -764,9 +772,13 @@ function dispatchRelease(workflow: string, version: string, tag: string): void {
 
 	// A run created before this instant is somebody else's. gh returns before the run exists.
 	const since = new Date(Date.now() - 5_000).toISOString();
-	run(
-		`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}`,
-	);
+	try {
+		run(
+			`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}`,
+		);
+	} catch {
+		fail(`could not dispatch ${workflow} (above). It has to exist on main to be dispatched.`);
+	}
 	const id = findRun(workflow, since);
 	const url = `https://github.com/${REPO}/actions/runs/${id}`;
 	const environment = workflow.replace(/\.yml$/, "");
@@ -967,8 +979,8 @@ function compareVersions(a: string, b: string): number {
 }
 
 /** What every build job checks before building. Returns the commit it builds from. */
-function runnerBuildStart(workflow: string, tag: string): string {
-	if (!process.env.GITHUB_ACTIONS) fail(`--runner-build runs in ${workflow}`);
+function runnerBuildStart(workflow: string, tag: string, mode = "--runner-build"): string {
+	if (!process.env.GITHUB_ACTIONS) fail(`${mode} runs in ${workflow}`);
 	// Releases come from main: the publish job commits onto it, and only onto what this built.
 	if (process.env.GITHUB_REF_NAME !== "main")
 		fail(`releases are cut from main, not ${process.env.GITHUB_REF_NAME}`);
@@ -1290,6 +1302,318 @@ async function runnerPublishChrome(version: string, tag: string): Promise<void> 
 	);
 }
 
+// ----- desktop: the CI route -----
+//
+// One release across three operating systems, so desktop-release.yml has more moving parts than the
+// other workflows. The version bump is committed first, as on the local route: the Windows installer
+// is built by sign-windows.yml on a runner of its own, and a runner can only build a commit it can
+// fetch. Linux builds on native runners and Windows goes through SignPath, both holding no secret
+// of ours; then one approved job on macOS builds and notarizes macOS and signs every updater
+// artifact with the real key, the only job that ever holds it, and publishes.
+
+/** Where build-windows.ts hands the dispatched run to the step that collects it. */
+function windowsRunFile(): string {
+	return "packages/platform-desktop/src-tauri/target/.windows-signing-run";
+}
+
+/** Outputs for the jobs after this one: `key=value` lines appended to the step's output file. */
+function stepOutputs(values: Record<string, string>): void {
+	const file = process.env.GITHUB_OUTPUT || fail("no GITHUB_OUTPUT: this runs in a workflow step");
+	appendFileSync(
+		file,
+		Object.entries(values)
+			.map(([k, v]) => `${k}=${v}\n`)
+			.join(""),
+	);
+}
+
+/**
+ * `--runner-bump`, the first job. Gates, commits the bump through GitHub's API, and dispatches the
+ * Windows build, which needs that commit to exist. A dry run commits nothing and builds no Windows:
+ * sign-windows.yml asserts it is building a committed version, and SignPath signs what it is sent.
+ */
+function runnerBumpDesktop(version: string, tag: string): void {
+	const base = runnerBuildStart("desktop-release.yml", tag, "--runner-bump");
+	const dryRun = flags.has("--dry-run");
+	gate();
+	const files = bumpManifestVersion(DESKTOP_CONF, version);
+	let sha = base;
+	if (!dryRun && files.length) {
+		sha = commitFiles({
+			repo: REPO,
+			branch: WEBSITE_BRANCH,
+			expectedHeadOid: base,
+			headline: `chore(release): desktop ${version}`,
+			files,
+		});
+		// build-windows.ts --ci-start insists HEAD is pushed and the tree clean: stand on the commit.
+		run(`git fetch --quiet origin ${WEBSITE_BRANCH}`);
+		run(`git reset --quiet --hard ${sha}`);
+	}
+	let windowsRun = "";
+	if (!dryRun) {
+		run("node scripts/build-windows.ts --ci-start");
+		windowsRun = readFileSync(windowsRunFile(), "utf8").trim();
+	}
+	stepOutputs({ sha, windows_run: windowsRun });
+	console.log(
+		`\n${version} at ${sha.slice(0, 9)}` +
+			(dryRun ? " (dry run: nothing committed, no Windows)" : `; Windows is run ${windowsRun}`),
+	);
+}
+
+/**
+ * `--runner-prepare`: the tree at `version` before a build. On a real run it already is, being the
+ * bump commit, and anything else is a tree the release commit does not describe. On a dry run
+ * nothing was committed, so the bump happens here, in this checkout only.
+ */
+function runnerPrepareDesktop(version: string): void {
+	if (!process.env.GITHUB_ACTIONS) fail("--runner-prepare runs in desktop-release.yml");
+	if (currentVersion("desktop") === version) return;
+	if (!flags.has("--dry-run"))
+		fail(`${DESKTOP_CONF} is not ${version}: this is not the release commit`);
+	bumpManifestVersion(DESKTOP_CONF, version);
+	console.log(`dry run: ${DESKTOP_CONF} set to ${version} in this checkout only`);
+}
+
+/**
+ * `--runner-publish`, the approved job on macOS and the only place the updater key exists. Builds
+ * macOS (Developer ID signed, notarized, its updater archive signed as it is made), re-signs the
+ * Linux AppImages over the throwaway signatures their builds carry, collects and re-signs the
+ * Windows installer, and verifies every updater signature against the public key compiled into the
+ * app before anything is public. Then it publishes, and only after the release exists commits the
+ * update manifest that points at it.
+ */
+async function runnerPublishDesktop(version: string, tag: string): Promise<void> {
+	if (!process.env.GITHUB_ACTIONS) fail("--runner-publish runs in desktop-release.yml");
+	const dryRun = flags.has("--dry-run");
+	const bundle = "packages/platform-desktop/src-tauri/target/universal-apple-darwin/release/bundle";
+	runnerPrepareDesktop(version);
+	const sha = capture("git rev-parse HEAD");
+	for (const name of [
+		"TAURI_SIGNING_PRIVATE_KEY",
+		"APPLE_CERTIFICATE",
+		"APPLE_CERTIFICATE_PASSWORD",
+		"APPLE_SIGNING_IDENTITY",
+		"ASC_KEY_ID",
+		"ASC_ISSUER_ID",
+		"ASC_KEY_CONTENT",
+	])
+		if (!process.env[name]) fail(`no ${name} in desktop-release`);
+
+	// Universal: build-macos.ts builds both slices, and on a runner Tauri imports APPLE_CERTIFICATE
+	// into a throwaway keychain of its own. Notarization reads the ASC key from the environment.
+	run("pnpm run build:macos");
+
+	const signUpdater = (file: string) =>
+		execFileSync(
+			"pnpm",
+			["--filter", "@vault/platform-desktop", "exec", "tauri", "signer", "sign", resolve(file)],
+			{ stdio: ["ignore", "ignore", "inherit"] },
+		);
+
+	// The Linux jobs signed their AppImages with a throwaway key, because the bundler will not emit
+	// updater artifacts unsigned. Same bytes, real signature.
+	const linux = "dist-linux/appimage";
+	const images = existsSync(linux)
+		? readdirSync(linux)
+				.filter((f) => f.endsWith(".AppImage") && f.includes(`_${version}_`))
+				.map((f) => join(linux, f))
+		: [];
+	if (images.length === 0)
+		fail(`no ${version} AppImage in ${linux}; the Linux builds did not hand one over`);
+	for (const image of images) {
+		rmSync(`${image}.sig`, { force: true });
+		signUpdater(image);
+	}
+
+	// Waits on SignPath's approval, downloads the Authenticode-signed installer, and signs it for the
+	// updater with the key in this job's environment.
+	const windows: string[] = [];
+	if (!dryRun) {
+		const runId = process.env.WINDOWS_RUN || fail("no Windows run id handed over by the bump job");
+		mkdirSync(dirname(windowsRunFile()), { recursive: true });
+		writeFileSync(windowsRunFile(), `${runId}\n`);
+		run("node scripts/build-windows.ts --ci-collect");
+		const nsis =
+			"packages/platform-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis";
+		for (const f of readdirSync(nsis))
+			if (f.endsWith("-setup.exe") && f.includes(`_${version}_`)) windows.push(join(nsis, f));
+	}
+
+	// Every updater artifact, against the public key compiled into the app, before anything is
+	// public. An artifact that fails this is one every installed app would refuse.
+	const macos = join(bundle, "macos");
+	const archives = readdirSync(macos)
+		.filter((f) => f.endsWith(".app.tar.gz"))
+		.map((f) => join(macos, f));
+	for (const artifact of [...archives, ...images, ...windows]) {
+		try {
+			run(`node scripts/verify-updater-signature.mjs ${artifact} ${artifact}.sig`);
+		} catch {
+			fail(
+				`${basename(artifact)} does not verify against the updater key in the app; nothing was published`,
+			);
+		}
+	}
+
+	if (dryRun) {
+		console.log(
+			`\ndry run: ${version} built for macOS (signed and notarized) and Linux, every updater` +
+				" signature verified against the key in the app. Windows is not part of a dry run." +
+				`\nNothing was committed, tagged or published; ${tag} is still free.`,
+		);
+		return;
+	}
+
+	const { assets, sums, expectedDmg } = collectDesktopAssets(version, true, bundle);
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+	const sumsAsset = join(stage, "SHA256SUMS");
+	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
+
+	createTag(REPO, tag, sha);
+	run(`git fetch --quiet origin refs/tags/${tag}:refs/tags/${tag}`);
+	try {
+		await publish(tag, `Desktop ${version}`, [...assets, sumsAsset], () => verifyDraft(tag, "*"));
+	} finally {
+		rmSync(stage, { recursive: true, force: true });
+	}
+
+	// Only now: the manifest IS the update channel, so it goes live after the artifacts it names
+	// exist. Committed onto main as it is NOW, an hour after the build started: these two files
+	// are the release's alone, and nothing else on main has to have stood still for them.
+	run("node scripts/release-desktop.mjs --resume --quiet");
+	updateCask(version, sums.get(expectedDmg) ?? fail(`${expectedDmg} is not in SHA256SUMS`));
+	const head = capture(`gh api repos/${REPO}/git/ref/heads/${WEBSITE_BRANCH} --jq .object.sha`);
+	commitFiles({
+		repo: REPO,
+		branch: WEBSITE_BRANCH,
+		expectedHeadOid: head,
+		headline: `chore(release): desktop ${version} update manifest and cask`,
+		files: [DESKTOP_MANIFEST, DESKTOP_CASK],
+	});
+	// A commit made with this workflow's token fires no push workflow, so deploy-website.yml would
+	// never hear about it. Dispatching it by hand is the one event that token can trigger.
+	run(`gh workflow run deploy-website.yml --repo ${REPO} --ref ${WEBSITE_BRANCH}`);
+
+	console.log(
+		`\nreleased ${tag}; the update manifest is committed and the website is deploying.` +
+			"\nThe APT repository is still signed from a Mac, until its key moves off the YubiKey:" +
+			`\n  pnpm run publish:apt --release ${tag}`,
+	);
+}
+
+/**
+ * Every artifact a desktop release publishes, checked for completeness: the universal .dmg, the
+ * Linux packages, the Windows installer, and each updater artifact with its signature. Returns them
+ * with their checksums, keyed by basename because the cask needs the .dmg's and `test:brew` asserts
+ * the two agree.
+ */
+function collectDesktopAssets(
+	version: string,
+	universal: boolean,
+	bundle: string,
+): { assets: string[]; sums: Map<string, string>; dmgs: string[]; expectedDmg: string } {
+	const macos = join(bundle, "macos");
+	const archives = existsSync(macos)
+		? readdirSync(macos).filter((f) => f.endsWith(".app.tar.gz"))
+		: [];
+	if (archives.length === 0)
+		fail(`no .app.tar.gz in ${macos}; the build produced no updater archive`);
+	const dmgs = existsSync(join(bundle, "dmg"))
+		? readdirSync(join(bundle, "dmg")).filter((f) => f.endsWith(".dmg"))
+		: [];
+	if (dmgs.length === 0) fail(`no .dmg in ${join(bundle, "dmg")}`);
+	// The website's download box builds this URL from the version rather than reading it from
+	// anywhere, because the updater manifest names the .app.tar.gz and never the disk image. A
+	// rename here would leave the front page's main macOS download pointing at a 404.
+	const expectedDmg = `Bramble_${version}_universal.dmg`;
+	if (universal && !dmgs.includes(expectedDmg))
+		fail(
+			`expected ${expectedDmg}, built ${dmgs.join(", ")}.\n` +
+				"website/src/downloads.ts links to that exact name; update both together.",
+		);
+
+	// dist-linux and the dmg directory are not cleaned between releases, and the bundlers put the
+	// version in every filename, so a plain extension glob picks up the PREVIOUS release too:
+	// cutting 0.4.0 over a 0.3.0 tree attaches 0.3.0 debs, rpms and AppImages to the new release
+	// and hashes them into its SHA256SUMS.
+	//
+	// Compared as text, not as a pattern. `version` comes from argv, so building a RegExp from it
+	// raises an escaping question with no upside: matching the delimited string is what was meant
+	// all along, and it cannot be malformed by its input.
+	// The bundlers bracket the version in one delimiter or the other, never a mix, so requiring a
+	// matched pair rejects 10.4.0 and 0.4.0-rc1 alike, where either loose end would take both.
+	/** `Bramble_0.4.0_amd64.deb` and `Bramble-0.4.0-1.x86_64.rpm`. */
+	const ofThisVersion = (f: string) => ["_", "-"].some((d) => f.includes(`${d}${version}${d}`));
+
+	const assets: string[] = [];
+	for (const f of dmgs.filter(ofThisVersion)) assets.push(join(bundle, "dmg", f));
+	// One release carries every platform. The AppImage must be signed, for the same reason the
+	// macOS archive must: it is what the updater fetches, and an unsigned one is rejected by every
+	// installed app, so publishing it looks complete and updates nobody. The .deb and .rpm carry
+	// .sig files too, which are meaningless (the updater cannot apply either) and not uploaded.
+	for (const [dir, ext] of [
+		["dist-linux/deb", ".deb"],
+		["dist-linux/rpm", ".rpm"],
+		["dist-linux/appimage", ".AppImage"],
+	] as const) {
+		if (!existsSync(dir)) continue;
+		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion(f));
+		// Nothing for this version means the Linux build did not run or wrote elsewhere. Silence
+		// here would publish a macOS-only release that claims to carry Linux.
+		if (built.length === 0) fail(`no ${version} ${ext} in ${dir}; re-run the Linux build`);
+		for (const f of built) {
+			assets.push(join(dir, f));
+			if (ext === ".AppImage") {
+				if (!existsSync(join(dir, `${f}.sig`)))
+					fail(`${f} has no .sig; the Linux build must not be --unsigned for a release`);
+				assets.push(join(dir, `${f}.sig`));
+			}
+		}
+	}
+	// Windows, where the installer is both the download and the updater artifact, so unlike the
+	// other two platforms there is one file and its signature rather than a pair to keep in step.
+	// Same rule about the .sig: unsigned means every installed app refuses the update.
+	for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"] as const) {
+		const dir = `packages/platform-desktop/src-tauri/target/${triple}/release/bundle/nsis`;
+		if (!existsSync(dir)) continue;
+		const built = readdirSync(dir).filter((f) => f.endsWith("-setup.exe") && ofThisVersion(f));
+		for (const f of built) {
+			if (!existsSync(join(dir, `${f}.sig`)))
+				fail(`${f} has no .sig; the Windows build must not be --unsigned for a release`);
+			assets.push(join(dir, f), join(dir, `${f}.sig`));
+		}
+	}
+	// Checked after the loop rather than inside it, because the arm64 directory legitimately does
+	// not exist: only x64 is built for a release. Nothing at all means the Windows build did not
+	// run, and silence there would publish a release that claims to carry Windows and does not.
+	if (!assets.some((a) => a.endsWith("-setup.exe")))
+		fail(
+			`no ${version} -setup.exe; the GitHub build did not produce one.\n` +
+				"Re-run to wait on it again, or check the run linked by --ci-start.",
+		);
+
+	for (const a of archives) {
+		if (!existsSync(join(macos, `${a}.sig`)))
+			// Every installed app rejects an unsigned archive, so publishing one leaves a release
+			// that looks complete while updating silently fails for everyone.
+			fail(`${a} has no .sig; was the signing key set for this build?`);
+		assets.push(join(macos, a), join(macos, `${a}.sig`));
+	}
+
+	// Keyed by basename because the cask below needs the .dmg's checksum, and `test:brew`
+	// asserts the two agree: hashing the same file twice is how they would come to disagree.
+	const sums = new Map(
+		assets
+			.filter((f) => !f.endsWith(".sig"))
+			.map(
+				(f) => [basename(f), createHash("sha256").update(readFileSync(f)).digest("hex")] as const,
+			),
+	);
+	return { assets, sums, dmgs, expectedDmg };
+}
+
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
 
 async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
@@ -1437,6 +1761,13 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 		fail(`invalid version "${version}". want major.minor.patch`);
 
 	const tag = `${version}-desktop`;
+
+	// The CI route: dispatched from here, built, signed and published on runners. docs/ci-releases.md.
+	if (viaCi) return dispatchRelease("desktop-release.yml", version, tag);
+	if (flags.has("--runner-bump")) return runnerBumpDesktop(version, tag);
+	if (flags.has("--runner-prepare")) return runnerPrepareDesktop(version);
+	if (flags.has("--runner-publish")) return runnerPublishDesktop(version, tag);
+
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	// A resume finishes the run that made this tag, so the tag existing is the precondition rather
 	// than the error. Publishing is all that is left, and it is keyed off the tag.
@@ -1588,105 +1919,9 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 		}
 	}
 
-	const macos = join(BUNDLE, "macos");
-	const archives = existsSync(macos)
-		? readdirSync(macos).filter((f) => f.endsWith(".app.tar.gz"))
-		: [];
-	if (archives.length === 0)
-		fail(`no .app.tar.gz in ${macos}; the build produced no updater archive`);
-	const dmgs = existsSync(join(BUNDLE, "dmg"))
-		? readdirSync(join(BUNDLE, "dmg")).filter((f) => f.endsWith(".dmg"))
-		: [];
-	if (dmgs.length === 0) fail(`no .dmg in ${join(BUNDLE, "dmg")}`);
-	// The website's download box builds this URL from the version rather than reading it from
-	// anywhere, because the updater manifest names the .app.tar.gz and never the disk image. A
-	// rename here would leave the front page's main macOS download pointing at a 404.
-	const expectedDmg = `Bramble_${version}_universal.dmg`;
-	if (universal && !dmgs.includes(expectedDmg))
-		fail(
-			`expected ${expectedDmg}, built ${dmgs.join(", ")}.\n` +
-				"website/src/downloads.ts links to that exact name; update both together.",
-		);
-
-	// dist-linux and the dmg directory are not cleaned between releases, and the bundlers put the
-	// version in every filename, so a plain extension glob picks up the PREVIOUS release too:
-	// cutting 0.4.0 over a 0.3.0 tree attaches 0.3.0 debs, rpms and AppImages to the new release
-	// and hashes them into its SHA256SUMS.
-	//
-	// Compared as text, not as a pattern. `version` comes from argv, so building a RegExp from it
-	// raises an escaping question with no upside: matching the delimited string is what was meant
-	// all along, and it cannot be malformed by its input.
-	// The bundlers bracket the version in one delimiter or the other, never a mix, so requiring a
-	// matched pair rejects 10.4.0 and 0.4.0-rc1 alike, where either loose end would take both.
-	/** `Bramble_0.4.0_amd64.deb` and `Bramble-0.4.0-1.x86_64.rpm`. */
-	const ofThisVersion = (f: string) => ["_", "-"].some((d) => f.includes(`${d}${version}${d}`));
-
-	const assets: string[] = [];
-	for (const f of dmgs.filter(ofThisVersion)) assets.push(join(BUNDLE, "dmg", f));
-	// One release carries every platform. The AppImage must be signed, for the same reason the
-	// macOS archive must: it is what the updater fetches, and an unsigned one is rejected by every
-	// installed app, so publishing it looks complete and updates nobody. The .deb and .rpm carry
-	// .sig files too, which are meaningless (the updater cannot apply either) and not uploaded.
-	for (const [dir, ext] of [
-		["dist-linux/deb", ".deb"],
-		["dist-linux/rpm", ".rpm"],
-		["dist-linux/appimage", ".AppImage"],
-	] as const) {
-		if (!existsSync(dir)) continue;
-		const built = readdirSync(dir).filter((f) => f.endsWith(ext) && ofThisVersion(f));
-		// Nothing for this version means the Linux build did not run or wrote elsewhere. Silence
-		// here would publish a macOS-only release that claims to carry Linux.
-		if (built.length === 0) fail(`no ${version} ${ext} in ${dir}; re-run the Linux build`);
-		for (const f of built) {
-			assets.push(join(dir, f));
-			if (ext === ".AppImage") {
-				if (!existsSync(join(dir, `${f}.sig`)))
-					fail(`${f} has no .sig; the Linux build must not be --unsigned for a release`);
-				assets.push(join(dir, `${f}.sig`));
-			}
-		}
-	}
-	// Windows, where the installer is both the download and the updater artifact, so unlike the
-	// other two platforms there is one file and its signature rather than a pair to keep in step.
-	// Same rule about the .sig: unsigned means every installed app refuses the update.
-	for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"] as const) {
-		const dir = `packages/platform-desktop/src-tauri/target/${triple}/release/bundle/nsis`;
-		if (!existsSync(dir)) continue;
-		const built = readdirSync(dir).filter((f) => f.endsWith("-setup.exe") && ofThisVersion(f));
-		for (const f of built) {
-			if (!existsSync(join(dir, `${f}.sig`)))
-				fail(`${f} has no .sig; the Windows build must not be --unsigned for a release`);
-			assets.push(join(dir, f), join(dir, `${f}.sig`));
-		}
-	}
-	// Checked after the loop rather than inside it, because the arm64 directory legitimately does
-	// not exist: only x64 is built for a release. Nothing at all means the Windows build did not
-	// run, and silence there would publish a release that claims to carry Windows and does not.
-	if (!assets.some((a) => a.endsWith("-setup.exe")))
-		fail(
-			`no ${version} -setup.exe; the GitHub build did not produce one.\n` +
-				"Re-run to wait on it again, or check the run linked by --ci-start.",
-		);
-
-	for (const a of archives) {
-		if (!existsSync(join(macos, `${a}.sig`)))
-			// Every installed app rejects an unsigned archive, so publishing one leaves a release
-			// that looks complete while updating silently fails for everyone.
-			fail(`${a} has no .sig; was the signing key set for this build?`);
-		assets.push(join(macos, a), join(macos, `${a}.sig`));
-	}
-
+	const { assets, sums, dmgs, expectedDmg } = collectDesktopAssets(version, universal, BUNDLE);
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const sumsAsset = join(stage, "SHA256SUMS");
-	// Keyed by basename because the cask below needs the .dmg's checksum, and `test:brew`
-	// asserts the two agree: hashing the same file twice is how they would come to disagree.
-	const sums = new Map(
-		assets
-			.filter((f) => !f.endsWith(".sig"))
-			.map(
-				(f) => [basename(f), createHash("sha256").update(readFileSync(f)).digest("hex")] as const,
-			),
-	);
 	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));
 
 	// Already tagged and pushed by the run being resumed; doing it again would only fail on the

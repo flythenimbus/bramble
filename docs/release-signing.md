@@ -639,17 +639,46 @@ build will keep using it and never ask for the YubiKey.
 ### Each release
 
 ```sh
-pnpm build:macos       # universal; prompts for a touch. aarch64-only via build:macos:aarch64
-pnpm release:desktop   # writes latest.json from what the build produced
+pnpm run release desktop 0.9.0             # from GitHub: dispatch, approve twice, done
+pnpm run release desktop 0.9.0 --dry-run   # everything short of publishing, Windows excepted
+pnpm run release desktop 0.9.0 --local     # from this Mac: every build here, a touch for the key
+pnpm run publish:apt --release 0.9.0-desktop   # the APT repository, still from a Mac (below)
 ```
 
-Then create the GitHub release tagged `v<version>` and attach the `.dmg`, the `.app.tar.gz` and
-`latest.json`. **`latest.json` must be on the LATEST release**: installed apps read that URL, so a
-release without it leaves them checking a stale manifest.
+**From GitHub**, the default route, through `.github/workflows/desktop-release.yml`. One release
+covers three operating systems, so it has more parts than the others:
 
-The build refuses to run without the key rather than producing an unsigned archive, because an
-unsigned one is rejected by every installed app — the release would look complete while updating
-silently broke.
+1. **Bump.** A job with no secrets runs the gate, commits the version through GitHub's API, and
+   dispatches `sign-windows.yml`. The commit comes first because that workflow builds the Windows
+   installer on a runner of its own, and a runner can only build a commit it can fetch.
+2. **Linux**, in the same Debian container as the local route, natively on amd64 and arm64 runners.
+   No secrets: their AppImages carry a throwaway updater signature, since the bundler will not emit
+   updater artifacts unsigned.
+3. **Windows**, in `sign-windows.yml`, waits for your approval **in SignPath**, which holds the
+   Authenticode certificate. That approval stays by design.
+4. **Publish**, on macOS, waits for your approval **in the `desktop-release` environment**. It is the
+   only job the updater key ever reaches, and it runs first-party actions only. It builds and
+   notarizes macOS, re-signs the AppImages and the SignPath-signed installer with the real key,
+   verifies every updater signature against the public key compiled into the app, and publishes.
+   The update manifest is committed only after the release exists, then the website deploy is
+   dispatched explicitly, because a commit made with the workflow's own token triggers no push
+   workflow.
+
+A dry run commits nothing and builds no Windows (`sign-windows.yml` asserts it is building a
+committed version, and SignPath signs whatever it is sent), but does everything else, including a
+real notarization, and stops before the tag.
+
+**The APT repository is the one step still on a Mac.** Its signing key was generated on the
+YubiKey's OpenPGP applet and cannot leave it, so after a GitHub release,
+`pnpm run publish:apt --release <tag>` downloads that release's `.deb`s and signs and publishes the
+index (two touches). Until it runs, Debian and Ubuntu users do not see the release.
+
+**From this Mac** (`--local`), the fallback: every build here, the Linux one in containers, Windows
+still through GitHub and SignPath, and APT publishing at the end, all as before.
+
+Either way, the build refuses to run without the key rather than producing an unsigned archive,
+because an unsigned one is rejected by every installed app: the release would look complete while
+updating silently broke.
 
 ### Notarization
 

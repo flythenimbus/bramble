@@ -62,10 +62,12 @@ run, one set of touches, and then the token goes in a drawer as the recovery pat
 ## The shape
 
 Each target gets one workflow that builds, signs and publishes. There is no "CI builds, you sign"
-split any more, because the keys are in CI too. That collapses rather than generalises the Windows
-pattern: `build-windows.ts --ci-collect` exists only to bring an installer home for its updater
-signature, and once the updater key is in the same job, both signatures happen in one place. The
-throwaway-key trick in `sign-windows.yml` goes away with it.
+split any more, because the keys are in CI too. Windows keeps its own shape inside that: SignPath
+verifies where an installer came from, and its trust is configured around `sign-windows.yml`, so
+that workflow is left exactly as it is, throwaway updater key and all. What moved is the other end:
+`build-windows.ts --ci-start` is dispatched by the desktop workflow's first job instead of a Mac,
+and `--ci-collect`, which re-signs the installer for the updater, runs in the publish job that holds
+the real key.
 
 `pnpm run release <target> <version>` stays the entry point, reduced to what it should always have
 been: validate the version, dispatch, watch. Everything with an ordering invariant moves into the
@@ -120,7 +122,7 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android` | keystore + password |
 | **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome**. Built: `chrome-release.yml`, `release chromium`, with a store preflight | CWS key + service account |
-| **4** | **Desktop**: Linux on native `ubuntu-24.04` + `ubuntu-24.04-arm` in `container: debian:12`, macOS on `macos-26`, Windows absorbing `--ci-collect`, then one publish job | updater key, Developer ID `.p12` |
+| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that notarizes, signs every updater artifact and publishes. APT stays on a Mac (`publish:apt --release`) | updater key, Developer ID `.p12`, ASC key |
 | **later** | APT key rotation, then OIDC custody | Users install a new key once |
 
 Android leads because it is self-contained and proves every part of the pattern in one place: a

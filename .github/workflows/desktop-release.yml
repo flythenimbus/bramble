@@ -1,0 +1,241 @@
+name: Desktop release
+
+# Builds, signs and publishes the desktop app for macOS, Linux and Windows as one release, so it
+# needs neither a Mac nor a YubiKey. docs/ci-releases.md has the trade.
+#
+# Three kinds of job, and only the last one holds anything that matters:
+#
+# - **bump** runs the gate, commits the version through GitHub's API, and dispatches
+#   sign-windows.yml. The commit comes first, as on the local route, because that workflow builds
+#   the Windows installer on a runner of its own, and a runner can only build a commit it can fetch.
+# - **linux**, on native amd64 and arm64 runners, builds in the same Debian container as the local
+#   route. Neither holds a secret: the bundler will not emit updater artifacts unsigned, so their
+#   AppImages carry a throwaway signature that the publish job replaces.
+# - **publish**, on macOS, is the one approval and the only job the updater key ever reaches, so it
+#   runs first-party actions only (Rust comes from the image's rustup, pnpm from corepack). It
+#   builds and notarizes macOS, re-signs the AppImages, waits for SignPath and re-signs the
+#   installer, verifies every updater signature against the public key compiled into the app, and
+#   publishes. The update manifest is committed after the release exists, and the website deploy
+#   is dispatched by hand, because a commit made with this workflow's token fires no push workflow.
+#
+# Windows keeps its own approval, in SignPath, which signs the installer with a certificate this
+# repository never holds. The APT repository is still signed from a Mac: its key lives on a
+# YubiKey and has not moved yet (`pnpm run publish:apt --release <tag>`).
+#
+# `pnpm run release desktop <version>` dispatches this and watches it. A dry run commits nothing and
+# builds no Windows, but does everything else up to publishing, including a real notarization.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Desktop version to release, e.g. 0.9.0"
+        required: true
+        type: string
+      dry_run:
+        description: "Build, sign, notarize and verify; commit, tag and publish nothing, and skip Windows"
+        required: false
+        default: false
+        type: boolean
+      xcode:
+        description: "Xcode version to build macOS with"
+        required: false
+        default: "26.4"
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Gate, bump, start Windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the bump commit
+      actions: write # dispatching sign-windows.yml
+    timeout-minutes: 45
+    outputs:
+      sha: ${{ steps.bump.outputs.sha }}
+      windows_run: ${{ steps.bump.outputs.windows_run }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Tags, so a version that has already shipped is refused before anything is built.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The gate's tests load the WASM core.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          cache: false
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
+        with:
+          tool: wasm-pack@0.13.1
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate, bump and start the Windows build
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          flags=(--runner-bump)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts desktop "$VERSION" "${flags[@]}"
+
+  linux:
+    name: Linux (${{ matrix.arch }})
+    needs: bump
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # For the throwaway updater key build-linux.ts generates with the Tauri CLI.
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      # The same Debian container as the local route, natively on each architecture instead of one
+      # of them emulated on a Mac. --unsigned is the throwaway key; publish signs for real.
+      - name: Build in the Debian container
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          flags=(--runner-prepare)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts desktop "$VERSION" "${flags[@]}"
+          node scripts/build-linux.ts --${{ matrix.arch }} --unsigned
+
+      - name: Hand off the packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            dist-linux/deb/*.deb
+            dist-linux/rpm/*.rpm
+            dist-linux/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: macOS, sign and publish
+    needs: [bump, linux]
+    runs-on: macos-26
+    # The approval gate, and the only job holding the updater key.
+    environment: desktop-release
+    permissions:
+      contents: write # the tag, the release and the manifest commit
+      actions: write # dispatching the website deploy
+    # A universal build and notarization, then as long as SignPath's approval takes.
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
+          # The previous desktop tag and the range after it, which the release notes are drawn from.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Named, never inherited, as in ios-testflight.yml.
+      - name: Select Xcode
+        env:
+          WANT: ${{ inputs.xcode }}
+        run: |
+          set -euo pipefail
+          app="/Applications/Xcode_${WANT}.app"
+          if [ ! -d "$app" ]; then
+            echo "::error::Xcode $WANT is not on this runner. Present: $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
+            exit 1
+          fi
+          sudo xcode-select -s "$app/Contents/Developer"
+          xcodebuild -version
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          # pnpm arrives through corepack below, so setup-node must not go looking for it.
+          package-manager-cache: false
+
+      # The image's own rustup rather than a setup action: the toolchain rust-toolchain.toml pins,
+      # and both Apple slices for the universal build.
+      - name: Rust
+        run: |
+          set -euo pipefail
+          rustup toolchain install
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install JS deps
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Receive the Linux packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: linux-*
+          merge-multiple: true
+          path: dist-linux/
+
+      - name: Build macOS, sign everything, publish
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+          WINDOWS_RUN: ${{ needs.bump.outputs.windows_run }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+        run: |
+          set -euo pipefail
+          flags=(--runner-publish)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts desktop "$VERSION" "${flags[@]}"
