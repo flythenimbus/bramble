@@ -37,7 +37,7 @@ things that keep it defensible:
 | One environment per target | A Firefox release cannot read the Android keystore |
 | No third-party actions in a job holding a permanent key | Their supply chain becomes ours the moment they run beside a key |
 | Every action pinned by commit, never a tag | A moved tag is a supply chain compromise with a signing key attached |
-| No build cache in release jobs | A restored `target/` puts objects in a signed binary that did not come from that checkout. `sign-windows.yml` already reasons this way for SignPath |
+| No cache of any kind in release jobs | A cache entry is mutable state any run on this repository can write, so a restored `target/` or pnpm store puts bytes in a signed artifact that did not come from that checkout. Both defaults are on: `setup-rust-toolchain` needs `cache: false` and `setup-node` needs `package-manager-cache: false`, since it caches off `packageManager` in package.json whether or not `cache:` is set |
 | Offline passphrase backups stay exactly as they are | They stop being the day-to-day path and become the recovery path |
 | Post-publish verification stays | `release.yml` re-verifies every updater artifact against the public key compiled into the app |
 

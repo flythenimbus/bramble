@@ -89,19 +89,19 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
-          cache: pnpm
+          # No dependency cache in a release build: a cache entry is mutable state any run on this
+          # repository can write, and this one is signed and handed to Apple.
+          package-manager-cache: false
 
       # Reads rust-toolchain.toml, the same single source of truth the other jobs use. The iOS
-      # targets themselves are added by scripts/build-crypto-ffi.sh.
+      # targets themselves are added by scripts/build-crypto-ffi.sh. Uncached, like every other
+      # release build: a restored target/ puts objects in a signed build that did not come from
+      # this checkout. The cost is a cold core build on a runner that already waits for an upload.
       - name: Setup Rust
         if: ${{ !inputs.check_only }}
         uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
-
-      - name: Cache Rust deps
-        if: ${{ !inputs.check_only }}
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          workspaces: packages/core-rust
+          cache: false
 
       # The webview half of the shared core still builds through wasm-pack, pinned as in ci.yml.
       - name: Install wasm-pack

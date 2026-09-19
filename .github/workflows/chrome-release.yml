@@ -62,7 +62,9 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
-          cache: pnpm
+          # No dependency cache in a release build, the same rule Rust follows here: a cache entry
+          # is mutable state any run on this repository can write, and these bytes get signed.
+          package-manager-cache: false
 
       # No cache: the WASM in this bundle ships inside a package signed with the CWS key.
       - name: Setup Rust
