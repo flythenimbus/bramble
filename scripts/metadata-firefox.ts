@@ -12,10 +12,10 @@
 // holding { "apiKey": "...", "apiSecret": "..." }. See docs/release-signing.md.
 
 import { execFileSync } from "node:child_process";
-import { createHmac, randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { amoJwt } from "./amo-auth.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -114,11 +114,7 @@ try {
 	}
 
 	// AMO auth is a short-lived HS256 JWT: iss = API key, per-request jti, exp <= 5 min.
-	const b64 = (s: string | Buffer) => Buffer.from(s).toString("base64url");
-	const now = Math.floor(Date.now() / 1000);
-	const head = b64(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-	const body = b64(JSON.stringify({ iss: apiKey, jti: randomUUID(), iat: now, exp: now + 60 }));
-	const token = `${head}.${body}.${b64(createHmac("sha256", apiSecret).update(`${head}.${body}`).digest())}`;
+	const token = amoJwt(apiKey as string, apiSecret as string);
 
 	const url = `${API_BASE}/addons/addon/${guid}/`;
 	const res = await fetch(url, {

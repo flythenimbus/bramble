@@ -210,18 +210,41 @@ screenshots + category are set once in the AMO Developer Hub.
 ### Each release
 
 ```sh
-pnpm run release firefox 1.0.0        # prompts for a YubiKey touch to decrypt the AMO secret
+pnpm run release firefox 1.0.0 --ci   # from GitHub: no Mac, no YubiKey, one approval
+pnpm run release firefox 1.0.0        # from this Mac: a YubiKey touch to decrypt the AMO secret
 ```
 
-It runs lint + tests, bumps the firefox `manifest.json` version, builds WASM, bundles
+**From GitHub** (`--ci`), the normal route, through `.github/workflows/firefox-release.yml`. A
+build job with no secrets runs the gate, bumps the version, bundles and lints; a publish job,
+approved in the `firefox-release` environment, submits and publishes. It follows the Android
+workflow with two differences, both because Mozilla holds the signing key and what needs guarding is
+the version, which an upload consumes for good:
+
+- **A preflight runs first**: the credentials authenticate, they belong to an author of this
+  add-on, and the version is above every version AMO already holds. That rules out the one mistake
+  that would otherwise leave a release commit for a version AMO refuses.
+- **The release commit comes before the upload.** The upload cannot be undone and the commit can
+  fail if main moved since the build, so committing first means the failure case is a bump commit
+  with nothing uploaded. Re-dispatching the same version finishes it: the manifest already matches,
+  so the build changes nothing and the publish job tags that commit and submits again.
+
+`-f dry_run=true` builds, lints, runs the preflight and makes the source archive, then stops. AMO
+has no dry run of its own, so this is the only way to test the route without spending a version.
+
+```sh
+gh workflow run firefox-release.yml --ref main -f version=1.0.0 -f dry_run=true
+```
+
+**From this Mac**, the fallback. It runs lint + tests, bumps the firefox `manifest.json` version, builds WASM, bundles
 `dist-firefox`, validates it with the addons-linter (the same check AMO runs) **before**
 submitting so a validation error fails for free, then **submits it to AMO on the listed channel**
 (`web-ext sign --channel listed`, with a source archive attached for review; see
 `docs/amo-source-build.md`), tags `1.0.0-firefox`, pushes, and publishes a GitHub release with the
 source `bramble_firefox_1.0.0.zip` + `SHA256SUMS`. Nothing is downloaded: AMO signs and publishes
 the `.xpi` itself once a reviewer approves it (track it in the Developer Hub). The credentials are
-decrypted to a temp file and wiped; they never touch the repo. CI verifies the source `.zip` +
-`SHA256SUMS` on the release; it never builds or signs.
+decrypted to a temp file and wiped; they never touch the repo. On publish, `release.yml` verifies
+the source `.zip` + `SHA256SUMS`; the GitHub route checks its own draft instead, since a release made
+with the workflow's token fires no other workflow.
 
 **AMO version numbers are unique across channels**, and a listed version must be **higher** than
 any previously signed version. If a submission fails after the bump, retry with the next version

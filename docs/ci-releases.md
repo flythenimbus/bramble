@@ -118,7 +118,7 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 |---|---|---|
 | **0** | `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them. Done | One YubiKey session, the last |
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android --ci` | keystore + password |
-| **2** | **Firefox** | AMO credentials |
+| **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox --ci`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome** | CWS key + service account |
 | **4** | **Desktop**: Linux on native `ubuntu-24.04` + `ubuntu-24.04-arm` in `container: debian:12`, macOS on `macos-26`, Windows absorbing `--ci-collect`, then one publish job | updater key, Developer ID `.p12` |
 | **later** | APT key rotation, then OIDC custody | Users install a new key once |
