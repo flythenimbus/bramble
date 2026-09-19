@@ -13,7 +13,15 @@
 // build, `ensurePacker` puts it in place before the bundler looks.
 
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	accessSync,
+	chmodSync,
+	constants,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -38,6 +46,20 @@ export const packerUrl = (arch: string): string =>
 
 const digest = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
 
+/**
+ * Executable, without assuming we own it. In the Linux container the packer is baked into the
+ * image and owned by root while the build runs as the invoking user, so it is already runnable and
+ * chmod is EPERM: asking first is the difference between that and a failed build.
+ */
+function makeRunnable(path: string): void {
+	try {
+		accessSync(path, constants.X_OK);
+		return;
+	} catch {
+		chmodSync(path, 0o755);
+	}
+}
+
 /** Whether what is in the cache now is still the pinned build. Synchronous, for the repack step. */
 export function packerMatchesPin(): boolean {
 	const path = packerPath();
@@ -57,7 +79,7 @@ export async function ensurePacker(): Promise<string> {
 	const path = packerPath();
 	if (!want) throw new Error(`no pinned AppImage packer for ${arch}`);
 	if (existsSync(path) && digest(path) === want) {
-		chmodSync(path, 0o755);
+		makeRunnable(path);
 		return path;
 	}
 
@@ -80,7 +102,7 @@ export async function ensurePacker(): Promise<string> {
 		throw new Error(
 			`the AppImage packer does not match its pin:\n  want ${want}\n  got  ${got}\n  ${packerUrl(arch)}`,
 		);
-	chmodSync(path, 0o755);
+	makeRunnable(path);
 	console.log(`AppImage packer ${PACKER_VERSION} (${arch}) ready`);
 	return path;
 }

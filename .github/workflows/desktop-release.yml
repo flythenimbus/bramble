@@ -122,6 +122,9 @@ jobs:
     needs: bump
     if: ${{ !contains(inputs.skip, 'linux') }}
     strategy:
+      # Both architectures, whatever one of them does: a release needs the pair, so cancelling the
+      # second on the first's failure only costs the log that says whether it was one arch or both.
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -178,7 +181,9 @@ jobs:
           retention-days: 7
 
   publish:
-    name: ${{ contains(inputs.skip, 'macos') && 'Sign and publish' || 'macOS, sign and publish' }}
+    # Static, unlike the bump job's: a skipped job never evaluates its name, so an expression here
+    # shows up in the UI as its own source whenever this job does not run.
+    name: Sign and publish
     needs: [bump, linux]
     # Runs when Linux was skipped on purpose, not only when it succeeded: a needs-job that is skipped
     # otherwise skips everything after it too.
