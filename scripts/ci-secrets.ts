@@ -5,7 +5,8 @@
 //   pnpm run ci:secrets --dry-run                 list what would be set, decrypt nothing
 //   pnpm run ci:secrets                           every environment
 //   pnpm run ci:secrets --only android-release    one environment
-//   APPLE_CERTIFICATE_PASSWORD=... pnpm run ci:secrets --only desktop-release --p12 ~/devid.p12
+//   pnpm run ci:secrets --p12 ~/devid.p12         the Developer ID certificate alone, no touch
+//                                                 (APPLE_CERTIFICATE_PASSWORD in the environment)
 //
 // The last YubiKey session a release ever needs. Each age wrapper is decrypted into memory and
 // piped straight into `gh secret set`, so no plaintext touches the disk on the way. Touch policy is
@@ -178,7 +179,21 @@ const PLANS: Plan[] = [
 
 // ----- run -----
 
-const plans = only ? PLANS.filter((p) => p.env === only) : PLANS;
+// --p12 sets the certificate and nothing else. It comes from the login keychain rather than a
+// wrapper, so it needs no touch, and re-setting the rest of desktop-release alongside it would
+// decrypt the updater key again for no reason.
+const CERTIFICATE = ["APPLE_CERTIFICATE", "APPLE_CERTIFICATE_PASSWORD"];
+if (p12 && only && only !== "desktop-release") fail("--p12 only applies to desktop-release");
+const plans = p12
+	? PLANS.filter((p) => p.env === "desktop-release").map((p) => ({
+			env: p.env,
+			secrets: Object.fromEntries(
+				Object.entries(p.secrets).filter(([name]) => CERTIFICATE.includes(name)),
+			),
+		}))
+	: only
+		? PLANS.filter((p) => p.env === only)
+		: PLANS;
 if (plans.length === 0)
 	fail(`no environment "${only}". Known: ${PLANS.map((p) => p.env).join(", ")}`);
 if (p12 && !existsSync(resolve(p12))) fail(`--p12 ${p12} does not exist`);
