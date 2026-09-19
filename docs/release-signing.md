@@ -308,10 +308,31 @@ Move `android-release-keystore.backup.age` to offline storage (not the repo, not
 ### Each release
 
 ```sh
-pnpm run release android 1.1.0           # prompts for a YubiKey touch to decrypt the keystore
+pnpm run release android 1.1.0 --ci      # from GitHub: no Mac, no YubiKey, one approval
+pnpm run release android 1.1.0           # from this Mac: a YubiKey touch to decrypt the keystore
 ```
 
-The keystore password resolves in this order: `ANDROID_KEYSTORE_PASSWORD`, then the macOS login
+**From GitHub** (`--ci`), which is the normal route. It dispatches
+`.github/workflows/android-release.yml` and returns. A *build* job with no secrets runs the gate,
+bumps the version and builds an unsigned APK; a *publish* job, which waits for your approval in the
+`android-release` environment, signs it with the keystore held there, commits the bump through
+GitHub's API (so the commit is verified with no key on the runner, and lands only onto the commit
+that was built), tags, and publishes. Approve a finished build from a phone and it goes out.
+
+Before anything is public, the signed APK is held to the certificate fingerprint published in
+`packages/platform-mobile/README.md`, the same one users are told to check, and a mismatch stops the
+release. The draft is then downloaded and checked again before it goes live. `-f dry_run=true` on a
+dispatch runs all of that and stops before the commit: the way to test the pipeline or a rotated
+secret without spending a version.
+
+```sh
+gh workflow run android-release.yml --ref main -f version=1.1.0 -f dry_run=true
+```
+
+The keystore and its password reached that environment through `pnpm run ci:secrets`; see
+[docs/ci-releases.md](ci-releases.md). The wrappers below remain the recovery path.
+
+**From this Mac**, the fallback when GitHub is the problem. The keystore password resolves in this order: `ANDROID_KEYSTORE_PASSWORD`, then the macOS login
 Keychain (`bramble-android-keystore`), then `~/.config/bramble/android-keystore-password.age`
 from step 4b. Only the last works off macOS, and it is the one that keeps the password out of
 your shell history and environment entirely. The script checks up front that at least one source
@@ -329,7 +350,9 @@ A build failure rewinds the release commit for a clean retry. A *signing* failur
 YubiKey touch) keeps the commit and the unsigned APK: re-run with `--resume` to sign that same build
 without rebuilding. Env overrides: `ANDROID_KEYSTORE_AGE` (encrypted keystore path),
 `ANDROID_KEY_ALIAS` (default `bramble`), `ANDROID_KEY_PASSWORD` (defaults to the store password).
-CI verifies an APK + matching `SHA256SUMS` are attached; it never builds or signs.
+On publish, `release.yml` verifies an APK + matching `SHA256SUMS` are attached. It does not see a
+release made from GitHub, whose own token cannot trigger other workflows; that route verifies its
+draft itself, more strictly, before publishing.
 
 ### Verifying (what users run)
 

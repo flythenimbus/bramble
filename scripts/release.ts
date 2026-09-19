@@ -42,6 +42,7 @@ import { createHash } from "node:crypto";
 import {
 	copyFileSync,
 	existsSync,
+	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -49,13 +50,16 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ASC_KEY_AGE } from "./asc-api-key.ts";
 import { signingKey } from "./desktop-signing-key.ts";
+import { commitFiles, createTag } from "./github-commit.ts";
 import { composeNotes } from "./release-notes.mjs";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = process.env.HOME ?? "";
+// On a runner GitHub says which repository this is; here it is the one this script ships.
+const REPO = process.env.GITHUB_REPOSITORY ?? "flythenimbus/bramble";
 
 /** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
 const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
@@ -155,7 +159,10 @@ const version = bumpKind
 // Every path but ios ends in `gh release create`, and finding gh missing or logged out there
 // means the store publish and the tag already happened. An installed gh is not enough.
 // `ios --ci` dispatches a workflow, so it needs gh as much as the publishing paths do.
-if (platform !== "ios" || flags.has("--ci")) {
+// The runner modes skip it: a workflow token has no user behind it, and `gh auth status` reports
+// that as a failure even though every API call the job makes will succeed.
+const onRunner = flags.has("--runner-build") || flags.has("--runner-publish");
+if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
 	requireBins(["gh"], "docs/release-signing.md");
 	// --active, because a bare `gh auth status` exits non-zero when ANY stored account is broken,
 	// including one for a different login that this repo never uses. What a release needs is the
@@ -398,18 +405,25 @@ async function releaseFirefox(version: string) {
 
 // ----- android: GitHub-released, signed .apk + SHA256SUMS -----
 
-async function releaseAndroid(version: string, resume: boolean) {
-	const ANDROID = "packages/platform-mobile/android";
-	const BUILD_GRADLE = `${ANDROID}/app/build.gradle`;
-	// gradle has no release signingConfig, so assembleRelease lands here UNSIGNED; apksigner signs it
-	// below, once, from a keystore that only exists on disk for those few seconds.
-	const UNSIGNED = `${ANDROID}/app/build/outputs/apk/release/app-release-unsigned.apk`;
+const ANDROID = "packages/platform-mobile/android";
+const ANDROID_GRADLE = `${ANDROID}/app/build.gradle`;
+// gradle has no release signingConfig, so assembleRelease lands here ANDROID_UNSIGNED; apksigner signs it
+// afterwards, once, from a keystore that only exists on disk for those few seconds.
+const ANDROID_UNSIGNED = `${ANDROID}/app/build/outputs/apk/release/app-release-unsigned.apk`;
+/** What the CI build job hands the publish job; see .github/workflows/android-release.yml. */
+const ANDROID_HANDOFF = "release-out";
 
+async function releaseAndroid(version: string, resume: boolean) {
 	// versionName is the marketing version; 1-3 dot-separated ints (matches bump:mobile).
 	if (!/^\d+(\.\d+){0,2}$/.test(version))
 		fail(`invalid version "${version}". want 1-3 ints (e.g. 1.1 or 1.1.0)`);
 
 	const tag = `${version}-android`;
+
+	// The CI route: dispatched from here, built and published on runners. docs/ci-releases.md.
+	if (flags.has("--ci")) return dispatchAndroid(version, tag);
+	if (flags.has("--runner-build")) return runnerBuildAndroid(version, tag);
+	if (flags.has("--runner-publish")) return runnerPublishAndroid(version, tag);
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
 	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
 
@@ -460,20 +474,22 @@ async function releaseAndroid(version: string, resume: boolean) {
 	if (resume) {
 		// Sign the apk a previous run already built. Both checks are load-bearing: signing an apk
 		// built from any other commit would publish a binary the tag does not describe.
-		if (!existsSync(UNSIGNED))
-			fail(`no unsigned apk at ${UNSIGNED}; nothing to resume, re-run without --resume`);
+		if (!existsSync(ANDROID_UNSIGNED))
+			fail(`no unsigned apk at ${ANDROID_UNSIGNED}; nothing to resume, re-run without --resume`);
 		const head = capture("git log -1 --pretty=%s");
 		if (head !== `chore(release): android ${version}`)
 			fail(`HEAD is "${head}", not the android ${version} release commit`);
-		versionCode = Number(readFileSync(BUILD_GRADLE, "utf8").match(/versionCode (\d+)/)?.[1] ?? 0);
+		versionCode = Number(readFileSync(ANDROID_GRADLE, "utf8").match(/versionCode (\d+)/)?.[1] ?? 0);
 		const aapt2 =
 			findBuildTool("aapt2") ??
 			fail("aapt2 not found (Android SDK build-tools), needed by --resume");
-		const badging = execFileSync(aapt2, ["dump", "badging", UNSIGNED], { encoding: "utf8" });
+		const badging = execFileSync(aapt2, ["dump", "badging", ANDROID_UNSIGNED], {
+			encoding: "utf8",
+		});
 		const built = `${badging.match(/versionCode='(\d+)'/)?.[1]}/${badging.match(/versionName='([^']*)'/)?.[1]}`;
 		if (built !== `${versionCode}/${version}`)
 			fail(
-				`${UNSIGNED} is ${built}, but HEAD is ${versionCode}/${version}; rebuild without --resume`,
+				`${ANDROID_UNSIGNED} is ${built}, but HEAD is ${versionCode}/${version}; rebuild without --resume`,
 			);
 		commit = capture("git rev-parse HEAD");
 		console.log(`resuming ${tag}: signing the apk built from ${commit.slice(0, 9)}`);
@@ -483,26 +499,9 @@ async function releaseAndroid(version: string, resume: boolean) {
 		// Bump versionName + a deterministic, committed versionCode (seconds-since-2020, kept monotonic),
 		// snapshot the changelogs, and COMMIT before building, so the tag names the exact tree the
 		// published APK was built from.
-		const before = readFileSync(BUILD_GRADLE, "utf8");
-		const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
-		versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
-		let replacedName = 0;
-		let replacedCode = 0;
-		let after = before.replace(/versionName "[^"]*"/, () => {
-			replacedName++;
-			return `versionName "${version}"`;
-		});
-		after = after.replace(/versionCode \d+/, () => {
-			replacedCode++;
-			return `versionCode ${versionCode}`;
-		});
-		if (replacedName !== 1)
-			fail(`expected exactly one versionName in ${BUILD_GRADLE}, found ${replacedName}`);
-		if (replacedCode !== 1)
-			fail(`expected exactly one versionCode in ${BUILD_GRADLE}, found ${replacedCode}`);
-		writeFileSync(BUILD_GRADLE, after);
-		const changelogFiles = snapshotAndroidChangelogs(String(versionCode));
-		run(`git add ${[BUILD_GRADLE, ...changelogFiles].join(" ")}`);
+		const bumped = bumpAndroid(version);
+		versionCode = bumped.versionCode;
+		run(`git add ${bumped.files.join(" ")}`);
 		run(`git commit -m ${JSON.stringify(`chore(release): android ${version}`)}`);
 		commit = capture("git rev-parse HEAD");
 
@@ -510,27 +509,8 @@ async function releaseAndroid(version: string, resume: boolean) {
 		// A failure here rewinds the release commit so the tree is clean for a retry (the bump +
 		// changelogs regenerate next run); nothing was published yet.
 		try {
-			// Stale-output guard: assembleRelease writing nothing (skipped task, wrong variant) would
-			// otherwise leave the previous run's apk in place and sign that instead.
-			rmSync(UNSIGNED, { force: true });
 			console.log(`\nbuilding ${commit.slice(0, 9)}…`);
-			run("pnpm run core:build");
-			run("pnpm run ffi:build:android");
-			run("pnpm --filter @vault/platform-mobile exec cap sync android");
-			execFileSync(
-				join(ANDROID, "gradlew"),
-				["-p", ANDROID, "assembleRelease", `-Porg.gradle.java.installations.paths=${java21}`],
-				{ stdio: "inherit", env: { ...process.env, JAVA_HOME: java21 } },
-			);
-			// `throw`, not fail(): these are build failures like any other, so they belong in the
-			// rewind path below rather than exiting on top of a release commit.
-			if (!existsSync(UNSIGNED)) throw new Error(`gradle did not produce ${UNSIGNED}`);
-			// The apk has to carry the versionCode we just committed; anything else means gradle read
-			// a different build.gradle than the one the tag will point at.
-			const outMeta = `${ANDROID}/app/build/outputs/apk/release/output-metadata.json`;
-			const builtCode = JSON.parse(readFileSync(outMeta, "utf8"))?.elements?.[0]?.versionCode;
-			if (builtCode !== versionCode)
-				throw new Error(`built versionCode ${builtCode} != expected ${versionCode} (${outMeta})`);
+			buildAndroidUnsigned(versionCode, java21);
 		} catch (e) {
 			rmSync(stage, { recursive: true, force: true });
 			run("git reset --hard HEAD~1");
@@ -556,50 +536,20 @@ async function releaseAndroid(version: string, resume: boolean) {
 		const storePassword = envStorePassword ?? ageDecrypt(ksPassAge, idFile);
 		const keyPassword =
 			envKeyPassword ?? (existsSync(keyPassAge) ? ageDecrypt(keyPassAge, idFile) : storePassword);
-		execFileSync(
-			apksigner,
-			[
-				"sign",
-				"--ks",
-				ksFile,
-				"--ks-key-alias",
-				keyAlias,
-				"--ks-pass",
-				"env:BR_KS_PASS",
-				"--key-pass",
-				"env:BR_KEY_PASS",
-				"--v1-signing-enabled",
-				"false",
-				"--out",
-				apkAsset,
-				UNSIGNED,
-			],
-			{
-				stdio: "inherit",
-				env: {
-					...process.env,
-					JAVA_HOME: java21,
-					BR_KS_PASS: storePassword,
-					BR_KEY_PASS: keyPassword,
-				},
-			},
-		);
+		signApk({ apksigner, java21, ksFile, keyAlias, storePassword, keyPassword, out: apkAsset });
 	} catch (e) {
 		rmSync(tmp, { recursive: true, force: true });
 		rmSync(stage, { recursive: true, force: true });
 		fail(
-			`signing failed (${(e as Error).message}); the release commit and ${UNSIGNED} are kept.` +
+			`signing failed (${(e as Error).message}); the release commit and ${ANDROID_UNSIGNED} are kept.` +
 				`\nre-run to sign that same build, with no rebuild: pnpm run release android ${version} --resume`,
 		);
 	}
 	rmSync(tmp, { recursive: true, force: true });
 
 	// Confirm the signed apk's cert before publishing (versionCode is what we committed).
-	const certOut = execFileSync(apksigner, ["verify", "--print-certs", apkAsset], {
-		encoding: "utf8",
-	});
-	const cert = certOut.match(/SHA-256 digest:\s*([0-9a-f]{64})/i)?.[1];
-	console.log(`\nAPK signing cert SHA-256: ${cert ?? "(unknown)"}  |  versionCode ${versionCode}`);
+	const cert = assertReleaseCert(apksigner, java21, apkAsset);
+	console.log(`\nAPK signing cert SHA-256: ${cert}  |  versionCode ${versionCode}`);
 
 	const sumsAsset = join(stage, "SHA256SUMS");
 	writeFileSync(
@@ -638,6 +588,275 @@ function snapshotAndroidChangelogs(versionCode: string): string[] {
 		written.push(out);
 	}
 	return written;
+}
+
+/**
+ * Bump versionName and a deterministic, monotonic versionCode (seconds since 2020), then snapshot
+ * the changelogs under that code. Returns every file it wrote, for whichever path commits them.
+ */
+function bumpAndroid(version: string): { versionCode: number; files: string[] } {
+	const before = readFileSync(ANDROID_GRADLE, "utf8");
+	const prevCode = Number(before.match(/versionCode (\d+)/)?.[1] ?? 0);
+	const versionCode = Math.max(prevCode + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
+	let replacedName = 0;
+	let replacedCode = 0;
+	let after = before.replace(/versionName "[^"]*"/, () => {
+		replacedName++;
+		return `versionName "${version}"`;
+	});
+	after = after.replace(/versionCode \d+/, () => {
+		replacedCode++;
+		return `versionCode ${versionCode}`;
+	});
+	if (replacedName !== 1)
+		fail(`expected exactly one versionName in ${ANDROID_GRADLE}, found ${replacedName}`);
+	if (replacedCode !== 1)
+		fail(`expected exactly one versionCode in ${ANDROID_GRADLE}, found ${replacedCode}`);
+	writeFileSync(ANDROID_GRADLE, after);
+	return {
+		versionCode,
+		files: [ANDROID_GRADLE, ...snapshotAndroidChangelogs(String(versionCode))],
+	};
+}
+
+/**
+ * Web bundle -> native crypto libs (4 ABIs) -> cap sync -> gradle, ending in an unsigned apk that
+ * carries `versionCode`. Throws rather than failing, so each caller decides what to rewind.
+ */
+function buildAndroidUnsigned(versionCode: number, java21: string): void {
+	// Stale-output guard: assembleRelease writing nothing (skipped task, wrong variant) would
+	// otherwise leave the previous run's apk in place and sign that instead.
+	rmSync(ANDROID_UNSIGNED, { force: true });
+	run("pnpm run core:build");
+	run("pnpm run ffi:build:android");
+	run("pnpm --filter @vault/platform-mobile exec cap sync android");
+	execFileSync(
+		join(ANDROID, "gradlew"),
+		["-p", ANDROID, "assembleRelease", `-Porg.gradle.java.installations.paths=${java21}`],
+		{ stdio: "inherit", env: { ...process.env, JAVA_HOME: java21 } },
+	);
+	if (!existsSync(ANDROID_UNSIGNED)) throw new Error(`gradle did not produce ${ANDROID_UNSIGNED}`);
+	// The apk has to carry the versionCode the release commit will; anything else means gradle read
+	// a different build.gradle than the one the tag will point at.
+	const outMeta = `${ANDROID}/app/build/outputs/apk/release/output-metadata.json`;
+	const builtCode = JSON.parse(readFileSync(outMeta, "utf8"))?.elements?.[0]?.versionCode;
+	if (builtCode !== versionCode)
+		throw new Error(`built versionCode ${builtCode} != expected ${versionCode} (${outMeta})`);
+}
+
+/** Sign gradle's unsigned apk into `out`. Passwords go by environment, never argv. */
+function signApk(o: {
+	apksigner: string;
+	java21: string;
+	ksFile: string;
+	keyAlias: string;
+	storePassword: string;
+	keyPassword: string;
+	out: string;
+}): void {
+	execFileSync(
+		o.apksigner,
+		[
+			"sign",
+			"--ks",
+			o.ksFile,
+			"--ks-key-alias",
+			o.keyAlias,
+			"--ks-pass",
+			"env:BR_KS_PASS",
+			"--key-pass",
+			"env:BR_KEY_PASS",
+			"--v1-signing-enabled",
+			"false",
+			"--out",
+			o.out,
+			ANDROID_UNSIGNED,
+		],
+		{
+			stdio: "inherit",
+			env: {
+				...process.env,
+				JAVA_HOME: o.java21,
+				BR_KS_PASS: o.storePassword,
+				BR_KEY_PASS: o.keyPassword,
+			},
+		},
+	);
+}
+
+/**
+ * The signing cert's SHA-256, asserted equal to the fingerprint users are told to check. That lives
+ * in packages/platform-mobile/README.md as the single published source of truth, so it is read from
+ * there rather than copied: a wrong keystore can never publish, whether or not anyone is watching.
+ */
+function assertReleaseCert(apksigner: string, java21: string, apk: string): string {
+	const out = execFileSync(apksigner, ["verify", "--print-certs", apk], {
+		encoding: "utf8",
+		env: { ...process.env, JAVA_HOME: java21 },
+	});
+	const cert = out.match(/SHA-256 digest:\s*([0-9a-f]{64})/i)?.[1]?.toLowerCase();
+	const readme = readFileSync("packages/platform-mobile/README.md", "utf8");
+	const published = readme
+		.match(/\b([0-9A-F]{2}(?::[0-9A-F]{2}){31})\b/i)?.[1]
+		?.replace(/:/g, "")
+		.toLowerCase();
+	if (!published) fail("no certificate fingerprint in packages/platform-mobile/README.md");
+	if (cert !== published)
+		fail(
+			`${basename(apk)} is signed by ${cert ?? "an unreadable certificate"}, not the published ` +
+				`${published}. Wrong keystore: nothing has been published.`,
+		);
+	return cert as string;
+}
+
+/** Download what users will download, from the draft, and check it the way they are told to. */
+function verifyPublishedApk(tag: string, apksigner: string, java21: string): void {
+	const dir = mkdtempSync(join(tmpdir(), "bramble-verify-"));
+	try {
+		run(`gh release download ${tag} --pattern '*.apk' --pattern SHA256SUMS --dir ${dir}`);
+		const sums = readFileSync(join(dir, "SHA256SUMS"), "utf8").trim().split("\n");
+		for (const line of sums) {
+			const [hash, name] = line.split(/\s+/);
+			const actual = createHash("sha256")
+				.update(readFileSync(join(dir, name as string)))
+				.digest("hex");
+			if (actual !== hash) fail(`${name} on the draft does not match SHA256SUMS; left as a draft`);
+			assertReleaseCert(apksigner, java21, join(dir, name as string));
+		}
+		console.log("draft verified: SHA256SUMS matches and the cert is the published one");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+/** `--ci`: nothing is built or signed here. The build and publish jobs run on GitHub. */
+function dispatchAndroid(version: string, tag: string): void {
+	// Checked on GitHub rather than locally: runners tag through the API, so a clone can lag.
+	if (ok(`gh api repos/${REPO}/git/ref/tags/${tag}`)) fail(`tag ${tag} already exists on GitHub`);
+	run(`gh workflow run android-release.yml --repo ${REPO} --ref main -f version=${version}`);
+	console.log(
+		`\ndispatched Android ${version}. The build runs now; publishing waits for your approval` +
+			"\nin the android-release environment once it finishes:\n  gh run watch",
+	);
+}
+
+/**
+ * `--runner-build`, the first job of android-release.yml. No secret reaches this job, which is what
+ * allows it third-party actions: it builds an UNSIGNED apk and hands it over, with the files the
+ * release commit will carry and the commit they were built from, to the job holding the keystore.
+ */
+function runnerBuildAndroid(version: string, tag: string): void {
+	if (!process.env.GITHUB_ACTIONS) fail("--runner-build runs in android-release.yml");
+	// Releases come from main: the publish job commits onto it, and only onto what this built.
+	if (process.env.GITHUB_REF_NAME !== "main")
+		fail(`releases are cut from main, not ${process.env.GITHUB_REF_NAME}`);
+	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+	const base = capture("git rev-parse HEAD");
+
+	gate();
+	const { versionCode, files } = bumpAndroid(version);
+	console.log(`\nbuilding ${version} (versionCode ${versionCode}) from ${base.slice(0, 9)}…`);
+	try {
+		buildAndroidUnsigned(versionCode, resolveJava21());
+	} catch (e) {
+		fail(`build failed: ${(e as Error).message}`);
+	}
+
+	rmSync(ANDROID_HANDOFF, { recursive: true, force: true });
+	mkdirSync(ANDROID_HANDOFF, { recursive: true });
+	copyFileSync(ANDROID_UNSIGNED, join(ANDROID_HANDOFF, "app-release-unsigned.apk"));
+	for (const f of files) {
+		mkdirSync(dirname(join(ANDROID_HANDOFF, "files", f)), { recursive: true });
+		copyFileSync(f, join(ANDROID_HANDOFF, "files", f));
+	}
+	writeFileSync(
+		join(ANDROID_HANDOFF, "meta.json"),
+		JSON.stringify({ version, versionCode, base, files }, null, 2),
+	);
+	console.log(`handed off ${ANDROID_HANDOFF}/: the unsigned apk and ${files.length} file(s)`);
+}
+
+/**
+ * `--runner-publish`, the second job, and the only place the keystore exists. Signs the build job's
+ * apk, holds the cert to the published fingerprint, commits the bump through GitHub's API (verified,
+ * and only onto the commit the build started from), tags it, and publishes.
+ *
+ * It verifies the release itself instead of leaving that to release.yml, because a release created
+ * with a workflow's own token does not fire other workflows: release.yml never sees this one.
+ */
+async function runnerPublishAndroid(version: string, tag: string): Promise<void> {
+	if (!process.env.GITHUB_ACTIONS) fail("--runner-publish runs in android-release.yml");
+	const meta = JSON.parse(readFileSync(join(ANDROID_HANDOFF, "meta.json"), "utf8"));
+	if (meta.version !== version) fail(`the handoff is for ${meta.version}, not ${version}`);
+	const head = capture("git rev-parse HEAD");
+	if (head !== meta.base)
+		fail(`checked out ${head.slice(0, 9)}, but the apk was built from ${meta.base.slice(0, 9)}`);
+
+	// `||`, not `??`: a secret the environment does not have arrives as an empty string.
+	const keystore =
+		process.env.ANDROID_KEYSTORE_BASE64 || fail("no ANDROID_KEYSTORE_BASE64 in android-release");
+	const storePassword =
+		process.env.ANDROID_KEYSTORE_PASSWORD ||
+		fail("no ANDROID_KEYSTORE_PASSWORD in android-release");
+	const keyPassword = process.env.ANDROID_KEY_PASSWORD || storePassword;
+	const keyAlias = process.env.ANDROID_KEY_ALIAS || "bramble";
+	const apksigner = findBuildTool("apksigner") ?? fail("apksigner not found in the Android SDK");
+	const java21 = resolveJava21();
+
+	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
+	const apkName = `bramble_android_${version}.apk`;
+	const apkAsset = join(stage, apkName);
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-android-"));
+	try {
+		const ksFile = join(tmp, "release.jks");
+		writeFileSync(ksFile, Buffer.from(keystore, "base64"), { mode: 0o600 });
+		mkdirSync(dirname(ANDROID_UNSIGNED), { recursive: true });
+		copyFileSync(join(ANDROID_HANDOFF, "app-release-unsigned.apk"), ANDROID_UNSIGNED);
+		signApk({ apksigner, java21, ksFile, keyAlias, storePassword, keyPassword, out: apkAsset });
+	} finally {
+		rmSync(tmp, { recursive: true, force: true });
+	}
+	const cert = assertReleaseCert(apksigner, java21, apkAsset);
+	const sumsAsset = join(stage, "SHA256SUMS");
+	writeFileSync(
+		sumsAsset,
+		`${createHash("sha256").update(readFileSync(apkAsset)).digest("hex")}  ${apkName}\n`,
+	);
+
+	// --dry-run stops at the last point where nothing is public: everything a release proves about
+	// the keystore, the password and the cert has been proven, and nothing has been committed.
+	if (flags.has("--dry-run")) {
+		rmSync(stage, { recursive: true, force: true });
+		console.log(
+			`\ndry run: ${apkName} built, signed and matched to the published cert ${cert}.` +
+				`\nNothing was committed, tagged or published; ${tag} is still free.`,
+		);
+		return;
+	}
+
+	// Nothing has left this runner until here. From the commit on, it is public.
+	const files = meta.files as string[];
+	for (const f of files) copyFileSync(join(ANDROID_HANDOFF, "files", f), f);
+	const commit = commitFiles({
+		repo: REPO,
+		branch: "main",
+		expectedHeadOid: meta.base,
+		headline: `chore(release): android ${version}`,
+		files,
+	});
+	createTag(REPO, tag, commit);
+	// releaseNotes walks the range locally, so the new commit and tag have to be here too.
+	run(`git fetch --quiet origin refs/tags/${tag}:refs/tags/${tag}`);
+	try {
+		await publish(tag, `Android ${version}`, [apkAsset, sumsAsset], () =>
+			verifyPublishedApk(tag, apksigner, java21),
+		);
+	} finally {
+		rmSync(stage, { recursive: true, force: true });
+	}
+	console.log(
+		`\nreleased ${tag} (commit ${commit.slice(0, 9)}): ${apkName}, versionCode ${meta.versionCode}, cert ${cert}.`,
+	);
 }
 
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
@@ -1316,7 +1535,13 @@ async function releaseNotes(tag: string, platform: string): Promise<string> {
 
 // Draft -> upload -> publish, so the `release: published` event fires only once the
 // signed artifacts are attached (CI verifies them on that event).
-async function publish(tag: string, title: string, assets: string[]) {
+async function publish(
+	tag: string,
+	title: string,
+	assets: string[],
+	// Runs against the draft, after upload and before it goes public. Failing it leaves a draft.
+	beforePublish?: () => void,
+) {
 	const notesDir = mkdtempSync(join(tmpdir(), "bramble-notes-"));
 	const notesFile = join(notesDir, "NOTES.md");
 	writeFileSync(notesFile, await releaseNotes(tag, platform));
@@ -1325,6 +1550,7 @@ async function publish(tag: string, title: string, assets: string[]) {
 			`gh release create ${tag} --draft --notes-file ${notesFile} --title ${JSON.stringify(title)}`,
 		);
 		run(`gh release upload ${tag} ${assets.join(" ")}`);
+		beforePublish?.();
 		run(`gh release edit ${tag} --draft=false`);
 	} finally {
 		rmSync(notesDir, { recursive: true, force: true });

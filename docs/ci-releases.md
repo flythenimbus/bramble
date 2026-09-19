@@ -78,10 +78,21 @@ workflow, where it stays in one place:
   live update channel and must never name an artifact that is not there yet.
 - APT publishing runs last, and its failure is not fatal to anything above it.
 
-**Open question: who makes the release commit.** Commits made through the GitHub API are signed
-with GitHub's own key and show as verified, which is the cleanest way for a workflow to make the
-bump commit without a signing key of its own. The alternative is committing as a bot with no
-signature, which weakens `git log` as a record of what shipped.
+**The release commit is made through GitHub's API** (`createCommitOnBranch`, in
+`scripts/github-commit.ts`). GitHub signs it, so it shows as verified with no signing key on the
+runner, and it takes an expected head, so it lands only onto the exact commit that was built. That
+also means nothing touches main until the artifact is built and signed, which is stricter than the
+local route, where the bump is committed first and rewound on failure.
+
+**Each target splits into two jobs along the line of the key.** A *build* job holds no secret, so it
+may use third-party actions for the toolchain, and it hands an unsigned artifact to a *publish* job
+that is the only place the key exists and runs first-party actions only. The environment's approval
+gates the publish job, so what gets approved is a finished build. Android is the template:
+`.github/workflows/android-release.yml`.
+
+**A release made with the workflow's own token fires no other workflow**, so `release.yml`'s
+post-publish checks never run for it. Each publish job verifies its own draft before undrafting it
+instead, which is the better place for the check anyway: a bad artifact never goes public at all.
 
 ## Keeping OIDC cheap
 
@@ -105,8 +116,8 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 
 | Phase | Delivers | Needs |
 |---|---|---|
-| **0** | `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them | One YubiKey session, the last |
-| **1** | **Android**, fully from CI | keystore + password |
+| **0** | `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them. Done | One YubiKey session, the last |
+| **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android --ci` | keystore + password |
 | **2** | **Firefox** | AMO credentials |
 | **3** | **Chrome** | CWS key + service account |
 | **4** | **Desktop**: Linux on native `ubuntu-24.04` + `ubuntu-24.04-arm` in `container: debian:12`, macOS on `macos-26`, Windows absorbing `--ci-collect`, then one publish job | updater key, Developer ID `.p12` |

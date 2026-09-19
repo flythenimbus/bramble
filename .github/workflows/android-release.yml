@@ -1,0 +1,157 @@
+name: Android release
+
+# Builds, signs and publishes the Android APK from GitHub, so a release needs neither a Mac nor a
+# YubiKey. docs/ci-releases.md has the whole trade; this file is the Android half of it.
+#
+# Two jobs, split deliberately along the line of the key:
+#
+# - **build** holds no secret at all, which is what lets it use third-party actions for the
+#   toolchain. It runs the release gate, bumps the version, builds an UNSIGNED apk, and hands it
+#   over with the files the release commit will carry and the commit they were built from.
+# - **publish** is the only job the keystore ever reaches, and it runs first-party actions only:
+#   a third-party action running beside a permanent key makes its supply chain ours. It waits on
+#   the android-release environment, so what gets approved is a finished build, not a promise of
+#   one, which is the closest a workflow gets to a touch that authorizes specific bytes.
+#
+# The release commit goes through GitHub's API, so it is verified without a signing key on the
+# runner, and it lands only if main still points where the build started. The signed apk is held to
+# the certificate fingerprint published in packages/platform-mobile/README.md before anything is
+# public, and the draft release is downloaded and checked again before it is published. That last
+# check lives here rather than in release.yml because a release created with this workflow's own
+# token does not fire other workflows.
+#
+# `pnpm run release android <version> --ci` dispatches this. `dry_run` does everything up to and
+# including the signature and the cert check, then stops before anything is public: the way to
+# test the pipeline, or a rotated secret, without spending a version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "versionName to release, e.g. 0.22.0"
+        required: true
+        type: string
+      dry_run:
+        description: "Build, sign and verify, but commit, tag and publish nothing"
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+# Two releases racing would bump from the same base; the second would fail its commit, but only
+# after building and signing for nothing.
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+env:
+  # Pinned, like Xcode for iOS: scripts/build-crypto-ffi.sh takes the newest NDK it can find, and the
+  # runner's newest is two majors past the 27 that releases are built with.
+  NDK_VERSION: 27.3.13750724
+
+jobs:
+  build:
+    name: Build (unsigned)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Tags too, so a version that has already shipped is refused before twenty minutes of
+          # building rather than at the commit.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # No cache, unlike ci.yml: a restored target/ would put objects in the apk that did not come
+      # from this checkout, and this apk is about to be signed with a key that cannot be rotated.
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          cache: false
+
+      - name: Install wasm-pack and cargo-ndk
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
+        with:
+          tool: wasm-pack@0.13.1,cargo-ndk@4.1.2
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate, bump and build
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          if [ ! -d "$ANDROID_NDK_HOME" ]; then
+            echo "::error::NDK $NDK_VERSION is not on this runner. Present: $(ls "$ANDROID_HOME/ndk" | tr '\n' ' ')"
+            exit 1
+          fi
+          node scripts/release.ts android "$VERSION" --runner-build
+
+      - name: Hand off the unsigned apk
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-release
+          path: release-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Sign and publish
+    needs: build
+    runs-on: ubuntu-24.04
+    # The approval gate. Its secrets reach this job only after a required reviewer approves it.
+    environment: android-release
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # The commit the build job built, which the release commit must sit directly on top of.
+          ref: ${{ github.sha }}
+          # The previous android tag and the range after it, which the release notes are drawn from.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No pnpm, no Rust, no third-party action: this job holds the keystore, and it needs nothing
+      # beyond Node for the release script, the SDK's apksigner and the JDK the image already has.
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Receive the unsigned apk
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: android-release
+          path: release-out/
+
+      - name: Sign, verify and publish
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          flags=(--runner-publish)
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/release.ts android "$VERSION" "${flags[@]}"
