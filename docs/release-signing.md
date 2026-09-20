@@ -453,8 +453,8 @@ desktop updater key, and worth remembering before treating them alike.
 ### Each release
 
 ```sh
-pnpm run release ios 1.2.0           # builds here: one touch to decrypt the key, then TestFlight
-pnpm run release ios 1.2.0 --ci      # builds on a runner instead; see below
+pnpm run release ios 1.2.0           # from GitHub: dispatch, approve, done (see below)
+pnpm run release ios 1.2.0 --local   # builds here: one touch to decrypt the key, then TestFlight
 ```
 
 `fastlane beta` and `fastlane metadata` both go through the same unlock, so each is one touch.
@@ -462,12 +462,17 @@ App Store submission stays manual in App Store Connect either way.
 
 ### Releasing from a runner
 
-`pnpm run release ios 1.2.0 --ci` bumps, commits, tags and pushes here, then dispatches
-`.github/workflows/ios-testflight.yml` with the build number it just committed. The runner builds
-and uploads; this machine does not have to be awake for any of it.
+The default. It bumps the version read from `main`, commits and tags **through GitHub's API**, then
+dispatches `.github/workflows/ios-testflight.yml` with the build number it just committed. The
+runner builds and uploads; this machine does not have to be awake for any of it, and it needs no
+YubiKey: nothing is pushed from this clone, and the API signs the commit itself. The working tree is
+put back afterwards, so the only trace here is that the clone is a commit behind main.
+
+Unlike the other targets, the bump is made from here rather than by a job, because for iOS the tag
+**is** the build request: the workflow builds the tag, so it has to exist before the dispatch.
 
 **The order flips, and it matters.** A local release uploads first and tags after, so a tag always
-names a build TestFlight received. A CI release must push the bump before a runner can build it, so
+names a build TestFlight received. A CI release must commit the bump before a runner can build it, so
 a failed build leaves a tag naming a build that does not exist. Re-dispatch the same tag once it is
 fixed rather than cutting a second version:
 

@@ -207,7 +207,7 @@ if (skipArg) {
 // (docs/ci-releases.md); --local is the fallback that does it all on this machine with the
 // YubiKey. --resume re-signs a build this machine made, so it is local by definition. iOS still
 // opts in with --ci: its route commits and pushes from this clone, which is its own story.
-const CI_TARGETS = new Set(["android", "firefox", "chromium", "desktop"]);
+const CI_TARGETS = new Set(["android", "firefox", "chromium", "desktop", "ios"]);
 const onRunner = [
 	"--runner-build",
 	"--runner-publish",
@@ -215,15 +215,17 @@ const onRunner = [
 	"--runner-prepare",
 	"--runner-compile",
 ].some((f) => flags.has(f));
-// --aarch64 is an Apple-Silicon-only build for iterating, which a release never is: local.
+// --aarch64 is an Apple-Silicon-only build for iterating, which a release never is: local. So is
+// --ipa, which builds a signed iOS build here and uploads nothing.
 const viaCi =
 	CI_TARGETS.has(platform) &&
 	!onRunner &&
 	!flags.has("--local") &&
 	!flags.has("--resume") &&
-	!flags.has("--aarch64");
+	!flags.has("--aarch64") &&
+	!flags.has("--ipa");
 
-if ((platform !== "ios" || flags.has("--ci")) && !onRunner) {
+if (!onRunner) {
 	requireBins(["gh"], "docs/release-signing.md");
 	// --active, because a bare `gh auth status` exits non-zero when ANY stored account is broken,
 	// including one for a different login that this repo never uses. What a release needs is the
@@ -274,7 +276,8 @@ if (
 }
 
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
-else if (platform === "ios") await releaseIos(version, flags.has("--ipa"), flags.has("--ci"));
+else if (platform === "ios")
+	await releaseIos(version, flags.has("--ipa"), viaCi || flags.has("--ci"));
 else if (platform === "firefox") await releaseFirefox(version);
 // Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
 // failure is silent from here: the dmg simply does not open on an Intel Mac.
@@ -1830,7 +1833,10 @@ async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
 	// every occurrence. Mirrors the Android versionCode: the build number is committed to source
 	// (seconds since 2020, `max(prev+1, now)` so a backwards clock can't emit a non-increasing build,
 	// which App Store Connect rejects) and passed to the lane below so the two always agree.
-	const before = readFileSync(PBXPROJ, "utf8");
+	// From main when a runner will build the tag, from this clone when this machine will build it.
+	// A stale checkout would otherwise bump from the wrong version and, worse, compute a build
+	// number below one App Store Connect has already seen, which it rejects.
+	const before = ci ? readFromMain(PBXPROJ) : readFileSync(PBXPROJ, "utf8");
 	const prevBuild = Number(before.match(/CURRENT_PROJECT_VERSION = (\d+);/)?.[1] ?? 0);
 	const build = Math.max(prevBuild + 1, Math.floor(Date.now() / 1000) - 1_577_836_800);
 	let replacedVersion = 0;
@@ -1853,7 +1859,9 @@ async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
 	// `<version>-ios` would collide on the second upload. Still ends in `-ios` so
 	// `git describe --match '*-ios'` (releaseNotes) can walk iOS tags.
 	const tag = `${version}-build${build}-ios`;
-	if (capture(`git tag -l ${tag}`)) fail(`tag ${tag} already exists`);
+	// On GitHub rather than in this clone for a CI release: the clone lags behind what runners tag.
+	if (ci ? ok(`gh api repos/${REPO}/git/ref/tags/${tag}`) : capture(`git tag -l ${tag}`))
+		fail(`tag ${tag} already exists`);
 	if (bumped) writeFileSync(PBXPROJ, after);
 
 	// --ipa: dry run. Build the signed IPA to ~/Desktop (no upload), then revert the bump so the
@@ -1876,13 +1884,32 @@ async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
 	// TestFlight never received. That is the trade for not needing this machine: re-dispatch
 	// against the same tag once it is fixed rather than cutting a second version.
 	if (ci) {
-		commitTagPush(bumped, PBXPROJ, `chore(release): ios ${version} (build ${build})`, tag, branch);
+		// Through GitHub's API, not `git push`: this was the last route that pushed from the clone,
+		// and the clone's remote is SSH, so a release needed the YubiKey for the push alone. The API
+		// signs the commit itself, and the working tree goes back to what it was either way.
 		try {
-			run(`gh workflow run ios-testflight.yml --ref ${tag} -f build=${build}`);
+			const head = capture(`gh api repos/${REPO}/git/ref/heads/main --jq .object.sha`);
+			const sha = bumped
+				? commitFiles({
+						repo: REPO,
+						branch: "main",
+						expectedHeadOid: head,
+						headline: `chore(release): ios ${version} (build ${build})`,
+						files: [PBXPROJ],
+					})
+				: head;
+			// The tag IS the build request here, so it has to exist before the dispatch and point at
+			// the commit the runner will check out.
+			createTag(REPO, tag, sha);
+		} finally {
+			if (bumped) run(`git checkout ${PBXPROJ}`);
+		}
+		try {
+			run(`gh workflow run ios-testflight.yml --repo ${REPO} --ref ${tag} -f build=${build}`);
 		} catch {
-			// The tag is already pushed, so this is recoverable by hand and worth saying how.
+			// The tag exists, so this is recoverable by hand and worth saying how.
 			fail(
-				`dispatch failed. The tag ${tag} is pushed, so run the workflow from the Actions tab\n` +
+				`dispatch failed. The tag ${tag} exists, so run the workflow from the Actions tab\n` +
 					`against ${tag} with build=${build}, or retry:\n` +
 					`  gh workflow run ios-testflight.yml --ref ${tag} -f build=${build}`,
 			);
@@ -1890,7 +1917,8 @@ async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
 		console.log(
 			`\ndispatched iOS ${version} (build ${build}) from ${tag}.` +
 				"\nIt waits for your approval before it can read any credential:" +
-				"\n  gh run watch  (or the Actions tab, iOS TestFlight)",
+				"\n  gh run watch  (or the Actions tab, iOS TestFlight)" +
+				"\nThis clone is now a commit behind main; `git pull` when convenient.",
 		);
 		return;
 	}
