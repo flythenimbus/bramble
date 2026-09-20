@@ -247,21 +247,28 @@ if (MAC) {
 const manifest = {
   version,
   // What the in-app update prompt shows, which is not the release body: a modal is no place for a
-  // changelog. The first line of the hand-written notes if there are any, since that line is
-  // written to answer "why would I take this update", and the version alone otherwise.
+  // changelog. The first line of the notes written for this release, since that line is the one
+  // that answers "why would I take this update", and the version alone when there are none.
   notes: updaterNotes(version),
   pub_date: new Date().toISOString(),
   platforms,
 };
 
+/**
+ * The first sentence of prose in the release notes, or the version.
+ *
+ * Headings, bullets and the changelog footer are skipped rather than stripped: notes with no
+ * summary start with "## All changes", and a modal reading "## All changes (5)" is worse than one
+ * reading "Bramble 0.10.0". The first sentence rather than the first line, because a drafted
+ * summary is a paragraph and an update prompt is one line.
+ */
 function updaterNotes(version) {
-  const file = join("release-notes", `${version}-desktop.md`);
-  if (!existsSync(file)) return `Bramble ${version}`;
-  const first = readFileSync(file, "utf8")
+  const prose = (process.env.BRAMBLE_RELEASE_NOTES ?? "")
     .split("\n")
-    .map((l) => l.replace(/^#+\s*/, "").trim())
-    .find((l) => l.length > 0);
-  return first || `Bramble ${version}`;
+    .map((l) => l.trim())
+    .find((l) => l.length > 0 && !/^([#>\-*|`]|\*\*)/.test(l));
+  const sentence = prose?.split(/(?<=[.!?])\s+/)[0]?.trim();
+  return sentence || `Bramble ${version}`;
 }
 
 const out = "website/public/desktop/latest.json";

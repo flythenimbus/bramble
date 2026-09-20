@@ -597,10 +597,20 @@ that lives encrypted at rest. `scripts/build-macos.ts` decrypts it (PIN + touch)
 the bundler through the environment, and never writes the plaintext to disk.
 
 Release notes are drafted from the commit range by the model the i18n scripts already use, then
-opened in `$EDITOR` before the release publishes; `--no-edit` skips the editing step. The model is
-shown only the `feat`/`fix`/`perf` subjects and told to claim nothing beyond them, and the full
-grouped list is kept underneath the summary in a collapsed block, so anything it leaves out is
-still one click away. No model reachable, or no terminal, falls back to that list unedited.
+opened in `$EDITOR`; `--no-edit` skips the editing step. The model is shown only the
+`feat`/`fix`/`perf` subjects and told to claim nothing beyond them, and the full grouped list is
+kept underneath the summary, so anything it leaves out is still there. No model reachable, or no
+terminal, falls back to that list unedited: a release must never block on a summary.
+
+**This happens before the dispatch, on the machine you run the release from**, and the result
+travels to the runner as a workflow input. A runner has neither a terminal to open an editor in
+nor the model, so notes written there would be the commit list and nothing else. It is the one
+step of a release that wants a person, so it happens where the person is.
+
+For desktop it also writes the line users are most likely to read. The in-app update prompt shows
+`latest.json`'s `notes`, not the release page, so it takes the first *sentence of prose* in what
+you wrote, skipping headings and bullets, and falls back to `Bramble <version>` when the notes are
+a bare changelog. Write a first line that answers "why would I take this update".
 
 `pnpm release desktop <version>` requires notarization credentials as well as the signing key; it
 reuses the App Store Connect API key the iOS release uses

@@ -17,9 +17,11 @@
 //                                        build the last run already made and signed)
 //
 // Release notes are drafted from the commit range by the same model the i18n scripts use, then
-// opened in $EDITOR before publishing: the commit log is written for us, the release page is not.
-// --no-edit publishes the draft unedited, and no model or no terminal falls back to the grouped
-// commit list, because a release must never block on a summary.
+// opened in $EDITOR: the commit log is written for us, the release page is not. On the GitHub
+// route that happens HERE, before the dispatch, and the text travels as a workflow input, because
+// a runner has neither a terminal nor the model. --no-edit publishes the draft unedited, and no
+// model or no terminal falls back to the grouped commit list: a release must never block on a
+// summary.
 //
 // The version arg is an explicit version (1.2.0 / v1.2.0) or a semver bump keyword
 // (patch/minor/major) that increments the SELECTED target's current version. Targets version
@@ -98,15 +100,6 @@ const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
 /** Canonical copy of the Homebrew cask; the published one lives in homebrew/homebrew-cask. */
 const DESKTOP_CASK = "packages/platform-desktop/homebrew/bramble.rb";
-/**
- * Where a release's hand-written notes live, if it has any: `release-notes/<tag>.md`.
- *
- * A runner has no terminal and no model, so the editor step that shapes notes locally cannot
- * happen there, and a release that waited for one would never finish. Writing the prose before the
- * release instead keeps it reviewable, versioned, and identical on every route.
- */
-const notesPreamble = (tag: string): string => join("release-notes", `${tag}.md`);
-
 /** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
 const WEBSITE_BRANCH = "main";
 
@@ -314,7 +307,7 @@ async function releaseExtension(target: string, version: string) {
 	const tag = `${version}-${target}`;
 
 	// The CI route: dispatched from here, built and submitted on runners. docs/ci-releases.md.
-	if (viaCi) return dispatchRelease("chrome-release.yml", version, tag);
+	if (viaCi) return await dispatchRelease("chrome-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildChrome(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishChrome(version, tag);
 
@@ -409,7 +402,7 @@ async function releaseFirefox(version: string) {
 	const tag = `${version}-firefox`;
 
 	// The CI route: dispatched from here, built and submitted on runners. docs/ci-releases.md.
-	if (viaCi) return dispatchRelease("firefox-release.yml", version, tag);
+	if (viaCi) return await dispatchRelease("firefox-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildFirefox(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishFirefox(version, tag);
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
@@ -486,7 +479,7 @@ async function releaseAndroid(version: string, resume: boolean) {
 	const tag = `${version}-android`;
 
 	// The CI route: dispatched from here, built and published on runners. docs/ci-releases.md.
-	if (viaCi) return dispatchRelease("android-release.yml", version, tag);
+	if (viaCi) return await dispatchRelease("android-release.yml", version, tag);
 	if (flags.has("--runner-build")) return runnerBuildAndroid(version, tag);
 	if (flags.has("--runner-publish")) return runnerPublishAndroid(version, tag);
 	if (capture("git status --porcelain")) fail("working tree is dirty; commit or stash first");
@@ -802,35 +795,35 @@ function verifyDraft(tag: string, pattern: string, check?: (file: string) => voi
  * the run to the end so this command still reports how the release went. `--dry-run` dispatches a
  * dry run instead; `--no-watch` returns as soon as the run exists.
  */
-function dispatchRelease(
+async function dispatchRelease(
 	workflow: string,
 	version: string,
 	tag: string,
 	inputs: Record<string, string> = {},
-): void {
+): Promise<void> {
 	const dryRun = flags.has("--dry-run");
 	// Checked on GitHub rather than locally: runners tag through the API, so a clone can lag.
 	if (ok(`gh api repos/${REPO}/git/ref/tags/${tag}`)) fail(`tag ${tag} already exists on GitHub`);
 
-	// Said before the release rather than discovered after it: a runner has no terminal, so the
-	// editor that shapes notes locally never opens, and without this file the page gets the commit
-	// list alone. Not fatal; plenty of releases have nothing to say beyond what changed.
-	if (!dryRun && !ok(`gh api repos/${REPO}/contents/${notesPreamble(tag)}?ref=main`))
-		console.warn(
-			`\nnote: no ${notesPreamble(tag)} on main, so the release page gets the generated\n` +
-				"      changelog and the update prompt gets the version. Write one, commit it, and\n" +
-				"      re-run to say why this release is worth taking.",
-		);
+	// The notes are written here, before anything is dispatched: this is the only step of a
+	// release that wants a person, and the runner that would otherwise write them has neither a
+	// terminal nor the model. A dry run publishes nothing, so it is not asked for.
+	const notes = dryRun ? "" : await notesForDispatch(platform, tag);
 
 	// A run created before this instant is somebody else's. gh returns before the run exists.
 	const since = new Date(Date.now() - 5_000).toISOString();
 	try {
-		run(
-			`gh workflow run ${workflow} --repo ${REPO} --ref main -f version=${version} -f dry_run=${dryRun}` +
-				Object.entries(inputs)
-					.map(([k, v]) => ` -f ${k}=${JSON.stringify(v)}`)
-					.join(""),
-		);
+		// Inputs as JSON on stdin rather than repeated -f: the notes are multi-line prose, and
+		// `-f notes=<a paragraph>` is a quoting accident waiting to happen.
+		execFileSync("gh", ["workflow", "run", workflow, "--repo", REPO, "--ref", "main", "--json"], {
+			input: JSON.stringify({
+				version,
+				dry_run: String(dryRun),
+				...(notes ? { notes } : {}),
+				...inputs,
+			}),
+			stdio: ["pipe", "inherit", "inherit"],
+		});
 	} catch {
 		fail(`could not dispatch ${workflow} (above). It has to exist on main to be dispatched.`);
 	}
@@ -1376,7 +1369,7 @@ function windowsRunFile(): string {
  * than an hour into a run: that Windows can actually be signed, and what skipping a platform that
  * has already shipped will do to the people using it.
  */
-function dispatchDesktop(version: string, tag: string): void {
+async function dispatchDesktop(version: string, tag: string): Promise<void> {
 	if (!skip.has("windows")) {
 		// What sign-windows.yml reads. Names only: their values are not ours to read, just to check.
 		// Inside the function, not beside it: the dispatch at the top of this file calls in here
@@ -1423,7 +1416,7 @@ function dispatchDesktop(version: string, tag: string): void {
 		if (live.some((k) => k.startsWith(prefix[p] as string)))
 			console.warn(`\nwarning: ${p} is live and this release skips it: ${consequences[p]}.`);
 
-	dispatchRelease("desktop-release.yml", version, tag, { skip: [...skip].join(",") });
+	await dispatchRelease("desktop-release.yml", version, tag, { skip: [...skip].join(",") });
 }
 
 /** Outputs for the jobs after this one: `key=value` lines appended to the step's output file. */
@@ -1982,7 +1975,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	const tag = `${version}-desktop`;
 
 	// The CI route: dispatched from here, built, signed and published on runners. docs/ci-releases.md.
-	if (viaCi) return dispatchDesktop(version, tag);
+	if (viaCi) return await dispatchDesktop(version, tag);
 	if (flags.has("--runner-bump")) return runnerBumpDesktop(version, tag);
 	if (flags.has("--runner-prepare")) return runnerPrepareDesktop(version);
 	if (flags.has("--runner-compile")) return runnerCompileMacos(version);
@@ -2392,25 +2385,23 @@ function commitTagPush(
 // --generate-notes is useless here: it lists merged PRs (we commit straight to main, so it finds
 // none) and picks the previous tag from the shared namespace (diffing android against a chromium
 // tag).
-async function releaseNotes(tag: string, platform: string): Promise<string> {
-	// Written by hand before the release, if there is anything to say that a commit list does not.
-	// Generated notes answer "what changed"; this is where "why you want it" goes, and the first
-	// line of it is what the in-app update prompt shows (release-desktop.mjs).
-	const preamble = existsSync(notesPreamble(tag))
-		? `${readFileSync(notesPreamble(tag), "utf8").trim()}\n\n`
-		: "";
+/**
+ * The previous release tag for a platform, and the commit subjects since it that a user could
+ * plausibly care about.
+ *
+ * `describeFrom` and `upTo` differ by when this is asked: on a runner the tag exists, so the range
+ * ends at it and the search for the previous one starts below it; at dispatch time it does not
+ * exist yet, and both are main.
+ */
+function changesSince(
+	platform: string,
+	describeFrom: string,
+	upTo: string,
+): { prev: string; subjects: string[] } {
 	const prev = capture(
-		`git describe --tags --abbrev=0 --match '*-${platform}' ${tag}^ 2>/dev/null || true`,
+		`git describe --tags --abbrev=0 --match '*-${platform}' ${describeFrom} 2>/dev/null || true`,
 	);
-	// First release for a platform: there is no previous tag to diff against, and falling back to
-	// the whole history lists every commit in the repo, most of them about other platforms. The
-	// desktop 0.2.0 notes came out 871 lines long that way. Nobody wants to read that, and it
-	// makes a milestone look like a changelog dump, so leave the body to be written by hand.
-	if (!prev)
-		return (
-			preamble ||
-			`First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`
-		);
+	if (!prev) return { prev: "", subjects: [] };
 
 	// An unknown platform would silently mean "no pathspec", i.e. every commit in the range, which
 	// is the bug this filtering exists to fix. Better to notice it here than on the release page.
@@ -2418,18 +2409,78 @@ async function releaseNotes(tag: string, platform: string): Promise<string> {
 	if (!paths) fail(`no release-note paths defined for platform "${platform}"`);
 	const pathspec = [...paths, ...SHARED_PATHS].map((p) => JSON.stringify(p)).join(" ");
 
-	const subjects = capture(`git log --no-merges --pretty=%s ${prev}..${tag} -- ${pathspec}`)
+	const subjects = capture(`git log --no-merges --pretty=%s ${prev}..${upTo} -- ${pathspec}`)
 		.split("\n")
 		.filter((s) => s && !/^chore\(release\)/.test(s))
 		// `!== false` so only a scope naming OTHER platforms drops the commit; a neutral scope
 		// returns null and stays.
 		.filter((s) => scopedPlatforms(s)?.includes(platform) !== false);
 
-	const repo = capture("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true");
-	const footer = repo
-		? `**Full Changelog**: https://github.com/${repo}/compare/${prev}...${tag}`
-		: "";
+	return { prev, subjects };
+}
 
+/**
+ * The body for the release page.
+ *
+ * Handed over by the dispatching machine when there is one: a runner has no terminal to open an
+ * editor in and no model to draft with, so notes written on GitHub would be the commit list and
+ * nothing else. Generated here only for a release cut locally.
+ */
+async function releaseNotes(tag: string, platform: string): Promise<string> {
+	const handed = process.env.BRAMBLE_RELEASE_NOTES?.trim();
+	if (handed) return handed;
+
+	const { prev, subjects } = changesSince(platform, `${tag}^`, tag);
+	// First release for a platform: there is no previous tag to diff against, and falling back to
+	// the whole history lists every commit in the repo, most of them about other platforms. The
+	// desktop 0.2.0 notes came out 871 lines long that way. Nobody wants to read that, and it
+	// makes a milestone look like a changelog dump, so leave the body to be written by hand.
+	if (!prev)
+		return `First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`;
+
+	const footer = `**Full Changelog**: https://github.com/${REPO}/compare/${prev}...${tag}`;
+	return composeNotes({ subjects, footer, edit: !flags.has("--no-edit") });
+}
+
+/**
+ * main and its tags, fetched over HTTPS with gh's token rather than through the clone's remote,
+ * which is SSH and behind the hardware key this whole route exists to stop needing. Without it the
+ * notes would be drafted from whatever this clone last saw, which is usually a release behind.
+ */
+function fetchMain(): void {
+	const helper = '!f() { echo username=x-access-token; echo "password=$(gh auth token)"; }; f';
+	try {
+		execFileSync(
+			"git",
+			[
+				"-c",
+				"credential.helper=",
+				"-c",
+				`credential.helper=${helper}`,
+				"fetch",
+				"--quiet",
+				`https://github.com/${REPO}.git`,
+				"main",
+				"--tags",
+			],
+			{ stdio: ["ignore", "ignore", "inherit"] },
+		);
+	} catch {
+		fail("could not fetch main to draft the release notes; check gh auth and the network");
+	}
+}
+
+/**
+ * Notes for a release about to be dispatched: drafted from the commits since the last release of
+ * this platform, then opened in $EDITOR. This is the one step of a release that wants a person, so
+ * it happens on the person's machine and travels to the runner as a workflow input.
+ */
+async function notesForDispatch(platform: string, tag: string): Promise<string> {
+	fetchMain();
+	const { prev, subjects } = changesSince(platform, "FETCH_HEAD", "FETCH_HEAD");
+	const footer = prev
+		? `**Full Changelog**: https://github.com/${REPO}/compare/${prev}...${tag}`
+		: "";
 	return composeNotes({ subjects, footer, edit: !flags.has("--no-edit") });
 }
 

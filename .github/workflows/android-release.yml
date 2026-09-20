@@ -38,6 +38,11 @@ on:
         default: false
         type: boolean
 
+      notes:
+        description: "Release notes, written and edited on the dispatching machine (blank = generate from the commits)"
+        required: false
+        default: ""
+        type: string
 permissions: {}
 
 # Two releases racing would bump from the same base; the second would fail its commit, but only
@@ -159,6 +164,7 @@ jobs:
 
       - name: Sign, verify and publish
         env:
+          BRAMBLE_RELEASE_NOTES: ${{ inputs.notes }}
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}

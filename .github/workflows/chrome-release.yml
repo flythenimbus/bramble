@@ -35,6 +35,11 @@ on:
         default: false
         type: boolean
 
+      notes:
+        description: "Release notes, written and edited on the dispatching machine (blank = generate from the commits)"
+        required: false
+        default: ""
+        type: string
 permissions: {}
 
 concurrency:
@@ -144,6 +149,7 @@ jobs:
 
       - name: Preflight, pack, commit, submit and publish
         env:
+          BRAMBLE_RELEASE_NOTES: ${{ inputs.notes }}
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
