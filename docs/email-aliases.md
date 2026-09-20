@@ -335,6 +335,70 @@ DuckDuckGo is the tempting one, being free and widely used, so the temptation is
 worth naming: it is the provider most likely to be asked for and the one that
 cannot be served cheaply.
 
+### What the adapter would actually cost
+
+Priced against the shipped code (September 2026), so the deferral is a number
+rather than a feeling. The total is about a week, and it is worth reading which
+part of the week it is, because the expensive platform is not the one the desktop
+precedent suggests.
+
+**The seam is one function.** `core/aliases/http.ts` holds the only `fetch` in
+the feature, and every provider goes through it by construction, so the core
+change is an `AliasTransport` that `request` calls instead. That interface does
+not need designing: `BackupTransport` in `core/backup/types.ts` is already the
+same three fields for the same reason. The one awkwardness is injection. Backups
+take their adapter off `PlatformContext`, but the extension reaches a provider
+from `background/alias.ts`, which calls `clientForConfig` outside React, so the
+transport has to be an argument or a module default rather than context alone.
+
+**The extension costs nothing.** `<all_urls>` is already in the manifest, so the
+default `fetch` transport keeps working and no new host permission appears at
+store review. Worth measuring that the settings path works from the popup and not
+only from the service worker, rather than assuming the two behave alike.
+
+**The desktop is a day.** `backup_send` is close to a template: an `alias_send`
+is that command with the credential-store half removed, since the key stays in
+the webview and rides in the header map, so there is no keychain read, no origin
+pin, no `AuthSpec`. `reqwest` with rustls is already in the tree, its cookie
+feature is off, and `redirect::Policy::none()` is already the house position, so
+both transport rules come free. A custom command needs no capability entry, only
+a line in the `invoke_handler` list.
+
+**Mobile is the whole cost, and not for the expected reason.** The obvious move
+is `CapacitorHttp`, which ships inside `@capacitor/core` (8.5.0 here) and takes a
+`disableRedirects` option, so it looks like a native transport with no native
+code. It is disqualified on the other rule: `HttpRequestHandler.swift` calls
+`setCookiesFromResponse` on every response unconditionally, parsing the
+provider's `Set-Cookie` into the Capacitor cookie manager and syncing it into the
+WebView, and outbound the `URLRequest` default of `httpShouldHandleCookies = true`
+attaches whatever is in shared storage. That is exactly the failure carried
+forward above as non-negotiable, and the one this repo has already paid for once
+(1255ab7b). So mobile needs a small in-house plugin in the shape of the several
+that exist: an ephemeral `URLSession` with `httpShouldHandleCookies = false` and a
+delegate that refuses redirects on iOS, no `CookieHandler` and
+`instanceFollowRedirects = false` on Android. Two or three days with device
+verification on both, which is where most of the week goes.
+
+**The two clients are a day between them.** Both endpoints are measured and
+written down in the table above, so each is a file the size of `addy.ts`, plus
+descriptors, settings fields, and an `i18n:extract` run for the new copy.
+
+### The cost is not the aliases feature's alone
+
+The arithmetic changes once the adapter is priced against everything waiting on
+it. [cloud-storage-backups.md](cloud-storage-backups.md) leaves mobile at
+`cloudBackup: false` and blocked on the same unanswered question, in the same
+words: whether a Capacitor webview can reach an arbitrary provider or needs a
+native transport. For S3 and WebDAV that answer is already known to be no, for
+the reason the desktop found. And the interface both features want is the same
+one, so a single native HTTP primitive on iOS and Android discharges both.
+
+Charged to aliases alone, a week for two providers is a bad trade and the
+deferral above stands. Charged across both, it is the missing piece of a feature
+that currently ships dark on half its targets. Whoever picks this up should pick
+it up as the mobile transport, with DuckDuckGo and Firefox Relay as two of its
+callers, rather than as a provider request that happens to need plumbing.
+
 Outside those six there is little. iCloud Hide My Email and Proton Pass aliases
 have no public creation API (Proton owns SimpleLogin, so a Proton user's route in
 is the SimpleLogin client we already have). Self-hosted Addy and SimpleLogin need
