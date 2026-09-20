@@ -80,10 +80,10 @@ const TOOLS: Tool[] = [
 	},
 ];
 
-export const toolsArch = (): string => (process.arch === "arm64" ? "aarch64" : "x86_64");
+const toolsArch = (): string => (process.arch === "arm64" ? "aarch64" : "x86_64");
 
 /** Where Tauri looks: `dirs::cache_dir()/tauri`. */
-export const toolsDir = (): string =>
+const toolsDir = (): string =>
 	join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "tauri");
 
 const digest = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");

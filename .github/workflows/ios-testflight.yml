@@ -20,8 +20,8 @@ name: iOS TestFlight
 # secrets, and CI is `readonly`: it can use the certificate and profiles, never create or renew
 # them. That stays a deliberate local `fastlane match appstore`. See docs/release-signing.md.
 #
-# `pnpm run release ios <version> --ci` drives this: it bumps, commits, tags, pushes, then
-# dispatches with the build number it committed. Run it from the Actions tab instead, with the
+# `pnpm run release ios <version>` drives this: it bumps, commits and tags through GitHub's API,
+# then dispatches with the build number it committed. Run it from the Actions tab instead, with the
 # build number left blank, for a one-off TestFlight build off any branch with no version bump.
 #
 # `check_only` is the cheap first run: the approval gate, all five secrets, the certificates repo

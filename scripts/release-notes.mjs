@@ -34,7 +34,7 @@ const SYSTEM =
 	"- Output markdown with no heading; the heading is added around you.";
 
 /** Conventional-commit subjects, grouped the way the log already implies. Also the fallback. */
-export function groupSubjects(subjects) {
+function groupSubjects(subjects) {
 	const sections = [
 		["feat", "### Features"],
 		["fix", "### Bug Fixes"],

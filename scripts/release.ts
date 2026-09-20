@@ -10,9 +10,8 @@
 //        --no-watch  return once the run exists
 //        --local     the fallback: build, sign and publish on this machine, with the YubiKey
 //        --resume    (android, local) sign the apk the last local run already built
-//   pnpm run release ios      <version|patch|minor|major> [--ipa] [--ci]
-//                                       (--ipa = dry-run IPA, no upload/tag; --ci = build and
-//                                        upload on a runner instead of this machine)
+//   pnpm run release ios      <version|patch|minor|major> [--ipa]
+//                                       (--ipa = dry-run IPA on this machine, no upload or tag)
 //   pnpm run release desktop  <version|patch|minor|major> [--aarch64] [--resume]
 //                                       (--aarch64 = skip the Intel slice; --resume = publish the
 //                                        build the last run already made and signed)
@@ -32,8 +31,8 @@
 // never builds or signs). chromium packs a locally-signed .crx; firefox uploads to AMO and
 // attaches the Mozilla-signed .xpi it returns. ios has no GitHub release: the binary goes to
 // TestFlight via fastlane, and you submit for App Store review manually in App Store Connect.
-// `ios --ci` moves the build and upload to .github/workflows/ios-testflight.yml, which waits for
-// an approval in the `ios-release` environment before it can reach any credential.
+// ios builds and uploads in .github/workflows/ios-testflight.yml, which waits for an approval in
+// the `ios-release` environment before it can reach any credential.
 // android builds here on macOS (web bundle + Rust FFI + gradle assembleRelease) and signs the
 // unsigned APK gradle emits with the YubiKey-held keystore. Signing setup lives in
 // docs/release-signing.md.
@@ -205,8 +204,8 @@ if (skipArg) {
 // independently, so a bump reads that target's own manifest/gradle/pbxproj.
 // Which route this run takes. GitHub builds, signs and publishes wherever it can
 // (docs/ci-releases.md); --local is the fallback that does it all on this machine with the
-// YubiKey. --resume re-signs a build this machine made, so it is local by definition. iOS still
-// opts in with --ci: its route commits and pushes from this clone, which is its own story.
+// YubiKey. --resume re-signs a build this machine made, so it is local by definition, and so is
+// --ipa, which builds a signed iOS build here and uploads nothing.
 const CI_TARGETS = new Set(["android", "firefox", "chromium", "desktop", "ios"]);
 const onRunner = [
 	"--runner-build",
@@ -245,8 +244,8 @@ const version = bumpKind
 	: rawVersion.replace(/^v/, "");
 
 // Every path but ios ends in `gh release create`, and finding gh missing or logged out there
-// means the store publish and the tag already happened. An installed gh is not enough.
-// `ios --ci` dispatches a workflow, so it needs gh as much as the publishing paths do.
+// means the store publish and the tag already happened. An installed gh is not enough. ios needs
+// it as much: it commits, tags and dispatches through the API.
 
 // Commit signing, when the repo asks for it. Every path ends in commitTagPush, which commits
 // AFTER the store upload, so a key that isn't available surfaced ten minutes in - with the build
@@ -276,8 +275,7 @@ if (
 }
 
 if (platform === "android") await releaseAndroid(version, flags.has("--resume"));
-else if (platform === "ios")
-	await releaseIos(version, flags.has("--ipa"), viaCi || flags.has("--ci"));
+else if (platform === "ios") await releaseIos(version, flags.has("--ipa"), viaCi);
 else if (platform === "firefox") await releaseFirefox(version);
 // Universal by default. Forgetting the flag would ship an Apple-Silicon-only release, and the
 // failure is silent from here: the dmg simply does not open on an Intel Mac.
@@ -1797,9 +1795,6 @@ function collectDesktopAssets(
 // ----- ios: App Store Connect / TestFlight via fastlane (no GitHub release) -----
 
 async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
-	// A dry run builds here and uploads nothing; a CI run builds nowhere near here. Asking for
-	// both is asking for two different machines to do the same job.
-	if (ipaOnly && ci) fail("--ipa and --ci are mutually exclusive");
 	const IOS = "packages/platform-mobile/ios/App";
 	const PBXPROJ = `${IOS}/App.xcodeproj/project.pbxproj`;
 
@@ -1878,7 +1873,7 @@ async function releaseIos(version: string, ipaOnly: boolean, ci = false) {
 		return;
 	}
 
-	// --ci: the runner builds and uploads, so the bump has to be pushed before it can be built,
+	// The GitHub route: the runner builds and uploads, so the bump has to be committed first,
 	// and the order flips. Locally the upload comes first and the tag records a build that already
 	// exists; here the tag IS the request, and a build that then fails leaves a tag naming a build
 	// TestFlight never received. That is the trade for not needing this machine: re-dispatch

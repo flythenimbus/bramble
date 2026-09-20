@@ -1,12 +1,16 @@
 name: Verify release
 
-# Releases are built, signed, and published from a maintainer's machine by
-# `pnpm run release` (the signing key never leaves that machine). These jobs do
-# NOT build or sign; they only confirm a publish carried the real signed artifact,
-# so a release can't silently go out without it. Triggered on publish (not the tag
-# push), by which point the assets are attached. One job runs per platform, keyed
-# off the tag suffix (<version>-chromium / <version>-firefox / <version>-android /
-# <version>-desktop).
+# These jobs do NOT build or sign; they only confirm a publish carried the real
+# signed artifact, so a release can't silently go out without it. Triggered on
+# publish (not the tag push), by which point the assets are attached. One job runs
+# per platform, keyed off the tag suffix (<version>-chromium / <version>-firefox /
+# <version>-android / <version>-desktop).
+#
+# This fires for a release published from a maintainer's machine (`release --local`).
+# It does NOT fire for one published by a release workflow, because a release created
+# with GITHUB_TOKEN triggers nothing, which is why each publish job downloads and
+# checks its own draft before undrafting it (verifyDraft in scripts/release.ts). Two
+# paths to the same guarantee, one per route.
 on:
   release:
     types: [published]
