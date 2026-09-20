@@ -255,7 +255,10 @@ const manifest = {
 
 const out = "website/public/desktop/latest.json";
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`);
+// Tabs, because this file is committed and biome formats the repository with tabs: written with
+// spaces it fails `biome ci` on the release commit, which used to go unnoticed only because a
+// commit made with GITHUB_TOKEN triggered no CI run.
+writeFileSync(out, `${JSON.stringify(manifest, null, "\t")}\n`);
 
 console.log(`latest.json -> ${out}`);
 for (const [key, value] of Object.entries(platforms)) {
