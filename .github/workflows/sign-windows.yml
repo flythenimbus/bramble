@@ -36,13 +36,13 @@ jobs:
     name: Build and sign
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           # No cache here either, for the reason spelled out for Rust below: node_modules builds
@@ -58,7 +58,7 @@ jobs:
       # The cost is a cold build, roughly ten minutes, on a job that already waits on a human.
       # `cache: false` is what enforces it: the action caches by default.
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache: false
 
@@ -117,7 +117,7 @@ jobs:
       # and downloads the signed artifact back into this run. The approval is manual by design:
       # their terms require a human to decide that a given release may be signed.
       - name: Sign with SignPath
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
