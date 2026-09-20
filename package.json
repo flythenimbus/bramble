@@ -46,7 +46,7 @@
 		"format": "biome format --write .",
 		"check": "biome check --write  --unsafe .",
 		"ci:check": "biome ci .",
-		"release": "node scripts/release.ts",
+		"release": "node --env-file-if-exists=.env.local scripts/release.ts",
 		"bump:ios": "node scripts/bump-mobile.ts ios",
 		"bump:android": "node scripts/bump-mobile.ts android",
 		"bump:mobile": "node scripts/bump-mobile.ts mobile",
