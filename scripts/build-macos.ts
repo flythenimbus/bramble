@@ -29,8 +29,8 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensurePacker } from "./appimage-packer.ts";
 import { makeAppImagePortable } from "./appimage-portability.ts";
+import { ensureTools } from "./appimage-tools.ts";
 import { type AscApiKey, ascApiKey } from "./asc-api-key.ts";
 import { KEY_AGE, signingKey } from "./desktop-signing-key.ts";
 
@@ -218,9 +218,10 @@ if (!compileOnly) {
 			TAURI_SIGNING_PRIVATE_KEY: key,
 			TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "",
 		};
-		// Before the bundler, not after it fails: on Linux the AppImage step fetches its packer from
-		// the network, and a failed fetch is a silent fallback rather than an error.
-		if (process.platform === "linux") await ensurePacker();
+		// Before the bundler, not after one of them fails: on Linux the AppImage step fetches five
+		// tools from the network mid-build, and the packer's failure is a silent fallback rather
+		// than an error. See appimage-tools.ts.
+		if (process.platform === "linux") await ensureTools();
 		tauri("bundle", [], env);
 		if (notarization.expected) assertNotarized();
 

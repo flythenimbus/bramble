@@ -79,35 +79,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 RUN mkdir -p /work /out /home/builder && chmod -R a+rwX /work /out /home/builder
 ENV HOME=/home/builder
 
-# The AppImage packer, pre-placed in Tauri's tool cache so the build never fetches it.
-#
-# `tauri build` downloads this from the linuxdeploy project's `continuous` tag, and when that
-# download fails it does not stop: it falls back to an older built-in packer and leaves the cache
-# empty, which is a release failing on a GitHub blip (it did, on amd64, while arm64 downloaded the
-# same file fine). scripts/appimage-portability.ts then has no packer to repack with, and
-# repacking is what keeps issue #100 fixed.
-#
-# So: a dated tag rather than `continuous`, checked against its digest, fetched once when the image
-# is built. A bad download fails here, loudly, instead of in the middle of a release. The version
-# and digest come from scripts/appimage-packer.ts through build args, so they are written down
-# once: builds that do not run in this image get the same file from `ensurePacker`.
-ARG LINUXDEPLOY_APPIMAGE_VERSION
-ARG LINUXDEPLOY_APPIMAGE_SHA256
-RUN set -eux; \
-    : "${LINUXDEPLOY_APPIMAGE_VERSION:?build this image with scripts/build-linux.ts, which passes the pin}"; \
-    : "${LINUXDEPLOY_APPIMAGE_SHA256:?build this image with scripts/build-linux.ts, which passes the pin}"; \
-    case "${TARGETARCH}" in \
-      amd64) arch=x86_64 ;; \
-      arm64) arch=aarch64 ;; \
-      *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac; \
-    mkdir -p "$HOME/.cache/tauri"; \
-    packer="$HOME/.cache/tauri/linuxdeploy-plugin-appimage.AppImage"; \
-    curl -fsSL --retry 5 --retry-all-errors \
-      "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/${LINUXDEPLOY_APPIMAGE_VERSION}/linuxdeploy-plugin-appimage-${arch}.AppImage" \
-      -o "$packer"; \
-    echo "${LINUXDEPLOY_APPIMAGE_SHA256}  $packer" | sha256sum -c -; \
-    chmod -R a+rwX "$HOME/.cache"; \
-    chmod a+rx "$packer"
+# The tools the AppImage bundler fetches mid-build are NOT baked in here: scripts/appimage-tools.ts
+# places all five, pinned by digest, on every path that builds an AppImage (this container, CI on
+# a runner, a local Linux build). One place to look, one place to update.
 
 WORKDIR /work

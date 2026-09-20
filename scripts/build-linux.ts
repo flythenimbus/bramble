@@ -35,7 +35,6 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PACKER_SHA256, PACKER_VERSION } from "./appimage-packer.ts";
 import { signingKey } from "./desktop-signing-key.ts";
 import { dockerProblem } from "./docker-available.ts";
 
@@ -193,9 +192,6 @@ for (const arch of arches) {
 	// Tagged per architecture so the two do not overwrite each other, and --platform on both the
 	// build and the run: off the host's own architecture this is emulated, which is slow but is
 	// the difference between a release that covers Linux and one that covers a third of it.
-	// The packer pin travels as build args rather than living in the Dockerfile too: one version
-	// and digest, in appimage-packer.ts, for the image and for every build outside it.
-	const packerArch = arch === "arm64" ? "aarch64" : "x86_64";
 	run("docker", [
 		"build",
 		"--platform",
@@ -204,10 +200,6 @@ for (const arch of arches) {
 		DOCKERFILE,
 		"-t",
 		`${IMAGE}:${arch}`,
-		"--build-arg",
-		`LINUXDEPLOY_APPIMAGE_VERSION=${PACKER_VERSION}`,
-		"--build-arg",
-		`LINUXDEPLOY_APPIMAGE_SHA256=${PACKER_SHA256[packerArch]}`,
 		"packages/platform-desktop/docker",
 	]);
 

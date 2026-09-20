@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, lstatSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { packerMatchesPin, packerPath } from "./appimage-packer.ts";
+import { packerMatchesPin, packerPath } from "./appimage-tools.ts";
 
 /** Bundled copies that break the app on hosts newer or older than the builder. */
 const DROP = [
@@ -64,7 +64,7 @@ export function makeAppImagePortable(bundleDir: string, env: NodeJS.ProcessEnv):
 		return;
 	}
 
-	// The pinned packer, put there by ensurePacker before the bundler ran (appimage-packer.ts).
+	// The pinned packer, put there by ensureTools before the bundler ran (appimage-tools.ts).
 	// Warned about rather than refused if it has changed underneath: tauri fetches into the same
 	// cache, so this says the bundle was packed by something other than the pin, which is worth
 	// knowing without failing a build over a packer that still works.
