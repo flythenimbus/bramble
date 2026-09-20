@@ -1,0 +1,28 @@
+# Keeps the actions in .github/workflows current.
+#
+# Added after a runtime deprecation caught three of them at once: GitHub retired Node 20, and every
+# release build started warning that actions/upload-artifact, actions/download-artifact and
+# pnpm/action-setup were being forced onto Node 24. Nothing was broken, but the warning is the only
+# notice given before a runner eventually refuses to run them, and finding out during a release is
+# the wrong time. This turns that into a pull request months earlier.
+#
+# It also matters for what these actions are: release workflows pin them by commit, because a moved
+# tag would be a supply chain compromise with a signing key attached (docs/ci-releases.md). A pin
+# that nobody ever moves is a pin that rots, so something has to propose the moves.
+#
+# Grouped into one pull request rather than one per action: they move together, they are reviewed
+# the same way, and a weekly batch is a thing to read rather than a thing to dismiss.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore(ci)
+    labels:
+      - dependencies
