@@ -246,12 +246,23 @@ if (MAC) {
 
 const manifest = {
   version,
-  // Release notes come from the GitHub release body; the updater shows this instead, so keep it
-  // short rather than duplicating a changelog nobody reads in a modal.
-  notes: `Bramble ${version}`,
+  // What the in-app update prompt shows, which is not the release body: a modal is no place for a
+  // changelog. The first line of the hand-written notes if there are any, since that line is
+  // written to answer "why would I take this update", and the version alone otherwise.
+  notes: updaterNotes(version),
   pub_date: new Date().toISOString(),
   platforms,
 };
+
+function updaterNotes(version) {
+  const file = join("release-notes", `${version}-desktop.md`);
+  if (!existsSync(file)) return `Bramble ${version}`;
+  const first = readFileSync(file, "utf8")
+    .split("\n")
+    .map((l) => l.replace(/^#+\s*/, "").trim())
+    .find((l) => l.length > 0);
+  return first || `Bramble ${version}`;
+}
 
 const out = "website/public/desktop/latest.json";
 mkdirSync(dirname(out), { recursive: true });

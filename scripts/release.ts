@@ -98,6 +98,15 @@ const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
 const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
 /** Canonical copy of the Homebrew cask; the published one lives in homebrew/homebrew-cask. */
 const DESKTOP_CASK = "packages/platform-desktop/homebrew/bramble.rb";
+/**
+ * Where a release's hand-written notes live, if it has any: `release-notes/<tag>.md`.
+ *
+ * A runner has no terminal and no model, so the editor step that shapes notes locally cannot
+ * happen there, and a release that waited for one would never finish. Writing the prose before the
+ * release instead keeps it reviewable, versioned, and identical on every route.
+ */
+const notesPreamble = (tag: string): string => join("release-notes", `${tag}.md`);
+
 /** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
 const WEBSITE_BRANCH = "main";
 
@@ -802,6 +811,16 @@ function dispatchRelease(
 	const dryRun = flags.has("--dry-run");
 	// Checked on GitHub rather than locally: runners tag through the API, so a clone can lag.
 	if (ok(`gh api repos/${REPO}/git/ref/tags/${tag}`)) fail(`tag ${tag} already exists on GitHub`);
+
+	// Said before the release rather than discovered after it: a runner has no terminal, so the
+	// editor that shapes notes locally never opens, and without this file the page gets the commit
+	// list alone. Not fatal; plenty of releases have nothing to say beyond what changed.
+	if (!dryRun && !ok(`gh api repos/${REPO}/contents/${notesPreamble(tag)}?ref=main`))
+		console.warn(
+			`\nnote: no ${notesPreamble(tag)} on main, so the release page gets the generated\n` +
+				"      changelog and the update prompt gets the version. Write one, commit it, and\n" +
+				"      re-run to say why this release is worth taking.",
+		);
 
 	// A run created before this instant is somebody else's. gh returns before the run exists.
 	const since = new Date(Date.now() - 5_000).toISOString();
@@ -2374,6 +2393,12 @@ function commitTagPush(
 // none) and picks the previous tag from the shared namespace (diffing android against a chromium
 // tag).
 async function releaseNotes(tag: string, platform: string): Promise<string> {
+	// Written by hand before the release, if there is anything to say that a commit list does not.
+	// Generated notes answer "what changed"; this is where "why you want it" goes, and the first
+	// line of it is what the in-app update prompt shows (release-desktop.mjs).
+	const preamble = existsSync(notesPreamble(tag))
+		? `${readFileSync(notesPreamble(tag), "utf8").trim()}\n\n`
+		: "";
 	const prev = capture(
 		`git describe --tags --abbrev=0 --match '*-${platform}' ${tag}^ 2>/dev/null || true`,
 	);
@@ -2382,7 +2407,10 @@ async function releaseNotes(tag: string, platform: string): Promise<string> {
 	// desktop 0.2.0 notes came out 871 lines long that way. Nobody wants to read that, and it
 	// makes a milestone look like a changelog dump, so leave the body to be written by hand.
 	if (!prev)
-		return `First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`;
+		return (
+			preamble ||
+			`First ${platform} release.\n\n_Release notes to follow; edit this release to add them._`
+		);
 
 	// An unknown platform would silently mean "no pathspec", i.e. every commit in the range, which
 	// is the bug this filtering exists to fix. Better to notice it here than on the release page.
