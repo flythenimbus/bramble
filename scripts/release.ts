@@ -1659,9 +1659,10 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 		headline: `chore(release): desktop ${version} update manifest${channels.length > 1 ? " and cask" : ""}`,
 		files: channels,
 	});
-	// A commit made with this workflow's token fires no push workflow, so deploy-website.yml would
-	// never hear about it. Dispatching it by hand is the one event that token can trigger.
-	run(`gh workflow run deploy-website.yml --repo ${REPO} --ref ${WEBSITE_BRANCH}`);
+	// No dispatch here: the commit above is made with the release app's token, not this workflow's,
+	// and an app's commit fires push workflows like any other, so deploy-website.yml is already
+	// running. Dispatching as well produced two runs a second apart, one of them cancelled by the
+	// concurrency group, which reads as a release that half worked.
 
 	console.log(
 		`\nreleased ${tag}${skip.size ? ` without ${[...skip].join(", ")}` : ""}; the update manifest` +

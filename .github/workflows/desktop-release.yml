@@ -18,8 +18,9 @@ name: Desktop release
 #   runs first-party actions only (Rust comes from the image's rustup, pnpm from corepack). It
 #   bundles, codesigns and notarizes macOS from the handed-over binaries, re-signs the AppImages,
 #   waits for SignPath and re-signs the installer, verifies every updater signature against the
-#   public key compiled into the app, and publishes. The update manifest is committed after the release exists, and the website deploy
-#   is dispatched by hand, because a commit made with this workflow's token fires no push workflow.
+#   public key compiled into the app, and publishes. The update manifest is committed after the
+#   release exists, which deploys the website on its own: that commit is made with the release
+#   app's token, and an app's commits fire push workflows where this workflow's token cannot.
 #
 # Windows keeps its own approval, in SignPath, which signs the installer with a certificate this
 # repository never holds. The APT repository is still signed from a Mac: its key lives on a
@@ -278,7 +279,7 @@ jobs:
     environment: desktop-release
     permissions:
       contents: write # the tag, the release and the manifest commit
-      actions: write # dispatching the website deploy
+      actions: read # collecting the Windows installer from sign-windows.yml
     # Bundling, codesigning and notarization, then as long as SignPath's approval takes.
     timeout-minutes: 180
     steps:
