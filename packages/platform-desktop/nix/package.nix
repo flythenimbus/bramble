@@ -89,16 +89,14 @@ rustPlatform.buildRustPackage (finalAttrs: {
     xdotool # the global shortcut
   ];
 
-  preFixup = ''
+  postFixup = ''
     # libappindicator-sys loads AppIndicator dynamically with dlopen(),
-    # so the library must be discoverable at runtime.
-    gappsWrapperArgs+=(
-      --prefix LD_LIBRARY_PATH : "${
-        lib.makeLibraryPath [
-          libayatana-appindicator
-        ]
-      }"
-    )
+    # so add it to the binary's RUNPATH.
+    patchelf --add-rpath "${
+      lib.makeLibraryPath [
+        libayatana-appindicator
+      ]
+    }" "$out/bin/.bramble-desktop-wrapped"
   '';
 
   # The crate's own tests need no display and are worth running here, but they are the shell's,
