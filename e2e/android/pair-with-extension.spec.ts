@@ -84,7 +84,8 @@ test("the extension pairs with the app on the device and its data lands there", 
 			.last()
 			.click();
 		await inviter.page.locator('input[type="password"]').first().fill(STRONG_PW);
-		await inviter.page.getByRole("button", { name: /Continue/i }).click();
+		// Exact: the desktop-link section's "Allow and continue" also matches /Continue/i.
+		await inviter.page.getByRole("button", { name: "Continue", exact: true }).click();
 
 		const code = await inviter.page.locator("input[readonly]").inputValue();
 		expect(code).toMatch(/^bramble-pair-1\./);

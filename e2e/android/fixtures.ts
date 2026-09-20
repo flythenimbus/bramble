@@ -114,7 +114,8 @@ export const test = base.extend<{ browser: Browser; context: BrowserContext; pag
 	browser: async ({}, use) => {
 		requireDevice();
 		const stopForward = forwardDevtools(appPid());
-		const browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
+		// noDefaults: the WebView rejects the browser-wide defaults (setDownloadBehavior et al.).
+		const browser = await chromium.connectOverCDP(`http://localhost:${PORT}`, { noDefaults: true });
 		await use(browser);
 		// Disconnects from the WebView. Deliberately does NOT stop the app: this is the user's
 		// device, and a test run should leave it as it found it.
