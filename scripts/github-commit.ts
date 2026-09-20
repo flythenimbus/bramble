@@ -38,11 +38,18 @@ export function commitFiles(opts: {
 			},
 		},
 	});
-	// stdin, not -f: the file contents would otherwise land in argv, and a changelog directory
-	// can outgrow the argument limit long before it outgrows anything else.
+	// A token that may write to a protected branch, falling back to the ambient one.
+	//
+	// GITHUB_TOKEN cannot: a ruleset evaluates it as the GitHub Actions app, and a personal
+	// repository cannot add that app to a bypass list (the API refuses it as belonging to no
+	// organization). Nor does adding github-actions[bot] as a user, which was measured and does
+	// nothing. So release workflows mint a token from an app of our own that the ruleset does allow
+	// through, holding contents:write and nothing else. See docs/ci-releases.md.
+	const token = process.env.BRAMBLE_COMMIT_TOKEN;
 	const out = execFileSync("gh", ["api", "graphql", "--input", "-"], {
 		input: body,
 		encoding: "utf8",
+		...(token ? { env: { ...process.env, GH_TOKEN: token } } : {}),
 	});
 	const oid = JSON.parse(out)?.data?.createCommitOnBranch?.commit?.oid;
 	if (!oid) throw new Error(`createCommitOnBranch returned no commit: ${out.slice(0, 300)}`);

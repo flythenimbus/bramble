@@ -147,11 +147,22 @@ jobs:
           name: android-release
           path: release-out/
 
+      # The ruleset on main refuses GITHUB_TOKEN, which it evaluates as the GitHub Actions app: a
+      # personal repository cannot add that app to a bypass list. This one can be, and carries
+      # contents:write and nothing else, so it may commit and may do nothing else. docs/ci-releases.md.
+      - name: Token that may commit to main
+        id: commit-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Sign, verify and publish
         env:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
+          BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

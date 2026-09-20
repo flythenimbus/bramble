@@ -34,6 +34,7 @@ things that keep it defensible:
 | Control | Why |
 |---|---|
 | Required reviewer on every environment | Repository write is not enough. A run waits for a person |
+| The release commit is made by an app, not by `GITHUB_TOKEN` | The ruleset on `main` requires a pull request, CodeQL and a green `CI`, which a commit that does not exist yet can never satisfy. `GITHUB_TOKEN` cannot be exempted: a ruleset evaluates it as the GitHub Actions app, and a personal repository cannot add that app to a bypass list (adding `github-actions[bot]` as a *user* was measured and does nothing). So a `bramble-release-bot` app, owned by the maintainer and installed only on this repository with **contents:write and nothing else**, is on the bypass list, and workflows mint a short-lived token per run. It may commit; it may not dispatch a workflow, read a secret, or touch anything else |
 | One environment per target | A Firefox release cannot read the Android keystore |
 | No third-party actions in a job holding a permanent key | Their supply chain becomes ours the moment they run beside a key |
 | Every action pinned by commit, never a tag | A moved tag is a supply chain compromise with a signing key attached |
@@ -118,7 +119,7 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 
 | Phase | Delivers | Needs |
 |---|---|---|
-| **0** | `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them. Done | One YubiKey session, the last |
+| **0** | `RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY` from the release app above, then `pnpm run ci:secrets`: the four environments, each with a required reviewer, and every wrapper decrypted into them. Done | One YubiKey session, the last |
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android` | keystore + password |
 | **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome**. Built: `chrome-release.yml`, `release chromium`, with a store preflight | CWS key + service account |

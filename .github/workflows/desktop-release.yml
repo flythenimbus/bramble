@@ -103,6 +103,16 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      # The ruleset on main refuses GITHUB_TOKEN, which it evaluates as the GitHub Actions app: a
+      # personal repository cannot add that app to a bypass list. This one can be, and carries
+      # contents:write and nothing else, so it may commit and may do nothing else. docs/ci-releases.md.
+      - name: Token that may commit to main
+        id: commit-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Gate, bump and start the Windows build
         id: bump
         env:
@@ -110,6 +120,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           SKIP: ${{ inputs.skip }}
           GH_TOKEN: ${{ github.token }}
+          BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
           # Whether sign-windows.yml could sign anything, without handing this job the token: the
           # comparison happens in the expression, and only its answer reaches the step.
           SIGNPATH_READY: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' && vars.SIGNPATH_PROJECT_SLUG != '' && vars.SIGNPATH_SIGNING_POLICY_SLUG != '' }}
@@ -327,11 +338,22 @@ jobs:
           merge-multiple: true
           path: dist-linux/
 
+      # The ruleset on main refuses GITHUB_TOKEN, which it evaluates as the GitHub Actions app: a
+      # personal repository cannot add that app to a bypass list. This one can be, and carries
+      # contents:write and nothing else, so it may commit and may do nothing else. docs/ci-releases.md.
+      - name: Token that may commit to main
+        id: commit-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Bundle macOS, sign everything, publish
         env:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
+          BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
           WINDOWS_RUN: ${{ needs.bump.outputs.windows_run }}
           SKIP: ${{ inputs.skip }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
