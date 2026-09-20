@@ -148,6 +148,25 @@ architectures build natively and in parallel, where today one is emulated on a M
 `container: debian:12` job keeps the glibc floor exactly while deleting the rsync-into-a-volume
 dance that exists only because the build host is not Linux.
 
+## Releasing a pair at once
+
+`release browser <patch|minor|major>` dispatches chromium then firefox; `release mobile ...` does
+ios then android. A keyword, never a version: these targets version independently, so one number
+cannot mean the same release in both, and each resolves its own from `main`.
+
+Each target runs as its own release process, so a failure stops that one and not the pair, and
+every guard, prompt and editor behaves as it does when run alone. That also means **one set of
+notes and one approval per target**: the saving is the typing, not the attention.
+
+They do not watch. Watching is serial, so the first would block on its approval while the second
+sat undispatched; the run URLs are printed instead.
+
+ios goes first in the pair because it is the one route that commits from the maintainer's machine
+at dispatch time, while the others commit from a job later, and every release commits with an
+expected head. A collision is refused rather than mangled, but a refusal costs a build, so the
+order keeps them apart. Approving one at a time does the rest. `all` deliberately does not exist:
+four approvals, four editors and four racing commits, to save one command.
+
 ## What this never buys
 
 - **Store review.** Chrome Web Store, AMO and App Store review stay human and stay slow.

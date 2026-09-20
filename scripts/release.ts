@@ -12,6 +12,11 @@
 //        --resume    (android, local) sign the apk the last local run already built
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]
 //                                       (--ipa = dry-run IPA on this machine, no upload or tag)
+//   pnpm run release browser  <patch|minor|major>   chromium, then firefox
+//   pnpm run release mobile   <patch|minor|major>   ios, then android
+//        Each target keeps its own version, so these take a bump keyword, never a version.
+//        They dispatch one after another and do not watch; each still wants its own notes and
+//        its own approval.
 //   pnpm run release desktop  <version|patch|minor|major> [--aarch64] [--resume]
 //                                       (--aarch64 = skip the Intel slice; --resume = publish the
 //                                        build the last run already made and signed)
@@ -60,6 +65,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AMO_API, amoJwt } from "./amo-auth.ts";
 import { ASC_KEY_AGE } from "./asc-api-key.ts";
 import { CWS_ITEM_ID } from "./cws-ids.ts";
@@ -190,6 +196,62 @@ if (!platform)
 	);
 if (!rawVersion)
 	fail(`missing version. usage: pnpm run release ${platform} <version|patch|minor|major>`);
+
+/**
+ * Targets that move together, in the order they should be dispatched.
+ *
+ * ios leads on mobile because it is the one route that commits from this machine, at dispatch
+ * time, while the others commit from a job later: going first keeps its commit clear of theirs.
+ * Every release commits with an expected head, so a collision is refused rather than mangled, but
+ * a refusal costs a build.
+ */
+const GROUPS: Record<string, string[]> = {
+	browser: ["chromium", "firefox"],
+	mobile: ["ios", "android"],
+};
+
+if (GROUPS[platform]) {
+	const targets = GROUPS[platform] as string[];
+	// A keyword, never a version: these targets version independently, so one number cannot mean
+	// the same release in both. `browser 1.30.0` would be right for chromium and wrong for firefox.
+	if (!["patch", "minor", "major"].includes(rawVersion))
+		fail(
+			`${platform} takes patch, minor or major, not a version: its targets ` +
+				`(${targets.join(", ")}) version independently, so each resolves its own from main.`,
+		);
+
+	// Each target runs as its own release, so a failure stops that one and not the group, and
+	// every guard, prompt and editor behaves exactly as it does when run alone. --no-watch because
+	// watching is serial: the first would block on an approval while the second sat undispatched.
+	const self = fileURLToPath(import.meta.url);
+	const passed = [...flags].filter((f) => f !== "--no-watch");
+	const results = targets.map((target) => {
+		console.log(`
+${"=".repeat(60)}
+${target} ${rawVersion}
+${"=".repeat(60)}`);
+		try {
+			execFileSync(process.execPath, [self, target, rawVersion, ...passed, "--no-watch"], {
+				stdio: "inherit",
+			});
+			return { target, ok: true };
+		} catch {
+			return { target, ok: false };
+		}
+	});
+
+	console.log(`
+${"=".repeat(60)}`);
+	for (const r of results) console.log(`  ${r.ok ? "dispatched" : "FAILED    "}  ${r.target}`);
+	const failed = results.filter((r) => !r.ok);
+	if (failed.length)
+		fail(
+			`${failed.length} of ${targets.length} did not dispatch. Re-run those targets alone` +
+				(results.some((r) => r.ok) ? "; the ones above them are already on their way." : "."),
+		);
+	console.log("\nEach waits for its own approval. `gh run list` shows where they are.");
+	process.exit(0);
+}
 if (skipArg) {
 	if (platform !== "desktop") fail("--skip is for desktop releases");
 	const unknown = [...skip].filter((p) => !DESKTOP_PLATFORMS.includes(p));
