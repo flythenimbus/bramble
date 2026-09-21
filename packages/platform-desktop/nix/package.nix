@@ -57,7 +57,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     inherit (finalAttrs) pname version src;
     pnpm = pnpm_10;
     fetcherVersion = 3;
-    hash = "sha256-N09AJYkab+fnGYhLHI0BtCUSNWfdb2NUvACfcCoT0bA=";
+    hash = "sha256-DGpZCPhSMdxljSJwUcqNODBM9s/LiOwLrLbLK2L3cVM=";
   };
 
   postPatch = ''
@@ -88,6 +88,16 @@ rustPlatform.buildRustPackage (finalAttrs: {
     librsvg
     xdotool # the global shortcut
   ];
+
+  postFixup = ''
+    # libappindicator-sys loads AppIndicator dynamically with dlopen(),
+    # so add it to the binary's RUNPATH.
+    patchelf --add-rpath "${
+      lib.makeLibraryPath [
+        libayatana-appindicator
+      ]
+    }" "$out/bin/.bramble-desktop-wrapped"
+  '';
 
   # The crate's own tests need no display and are worth running here, but they are the shell's,
   # not the workspace's: `pnpm test` belongs to CI.
