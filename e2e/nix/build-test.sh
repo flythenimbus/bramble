@@ -65,12 +65,29 @@ SIZE="$(stat -c%s "$OUT/bin/.bramble-desktop-wrapped")"
 ok "$((SIZE / 1024 / 1024)) MB"
 
 # Nix patches the interpreter and rpath; anything unresolved here would be a missing buildInput
-# that happens to exist on the builder.
-if ldd "$OUT/bin/.bramble-desktop-wrapped" 2>/dev/null | grep -q "not found"; then
-	ldd "$OUT/bin/.bramble-desktop-wrapped" | grep "not found"
-	die "unresolved shared libraries"
+# that happens to exist on the builder. This image ships no ldd of its own, and a check that
+# cannot run should say so rather than print an ok.
+if command -v ldd >/dev/null 2>&1; then
+	if ldd "$OUT/bin/.bramble-desktop-wrapped" | grep -q "not found"; then
+		ldd "$OUT/bin/.bramble-desktop-wrapped" | grep "not found"
+		die "unresolved shared libraries"
+	fi
+	ok "no unresolved shared libraries"
+else
+	printf '  skipped: no ldd in this image\n'
 fi
-ok "no unresolved shared libraries"
+
+# The tray library is not one ldd could report either way: libappindicator-sys reaches for it with
+# dlopen(), so it is never a DT_NEEDED entry, and the only thing that makes it resolvable at
+# startup is the store path nix/package.nix puts on the binary's RUNPATH. That path is a plain
+# string in the binary, which is what this matches. Without it the app builds, installs, passes
+# every check above, and then panics on launch, which is exactly how it shipped broken.
+say "the dlopen'd tray library"
+TRAY="$(grep -ao "/nix/store/[0-9a-z]\{32\}-libayatana-appindicator[0-9A-Za-z.+_-]*/lib" \
+	"$OUT/bin/.bramble-desktop-wrapped" | head -1 || true)"
+[ -n "$TRAY" ] || die "no libayatana-appindicator on the RUNPATH; the tray dlopen would fail at startup"
+[ -e "$TRAY/libayatana-appindicator3.so.1" ] || die "$TRAY holds no libayatana-appindicator3.so.1"
+ok "libayatana-appindicator3.so.1 via $TRAY"
 
 # Closure size is reported rather than asserted: a jump usually means a dependency crept in
 # through a wrapper, and nobody notices until someone downloads it. No awk in this image, hence

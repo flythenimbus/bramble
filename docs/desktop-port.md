@@ -1171,7 +1171,7 @@ to the same users on our own schedule, and CI can build it so it cannot rot. Ups
 a strict addition, and is the sort of thing a NixOS user in the community often does better than
 we would, since it comes with a per-release obligation to regenerate hashes.
 
-Three things about the derivation are worth knowing before changing it:
+Four things about the derivation are worth knowing before changing it:
 
 - **It builds from source, so nothing may be fetched at build time.** That is what caught
   `stage-proxy.mjs` assuming `target/release/`: Nix sets `CARGO_BUILD_TARGET` even for a native
@@ -1184,7 +1184,23 @@ Three things about the derivation are worth knowing before changing it:
 - **Two hashes, one of which is maintenance.** `cargoLock.lockFile` means there is no vendor hash
   to regenerate (every dependency is a registry crate). The pnpm store is a fixed-output
   derivation and its `hash` must be updated whenever the lockfile changes: build once, take the
-  `got:` value from the mismatch error.
+  `got:` value from the mismatch error. That is automated now. `scripts/nix-hash.ts` does exactly
+  that (`--check` to test, no argument to fix), and `nix-hash.yml` runs it on any push to main
+  touching `pnpm-lock.yaml`, committing the result through the release app. It is triggered by
+  the lockfile rather than by a release on purpose: `nix run github:flythenimbus/bramble` builds
+  main, not a tag, so a release is not a boundary that protects anyone. The hash was last left
+  stale for a month across seven lockfile changes and four desktop releases, and an outside
+  contributor found it rather than us.
+- **One runtime dependency is invisible to Nix.** `libappindicator-sys` reaches for the tray
+  library with `dlopen()`, so `libayatana-appindicator` being in `buildInputs` is not enough: it
+  is never a `DT_NEEDED` entry, nothing patches an rpath for it, and the app builds and installs
+  and then panics on launch. `postFixup` puts it on the binary's RUNPATH by hand. Two details
+  there are load-bearing. It must run *after* fixup, because stdenv's `patchelf --shrink-rpath`
+  strips any rpath with no matching `DT_NEEDED` entry, which is precisely this one. And it must
+  be the binary's RUNPATH rather than `LD_LIBRARY_PATH` in the wrapper, because an environment is
+  inherited: the wrapper would push our copy of the library onto the browser and file manager
+  that `tauri-plugin-opener` spawns, ahead of their own `DT_RUNPATH`. `e2e/nix/build-test.sh`
+  asserts the RUNPATH entry resolves, since `ldd` by construction cannot see a `dlopen`.
 
 Users who would rather not build anything can run the published AppImage with
 `programs.appimage.enable`, which needs nothing from us.

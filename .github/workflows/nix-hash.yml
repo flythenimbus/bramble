@@ -1,0 +1,59 @@
+name: nix hash
+
+# The fetchPnpmDeps hash pins the whole resolved dependency store, so any lockfile change
+# invalidates it. Nothing else in CI builds the flake, and a stale hash is not a degraded build
+# but no build at all, so it has to be refreshed the moment the lockfile moves rather than at
+# release time: `nix run github:flythenimbus/bramble` tracks main, not a tag. Four desktop
+# releases shipped over the month it was last broken without any of them noticing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pnpm-lock.yaml
+  workflow_dispatch:
+
+# The commit goes through the app token below, never the ambient one.
+permissions:
+  contents: read
+
+# Two lockfile changes in quick succession: only the newer tree is worth an hour of fetching,
+# and the older job's expectedHeadOid would refuse its commit anyway.
+concurrency:
+  group: nix-hash
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: refresh the pnpm hash
+    runs-on: ubuntu-latest
+    # Measured at about an hour cold, and it is network-bound in the pnpm fetch. This is a
+    # ceiling to fail under, not an expectation.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      # The same app the release jobs use: a ruleset on main refuses GITHUB_TOKEN, which it
+      # evaluates as the GitHub Actions app, and a personal repository cannot add that app to a
+      # bypass list. This one can be, and holds contents:write and nothing else.
+      # See docs/ci-releases.md.
+      - name: Token that may commit to main
+        id: commit-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      # A no-op when the lockfile change did not move the resolved store, which is the common
+      # case for a workspace-only edit: the script exits without committing.
+      - name: Recompute and commit
+        env:
+          BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
+        run: node scripts/nix-hash.ts --commit
