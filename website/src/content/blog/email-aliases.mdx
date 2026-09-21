@@ -1,0 +1,54 @@
+---
+title: "Email aliases: a different address for every site"
+description: "Bramble now makes a fresh forwarding address when you sign up: through Addy.io, SimpleLogin, or a domain you already own with no account and no API key at all."
+pubDate: 2026-09-20
+---
+
+Your email address is the one thing you hand to every site you sign up to, and it is the thing
+that ties all of those accounts back together the moment one of them leaks. Bramble can now hand
+each of them a different one.
+
+Press the alias button on an entry, or take the row that appears in the sign-up form itself, and
+Bramble creates a fresh forwarding address, fills it in, and saves it with the login. The mail
+arrives in your real inbox as usual. When a site starts selling the address, or turns up in a
+breach, you switch off that one alias and nothing else changes.
+
+It is in the browser extensions, the desktop app, and both phone apps.
+
+## Where the addresses come from
+
+Bramble is not the alias service. It uses an account you already have, or a domain you already own,
+and the mail never comes near us. Three options today:
+
+- **[Addy.io](https://addy.io)** and **[SimpleLogin](https://simplelogin.io)**. Paste an API key
+  from your account into Settings and you are done. Both are free to start with, and both work the
+  same way if you self-host them.
+- **A domain you already own**, with no account anywhere and nothing to paste. If your mail host
+  lets you point a whole domain at one inbox, and most do, then `anything@yourdomain` already
+  arrives and an alias is just a name nobody has used yet. Bramble makes one up on the spot: words,
+  like `quiet-fox-42`, or letters and numbers, like `k3f9x2ab7q`.
+
+That last one is the quiet favourite. There is no key, no account, no allowance to run down, and no
+waiting, because nothing has to be asked of anyone. The one thing it cannot do is warn you that you
+typed the domain wrong, so give it a second look when you set it up.
+
+More providers are on the way. Bramble is a password manager rather than an alias service, though,
+so switching an alias off, changing where it forwards, or deleting it stays where those settings
+already live: in your provider's own dashboard, or in your own mail host.
+
+## Nothing happens behind your back
+
+Setting up a provider is the on switch. Until you do, Bramble contacts nobody and the feature does
+not show up anywhere in the app.
+
+After that, an address is only ever made when you ask for one, by pressing the button. Never on
+page load, never in the background, never while you are still deciding. That matters more here than
+with a generated password: each alias is a real record on your own account, and some plans only
+allow a handful of them.
+
+Your API key is kept in the vault itself, encrypted like everything else in there, which is why it
+follows you to your other devices and why the vault has to be unlocked to make an alias. The
+[privacy policy](/privacy) has the details, alongside Bramble's other optional network features.
+
+Grab it from [bramble.sh](https://bramble.sh), or read the
+[source](https://github.com/flythenimbus/bramble). Questions welcome, as always.
