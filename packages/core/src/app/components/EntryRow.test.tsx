@@ -25,6 +25,7 @@ function renderRow({ target = "chromium", ...props }: RowOverrides = {}) {
 		<I18nProvider i18n={i18n}>
 			<PlatformProvider platform={platformFor(target)}>
 				<EntryRow
+					id="e1"
 					name="GitHub"
 					secondary="octocat"
 					icon={KeyRound}
@@ -121,7 +122,7 @@ describe("EntryRow selection", () => {
 		const onToggleSelect = vi.fn();
 		renderRow({ selectMode: true, onToggleSelect });
 		fireEvent.click(screen.getByRole("checkbox", { name: "Select GitHub" }));
-		expect(onToggleSelect).toHaveBeenCalledTimes(1);
+		expect(onToggleSelect).toHaveBeenCalledWith("e1");
 	});
 
 	it("toggles instead of opening when the row itself is tapped", () => {
@@ -129,7 +130,7 @@ describe("EntryRow selection", () => {
 		const onToggleSelect = vi.fn();
 		renderRow({ selectMode: true, onSelect, onToggleSelect });
 		fireEvent.click(rowButton());
-		expect(onToggleSelect).toHaveBeenCalledTimes(1);
+		expect(onToggleSelect).toHaveBeenCalledWith("e1");
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 
@@ -145,7 +146,7 @@ describe("EntryRow selection", () => {
 		const onSelect = vi.fn();
 		renderRow({ onSelect, onToggleSelect: () => {} });
 		fireEvent.click(screen.getByRole("button", { name: "Open GitHub" }));
-		expect(onSelect).toHaveBeenCalledTimes(1);
+		expect(onSelect).toHaveBeenCalledWith("e1");
 	});
 });
 
@@ -169,7 +170,7 @@ describe("EntryRow long press", () => {
 		vi.advanceTimersByTime(600);
 		fireEvent.touchEnd(button);
 		fireEvent.click(button);
-		expect(onLongPress).toHaveBeenCalledTimes(1);
+		expect(onLongPress).toHaveBeenCalledWith("e1");
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 
@@ -189,7 +190,7 @@ describe("EntryRow long press", () => {
 		fireEvent.touchEnd(button);
 		fireEvent.click(button);
 		expect(onLongPress).not.toHaveBeenCalled();
-		expect(onSelect).toHaveBeenCalledTimes(1);
+		expect(onSelect).toHaveBeenCalledWith("e1");
 	});
 
 	it("never fires on a pointer surface", () => {
@@ -197,5 +198,25 @@ describe("EntryRow long press", () => {
 		press(button);
 		vi.advanceTimersByTime(600);
 		expect(onLongPress).not.toHaveBeenCalled();
+	});
+});
+
+describe("EntryRow action arguments", () => {
+	// The callbacks take the row's entry id; a mis-wired argument would pass every
+	// call-count assertion elsewhere in this file.
+	it("passes the row's id to edit and delete", async () => {
+		const onEdit = vi.fn();
+		const onDelete = vi.fn(async (_id: string) => {});
+		renderRow({ onEdit, onDelete });
+
+		fireEvent.click(screen.getByLabelText("More options"));
+		fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+		expect(onEdit).toHaveBeenCalledWith("e1");
+
+		fireEvent.click(screen.getByLabelText("More options"));
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		// Destructive is two-stage: the confirming click is the one that fires onDelete.
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		await vi.waitFor(() => expect(onDelete).toHaveBeenCalledWith("e1"));
 	});
 });

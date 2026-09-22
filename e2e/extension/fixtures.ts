@@ -26,6 +26,8 @@ export async function launchExtensionContext(reuseProfileDir?: string): Promise<
 		// `channel: "chromium"` runs Chromium's NEW headless, which (unlike the default/old headless)
 		// actually loads MV3 extensions and starts their service worker. HEADED=1 shows the window.
 		channel: "chromium",
+		// The specs match English UI strings; a host in another locale would translate them.
+		locale: "en-US",
 		...(process.env.HEADED ? { headless: false } : {}),
 		args: [
 			`--disable-extensions-except=${EXTENSION_PATH}`,
@@ -36,6 +38,16 @@ export async function launchExtensionContext(reuseProfileDir?: string): Promise<
 	let [sw] = context.serviceWorkers();
 	if (!sw) sw = await context.waitForEvent("serviceworker", { timeout: 30_000 });
 	const extensionId = new URL(sw.url()).host;
+	// Wait out the SW's one-time storage migration: its ghost-record reap can delete a
+	// vault that is still being created (registry record written, blob not yet).
+	for (let i = 0; i < 100; i++) {
+		const settled = await sw.evaluate(async () => {
+			const r = await chrome.storage.local.get("vault.registry");
+			return r["vault.registry"] !== undefined;
+		});
+		if (settled) break;
+		await new Promise((r) => setTimeout(r, 100));
+	}
 	return { context, extensionId, profileDir };
 }
 

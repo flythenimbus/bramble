@@ -89,7 +89,11 @@ async function localEnvelope(opts: RosterSyncOptions): Promise<string> {
 	return JSON.stringify({ entries, roster } satisfies SyncEnvelope);
 }
 
-async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<void> {
+async function applyEnvelope(
+	opts: RosterSyncOptions,
+	json: string,
+	local: RosterPayload,
+): Promise<void> {
 	let env: SyncEnvelope;
 	try {
 		env = JSON.parse(json) as SyncEnvelope;
@@ -97,7 +101,7 @@ async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<voi
 		return;
 	}
 	if (env.roster && opts.pushRemoteRoster) {
-		const verified = await verifyRosterEnvelope(opts, env.roster);
+		const verified = await verifyRosterEnvelope(opts, env.roster, local);
 		if (verified !== null) await opts.pushRemoteRoster(verified);
 	}
 	if (env.entries) await opts.pushRemotePayload(env.entries);
@@ -111,6 +115,7 @@ async function applyEnvelope(opts: RosterSyncOptions, json: string): Promise<voi
 export async function verifyRosterEnvelope(
 	opts: Pick<RosterSyncOptions, "roster" | "fetchLocalRoster" | "wasm">,
 	rosterJson: string,
+	local?: RosterPayload,
 ): Promise<string | null> {
 	let remote: RosterPayload;
 	try {
@@ -120,7 +125,7 @@ export async function verifyRosterEnvelope(
 	}
 	const rosterVerify = opts.wasm.roster_verify;
 	if (!rosterVerify) return rosterJson; // host not wired for verification: verify-if-present passes.
-	const local = await currentRoster(opts);
+	const current = local ?? (await currentRoster(opts));
 	const valid = new Set<RosterEntry>(); // valid self-signature (keyed by object identity)
 	const validAdmission = new Set<RosterEntry>(); // valid admission by a current member
 	for (const entry of remote.devices) {
@@ -135,7 +140,7 @@ export async function verifyRosterEnvelope(
 		// An admission is valid iff a CURRENT live member (the admitter) signed this entry with its
 		// published admission key. A compromised member without the password can't produce one.
 		if (entry.admission) {
-			const admitter = local.devices.find((d) => d.id === entry.admission?.by);
+			const admitter = current.devices.find((d) => d.id === entry.admission?.by);
 			if (admitter?.admissionKey) {
 				try {
 					if (
@@ -154,7 +159,7 @@ export async function verifyRosterEnvelope(
 	}
 	return encodeRoster(
 		verifyRemoteRoster(
-			local,
+			current,
 			remote,
 			(entry) => valid.has(entry),
 			(entry) => validAdmission.has(entry),
@@ -330,14 +335,17 @@ async function syncPeer(
 		if (envelope === null) break;
 		entry.lastSeen = Date.now();
 		// Refuse inbound from a peer revoked since the handshake: don't apply its data.
-		if (!inRoster(await currentRoster(opts), peerPub)) {
+		const roster = await currentRoster(opts);
+		if (!inRoster(roster, peerPub)) {
 			entry.close();
 			peers.delete(peerPub);
 			break;
 		}
-		await applyEnvelope(opts, envelope);
+		await applyEnvelope(opts, envelope, roster);
 		// The envelope may have gossiped a revocation of another peer; drop it now rather than
 		// waiting for the next re-broadcast tick, so a revocation propagates across the mesh at once.
+		// Fresh read, not the copy above: the merge can outlast an enrollment finishing elsewhere,
+		// and reaping against the pre-merge copy would close the joiner as if it were revoked.
 		reapRevoked(opts, peers, await currentRoster(opts));
 	}
 }

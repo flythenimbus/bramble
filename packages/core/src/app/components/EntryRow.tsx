@@ -9,7 +9,7 @@ import {
 	Pencil,
 	Trash2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePlatform, useSurface } from "../../context/PlatformContext";
 import { useLongPress } from "../../hooks/useLongPress";
 import type { CopyItem } from "../entry-modes/types";
@@ -17,6 +17,7 @@ import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 
 interface EntryRowProps {
+	id: string;
 	name: string;
 	/** Secondary line under the name (username, masked card number, note preview). */
 	secondary: string;
@@ -30,11 +31,11 @@ interface EntryRowProps {
 	passkeys?: number;
 	/** Quick-copy actions; empty hides the copy button. */
 	copyItems: CopyItem[];
-	onSelect: () => void;
-	onEdit: () => void;
-	onDelete: () => Promise<void>;
+	onSelect: (id: string) => void;
+	onEdit: (id: string) => void;
+	onDelete: (id: string) => Promise<void>;
 	/** Called after a successful quick-copy, to record the entry as recently used. */
-	onUse?: () => void;
+	onUse?: (id: string) => void;
 	/** Tint the row when it matches the current site (surfaced at the top of the list). */
 	highlighted?: boolean;
 	/**
@@ -43,13 +44,14 @@ interface EntryRowProps {
 	 */
 	selectMode?: boolean;
 	selected?: boolean;
-	onToggleSelect?: () => void;
+	onToggleSelect?: (id: string) => void;
 	/** Touch long-press on the row. Omitted where selection isn't offered. */
-	onLongPress?: () => void;
+	onLongPress?: (id: string) => void;
 }
 
 /** Type-agnostic vault-list row; type-specific projection is computed by the entry mode and passed in. */
-export function EntryRow({
+export const EntryRow = memo(function EntryRow({
+	id,
 	name,
 	secondary,
 	icon: Icon,
@@ -108,7 +110,7 @@ export function EntryRow({
 			await clipboard.copy(typeof value === "function" ? value() : value);
 			setCopied(label);
 			setCopyOpen(false);
-			onUse?.();
+			onUse?.(id);
 		} catch {
 			// Best-effort: clipboard write can fail if unfocused or permission revoked.
 		}
@@ -116,13 +118,13 @@ export function EntryRow({
 
 	const handleEdit = () => {
 		setMoreOpen(false);
-		onEdit();
+		onEdit(id);
 	};
 
 	const handleDelete = async () => {
 		setDeleting(true);
 		try {
-			await onDelete();
+			await onDelete(id);
 		} finally {
 			setDeleting(false);
 			setConfirmingDelete(false);
@@ -131,10 +133,13 @@ export function EntryRow({
 	};
 
 	// In selection mode the row is a checkbox, not a link: tapping it toggles.
-	const activate = selectMode && onToggleSelect ? onToggleSelect : onSelect;
+	const activate = () => {
+		if (selectMode && onToggleSelect) onToggleSelect(id);
+		else onSelect(id);
+	};
 	const press = useLongPress({
 		onClick: activate,
-		onLongPress: () => onLongPress?.(),
+		onLongPress: () => onLongPress?.(id),
 		enabled: touch && !!onLongPress,
 	});
 
@@ -162,7 +167,7 @@ export function EntryRow({
 			{onToggleSelect && selectMode && (
 				<Checkbox
 					checked={selected}
-					onChange={onToggleSelect}
+					onChange={() => onToggleSelect(id)}
 					ariaLabel={t`Select ${name}`}
 					// Negative margin + matching padding: a full-height hit target that
 					// doesn't make the row taller.
@@ -335,7 +340,7 @@ export function EntryRow({
 			</div>
 		</div>
 	);
-}
+});
 
 function MenuItem({
 	icon,

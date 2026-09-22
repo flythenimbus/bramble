@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ListChecks, type LucideIcon, TrendingDown, TrendingUp } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Entry, EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
@@ -86,7 +86,10 @@ export function VaultHome({
 	reviewNudge,
 }: VaultHomeProps) {
 	const { t } = useLingui();
-	const filtered = filterAndSortEntries(items, search, matchedIds);
+	const filtered = useMemo(
+		() => filterAndSortEntries(items, search, matchedIds),
+		[items, search, matchedIds],
+	);
 
 	// Bulk selection. An explicit mode, not one derived from `selected.size`: emptying
 	// the selection is a normal thing to do mid-edit and must not throw the user out.
@@ -105,6 +108,14 @@ export function VaultHome({
 		setSelectMode(false);
 	};
 
+	const toggleRowSelect = useCallback((id: string) => {
+		setSelected((prev) => toggleSelected(prev, id));
+	}, []);
+	const longPressRowSelect = useCallback((id: string) => {
+		setSelectMode(true);
+		setSelected((prev) => toggleSelected(prev, id));
+	}, []);
+
 	// Actions run on real entries, not the list projection. Filtering `entries` (not
 	// mapping `selected`) keeps them in vault order and drops ids a sync merge removed.
 	const selectedEntries = useMemo(
@@ -118,8 +129,15 @@ export function VaultHome({
 	const live = useMemo(() => items.filter((item) => !item.archived), [items]);
 	const archivedCount = items.length - live.length;
 	// "At Risk" / "Strong" are password-health stats, so they count logins only.
-	const atRisk = live.filter((item) => item.leaked).length;
-	const strong = live.filter((item) => item.type === "login" && !item.leaked).length;
+	const { atRisk, strong } = useMemo(() => {
+		let atRisk = 0;
+		let strong = 0;
+		for (const item of live) {
+			if (item.leaked) atRisk += 1;
+			else if (item.type === "login") strong += 1;
+		}
+		return { atRisk, strong };
+	}, [live]);
 
 	// Virtualize the row list so a large vault (1000+ entries) mounts only the
 	// visible rows, not every EntryRow at once (the main open-time render cost).
@@ -250,6 +268,7 @@ export function VaultHome({
 										style={{ transform: `translateY(${row.start}px)` }}
 									>
 										<EntryRow
+											id={item.id}
 											name={item.name}
 											secondary={item.secondary}
 											icon={item.icon}
@@ -257,20 +276,15 @@ export function VaultHome({
 											leaked={item.leaked}
 											passkeys={item.passkeys}
 											copyItems={item.copyItems}
-											onSelect={() => onSelectEntry(item.id)}
-											onEdit={() => onEditEntry(item.id)}
-											onDelete={() => onDeleteEntry(item.id)}
-											onUse={() => onUseEntry(item.id)}
+											onSelect={onSelectEntry}
+											onEdit={onEditEntry}
+											onDelete={onDeleteEntry}
+											onUse={onUseEntry}
 											highlighted={matchedIds?.has(item.id)}
 											selectMode={selectMode}
 											selected={selected.has(item.id)}
-											onToggleSelect={() => setSelected((prev) => toggleSelected(prev, item.id))}
-											// Long-press selects the row it started on, so the gesture and its
-											// first selection are one action.
-											onLongPress={() => {
-												setSelectMode(true);
-												setSelected((prev) => toggleSelected(prev, item.id));
-											}}
+											onToggleSelect={toggleRowSelect}
+											onLongPress={longPressRowSelect}
 										/>
 									</div>
 								);
