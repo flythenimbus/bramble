@@ -50,9 +50,10 @@ export function VaultHomeRoute() {
 			.matchCurrentTab(logins)
 			.then((ids) => {
 				if (!cancelled)
-					setMatchedIds((prev) =>
-						prev.size === ids.length && ids.every((id) => prev.has(id)) ? prev : new Set(ids),
-					);
+					setMatchedIds((prev) => {
+						const next = new Set(ids);
+						return prev.size === next.size && ids.every((id) => prev.has(id)) ? prev : next;
+					});
 			})
 			.catch(() => {});
 		return () => {
