@@ -122,7 +122,7 @@ describe("EntryRow selection", () => {
 		const onToggleSelect = vi.fn();
 		renderRow({ selectMode: true, onToggleSelect });
 		fireEvent.click(screen.getByRole("checkbox", { name: "Select GitHub" }));
-		expect(onToggleSelect).toHaveBeenCalledWith("e1");
+		expect(onToggleSelect).toHaveBeenCalledExactlyOnceWith("e1");
 	});
 
 	it("toggles instead of opening when the row itself is tapped", () => {
@@ -130,7 +130,7 @@ describe("EntryRow selection", () => {
 		const onToggleSelect = vi.fn();
 		renderRow({ selectMode: true, onSelect, onToggleSelect });
 		fireEvent.click(rowButton());
-		expect(onToggleSelect).toHaveBeenCalledWith("e1");
+		expect(onToggleSelect).toHaveBeenCalledExactlyOnceWith("e1");
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 
@@ -146,7 +146,7 @@ describe("EntryRow selection", () => {
 		const onSelect = vi.fn();
 		renderRow({ onSelect, onToggleSelect: () => {} });
 		fireEvent.click(screen.getByRole("button", { name: "Open GitHub" }));
-		expect(onSelect).toHaveBeenCalledWith("e1");
+		expect(onSelect).toHaveBeenCalledExactlyOnceWith("e1");
 	});
 });
 
@@ -170,7 +170,7 @@ describe("EntryRow long press", () => {
 		vi.advanceTimersByTime(600);
 		fireEvent.touchEnd(button);
 		fireEvent.click(button);
-		expect(onLongPress).toHaveBeenCalledWith("e1");
+		expect(onLongPress).toHaveBeenCalledExactlyOnceWith("e1");
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 
@@ -190,7 +190,7 @@ describe("EntryRow long press", () => {
 		fireEvent.touchEnd(button);
 		fireEvent.click(button);
 		expect(onLongPress).not.toHaveBeenCalled();
-		expect(onSelect).toHaveBeenCalledWith("e1");
+		expect(onSelect).toHaveBeenCalledExactlyOnceWith("e1");
 	});
 
 	it("never fires on a pointer surface", () => {
@@ -211,12 +211,24 @@ describe("EntryRow action arguments", () => {
 
 		fireEvent.click(screen.getByLabelText("More options"));
 		fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-		expect(onEdit).toHaveBeenCalledWith("e1");
+		expect(onEdit).toHaveBeenCalledExactlyOnceWith("e1");
 
 		fireEvent.click(screen.getByLabelText("More options"));
 		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 		// Destructive is two-stage: the confirming click is the one that fires onDelete.
 		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-		await vi.waitFor(() => expect(onDelete).toHaveBeenCalledWith("e1"));
+		await vi.waitFor(() => expect(onDelete).toHaveBeenCalledExactlyOnceWith("e1"));
+	});
+
+	// onUse drives touchEntry, which orders "Recently used". A mis-wired id here would
+	// silently promote the wrong entry, and nothing else in this file calls it.
+	it("passes the row's id to use, on a copy", async () => {
+		const onUse = vi.fn();
+		renderRow({ onUse, copyItems: [{ label: "password", value: "hunter2" }] });
+
+		fireEvent.click(screen.getByLabelText("Copy"));
+		fireEvent.click(screen.getByRole("button", { name: "Copy password" }));
+
+		await vi.waitFor(() => expect(onUse).toHaveBeenCalledExactlyOnceWith("e1"));
 	});
 });

@@ -218,6 +218,74 @@ describe("verifyRosterEnvelope (Item A: password-authority admission gate for ne
 	});
 });
 
+describe("verifyRosterEnvelope (the local roster it judges admissions against)", () => {
+	// The optional third argument is the trust anchor for the admission gate: `admitter` is looked
+	// up in it, so handing in a stale roster would let a since-revoked member keep admitting. The
+	// receive loop passes the roster it already gated on; every other caller must omit it and take
+	// the fresh read. See docs/p2p-sync-revocation-hardening.md.
+	const wasm = {
+		roster_verify: async (_p: string, _m: string, sig: string) => sig === "valid",
+	} as unknown as RosterSyncWasm;
+	const admitter: RosterEntry = {
+		id: "laptop",
+		publicKey: "pk-laptop",
+		label: "laptop",
+		addedAt: 0,
+		hlc: { wall: 1, counter: 0, node: "laptop" },
+		sigKey: "sk-laptop",
+		sig: "valid",
+		admissionKey: "adm-laptop",
+	};
+	const joiner: RosterEntry = {
+		id: "phone",
+		publicKey: "pk-phone",
+		label: "phone",
+		addedAt: 0,
+		hlc: { wall: 2, counter: 0, node: "phone" },
+		sigKey: "sk-phone",
+		sig: "valid",
+		admission: { by: "laptop", sig: "valid" },
+	};
+	const gossiped = encodeRoster({ devices: [admitter, joiner], revoked: [] });
+	const idsOf = (out: string | null) => decodeRoster(out as string).devices.map((d) => d.id);
+
+	it("uses the roster it is handed, without reading storage again", async () => {
+		const withAdmitter: RosterPayload = { devices: [admitter], revoked: [] };
+		const fetchLocalRoster = vi.fn(async () => encodeRoster({ devices: [], revoked: [] }));
+
+		const out = await verifyRosterEnvelope(
+			{ roster: withAdmitter, fetchLocalRoster, wasm },
+			gossiped,
+			withAdmitter,
+		);
+
+		expect(idsOf(out)).toContain("phone");
+		expect(fetchLocalRoster).not.toHaveBeenCalled();
+	});
+
+	it("reads the roster fresh when none is handed in", async () => {
+		// Same inputs, minus the third argument: the admitter is absent from storage, so the
+		// admission has no live member behind it and the joiner is dropped.
+		const snapshot: RosterPayload = { devices: [admitter], revoked: [] };
+		const fetchLocalRoster = vi.fn(async () => encodeRoster({ devices: [], revoked: [] }));
+
+		const out = await verifyRosterEnvelope({ roster: snapshot, fetchLocalRoster, wasm }, gossiped);
+
+		expect(idsOf(out)).not.toContain("phone");
+		expect(fetchLocalRoster).toHaveBeenCalled();
+	});
+
+	it("rejects an admission by a member the handed-in roster no longer lists", async () => {
+		const revokedAdmitter: RosterPayload = { devices: [], revoked: [] };
+		const out = await verifyRosterEnvelope(
+			{ roster: revokedAdmitter, fetchLocalRoster: async () => "", wasm },
+			gossiped,
+			revokedAdmitter,
+		);
+		expect(idsOf(out)).not.toContain("phone");
+	});
+});
+
 describe("reapRevoked", () => {
 	it("closes and drops a peer no longer in the current roster; keeps active members", () => {
 		const revokedClose = vi.fn();
