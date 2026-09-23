@@ -38,16 +38,11 @@ export async function launchExtensionContext(reuseProfileDir?: string): Promise<
 	let [sw] = context.serviceWorkers();
 	if (!sw) sw = await context.waitForEvent("serviceworker", { timeout: 30_000 });
 	const extensionId = new URL(sw.url()).host;
-	// Wait out the SW's one-time storage migration: its ghost-record reap can delete a
-	// vault that is still being created (registry record written, blob not yet).
-	for (let i = 0; i < 100; i++) {
-		const settled = await sw.evaluate(async () => {
-			const r = await chrome.storage.local.get("vault.registry");
-			return r["vault.registry"] !== undefined;
-		});
-		if (settled) break;
-		await new Promise((r) => setTimeout(r, 100));
-	}
+	// No barrier against the SW's one-time migration on purpose. It used to poll for
+	// `vault.registry`, which migrateNamespacing publishes BEFORE the ghost-record reap it was
+	// meant to wait out, and which already exists on a reused profile — so it never held anything
+	// back. The reap now spares records too young to distinguish from a create in progress and
+	// re-reads before writing, so racing it is safe (see platform-extension/src/storage.ts).
 	return { context, extensionId, profileDir };
 }
 

@@ -8,7 +8,6 @@ import {
 	EMPTY_REGISTRY,
 	parseRegistry,
 	VAULT_REGISTRY_KEY,
-	type VaultRecord,
 	type VaultRegistry,
 } from "@core/vault/vault-registry";
 import { api } from "./platform-api";
@@ -98,29 +97,42 @@ async function runMigration(): Promise<void> {
 	await reapGhostRecords();
 }
 
+// A vault being created is in exactly the ghost state until Argon2id finishes deriving its slots,
+// which is seconds on a slow device. ensureMigrated() is lazy, so the reap does NOT reliably run
+// before a create starts: any storage call can be the one that triggers it. A record younger than
+// this is therefore left for a later run rather than judged now.
+const CREATE_GRACE_MS = 5 * 60_000;
+
 // A record with neither a blob, a recovery snapshot, nor a sync group is an orphan from a
 // create/join that registered the vault but never wrote it. The picker still offers it, selecting
-// it dead-ends on the first-run screen, and it can't be deleted from the UI, so reap it. Startup
-// only: a vault being created is briefly in exactly this state. Skipped entirely while a legacy
-// FSA handle exists, because that vault's record legitimately has no blob until the first unlock
-// materialises it (see readVaultBlob).
+// it dead-ends on the first-run screen, and it can't be deleted from the UI, so reap it. Skipped
+// entirely while a legacy FSA handle exists, because that vault's record legitimately has no blob
+// until the first unlock materialises it (see readVaultBlob).
 async function reapGhostRecords(): Promise<void> {
 	const reg = await readRegistry();
 	if (reg.vaults.length === 0) return;
-	const live: VaultRecord[] = [];
+	const now = Date.now();
+	const ghosts = new Set<string>();
 	for (const v of reg.vaults) {
+		if (now - v.createdAt < CREATE_GRACE_MS) continue; // too young to call: may be mid-create
 		const keys = await api.storage.local.get([
 			blobKeyFor(v.id),
 			backupKeyFor(v.id),
 			syncKeyFor("sync.group", v.id),
 		]);
-		if (Object.values(keys).some((x) => x != null)) live.push(v);
+		if (Object.values(keys).every((x) => x == null)) ghosts.add(v.id);
 	}
-	if (live.length === reg.vaults.length) return;
+	if (ghosts.size === 0) return;
 	// Only consult the handle once something would actually be dropped, so the common startup
 	// never touches IndexedDB.
 	if ((await getLegacyHandle()) !== null) return;
-	await writeRegistry({ vaults: live });
+	// Re-read rather than writing back the survey: createVault persists its record before its blob,
+	// so a vault registered while we were surveying is absent from `reg` entirely and a blind write
+	// would erase it. Drop only the ids actually confirmed dead. (Same discipline as the migration's
+	// registryExists() re-checks; storage.local has no compare-and-swap.)
+	const latest = await readRegistry();
+	const kept = latest.vaults.filter((v) => !ghosts.has(v.id));
+	if (kept.length !== latest.vaults.length) await writeRegistry({ vaults: kept });
 }
 
 async function migrateNamespacing(): Promise<void> {

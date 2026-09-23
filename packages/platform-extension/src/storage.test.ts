@@ -490,6 +490,59 @@ describe("ghost-record reaping", () => {
 		expect(reg(local).vaults.map((v) => v.id)).toEqual(["v"]);
 	});
 
+	// The reap is lazy, not startup-only: any storage call can be the one that triggers it, so it
+	// can land in the seconds a create spends in Argon2id with the record written and no blob yet.
+	it("spares a record too young to tell apart from a vault being created", async () => {
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: {
+				vaults: [
+					{ id: "creating", label: "", createdAt: Date.now() - 2_000 },
+					{ id: "stale", label: "", createdAt: 1 },
+				],
+			},
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["creating"]);
+	});
+
+	// createVault persists the record before the blob, so a vault registered while the reap is
+	// surveying is absent from the copy it read. Writing that copy back would erase it.
+	it("keeps a vault registered while the survey was running", async () => {
+		const local = stubChrome({
+			[VAULT_REGISTRY_KEY]: { vaults: [{ id: "ghost", label: "", createdAt: 1 }] },
+		});
+		// The survey's per-vault read is the await a concurrent createVault slips through.
+		const realGet = chrome.storage.local.get;
+		let raced = false;
+		vi.stubGlobal("chrome", {
+			storage: {
+				local: {
+					...chrome.storage.local,
+					get: async (keys: string | string[]) => {
+						const out = await realGet(keys);
+						if (!raced && String(keys).includes("ghost")) {
+							raced = true;
+							local[VAULT_REGISTRY_KEY] = {
+								vaults: [
+									{ id: "ghost", label: "", createdAt: 1 },
+									{ id: "fresh", label: "", createdAt: Date.now() },
+								],
+							};
+						}
+						return out;
+					},
+				},
+			},
+		});
+		const storage = await loadStorage();
+		await storage.hasVaultHandle();
+
+		expect(raced).toBe(true);
+		expect(reg(local).vaults.map((v) => v.id)).toEqual(["fresh"]);
+	});
+
 	// A file-backed vault's record legitimately has no blob until the first unlock materialises it.
 	it("reaps nothing while a legacy FSA handle exists", async () => {
 		const local = stubChrome({
