@@ -59,8 +59,17 @@ class FakePeerConnection {
 }
 
 const realSetTimeout = globalThis.setTimeout;
+const hop = () => new Promise((r) => realSetTimeout(r, 0));
+/** Give pending async work a few turns. A fixed budget, so it proves a count did NOT grow. */
 const settle = async (): Promise<void> => {
-	for (let i = 0; i < 5; i++) await new Promise((r) => realSetTimeout(r, 0));
+	for (let i = 0; i < 5; i++) await hop();
+};
+/** Wait for something to happen, bounded. The chain behind a delivered event is several awaits
+ * deep (decrypt -> verify -> setup), and on a loaded machine it outruns any fixed number of turns:
+ * a CI run failed here reading a status that simply had not been appended yet. Assert AFTER this,
+ * so a genuinely wrong count still fails on the expect rather than on the wait. */
+const settleUntil = async (ok: () => boolean): Promise<void> => {
+	for (let i = 0; i < 500 && !ok(); i++) await hop();
 };
 
 async function tick(ms: number): Promise<void> {
@@ -124,15 +133,18 @@ describe("a peer marked known with nothing behind it", () => {
 		await tick(0);
 
 		await deliverHello(sockets[0]!);
+		await settleUntil(() => setupFailures() === 1);
 		expect(setupFailures()).toBe(1);
 
-		// Every later hello is a duplicate discovery, so nothing is attempted.
+		// Every later hello is a duplicate discovery, so nothing is attempted. deliverHello's own
+		// settle is the budget a second attempt would have had to show up in.
 		await deliverHello(sockets[0]!);
 		expect(setupFailures()).toBe(1);
 
 		await tick(31_000);
 		await deliverHello(sockets[0]!);
 
+		await settleUntil(() => setupFailures() === 2);
 		expect(setupFailures()).toBe(2);
 	});
 });
