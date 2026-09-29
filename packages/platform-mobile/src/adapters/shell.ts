@@ -6,6 +6,7 @@ import type { OptionsScreen, ShellAdapter, Target } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
 import { requestStoreReview } from "../app-review";
 import { armFilePickGrace } from "../auto-lock";
+import { consumePendingAssociations as drainPendingAssociations } from "../autofill-pending-assoc";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
 import { scanQr } from "../qr-scanner";
 import {
@@ -73,6 +74,7 @@ export const mobileShell: ShellAdapter = {
 	// can't write the vault, so it hands them off (iOS App Group / Android file) and the app drains
 	// them here on launch. drainPendingPasskeys reads the right per-platform source.
 	consumePendingPasskeys: drainPendingPasskeys,
+	consumePendingAssociations: drainPendingAssociations,
 	// On mobile this is a camera scan (the "active tab" concept doesn't apply): used for
 	// sync pairing codes and TOTP otpauth:// QRs. ../qr-scanner picks the per-platform
 	// scanner and holds the auto-lock guard the permission prompt needs.
