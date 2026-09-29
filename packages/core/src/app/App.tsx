@@ -1,6 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
+import { usePendingAssociations } from "../hooks/usePendingAssociations";
 import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
@@ -77,6 +78,8 @@ function InnerApp({
 
 	// Mobile: persist passkeys the native provider minted during a sign-in registration.
 	usePendingPasskeys();
+
+	usePendingAssociations();
 
 	// Stash the current route so a closed-then-reopened popup resumes it (restore in the
 	// platform boot, gated on an unlocked session). Skip the "/" unlock/redirect route, so a

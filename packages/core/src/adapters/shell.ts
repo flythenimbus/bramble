@@ -9,6 +9,15 @@ interface CurrentTabLogin {
 	subdomainMatch?: SubdomainMatchMode;
 }
 
+/** One app/site association a confirmed "fill and save" pick handed over. */
+export interface PendingAssociation {
+	entryId: string;
+	/** `androidapp://<package>` for a native-app caller, `https://<host>` for a web one. */
+	url: string;
+	vaultId: string;
+	at: number;
+}
+
 /** State carried from the originating popup into a freshly-opened detached window so the pop-out lands on the same route. */
 export interface PopOutHandoff {
 	/** Router href to restore, e.g. "/vault/new/card". */
@@ -140,6 +149,8 @@ export interface ShellAdapter {
 	 * there's no native provider. See docs/passkey-provider.md.
 	 */
 	consumePendingPasskeys?(): Promise<PasskeyCredential[]>;
+	/** Mobile only: drain the confirmed "fill and save" associations (cleared on read). */
+	consumePendingAssociations?(): Promise<PendingAssociation[]>;
 	/**
 	 * Capture the active page and decode a single QR code, returning the decoded text (typically `otpauth://`) or null.
 	 * Used to import a TOTP key off a site's 2FA setup page.
