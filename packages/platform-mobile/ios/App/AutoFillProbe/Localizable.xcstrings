@@ -21,6 +21,12 @@
             "state": "translated",
             "value": "Ajouter %@ à «%@» pour que Bramble le propose ici automatiquement ?"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungere %@ a “%@” così Bramble lo propone qui automaticamente?"
+          }
         }
       }
     },
@@ -484,6 +490,12 @@
             "state": "translated",
             "value": "Préremplir et enregistrer"
           }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compila e salva"
+          }
         }
       }
     },
@@ -631,6 +643,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Préremplir uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compila soltanto"
           }
         }
       }
@@ -969,6 +987,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enregistrer dans Bramble ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvare in Bramble?"
           }
         }
       }
