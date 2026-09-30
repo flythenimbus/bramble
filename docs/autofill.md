@@ -84,6 +84,14 @@ Before that, the package name was indexed as if it were a hostname:
 persisted and counted toward the locked-state "you probably have a login here"
 hint (issue #46).
 
+The browser match index still ignores them; what changed is the Android **native**
+matcher: `VaultReader.appsOf` projects an entry's `androidapp://` / `android://` app
+ids and `BrambleAutofillService` matches a native-app caller by **exact package
+equality** (the "fill and save" flow records such a URI on a confirmed pick; see
+docs/mobile-port.md). Unchanged: a package is never reversed into a domain, other
+platforms' schemes are not Android identities, and the extension and iOS provider
+never see app URIs.
+
 ### Why a package name is never turned into a domain
 
 Reversing a package name looks like it would fix cross-platform matching:
@@ -114,6 +122,11 @@ real registrable domain, the entry editor should offer to add that website —
 URL and the existing matcher takes over, with no new matching path, no network
 call, and the guess visible to the person who can confirm it. `appIdFromUri`
 exists for this and has no other caller.
+
+Distinct from the two built app-URI features: the native matcher reads them for
+exact package equality, and "fill and save" (mobile only; docs/mobile-port.md)
+records one on a confirmed pick. This editor feature would offer a reversed-package
+website guess for the user to confirm, at edit time.
 
 ## The fill model: secrets fetched only on explicit pick
 

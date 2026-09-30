@@ -574,6 +574,30 @@ so the toggle and its "Sites you've muted" list only render where the corner-pro
 Wiring Android save means setting `supportsSaveCapture: true` in the mobile shell and routing the
 native `onSaveRequest` capture into the existing `offerToSave` / `neverSaveSites` prefs.
 
+### "Fill and save": saving the app/site association on pick (Android + iOS)
+
+When a pick from the searchable list does not match the fill context and the caller has a
+trustworthy identifier, the provider offers to save it onto the picked entry: a verified
+browser's webDomain (`https://<host>`) or a native caller's package (`androidapp://<package>`,
+Bitwarden's convention). The prompt shows the caller's app label or web host; the OS-verified
+identifier is what gets saved. Untrusted callers and already-matching entries get no prompt,
+and declining ("Just fill") never blocks the fill.
+
+The provider never writes the vault. It stashes a VEK-encrypted **PendingAssociation**
+(entry id, URI, vault id) - Android in an app-private file (`PendingAssociation.kt`), iOS in
+the App Group via `AutofillBridge.consumePendingAssociations` - and the app drains it on
+unlock/foreground (`usePendingAssociations`), drops records from other vaults, archived or
+deleted entries and duplicate targets, and applies what survives through the ordinary `update`
+mutation. The Android matcher then matches the caller's package against the entry's
+`androidapp://` / `android://` app ids by exact equality (never reversed into a domain; app
+URIs stay out of the browser index). iOS needs no new matching: the saved `https://` URL flows
+through the existing hostname filter and QuickType identities.
+
+Distinct from the Android capture-save (`onSaveRequest` -> `PendingSave`, newly typed
+credentials, untouched) and the planned entry-editor "offer the link" feature
+(docs/autofill.md, a website suggested for an app URI at edit time): this records where a
+confirmed fill just happened.
+
 ### Passkey hosting is a deferred future feature
 
 Two passkey concerns are easy to conflate, and **both are out of v1 scope**:

@@ -122,6 +122,11 @@ Two consequences worth stating, because both have been got wrong:
 
 ## Autofill detection
 
+- **PendingAssociation** — the mobile "fill and save" handoff: a confirmed pick of a
+  non-matching login, recorded VEK-encrypted and vault-scoped for the main app to
+  drain on unlock and apply through the ordinary `update` mutation (the provider
+  never writes the vault, like PendingSave). `androidapp://<package>` for a native
+  caller, `https://<host>` for a browser; docs/mobile-port.md.
 - **PageFieldModel** — the parsed, in-memory description of a web page's fillable
   fields: the login fields (username/password/new-password), the card fields, and
   the one-time-code inputs, holding live element references. Produced once by
