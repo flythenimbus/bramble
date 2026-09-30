@@ -39,6 +39,13 @@
     <string name="af_ds_search_vault">Search your vault</string>
     <string name="af_ds_show_all">Show all</string>
 
+    <!-- "Fill and save" association prompt (AutofillUnlockActivity) -->
+    <string name="af_assoc_title">Save to Bramble?</string>
+    <string name="af_assoc_message_app">Add the %1$s app to “%2$s” so Bramble offers it here automatically?</string>
+    <string name="af_assoc_message_web">Add %1$s to “%2$s” so Bramble offers it here automatically?</string>
+    <string name="af_assoc_save">Fill and save</string>
+    <string name="af_assoc_just">Just fill</string>
+
     <!-- Foreground-service notification while a request finishes (TransferService) -->
     <string name="transfer_channel_name">Uploads</string>
     <string name="transfer_notification_title">Finishing an upload</string>

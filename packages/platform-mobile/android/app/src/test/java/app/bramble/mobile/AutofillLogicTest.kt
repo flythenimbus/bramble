@@ -47,6 +47,58 @@ class AutofillLogicTest {
         assertEquals(emptyList<String>(), searchTokens("   "))
     }
 
+    // --- app-URI projection + native-app matching ("fill and save") ---
+
+    @Test
+    fun `appIdsOf projects Android app ids from entry URLs, both conventions`() {
+        assertEquals(
+            listOf("com.instagram.android", "com.example.app"),
+            VaultReader.appIdsOf(
+                listOf(
+                    "androidapp://com.instagram.android",
+                    "https://instagram.com",
+                    "android://sha256abc@com.example.app",
+                    "android://sha256abc@com.example.app/",
+                    "iosapp://com.example.app",
+                    "bare.host",
+                    "",
+                ),
+            ),
+        )
+        assertEquals(
+            listOf("Case.Sensitive.Pkg"),
+            VaultReader.appIdsOf(listOf("ANDROIDAPP://Case.Sensitive.Pkg")),
+        )
+        assertEquals(emptyList<String>(), VaultReader.appIdsOf(emptyList()))
+    }
+
+    @Test
+    fun `app matching is exact package equality, never a domain inference`() {
+        val entry = login("Instagram", "me@x.y", "instagram.com")
+        assertFalse(VaultReader.matchesApp(entry, "com.instagram.android"))
+        val associated = AutofillLogin(
+            "id-2", "Instagram", "me@x.y", "pw", null,
+            listOf("instagram.com"), listOf("com.instagram.android"),
+        )
+        assertTrue(VaultReader.matchesApp(associated, "com.instagram.android"))
+        assertFalse(VaultReader.matchesApp(associated, "com.instagram.evil"))
+        assertFalse(VaultReader.matchesApp(associated, "android.instagram.com"))
+        assertFalse(VaultReader.matchesApp(associated, ""))
+    }
+
+    @Test
+    fun `combined matching unions hosts and app ids, and an empty context matches nothing`() {
+        // android.net.Uri isn't mocked on the host JVM, so only the empty-hosts branch runs.
+        val associated = AutofillLogin(
+            "id-1", "Instagram", "me@x.y", "pw", null,
+            listOf("instagram.com"), listOf("com.instagram.android"),
+        )
+        assertTrue(VaultReader.matches(associated, emptyList(), "com.instagram.android"))
+        assertFalse(VaultReader.matches(associated, emptyList(), null))
+        val hostOnly = login("Instagram", "me@x.y", "instagram.com")
+        assertFalse(VaultReader.matches(hostOnly, emptyList(), "com.instagram.android"))
+    }
+
 
     // A real VLT1 v2 vault blob (a password slot + a recovery slot + an empty entries
     // payload), base64-encoded. Decoded structure is asserted below.

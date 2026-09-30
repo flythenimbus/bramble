@@ -12,6 +12,13 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
+        <!-- So the "fill and save" prompt can show the caller's real app name: without this,
+             package visibility filtering hides non-browser packages and the label falls back
+             to the raw package. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application

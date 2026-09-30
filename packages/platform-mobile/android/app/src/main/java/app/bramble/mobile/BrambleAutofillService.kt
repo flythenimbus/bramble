@@ -61,6 +61,8 @@ class BrambleAutofillService : AutofillService() {
         val hosts =
             if (trustedBrowser) parsed.requestedHosts(isTrustedBrowser = true)
             else DigitalAssetLinks.verifiedDomainsFor(this, parsed.packageName)
+        val matchPackage = if (trustedBrowser) null else parsed.packageName
+        val association = associationFor(parsed, trustedBrowser)
         // Page-side diagnostics only (field counts + the page's own domain/package). Never
         // logs vault data.
         Log.d(
@@ -74,7 +76,7 @@ class BrambleAutofillService : AutofillService() {
             return
         }
         val response = try {
-            buildResponse(request, parsed, hosts)
+            buildResponse(request, parsed, hosts, matchPackage, association)
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "onFillRequest failed", e)
             null
@@ -86,12 +88,14 @@ class BrambleAutofillService : AutofillService() {
         request: FillRequest,
         parsed: ParsedStructure,
         hosts: List<String>,
+        matchPackage: String?,
+        association: Association?,
     ): FillResponse {
         val inline = inlineContext(request)
         val builder = FillResponse.Builder()
         val session = KeepUnlockedStore.load(this)
-        val filled = session != null && addDirectDatasets(builder, parsed, hosts, session, inline)
-        if (!filled) addLockedDataset(builder, parsed, hosts, inline)
+        val filled = session != null && addDirectDatasets(builder, parsed, hosts, matchPackage, association, session, inline)
+        if (!filled) addLockedDataset(builder, parsed, hosts, matchPackage, association, inline)
         addSaveInfo(builder, parsed)
         return builder.build()
     }
@@ -103,6 +107,8 @@ class BrambleAutofillService : AutofillService() {
         builder: FillResponse.Builder,
         parsed: ParsedStructure,
         hosts: List<String>,
+        matchPackage: String?,
+        association: Association?,
         vekB64: String,
         inline: InlineContext?,
     ): Boolean {
@@ -113,7 +119,7 @@ class BrambleAutofillService : AutofillService() {
             if (wasLocked) lock()
             KeepUnlockedStore.save(this, vekB64) // slide the window forward
 
-            val matches = logins.filter { VaultReader.matches(it, hosts) }
+            val matches = logins.filter { VaultReader.matches(it, hosts, matchPackage) }
             val now = System.currentTimeMillis()
             for (login in matches) {
                 builder.addDataset(
@@ -123,7 +129,7 @@ class BrambleAutofillService : AutofillService() {
                     )
                 )
             }
-            builder.addDataset(showAllDataset(parsed, hosts, inline))
+            builder.addDataset(showAllDataset(parsed, hosts, matchPackage, association, inline))
             true
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "directFill failed; falling back to auth", e)
@@ -137,25 +143,33 @@ class BrambleAutofillService : AutofillService() {
         builder: FillResponse.Builder,
         parsed: ParsedStructure,
         hosts: List<String>,
+        matchPackage: String?,
+        association: Association?,
         inline: InlineContext?,
     ) {
         val pres = Datasets.presentation(this, getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val inlinePres = inline?.next(getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val dataset = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(dataset, id, pres, inlinePres)
-        dataset.setAuthentication(authSender(parsed, hosts, showAll = false))
+        dataset.setAuthentication(authSender(parsed, hosts, matchPackage, association, showAll = false))
         builder.addDataset(dataset.build())
     }
 
     // A "Show all logins" entry: authenticates (or reuses the live session) into the full
     // searchable list. Used in the unlocked dropdown so the user can reach non-matching logins.
     @Suppress("DEPRECATION")
-    private fun showAllDataset(parsed: ParsedStructure, hosts: List<String>, inline: InlineContext?): Dataset {
+    private fun showAllDataset(
+        parsed: ParsedStructure,
+        hosts: List<String>,
+        matchPackage: String?,
+        association: Association?,
+        inline: InlineContext?,
+    ): Dataset {
         val pres = Datasets.presentation(this, getString(R.string.af_ds_show_all_logins), getString(R.string.af_ds_search_vault))
         val inlinePres = inline?.next(getString(R.string.af_ds_show_all), getString(R.string.af_ds_search_vault))
         val builder = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(builder, id, pres, inlinePres)
-        builder.setAuthentication(authSender(parsed, hosts, showAll = true))
+        builder.setAuthentication(authSender(parsed, hosts, matchPackage, association, showAll = true))
         return builder.build()
     }
 
@@ -192,7 +206,13 @@ class BrambleAutofillService : AutofillService() {
 
     // PendingIntent into the unlock Activity, carrying the field ids + requested hosts so the
     // Activity can build the chosen Dataset. Mutable so the framework can attach its extras.
-    private fun authSender(parsed: ParsedStructure, hosts: List<String>, showAll: Boolean): IntentSender {
+    private fun authSender(
+        parsed: ParsedStructure,
+        hosts: List<String>,
+        matchPackage: String?,
+        association: Association?,
+        showAll: Boolean,
+    ): IntentSender {
         val intent = Intent(this, AutofillUnlockActivity::class.java).apply {
             putParcelableArrayListExtra(AutofillUnlockActivity.EXTRA_USERNAME_IDS, ArrayList(parsed.usernameIds))
             putParcelableArrayListExtra(AutofillUnlockActivity.EXTRA_PASSWORD_IDS, ArrayList(parsed.passwordIds))
@@ -200,6 +220,11 @@ class BrambleAutofillService : AutofillService() {
             putStringArrayListExtra(AutofillUnlockActivity.EXTRA_HOSTS, ArrayList(hosts))
             putExtra(AutofillUnlockActivity.EXTRA_LABEL, hosts.firstOrNull() ?: "")
             putExtra(AutofillUnlockActivity.EXTRA_SHOW_ALL, showAll)
+            matchPackage?.let { putExtra(AutofillUnlockActivity.EXTRA_MATCH_PACKAGE, it) }
+            association?.let {
+                putExtra(AutofillUnlockActivity.EXTRA_ASSOC_URI, it.uri)
+                putExtra(AutofillUnlockActivity.EXTRA_ASSOC_LABEL, it.label)
+            }
         }
         return PendingIntent.getActivity(this, requestCode.getAndIncrement(), intent, pendingIntentFlags()).intentSender
     }
@@ -244,6 +269,28 @@ class BrambleAutofillService : AutofillService() {
             parsed.webDomains.firstOrNull()?.let { return VaultReader.normalizeHost(it) }
         }
         return parsed.packageName ?: ""
+    }
+
+    /** The association a confirmed "fill and save" records: `uri` is what gets saved, `label` is what the prompt shows. */
+    private class Association(val uri: String, val label: String)
+
+    // A verified browser vouches for its webDomain; any other caller's identity is its
+    // package. The label is display only (the app's own name / the host); what lands on the
+    // entry is the OS-verified package.
+    private fun associationFor(parsed: ParsedStructure, trustedBrowser: Boolean): Association? {
+        if (trustedBrowser) {
+            val host = parsed.webDomains.firstOrNull()?.let { VaultReader.normalizeHost(it) }
+            return if (host.isNullOrEmpty()) null else Association("https://$host", host)
+        }
+        val pkg = parsed.packageName ?: return null
+        if (pkg.isEmpty() || pkg == packageName) return null
+        val label = try {
+            val info = packageManager.getApplicationInfo(pkg, 0)
+            packageManager.getApplicationLabel(info).toString().ifEmpty { pkg }
+        } catch (e: Exception) {
+            pkg
+        }
+        return Association("androidapp://$pkg", label)
     }
 
     // The user confirmed "Save to Bramble?". Capture the submitted username + password and
