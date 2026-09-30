@@ -1,6 +1,10 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Add %@ to “%@” so Bramble offers it here automatically?": {
+      "extractionState": "manual",
+      "localizations": {}
+    },
     "All items": {
       "localizations": {
         "de": {
@@ -436,6 +440,16 @@
         }
       }
     },
+    "Fill and save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fill and save"
+          }
+        }
+      }
+    },
     "For %@": {
       "localizations": {
         "de": {
@@ -552,6 +566,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Itens (%lld)"
+          }
+        }
+      }
+    },
+    "Just fill": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just fill"
           }
         }
       }
@@ -862,6 +886,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Risultati (%lld)"
+          }
+        }
+      }
+    },
+    "Save to Bramble?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save to Bramble?"
           }
         }
       }

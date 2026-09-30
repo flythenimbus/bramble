@@ -270,6 +270,48 @@ private struct CredentialListView: View {
 	}
 }
 
+// "Fill and save" confirmation, styled like the app's own cards rather than a system alert.
+private struct AssociationPromptView: View {
+	let cred: Cred
+	let site: String
+	let onConfirm: () -> Void
+	let onDecline: () -> Void
+
+	var body: some View {
+		ZStack {
+			Theme.background.opacity(0.88).ignoresSafeArea()
+			VStack(alignment: .leading, spacing: 18) {
+				Text(loc("Save to Bramble?"))
+					.font(.system(size: 19, weight: .semibold)).foregroundColor(Theme.foreground)
+				Text(loc("Add \(site) to “\(cred.name)” so Bramble offers it here automatically?"))
+					.font(.system(size: 15)).foregroundColor(Theme.foreground)
+					.fixedSize(horizontal: false, vertical: true)
+				Button(action: onConfirm) {
+					Text(loc("Fill and save")).font(.system(size: 15, weight: .semibold))
+						.frame(maxWidth: .infinity).padding(.vertical, 12)
+						.foregroundColor(.black).background(Theme.foreground)
+						.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+				}
+				.buttonStyle(.plain)
+				Button(action: onDecline) {
+					Text(loc("Just fill")).font(.system(size: 15, weight: .medium))
+						.frame(maxWidth: .infinity).padding(.vertical, 12)
+						.foregroundColor(Theme.foreground)
+						.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+						.overlay(
+							RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(
+								Theme.border, lineWidth: 1))
+				}
+				.buttonStyle(.plain)
+			}
+			.padding(20).background(Theme.card)
+			.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+			.overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.border, lineWidth: 1))
+			.padding(.horizontal, 24)
+		}
+	}
+}
+
 // --- passkey picker (only when several stored passkeys match one get() request) ---
 
 private struct PasskeyPickerView: View {
@@ -1015,9 +1057,45 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	private func select(_ cred: Cred) {
 		if pendingOneTimeCode {
 			if #available(iOS 18.0, *) { completeOneTimeCode(cred) } else { cancel(.failed) }
+		} else if let site = associationHost(), !matchesRequested(cred) {
+			promptToAssociate(cred, site: site)
 		} else {
 			complete(cred)
 		}
+	}
+
+	private func associationHost() -> String? {
+		guard let host = pendingHosts.first, !host.isEmpty else { return nil }
+		return host
+	}
+
+	private func promptToAssociate(_ cred: Cred, site: String) {
+		host(
+			AssociationPromptView(
+				cred: cred, site: site,
+				onConfirm: { [weak self] in
+					self?.stashPendingAssociation(cred, uri: "https://\(site)")
+					self?.complete(cred)
+				},
+				onDecline: { [weak self] in self?.complete(cred) }))
+	}
+
+	private func stashPendingAssociation(_ cred: Cred, uri: String) {
+		guard let vaultId = bundleVaultId(),
+			let json = try? JSONSerialization.data(withJSONObject: [
+				"entryId": cred.recordId,
+				"url": uri,
+				"vaultId": vaultId,
+				"at": Int(Date().timeIntervalSince1970 * 1000),
+			]),
+			let plaintext = String(data: json, encoding: .utf8),
+			let enc = try? encryptWithVek(plaintext: plaintext)
+		else { return }
+		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+		var pending =
+			(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
+		pending.append(["iv": enc.iv, "ciphertext": enc.ciphertext])
+		defaults?.set(pending, forKey: BrambleVault.pendingAssociationsKey)
 	}
 
 	private func complete(_ cred: Cred) {
