@@ -27,6 +27,12 @@
             "state": "translated",
             "value": "Aggiungere %@ a “%@” così Bramble lo propone qui automaticamente?"
           }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar %@ a “%@” para o Bramble oferecer aqui automaticamente?"
+          }
         }
       }
     },
@@ -496,6 +502,12 @@
             "state": "translated",
             "value": "Compila e salva"
           }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preencher e salvar"
+          }
         }
       }
     },
@@ -649,6 +661,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Compila soltanto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas preencher"
           }
         }
       }
@@ -993,6 +1011,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Salvare in Bramble?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvar no Bramble?"
           }
         }
       }
