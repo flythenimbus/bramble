@@ -3,7 +3,14 @@
   "strings": {
     "Add %@ to “%@” so Bramble offers it here automatically?": {
       "extractionState": "manual",
-      "localizations": {}
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ zu „%@” hinzufügen, damit Bramble es hier automatisch anbietet?"
+          }
+        }
+      }
     },
     "All items": {
       "localizations": {
@@ -442,6 +449,12 @@
     },
     "Fill and save": {
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausfüllen und speichern"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -572,6 +585,12 @@
     },
     "Just fill": {
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur ausfüllen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -892,6 +911,12 @@
     },
     "Save to Bramble?": {
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Bramble speichern?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
