@@ -580,18 +580,22 @@ When a pick from the searchable list does not match the fill context and the cal
 trustworthy identifier, the provider offers to save it onto the picked entry: a verified
 browser's webDomain (`https://<host>`) or a native caller's package (`androidapp://<package>`,
 Bitwarden's convention). The prompt shows the caller's app label or web host; the OS-verified
-identifier is what gets saved. Untrusted callers and already-matching entries get no prompt,
-and declining ("Just fill") never blocks the fill.
+identifier is what gets saved. Browsers off the trusted list get neither a prompt nor package
+matching (a browser's package is not its pages' identity), already-matching entries get no
+prompt, and declining ("Just fill") never blocks the fill.
 
 The provider never writes the vault. It stashes a VEK-encrypted **PendingAssociation**
-(entry id, URI, vault id) - Android in an app-private file (`PendingAssociation.kt`), iOS in
-the App Group via `AutofillBridge.consumePendingAssociations` - and the app drains it on
-unlock/foreground (`usePendingAssociations`), drops records from other vaults, archived or
-deleted entries and duplicate targets, and applies what survives through the ordinary `update`
-mutation. The Android matcher then matches the caller's package against the entry's
-`androidapp://` / `android://` app ids by exact equality (never reversed into a domain; app
-URIs stay out of the browser index). iOS needs no new matching: the saved `https://` URL flows
-through the existing hostname filter and QuickType identities.
+(entry id, URI, label, vault id) - Android in an app-private file (`PendingAssociation.kt`),
+iOS in the App Group via `AutofillBridge.consumePendingAssociations` - and the app drains it
+on unlock and foreground through `usePendingHandoffs`, serialized with the passkey drain so
+the two whole-vault writes cannot race. Archived or deleted entries and duplicate targets are
+dropped; records sealed under another vault's VEK are re-stashed until that vault is the one
+unlocked. What survives is applied through the ordinary `update` mutation. The Android matcher
+then matches the caller's package against the entry's `androidapp://` / `android://` app ids
+by exact equality, and an `android://<hash>@<package>` pin must additionally match the
+caller's signing certificate (never reversed into a domain; app URIs stay out of the browser
+index). iOS needs no new matching: the saved `https://` URL flows through the existing
+hostname filter and QuickType identities.
 
 Distinct from the Android capture-save (`onSaveRequest` -> `PendingSave`, newly typed
 credentials, untouched) and the planned entry-editor "offer the link" feature

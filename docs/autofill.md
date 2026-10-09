@@ -85,12 +85,13 @@ persisted and counted toward the locked-state "you probably have a login here"
 hint (issue #46).
 
 The browser match index still ignores them; what changed is the Android **native**
-matcher: `VaultReader.appsOf` projects an entry's `androidapp://` / `android://` app
-ids and `BrambleAutofillService` matches a native-app caller by **exact package
-equality** (the "fill and save" flow records such a URI on a confirmed pick; see
-docs/mobile-port.md). Unchanged: a package is never reversed into a domain, other
-platforms' schemes are not Android identities, and the extension and iOS provider
-never see app URIs.
+matcher: the entry's `androidapp://` / `android://` app ids are projected and a
+native-app caller matches by **exact package equality** (the "fill and save" flow
+records such a URI on a confirmed pick; see docs/mobile-port.md). An
+`android://<hash>@<package>` URL additionally pins the signing cert, and browsers
+off the trusted list get no package matching at all. Unchanged: a package is never
+reversed into a domain, other platforms' schemes are not Android identities, and the
+extension and iOS provider never see app URIs.
 
 ### Why a package name is never turned into a domain
 
