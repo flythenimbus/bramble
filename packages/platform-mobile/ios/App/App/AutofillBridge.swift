@@ -20,7 +20,9 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingPasskeys", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "restorePendingPasskeys", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingAssociations", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "restorePendingAssociations", returnType: CAPPluginReturnPromise),
 	]
 
 	// Shared identifiers (App Group, Keychain group, keys) live in BrambleVault, compiled
@@ -141,6 +143,32 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 			(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
 		defaults?.removeObject(forKey: BrambleVault.pendingAssociationsKey)
 		call.resolve(["pending": pending])
+	}
+
+	// Put drained records back when the app could not decrypt them (they belong to
+	// whichever vault was active at the pick). Merged with any records a fill wrote after
+	// the drain, so nothing is lost.
+	@objc func restorePendingAssociations(_ call: CAPPluginCall) {
+		let keep = (call.getArray("keep") as? [[String: String]]) ?? []
+		if !keep.isEmpty {
+			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+			let existing =
+				(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
+			defaults?.set(existing + keep, forKey: BrambleVault.pendingAssociationsKey)
+		}
+		call.resolve()
+	}
+
+	// Passkey handoff counterpart of the above.
+	@objc func restorePendingPasskeys(_ call: CAPPluginCall) {
+		let keep = (call.getArray("keep") as? [[String: String]]) ?? []
+		if !keep.isEmpty {
+			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
+			let existing =
+				(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
+			defaults?.set(existing + keep, forKey: BrambleVault.pendingPasskeysKey)
+		}
+		call.resolve()
 	}
 
 	// Erase every trace of the vault the provider holds. Called when a vault is deleted, so it

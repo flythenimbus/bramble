@@ -1074,17 +1074,18 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			AssociationPromptView(
 				cred: cred, site: site,
 				onConfirm: { [weak self] in
-					self?.stashPendingAssociation(cred, uri: "https://\(site)")
+					self?.stashPendingAssociation(cred, uri: "https://\(site)", label: site)
 					self?.complete(cred)
 				},
 				onDecline: { [weak self] in self?.complete(cred) }))
 	}
 
-	private func stashPendingAssociation(_ cred: Cred, uri: String) {
+	private func stashPendingAssociation(_ cred: Cred, uri: String, label: String) {
 		guard let vaultId = bundleVaultId(),
 			let json = try? JSONSerialization.data(withJSONObject: [
 				"entryId": cred.recordId,
 				"url": uri,
+				"label": label,
 				"vaultId": vaultId,
 				"at": Int(Date().timeIntervalSince1970 * 1000),
 			]),
