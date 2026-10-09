@@ -1,22 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { stat, readFile, deleteFile, platform, bridgeConsume } = vi.hoisted(() => ({
+const { stat, readFile, writeFile, deleteFile, platform, consume, restore } = vi.hoisted(() => ({
 	stat: vi.fn(),
 	readFile: vi.fn(),
+	writeFile: vi.fn().mockResolvedValue(undefined),
 	deleteFile: vi.fn().mockResolvedValue(undefined),
 	platform: vi.fn(),
-	bridgeConsume: vi.fn(),
+	consume: vi.fn(),
+	restore: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@capacitor/core", () => ({
 	Capacitor: { getPlatform: () => platform() },
-	registerPlugin: () => ({ consumePendingAssociations: (...a: unknown[]) => bridgeConsume(...a) }),
+	registerPlugin: () => ({
+		consumePendingAssociations: consume,
+		restorePendingAssociations: restore,
+	}),
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
 	Directory: { Data: "DATA" },
 	Encoding: { UTF8: "utf8" },
-	Filesystem: { stat, readFile, deleteFile },
+	Filesystem: { stat, readFile, writeFile, deleteFile },
 }));
 
 const decryptWithVek = vi.fn();
@@ -24,8 +29,7 @@ vi.mock("./adapters/crypto", () => ({ mobileCrypto: { decryptWithVek } }));
 
 const { consumePendingAssociations } = await import("./autofill-pending-assoc");
 
-const REC = (o: object) => JSON.stringify(o);
-const enc = (i: number, payload: string) => ({ iv: `iv${i}`, ciphertext: btoa(payload) });
+const enc = (payload: string) => ({ iv: "iv", ciphertext: btoa(payload) });
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -39,30 +43,37 @@ describe("consumePendingAssociations (android)", () => {
 		expect(readFile).not.toHaveBeenCalled();
 	});
 
-	it("drains, decrypts and deletes the file", async () => {
+	it("drains, decrypts (with label) and deletes the file", async () => {
 		stat.mockResolvedValue(undefined);
-		const payload = JSON.stringify([
-			enc(1, REC({ entryId: "e1", url: "androidapp://com.example", vaultId: "v1", at: 5 })),
-		]);
-		readFile.mockResolvedValue({ data: payload });
-		decryptWithVek.mockResolvedValue(
-			REC({ entryId: "e1", url: "androidapp://com.example", vaultId: "v1", at: 5 }),
-		);
+		const payload = JSON.stringify({
+			entryId: "e1",
+			url: "androidapp://com.example",
+			label: "Example",
+			vaultId: "v1",
+			at: 5,
+		});
+		readFile.mockResolvedValue({ data: JSON.stringify([enc(payload)]) });
+		decryptWithVek.mockResolvedValue(payload);
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e1", url: "androidapp://com.example", vaultId: "v1", at: 5 },
+			{ entryId: "e1", url: "androidapp://com.example", label: "Example", vaultId: "v1", at: 5 },
 		]);
 		expect(deleteFile).toHaveBeenCalled();
+		expect(writeFile).not.toHaveBeenCalled();
 	});
 
-	it("skips records it cannot decrypt (another vault's VEK) without wedging the drain", async () => {
+	it("re-stashes records another vault sealed, without losing new ones", async () => {
 		stat.mockResolvedValue(undefined);
-		readFile.mockResolvedValue({
+		const ok = enc(
+			JSON.stringify({ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2", at: 6 }),
+		);
+		const foreign = enc("from vault A");
+		readFile.mockResolvedValueOnce({ data: JSON.stringify([foreign, ok]) }).mockResolvedValueOnce({
 			data: JSON.stringify([
-				enc(1, "from vault A"),
-				enc(2, REC({ entryId: "e2", url: "https://b.se", vaultId: "v2", at: 6 })),
+				enc(JSON.stringify({ entryId: "new", url: "https://n.se", vaultId: "v2", at: 7 })),
 			]),
 		});
+		writeFile.mockResolvedValue(undefined);
 		decryptWithVek.mockImplementation(async (_iv: string, ct: string) => {
 			const s = atob(ct);
 			if (s.includes("vault A")) throw new Error("aead failure");
@@ -70,16 +81,20 @@ describe("consumePendingAssociations (android)", () => {
 		});
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e2", url: "https://b.se", vaultId: "v2", at: 6 },
+			{ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2", at: 6 },
 		]);
+		const wrote = JSON.parse(String(writeFile.mock.calls[0]![0]!.data));
+		expect(wrote).toHaveLength(2);
+		expect(wrote[0]).toEqual(foreign);
+		expect(JSON.parse(atob(wrote[1].ciphertext)).entryId).toBe("new");
 	});
 
 	it("skips records with missing fields and drops a corrupt file entirely", async () => {
 		stat.mockResolvedValue(undefined);
 		readFile.mockResolvedValue({
-			data: JSON.stringify([enc(1, REC({ entryId: "e1" }))]),
+			data: JSON.stringify([enc(JSON.stringify({ entryId: "e1" }))]),
 		});
-		decryptWithVek.mockResolvedValue(REC({ entryId: "e1" }));
+		decryptWithVek.mockResolvedValue(JSON.stringify({ entryId: "e1" }));
 		await expect(consumePendingAssociations()).resolves.toEqual([]);
 
 		readFile.mockRejectedValue(new Error("corrupt"));
@@ -93,23 +108,28 @@ describe("consumePendingAssociations (ios)", () => {
 		platform.mockReturnValue("ios");
 	});
 
-	it("drains via the AutofillBridge plugin and leaves no file access", async () => {
-		bridgeConsume.mockResolvedValue({
-			pending: [enc(1, REC({ entryId: "e1", url: "https://x.se", vaultId: "v1", at: 9 }))],
+	it("drains via the bridge and restores the undecryptable", async () => {
+		const foreign = enc("vault A");
+		consume.mockResolvedValue({
+			pending: [
+				enc(JSON.stringify({ entryId: "e1", url: "https://x.se", vaultId: "v1", at: 9 })),
+				foreign,
+			],
 		});
-		decryptWithVek.mockResolvedValue(
-			REC({ entryId: "e1", url: "https://x.se", vaultId: "v1", at: 9 }),
-		);
+		decryptWithVek.mockImplementation(async (_iv: string, ct: string) => {
+			const s = atob(ct);
+			if (s.includes("vault A")) throw new Error("aead failure");
+			return s;
+		});
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e1", url: "https://x.se", vaultId: "v1", at: 9 },
+			{ entryId: "e1", url: "https://x.se", label: undefined, vaultId: "v1", at: 9 },
 		]);
-		expect(bridgeConsume).toHaveBeenCalledOnce();
-		expect(stat).not.toHaveBeenCalled();
+		expect(restore).toHaveBeenCalledWith({ keep: [foreign] });
 	});
 
 	it("resolves [] when the bridge method is absent (old build)", async () => {
-		bridgeConsume.mockRejectedValue(new Error("not implemented"));
+		consume.mockRejectedValue(new Error("not implemented"));
 		await expect(consumePendingAssociations()).resolves.toEqual([]);
 	});
 });
