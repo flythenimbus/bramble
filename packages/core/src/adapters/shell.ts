@@ -14,6 +14,8 @@ export interface PendingAssociation {
 	entryId: string;
 	/** `androidapp://<package>` for a native-app caller, `https://<host>` for a web one. */
 	url: string;
+	/** The friendly name the prompt showed; `url` when the device couldn't resolve one. */
+	label?: string;
 	vaultId: string;
 	at: number;
 }

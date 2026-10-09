@@ -7,6 +7,8 @@ export interface AssociationUpdate {
 	data: EntryData;
 	added: string[];
 	entryName: string;
+	/** The friendly name to surface in the toast; falls back to the url. */
+	label: string;
 }
 
 function targetKey(url: string): string {
@@ -26,6 +28,7 @@ export function planAssociationUpdates(
 	const scope = activeVaultId ?? "";
 	const byId = new Map(entries.map((e) => [e.id, e]));
 	const acc = new Map<string, { added: string[]; seen: Set<string> }>();
+	const labels = new Map<string, string>();
 	for (const assoc of pending) {
 		if (assoc.vaultId !== scope || !assoc.url) continue;
 		const entry = byId.get(assoc.entryId);
@@ -39,17 +42,20 @@ export function planAssociationUpdates(
 		if (plan.seen.has(key)) continue;
 		plan.seen.add(key);
 		plan.added.push(assoc.url);
+		labels.set(key, assoc.label ?? assoc.url);
 	}
 	const out: AssociationUpdate[] = [];
 	for (const [entryId, { added }] of acc) {
 		if (added.length === 0) continue;
 		const entry = byId.get(entryId) as LoginEntry;
 		const { id: _id, ...data } = entry;
+		const label = added.map((url) => labels.get(targetKey(url)) ?? url).join(", ");
 		out.push({
 			entryId,
 			data: { ...data, urls: [...entry.urls, ...added] },
 			added,
 			entryName: entry.name,
+			label,
 		});
 	}
 	return out;

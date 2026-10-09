@@ -1,8 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlatform } from "../context/PlatformContext";
-import { usePendingAssociations } from "../hooks/usePendingAssociations";
-import { usePendingPasskeys } from "../hooks/usePendingPasskeys";
+import { usePendingHandoffs } from "../hooks/usePendingHandoffs";
 import { PrefsProvider } from "../hooks/usePrefs";
 import { useVault, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
@@ -76,10 +75,9 @@ function InnerApp({
 	// Comparing the key itself still refuses to route the SAME one twice.
 	const routedTotp = useRef<string | null>(null);
 
-	// Mobile: persist passkeys the native provider minted during a sign-in registration.
-	usePendingPasskeys();
-
-	usePendingAssociations();
+	// Mobile: persist passkeys the native provider minted, and apply the associations
+	// a confirmed "fill and save" pick handed over.
+	usePendingHandoffs();
 
 	// Stash the current route so a closed-then-reopened popup resumes it (restore in the
 	// platform boot, gated on an unlocked session). Skip the "/" unlock/redirect route, so a

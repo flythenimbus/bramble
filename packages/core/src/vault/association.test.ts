@@ -17,8 +17,13 @@ function login(id: string, urls: string[] = [], overrides: Partial<LoginEntry> =
 	} as LoginEntry;
 }
 
-function assoc(entryId: string, url: string, vaultId: string = VAULT): PendingAssociation {
-	return { entryId, url, vaultId, at: Date.now() };
+function assoc(
+	entryId: string,
+	url: string,
+	vaultId: string = VAULT,
+	label?: string,
+): PendingAssociation {
+	return { entryId, url, vaultId, at: Date.now(), label };
 }
 
 describe("planAssociationUpdates", () => {
@@ -44,9 +49,6 @@ describe("planAssociationUpdates", () => {
 		expect(
 			planAssociationUpdates(entries, undefined, [assoc("e1", "https://x.se", VAULT)]),
 		).toHaveLength(0);
-		expect(
-			planAssociationUpdates(entries, undefined, [assoc("e1", "https://x.se", "")]),
-		).toHaveLength(1);
 	});
 
 	it("drops entries that were archived, deleted, or changed type since the pick", () => {
@@ -125,5 +127,17 @@ describe("planAssociationUpdates", () => {
 		const entries: Entry[] = [login("e1")];
 		expect(planAssociationUpdates(entries, VAULT, [])).toHaveLength(0);
 		expect(planAssociationUpdates(entries, VAULT, [assoc("e1", "")])).toHaveLength(0);
+	});
+
+	it("carries the friendly label the prompt showed, per added url", () => {
+		const entries: Entry[] = [login("e1"), login("e2")];
+		const out = planAssociationUpdates(entries, VAULT, [
+			assoc("e1", "androidapp://com.example.app", VAULT, "Example"),
+			assoc("e2", "https://a.se"),
+		]);
+		expect(out.map((u) => [u.entryId, u.label])).toEqual([
+			["e1", "Example"],
+			["e2", "https://a.se"],
+		]);
 	});
 });

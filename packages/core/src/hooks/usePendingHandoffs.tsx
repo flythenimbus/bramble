@@ -1,42 +1,38 @@
 import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Link2 } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useToast } from "../app/components/ui/toast";
 import { usePlatform } from "../context/PlatformContext";
+import { planAssociationUpdates } from "../vault/association";
 import { planPasskeyPlacement } from "../vault/passkey";
 import { useVault } from "./useVault";
+import { useVaultRegistry } from "./useVaultRegistry";
 
-/**
- * Mobile only: drain any passkeys the native credential provider minted during a sign-in
- * registration (the sandboxed AutoFill extension can't write the vault) and persist them -
- * attaching to the matching login or creating one (planPasskeyPlacement) - then a confirmation
- * toast. Runs on unlock AND on app foreground, since creating a passkey in Safari and returning
- * to an already-unlocked app has no lock/unlock transition to ride. No-op where
- * shell.consumePendingPasskeys is absent (extension/desktop). See docs/passkey-provider.md.
- */
-export function usePendingPasskeys(): void {
+// Both provider handoffs, one serial drain: mutations snapshot and persist the whole
+// entry list, so two concurrent drains would race and the second write would wipe the
+// first.
+export function usePendingHandoffs(): void {
 	const { shell } = usePlatform();
 	const { entries, addEntry, updateEntry, isLocked, ready } = useVault();
+	const { activeId } = useVaultRegistry();
 	const { show } = useToast();
-	// Read the latest vault + helpers inside the async drain without re-firing on every entries
-	// change, and so the foreground listener always sees current lock/ready state.
-	const latest = useRef({ entries, addEntry, updateEntry, show, isLocked, ready });
-	latest.current = { entries, addEntry, updateEntry, show, isLocked, ready };
+	const latest = useRef({ entries, addEntry, updateEntry, activeId, show, isLocked, ready });
+	latest.current = { entries, addEntry, updateEntry, activeId, show, isLocked, ready };
 	const draining = useRef(false);
 
 	const drainNow = useCallback(async () => {
-		const drain = shell.consumePendingPasskeys;
+		const drainPasskeys = shell.consumePendingPasskeys;
 		const { ready, isLocked } = latest.current;
-		if (!drain || !ready || isLocked || draining.current) return;
+		if (!drainPasskeys || !ready || isLocked || draining.current) return;
 		draining.current = true;
 		try {
-			const pending = await drain();
-			for (const pk of pending) {
+			const afterWrite = () =>
+				new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+			for (const pk of (await drainPasskeys()) ?? []) {
 				const { entries, addEntry, updateEntry, show } = latest.current;
 				try {
-					// Rare: several pending passkeys for the same site land against one snapshot,
-					// so a second could create a duplicate login. Acceptable for a pre-launch batch.
 					const placement = planPasskeyPlacement(entries, pk.rpId, pk.rpName, pk);
 					let loginName: string;
 					if (placement.kind === "create") {
@@ -49,6 +45,7 @@ export function usePendingPasskeys(): void {
 						await updateEntry(placement.entryId, { ...data, passkeys: placement.passkeys });
 						loginName = entry.name;
 					}
+					await afterWrite();
 					show({
 						message:
 							placement.kind === "create"
@@ -58,7 +55,26 @@ export function usePendingPasskeys(): void {
 						icon: KeyRound,
 					});
 				} catch {
-					// One bad entry shouldn't drop the rest of the drained batch.
+					// One bad passkey shouldn't drop the rest of the drained batch.
+				}
+			}
+
+			const drainAssociations = shell.consumePendingAssociations;
+			if (drainAssociations) {
+				const { entries, updateEntry, activeId, show } = latest.current;
+				const updates = planAssociationUpdates(entries, activeId, await drainAssociations());
+				for (const u of updates) {
+					try {
+						await updateEntry(u.entryId, u.data);
+						await afterWrite();
+						show({
+							message: i18n._(msg`Saved ${u.label} to ${u.entryName}`),
+							variant: "success",
+							icon: Link2,
+						});
+					} catch {
+						// One failed update drops just its association.
+					}
 				}
 			}
 		} finally {
@@ -66,15 +82,11 @@ export function usePendingPasskeys(): void {
 		}
 	}, [shell]);
 
-	// On unlock + mount. ready/isLocked are change triggers (drainNow reads them from the ref),
-	// so the drain re-runs the moment the vault unlocks.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: ready/isLocked are the unlock trigger
 	useEffect(() => {
 		void drainNow();
 	}, [drainNow, ready, isLocked]);
 
-	// On app foreground too: returning from a Safari passkey-create to an already-unlocked
-	// vault has no lock/unlock change, so visibility is the only signal we'd otherwise miss.
 	useEffect(() => {
 		const onVisible = () => {
 			if (document.visibilityState === "visible") void drainNow();
