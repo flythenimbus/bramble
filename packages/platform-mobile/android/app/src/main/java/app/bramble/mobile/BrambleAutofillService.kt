@@ -61,22 +61,26 @@ class BrambleAutofillService : AutofillService() {
         val hosts =
             if (trustedBrowser) parsed.requestedHosts(isTrustedBrowser = true)
             else DigitalAssetLinks.verifiedDomainsFor(this, parsed.packageName)
-        val matchPackage = if (trustedBrowser) null else parsed.packageName
-        val association = associationFor(parsed, trustedBrowser)
+        val browserApp = trustedBrowser || TrustedBrowsers.isBrowserApp(this, parsed.packageName)
+        val matchPackage = if (browserApp) null else parsed.packageName
+        val callerCerts =
+            if (matchPackage != null) TrustedBrowsers.signingFingerprints(packageManager, matchPackage)
+            else emptySet()
+        val association = associationFor(parsed, trustedBrowser, browserApp)
         // Page-side diagnostics only (field counts + the page's own domain/package). Never
         // logs vault data.
         Log.d(
             BrambleAutofill.LOG_TAG,
             "onFillRequest user=${parsed.usernameIds.size} pass=${parsed.passwordIds.size} " +
-                "otp=${parsed.otpIds.size} pkg=${parsed.packageName} browser=$trustedBrowser hosts=$hosts " +
-                "inlineReqByKeyboard=$inlineRequested",
+                "otp=${parsed.otpIds.size} pkg=${parsed.packageName} browser=$trustedBrowser " +
+                "browserApp=$browserApp hosts=$hosts inlineReqByKeyboard=$inlineRequested",
         )
         if (!parsed.hasFields || parsed.packageName == packageName) {
             callback.onSuccess(null)
             return
         }
         val response = try {
-            buildResponse(request, parsed, hosts, matchPackage, association)
+            buildResponse(request, parsed, hosts, matchPackage, callerCerts, association)
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "onFillRequest failed", e)
             null
@@ -89,13 +93,14 @@ class BrambleAutofillService : AutofillService() {
         parsed: ParsedStructure,
         hosts: List<String>,
         matchPackage: String?,
+        callerCerts: Set<String>,
         association: Association?,
     ): FillResponse {
         val inline = inlineContext(request)
         val builder = FillResponse.Builder()
         val session = KeepUnlockedStore.load(this)
-        val filled = session != null && addDirectDatasets(builder, parsed, hosts, matchPackage, association, session, inline)
-        if (!filled) addLockedDataset(builder, parsed, hosts, matchPackage, association, inline)
+        val filled = session != null && addDirectDatasets(builder, parsed, hosts, matchPackage, callerCerts, association, session, inline)
+        if (!filled) addLockedDataset(builder, parsed, hosts, matchPackage, callerCerts, association, inline)
         addSaveInfo(builder, parsed)
         return builder.build()
     }
@@ -108,6 +113,7 @@ class BrambleAutofillService : AutofillService() {
         parsed: ParsedStructure,
         hosts: List<String>,
         matchPackage: String?,
+        callerCerts: Set<String>,
         association: Association?,
         vekB64: String,
         inline: InlineContext?,
@@ -119,7 +125,7 @@ class BrambleAutofillService : AutofillService() {
             if (wasLocked) lock()
             KeepUnlockedStore.save(this, vekB64) // slide the window forward
 
-            val matches = logins.filter { VaultReader.matches(it, hosts, matchPackage) }
+            val matches = logins.filter { VaultReader.matches(it, hosts, matchPackage, callerCerts) }
             val now = System.currentTimeMillis()
             for (login in matches) {
                 builder.addDataset(
@@ -129,7 +135,7 @@ class BrambleAutofillService : AutofillService() {
                     )
                 )
             }
-            builder.addDataset(showAllDataset(parsed, hosts, matchPackage, association, inline))
+            builder.addDataset(showAllDataset(parsed, hosts, matchPackage, callerCerts, association, inline))
             true
         } catch (e: Exception) {
             Log.e(BrambleAutofill.LOG_TAG, "directFill failed; falling back to auth", e)
@@ -144,6 +150,7 @@ class BrambleAutofillService : AutofillService() {
         parsed: ParsedStructure,
         hosts: List<String>,
         matchPackage: String?,
+        callerCerts: Set<String>,
         association: Association?,
         inline: InlineContext?,
     ) {
@@ -151,7 +158,7 @@ class BrambleAutofillService : AutofillService() {
         val inlinePres = inline?.next(getString(R.string.app_name), getString(R.string.af_ds_unlock))
         val dataset = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(dataset, id, pres, inlinePres)
-        dataset.setAuthentication(authSender(parsed, hosts, matchPackage, association, showAll = false))
+        dataset.setAuthentication(authSender(parsed, hosts, matchPackage, callerCerts, association, showAll = false))
         builder.addDataset(dataset.build())
     }
 
@@ -162,6 +169,7 @@ class BrambleAutofillService : AutofillService() {
         parsed: ParsedStructure,
         hosts: List<String>,
         matchPackage: String?,
+        callerCerts: Set<String>,
         association: Association?,
         inline: InlineContext?,
     ): Dataset {
@@ -169,7 +177,7 @@ class BrambleAutofillService : AutofillService() {
         val inlinePres = inline?.next(getString(R.string.af_ds_show_all), getString(R.string.af_ds_search_vault))
         val builder = Dataset.Builder(pres)
         for (id in parsed.allIds) setAuthValue(builder, id, pres, inlinePres)
-        builder.setAuthentication(authSender(parsed, hosts, matchPackage, association, showAll = true))
+        builder.setAuthentication(authSender(parsed, hosts, matchPackage, callerCerts, association, showAll = true))
         return builder.build()
     }
 
@@ -210,6 +218,7 @@ class BrambleAutofillService : AutofillService() {
         parsed: ParsedStructure,
         hosts: List<String>,
         matchPackage: String?,
+        callerCerts: Set<String>,
         association: Association?,
         showAll: Boolean,
     ): IntentSender {
@@ -221,6 +230,9 @@ class BrambleAutofillService : AutofillService() {
             putExtra(AutofillUnlockActivity.EXTRA_LABEL, hosts.firstOrNull() ?: "")
             putExtra(AutofillUnlockActivity.EXTRA_SHOW_ALL, showAll)
             matchPackage?.let { putExtra(AutofillUnlockActivity.EXTRA_MATCH_PACKAGE, it) }
+            if (callerCerts.isNotEmpty()) {
+                putStringArrayListExtra(AutofillUnlockActivity.EXTRA_CALLER_CERTS, ArrayList(callerCerts))
+            }
             association?.let {
                 putExtra(AutofillUnlockActivity.EXTRA_ASSOC_URI, it.uri)
                 putExtra(AutofillUnlockActivity.EXTRA_ASSOC_LABEL, it.label)
@@ -277,8 +289,13 @@ class BrambleAutofillService : AutofillService() {
     // A verified browser vouches for its webDomain; any other caller's identity is its
     // package. The label is display only (the app's own name / the host); what lands on the
     // entry is the OS-verified package.
-    private fun associationFor(parsed: ParsedStructure, trustedBrowser: Boolean): Association? {
-        if (trustedBrowser) {
+    private fun associationFor(
+        parsed: ParsedStructure,
+        trustedBrowser: Boolean,
+        browserApp: Boolean,
+    ): Association? {
+        if (browserApp) {
+            if (!trustedBrowser) return null
             val host = parsed.webDomains.firstOrNull()?.let { VaultReader.normalizeHost(it) }
             return if (host.isNullOrEmpty()) null else Association("https://$host", host)
         }

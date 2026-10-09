@@ -20,6 +20,7 @@ class AutofillLogin(
     val totp: String?,
     val hostnames: List<String>,
     val apps: List<String> = emptyList(),
+    val appCertHashes: Map<String, String> = emptyMap(),
 )
 
 // One stored passkey (provider role) extracted from a login entry's `passkeys[]`. All base64
@@ -125,6 +126,7 @@ object VaultReader {
                     totp = data.optString("totp", "").ifEmpty { null },
                     hostnames = hostnamesOf(urls),
                     apps = appIdsOf(urls),
+                    appCertHashes = appCertHashesOf(urls),
                 )
             )
         }
@@ -249,6 +251,24 @@ object VaultReader {
         return out
     }
 
+    // Cert hashes pinned by android://<hash>@<package> URLs, keyed by package.
+    internal fun appCertHashesOf(urls: List<String>): Map<String, String> {
+        val out = HashMap<String, String>()
+        for (url in urls) {
+            val s = url.trim()
+            val schemeEnd = s.indexOf("://")
+            if (schemeEnd <= 0) continue
+            if (s.substring(0, schemeEnd).lowercase() != "android") continue
+            val rest = s.substring(schemeEnd + 3)
+            if (!rest.contains('@')) continue
+            val hash = rest.substringBefore('@')
+            val pkg = rest.substringAfter('@')
+                .substringBefore('/').substringBefore('?').substringBefore(':')
+            if (hash.isNotEmpty() && pkg.isNotEmpty()) out[pkg] = hash
+        }
+        return out
+    }
+
     private fun urlsListOf(urls: JSONArray?): List<String> {
         if (urls == null) return emptyList()
         return (0 until urls.length()).map { urls.optString(it, "") }
@@ -292,13 +312,29 @@ object VaultReader {
         }
     }
 
-    // Exact equality only: a package name is never reversed into a domain.
-    fun matchesApp(login: AutofillLogin, callerPackage: String): Boolean =
-        callerPackage.isNotEmpty() && callerPackage in login.apps
+    // Exact package equality only: a package name is never reversed into a domain. A
+    // pinned cert hash (android://<hash>@<package>) must additionally match the caller.
+    fun matchesApp(
+        login: AutofillLogin,
+        callerPackage: String,
+        callerFingerprints: Set<String> = emptySet(),
+    ): Boolean {
+        if (callerPackage.isEmpty() || callerPackage !in login.apps) return false
+        val pinned = login.appCertHashes[callerPackage] ?: return true
+        return callerFingerprints.any { normalizeCertHash(it) == normalizeCertHash(pinned) }
+    }
 
-    fun matches(login: AutofillLogin, requestedHosts: List<String>, callerPackage: String?): Boolean =
+    fun normalizeCertHash(raw: String): String =
+        raw.replace(":", "").replace("-", "").filterNot { it.isWhitespace() }.lowercase()
+
+    fun matches(
+        login: AutofillLogin,
+        requestedHosts: List<String>,
+        callerPackage: String?,
+        callerFingerprints: Set<String> = emptySet(),
+    ): Boolean =
         matches(login, requestedHosts) ||
-            (callerPackage != null && matchesApp(login, callerPackage))
+            (callerPackage != null && matchesApp(login, callerPackage, callerFingerprints))
 
     private fun b64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
 }

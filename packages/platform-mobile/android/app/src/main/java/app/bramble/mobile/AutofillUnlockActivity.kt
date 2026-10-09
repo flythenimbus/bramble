@@ -38,6 +38,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         const val EXTRA_SHOW_ALL = "app.bramble.autofill.SHOW_ALL"
 
         const val EXTRA_MATCH_PACKAGE = "app.bramble.autofill.MATCH_PACKAGE"
+        const val EXTRA_CALLER_CERTS = "app.bramble.autofill.CALLER_CERTS"
         const val EXTRA_ASSOC_URI = "app.bramble.autofill.ASSOC_URI"
         const val EXTRA_ASSOC_LABEL = "app.bramble.autofill.ASSOC_LABEL"
     }
@@ -49,6 +50,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
     private var label: String = ""
     private var showAll: Boolean = false
     private var matchPackage: String? = null
+    private var callerCerts: Set<String> = emptySet()
     private var assocUri: String? = null
     private var assocLabel: String? = null
 
@@ -64,6 +66,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         label = intent.getStringExtra(EXTRA_LABEL) ?: ""
         showAll = intent.getBooleanExtra(EXTRA_SHOW_ALL, false)
         matchPackage = intent.getStringExtra(EXTRA_MATCH_PACKAGE)
+        callerCerts = intent.getStringArrayListExtra(EXTRA_CALLER_CERTS)?.toSet() ?: emptySet()
         assocUri = intent.getStringExtra(EXTRA_ASSOC_URI)
         assocLabel = intent.getStringExtra(EXTRA_ASSOC_LABEL)
     }
@@ -77,7 +80,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
                     setError(getString(R.string.af_err_load_logins))
                 } else {
                     logins = loaded
-                    matches = loaded.filter { VaultReader.matches(it, hosts, matchPackage) }
+                    matches = loaded.filter { VaultReader.matches(it, hosts, matchPackage, callerCerts) }
                     showList("")
                 }
             }
@@ -248,10 +251,12 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         })
         card.addView(filledButton(getString(R.string.af_assoc_save)) {
             dialog.dismiss()
-            try {
-                PendingAssociation.write(this, login.id, uri, VaultReader.activeVaultId(this) ?: "")
-            } catch (e: Exception) {
-                // The fill survives a failed save.
+            VaultReader.activeVaultId(this)?.let { vaultId ->
+                try {
+                    PendingAssociation.write(this, login.id, uri, vaultId, label)
+                } catch (e: Exception) {
+                    // The fill survives a failed save.
+                }
             }
             finishWithDataset(login)
         })

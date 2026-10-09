@@ -87,6 +87,49 @@ class AutofillLogicTest {
     }
 
     @Test
+    fun `appCertHashesOf collects the pins of android URLs only, keyed by package`() {
+        assertEquals(
+            mapOf("com.example.app" to "AABB", "com.other.app" to "CCDD"),
+            VaultReader.appCertHashesOf(
+                listOf(
+                    "android://AABB@com.example.app",
+                    "ANDROID://CCDD@com.other.app/ignored",
+                    "androidapp://com.pinless.app", // Bitwarden's form carries no pin
+                    "android://hashless@...".replace("hashless@", ""), // malformed, skipped
+                    "https://a.se",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `a pinned cert hash must match the caller's signing certificate`() {
+        val pinned = AutofillLogin(
+            "id-1", "Instagram", "me@x.y", "pw", null,
+            listOf("instagram.com"),
+            listOf("com.instagram.android"),
+            mapOf("com.instagram.android" to "AA:BB:CC"),
+        )
+        val colonless = setOf("aabbcc")
+        assertTrue(VaultReader.matchesApp(pinned, "com.instagram.android", colonless))
+        // A same-package impostor with a different certificate does not match.
+        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android", setOf("FF:EE:DD")))
+        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android"))
+        // Unpinned (androidapp:// or hashless android://) stays package-only.
+        val unpinned = AutofillLogin(
+            "id-2", "Instagram", "me@x.y", "pw", null,
+            listOf("instagram.com"), listOf("com.instagram.android"),
+        )
+        assertTrue(VaultReader.matchesApp(unpinned, "com.instagram.android"))
+    }
+
+    @Test
+    fun `normalizeCertHash ignores separators, case and whitespace`() {
+        assertEquals("aabbcc", VaultReader.normalizeCertHash("AA:BB:CC"))
+        assertEquals("aabbcc", VaultReader.normalizeCertHash("aa- bb  cc"))
+    }
+
+    @Test
     fun `combined matching unions hosts and app ids, and an empty context matches nothing`() {
         // android.net.Uri isn't mocked on the host JVM, so only the empty-hosts branch runs.
         val associated = AutofillLogin(

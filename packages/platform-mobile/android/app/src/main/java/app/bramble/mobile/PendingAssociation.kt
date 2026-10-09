@@ -11,10 +11,11 @@ import uniffi.vault_crypto.encryptWithVek
 object PendingAssociation {
     const val FILE = "autofill_pending_assoc.json"
 
-    fun write(context: Context, entryId: String, url: String, vaultId: String) {
+    fun write(context: Context, entryId: String, url: String, vaultId: String, label: String) {
         val json = JSONObject()
             .put("entryId", entryId)
             .put("url", url)
+            .put("label", label)
             .put("vaultId", vaultId)
             .put("at", System.currentTimeMillis())
         val enc = encryptWithVek(json.toString())
