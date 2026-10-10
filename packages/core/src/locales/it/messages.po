@@ -2727,6 +2727,14 @@ msgstr "I backup pianificati vengono eseguiti solo mentre Bramble è in esecuzio
 msgid "Scissors"
 msgstr "Forbici"
 
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "Scorri verso sinistra"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "Scorri verso destra"
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
 msgstr "Cerca nei login"

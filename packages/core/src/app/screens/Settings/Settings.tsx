@@ -37,7 +37,7 @@ export function Settings() {
 	const setTab = (id: SettingsTab) =>
 		navigate({ to: "/settings", search: (prev) => ({ ...prev, tab: id }), replace: true });
 
-	// Fade whichever edge of the tab strip still has tabs scrolled off (else they hide with no hint).
+	// Reveal hidden tabs with wheel scrolling and clickable edge hints.
 	const { ref: tabsRef, edges } = useScrollEdges<HTMLElement>();
 
 	const tabs: { id: SettingsTab; label: string; Icon: LucideIcon }[] = [
@@ -54,8 +54,7 @@ export function Settings() {
 			<div className="relative mb-4">
 				<nav
 					ref={tabsRef}
-					// overflow-y-hidden + touch-pan-x: horizontal only, so a vertical drag scrolls the page (iOS).
-					className="flex gap-1 overflow-x-auto overflow-y-hidden touch-pan-x border-b border-border/50 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border/50 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					aria-label={t`Settings sections`}
 				>
 					{tabs.map(({ id, label, Icon }) => (
@@ -76,7 +75,7 @@ export function Settings() {
 						</button>
 					))}
 				</nav>
-				<ScrollEdgeFades edges={edges} />
+				<ScrollEdgeFades edges={edges} scrollRef={tabsRef} />
 			</div>
 
 			<div className="space-y-4">

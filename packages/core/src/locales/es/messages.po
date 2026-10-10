@@ -2727,6 +2727,14 @@ msgstr "Las copias de seguridad programadas solo se ejecutan mientras Bramble es
 msgid "Scissors"
 msgstr "Tijeras"
 
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "Desplazar hacia la izquierda"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "Desplazar hacia la derecha"
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
 msgstr "Buscar inicios de sesión"

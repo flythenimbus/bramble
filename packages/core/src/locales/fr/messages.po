@@ -2727,6 +2727,14 @@ msgstr "Les sauvegardes planifiées ne s’exécutent que lorsque Bramble est en
 msgid "Scissors"
 msgstr "Ciseaux"
 
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "Faire défiler vers la gauche"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "Faire défiler vers la droite"
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
 msgstr "Rechercher des identifiants"

@@ -280,8 +280,7 @@ export function VaultSearchBar({
 				>
 					<div
 						ref={chipStrip.ref}
-						// overflow-y-hidden + touch-pan-x: horizontal only, so a vertical drag scrolls the list.
-						className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+						className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					>
 						{typeOptions.map((chip) => {
 							const active = search.type === chip.value;
@@ -304,7 +303,7 @@ export function VaultSearchBar({
 							);
 						})}
 					</div>
-					<ScrollEdgeFades edges={chipStrip.edges} />
+					<ScrollEdgeFades edges={chipStrip.edges} scrollRef={chipStrip.ref} />
 				</fieldset>
 
 				<SelectPill

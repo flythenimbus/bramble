@@ -2727,6 +2727,14 @@ msgstr "Os backups agendados somente são executados enquanto o Bramble estiver 
 msgid "Scissors"
 msgstr "Tesoura"
 
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "Rolar para a esquerda"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "Rolar para a direita"
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
 msgstr "Buscar logins"

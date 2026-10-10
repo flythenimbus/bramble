@@ -2727,6 +2727,14 @@ msgstr "Scheduled backups only run while Bramble is running. Start it at login a
 msgid "Scissors"
 msgstr "Scissors"
 
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "Scroll left"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "Scroll right"
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
 msgstr "Search logins"
