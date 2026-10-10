@@ -96,6 +96,8 @@ jobs:
         shell: bash
         run: |
           pnpm --filter @vault/platform-desktop exec tauri signer generate -w /tmp/ci.key -p ""
+          # Throwaway and trusted by nothing, but a private key in plaintext in a public log reads as a leak.
+          echo "::add-mask::$(cat /tmp/ci.key)"
           echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/ci.key)" >> "$GITHUB_ENV"
           echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> "$GITHUB_ENV"
 
