@@ -16,7 +16,8 @@ name: Sign Windows installer
 # scripts/build-windows.ts.
 #
 # Driven by `pnpm run build:windows --ci-start`, which dispatches this, and `--ci-collect`, which
-# waits for it and signs what comes back.
+# waits for it and signs what comes back. A run against SignPath's TEST certificate, outside any
+# release, is `gh workflow run sign-windows.yml -f version=<v> -f allow_untrusted=true`.
 
 on:
   workflow_dispatch:
@@ -25,6 +26,14 @@ on:
         description: The version this run is expected to build, as a guard against a stale ref
         required: true
         type: string
+      # Off unless asked for, so it is the TEST run that has to say so and not the release: a release
+      # path that forgot a flag would otherwise ship whatever certificate the policy variable points
+      # at, which before the production certificate exists is the test one.
+      allow_untrusted:
+        description: Accept a signature Windows does not trust (test certificate runs only, never a release)
+        required: false
+        default: false
+        type: boolean
 
 # Least privilege. `id-token` is what SignPath's origin verification reads.
 permissions:
@@ -138,12 +147,15 @@ jobs:
       # is what a new subscription gets before the production one is issued, reporting "not
       # signed" for a run where signing had worked perfectly.
       #
-      # Presence is the hard failure; trust is only reported. A test certificate need not chain to
-      # a root the runner trusts, so `Status` is expected to be something other than Valid until
-      # the production certificate is in place, and failing on that would block the very phase
-      # this is meant to survive.
+      # Trust is a hard failure too, unless the run was dispatched with allow_untrusted. A test
+      # certificate is self-signed and reports UnknownError here, which is right for a test run and
+      # disastrous in a release: users would get an installer Windows calls invalid, worse than an
+      # unsigned one. `SIGNPATH_SIGNING_POLICY_SLUG` is the only thing choosing between the two
+      # certificates, so this check is what stops a release going out on the wrong one.
       - name: Assert the installer came back signed
         shell: pwsh
+        env:
+          ALLOW_UNTRUSTED: ${{ inputs.allow_untrusted }}
         run: |
           $exe = Get-ChildItem signed\*-setup.exe | Select-Object -First 1
           if ($null -eq $exe) { Write-Output "::error::no -setup.exe came back from signing"; exit 1 }
@@ -158,7 +170,11 @@ jobs:
           Write-Output "issuer: $($sig.SignerCertificate.Issuer)"
           Write-Output "status: $($sig.Status)"
           if ($sig.Status -ne 'Valid') {
-            Write-Output "::warning::signature is present but does not validate on this runner ($($sig.Status)). Expected while signing with a test certificate."
+            if ($env:ALLOW_UNTRUSTED -ne 'true') {
+              Write-Output "::error::the signature does not validate ($($sig.Status)); a release needs one Windows trusts. Is SIGNPATH_SIGNING_POLICY_SLUG still the test policy?"
+              exit 1
+            }
+            Write-Output "::warning::signature is present but does not validate on this runner ($($sig.Status)). Accepted because this run set allow_untrusted (test certificate)."
           }
           Get-ChildItem signed
 

@@ -31,8 +31,9 @@ None of this can be automated honestly: it needs a real desktop, a real browser,
 ### Installer and SmartScreen
 
 - [ ] The **signed** installer (the SignPath artifact, not a local build) downloads and runs
-      without the "unknown publisher" warning: Windows shows Bramble's publisher from the
-      Authenticode certificate. An unsigned local build must still warn, which is correct.
+      without the "unknown publisher" warning, naming **SignPath Foundation** as the verified
+      publisher: the certificate is issued to the Foundation, not to Bramble, so that name is
+      correct. An unsigned local build must still warn, which is correct too.
 - [ ] Install, then install again over it: an update in place must not lose the vault or force a
       logout. (The updater is the usual update path, but users do reinstall.)
 - [ ] Install on a clean Windows 10 VM: WebView2 bootstrapping and the 1909-era floor.

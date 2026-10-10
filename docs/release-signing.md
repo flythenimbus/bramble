@@ -741,9 +741,19 @@ agent attested by GitHub itself, so a cross-compiled installer from a maintainer
 be signed at all. Windows is therefore the one artifact Bramble ships that is not built locally:
 `.github/workflows/sign-windows.yml` builds it on a `windows-latest` runner and submits the single
 `*-setup.exe` to SignPath, a maintainer approves the request in the SignPath UI (manual by
-design), and the signed installer comes back as the `bramble-windows-signed` artifact. The job
-asserts the binary carries a recognizable certificate on the way out, because a silently unsigned
-one looks identical until a user hits SmartScreen.
+design), and the signed installer comes back as the `bramble-windows-signed` artifact.
+
+On the way out the job asks Windows (`Get-AuthenticodeSignature`) and fails on two things: no
+signature at all, because a silently unsigned installer looks identical until a user hits
+SmartScreen, and a signature Windows does not trust. The second is what keeps a release off the
+TEST certificate, which is self-signed and reports `UnknownError`: shipped, it would be an
+installer Windows calls invalid, worse than an unsigned one. `SIGNPATH_SIGNING_POLICY_SLUG` is the
+only thing choosing between the two certificates, so this check is the backstop for it. A test run
+outside any release opts out explicitly, and the release path never does:
+
+```sh
+gh workflow run sign-windows.yml -f version=<current desktop version> -f allow_untrusted=true
+```
 
 The flow, driven by `scripts/build-windows.ts`:
 
@@ -765,13 +775,44 @@ The updater key never goes to CI at all. SignPath signs for *Windows*; the minis
 for *the updater*, and only the second is the root of trust for updates. Same age + YubiKey scheme
 as above, same permanence rules.
 
-One-time setup is in the SignPath dashboard: register the GitHub organization, create a project
-pointed at this repository and the `sign-windows.yml` workflow, and pick a signing policy. The
-repository then needs `SIGNPATH_API_TOKEN` in **secrets** and `SIGNPATH_ORGANIZATION_ID`,
-`SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` in **variables**; the workflow reads
-exactly those names, and so does the desktop release's preflight, which is why a release stops early
-while they are absent. Until that setup is done, desktop releases go out with `--skip=windows`. If `gh workflow list` does not show the workflow yet, push `.github/` to the
-default branch first: a workflow cannot be dispatched before it exists there.
+**Setup, as it actually went (2026-10-10).** The SignPath Foundation creates the organization and
+project (`bramble`) and links the GitHub.com trusted build system. The rest is ours, and each of
+these failed or would have failed a run before it was fixed:
+
+- **Install the [SignPath GitHub App](https://github.com/apps/signpath) on this repository.**
+  Their docs call it optional; the connector refuses without it ("Failed to retrieve GitHub App
+  token").
+- **Submit as a CI user**, a token-only SignPath account added as a Submitter on each signing
+  policy, with a human as Approver. An interactive user cannot be a Submitter once a policy requires
+  the trusted build system, so a personal token stops working exactly when it matters.
+- **The project's artifact configuration must open a zip.** `actions/upload-artifact` always zips,
+  and SignPath's default template expects a bare executable. `product-name` is the metadata
+  restriction the Foundation's terms require; the installer sets it from `productName`:
+
+  ```xml
+  <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+    <zip-file>
+      <pe-file path="*-setup.exe" product-name="Bramble">
+        <authenticode-sign />
+      </pe-file>
+    </zip-file>
+  </artifact-configuration>
+  ```
+
+- **Repository settings:** `SIGNPATH_API_TOKEN` as a *repository* secret (`sign-windows.yml` has no
+  environment, so it cannot read an environment's), and `SIGNPATH_ORGANIZATION_ID`,
+  `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` as variables. The desktop release's
+  preflight reads the same four, which is why a release stops early while any is absent.
+
+The policy variable starts on `test-signing`, whose certificate is issued at once; the Foundation
+orders the production certificate for `release-signing` only after a test-signed build has come
+through the connector. Until the variable points at the release policy, desktop releases go out
+with `--skip=windows`, and the trust check above turns forgetting that into a failed run instead
+of a shipped installer. The release policy should require approval, the trusted build system and
+origin verification, all three of which the test policy leaves off.
+
+The Windows signer is **SignPath Foundation**, not Bramble: the certificate is issued to the
+Foundation, so that is the verified publisher Windows shows on the installer.
 
 ### If the YubiKey is lost
 
