@@ -5,20 +5,20 @@ import { SITE } from "@/consts";
 
 <LegalLayout
 	title="Privacy Policy"
-	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control: a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use."
+	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control (a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use), plus an update check in the desktop app that you can turn off."
 	path="/privacy"
-	meta="Effective date: 26 September 2026"
+	meta="Effective date: 10 October 2026"
 >
 	<p class="lead">
 		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
-		browser extension and as mobile apps. It does not collect, sell, or share any of your data.
-		There is no account and no Bramble server that holds your vault. Everything stays on your
-		device, encrypted. Bramble makes network connections only for a few optional features that are
-		off by default and that you turn on yourself: a password breach check, peer-to-peer sync between
-		your own devices, encrypted backups to a storage provider you choose, and email aliases from a
-		provider you already use. None of them ever
-		exposes your passwords or your vault in a form that Bramble, a provider, or anyone else could
-		read. Details below.
+		browser extension, as mobile apps, and as a desktop app. It does not collect, sell, or share any
+		of your data. There is no account and no Bramble server that holds your vault. Everything stays
+		on your device, encrypted. Bramble makes network connections only for a few optional features
+		that are off by default and that you turn on yourself: a password breach check, peer-to-peer
+		sync between your own devices, encrypted backups to a storage provider you choose, and email
+		aliases from a provider you already use. The one exception is the desktop app, which checks for
+		updates when it opens; you can turn that off. None of these ever exposes your passwords or your
+		vault in a form that Bramble, a provider, or anyone else could read. Details below.
 	</p>
 
 	<h2>What data Bramble handles</h2>
@@ -35,7 +35,11 @@ import { SITE } from "@/consts";
 		Your vault is stored only on your devices. In the browser extension that means your browser's
 		local extension storage and/or a vault file you pick on your own computer. In the mobile apps
 		it means the app's private on-device storage, with a small number of secrets (the key that
-		protects your vault) held in the OS keystore. Bramble has no vault server, so your data is not
+		protects your vault) held in the OS keystore. In the desktop app it means ordinary files in the
+		app's data folder on your computer; this device's sync identity and the credentials for any
+		cloud backups you set up are kept in your operating system's credential store where one is
+		available (the macOS Keychain, the Windows Credential Manager, or the Secret Service or kernel
+		keyring on Linux), and never the key to your vault. Bramble has no vault server, so your data is not
 		stored off your devices unless you turn on cloud backups (below), which keep an encrypted copy
 		with a storage provider you choose.
 	</p>
@@ -63,11 +67,39 @@ import { SITE } from "@/consts";
 
 	<h2>Network connections, in full</h2>
 	<p>
-		Bramble works entirely offline by default. There are four features that make network
-		connections, all optional and all off until you turn them on: the password breach check, device
-		sync, cloud backups, and email aliases. They are described next. Bramble makes no other network
+		The browser extension and the mobile apps work entirely offline by default, and their updates
+		come through the store or app store you installed them from. There are four features that make
+		network connections, all optional and all off until you turn them on: the password breach check,
+		device sync, cloud backups, and email aliases. The desktop app adds one more, on by default: a
+		check for updates when it opens. They are described next. Bramble makes no other network
 		requests.
 	</p>
+
+	<h2>Update checks (desktop app)</h2>
+	<p>
+		The desktop app is installed directly rather than from a store, so it looks for new versions
+		itself. A few seconds after it opens, it downloads a small file from bramble.sh that names the
+		latest version. You can turn this off in Settings, under Updates, with "Check for updates when
+		Bramble opens"; you can still check by hand from the same place, or from the app menu.
+	</p>
+	<ul>
+		<li>
+			<strong>What is sent.</strong> An ordinary web request for that file, the same for everyone.
+			Nothing from your vault, your settings, or your device is included. Like any web request it
+			shows your IP address to the server; bramble.sh is hosted by Cloudflare.
+		</li>
+		<li>
+			<strong>Nothing installs without you.</strong> If a newer version exists, Bramble asks before
+			doing anything. If you agree, it downloads the update from Bramble's releases on GitHub and
+			checks it against a signature built into the app before applying it, so a tampered download
+			is refused.
+		</li>
+		<li>
+			<strong>Not every install checks.</strong> On Linux, copies installed from a package (such as
+			the .deb or .rpm, or through Nix) never check, because your package manager updates them; the
+			AppImage does check.
+		</li>
+	</ul>
 
 	<h2>Password breach check (optional)</h2>
 	<p>
@@ -93,13 +125,13 @@ import { SITE } from "@/consts";
 		Bramble can sync one vault across your own devices (for example between two browsers, or between
 		a browser and a phone). This is optional and off until you set it up by linking a device, and
 		it is strictly personal: only your own devices, only your own vault. There is no shared network,
-		and there is no Bramble server that stores or relays your vault.
+		and no server ever stores your vault or can read it.
 	</p>
 	<p>How it works, and what each part can see:</p>
 	<ul>
 		<li>
 			<strong>The vault transfer is device-to-device.</strong> Your devices connect directly to
-			each other over your local network and exchange the vault over that direct, encrypted
+			each other wherever the network allows it, and exchange the vault over that encrypted
 			connection. The vault stays end-to-end encrypted under a key that only your devices hold.
 		</li>
 		<li>
@@ -117,6 +149,15 @@ import { SITE } from "@/consts";
 			when. The direct channel between your devices is mutually authenticated, so a dishonest relay
 			cannot read, alter, or impersonate either device; it can at most refuse to help, in which case
 			you can link devices by scanning a QR code instead.
+		</li>
+		<li>
+			<strong>When a direct connection is not possible, it is relayed.</strong> Two devices on
+			different networks (a phone on mobile data and a laptop at home, say) often cannot reach each
+			other directly. Then the connection runs through a TURN relay server, Cloudflare's by default,
+			which the signaling relay arranges. The relayed traffic is the same end-to-end encrypted
+			connection, which the TURN server cannot read; it sees your network addresses and how much data
+			passes. You can point Bramble at your own TURN service in the same Advanced settings as the
+			relay.
 		</li>
 	</ul>
 
@@ -248,6 +289,28 @@ import { SITE } from "@/consts";
 		</li>
 	</ul>
 
+	<h2>On the desktop: the browser link, credentials, and starting at login</h2>
+	<ul>
+		<li>
+			<strong>Linking to your browser.</strong> The desktop app can link to the Bramble extension in
+			browsers on the same computer, so its quick-access panel can fill the page in front of you.
+			The two talk over a channel the browser provides between itself and programs on the same
+			computer ("native messaging"), encrypted and authenticated by a pairing you confirm, and
+			nothing about it goes over the network. To make that possible, the desktop app registers a
+			small helper with the browsers installed on your computer: a small file for each browser, or on
+			Windows one file plus a registry entry for each browser.
+		</li>
+		<li>
+			<strong>Credentials.</strong> As above, the keys that identify this device to your others for
+			sync, and the credentials for any cloud backups you set up, are kept in your operating
+			system's credential store. Your vault key never is.
+		</li>
+		<li>
+			<strong>Starting at login (off by default).</strong> If you turn it on, the app starts when you
+			sign in to your computer, so scheduled backups run without you opening it.
+		</li>
+	</ul>
+
 	<h2>Browser extension permissions, in plain language</h2>
 	<ul>
 		<li>Access to websites: to detect login fields and offer autofill.</li>
@@ -264,6 +327,10 @@ import { SITE } from "@/consts";
 		<li>
 			Identity: to run the provider's sign-in screen when you connect a cloud-backup account such as
 			Dropbox.
+		</li>
+		<li>
+			Native messaging (optional, Chromium browsers): to talk to the Bramble desktop app on the same
+			computer. Your browser asks you for it only when you link the extension to the desktop app.
 		</li>
 	</ul>
 
@@ -294,7 +361,9 @@ import { SITE } from "@/consts";
 	<p>
 		Because your data lives only on your devices, you are in control of it. Removing the extension
 		or the app, deleting your vault file, and clearing the app's or extension's storage removes your
-		data. Bramble retains nothing on your behalf because it holds nothing about you anywhere else. If
+		data. For the desktop app, that means deleting its data folder too; the Windows uninstaller
+		offers to do that for you, along with the credentials it stored in the Windows Credential
+		Manager. Bramble retains nothing on your behalf because it holds nothing about you anywhere else. If
 		you turned on cloud backups, delete the encrypted backup files from your storage provider too,
 		since those live in your account there, not with Bramble.
 	</p>
