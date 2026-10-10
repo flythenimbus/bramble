@@ -202,6 +202,12 @@ flythenimbus@cake.cash
 bc1q78sd5rnuufqdtv9plp0p56hrq72c9unj8tec8t
 ```
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+The desktop app's Windows installer is built by GitHub Actions from this repository and signed through SignPath only after a manual approval, so Windows shows **SignPath Foundation** as its publisher. Team roles, how a signed build is made, and the privacy statement are in the full [code signing policy](https://bramble.sh/code-signing).
+
 ## License
 
 Copyright (C) 2026 Webvana Inc.
