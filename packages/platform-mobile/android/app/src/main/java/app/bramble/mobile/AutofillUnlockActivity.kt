@@ -1,6 +1,9 @@
 package app.bramble.mobile
 
+import android.app.Dialog
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.text.Editable
 import android.text.InputType
@@ -8,6 +11,7 @@ import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillManager
 import android.widget.EditText
@@ -32,6 +36,11 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         const val EXTRA_HOSTS = "app.bramble.autofill.HOSTS"
         const val EXTRA_LABEL = "app.bramble.autofill.LABEL"
         const val EXTRA_SHOW_ALL = "app.bramble.autofill.SHOW_ALL"
+
+        const val EXTRA_MATCH_PACKAGE = "app.bramble.autofill.MATCH_PACKAGE"
+        const val EXTRA_CALLER_CERTS = "app.bramble.autofill.CALLER_CERTS"
+        const val EXTRA_ASSOC_URI = "app.bramble.autofill.ASSOC_URI"
+        const val EXTRA_ASSOC_LABEL = "app.bramble.autofill.ASSOC_LABEL"
     }
 
     private lateinit var usernameIds: List<AutofillId>
@@ -40,6 +49,10 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
     private lateinit var hosts: List<String>
     private var label: String = ""
     private var showAll: Boolean = false
+    private var matchPackage: String? = null
+    private var callerCerts: Set<String> = emptySet()
+    private var assocUri: String? = null
+    private var assocLabel: String? = null
 
     // Loaded after unlock.
     private var logins: List<AutofillLogin> = emptyList()
@@ -52,6 +65,10 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         hosts = intent.getStringArrayListExtra(EXTRA_HOSTS) ?: emptyList()
         label = intent.getStringExtra(EXTRA_LABEL) ?: ""
         showAll = intent.getBooleanExtra(EXTRA_SHOW_ALL, false)
+        matchPackage = intent.getStringExtra(EXTRA_MATCH_PACKAGE)
+        callerCerts = intent.getStringArrayListExtra(EXTRA_CALLER_CERTS)?.toSet() ?: emptySet()
+        assocUri = intent.getStringExtra(EXTRA_ASSOC_URI)
+        assocLabel = intent.getStringExtra(EXTRA_ASSOC_LABEL)
     }
 
     // VEK loaded by the base; decrypt the logins off the main thread, then show the list.
@@ -63,7 +80,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
                     setError(getString(R.string.af_err_load_logins))
                 } else {
                     logins = loaded
-                    matches = loaded.filter { VaultReader.matches(it, hosts) }
+                    matches = loaded.filter { VaultReader.matches(it, hosts, matchPackage, callerCerts) }
                     showList("")
                 }
             }
@@ -198,6 +215,70 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
     }
 
     private fun complete(login: AutofillLogin) {
+        val uri = assocUri
+        if (uri != null && !VaultReader.matches(login, hosts, matchPackage)) {
+            showAssociationPrompt(login, uri, assocLabel ?: uri)
+        } else {
+            finishWithDataset(login)
+        }
+    }
+
+    private fun showAssociationPrompt(login: AutofillLogin, uri: String, label: String) {
+        val message = getString(
+            if (uri.startsWith("androidapp://")) R.string.af_assoc_message_app else R.string.af_assoc_message_web,
+            label,
+            login.displayTitle(this),
+        )
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(22), dp(22), dp(20))
+            background = roundedFill(color(R.color.bramble_af_card), color(R.color.bramble_af_border))
+        }
+        card.addView(TextView(this).apply {
+            text = getString(R.string.af_assoc_title)
+            setTextColor(color(R.color.bramble_af_foreground))
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, 0, 0, dp(8))
+        })
+        card.addView(TextView(this).apply {
+            text = message
+            setTextColor(color(R.color.bramble_af_foreground))
+            textSize = 15f
+            setPadding(0, 0, 0, dp(18))
+        })
+        card.addView(filledButton(getString(R.string.af_assoc_save)) {
+            dialog.dismiss()
+            VaultReader.activeVaultId(this)?.let { vaultId ->
+                try {
+                    PendingAssociation.write(this, login.id, uri, vaultId, label)
+                } catch (e: Exception) {
+                    // The fill survives a failed save.
+                }
+            }
+            finishWithDataset(login)
+        })
+        card.addView(spacer(dp(10)))
+        card.addView(outlinedButton(getString(R.string.af_assoc_just)) {
+            dialog.dismiss()
+            finishWithDataset(login)
+        })
+        val wrap = FrameLayout(this).apply {
+            setPadding(dp(24), 0, dp(24), 0)
+            addView(card)
+        }
+        dialog.setContentView(wrap)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        dialog.setOnCancelListener { finishWithDataset(login) }
+        dialog.show()
+    }
+
+    private fun finishWithDataset(login: AutofillLogin) {
         val dataset = Datasets.fillDataset(this, login, usernameIds, passwordIds, otpIds, System.currentTimeMillis())
         val result = android.content.Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, dataset)
         setResult(RESULT_OK, result)

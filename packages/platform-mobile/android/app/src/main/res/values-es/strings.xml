@@ -29,6 +29,11 @@ Añada uno en Bramble.</string>
     <string name="af_ds_show_all_logins">Mostrar todos los inicios de sesión</string>
     <string name="af_ds_search_vault">Buscar en su bóveda</string>
     <string name="af_ds_show_all">Mostrar todo</string>
+    <string name="af_assoc_title">¿Guardar en Bramble?</string>
+    <string name="af_assoc_message_app">¿Añadir la app %1$s a “%2$s” para que Bramble lo ofrezca aquí automáticamente?</string>
+    <string name="af_assoc_message_web">¿Añadir %1$s a “%2$s” para que Bramble lo ofrezca aquí automáticamente?</string>
+    <string name="af_assoc_save">Autocompletar y guardar</string>
+    <string name="af_assoc_just">Solo autocompletar</string>
     <string name="transfer_channel_name">Subidas</string>
     <string name="transfer_notification_title">Terminando una subida</string>
     <string name="transfer_notification_text">Bramble sigue funcionando en segundo plano hasta terminar.</string>

@@ -1,7 +1,9 @@
 package app.bramble.mobile
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import java.security.MessageDigest
 
@@ -58,6 +60,21 @@ object TrustedBrowsers {
         "org.mozilla.fennec_fdroid" to
             setOf("06:66:53:58:EF:D8:BA:05:BE:23:6A:47:A1:2C:B0:95:8D:7D:75:DD:93:9D:77:C2:B3:1F:53:98:53:7E:BD:C5"),
     )
+
+    /** A browser of any kind (allow-listed, or handles BROWSABLE https VIEW intents):
+     * a package association would make every page in such a caller match. */
+    fun isBrowserApp(context: Context, packageName: String?): Boolean {
+        val pkg = packageName ?: return false
+        if (BROWSERS.containsKey(pkg)) return true
+        return try {
+            val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://bramble.invalid/"))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+            context.packageManager.queryIntentActivities(view, 0)
+                .any { it.activityInfo?.packageName == pkg }
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /** True iff `packageName` is an allow-listed browser AND its real signing cert matches. */
     fun isTrustedBrowser(context: Context, packageName: String?): Boolean {

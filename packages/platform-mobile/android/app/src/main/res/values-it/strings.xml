@@ -29,6 +29,11 @@ Aggiungine uno in Bramble.</string>
     <string name="af_ds_show_all_logins">Mostra tutti i login</string>
     <string name="af_ds_search_vault">Cerca nel tuo caveau</string>
     <string name="af_ds_show_all">Mostra tutto</string>
+    <string name="af_assoc_title">Salvare in Bramble?</string>
+    <string name="af_assoc_message_app">Aggiungere l\'app %1$s a “%2$s” così Bramble lo propone qui automaticamente?</string>
+    <string name="af_assoc_message_web">Aggiungere %1$s a “%2$s” così Bramble lo propone qui automaticamente?</string>
+    <string name="af_assoc_save">Compila e salva</string>
+    <string name="af_assoc_just">Compila soltanto</string>
     <string name="transfer_channel_name">Caricamenti</string>
     <string name="transfer_notification_title">Completamento di un caricamento</string>
     <string name="transfer_notification_text">Bramble resta attivo in background fino al termine.</string>

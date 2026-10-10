@@ -44,5 +44,7 @@ enum BrambleVault {
 	// the vault, so it stashes each new credential (VEK-encrypted) here and the main app drains
 	// it on next launch. Array of {iv, ciphertext}. Mirrors Android's PendingSave.
 	static let pendingPasskeysKey = "autofill.pendingPasskeys"
+	// Confirmed "fill and save" associations, VEK-encrypted for the app to drain and apply.
+	static let pendingAssociationsKey = "autofill.pendingAssociations"
 
 }

@@ -29,6 +29,11 @@ Ajoutez-en un dans Bramble.</string>
     <string name="af_ds_show_all_logins">Afficher tous les identifiants</string>
     <string name="af_ds_search_vault">Rechercher dans votre coffre-fort</string>
     <string name="af_ds_show_all">Tout afficher</string>
+    <string name="af_assoc_title">Enregistrer dans Bramble ?</string>
+    <string name="af_assoc_message_app">Ajouter l\'application %1$s à «%2$s» pour que Bramble le propose ici automatiquement ?</string>
+    <string name="af_assoc_message_web">Ajouter %1$s à «%2$s» pour que Bramble le propose ici automatiquement ?</string>
+    <string name="af_assoc_save">Préremplir et enregistrer</string>
+    <string name="af_assoc_just">Préremplir uniquement</string>
     <string name="transfer_channel_name">Envois</string>
     <string name="transfer_notification_title">Finalisation d’un envoi</string>
     <string name="transfer_notification_text">Bramble continue en arrière-plan jusqu’à la fin.</string>

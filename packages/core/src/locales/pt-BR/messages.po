@@ -2682,6 +2682,12 @@ msgstr "Salvar em um novo login"
 msgid "Save your recovery code"
 msgstr "Salvar seu código de recuperação"
 
+#. placeholder {0}: u.added.join(", ")
+#. placeholder {1}: u.entryName
+#: packages/core/src/hooks/usePendingAssociations.tsx
+msgid "Saved {0} to {1}"
+msgstr "Salvo {0} em {1}"
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Saving…"

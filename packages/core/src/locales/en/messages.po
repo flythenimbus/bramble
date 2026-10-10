@@ -2682,6 +2682,12 @@ msgstr "Save to a new login"
 msgid "Save your recovery code"
 msgstr "Save your recovery code"
 
+#. placeholder {0}: u.added.join(", ")
+#. placeholder {1}: u.entryName
+#: packages/core/src/hooks/usePendingAssociations.tsx
+msgid "Saved {0} to {1}"
+msgstr "Saved {0} to {1}"
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Saving…"
