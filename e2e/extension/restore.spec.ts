@@ -2,7 +2,16 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, optionsUrl, STRONG_PW } from "./helpers";
+import {
+	backgroundWorker,
+	createVault,
+	lockToPicker,
+	openPopup,
+	optionsUrl,
+	STRONG_PW,
+	seedExampleLogin,
+	selectVault,
+} from "./helpers";
 
 // Restoring a .bramble backup when a vault already exists must ADD a new vault, never overwrite the
 // vault on this device (the old code did an id-less write straight over the primary - a data-loss
@@ -112,4 +121,72 @@ test("the Add-a-vault screen offers restoring a backup", async ({ context, exten
 	await page.getByRole("button", { name: /Restore from backup/i }).click();
 	// The restore flow opened (its file picker is present).
 	await expect(page.locator('input[type="file"]')).toBeAttached();
+});
+
+// The way back for a user stuck on "aes decrypt: aead::Error": from the lock screen, restore a
+// healthy device's backup as a new vault and open that one instead.
+test("a vault that won't decrypt can be replaced from its lock screen", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await seedExampleLogin(popup);
+
+	// The backup a healthy device would export: these bytes while still readable.
+	const sw = await backgroundWorker(context);
+	const key = await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults: { id: string }[];
+		};
+		return `vault-blob-b64:${reg.vaults[0]!.id}`;
+	});
+	const b64 = await sw.evaluate(async (k) => (await chrome.storage.local.get(k))[k] as string, key);
+	const dir = mkdtempSync(path.join(tmpdir(), "bramble-backup-"));
+	const file = path.join(dir, "backup.bramble");
+	writeFileSync(file, Buffer.from(b64, "base64"));
+
+	// A second vault, as the user has: only then does the lock screen offer the vault picker.
+	await createVault(setup, extensionId);
+	// openOptionsPage focuses an open options tab instead of opening one.
+	await setup.close();
+	await openPopup(popup, extensionId);
+	await lockToPicker(popup);
+
+	// Break the first vault's copy: the entries' auth tag is the blob's last byte.
+	await sw.evaluate(async (k) => {
+		const raw = atob((await chrome.storage.local.get(k))[k] as string);
+		const bytes = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+		const last = bytes.length - 1;
+		bytes[last] = (bytes[last] ?? 0) ^ 0xff;
+		await chrome.storage.local.set({ [k]: btoa(String.fromCharCode(...bytes)) });
+	}, key);
+	await popup.getByRole("button", { name: /Vault 1/ }).click();
+	await popup.locator('input[type="password"]').first().fill(STRONG_PW);
+	await popup.getByRole("button", { name: "Unlock Vault" }).click();
+	await expect(popup.getByText(/aes decrypt: aead::Error/)).toBeVisible();
+
+	// The recovery, as the user would click it.
+	await popup.getByRole("button", { name: /Choose a different vault/i }).click();
+	const [restoreTab] = await Promise.all([
+		context.waitForEvent("page"),
+		popup.getByRole("button", { name: /Create new vault/i }).click(),
+	]);
+	await restoreTab.getByRole("button", { name: /Restore from backup/i }).click();
+	await restoreTab.locator('input[type="file"]').setInputFiles(file);
+	await restoreTab.getByLabel("Vault name").fill("Recovered");
+	await restoreTab.locator('input[type="password"]').first().fill(STRONG_PW);
+	await restoreTab.getByRole("button", { name: /Restore vault/i }).click();
+	await expect(restoreTab.getByRole("heading", { name: /Vault added/i })).toBeVisible();
+
+	const reopened = await context.newPage();
+	await openPopup(reopened, extensionId);
+	const picker = reopened.getByRole("heading", { name: /Choose a vault/i });
+	const switchLink = reopened.getByRole("button", { name: /Choose a different vault/i });
+	await expect(picker.or(switchLink)).toBeVisible();
+	if (!(await picker.isVisible())) await switchLink.click();
+	await selectVault(reopened, /Recovered/);
+	await expect(reopened.getByText("Example Login")).toBeVisible();
 });
