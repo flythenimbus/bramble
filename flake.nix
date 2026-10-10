@@ -27,25 +27,34 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
       forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
       packages = forEachSystem (pkgs: rec {
-        bramble = pkgs.callPackage ./packages/platform-desktop/nix/package.nix {
-          # `self` rather than a relative path, so the build sees the flake's own source and a
-          # dirty tree is caught rather than silently built from the checkout.
+        bramble = pkgs.callPackage (
+          if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
+            ./packages/platform-desktop/nix/package-darwin.nix
+          else
+            ./packages/platform-desktop/nix/package.nix
+        ) {
           src = self;
         };
         default = bramble;
       });
 
       overlays.default = final: _prev: {
-        bramble = final.callPackage ./packages/platform-desktop/nix/package.nix { src = self; };
+        bramble = final.callPackage (
+          if final.stdenv.hostPlatform.system == "aarch64-darwin" then
+            ./packages/platform-desktop/nix/package-darwin.nix
+          else
+            ./packages/platform-desktop/nix/package.nix
+        ) { src = self; };
       };
 
       # `nix flake check` builds the package, which is the only check worth having here: the
       # failure this guards against is the derivation drifting away from the repository.
-      checks = forEachSystem (pkgs: { bramble = self.packages.${pkgs.system}.bramble; });
+      checks = forEachSystem (pkgs: { bramble = self.packages.${pkgs.stdenv.hostPlatform.system}.bramble; });
     };
 }
