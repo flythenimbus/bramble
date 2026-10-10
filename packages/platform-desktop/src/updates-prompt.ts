@@ -28,7 +28,12 @@ export function promptForUpdateOnLaunch(): () => void {
 		// Nothing to nudge about where a package manager owns this install: apt already keeps it
 		// current, and the updater could not apply what the prompt offered.
 		if (!canSelfUpdate()) return;
-		void offer().catch(() => {
+		void (async () => {
+			// Turned off in Settings. Only the menu and the Settings button check after that, since
+			// those are the user asking.
+			if ((await desktopUpdates.checkOnLaunch?.()) === false) return;
+			await offer();
+		})().catch(() => {
 			// Offline, GitHub down, a malformed manifest: none of it is worth a dialog on launch.
 			// Settings still has a Check button that reports the reason.
 		});

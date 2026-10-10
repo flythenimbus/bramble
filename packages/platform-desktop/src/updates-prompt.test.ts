@@ -19,6 +19,10 @@ const h = vi.hoisted(() => ({
 	listeners: new Map<string, () => void>(),
 	/** False for a .deb install, where apt owns updates and the updater cannot apply one. */
 	selfUpdatable: true,
+	/** The Settings toggle. */
+	checkOnLaunch: true,
+	/** Requests to bramble.sh, which is what the toggle promises to stop. */
+	checks: 0,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -47,9 +51,11 @@ vi.mock("./adapters/updates", () => ({
 	canSelfUpdate: () => h.selfUpdatable,
 	desktopUpdates: {
 		check: async () => {
+			h.checks++;
 			if (h.checkFails) throw new Error("offline");
 			return h.available;
 		},
+		checkOnLaunch: async () => h.checkOnLaunch,
 		install: async () => {
 			h.installs++;
 		},
@@ -77,6 +83,8 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	h.available = { version: "1.2.0" };
 	h.selfUpdatable = true;
+	h.checkOnLaunch = true;
+	h.checks = 0;
 	h.checkFails = false;
 	h.accept = true;
 	h.asked = [];
@@ -208,5 +216,24 @@ describe("promptForUpdateOnLaunch", () => {
 
 		expect(h.asked).toHaveLength(0);
 		expect(h.installs).toBe(0);
+	});
+
+	// The privacy policy promises this one can be refused. Not asking the user is not enough: the
+	// request itself must not happen, since the request is what the promise is about.
+	it("makes no request at all when the user turned the check off", async () => {
+		h.checkOnLaunch = false;
+		await launch();
+
+		expect(h.checks).toBe(0);
+		expect(h.asked).toHaveLength(0);
+	});
+
+	it("still checks from the menu with the launch check off", async () => {
+		// Off means "not unless I ask", and the menu item is asking.
+		h.checkOnLaunch = false;
+		await menuCheck();
+
+		expect(h.checks).toBe(1);
+		expect(h.asked).toHaveLength(1);
 	});
 });

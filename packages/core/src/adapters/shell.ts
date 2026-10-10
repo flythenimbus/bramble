@@ -184,6 +184,13 @@ export interface ShellAdapter {
 		 * content length, and undefined when nothing is running. Returns an unsubscribe.
 		 */
 		onProgress(callback: (fraction: number | null | undefined) => void): () => void;
+		/**
+		 * Whether the app looks for a new version by itself when it opens. On unless the user turned
+		 * it off: it is the one request Bramble makes without being asked, so the privacy policy
+		 * names it and this is how it is refused. Asking from Settings or the menu works either way.
+		 */
+		checkOnLaunch?(): Promise<boolean>;
+		setCheckOnLaunch?(on: boolean): Promise<void>;
 	};
 	/**
 	 * Ask the OS to present its own rating prompt.

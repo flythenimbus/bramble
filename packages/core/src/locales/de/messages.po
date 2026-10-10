@@ -659,6 +659,10 @@ msgstr "Überprüfen"
 msgid "Check for updates"
 msgstr "Nach Updates suchen"
 
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates when Bramble opens"
+msgstr "Beim Öffnen von Bramble nach Updates suchen"
+
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Check key"
 msgstr "Schlüssel prüfen"
@@ -1389,6 +1393,10 @@ msgstr "Fehlgeschlagen"
 #: packages/core/src/app/components/ui/password-strength-meter.tsx
 msgid "Fair"
 msgstr "Mittel"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Fetches the latest version number from bramble.sh. Nothing from your vault is sent."
+msgstr "Ruft die neueste Versionsnummer von bramble.sh ab. Es werden keine Daten aus Ihrem Tresor gesendet."
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Field name"
