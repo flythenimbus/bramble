@@ -333,6 +333,9 @@ export interface VaultActions {
 	setEntriesTags(ids: string[], change: { add?: string[]; remove?: string[] }): Promise<void>;
 	/** Record a use (copy/fill): bumps only the entry's `lastUsedAt`. */
 	touchEntry(id: string): Promise<void>;
+	/** The current entries, read synchronously: includes writes committed before their
+	 * render has landed, so sequential mutations see their own earlier writes. */
+	readEntries(): Entry[];
 	verifyMasterPassword(password: string): Promise<boolean>;
 	/** Prove possession of a registered key (a tap) without changing lock state. */
 	verifyWithWebauthnKey(): Promise<boolean>;
@@ -1131,6 +1134,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		stampsRef.current = next.stamps;
 		tombstonesRef.current = next.tombstones;
 		settingsRef.current = next.settings;
+		// Advance the mirror ahead of the render setEntries schedules: a second mutation
+		// before it lands must snapshot the first one's committed result.
+		latestRef.current = { ...latestRef.current, entries: next.entries };
 		setSyncedSettings(next.settings);
 		setEntries(next.entries);
 	}, []);
@@ -1171,6 +1177,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (id: string) => commitEntries(await mutations.touch(snapshotEntries(), id)),
 		[mutations, snapshotEntries, commitEntries],
 	);
+	const readEntries = useCallback((): Entry[] => latestRef.current.entries, []);
 
 	/** Check a password against the slot verifier without unlocking. */
 	const verifyMasterPassword = useCallback(
@@ -1755,6 +1762,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setEntriesArchived,
 			setEntriesTags,
 			touchEntry,
+			readEntries,
 			verifyMasterPassword,
 			verifyWithWebauthnKey,
 			changeMasterPassword,
@@ -1792,6 +1800,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			setEntriesArchived,
 			setEntriesTags,
 			touchEntry,
+			readEntries,
 			verifyMasterPassword,
 			verifyWithWebauthnKey,
 			changeMasterPassword,

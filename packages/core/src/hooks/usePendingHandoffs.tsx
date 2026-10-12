@@ -14,11 +14,11 @@ import { useVaultRegistry } from "./useVaultRegistry";
 // first.
 export function usePendingHandoffs(): void {
 	const { shell } = usePlatform();
-	const { entries, addEntry, updateEntry, isLocked, ready } = useVault();
+	const { addEntry, updateEntry, readEntries, isLocked, ready } = useVault();
 	const { activeId } = useVaultRegistry();
 	const { show } = useToast();
-	const latest = useRef({ entries, addEntry, updateEntry, activeId, show, isLocked, ready });
-	latest.current = { entries, addEntry, updateEntry, activeId, show, isLocked, ready };
+	const latest = useRef({ addEntry, updateEntry, readEntries, activeId, show, isLocked, ready });
+	latest.current = { addEntry, updateEntry, readEntries, activeId, show, isLocked, ready };
 	const draining = useRef(false);
 
 	const drainNow = useCallback(async () => {
@@ -27,25 +27,21 @@ export function usePendingHandoffs(): void {
 		if (!drainPasskeys || !ready || isLocked || draining.current) return;
 		draining.current = true;
 		try {
-			const afterWrite = () =>
-				new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
 			for (const pk of (await drainPasskeys()) ?? []) {
-				const { entries, addEntry, updateEntry, show } = latest.current;
+				const { addEntry, updateEntry, readEntries, show } = latest.current;
 				try {
-					const placement = planPasskeyPlacement(entries, pk.rpId, pk.rpName, pk);
+					const placement = planPasskeyPlacement(readEntries(), pk.rpId, pk.rpName, pk);
 					let loginName: string;
 					if (placement.kind === "create") {
 						await addEntry(placement.data);
 						loginName = placement.data.name;
 					} else {
-						const entry = entries.find((e) => e.id === placement.entryId);
+						const entry = readEntries().find((e) => e.id === placement.entryId);
 						if (entry?.type !== "login") continue;
 						const { id: _id, ...data } = entry;
 						await updateEntry(placement.entryId, { ...data, passkeys: placement.passkeys });
 						loginName = entry.name;
 					}
-					await afterWrite();
 					show({
 						message:
 							placement.kind === "create"
@@ -61,12 +57,11 @@ export function usePendingHandoffs(): void {
 
 			const drainAssociations = shell.consumePendingAssociations;
 			if (drainAssociations) {
-				const { entries, updateEntry, activeId, show } = latest.current;
-				const updates = planAssociationUpdates(entries, activeId, await drainAssociations());
+				const { updateEntry, readEntries, activeId, show } = latest.current;
+				const updates = planAssociationUpdates(readEntries(), activeId, await drainAssociations());
 				for (const u of updates) {
 					try {
 						await updateEntry(u.entryId, u.data);
-						await afterWrite();
 						show({
 							message: i18n._(msg`Saved ${u.label} to ${u.entryName}`),
 							variant: "success",
