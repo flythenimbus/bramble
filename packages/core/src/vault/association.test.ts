@@ -23,7 +23,7 @@ function assoc(
 	vaultId: string = VAULT,
 	label?: string,
 ): PendingAssociation {
-	return { entryId, url, vaultId, at: Date.now(), label };
+	return { entryId, url, vaultId, label };
 }
 
 describe("planAssociationUpdates", () => {

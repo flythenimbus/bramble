@@ -17,7 +17,6 @@ export interface PendingAssociation {
 	/** The friendly name the prompt showed; `url` when the device couldn't resolve one. */
 	label?: string;
 	vaultId: string;
-	at: number;
 }
 
 /** State carried from the originating popup into a freshly-opened detached window so the pop-out lands on the same route. */

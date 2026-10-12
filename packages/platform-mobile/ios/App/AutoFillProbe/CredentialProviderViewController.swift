@@ -1087,7 +1087,6 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 				"url": uri,
 				"label": label,
 				"vaultId": vaultId,
-				"at": Int(Date().timeIntervalSince1970 * 1000),
 			]),
 			let plaintext = String(data: json, encoding: .utf8),
 			let enc = try? encryptWithVek(plaintext: plaintext)

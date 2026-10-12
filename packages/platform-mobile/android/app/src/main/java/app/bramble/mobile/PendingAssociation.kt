@@ -17,7 +17,6 @@ object PendingAssociation {
             .put("url", url)
             .put("label", label)
             .put("vaultId", vaultId)
-            .put("at", System.currentTimeMillis())
         val enc = encryptWithVek(json.toString())
         val file = File(context.filesDir, FILE)
         val arr = try {

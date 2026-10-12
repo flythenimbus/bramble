@@ -50,13 +50,12 @@ describe("consumePendingAssociations (android)", () => {
 			url: "androidapp://com.example",
 			label: "Example",
 			vaultId: "v1",
-			at: 5,
 		});
 		readFile.mockResolvedValue({ data: JSON.stringify([enc(payload)]) });
 		decryptWithVek.mockResolvedValue(payload);
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e1", url: "androidapp://com.example", label: "Example", vaultId: "v1", at: 5 },
+			{ entryId: "e1", url: "androidapp://com.example", label: "Example", vaultId: "v1" },
 		]);
 		expect(deleteFile).toHaveBeenCalled();
 		expect(writeFile).not.toHaveBeenCalled();
@@ -65,12 +64,12 @@ describe("consumePendingAssociations (android)", () => {
 	it("re-stashes records another vault sealed, without losing new ones", async () => {
 		stat.mockResolvedValue(undefined);
 		const ok = enc(
-			JSON.stringify({ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2", at: 6 }),
+			JSON.stringify({ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2" }),
 		);
 		const foreign = enc("from vault A");
 		readFile.mockResolvedValueOnce({ data: JSON.stringify([foreign, ok]) }).mockResolvedValueOnce({
 			data: JSON.stringify([
-				enc(JSON.stringify({ entryId: "new", url: "https://n.se", vaultId: "v2", at: 7 })),
+				enc(JSON.stringify({ entryId: "new", url: "https://n.se", vaultId: "v2" })),
 			]),
 		});
 		writeFile.mockResolvedValue(undefined);
@@ -81,7 +80,7 @@ describe("consumePendingAssociations (android)", () => {
 		});
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2", at: 6 },
+			{ entryId: "e2", url: "https://b.se", label: "B", vaultId: "v2" },
 		]);
 		const wrote = JSON.parse(String(writeFile.mock.calls[0]![0]!.data));
 		expect(wrote).toHaveLength(2);
@@ -112,7 +111,7 @@ describe("consumePendingAssociations (ios)", () => {
 		const foreign = enc("vault A");
 		consume.mockResolvedValue({
 			pending: [
-				enc(JSON.stringify({ entryId: "e1", url: "https://x.se", vaultId: "v1", at: 9 })),
+				enc(JSON.stringify({ entryId: "e1", url: "https://x.se", vaultId: "v1" })),
 				foreign,
 			],
 		});
@@ -123,7 +122,7 @@ describe("consumePendingAssociations (ios)", () => {
 		});
 
 		await expect(consumePendingAssociations()).resolves.toEqual([
-			{ entryId: "e1", url: "https://x.se", label: undefined, vaultId: "v1", at: 9 },
+			{ entryId: "e1", url: "https://x.se", label: undefined, vaultId: "v1" },
 		]);
 		expect(restore).toHaveBeenCalledWith({ keep: [foreign] });
 	});

@@ -31,7 +31,6 @@ export async function consumePendingAssociations(): Promise<PendingAssociation[]
 					url: d.url,
 					label: typeof d.label === "string" && d.label ? d.label : undefined,
 					vaultId: d.vaultId,
-					at: typeof d.at === "number" ? d.at : 0,
 				});
 			}
 		} catch {
