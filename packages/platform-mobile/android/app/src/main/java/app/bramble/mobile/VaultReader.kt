@@ -312,29 +312,27 @@ object VaultReader {
         }
     }
 
-    // Exact package equality only: a package name is never reversed into a domain. A
-    // pinned cert hash (android://<hash>@<package>) must additionally match the caller.
+    // Exact package equality only: a package name is never reversed into a domain. A pinned
+    // android://<hash>@<package> hash must additionally match the caller's facetCertHash
+    // exactly - base64url has no spelling to normalize.
     fun matchesApp(
         login: AutofillLogin,
         callerPackage: String,
-        callerFingerprints: Set<String> = emptySet(),
+        callerCertHashes: Set<String> = emptySet(),
     ): Boolean {
         if (callerPackage.isEmpty() || callerPackage !in login.apps) return false
         val pinned = login.appCertHashes[callerPackage] ?: return true
-        return callerFingerprints.any { normalizeCertHash(it) == normalizeCertHash(pinned) }
+        return callerCertHashes.contains(pinned)
     }
-
-    fun normalizeCertHash(raw: String): String =
-        raw.replace(":", "").replace("-", "").filterNot { it.isWhitespace() }.lowercase()
 
     fun matches(
         login: AutofillLogin,
         requestedHosts: List<String>,
         callerPackage: String?,
-        callerFingerprints: Set<String> = emptySet(),
+        callerCertHashes: Set<String> = emptySet(),
     ): Boolean =
         matches(login, requestedHosts) ||
-            (callerPackage != null && matchesApp(login, callerPackage, callerFingerprints))
+            (callerPackage != null && matchesApp(login, callerPackage, callerCertHashes))
 
     private fun b64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
 }

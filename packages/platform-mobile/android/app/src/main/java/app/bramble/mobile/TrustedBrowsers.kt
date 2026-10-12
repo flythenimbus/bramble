@@ -61,16 +61,20 @@ object TrustedBrowsers {
             setOf("06:66:53:58:EF:D8:BA:05:BE:23:6A:47:A1:2C:B0:95:8D:7D:75:DD:93:9D:77:C2:B3:1F:53:98:53:7E:BD:C5"),
     )
 
-    /** A browser of any kind (allow-listed, or handles BROWSABLE https VIEW intents):
-     * a package association would make every page in such a caller match. */
+    /** A browser of any kind (allow-listed, or a caller that can VIEW arbitrary web
+     * pages, the ROLE_BROWSER filter shape): a package association would make every page
+     * in such a caller match. */
     fun isBrowserApp(context: Context, packageName: String?): Boolean {
         val pkg = packageName ?: return false
         if (BROWSERS.containsKey(pkg)) return true
         return try {
-            val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://bramble.invalid/"))
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-            context.packageManager.queryIntentActivities(view, 0)
-                .any { it.activityInfo?.packageName == pkg }
+            listOf("http", "https").all { scheme ->
+                val probe = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://bramble.invalid/"))
+                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                    .addCategory(Intent.CATEGORY_DEFAULT)
+                context.packageManager.queryIntentActivities(probe, 0)
+                    .any { it.activityInfo?.packageName == pkg }
+            }
         } catch (e: Exception) {
             false
         }
@@ -106,23 +110,76 @@ object TrustedBrowsers {
         return digest.joinToString(":") { "%02X".format(it) }
     }
 
-    /** The SHA-256 fingerprints of a package's current signing certificates (uppercase,
-     * colon-separated). Empty if the package is absent or unreadable. Shared with the Digital
-     * Asset Links check. */
-    internal fun signingFingerprints(pm: PackageManager, pkg: String): Set<String> =
+    /** The hash `android://<hash>@<package>` pins carry (Google Password Manager /
+     * Chrome app ids): base64url, padded, of the signing certificate's SHA-512, per
+     * Chromium's affiliation_utils.h. */
+    internal fun facetCertHash(der: ByteArray): String =
+        base64Url(MessageDigest.getInstance("SHA-512").digest(der))
+
+    private const val B64URL =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+    // Hand-rolled, not android.util.Base64, so host-JVM unit tests can exercise it.
+    internal fun base64Url(bytes: ByteArray): String {
+        val out = StringBuilder((bytes.size + 2) / 3 * 4)
+        var i = 0
+        while (i + 3 <= bytes.size) {
+            val n =
+                ((bytes[i].toInt() and 0xFF) shl 16) or
+                    ((bytes[i + 1].toInt() and 0xFF) shl 8) or
+                    (bytes[i + 2].toInt() and 0xFF)
+            out
+                .append(B64URL[(n ushr 18) and 0x3F])
+                .append(B64URL[(n ushr 12) and 0x3F])
+                .append(B64URL[(n ushr 6) and 0x3F])
+                .append(B64URL[n and 0x3F])
+            i += 3
+        }
+        when (bytes.size - i) {
+            1 -> {
+                val n = (bytes[i].toInt() and 0xFF) shl 16
+                out
+                    .append(B64URL[(n ushr 18) and 0x3F])
+                    .append(B64URL[(n ushr 12) and 0x3F])
+                    .append("==")
+            }
+            2 -> {
+                val n =
+                    ((bytes[i].toInt() and 0xFF) shl 16) or
+                        ((bytes[i + 1].toInt() and 0xFF) shl 8)
+                out
+                    .append(B64URL[(n ushr 18) and 0x3F])
+                    .append(B64URL[(n ushr 12) and 0x3F])
+                    .append(B64URL[(n ushr 6) and 0x3F])
+                    .append('=')
+            }
+        }
+        return out.toString()
+    }
+
+    /** DER bytes of a package's current signing certificates; empty if absent or unreadable. */
+    private fun signingCerts(pm: PackageManager, pkg: String): List<ByteArray> =
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
-                (info.signingInfo?.apkContentsSigners ?: emptyArray())
-                    .map { certFingerprint(it.toByteArray()) }
-                    .toSet()
+                (info.signingInfo?.apkContentsSigners ?: emptyArray()).map { it.toByteArray() }
             } else {
                 @Suppress("DEPRECATION")
                 val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES)
                 @Suppress("DEPRECATION")
-                (info.signatures ?: emptyArray()).map { certFingerprint(it.toByteArray()) }.toSet()
+                (info.signatures ?: emptyArray()).map { it.toByteArray() }
             }
         } catch (e: Exception) {
-            emptySet()
+            emptyList()
         }
+
+    /** The SHA-256 fingerprints of a package's current signing certificates (uppercase,
+     * colon-separated). Empty if the package is absent or unreadable. Shared with the Digital
+     * Asset Links check. */
+    internal fun signingFingerprints(pm: PackageManager, pkg: String): Set<String> =
+        signingCerts(pm, pkg).map { certFingerprint(it) }.toSet()
+
+    /** facetCertHash of a package's current signing certificates. */
+    internal fun signingCertHashes(pm: PackageManager, pkg: String): Set<String> =
+        signingCerts(pm, pkg).map { facetCertHash(it) }.toSet()
 }

@@ -216,7 +216,7 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
 
     private fun complete(login: AutofillLogin) {
         val uri = assocUri
-        if (uri != null && !VaultReader.matches(login, hosts, matchPackage)) {
+        if (uri != null && !VaultReader.matches(login, hosts, matchPackage, callerCerts)) {
             showAssociationPrompt(login, uri, assocLabel ?: uri)
         } else {
             finishWithDataset(login)

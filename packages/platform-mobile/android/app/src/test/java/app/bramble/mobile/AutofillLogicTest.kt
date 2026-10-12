@@ -1,5 +1,6 @@
 package app.bramble.mobile
 
+import java.security.MessageDigest
 import java.util.Base64
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -103,19 +104,25 @@ class AutofillLogicTest {
     }
 
     @Test
-    fun `a pinned cert hash must match the caller's signing certificate`() {
+    fun `a pinned cert hash must match the caller's signing certificate exactly`() {
+        val der = ByteArray(900) { (it * 7 + 3).toByte() }
+        val pin = TrustedBrowsers.facetCertHash(der)
+        assertEquals(88, pin.length) // 64-byte SHA-512 -> 88 chars incl. the "==" padding
+        assertTrue(pin.endsWith("=="))
         val pinned = AutofillLogin(
             "id-1", "Instagram", "me@x.y", "pw", null,
             listOf("instagram.com"),
             listOf("com.instagram.android"),
-            mapOf("com.instagram.android" to "AA:BB:CC"),
+            mapOf("com.instagram.android" to pin),
         )
-        val colonless = setOf("aabbcc")
-        assertTrue(VaultReader.matchesApp(pinned, "com.instagram.android", colonless))
+        assertTrue(VaultReader.matchesApp(pinned, "com.instagram.android", setOf(pin)))
         // A same-package impostor with a different certificate does not match.
-        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android", setOf("FF:EE:DD")))
+        val impostor = TrustedBrowsers.facetCertHash(ByteArray(900) { (it * 7 + 4).toByte() })
+        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android", setOf(impostor)))
         assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android"))
-        // Unpinned (androidapp:// or hashless android://) stays package-only.
+        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android", setOf(pin.lowercase())))
+        assertFalse(VaultReader.matchesApp(pinned, "com.instagram.android", setOf("$pin==")))
+        // Unpinned (androidapp:// or a hashless android://) stays package-only.
         val unpinned = AutofillLogin(
             "id-2", "Instagram", "me@x.y", "pw", null,
             listOf("instagram.com"), listOf("com.instagram.android"),
@@ -124,9 +131,25 @@ class AutofillLogicTest {
     }
 
     @Test
-    fun `normalizeCertHash ignores separators, case and whitespace`() {
-        assertEquals("aabbcc", VaultReader.normalizeCertHash("AA:BB:CC"))
-        assertEquals("aabbcc", VaultReader.normalizeCertHash("aa- bb  cc"))
+    fun `facetCertHash is padded base64url of the cert's SHA-512, as the JDK encoder produces`() {
+        val md = MessageDigest.getInstance("SHA-512")
+        for (size in listOf(0, 1, 2, 3, 31, 32, 63, 64, 65, 700)) {
+            val der = ByteArray(size) { (it * 31).toByte() }
+            assertEquals(Base64.getUrlEncoder().encodeToString(md.digest(der)), TrustedBrowsers.facetCertHash(der))
+        }
+    }
+
+    @Test
+    fun `base64Url handles all byte values and every padding case`() {
+        val all = ByteArray(256) { it.toByte() }
+        assertEquals(
+            Base64.getUrlEncoder().encodeToString(all),
+            TrustedBrowsers.base64Url(all),
+        )
+        assertEquals("QUJD", TrustedBrowsers.base64Url(byteArrayOf('A'.code.toByte(), 'B'.code.toByte(), 'C'.code.toByte())))
+        assertEquals("QUI=", TrustedBrowsers.base64Url(byteArrayOf('A'.code.toByte(), 'B'.code.toByte())))
+        assertEquals("QQ==", TrustedBrowsers.base64Url(byteArrayOf('A'.code.toByte())))
+        assertEquals("", TrustedBrowsers.base64Url(byteArrayOf()))
     }
 
     @Test

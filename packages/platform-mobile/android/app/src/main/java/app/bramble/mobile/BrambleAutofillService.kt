@@ -64,7 +64,7 @@ class BrambleAutofillService : AutofillService() {
         val browserApp = trustedBrowser || TrustedBrowsers.isBrowserApp(this, parsed.packageName)
         val matchPackage = if (browserApp) null else parsed.packageName
         val callerCerts =
-            if (matchPackage != null) TrustedBrowsers.signingFingerprints(packageManager, matchPackage)
+            if (matchPackage != null) TrustedBrowsers.signingCertHashes(packageManager, matchPackage)
             else emptySet()
         val association = associationFor(parsed, trustedBrowser, browserApp)
         // Page-side diagnostics only (field counts + the page's own domain/package). Never
