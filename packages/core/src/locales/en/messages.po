@@ -2273,7 +2273,7 @@ msgstr "Paperclip"
 msgid "Passkey added to {0}"
 msgstr "Passkey added to {0}"
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey added to {loginName}"
 msgstr "Passkey added to {loginName}"
 
@@ -2282,7 +2282,7 @@ msgstr "Passkey added to {loginName}"
 msgid "Passkey saved as {0}"
 msgstr "Passkey saved as {0}"
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey saved as {loginName}"
 msgstr "Passkey saved as {loginName}"
 
@@ -2702,9 +2702,9 @@ msgstr "Save to a new login"
 msgid "Save your recovery code"
 msgstr "Save your recovery code"
 
-#. placeholder {0}: u.added.join(", ")
+#. placeholder {0}: u.label
 #. placeholder {1}: u.entryName
-#: packages/core/src/hooks/usePendingAssociations.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Saved {0} to {1}"
 msgstr "Saved {0} to {1}"
 

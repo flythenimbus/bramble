@@ -2273,7 +2273,7 @@ msgstr "Büroklammer"
 msgid "Passkey added to {0}"
 msgstr "Passkey wurde zu {0} hinzugefügt."
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey added to {loginName}"
 msgstr "Passkey zu {loginName} hinzugefügt"
 
@@ -2282,7 +2282,7 @@ msgstr "Passkey zu {loginName} hinzugefügt"
 msgid "Passkey saved as {0}"
 msgstr "Passkey gespeichert als {0}."
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey saved as {loginName}"
 msgstr "Passkey als {loginName} gespeichert"
 
@@ -2702,9 +2702,9 @@ msgstr "In einem neuen Login speichern"
 msgid "Save your recovery code"
 msgstr "Speichern Sie Ihren Wiederherstellungscode"
 
-#. placeholder {0}: u.added.join(", ")
+#. placeholder {0}: u.label
 #. placeholder {1}: u.entryName
-#: packages/core/src/hooks/usePendingAssociations.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Saved {0} to {1}"
 msgstr "{0} in {1} gespeichert"
 

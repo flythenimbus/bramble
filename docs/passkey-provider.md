@@ -133,7 +133,7 @@ The extension already decrypts the vault natively via App Group + uniffi. What w
   mints ES256 (`passkeyMakeCredential`), hands back an `ASPasskeyRegistrationCredential`, and
   stashes the new credential VEK-encrypted in App Group `autofill.pendingPasskeys` — because the
   sandboxed extension can't write the vault. The main app drains it (`AutofillBridge`
-  .consumePendingPasskeys -> mobile shell.consumePendingPasskeys -> core `usePendingPasskeys`
+  .consumePendingPasskeys -> mobile shell.consumePendingPasskeys -> core `usePendingHandoffs`
   hook) and persists via `planPasskeyPlacement` (attach to the matching login or create one),
   re-syncing the bundle. Mirrors Android's `PendingSave` handoff.
 - **Usable without opening the app.** Two refinements so a freshly-created passkey works
@@ -180,7 +180,7 @@ lists matching passkeys as `PublicKeyCredentialEntry` items (system renders the 
 signs (`passkeyGetAssertion` -> `WebauthnJson.authenticationResponseJson`);
 `onBeginCreateCredentialRequest` offers a "Save passkey in Bramble" `CreateEntry` whose fulfill
 mints ES256 (`passkeyMakeCredential` -> `registrationResponseJson`) and stashes the credential
-VEK-encrypted via `PendingPasskey` for the app to persist (the core `usePendingPasskeys` drain reads
+VEK-encrypted via `PendingPasskey` for the app to persist (the core `usePendingHandoffs` drain reads
 the Android file too now). The auth-first unlock is the shared `BrambleUnlockActivity` (extracted
 from `AutofillUnlockActivity`, which is unchanged behaviourally). `VaultReader.readPasskeys` reads
 the real vault directly (same app -> no iOS-style bundle). Verified with
@@ -509,18 +509,19 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
 3. **iOS provider (DONE — device-verified).** `ProvidesPasskeys`, the
    `ASPasskeyCredentialRequest` assertion methods + `prepareInterface(forPasskeyRegistration:)`,
    `ASPasskeyCredentialIdentity` registration, the VEK-encrypted passkey bundle, and a
-   pending-passkey handoff (extension mints -> App Group -> `usePendingPasskeys` drains into the
+   pending-passkey handoff (extension mints -> App Group -> `usePendingHandoffs` drains into the
    vault), plus the create-time immediate-use bridge. All `@available(iOS 17, *)`; deployment
    target stays 15.0. **Verified on a device**: register + sign-in on webauthn.io both succeed,
    and the freshly-created passkey is usable without opening the main app (fix #2). Build via the
    TestFlight lane (`ios:beta`, which runs `ffi:build:ios` + `cap sync`). One fix found in
-   verification: a lingui macro in a `.ts` file (`usePendingPasskeys`) shipped untransformed and
-   hung the mobile splash — macro-using files must be `.tsx` (commit 2fb0fbf0).
+   verification: a lingui macro in a `.ts` file (`usePendingPasskeys`, since renamed
+   `usePendingHandoffs`) shipped untransformed and hung the mobile splash — macro-using files must
+   be `.tsx` (commit 2fb0fbf0).
 4. **Android provider (BUILT, compile-verified; pending device verification).**
    `BrambleCredentialService` (`onBeginGet` unlock-action + `onBeginCreate` save-entry) +
    `CredentialFulfillActivity` (MODE_GET list / MODE_ASSERT sign / MODE_CREATE mint), the shared
    `BrambleUnlockActivity`, `VaultReader.readPasskeys`, `WebauthnJson` (auth + registration JSON),
-   and the `PendingPasskey` create handoff (drained by the existing core `usePendingPasskeys`). Pure
+   and the `PendingPasskey` create handoff (drained by the existing core `usePendingHandoffs`). Pure
    AOSP, API 34+. `compileDebugKotlin` + `testDebugUnitTest` pass. Needs `ffi:build:android` (NDK) +
    an API 34+ device; the browser **origin allowlist** (res/raw/privileged_browsers.json) is the
    one device-iteration TODO. See the Android section above.

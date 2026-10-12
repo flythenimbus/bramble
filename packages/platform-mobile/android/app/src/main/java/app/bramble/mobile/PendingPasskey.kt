@@ -9,7 +9,7 @@ import uniffi.vault_crypto.encryptWithVek
 // Create-side handoff for the Credential Manager passkey provider. The fulfill activity mints a
 // passkey but must NOT write the vault (single-writer + sync HLC stamping live in the main app),
 // so it stashes the new credential here - VEK-encrypted, so the private key is never at rest in
-// clear - and the app drains + persists it on next launch (core usePendingPasskeys). Mirrors
+// clear - and the app drains + persists it on next launch (core usePendingHandoffs). Mirrors
 // PendingSave and the iOS App Group handoff. The file lives in the app-private filesDir that
 // Capacitor's Directory.Data reads. See docs/passkey-provider.md.
 object PendingPasskey {

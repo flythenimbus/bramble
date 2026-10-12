@@ -2273,7 +2273,7 @@ msgstr "Clipe"
 msgid "Passkey added to {0}"
 msgstr "Chave de acesso adicionada a {0}"
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey added to {loginName}"
 msgstr "Passkey adicionada a {loginName}"
 
@@ -2282,7 +2282,7 @@ msgstr "Passkey adicionada a {loginName}"
 msgid "Passkey saved as {0}"
 msgstr "Chave de acesso salva como {0}"
 
-#: packages/core/src/hooks/usePendingPasskeys.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Passkey saved as {loginName}"
 msgstr "Passkey salva como {loginName}"
 
@@ -2702,9 +2702,9 @@ msgstr "Salvar em um novo login"
 msgid "Save your recovery code"
 msgstr "Salvar seu código de recuperação"
 
-#. placeholder {0}: u.added.join(", ")
+#. placeholder {0}: u.label
 #. placeholder {1}: u.entryName
-#: packages/core/src/hooks/usePendingAssociations.tsx
+#: packages/core/src/hooks/usePendingHandoffs.tsx
 msgid "Saved {0} to {1}"
 msgstr "Salvo {0} em {1}"
 
